@@ -1,0 +1,141 @@
+/* ==========================================================================
+   ORION OS 6.0 THEME (Windows XP / Royale / Luna Period Authentic Aesthetic)
+   Warmer sand chrome, glossy blue/silver gradients, subtle rounded pill buttons.
+   ========================================================================== */
+
+[data-theme="orion60"] {
+  --orion-font-family: Tahoma, "Segoe UI", Arial, sans-serif;
+  --orion-font-size-base: 12px;
+  --orion-font-size-title: 12px;
+  --orion-font-weight-bold: 700;
+
+  /* Color Palette */
+  --orion-bg-desktop: #245edb;
+  --orion-bg-face: #ece9d8;
+  --orion-bg-surface: #dfdfdf;
+  --orion-bg-light: #ffffff;
+  --orion-bg-shadow: #aca899;
+  --orion-bg-dark: #716f64;
+  --orion-bg-window: #ffffff;
+  --orion-bg-input: #ffffff;
+  --orion-bg-tooltip: #ffffe1;
+
+  --orion-text-main: #000000;
+  --orion-text-muted: #716f64;
+  --orion-text-highlight: #ffffff;
+  --orion-text-title: #ffffff;
+  --orion-text-title-inactive: #e0e9f8;
+  --orion-bg-highlight: #316ac5;
+  --orion-border-dark: #aca899;
+
+  /* Titlebar Gradients (XP Luna Royal Blue) */
+  --orion-title-active-from: #0055ea;
+  --orion-title-active-to: #3b88fd;
+  --orion-title-inactive-from: #7697d9;
+  --orion-title-inactive-to: #a5bce9;
+
+  /* Taskbar */
+  --orion-taskbar-height: 32px;
+  --orion-taskbar-bg: linear-gradient(180deg, #1f48ab 0%, #245edb 10%, #1a3c94 65%, #122868 100%);
+  --orion-taskbar-border-top: 1px solid #3c7bf0;
+  --orion-taskbar-btn-bg: linear-gradient(180deg, #386cd4 0%, #2454b8 60%, #1e4598 100%);
+  --orion-taskbar-btn-active: linear-gradient(180deg, #122a68 0%, #183a8a 60%, #204eb8 100%);
+  --orion-start-btn-bg: linear-gradient(180deg, #388e3c 0%, #2e7d32 45%, #1b5e20 80%, #2e7d32 100%);
+  --orion-start-btn-color: #ffffff;
+
+  /* Geometry & Radii */
+  --orion-btn-radius: 3px;
+  --orion-border-radius-win: 5px 5px 0px 0px;
+  --orion-border-radius-menu: 4px;
+
+  /* XP Soft Shadows & Highlights */
+  --orion-shadow-outset: 0 1px 3px rgba(0, 0, 0, 0.15), inset 0 1px 0 #ffffff;
+  --orion-shadow-inset: inset 0 1px 2px rgba(0, 0, 0, 0.2), inset 0 0 1px #aca899;
+  --orion-shadow-button: inset 0 1px 0 rgba(255, 255, 255, 0.8), 0 1px 2px rgba(0, 0, 0, 0.2);
+  --orion-shadow-button-pressed: inset 0 1px 3px rgba(0, 0, 0, 0.4), 0 1px 0 rgba(255, 255, 255, 0.6);
+  --orion-shadow-window: 0 4px 12px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.5);
+  --orion-shadow-field: inset 0 1px 2px rgba(0, 0, 0, 0.25);
+}
+
+/* Base Bevel Utility Classes for Orion 6.0 */
+[data-theme="orion60"] .orion-outset {
+  background-color: var(--orion-bg-face);
+  border: 1px solid #716f64;
+  box-shadow: var(--orion-shadow-outset);
+  border-radius: var(--orion-btn-radius);
+}
+
+[data-theme="orion60"] .orion-inset {
+  background-color: var(--orion-bg-face);
+  border: 1px solid #aca899;
+  box-shadow: var(--orion-shadow-inset);
+  border-radius: var(--orion-btn-radius);
+}
+
+[data-theme="orion60"] .orion-button {
+  background: linear-gradient(180deg, #ffffff 0%, #ece9d8 50%, #d8d4c4 100%);
+  color: var(--orion-text-main);
+  font-family: var(--orion-font-family);
+  font-size: var(--orion-font-size-base);
+  border: 1px solid #003c74;
+  border-radius: 3px;
+  box-shadow: var(--orion-shadow-button);
+  padding: 3px 12px;
+  cursor: pointer;
+  user-select: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  transition: filter 0.1s ease;
+}
+
+[data-theme="orion60"] .orion-button:hover {
+  background: linear-gradient(180deg, #ffffff 0%, #f7f5ec 50%, #e5e0cf 100%);
+  border-color: #ff9900;
+  box-shadow: 0 0 3px rgba(255, 153, 0, 0.6);
+}
+
+[data-theme="orion60"] .orion-button:active,
+[data-theme="orion60"] .orion-button.is-active {
+  background: linear-gradient(180deg, #d8d4c4 0%, #ece9d8 50%, #ffffff 100%);
+  box-shadow: var(--orion-shadow-button-pressed);
+}
+
+[data-theme="orion60"] .orion-button:focus-visible {
+  outline: 1px dotted #ff9900;
+  outline-offset: -2px;
+}
+
+[data-theme="orion60"] .orion-input {
+  background-color: var(--orion-bg-input);
+  color: var(--orion-text-main);
+  border: 1px solid #7f9db9;
+  border-radius: 2px;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.15);
+  font-family: var(--orion-font-family);
+  font-size: var(--orion-font-size-base);
+  padding: 4px 6px;
+  outline: none;
+}
+
+[data-theme="orion60"] .orion-input:focus {
+  border-color: #316ac5;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.15), 0 0 3px rgba(49, 106, 197, 0.5);
+}
+
+[data-theme="orion60"] .orion-scrollbar::-webkit-scrollbar {
+  width: 16px;
+  height: 16px;
+}
+
+[data-theme="orion60"] .orion-scrollbar::-webkit-scrollbar-track {
+  background: #ece9d8;
+  border-left: 1px solid #d4d0c8;
+}
+
+[data-theme="orion60"] .orion-scrollbar::-webkit-scrollbar-thumb {
+  background: linear-gradient(90deg, #f0f4fc 0%, #bcd0f7 50%, #8caeec 100%);
+  border: 1px solid #4d7cd6;
+  border-radius: 2px;
+}

@@ -1,0 +1,35 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+
+# Test artifacts
+playwright-report/
+test-results/
+
+# TypeScript build info
+tsconfig.tsbuildinfo
+
+# Scratch / test files
+test.txt
+test_b64.py
+test_herestring.js
+test_herestring3.js
+test_lines.cjs
+test_ps2.txt
+test_ps_raw.txt
+test_py.txt
+test_writer.py
+gen_pulse_components_1.js
+gen_pulse_files.py
+gen_pulse_part1.py
+generate_pulse.cjs
+scripts_writer.cjs
+write_base64.py
+write_hex.py
+test_hex.txt
+
+# OS
+.DS_Store
+Thumbs.db

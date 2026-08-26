@@ -1,0 +1,29 @@
+@import './desktop/themes/orion48.css';
+@import './desktop/themes/orion60.css';
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+}
+
+html, body, #root {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  user-select: none;
+  font-family: var(--orion-font-family, "MS Sans Serif", Tahoma, Geneva, sans-serif);
+}
+
+/* Custom scrollbar utility for retro feel */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}

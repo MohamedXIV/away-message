@@ -1,0 +1,41 @@
+import Dexie, { type Table } from 'dexie';
+import type {
+  SaveSlotRecord,
+  VfsFileRecord,
+  DownloadTaskRecord,
+  InstalledSoftwareRecord,
+  MessageRecord,
+  RelationshipRecord,
+  NarrativeStateRecord,
+  TelemetryLogRecord,
+} from './schema';
+
+export class AwayMessageDB extends Dexie {
+  saves!: Table<SaveSlotRecord, string>;
+  vfs_files!: Table<VfsFileRecord, string>;
+  downloads!: Table<DownloadTaskRecord, string>;
+  installed_software!: Table<InstalledSoftwareRecord, string>;
+  messages!: Table<MessageRecord, string>;
+  relationships!: Table<RelationshipRecord, string>;
+  narrative_state!: Table<NarrativeStateRecord, string>;
+  telemetry_logs!: Table<TelemetryLogRecord, number>;
+
+  constructor(databaseName = 'AwayMessageDB') {
+    super(databaseName);
+
+    // Schema Definition Version 1
+    this.version(1).stores({
+      saves: 'id, name, updatedAt, day',
+      vfs_files: 'id, path, parentPath, kind, name, createdAt',
+      downloads: 'id, status, startedAt, completedAt',
+      installed_software: 'appId, installedAt, version',
+      messages: 'id, buddyId, timestamp, isRead, [buddyId+timestamp]',
+      relationships: 'buddyId, lastInteractionDay',
+      narrative_state: 'key, updatedAt',
+      telemetry_logs: '++id, timestamp, gameDay, eventType',
+    });
+  }
+}
+
+// Singleton database instance for application runtime
+export const db = new AwayMessageDB();
