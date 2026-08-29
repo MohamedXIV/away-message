@@ -407,6 +407,50 @@ export class SynthAudio {
     } catch {}
   }
 
+  /** Yahoo-style Buzz / Nudge: three urgent square pulses */
+  public playBuzz(): void {
+    const ctx = this.getContext();
+    if (!ctx || this.isMuted) return;
+    try {
+      const t0 = ctx.currentTime;
+      [0, 0.13, 0.26].forEach((offset, index) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'square';
+        osc.frequency.value = index === 1 ? 920 : 720;
+        gain.gain.setValueAtTime(0.13, t0 + offset);
+        gain.gain.exponentialRampToValueAtTime(0.001, t0 + offset + 0.08);
+        osc.connect(gain);
+        gain.connect(this.sfxGain!);
+        osc.start(t0 + offset);
+        osc.stop(t0 + offset + 0.08);
+      });
+    } catch {}
+  }
+
+  /** Yahoo-style room invitation: two-note ascending notification */
+  public playInvite(): void {
+    const ctx = this.getContext();
+    if (!ctx || this.isMuted) return;
+    try {
+      const t0 = ctx.currentTime;
+      const notes = [659.25, 987.77];
+      notes.forEach((frequency, index) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        const start = t0 + index * 0.12;
+        osc.type = 'triangle';
+        osc.frequency.value = frequency;
+        gain.gain.setValueAtTime(0.14, start);
+        gain.gain.exponentialRampToValueAtTime(0.001, start + 0.24);
+        osc.connect(gain);
+        gain.connect(this.sfxGain!);
+        osc.start(start);
+        osc.stop(start + 0.24);
+      });
+    } catch {}
+  }
+
   /** IM Send Chime (E5 -> G5) */
   public playImSend(): void {
     const ctx = this.getContext();

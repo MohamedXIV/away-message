@@ -4,6 +4,7 @@ import { soundManager } from '../../../audio/SoundManager';
 import { NpcDialogueScript, DialogueChoiceOption } from '../types';
 import { DIALOGUE_SCRIPTS } from '../data/dialogueTrees';
 import { parseNarrativeTag } from '../../../narrative/tagParser';
+import type { GeneratedChatResponse } from '../../../ai/types';
 
 export interface TypingState {
   isTyping: boolean;
@@ -155,6 +156,19 @@ export function useSimulatedTyping(_activeConversationBuddyId: string | null) {
     });
   }, [engine, executeTags]);
 
+  const triggerGeneratedResponse = useCallback((buddyId: string, response: GeneratedChatResponse) => {
+    const socialTags = response.socialAction === 'none' ? undefined : [response.socialAction];
+    triggerNpcScript({
+      id: `ai_${buddyId}_${Date.now()}`,
+      buddyId,
+      messages: response.messages.map((message, index) => ({
+        text: message.text,
+        tags: index === response.messages.length - 1 ? socialTags : undefined,
+      })),
+      playerChoices: [],
+    });
+  }, [triggerNpcScript]);
+
   const selectPlayerChoice = useCallback((choice: DialogueChoiceOption, buddyId: string) => {
     setIsPlayerTyping(true);
     setPlayerTypingText('');
@@ -204,6 +218,7 @@ export function useSimulatedTyping(_activeConversationBuddyId: string | null) {
     playerTypingText,
     isPlayerTyping,
     triggerNpcScript,
+    triggerGeneratedResponse,
     selectPlayerChoice,
   };
 }

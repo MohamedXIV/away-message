@@ -130,6 +130,16 @@ export interface TelemetryLogRecord {
   payload: Record<string, unknown>;
 }
 
+export interface AICacheRecord {
+  key: string;                   // Deterministic cache key
+  kind: 'site' | 'chat';
+  providerId: string;
+  model: string;
+  payload: unknown;
+  createdAt: number;
+  expiresAt: number;
+}
+
 // ==========================================
 // 2. Full Simulation Snapshot Interface
 // ==========================================

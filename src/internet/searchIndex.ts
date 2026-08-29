@@ -353,3 +353,58 @@ export function searchInternet(
 ): SearchIndexEntry[] {
   return SearchEngine.search(query, { currentDay, narrativeFlags }).results;
 }
+
+function slugifySiteName(value: string): string {
+  const slug = value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 32);
+  return slug || 'new-site';
+}
+
+function titleizeSiteName(value: string): string {
+  return value
+    .split(/[^a-zA-Z0-9]+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
+    .join(' ') || 'New Site';
+}
+
+export function generateFindItCandidates(query: string, currentDay = 1): SearchIndexEntry[] {
+  const cleanQuery = query.trim().replace(/\s+/g, ' ');
+  if (!cleanQuery) return [];
+
+  const title = titleizeSiteName(cleanQuery);
+  const slug = slugifySiteName(cleanQuery);
+  const candidates: SearchIndexEntry[] = [
+    {
+      id: `generated_site_${slug}`,
+      title: `${title} — unofficial local site`,
+      url: `http://${slug}.local/`,
+      snippet: `A newly discovered ${title.toLowerCase()} page assembled from the Orion Web index. Click to let Voyager generate the site before you visit it.`,
+      category: 'community',
+      keywords: cleanQuery.toLowerCase().split(/\s+/),
+      availableFromDay: Math.max(1, currentDay),
+      datePublished: 'Oct 06, 2006',
+      score: 72,
+      isGenerated: true,
+      generatedSiteHint: `Generated from the search phrase “${cleanQuery}”.`,
+    },
+    {
+      id: `generated_directory_${slug}`,
+      title: `${title} Directory — Orion local web listing`,
+      url: `http://${slug}-directory.local/`,
+      snippet: `A small directory entry for ${cleanQuery.toLowerCase()}, with period-authentic links, notices, and a guestbook waiting to be generated.`,
+      category: 'news',
+      keywords: [...cleanQuery.toLowerCase().split(/\s+/), 'directory', 'local'],
+      availableFromDay: Math.max(1, currentDay),
+      datePublished: 'Oct 06, 2006',
+      score: 60,
+      isGenerated: true,
+      generatedSiteHint: `A second generated candidate based on “${cleanQuery}”.`,
+    },
+  ];
+
+  return candidates;
+}

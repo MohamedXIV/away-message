@@ -14,6 +14,7 @@ beforeEach(async () => {
       await db.relationships?.clear();
       await db.narrative_state?.clear();
       await db.telemetry_logs?.clear();
+      await db.ai_cache?.clear();
     }
   } catch {
     // Graceful fallback if tables are not initialized

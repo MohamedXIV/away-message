@@ -56,6 +56,8 @@ export class SoundManager {
       | 'door_open'
       | 'door_slam'
       | 'hdd_chirp'
+      | 'buzz'
+      | 'invite'
   ): void {
     this.unlockAudio();
     if (this.settings.isMuted) return;
@@ -79,6 +81,10 @@ export class SoundManager {
         return this.synth.playDoorSlam();
       case 'hdd_chirp':
         return this.synth.playHddChirp();
+      case 'buzz':
+        return this.synth.playBuzz();
+      case 'invite':
+        return this.synth.playInvite();
     }
   }
 

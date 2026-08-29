@@ -6,9 +6,9 @@ test.describe('Tier 2: Input Fuzzing & 404 Error Handling', () => {
     await browserPage.openBrowser();
   });
 
-  test('TC-IFZ-01: Navigating to non-existent .local domain renders 404 Not Found page gracefully', async ({ page, browserPage }) => {
+  test('TC-IFZ-01: Navigating to an unknown .local domain renders a generated or offline page gracefully', async ({ page, browserPage }) => {
     await browserPage.navigate('nonexistentdomain123.local');
-    await expect(page.locator('text=404').or(page.locator('text=Not Found')).or(page.locator('text=Cannot Connect'))).toBeVisible({ timeout: 5000 });
+    await expect(page.locator('text=NONEXISTENTDOMAIN123').or(page.locator('text=404')).or(page.locator('text=Not Found')).or(page.locator('text=Cannot Connect'))).toBeVisible({ timeout: 5000 });
   });
 
   test('TC-IFZ-02: Searching special symbols and unicode characters does not crash search engine', async ({ page, browserPage }) => {

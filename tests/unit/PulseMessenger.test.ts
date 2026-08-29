@@ -1,8 +1,9 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { parseEmoticons } from '../../src/apps/pulse/utils/emoticonParser';
 import { AWAY_MESSAGE_PRESETS } from '../../src/apps/pulse/data/awayMessagePresets';
 import { DIALOGUE_SCRIPTS } from '../../src/apps/pulse/data/dialogueTrees';
 import { formatSimulationTime } from '../../src/apps/pulse/utils/timeFormat';
+import { loadPulseState, makeDefaultPulseState, savePulseState } from '../../src/apps/pulse/persistence';
 
 describe('Pulse Messenger Subsystem Test Suite', () => {
   it('formats simulation minutes into 12-hour AM/PM times', () => {
@@ -35,6 +36,28 @@ describe('Pulse Messenger Subsystem Test Suite', () => {
     expect(categories.has('activity')).toBe(true);
     expect(categories.has('quote')).toBe(true);
     expect(categories.has('retro')).toBe(true);
+  });
+
+  it('persists room transcripts and request state across Pulse reloads', () => {
+    let stored: string | null = null;
+    vi.stubGlobal('window', {
+      localStorage: {
+        getItem: () => stored,
+        setItem: (_key: string, value: string) => { stored = value; },
+      },
+    });
+
+    const state = makeDefaultPulseState();
+    state.joinedRoomIds = ['pc-help'];
+    state.friendRequestStatus = 'accepted';
+    state.roomMessages['pc-help'] = [{ id: 'room-1', senderId: 'player', senderName: 'wanderer06', text: 'anyone here? :)', minute: 1400 }];
+    savePulseState(state);
+
+    const restored = loadPulseState();
+    expect(restored.joinedRoomIds).toEqual(['pc-help']);
+    expect(restored.friendRequestStatus).toBe('accepted');
+    expect(restored.roomMessages['pc-help']?.[0]?.text).toBe('anyone here? :)');
+    vi.unstubAllGlobals();
   });
 
   it('has structured branching dialogue scripts with narrative action impacts', () => {

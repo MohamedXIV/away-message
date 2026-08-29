@@ -16,6 +16,7 @@ import { PhotoBoxApp } from '../apps/photobox/PhotoBoxApp';
 import { WeatherBuddyApp } from '../apps/weatherbuddy/WeatherBuddyApp';
 import { SafeSweepApp } from '../apps/safesweep/SafeSweepApp';
 import { MailboxApp } from '../apps/mailbox/MailboxApp';
+import { AILabApp } from '../apps/ailab/AILabApp';
 
 export interface AppRegistryProps {
   window: WindowState;
@@ -83,6 +84,9 @@ const defaultAppComponents: AppRegistry = {
 
   mailbox: () => <MailboxApp />,
   'app.mailbox': () => <MailboxApp />,
+
+  ailab: () => <AILabApp />,
+  'app.ailab': () => <AILabApp />,
 };
 
 interface WindowManagerProps {

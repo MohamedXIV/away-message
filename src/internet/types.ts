@@ -72,6 +72,8 @@ export interface SearchIndexEntry {
   requiredFlags?: string[];      // Narrative flags required to appear
   datePublished: string;        // Period authentic date (e.g. 'Oct 12, 2004')
   score?: number;
+  isGenerated?: boolean;
+  generatedSiteHint?: string;
 }
 
 export interface SearchResultSummary {

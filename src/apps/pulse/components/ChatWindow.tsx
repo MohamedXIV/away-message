@@ -19,6 +19,7 @@ interface ChatWindowProps {
   onSelectTab: (buddyId: string) => void;
   onCloseTab: (buddyId: string) => void;
   onSendMessage: (buddyId: string, text: string) => void;
+  onBuzz?: (buddyId: string) => void;
   onSelectChoice: (choice: DialogueChoiceOption, buddyId: string) => void;
 }
 
@@ -35,6 +36,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   onSelectTab,
   onCloseTab,
   onSendMessage,
+  onBuzz,
   onSelectChoice,
 }) => {
   if (!activeBuddyId || openBuddyIds.length === 0) {
@@ -82,6 +84,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
 
       <MessageInputBar
         onSendMessage={(text) => onSendMessage(activeBuddyId, text)}
+        onBuzz={() => onBuzz?.(activeBuddyId)}
         playerTypingText={playerTypingText}
         isPlayerTyping={isPlayerTyping}
       />

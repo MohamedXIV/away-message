@@ -11,6 +11,10 @@ export class PulsePage {
     await this.page.evaluate(() => {
       (window as any).__windowStore.getState().openWindow('pulse');
     });
+    const signInButton = this.page.locator('button:has-text("Sign In")').first();
+    await expect(signInButton).toBeVisible({ timeout: 7000 });
+    await signInButton.click();
+    await expect(this.page.locator('text=Contacts').first()).toBeVisible({ timeout: 7000 });
     await this.page.waitForTimeout(100);
   }
 

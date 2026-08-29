@@ -3,6 +3,10 @@ import { useSimulationStore } from '../../store/useSimulationStore';
 import { InternetRouter } from '../../internet/InternetRouter';
 import { RouteMatchResult, ParsedUrl } from '../../internet/types';
 import { soundManager } from '../../audio/SoundManager';
+import { GeneratedSite } from '../../internet/sites/GeneratedSite';
+import { aiService } from '../../ai/service';
+import { loadAISettings } from '../../ai/settings';
+import type { GeneratedSiteContent, AIResultMeta } from '../../ai/types';
 
 interface HistoryEntry {
   url: string;
@@ -28,6 +32,9 @@ export const VoyagerBrowserApp: React.FC<VoyagerBrowserAppProps> = ({ initialUrl
   const [loadProgress, setLoadProgress] = useState(0);
   const [statusText, setStatusText] = useState('Done');
   const [matchResult, setMatchResult] = useState<RouteMatchResult | null>(null);
+  const [generatedSite, setGeneratedSite] = useState<GeneratedSiteContent | null>(null);
+  const [generatedSiteMeta, setGeneratedSiteMeta] = useState<AIResultMeta | null>(null);
+  const aiRequestIdRef = useRef(0);
 
   const router = useMemo(() => new InternetRouter(), []);
   const loadTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -48,6 +55,9 @@ export const VoyagerBrowserApp: React.FC<VoyagerBrowserAppProps> = ({ initialUrl
     setIsLoading(true);
     setLoadProgress(10);
     setStatusText(`Connecting to ${cleanUrl}...`);
+    setMatchResult(null);
+    setGeneratedSite(null);
+    setGeneratedSiteMeta(null);
 
     const result = router.resolveRoute(cleanUrl);
 
@@ -59,11 +69,44 @@ export const VoyagerBrowserApp: React.FC<VoyagerBrowserAppProps> = ({ initialUrl
         setStatusText(`Transferring data from ${result.host}... ${progress}%`);
       },
       () => {
+        const parsedUrl = result.parsedUrl;
+        const resolvedUrl = parsedUrl ? parsedUrl.rawUrl : cleanUrl;
+        const shouldGenerate = Boolean(result.is404 && parsedUrl?.host.endsWith('.local'));
+
+        if (shouldGenerate && parsedUrl) {
+          const requestId = ++aiRequestIdRef.current;
+          setLoadProgress(96);
+          setStatusText(`Generating ${parsedUrl.host}...`);
+          void aiService.generateSite({
+            host: parsedUrl.host,
+            pathname: parsedUrl.pathname,
+            worldSeed: 'away-message-demo',
+            locale: 'en',
+          }, loadAISettings()).then((aiResult) => {
+            if (requestId !== aiRequestIdRef.current) return;
+            setIsLoading(false);
+            setLoadProgress(100);
+            setStatusText(aiResult.meta.fallback ? 'Offline copy ready' : aiResult.meta.fromCache ? 'Cached page ready' : 'Generated page ready');
+            setMatchResult(null);
+            setGeneratedSite(aiResult.data);
+            setGeneratedSiteMeta(aiResult.meta);
+            setCurrentUrl(resolvedUrl);
+            setInputUrl(resolvedUrl);
+
+            if (addToHistory) {
+              const newEntry = { url: resolvedUrl, title: aiResult.data.title };
+              setHistory((prev) => [...prev.slice(0, historyIndex + 1), newEntry]);
+              setHistoryIndex((prev) => prev + 1);
+            }
+            soundManager.play('im_recv');
+          });
+          return;
+        }
+
         setIsLoading(false);
         setLoadProgress(100);
         setStatusText('Done');
         setMatchResult(result);
-        const resolvedUrl = result.parsedUrl ? result.parsedUrl.rawUrl : cleanUrl;
         setCurrentUrl(resolvedUrl);
         setInputUrl(resolvedUrl);
 
@@ -273,7 +316,16 @@ export const VoyagerBrowserApp: React.FC<VoyagerBrowserAppProps> = ({ initialUrl
 
       {/* Main Viewport */}
       <div className="flex-1 bg-white overflow-auto relative">
-        {ActivePageComponent && matchResult ? (
+        {generatedSite ? (
+          <GeneratedSite
+            url={defaultParsedUrl}
+            navigate={(u: string) => loadPage(u, true)}
+            params={{}}
+            searchParams={{}}
+            content={generatedSite}
+            meta={generatedSiteMeta || undefined}
+          />
+        ) : ActivePageComponent && matchResult ? (
           <ActivePageComponent
             url={matchResult.parsedUrl || defaultParsedUrl}
             navigate={(u: string) => loadPage(u, true)}

@@ -6,6 +6,7 @@ interface BuddyItemProps {
   presence: BuddyPresence;
   unreadCount?: number;
   onOpenChat: (buddyId: string) => void;
+  onInspect?: (buddyId: string) => void;
 }
 
 export const BuddyItem: React.FC<BuddyItemProps> = ({
@@ -13,6 +14,7 @@ export const BuddyItem: React.FC<BuddyItemProps> = ({
   presence,
   unreadCount = 0,
   onOpenChat,
+  onInspect,
 }) => {
   const statusDotColor = {
     online: 'bg-green-500',
@@ -23,9 +25,10 @@ export const BuddyItem: React.FC<BuddyItemProps> = ({
 
   return (
     <div
+      onClick={() => onInspect?.(buddy.id)}
       onDoubleClick={() => onOpenChat(buddy.id)}
       className="flex items-center gap-2 p-1.5 hover:bg-blue-100 rounded cursor-pointer select-none transition-colors group"
-      title={`Double-click to chat with ${buddy.displayName}`}
+      title={`Click for profile • double-click to chat with ${buddy.displayName}`}
     >
       <div className="w-6 h-6 rounded bg-gray-200 border border-gray-400 flex items-center justify-center text-xs shrink-0 relative shadow-xs">
         <span>👤</span>

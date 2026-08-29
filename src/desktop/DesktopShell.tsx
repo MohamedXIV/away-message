@@ -16,6 +16,7 @@ import {
   FileText,
   Package,
   Folder,
+  Sparkles,
 } from 'lucide-react';
 
 export type WallpaperPreset = 'classic_teal' | 'bliss_green' | 'starry_night' | 'matrix_rain' | 'solid_navy';
@@ -24,7 +25,7 @@ export interface DesktopIconItem {
   id: string;
   label: string;
   appId: string;
-  iconType: 'computer' | 'browser' | 'pulse' | 'terminal' | 'control' | 'trash' | 'text' | 'installer' | 'folder';
+  iconType: 'computer' | 'browser' | 'pulse' | 'terminal' | 'control' | 'trash' | 'text' | 'installer' | 'folder' | 'ai';
   filePath?: string;
   gridX: number; // Column index (0, 1, 2...)
   gridY: number; // Row index (0, 1, 2...)
@@ -65,6 +66,8 @@ function renderIconGraphic(type: DesktopIconItem['iconType'], _theme?: string) {
       return <Package className="w-7 h-7 text-indigo-300 drop-shadow" />;
     case 'folder':
       return <Folder className="w-7 h-7 text-yellow-400 drop-shadow" />;
+    case 'ai':
+      return <Sparkles className="w-7 h-7 text-fuchsia-300 drop-shadow" />;
   }
 }
 
@@ -98,6 +101,7 @@ export const DesktopShell: React.FC = () => {
     { id: 'sys_terminal', label: 'Terminal CLI', appId: 'terminal', iconType: 'terminal', gridX: 0, gridY: 3 },
     { id: 'sys_control', label: 'Control Panel', appId: 'controlpanel', iconType: 'control', gridX: 0, gridY: 4 },
     { id: 'sys_trash', label: 'Recycle Bin', appId: 'trash', iconType: 'trash', gridX: 0, gridY: 5 },
+    { id: 'sys_ailab', label: 'AI Lab', appId: 'ailab', iconType: 'ai', gridX: 0, gridY: 6 },
   ];
 
   // Dynamic VFS icons in C:/Desktop

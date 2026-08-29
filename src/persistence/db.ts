@@ -8,6 +8,7 @@ import type {
   RelationshipRecord,
   NarrativeStateRecord,
   TelemetryLogRecord,
+  AICacheRecord,
 } from './schema';
 
 export class AwayMessageDB extends Dexie {
@@ -19,6 +20,7 @@ export class AwayMessageDB extends Dexie {
   relationships!: Table<RelationshipRecord, string>;
   narrative_state!: Table<NarrativeStateRecord, string>;
   telemetry_logs!: Table<TelemetryLogRecord, number>;
+  ai_cache!: Table<AICacheRecord, string>;
 
   constructor(databaseName = 'AwayMessageDB') {
     super(databaseName);
@@ -33,6 +35,19 @@ export class AwayMessageDB extends Dexie {
       relationships: 'buddyId, lastInteractionDay',
       narrative_state: 'key, updatedAt',
       telemetry_logs: '++id, timestamp, gameDay, eventType',
+    });
+
+    // AI artifacts are app-level cache, intentionally excluded from save slots.
+    this.version(2).stores({
+      saves: 'id, name, updatedAt, day',
+      vfs_files: 'id, path, parentPath, kind, name, createdAt',
+      downloads: 'id, status, startedAt, completedAt',
+      installed_software: 'appId, installedAt, version',
+      messages: 'id, buddyId, timestamp, isRead, [buddyId+timestamp]',
+      relationships: 'buddyId, lastInteractionDay',
+      narrative_state: 'key, updatedAt',
+      telemetry_logs: '++id, timestamp, gameDay, eventType',
+      ai_cache: 'key, kind, expiresAt, providerId',
     });
   }
 }

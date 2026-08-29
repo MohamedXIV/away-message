@@ -7,6 +7,7 @@ interface BuddyGroupProps {
   buddies: Array<{ buddy: BuddyCharacter; presence: BuddyPresence }>;
   unreadCounts: Record<string, number>;
   onOpenChat: (buddyId: string) => void;
+  onInspect?: (buddyId: string) => void;
   defaultExpanded?: boolean;
 }
 
@@ -15,6 +16,7 @@ export const BuddyGroup: React.FC<BuddyGroupProps> = ({
   buddies,
   unreadCounts,
   onOpenChat,
+  onInspect,
   defaultExpanded = true,
 }) => {
   const [isExpanded, setIsExpanded] = useState(defaultExpanded);
@@ -40,6 +42,7 @@ export const BuddyGroup: React.FC<BuddyGroupProps> = ({
               presence={presence}
               unreadCount={unreadCounts[buddy.id] || 0}
               onOpenChat={onOpenChat}
+              onInspect={onInspect}
             />
           ))}
         </div>

@@ -30,6 +30,12 @@ write_base64.py
 write_hex.py
 test_hex.txt
 
+# Local environment secrets
+.env
+.env.local
+.env.*.local
+!.env.example
+
 # OS
 .DS_Store
 Thumbs.db

@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { SiteRouteProps } from '../types';
 import { useSimulationStore } from '../../store/useSimulationStore';
-import { searchInternet } from '../searchIndex';
+import { generateFindItCandidates, searchInternet } from '../searchIndex';
 
 export const FindItSite: React.FC<SiteRouteProps> = (props) => {
   const currentDay = useSimulationStore((s) => s.state.time.day);
@@ -13,12 +13,16 @@ export const FindItSite: React.FC<SiteRouteProps> = (props) => {
   const [searchQuery, setSearchQuery] = useState(initialQuery);
   const [hasSearched, setHasSearched] = useState(Boolean(initialQuery));
 
-  const results = searchInternet(searchQuery, currentDay, narrativeFlags);
+  const indexedResults = searchInternet(searchQuery, currentDay, narrativeFlags);
+  const generatedResults = useMemo(() => generateFindItCandidates(searchQuery, currentDay), [searchQuery, currentDay]);
+  const results = useMemo(() => [...indexedResults, ...generatedResults].slice(0, 8), [indexedResults, generatedResults]);
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!searchQuery.trim()) return;
+    const cleanQuery = searchQuery.trim();
+    if (!cleanQuery) return;
     setHasSearched(true);
+    doNavigate(`http://findit.local/?q=${encodeURIComponent(cleanQuery)}`);
   };
 
   return (
@@ -80,8 +84,8 @@ export const FindItSite: React.FC<SiteRouteProps> = (props) => {
               Your search - <strong>{searchQuery}</strong> - did not match any documents in the FindIt index.
             </div>
           ) : (
-            results.map((item: any) => (
-              <div key={item.id} className="space-y-0.5 text-left">
+              results.map((item) => (
+              <div key={item.id} className={`space-y-0.5 text-left border-b border-gray-100 pb-3 ${item.isGenerated ? 'bg-[#fffdf0] px-2 py-2' : ''}`}>
                 <button
                   onClick={() => doNavigate(item.url)}
                   className="text-blue-800 hover:underline font-bold text-sm text-left block"
@@ -89,7 +93,9 @@ export const FindItSite: React.FC<SiteRouteProps> = (props) => {
                   {item.title}
                 </button>
                 <span className="text-[11px] text-green-700 font-mono block">{item.url}</span>
+                {item.isGenerated && <span className="inline-block bg-yellow-100 px-1 text-[10px] text-yellow-800">AI-generated discovery</span>}
                 <p className="text-xs text-gray-700">{item.snippet}</p>
+                {item.generatedSiteHint && <p className="text-[10px] italic text-gray-500">{item.generatedSiteHint}</p>}
               </div>
             ))
           )}
