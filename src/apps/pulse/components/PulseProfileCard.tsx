@@ -1,6 +1,7 @@
 import React from 'react';
 import type { BuddyCharacter, BuddyPresence, RelationshipDimensions } from '../../../engine/types';
 import type { PulseRoom } from '../data/pulseRooms';
+import type { PulseActivityEntry } from '../types';
 
 interface PulseProfileCardProps {
   buddy: BuddyCharacter;
@@ -11,6 +12,7 @@ interface PulseProfileCardProps {
   onChat: () => void;
   onBuzz: () => void;
   onInvite: (roomId: string) => void;
+  awayHistory?: PulseActivityEntry[];
 }
 
 const meterItems: Array<{ key: keyof RelationshipDimensions; label: string; color: string }> = [
@@ -20,7 +22,7 @@ const meterItems: Array<{ key: keyof RelationshipDimensions; label: string; colo
   { key: 'respect', label: 'Respect', color: '#8668a8' },
 ];
 
-export const PulseProfileCard: React.FC<PulseProfileCardProps> = ({ buddy, presence, relationship, rooms, onClose, onChat, onBuzz, onInvite }) => {
+export const PulseProfileCard: React.FC<PulseProfileCardProps> = ({ buddy, presence, relationship, rooms, onClose, onChat, onBuzz, onInvite, awayHistory = [] }) => {
   const avatarLetter = buddy.displayName.trim().charAt(0).toUpperCase() || '?';
 
   return (
@@ -45,6 +47,13 @@ export const PulseProfileCard: React.FC<PulseProfileCardProps> = ({ buddy, prese
           <button onClick={onChat} className="flex-1 border border-[#3d5874] bg-[#d9e9f7] px-2 py-1 font-bold hover:bg-[#c6def1]">Send IM</button>
           <button onClick={onBuzz} className="border border-[#825c25] bg-[#f4d58d] px-2 py-1 font-bold hover:bg-[#eec878]">Buzz</button>
         </div>
+
+        {awayHistory.length > 0 && <div className="border border-[#b2bdc8] bg-white p-2">
+          <div className="mb-1 font-bold text-[#274e78]">Away message history</div>
+          <div className="space-y-1 text-[10px] text-gray-600">
+            {awayHistory.slice(-3).reverse().map((entry) => <div key={entry.id}><div className="italic">“{entry.text.replace(`${buddy.displayName} is away: `, '')}”</div><div className="text-[9px] text-gray-400">Day {Math.floor(entry.minute / 1440) + 1}</div></div>)}
+          </div>
+        </div>}
 
         <div className="border border-[#b2bdc8] bg-white p-2">
           <div className="mb-2 font-bold text-[#274e78]">Relationship snapshot</div>

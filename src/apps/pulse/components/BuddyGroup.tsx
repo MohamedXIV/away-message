@@ -8,6 +8,7 @@ interface BuddyGroupProps {
   unreadCounts: Record<string, number>;
   onOpenChat: (buddyId: string) => void;
   onInspect?: (buddyId: string) => void;
+  onContextMenu?: (buddyId: string, event: React.MouseEvent<HTMLDivElement>) => void;
   defaultExpanded?: boolean;
 }
 
@@ -17,6 +18,7 @@ export const BuddyGroup: React.FC<BuddyGroupProps> = ({
   unreadCounts,
   onOpenChat,
   onInspect,
+  onContextMenu,
   defaultExpanded = true,
 }) => {
   const [isExpanded, setIsExpanded] = useState(defaultExpanded);
@@ -43,6 +45,7 @@ export const BuddyGroup: React.FC<BuddyGroupProps> = ({
               unreadCount={unreadCounts[buddy.id] || 0}
               onOpenChat={onOpenChat}
               onInspect={onInspect}
+              onContextMenu={onContextMenu}
             />
           ))}
         </div>

@@ -15,6 +15,9 @@ export interface PulsePersistedState {
   activityBuckets: Record<string, number>;
   activityFeed: PulseActivityEntry[];
   lastSeenTotalMinutes: number;
+  conversationMemory: Record<string, string[]>;
+  npcMood: Record<string, string>;
+  npcActivity: Record<string, string>;
   friendRequestStatus: FriendRequestStatus;
 }
 
@@ -40,6 +43,9 @@ export function makeDefaultPulseState(): PulsePersistedState {
     activityBuckets: {},
     activityFeed: [],
     lastSeenTotalMinutes: 480,
+    conversationMemory: {},
+    npcMood: {},
+    npcActivity: {},
     friendRequestStatus: 'pending',
   };
 }
@@ -98,10 +104,24 @@ export function loadPulseState(): PulsePersistedState {
     const lastSeenTotalMinutes = typeof parsed.lastSeenTotalMinutes === 'number' && Number.isFinite(parsed.lastSeenTotalMinutes)
       ? Math.max(0, parsed.lastSeenTotalMinutes)
       : fallback.lastSeenTotalMinutes;
+    const readStringMap = (value: unknown): Record<string, string> => value && typeof value === 'object'
+      ? Object.fromEntries(Object.entries(value as Record<string, unknown>).reduce<Array<[string, string]>>((items, [key, item]) => {
+        if (typeof item === 'string') items.push([key, item]);
+        return items;
+      }, []))
+      : {};
+    const conversationMemory: Record<string, string[]> = {};
+    if (parsed.conversationMemory && typeof parsed.conversationMemory === 'object') {
+      Object.entries(parsed.conversationMemory as Record<string, unknown>).forEach(([buddyId, items]) => {
+        if (Array.isArray(items)) conversationMemory[buddyId] = items.filter((item): item is string => typeof item === 'string').slice(-6);
+      });
+    }
+    const npcMood = readStringMap(parsed.npcMood);
+    const npcActivity = readStringMap(parsed.npcActivity);
     const friendRequestStatus: FriendRequestStatus = parsed.friendRequestStatus === 'accepted' || parsed.friendRequestStatus === 'ignored'
       ? parsed.friendRequestStatus
       : 'pending';
-    return { version: 1, joinedRoomIds, roomMessages, roomTopics, roomReadThrough, activityBuckets, activityFeed, lastSeenTotalMinutes, friendRequestStatus };
+    return { version: 1, joinedRoomIds, roomMessages, roomTopics, roomReadThrough, activityBuckets, activityFeed, lastSeenTotalMinutes, conversationMemory, npcMood, npcActivity, friendRequestStatus };
   } catch {
     return fallback;
   }
@@ -114,6 +134,7 @@ export function savePulseState(state: PulsePersistedState): void {
       ...state,
       version: 1,
       activityFeed: state.activityFeed.slice(-60),
+      conversationMemory: Object.fromEntries(Object.entries(state.conversationMemory).map(([buddyId, items]) => [buddyId, items.slice(-6)])),
       roomMessages: Object.fromEntries(Object.entries(state.roomMessages).map(([roomId, messages]) => [roomId, messages.slice(-80)])),
     }));
   } catch {

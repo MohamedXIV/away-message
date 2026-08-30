@@ -22,6 +22,7 @@ interface BuddyListWindowProps {
   onViewChange: (view: PulseListView) => void;
   onOpenRequests: () => void;
   onSignOut: () => void;
+  onBuzz: (buddyId: string) => void;
   unreadCounts: Record<string, number>;
   activityFeed: PulseActivityEntry[];
 }
@@ -42,6 +43,7 @@ export const BuddyListWindow: React.FC<BuddyListWindowProps> = ({
   onViewChange,
   onOpenRequests,
   onSignOut,
+  onBuzz,
   unreadCounts,
   activityFeed,
 }) => {
@@ -49,6 +51,7 @@ export const BuddyListWindow: React.FC<BuddyListWindowProps> = ({
   const presenceMap = useSimulationStore((s) => s.state.social.presence);
   const buddies = engine.social.getBuddies();
   const [searchFilter, setSearchFilter] = useState('');
+  const [contextMenu, setContextMenu] = useState<{ buddyId: string; x: number; y: number } | null>(null);
 
   const buddiesWithPresence = useMemo(() => buddies
     .filter((buddy) => buddy.displayName.toLowerCase().includes(searchFilter.toLowerCase()) || buddy.handle.toLowerCase().includes(searchFilter.toLowerCase()))
@@ -62,8 +65,16 @@ export const BuddyListWindow: React.FC<BuddyListWindowProps> = ({
   }));
 
   const activeCount = buddiesWithPresence.filter(({ presence }) => presence.status !== 'offline').length;
+  const contextBuddy = contextMenu ? buddies.find((buddy) => buddy.id === contextMenu.buddyId) : undefined;
   return (
-    <div className="flex h-full w-full flex-col overflow-hidden bg-[#f6f6f6] font-sans text-xs select-none">
+    <div className="relative flex h-full w-full flex-col overflow-hidden bg-[#f6f6f6] font-sans text-xs select-none" onClick={() => setContextMenu(null)}>
+      {contextMenu && contextBuddy && <div className="fixed z-50 w-44 border-2 border-[#38516e] bg-white p-1 font-sans text-[11px] shadow-[3px_3px_0_rgba(15,35,60,0.3)]" style={{ left: contextMenu.x, top: contextMenu.y }} onClick={(event) => event.stopPropagation()}>
+        <div className="border-b border-[#b8c3ce] px-2 py-1 font-bold text-[#274e78]">{contextBuddy.displayName}</div>
+        <button className="block w-full px-2 py-1 text-left hover:bg-[#dceafa]" onClick={() => { onOpenChat(contextBuddy.id); setContextMenu(null); }}>Send IM</button>
+        <button className="block w-full px-2 py-1 text-left hover:bg-[#dceafa]" onClick={() => { onInspect(contextBuddy.id); setContextMenu(null); }}>View Profile</button>
+        <button className="block w-full px-2 py-1 text-left hover:bg-[#dceafa]" onClick={() => { onBuzz(contextBuddy.id); setContextMenu(null); }}>Buzz / Nudge</button>
+        <button className="block w-full px-2 py-1 text-left hover:bg-[#dceafa]" onClick={() => { onInspect(contextBuddy.id); setContextMenu(null); }}>Away Message History</button>
+      </div>}
       <div className="flex gap-3 border-b border-gray-400 bg-[#dfdfdf] px-2 py-0.5 text-[11px] text-gray-800">
         <span className="cursor-pointer font-bold hover:underline">Contacts</span>
         <span className="cursor-pointer hover:underline">Actions</span>
@@ -94,7 +105,7 @@ export const BuddyListWindow: React.FC<BuddyListWindowProps> = ({
             <span>New friend request</span>
           </button> : <div className="mx-1 mt-1 border border-[#b8c3ce] bg-[#f3f6f8] px-2 py-1 text-[10px] text-gray-600">Friend request {friendRequestStatus}.</div>}
           <div className="flex-1 space-y-1 overflow-y-auto bg-white p-1">
-            {groupedBuddies.map((group, index) => <BuddyGroup key={group.id} title={group.label} buddies={group.buddies} unreadCounts={unreadCounts} onOpenChat={onOpenChat} onInspect={onInspect} defaultExpanded={index === 0} />)}
+            {groupedBuddies.map((group, index) => <BuddyGroup key={group.id} title={group.label} buddies={group.buddies} unreadCounts={unreadCounts} onOpenChat={onOpenChat} onInspect={onInspect} onContextMenu={(buddyId, event) => setContextMenu({ buddyId, x: event.clientX, y: event.clientY })} defaultExpanded={index === 0} />)}
             {groupedBuddies.every((group) => group.buddies.length === 0) && <div className="p-4 text-center text-[11px] italic text-gray-500">No contacts match this search.</div>}
           </div>
         </>

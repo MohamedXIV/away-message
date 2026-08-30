@@ -7,6 +7,7 @@ interface BuddyItemProps {
   unreadCount?: number;
   onOpenChat: (buddyId: string) => void;
   onInspect?: (buddyId: string) => void;
+  onContextMenu?: (buddyId: string, event: React.MouseEvent<HTMLDivElement>) => void;
 }
 
 export const BuddyItem: React.FC<BuddyItemProps> = ({
@@ -15,6 +16,7 @@ export const BuddyItem: React.FC<BuddyItemProps> = ({
   unreadCount = 0,
   onOpenChat,
   onInspect,
+  onContextMenu,
 }) => {
   const statusDotColor = {
     online: 'bg-green-500',
@@ -27,6 +29,7 @@ export const BuddyItem: React.FC<BuddyItemProps> = ({
     <div
       onClick={() => onInspect?.(buddy.id)}
       onDoubleClick={() => onOpenChat(buddy.id)}
+      onContextMenu={(event) => { event.preventDefault(); onContextMenu?.(buddy.id, event); }}
       className="flex items-center gap-2 p-1.5 hover:bg-blue-100 rounded cursor-pointer select-none transition-colors group"
       title={`Click for profile • double-click to chat with ${buddy.displayName}`}
     >

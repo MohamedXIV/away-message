@@ -29,6 +29,14 @@ function getBuddyPersona(buddyId: string): string {
   return personas[buddyId] || 'A believable online friend with a distinct but grounded personality.';
 }
 
+function getNpcMood(status: string, relationship?: { trust: number; comfort: number; annoyance: number }): string {
+  if (status === 'offline') return 'unavailable and likely tired';
+  if (status === 'away') return 'distracted but reachable';
+  if ((relationship?.annoyance ?? 0) > 45) return 'slightly irritated';
+  if ((relationship?.comfort ?? 0) > 65) return 'relaxed and familiar';
+  return 'neutral and present';
+}
+
 function getRoomReply(roomId: string): { senderId: string; text: string } {
   if (roomId === 'pc-help') return { senderId: 'ryan', text: 'drop the specs and someone will probably have a mirror link' };
   if (roomId === 'night-shift') return { senderId: 'maya', text: 'hold on... i have a track for exactly that mood' };
@@ -201,6 +209,16 @@ export const PulseMessengerApp: React.FC = () => {
 
     const buddy = engine.social.getBuddy(buddyId);
     const relationship = engine.social.getRelationships(buddyId);
+    const presence = engine.social.getPresence(buddyId);
+    const mood = getNpcMood(presence?.status || 'offline', relationship);
+    const activity = presence?.awayMessage || (presence?.status === 'online' ? 'online and checking messages' : 'offline');
+    const memory = pulseState.conversationMemory[buddyId] || [];
+    setPulseState((previous) => ({
+      ...previous,
+      conversationMemory: { ...previous.conversationMemory, [buddyId]: [...(previous.conversationMemory[buddyId] || []), `Player said: ${text}`].slice(-6) },
+      npcMood: { ...previous.npcMood, [buddyId]: mood },
+      npcActivity: { ...previous.npcActivity, [buddyId]: activity },
+    }));
     const recentMessages = engine.social.getMessages(buddyId).slice(-8).map((message) => ({
       sender: message.senderId === 'player' ? 'player' : 'buddy',
       text: message.text,
@@ -211,7 +229,7 @@ export const PulseMessengerApp: React.FC = () => {
       displayName: buddy?.displayName || buddyId,
       handle: buddy?.handle || buddyId,
       persona: getBuddyPersona(buddyId),
-      relationshipSummary: relationship ? JSON.stringify(relationship) : 'new friendship',
+      relationshipSummary: `${relationship ? JSON.stringify(relationship) : 'new friendship'} Mood: ${mood}. Current activity: ${activity}. Memory: ${memory.join(' | ') || 'No prior remembered details.'}`,
       recentMessages,
       playerMessage: text,
     }, loadAISettings());
@@ -383,6 +401,7 @@ export const PulseMessengerApp: React.FC = () => {
           onOpenRoom={handleOpenRoom}
           onViewChange={setView}
           onOpenRequests={() => { setShowFriendRequest(true); soundManager.play('invite'); }}
+          onBuzz={() => handleBuzz()}
           onSignOut={() => { setPulseState((previous) => ({ ...previous, lastSeenTotalMinutes: totalMinutes })); deliveredOfflineForSession.current = false; setSession(null); setActiveRoomId(null); setView('contacts'); }}
           unreadCounts={unreadCounts}
           activityFeed={pulseState.activityFeed}
@@ -445,8 +464,10 @@ export const PulseMessengerApp: React.FC = () => {
           rooms={PULSE_ROOMS}
           onClose={() => setSelectedBuddyId(null)}
           onChat={() => handleOpenChat(selectedBuddyId)}
-          onBuzz={handleBuzz}
-          onInvite={(roomId) => handleInvite(selectedBuddyId, roomId)}
+                      onBuzz={handleBuzz}
+            onInvite={(roomId) => handleInvite(selectedBuddyId, roomId)}
+            awayHistory={pulseState.activityFeed.filter((entry) => entry.buddyId === selectedBuddyId && entry.kind === 'away')}
+
         />
       )}
       {buzzActive && <div className="pointer-events-none absolute inset-0 z-40 animate-[pulse_0.16s_ease-in-out_4] border-4 border-[#f4c542]" />}
