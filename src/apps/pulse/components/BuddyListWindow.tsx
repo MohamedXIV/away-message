@@ -4,6 +4,7 @@ import { UserProfileHeader } from './UserProfileHeader';
 import { BuddyGroup } from './BuddyGroup';
 import { PULSE_GROUPS, PULSE_ROOMS } from '../data/pulseRooms';
 import type { PulseLoginSession } from './PulseLoginSplash';
+import type { PulseActivityEntry } from '../types';
 
 export type PulseListView = 'contacts' | 'rooms';
 
@@ -22,6 +23,7 @@ interface BuddyListWindowProps {
   onOpenRequests: () => void;
   onSignOut: () => void;
   unreadCounts: Record<string, number>;
+  activityFeed: PulseActivityEntry[];
 }
 
 const presenceRank: Record<string, number> = { online: 0, away: 1, busy: 2, offline: 3 };
@@ -41,6 +43,7 @@ export const BuddyListWindow: React.FC<BuddyListWindowProps> = ({
   onOpenRequests,
   onSignOut,
   unreadCounts,
+  activityFeed,
 }) => {
   const engine = useSimulationStore((s) => s.engine);
   const presenceMap = useSimulationStore((s) => s.state.social.presence);
@@ -80,6 +83,12 @@ export const BuddyListWindow: React.FC<BuddyListWindowProps> = ({
           <div className="border-b border-gray-300 bg-[#ece9d8] p-1.5">
             <input type="text" value={searchFilter} onChange={(event) => setSearchFilter(event.target.value)} placeholder="Search contacts..." className="w-full rounded border border-gray-400 bg-white px-2 py-1 text-xs outline-none shadow-inner" />
           </div>
+          {activityFeed.length > 0 && <div className="mx-1 mt-1 border border-[#b8c3ce] bg-[#f3f6f8] px-2 py-1">
+            <div className="mb-1 flex items-center justify-between text-[9px] font-bold uppercase tracking-wide text-[#456990]"><span>Pulse activity</span><span className="font-normal text-gray-500">last {Math.min(activityFeed.length, 3)}</span></div>
+            <div className="space-y-0.5">
+              {activityFeed.slice(-3).reverse().map((entry) => <button key={entry.id} onClick={() => onOpenChat(entry.buddyId)} className="block w-full truncate text-left text-[10px] text-gray-700 hover:text-blue-800 hover:underline">{entry.text}</button>)}
+            </div>
+          </div>}
           {friendRequestStatus === 'pending' ? <button onClick={onOpenRequests} className="mx-1 mt-1 flex items-center gap-2 border border-[#c39a35] bg-[#fff4bd] px-2 py-1 text-left text-[10px] font-bold text-[#6d5000] hover:bg-[#ffed8e]">
             <span className="rounded-full bg-[#d96c3b] px-1.5 py-0.5 text-white">1</span>
             <span>New friend request</span>

@@ -464,6 +464,20 @@ export class SimulationEngine {
         return { success: true, data: msg };
       }
 
+      case 'SOCIAL_RECEIVE_MESSAGE': {
+        const msg = this.social.sendMessage(
+          action.buddyId,
+          action.buddyId,
+          'player',
+          action.text,
+          action.timestampMinute ?? currentMinutes,
+          action.deliveredAway ?? false,
+          action.tags
+        );
+        this.notifySubscribers();
+        return { success: true, data: msg };
+      }
+
       case 'SOCIAL_APPLY_ACTION': {
         try {
           const rels = this.social.applySocialAction(action.buddyId, action.socialAction);

@@ -17,6 +17,7 @@ import { aiService } from '../../ai/service';
 import { loadAISettings } from '../../ai/settings';
 import { soundManager } from '../../audio/SoundManager';
 import { loadPulseState, savePulseState, type PulsePersistedState } from './persistence';
+import type { PulseActivityEntry } from './types';
 
 function getBuddyPersona(buddyId: string): string {
   const personas: Record<string, string> = {
@@ -45,6 +46,7 @@ export const PulseMessengerApp: React.FC = () => {
   const conversations = useSimulationStore((s) => s.state.social.conversations);
   const currentDay = useSimulationStore((s) => s.state.time.day);
   const totalMinutes = useSimulationStore((s) => s.state.time.totalMinutes);
+  const presenceMap = useSimulationStore((s) => s.state.social.presence);
 
   usePulseAudio();
 
@@ -60,6 +62,8 @@ export const PulseMessengerApp: React.FC = () => {
   const [roomTyping, setRoomTyping] = useState(false);
   const [pulseState, setPulseState] = useState<PulsePersistedState>(() => loadPulseState());
   const triggeredDayScripts = useRef<Set<string>>(new Set());
+  const previousPresence = useRef<Record<string, string>>({});
+  const deliveredOfflineForSession = useRef(false);
 
   const {
     typingState,
@@ -78,6 +82,50 @@ export const PulseMessengerApp: React.FC = () => {
     savePulseState(pulseState);
   }, [pulseState]);
 
+  useEffect(() => {
+    if (!session || !Number.isFinite(totalMinutes)) return;
+    const changes: PulseActivityEntry[] = [];
+    Object.entries(presenceMap).forEach(([buddyId, presence]) => {
+      const nextKey = `${presence.status}:${presence.awayMessage}`;
+      const previousKey = previousPresence.current[buddyId];
+      previousPresence.current[buddyId] = nextKey;
+      if (!previousKey || previousKey === nextKey) return;
+      const buddy = engine.social.getBuddy(buddyId);
+      if (!buddy) return;
+      const kind = presence.status === 'online' ? 'sign_in' : presence.status === 'offline' ? 'sign_out' : 'away';
+      const text = kind === 'sign_in'
+        ? `${buddy.displayName} signed in.`
+        : kind === 'sign_out'
+          ? `${buddy.displayName} signed out.`
+          : `${buddy.displayName} is away: ${presence.awayMessage || 'be right back'}`;
+      changes.push({ id: `activity_${buddyId}_${totalMinutes}_${kind}`, buddyId, kind, text, minute: totalMinutes, createdAt: Date.now(), isRead: false });
+    });
+    if (changes.length > 0) {
+      setPulseState((previous) => ({ ...previous, activityFeed: [...previous.activityFeed, ...changes].slice(-60) }));
+    }
+  }, [engine, presenceMap, session, totalMinutes]);
+
+  useEffect(() => {
+    if (!session || deliveredOfflineForSession.current || !Number.isFinite(totalMinutes)) return;
+    deliveredOfflineForSession.current = true;
+    const elapsed = totalMinutes - pulseState.lastSeenTotalMinutes;
+    const nextActivities: PulseActivityEntry[] = [];
+    if (elapsed >= 45) {
+      const offlineLines: Record<string, string> = {
+        maya: 'hey... sorry i missed you. i was away from the desk. what did i miss?',
+        ryan: 'yo, leaving this here before i crash. we still on for later?',
+        nora: 'you were offline. i found an interesting link and bookmarked it for you.',
+        henderson: 'Please contact the office regarding your account when convenient.',
+      };
+      engine.social.getBuddies().forEach((buddy) => {
+        const text = offlineLines[buddy.id];
+        if (!text) return;
+        engine.dispatchAction({ type: 'SOCIAL_RECEIVE_MESSAGE', buddyId: buddy.id, text, timestampMinute: Math.max(pulseState.lastSeenTotalMinutes + 15, totalMinutes - 20), deliveredAway: true, tags: ['offline-message'] });
+        nextActivities.push({ id: `offline_${buddy.id}_${totalMinutes}`, buddyId: buddy.id, kind: 'message', text: `${buddy.displayName} left you an offline message.`, minute: totalMinutes, createdAt: Date.now(), isRead: false });
+      });
+    }
+    setPulseState((previous) => ({ ...previous, lastSeenTotalMinutes: totalMinutes, activityFeed: [...previous.activityFeed, ...nextActivities].slice(-60) }));
+  }, [engine, pulseState.lastSeenTotalMinutes, session, totalMinutes]);
   const unreadCounts: Record<string, number> = {};
   Object.entries(conversations).forEach(([buddyId, msgs]) => {
     const unreads = msgs.filter((message) => !message.isRead && message.senderId !== 'player').length;
@@ -335,8 +383,9 @@ export const PulseMessengerApp: React.FC = () => {
           onOpenRoom={handleOpenRoom}
           onViewChange={setView}
           onOpenRequests={() => { setShowFriendRequest(true); soundManager.play('invite'); }}
-          onSignOut={() => { setSession(null); setActiveRoomId(null); setView('contacts'); }}
+          onSignOut={() => { setPulseState((previous) => ({ ...previous, lastSeenTotalMinutes: totalMinutes })); deliveredOfflineForSession.current = false; setSession(null); setActiveRoomId(null); setView('contacts'); }}
           unreadCounts={unreadCounts}
+          activityFeed={pulseState.activityFeed}
         />
       </div>
 

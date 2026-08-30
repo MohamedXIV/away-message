@@ -1,4 +1,5 @@
 import type { PulseRoomMessage } from './components/PulseRoomWindow';
+import type { PulseActivityEntry } from './types';
 import { PULSE_ROOMS } from './data/pulseRooms';
 
 const STORAGE_KEY = 'away_message_pulse_state_v1';
@@ -12,6 +13,8 @@ export interface PulsePersistedState {
   roomTopics: Record<string, string>;
   roomReadThrough: Record<string, number>;
   activityBuckets: Record<string, number>;
+  activityFeed: PulseActivityEntry[];
+  lastSeenTotalMinutes: number;
   friendRequestStatus: FriendRequestStatus;
 }
 
@@ -35,6 +38,8 @@ export function makeDefaultPulseState(): PulsePersistedState {
     roomTopics: Object.fromEntries(PULSE_ROOMS.map((room) => [room.id, room.topic])),
     roomReadThrough: Object.fromEntries(PULSE_ROOMS.map((room) => [room.id, (roomMessages[room.id] || []).length])),
     activityBuckets: {},
+    activityFeed: [],
+    lastSeenTotalMinutes: 480,
     friendRequestStatus: 'pending',
   };
 }
@@ -87,10 +92,16 @@ export function loadPulseState(): PulsePersistedState {
         if (knownRoomIds.has(roomId) && typeof value === 'number' && Number.isFinite(value)) activityBuckets[roomId] = value;
       });
     }
+    const activityFeed = Array.isArray(parsed.activityFeed)
+      ? parsed.activityFeed.filter((entry): entry is PulseActivityEntry => Boolean(entry && typeof entry === 'object' && typeof (entry as PulseActivityEntry).id === 'string' && typeof (entry as PulseActivityEntry).buddyId === 'string' && typeof (entry as PulseActivityEntry).text === 'string' && typeof (entry as PulseActivityEntry).minute === 'number')).slice(-60)
+      : fallback.activityFeed;
+    const lastSeenTotalMinutes = typeof parsed.lastSeenTotalMinutes === 'number' && Number.isFinite(parsed.lastSeenTotalMinutes)
+      ? Math.max(0, parsed.lastSeenTotalMinutes)
+      : fallback.lastSeenTotalMinutes;
     const friendRequestStatus: FriendRequestStatus = parsed.friendRequestStatus === 'accepted' || parsed.friendRequestStatus === 'ignored'
       ? parsed.friendRequestStatus
       : 'pending';
-    return { version: 1, joinedRoomIds, roomMessages, roomTopics, roomReadThrough, activityBuckets, friendRequestStatus };
+    return { version: 1, joinedRoomIds, roomMessages, roomTopics, roomReadThrough, activityBuckets, activityFeed, lastSeenTotalMinutes, friendRequestStatus };
   } catch {
     return fallback;
   }
@@ -102,6 +113,7 @@ export function savePulseState(state: PulsePersistedState): void {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify({
       ...state,
       version: 1,
+      activityFeed: state.activityFeed.slice(-60),
       roomMessages: Object.fromEntries(Object.entries(state.roomMessages).map(([roomId, messages]) => [roomId, messages.slice(-80)])),
     }));
   } catch {

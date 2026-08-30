@@ -40,6 +40,18 @@ export interface NpcDialogueScript {
   playerChoices?: DialogueChoiceOption[];
 }
 
+export type PulseActivityKind = 'sign_in' | 'sign_out' | 'away' | 'message' | 'room';
+
+export interface PulseActivityEntry {
+  id: string;
+  buddyId: string;
+  kind: PulseActivityKind;
+  text: string;
+  minute: number;
+  createdAt: number;
+  isRead: boolean;
+}
+
 export interface PulseNotification {
   id: string;
   buddyId: string;
