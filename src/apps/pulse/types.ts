@@ -36,6 +36,9 @@ export interface NpcDialogueScript {
     text: string;
     delaySeconds?: number;
     tags?: string[];
+    imageUrl?: string;
+    imagePrompt?: string;
+    imageCaption?: string;
   }>;
   playerChoices?: DialogueChoiceOption[];
 }

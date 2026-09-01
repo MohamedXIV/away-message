@@ -1,6 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useSimulationStore } from '../../store/useSimulationStore';
 import { useWindowStore } from '../../store/useWindowStore';
+import { getFileInfoFromUrl, formatFileSize } from '../../engine/fileUtils';
+import { soundManager } from '../../audio/SoundManager';
 
 interface TerminalLine {
   id: string;
@@ -98,6 +100,8 @@ export const TerminalApp: React.FC<{ windowId: string }> = ({ windowId }) => {
           '  TRACERT <host>      Determines the path that a packet takes to reach a destination.\n' +
           '  IPCONFIG [/all]     Displays all current TCP/IP network configuration values.\n' +
           '  UNZIP <archive>     Extracts files from a compressed ZIP archive.\n' +
+          '  DOWNLOAD <url>      Downloads a file from any .local URL (alias: wget, curl).\n' +
+          '  SAVE <path> <text>  Saves text to a file on disk (e.g. save C:/Documents/note.txt \"hi\").\n' +
           '  VER                 Displays the Orion OS version.\n' +
           '  EXIT                Quits the Command Prompt session.'
         );
@@ -327,6 +331,69 @@ export const TerminalApp: React.FC<{ windowId: string }> = ({ windowId }) => {
         break;
       }
 
+      case 'download':
+      case 'wget':
+      case 'curl': {
+        if (args.length === 0 || !args[0]) {
+          addLine('Usage: download <url>  — e.g. download http://rain-archive.local/files/rain.zip', 'error');
+          return;
+        }
+        const rawUrl = args[0];
+        const info = getFileInfoFromUrl(rawUrl);
+        if (!info) {
+          addLine(`Cannot determine file from URL: ${rawUrl}\nTip: use a direct file URL like http://rain-archive.local/files/archive.zip`, 'error');
+          return;
+        }
+        try {
+          dispatchAction({
+            type: 'DOWNLOAD_START',
+            sourceId: `terminal_${info.fileName}`,
+            url: info.downloadUrl,
+            fileName: info.fileName,
+            totalBytes: info.totalBytes,
+            sourceMaxKbps: info.sourceMaxKbps,
+            fileKind: info.fileKind as any,
+            appAssociation: info.appAssociation,
+          });
+          soundManager.play('im_send');
+          addLine(`Downloading ${info.fileName} (${formatFileSize(info.totalBytes)}) from ${info.downloadUrl}\n→ C:/Downloads/${info.fileName}\nUse FlashFetch or Taskbar to track progress.`);
+        } catch (err) {
+          addLine(`Download failed: ${(err as Error).message}`, 'error');
+        }
+        break;
+      }
+      case 'save': {
+        if (args.length < 2 || !args[0]) {
+          addLine('Usage: save <filePath> <content>  — e.g. save C:/Documents/note.txt \"hello world\"', 'error');
+          return;
+        }
+        const rawSavePath = args[0] as string;
+        const savePath = rawSavePath.startsWith('C:')
+          ? rawSavePath
+          : `${currentPath}/${rawSavePath}`.replace(/\/+/g, '/');
+        const content = args.slice(1).join(' ').replace(/^["']|["']$/g, '');
+        const saveName = savePath.split('/').pop()! || 'note.txt';
+        const saveDir = savePath.substring(0, savePath.lastIndexOf('/')) || currentPath;
+        try {
+          dispatchAction({
+            type: 'VFS_CREATE_FILE',
+            file: {
+              name: saveName,
+              path: savePath,
+              parentPath: saveDir,
+              kind: 'text',
+              sizeBytes: content.length,
+              content,
+              metadata: { textContent: content },
+            },
+          });
+          soundManager.play('im_send');
+          addLine(`Saved ${saveName} to ${savePath} (${content.length} bytes)`);
+        } catch (err) {
+          addLine(`Save failed: ${(err as Error).message}`, 'error');
+        }
+        break;
+      }
       default: {
         addLine(`'${cmd}' is not recognized as an internal or external command,\noperable program or batch file.`, 'error');
         break;

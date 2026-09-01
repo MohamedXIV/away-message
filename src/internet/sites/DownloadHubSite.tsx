@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { SiteRouteProps } from '../types';
 import { useSimulationStore } from '../../store/useSimulationStore';
+import { useWindowStore } from '../../store/useWindowStore';
 import { soundManager } from '../../audio/SoundManager';
 
 interface DownloadItem {
@@ -83,14 +84,29 @@ const DOWNLOAD_CATALOG: DownloadItem[] = [
 
 export const DownloadHubSite: React.FC<SiteRouteProps> = () => {
   const dispatchAction = useSimulationStore((s) => s.dispatchAction);
+  const downloads = useSimulationStore((s) => s.state.downloads);
+  const openWindow = useWindowStore((s) => s.openWindow);
   const [selectedCat, setSelectedCat] = useState<string>('ALL');
+  const [notice, setNotice] = useState<string | null>(null);
 
   const filtered = selectedCat === 'ALL'
     ? DOWNLOAD_CATALOG
     : DOWNLOAD_CATALOG.filter((d) => d.category === selectedCat);
 
+  const getDownloadStatus = (item: DownloadItem) => {
+    const task = downloads.find((t) => t.sourceId === item.id || t.fileName === (item.downloadUrl.split('/').pop() || ''));
+    return task?.status || null;
+  };
+
   const handleDownloadFile = (item: DownloadItem) => {
     const fileName = item.downloadUrl.split('/').pop() || 'setup.exe';
+    const existing = downloads.find((t) => t.sourceId === item.id);
+    if (existing && (existing.status === 'downloading' || existing.status === 'queued')) {
+      setNotice(`${item.name} is already in your download queue — check FlashFetch.`);
+      setTimeout(() => setNotice(null), 2500);
+      openWindow('flashfetch');
+      return;
+    }
     dispatchAction({
       type: 'DOWNLOAD_START',
       sourceId: item.id,
@@ -101,7 +117,10 @@ export const DownloadHubSite: React.FC<SiteRouteProps> = () => {
       fileKind: 'installer',
     });
     soundManager.play('im_send');
-    alert(`Started downloading ${item.name} via FlashFetch / Voyager download manager!`);
+    setNotice(`Queued ${item.name} (${(item.fileSizeBytes / (1024*1024)).toFixed(1)} MB) → C:/Downloads/${fileName} — opened in FlashFetch.`);
+    setTimeout(() => setNotice(null), 3000);
+    // Auto-open the download manager so the user sees progress inside the desktop, not a real browser popup
+    setTimeout(() => openWindow('flashfetch'), 250);
   };
 
   return (
@@ -142,6 +161,14 @@ export const DownloadHubSite: React.FC<SiteRouteProps> = () => {
         ))}
       </div>
 
+      {/* In-game download notice (replaces real browser alert) */}
+      {notice && (
+        <div className="max-w-4xl w-full mt-2 flex items-center justify-between border border-teal-600 bg-[#e0f2f1] px-3 py-2 text-xs font-bold text-teal-900 shadow">
+          <span className="flex items-center gap-2">⬇ {notice}</span>
+          <button onClick={() => setNotice(null)} className="ml-2 rounded border border-teal-700 bg-white px-2 py-0.5 text-[11px] hover:bg-teal-50">Open FlashFetch</button>
+        </div>
+      )}
+
       {/* Main Downloads Table */}
       <div className="max-w-4xl w-full bg-white border border-gray-300 rounded shadow mt-3 overflow-hidden">
         <table className="w-full text-left text-xs border-collapse">
@@ -172,12 +199,25 @@ export const DownloadHubSite: React.FC<SiteRouteProps> = () => {
                   )}
                 </td>
                 <td className="p-2 text-center">
-                  <button
-                    onClick={() => handleDownloadFile(item)}
-                    className="px-3 py-1 bg-teal-600 hover:bg-teal-700 text-white font-bold rounded text-xs shadow-xs cursor-pointer"
-                  >
-                    ⬇ Download
-                  </button>
+                  {(() => {
+                    const status = getDownloadStatus(item);
+                    if (status === 'downloading' || status === 'queued') {
+                      const task = downloads.find((t) => t.sourceId === item.id);
+                      const pct = task ? Math.round((task.downloadedBytes / task.totalBytes) * 100) : 0;
+                      return <span className="inline-flex items-center gap-1 rounded bg-amber-100 px-2 py-1 text-[11px] font-bold text-amber-800 border border-amber-300">⏳ {status === 'queued' ? 'Queued' : `${pct}%`} — FlashFetch</span>;
+                    }
+                    if (status === 'complete') {
+                      return <span className="inline-flex items-center gap-1 rounded bg-green-100 px-2 py-1 text-[11px] font-bold text-green-800 border border-green-300">✓ Downloaded</span>;
+                    }
+                    return (
+                      <button
+                        onClick={() => handleDownloadFile(item)}
+                        className="px-3 py-1 bg-teal-600 hover:bg-teal-700 text-white font-bold rounded text-xs shadow-xs cursor-pointer"
+                      >
+                        ⬇ Download
+                      </button>
+                    );
+                  })()}
                 </td>
               </tr>
             ))}

@@ -17,7 +17,7 @@ export const GeneratedSiteSchema = z.object({
   tagline: boundedText(240),
   eraStyle: boundedText(80),
   archetype: boundedText(60).default('personal homepage'),
-  layout: z.enum(['centered', 'columns', 'forum', 'catalog', 'newspaper', 'sidebar']).default('centered'),
+  layout: z.enum(['centered', 'columns', 'forum', 'catalog', 'newspaper', 'sidebar', 'geocities_table', 'myspace_profile', 'guestbook', 'blog_diary', 'webring']).default('centered'),
   theme: z.object({
     primary: z.string().regex(/^#[0-9a-fA-F]{6}$/),
     secondary: z.string().regex(/^#[0-9a-fA-F]{6}$/),
@@ -45,6 +45,8 @@ export const GeneratedChatResponseSchema = z.object({
   messages: z.array(z.object({
     text: boundedText(500),
     tone: boundedText(40),
+    imagePrompt: z.string().trim().max(200).nullable().optional(),
+    imageCaption: z.string().trim().max(120).nullable().optional(),
   })).min(1).max(3),
   socialAction: z.enum([
     'empathy',
@@ -57,6 +59,8 @@ export const GeneratedChatResponseSchema = z.object({
     'none',
   ]),
   storyHookId: z.string().trim().max(80).nullable(),
+  imagePrompt: z.string().trim().max(200).nullable().optional(),
+  imageCaption: z.string().trim().max(120).nullable().optional(),
 }).strict();
 
 export function parseGeneratedSite(value: unknown): GeneratedSiteContent {

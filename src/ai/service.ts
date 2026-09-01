@@ -31,7 +31,7 @@ const SITE_JSON_SCHEMA: Record<string, unknown> = {
     tagline: { type: 'string' },
     eraStyle: { type: 'string' },
     archetype: { type: 'string' },
-    layout: { type: 'string', enum: ['centered', 'columns', 'forum', 'catalog', 'newspaper', 'sidebar'] },
+    layout: { type: 'string', enum: ['centered', 'columns', 'forum', 'catalog', 'newspaper', 'sidebar', 'geocities_table', 'myspace_profile', 'guestbook', 'blog_diary', 'webring'] },
     theme: {
       type: 'object',
       additionalProperties: false,
@@ -84,7 +84,7 @@ const CHAT_JSON_SCHEMA: Record<string, unknown> = {
       items: {
         type: 'object',
         additionalProperties: false,
-        properties: { text: { type: 'string' }, tone: { type: 'string' } },
+        properties: { text: { type: 'string' }, tone: { type: 'string' }, imagePrompt: { type: ['string', 'null'] }, imageCaption: { type: ['string', 'null'] } },
         required: ['text', 'tone'],
       },
     },
@@ -102,6 +102,8 @@ const CHAT_JSON_SCHEMA: Record<string, unknown> = {
       ],
     },
     storyHookId: { type: ['string', 'null'] },
+    imagePrompt: { type: ['string', 'null'] },
+    imageCaption: { type: ['string', 'null'] },
   },
   required: ['messages', 'socialAction', 'storyHookId'],
 };
@@ -171,6 +173,8 @@ function buildChatPrompts(request: ChatGenerationRequest): { system: string; use
       'Stay in the persona, do not mention being an AI, and do not invent irreversible game events.',
       'Do not change money, files, relationships, or narrative state. Choose only one allowed socialAction.',
       'Prefer lowercase shorthand, pauses, emoticons, and era-appropriate tone when they fit the persona.',
+      'You may occasionally share a fictional .local URL (e.g. http://rain-archive.local/ or http://nightboard.local/thread/104) when it naturally fits the conversation — keep links short and relevant, never real URLs.',
+      'If the player asks for a photo/image and trust/comfort is high enough, you may agree and provide a short imagePrompt (10-20 words, era-appropriate, small low-res photo description) and optional imageCaption. Otherwise leave imagePrompt null. Never invent a photo you host; only describe it.',
     ].join(' '),
     user: [
       `NPC: ${request.displayName} (${request.handle})`,
@@ -178,7 +182,7 @@ function buildChatPrompts(request: ChatGenerationRequest): { system: string; use
       `Relationship snapshot: ${request.relationshipSummary}`,
       `Recent messages: ${JSON.stringify(request.recentMessages.slice(-8))}`,
       `Player message: ${request.playerMessage}`,
-      'Reply with one or two short messages, not a monologue.',
+      'Reply with one or two short messages, not a monologue. If you share a link, include exactly one .local URL inline. If you agree to send a photo, set imagePrompt to a short description (e.g. "Maya at her desk, warm lamp, small photo") and imageCaption to a brief caption.',
     ].join('\n'),
   };
 }
@@ -192,7 +196,7 @@ function colorValue(value: unknown, fallback: string): string {
 }
 
 function layoutValue(value: unknown, fallback: GeneratedSiteContent['layout']): GeneratedSiteContent['layout'] {
-  const layouts: GeneratedSiteContent['layout'][] = ['centered', 'columns', 'forum', 'catalog', 'newspaper', 'sidebar'];
+  const layouts: GeneratedSiteContent['layout'][] = ['centered', 'columns', 'forum', 'catalog', 'newspaper', 'sidebar', 'geocities_table', 'myspace_profile', 'guestbook', 'blog_diary', 'webring'];
   return typeof value === 'string' && layouts.includes(value as GeneratedSiteContent['layout']) ? value as GeneratedSiteContent['layout'] : fallback;
 }
 

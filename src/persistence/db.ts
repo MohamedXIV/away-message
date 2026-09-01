@@ -9,6 +9,7 @@ import type {
   NarrativeStateRecord,
   TelemetryLogRecord,
   AICacheRecord,
+  PulseStateRecord,
 } from './schema';
 
 export class AwayMessageDB extends Dexie {
@@ -21,6 +22,7 @@ export class AwayMessageDB extends Dexie {
   narrative_state!: Table<NarrativeStateRecord, string>;
   telemetry_logs!: Table<TelemetryLogRecord, number>;
   ai_cache!: Table<AICacheRecord, string>;
+  pulse_state!: Table<PulseStateRecord, string>;
 
   constructor(databaseName = 'AwayMessageDB') {
     super(databaseName);
@@ -48,6 +50,20 @@ export class AwayMessageDB extends Dexie {
       narrative_state: 'key, updatedAt',
       telemetry_logs: '++id, timestamp, gameDay, eventType',
       ai_cache: 'key, kind, expiresAt, providerId',
+    });
+
+    // Pulse social state is save-slot-specific so each timeline stays independent.
+    this.version(3).stores({
+      saves: 'id, name, updatedAt, day',
+      vfs_files: 'id, path, parentPath, kind, name, createdAt',
+      downloads: 'id, status, startedAt, completedAt',
+      installed_software: 'appId, installedAt, version',
+      messages: 'id, buddyId, timestamp, isRead, [buddyId+timestamp]',
+      relationships: 'buddyId, lastInteractionDay',
+      narrative_state: 'key, updatedAt',
+      telemetry_logs: '++id, timestamp, gameDay, eventType',
+      ai_cache: 'key, kind, expiresAt, providerId',
+      pulse_state: 'saveSlotId',
     });
   }
 }

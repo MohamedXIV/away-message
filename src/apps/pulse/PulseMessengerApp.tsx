@@ -16,8 +16,11 @@ import { DIALOGUE_SCRIPTS } from './data/dialogueTrees';
 import { aiService } from '../../ai/service';
 import { loadAISettings } from '../../ai/settings';
 import { soundManager } from '../../audio/SoundManager';
-import { loadPulseState, savePulseState, type PulsePersistedState } from './persistence';
-import type { PulseActivityEntry } from './types';
+import { loadPulseState, savePulseState, getCurrentPulseSlotId, setCurrentPulseSlotId, type PulsePersistedState, type PulseSkin } from './persistence';
+import type { PulseActivityEntry, PulseActivityKind } from './types';
+import { getNpcStyle, getNpcMoodLabel, getNpcAvailabilityLabel, getNpcActivityLabel } from './data/npcStyles';
+import { extractFactsFromPlayerMessage, buildConversationSummary, buildMemoryContext, hashReply, isDuplicateReply } from './utils/conversationMemory';
+import { extractLocalLinks, pickRandomBuddyLink } from './utils/linkDetector';
 
 function getBuddyPersona(buddyId: string): string {
   const personas: Record<string, string> = {
@@ -29,24 +32,130 @@ function getBuddyPersona(buddyId: string): string {
   return personas[buddyId] || 'A believable online friend with a distinct but grounded personality.';
 }
 
-function getNpcMood(status: string, relationship?: { trust: number; comfort: number; annoyance: number }): string {
-  if (status === 'offline') return 'unavailable and likely tired';
-  if (status === 'away') return 'distracted but reachable';
-  if ((relationship?.annoyance ?? 0) > 45) return 'slightly irritated';
-  if ((relationship?.comfort ?? 0) > 65) return 'relaxed and familiar';
-  return 'neutral and present';
-}
-
 function getRoomReply(roomId: string): { senderId: string; text: string } {
   if (roomId === 'pc-help') return { senderId: 'ryan', text: 'drop the specs and someone will probably have a mirror link' };
   if (roomId === 'night-shift') return { senderId: 'maya', text: 'hold on... i have a track for exactly that mood' };
   return { senderId: 'nora', text: 'hello, new arrival. please observe the room etiquette.' };
 }
 
-function getRoomResponderId(roomId: string, participantIds: string[], messageCount: number): string {
+export function getRoomResponderId(roomId: string, participantIds: string[], messageCount: number): string {
   if (participantIds.length === 0) return 'nora';
   const offset = roomId.split('').reduce((sum, character) => sum + character.charCodeAt(0), 0);
   return participantIds[(offset + messageCount) % participantIds.length] ?? participantIds[0] ?? 'nora';
+}
+
+export function hashString(value: string): number {
+  let hash = 0;
+  for (let index = 0; index < value.length; index += 1) hash = (hash * 31 + value.charCodeAt(index)) >>> 0;
+  return hash;
+}
+
+export const OFFLINE_MESSAGE_POOLS: Record<string, string[]> = {
+  maya: [
+    'hey... sorry i missed you. i was away from the desk. what did i miss?',
+    'are you there? i made coffee and thought of you :)',
+    'i left a note on myplace... tell me what you think when you get this — http://myplace.local/maya_x',
+    'the rain got heavy again. i was listening to that track we talked about — http://rain-archive.local/',
+    'you were offline for a bit — i bookmarked something on findit for you: http://rain-archive.local/collection',
+    'check this when you are back: http://retroamp.local/playlist/maya-blue ~',
+  ],
+  ryan: [
+    'yo, leaving this here before i crash. we still on for later?',
+    'dude my cart shift was brutal lol. hmu when you are back',
+    'found a mirror that actually works. will send the link when you are on — http://downloadhub.local/files/flashfetch',
+    'yo i tried buzzing you but you were offline. ping me — also http://techmart.local/product/ram512 is the ram i mentioned',
+    'leaving this offline so you see it: tacos tomorrow? my treat if you show — http://taco-cart.local/',
+    'check the pc help room mirror list: http://pc-help.local/',
+  ],
+  nora: [
+    'you were offline. i found an interesting link and bookmarked it for you. http://canal-hum.local/recording',
+    'nightboard was quiet while you were away. left you a thread to read: http://nightboard.local/thread/104',
+    'heard that hum again near the canal. tell me if you hear it too? http://canal-hum.local/recording',
+    'i was indexing logs. you missed a weird post — i saved it: http://archive.local/logs/nora-index',
+    'the lounge was empty. i kept a seat for you — http://nightboard.local/thread/112',
+    'found a log that mentions the motel: http://citywire.local/article/power_grid',
+  ],
+  henderson: [
+    'Please contact the office regarding your account when convenient. http://motellink.local/',
+    'Reminder: rent ledger updated. See me at the front desk if you have questions. http://motellink.local/',
+    'Office hours 08:00–20:00. Leave a message if you miss me. http://motellink.local/',
+    'Noticed a draft by the window. Let me know if the heat is uneven.',
+    'Your mailbox has a notice. Check when you are back online. http://goldnet.local/',
+    'Updated office notice: http://citywire.local/article/motel-district',
+  ],
+};
+
+export function pickOfflineMessage(buddyId: string, minute: number): string {
+  const pool = OFFLINE_MESSAGE_POOLS[buddyId] || [`hey, you missed me at ${minute}. ping me later?`];
+  const index = hashString(`${buddyId}:${minute}`) % pool.length;
+  return pool[index] || pool[0]!;
+}
+
+export function collectMissedPresenceActivities(
+  lastSeenMinute: number,
+  currentMinute: number,
+  getBuddy: (id: string) => { displayName: string; schedule: Record<number, Array<{ startMinuteOfDay: number; endMinuteOfDay: number; status: string; awayMessage: string }>> } | undefined,
+  buddyIds: string[]
+): PulseActivityEntry[] {
+  if (!Number.isFinite(lastSeenMinute) || !Number.isFinite(currentMinute) || currentMinute <= lastSeenMinute) return [];
+  const cappedLastSeen = Math.max(0, lastSeenMinute);
+  const elapsed = currentMinute - cappedLastSeen;
+  if (elapsed < 15) return [];
+  const activities: import('./types').PulseActivityEntry[] = [];
+  const startDay = Math.floor(cappedLastSeen / 1440) + 1;
+  const endDay = Math.floor(currentMinute / 1440) + 1;
+  for (const buddyId of buddyIds) {
+    const buddy = getBuddy(buddyId);
+    if (!buddy) continue;
+    for (let day = startDay; day <= endDay; day += 1) {
+      const daySchedule = buddy.schedule[day] || buddy.schedule[1];
+      if (!daySchedule) continue;
+      for (const block of daySchedule) {
+        const blockStartTotal = (day - 1) * 1440 + block.startMinuteOfDay;
+        if (blockStartTotal <= cappedLastSeen || blockStartTotal > currentMinute) continue;
+        const kind = block.status === 'online' ? 'sign_in' : block.status === 'offline' ? 'sign_out' : 'away';
+        const text = kind === 'sign_in'
+          ? `${buddy.displayName} signed in.`
+          : kind === 'sign_out'
+            ? `${buddy.displayName} signed out.`
+            : `${buddy.displayName} is away: ${block.awayMessage || 'be right back'}`;
+        activities.push({
+          id: `missed_${buddyId}_${blockStartTotal}_${kind}`,
+          buddyId,
+          kind: kind as PulseActivityKind,
+          text,
+          minute: blockStartTotal,
+          createdAt: Date.now() - (currentMinute - blockStartTotal) * 60000,
+          isRead: false,
+        });
+      }
+    }
+  }
+  activities.sort((a, b) => a.minute - b.minute);
+  return activities.slice(-30);
+}
+
+export function getRoomResponderSequence(roomId: string, participantIds: string[], messageCount: number, playerText: string): string[] {
+  if (participantIds.length === 0) return ['nora'];
+  const primary = getRoomResponderId(roomId, participantIds, messageCount);
+  const hash = hashString(`${roomId}:${messageCount}:${playerText}`);
+  const roll = hash % 100;
+  let count = 1;
+  if (participantIds.length >= 2) {
+    if (roll < 10) count = 3;
+    else if (roll < 40) count = 2;
+  }
+  // Cap by available participants
+  count = Math.min(count, participantIds.length);
+  if (count === 1) return [primary];
+  const remaining = participantIds.filter((id) => id !== primary);
+  const secondIndex = (hash >> 7) % remaining.length;
+  const second = remaining[secondIndex]!;
+  if (count === 2) return [primary, second];
+  const remaining2 = remaining.filter((id) => id !== second);
+  const thirdIndex = (hash >> 14) % remaining2.length;
+  const third = remaining2[thirdIndex]!;
+  return [primary, second, third];
 }
 
 export const PulseMessengerApp: React.FC = () => {
@@ -68,7 +177,8 @@ export const PulseMessengerApp: React.FC = () => {
   const [inviteNotice, setInviteNotice] = useState<string | null>(null);
   const [showFriendRequest, setShowFriendRequest] = useState(false);
   const [roomTyping, setRoomTyping] = useState(false);
-  const [pulseState, setPulseState] = useState<PulsePersistedState>(() => loadPulseState());
+  const [currentSlotId, setCurrentSlotIdState] = useState<string>(() => getCurrentPulseSlotId());
+  const [pulseState, setPulseState] = useState<PulsePersistedState>(() => loadPulseState(getCurrentPulseSlotId()));
   const triggeredDayScripts = useRef<Set<string>>(new Set());
   const previousPresence = useRef<Record<string, string>>({});
   const deliveredOfflineForSession = useRef(false);
@@ -84,11 +194,31 @@ export const PulseMessengerApp: React.FC = () => {
 
   const { activeToasts, dismissToast } = usePulseNotifications(activeBuddyId);
 
-  const { joinedRoomIds, roomMessages, roomTopics, friendRequestStatus } = pulseState;
+  const { joinedRoomIds, roomMessages, roomTopics, friendRequestStatus, pulseSkin } = pulseState;
 
   useEffect(() => {
-    savePulseState(pulseState);
-  }, [pulseState]);
+    savePulseState(pulseState, currentSlotId);
+  }, [pulseState, currentSlotId]);
+
+  const handleChangeSkin = (skin: PulseSkin) => {
+    setPulseState((previous) => ({ ...previous, pulseSkin: skin }));
+  };
+
+  const handleSwitchSlot = (slotId: string) => {
+    const cleanSlotId = slotId.trim().slice(0, 32) || 'slot_1';
+    if (cleanSlotId === currentSlotId) return;
+    // Persist current slot before switching
+    savePulseState(pulseState, currentSlotId);
+    setCurrentPulseSlotId(cleanSlotId);
+    setCurrentSlotIdState(cleanSlotId);
+    const nextState = loadPulseState(cleanSlotId);
+    setPulseState(nextState);
+    deliveredOfflineForSession.current = false;
+    previousPresence.current = {};
+    triggeredDayScripts.current.clear();
+    setInviteNotice(`Switched to ${cleanSlotId} — Pulse timeline isolated.`);
+    window.setTimeout(() => setInviteNotice(null), 2200);
+  };
 
   useEffect(() => {
     if (!session || !Number.isFinite(totalMinutes)) return;
@@ -109,7 +239,16 @@ export const PulseMessengerApp: React.FC = () => {
       changes.push({ id: `activity_${buddyId}_${totalMinutes}_${kind}`, buddyId, kind, text, minute: totalMinutes, createdAt: Date.now(), isRead: false });
     });
     if (changes.length > 0) {
-      setPulseState((previous) => ({ ...previous, activityFeed: [...previous.activityFeed, ...changes].slice(-60) }));
+      setPulseState((previous) => {
+        const nextAwayHistory = { ...previous.awayHistory };
+        changes.forEach((entry) => {
+          if (entry.kind === 'away') {
+            const existing = nextAwayHistory[entry.buddyId] || [];
+            nextAwayHistory[entry.buddyId] = [...existing, entry].slice(-20);
+          }
+        });
+        return { ...previous, activityFeed: [...previous.activityFeed, ...changes].slice(-80), awayHistory: nextAwayHistory };
+      });
     }
   }, [engine, presenceMap, session, totalMinutes]);
 
@@ -117,22 +256,97 @@ export const PulseMessengerApp: React.FC = () => {
     if (!session || deliveredOfflineForSession.current || !Number.isFinite(totalMinutes)) return;
     deliveredOfflineForSession.current = true;
     const elapsed = totalMinutes - pulseState.lastSeenTotalMinutes;
-    const nextActivities: PulseActivityEntry[] = [];
-    if (elapsed >= 45) {
-      const offlineLines: Record<string, string> = {
-        maya: 'hey... sorry i missed you. i was away from the desk. what did i miss?',
-        ryan: 'yo, leaving this here before i crash. we still on for later?',
-        nora: 'you were offline. i found an interesting link and bookmarked it for you.',
-        henderson: 'Please contact the office regarding your account when convenient.',
+    const buddyIds = engine.social.getBuddies().map((buddy) => buddy.id).filter((id) => !pulseState.blockedBuddyIds.includes(id));
+    const missedActivities = collectMissedPresenceActivities(pulseState.lastSeenTotalMinutes, totalMinutes, (id) => engine.social.getBuddy(id) as any, buddyIds);
+    const offlineActivities: PulseActivityEntry[] = [];
+    const offlineNewLinks: import('./persistence').PulseSharedLink[] = [];
+    // Generate varied offline messages when the player was away long enough.
+    // Each buddy that was at least once online/away during the absence may leave one.
+    if (elapsed >= 30) {
+      const shouldLeaveMessage = (buddyId: string): boolean => {
+        // Deterministic 75% chance per buddy based on elapsed and buddy hash — keeps world feeling alive but not spammy.
+        if (elapsed >= 90) return true;
+        const roll = hashString(`${buddyId}:${pulseState.lastSeenTotalMinutes}:${totalMinutes}`) % 100;
+        return roll < 75;
       };
       engine.social.getBuddies().forEach((buddy) => {
-        const text = offlineLines[buddy.id];
-        if (!text) return;
-        engine.dispatchAction({ type: 'SOCIAL_RECEIVE_MESSAGE', buddyId: buddy.id, text, timestampMinute: Math.max(pulseState.lastSeenTotalMinutes + 15, totalMinutes - 20), deliveredAway: true, tags: ['offline-message'] });
-        nextActivities.push({ id: `offline_${buddy.id}_${totalMinutes}`, buddyId: buddy.id, kind: 'message', text: `${buddy.displayName} left you an offline message.`, minute: totalMinutes, createdAt: Date.now(), isRead: false });
+        if (pulseState.blockedBuddyIds.includes(buddy.id)) return;
+        if (!shouldLeaveMessage(buddy.id)) return;
+        const hash = hashString(`${buddy.id}:${totalMinutes}:${pulseState.lastSeenTotalMinutes}`);
+        const maxOffset = Math.max(10, elapsed - 12);
+        const offset = 10 + (hash % Math.min( maxOffset, 720));
+        const timestampMinute = Math.min(totalMinutes - 2, Math.max(pulseState.lastSeenTotalMinutes + 10, pulseState.lastSeenTotalMinutes + offset));
+        const text = pickOfflineMessage(buddy.id, timestampMinute);
+        // Capture any .local links from offline message for sharedLinks / FindIt discovery
+        extractLocalLinks(text).forEach((link) => {
+          const lower = link.url.toLowerCase();
+          if (offlineNewLinks.some((entry) => entry.url.toLowerCase() === lower) || pulseState.sharedLinks.some((entry) => entry.url.toLowerCase() === lower)) return;
+          offlineNewLinks.push({
+            id: `shared_offline_${buddy.id}_${link.host}_${timestampMinute}`,
+            url: link.url,
+            host: link.host,
+            title: `${link.host} — shared by ${buddy.displayName}`,
+            sharedBy: buddy.id,
+            sharedByName: buddy.displayName,
+            minute: timestampMinute,
+            snippet: `Offline message from ${buddy.displayName} at Day ${Math.floor(timestampMinute / 1440) + 1}.`,
+          });
+        });
+        engine.dispatchAction({ type: 'SOCIAL_RECEIVE_MESSAGE', buddyId: buddy.id, text, timestampMinute, deliveredAway: true, tags: ['offline-message', 'offline'] });
+        if (elapsed >= 240) {
+          // Very long absence: second message from the most social buddies with a staggered timestamp.
+          if (buddy.id === 'maya' || buddy.id === 'ryan') {
+            const secondOffset = Math.min(offset + 45, elapsed - 4);
+            const secondMinute = Math.min(totalMinutes - 1, pulseState.lastSeenTotalMinutes + secondOffset);
+            const secondText = pickOfflineMessage(buddy.id, secondMinute + 999);
+            if (secondText !== text) {
+              extractLocalLinks(secondText).forEach((link) => {
+                const lower = link.url.toLowerCase();
+                if (offlineNewLinks.some((entry) => entry.url.toLowerCase() === lower) || pulseState.sharedLinks.some((entry) => entry.url.toLowerCase() === lower)) return;
+                offlineNewLinks.push({
+                  id: `shared_offline_${buddy.id}_${link.host}_${secondMinute}`,
+                  url: link.url,
+                  host: link.host,
+                  title: `${link.host} — shared by ${buddy.displayName}`,
+                  sharedBy: buddy.id,
+                  sharedByName: buddy.displayName,
+                  minute: secondMinute,
+                  snippet: `Offline message from ${buddy.displayName} at Day ${Math.floor(secondMinute / 1440) + 1}.`,
+                });
+              });
+              engine.dispatchAction({ type: 'SOCIAL_RECEIVE_MESSAGE', buddyId: buddy.id, text: secondText, timestampMinute: secondMinute, deliveredAway: true, tags: ['offline-message'] });
+            }
+          }
+        }
+        offlineActivities.push({ id: `offline_${buddy.id}_${timestampMinute}`, buddyId: buddy.id, kind: 'message', text: `${buddy.displayName} left you an offline message.`, minute: timestampMinute, createdAt: Date.now() - (totalMinutes - timestampMinute) * 60000, isRead: false });
       });
     }
-    setPulseState((previous) => ({ ...previous, lastSeenTotalMinutes: totalMinutes, activityFeed: [...previous.activityFeed, ...nextActivities].slice(-60) }));
+    const mergedActivities = [...missedActivities, ...offlineActivities].sort((a, b) => a.minute - b.minute);
+    setPulseState((previous) => {
+      const nextAwayHistory = { ...previous.awayHistory };
+      mergedActivities.forEach((entry) => {
+        if (entry.kind === 'away') {
+          const existing = nextAwayHistory[entry.buddyId] || [];
+          if (!existing.some((e) => e.id === entry.id)) nextAwayHistory[entry.buddyId] = [...existing, entry].slice(-20);
+        }
+      });
+      // Also push missed away entries into away history if they came from schedule gap.
+      missedActivities.forEach((entry) => {
+        if (entry.kind === 'away') {
+          const existing = nextAwayHistory[entry.buddyId] || [];
+          if (!existing.some((e) => e.id === entry.id)) nextAwayHistory[entry.buddyId] = [...existing, entry].slice(-20);
+        }
+      });
+      // Merge offline-discovered links
+      const existingShared = previous.sharedLinks || [];
+      const existingUrls = new Set(existingShared.map((link) => link.url.toLowerCase()));
+      const newLinksToAdd = offlineNewLinks.filter((link) => !existingUrls.has(link.url.toLowerCase()));
+      const mergedSharedLinks = [...existingShared, ...newLinksToAdd].slice(-30);
+      const discoveredSet = new Set(previous.discoveredHosts || []);
+      newLinksToAdd.forEach((link) => discoveredSet.add(link.host.toLowerCase()));
+      const mergedDiscoveredHosts = Array.from(discoveredSet).slice(0, 30);
+      return { ...previous, lastSeenTotalMinutes: totalMinutes, activityFeed: [...previous.activityFeed, ...mergedActivities].slice(-80), awayHistory: nextAwayHistory, sharedLinks: mergedSharedLinks, discoveredHosts: mergedDiscoveredHosts };
+    });
   }, [engine, pulseState.lastSeenTotalMinutes, session, totalMinutes]);
   const unreadCounts: Record<string, number> = {};
   Object.entries(conversations).forEach(([buddyId, msgs]) => {
@@ -152,6 +366,13 @@ export const PulseMessengerApp: React.FC = () => {
     setActiveRoomId(null);
     setView('contacts');
     engine.social.markAsRead(buddyId);
+    setPulseState((previous) => ({
+      ...previous,
+      activityFeed: previous.activityFeed.map((entry) => entry.buddyId === buddyId ? { ...entry, isRead: true } : entry),
+      awayHistory: previous.awayHistory[buddyId]
+        ? { ...previous.awayHistory, [buddyId]: previous.awayHistory[buddyId]!.map((entry) => ({ ...entry, isRead: true })) }
+        : previous.awayHistory,
+    }));
   };
 
   const handleOpenRoom = (roomId: string) => {
@@ -198,6 +419,65 @@ export const PulseMessengerApp: React.FC = () => {
     window.setTimeout(() => setInviteNotice(null), 2600);
   };
 
+  const handleBlockBuddy = (buddyId: string) => {
+    const buddy = engine.social.getBuddy(buddyId);
+    setPulseState((previous) => {
+      if (previous.blockedBuddyIds.includes(buddyId)) return previous;
+      return { ...previous, blockedBuddyIds: [...previous.blockedBuddyIds, buddyId] };
+    });
+    soundManager.play('buzz');
+    setInviteNotice(`${buddy?.displayName || buddyId} has been blocked.`);
+    window.setTimeout(() => setInviteNotice(null), 2600);
+    setOpenBuddyIds((previous) => previous.filter((id) => id !== buddyId));
+    if (activeBuddyId === buddyId) setActiveBuddyId(() => {
+      const remaining = openBuddyIds.filter((id) => id !== buddyId);
+      return remaining[0] || '';
+    });
+  };
+
+  const handleUnblockBuddy = (buddyId: string) => {
+    const buddy = engine.social.getBuddy(buddyId);
+    setPulseState((previous) => ({ ...previous, blockedBuddyIds: previous.blockedBuddyIds.filter((id) => id !== buddyId) }));
+    setInviteNotice(`${buddy?.displayName || buddyId} has been unblocked.`);
+    window.setTimeout(() => setInviteNotice(null), 2600);
+  };
+
+  const handleRemoveBuddy = (buddyId: string) => {
+    const buddy = engine.social.getBuddy(buddyId);
+    // Remove is currently a soft-block (hide) with a distinct message; unblock restores it.
+    setPulseState((previous) => {
+      if (previous.blockedBuddyIds.includes(buddyId)) return previous;
+      return { ...previous, blockedBuddyIds: [...previous.blockedBuddyIds, buddyId] };
+    });
+    setInviteNotice(`${buddy?.displayName || buddyId} removed from your buddy list. (Use Unblock to restore)`);
+    window.setTimeout(() => setInviteNotice(null), 2600);
+    setOpenBuddyIds((previous) => previous.filter((id) => id !== buddyId));
+    if (activeBuddyId === buddyId) setActiveBuddyId(() => {
+      const remaining = openBuddyIds.filter((id) => id !== buddyId);
+      return remaining[0] || '';
+    });
+  };
+
+  const handleRenameGroup = (groupId: string, newLabel: string) => {
+    const clean = newLabel.trim().slice(0, 32);
+    if (!clean) return;
+    setPulseState((previous) => ({ ...previous, groupLabels: { ...previous.groupLabels, [groupId]: clean } }));
+  };
+
+  const handleReorderGroup = (groupId: string, direction: 'up' | 'down') => {
+    setPulseState((previous) => {
+      const order = [...previous.groupOrder];
+      const index = order.indexOf(groupId);
+      if (index === -1) return previous;
+      const targetIndex = direction === 'up' ? index - 1 : index + 1;
+      if (targetIndex < 0 || targetIndex >= order.length) return previous;
+      const temp = order[index]!;
+      order[index] = order[targetIndex]!;
+      order[targetIndex] = temp;
+      return { ...previous, groupOrder: order };
+    });
+  };
+
   const handleCloseTab = (buddyId: string) => {
     const nextTabs = openBuddyIds.filter((id) => id !== buddyId);
     setOpenBuddyIds(nextTabs);
@@ -205,34 +485,180 @@ export const PulseMessengerApp: React.FC = () => {
   };
 
   const handleSendMessage = async (buddyId: string, text: string) => {
+    if (pulseState.blockedBuddyIds.includes(buddyId)) {
+      setInviteNotice('You have blocked this buddy. Unblock to send messages.');
+      window.setTimeout(() => setInviteNotice(null), 2200);
+      return;
+    }
     engine.dispatchAction({ type: 'SOCIAL_SEND_MESSAGE', buddyId, text });
 
     const buddy = engine.social.getBuddy(buddyId);
     const relationship = engine.social.getRelationships(buddyId);
     const presence = engine.social.getPresence(buddyId);
-    const mood = getNpcMood(presence?.status || 'offline', relationship);
-    const activity = presence?.awayMessage || (presence?.status === 'online' ? 'online and checking messages' : 'offline');
-    const memory = pulseState.conversationMemory[buddyId] || [];
-    setPulseState((previous) => ({
-      ...previous,
-      conversationMemory: { ...previous.conversationMemory, [buddyId]: [...(previous.conversationMemory[buddyId] || []), `Player said: ${text}`].slice(-6) },
-      npcMood: { ...previous.npcMood, [buddyId]: mood },
-      npcActivity: { ...previous.npcActivity, [buddyId]: activity },
-    }));
-    const recentMessages = engine.social.getMessages(buddyId).slice(-8).map((message) => ({
+    const gameHour = Math.floor((totalMinutes % 1440) / 60);
+    let playerEnergy = 80;
+    try { playerEnergy = (engine as unknown as { economy: { getState: () => { energy: number } } }).economy.getState().energy ?? 80; } catch { playerEnergy = 80; }
+    const style = getNpcStyle(buddyId);
+    const mood = getNpcMoodLabel(presence, relationship, gameHour, playerEnergy);
+    const availability = getNpcAvailabilityLabel(presence, gameHour);
+    const activity = getNpcActivityLabel(presence, buddyId, gameHour);
+    const existingMemory = pulseState.conversationMemory[buddyId] || [];
+    const existingFacts = pulseState.buddyFacts[buddyId] || [];
+    const newFacts = extractFactsFromPlayerMessage(text);
+    const mergedFacts = [...existingFacts, ...newFacts].slice(-12);
+    const recentMessagesForSummary = engine.social.getMessages(buddyId).slice(-8).map((message) => ({
       sender: message.senderId === 'player' ? 'player' : 'buddy',
       text: message.text,
     }));
+    const previousSummary = pulseState.conversationSummaries[buddyId] || '';
+    const updatedSummary = buildConversationSummary(recentMessagesForSummary, previousSummary);
+    const recentRepliesForBuddy = pulseState.recentReplies[buddyId] || [];
+    const memoryContext = buildMemoryContext([...existingMemory, `Player said: ${text}`].slice(-6), mergedFacts, updatedSummary, recentRepliesForBuddy);
 
-    const result = await aiService.generateChat({
+    setPulseState((previous) => ({
+      ...previous,
+      conversationMemory: { ...previous.conversationMemory, [buddyId]: [...(previous.conversationMemory[buddyId] || []), `Player said: ${text}`].slice(-6) },
+      conversationSummaries: { ...previous.conversationSummaries, [buddyId]: updatedSummary },
+      buddyFacts: { ...previous.buddyFacts, [buddyId]: mergedFacts },
+      npcMood: { ...previous.npcMood, [buddyId]: mood },
+      npcActivity: { ...previous.npcActivity, [buddyId]: activity },
+    }));
+
+    const recentMessages = recentMessagesForSummary;
+
+    const personaWithStyle = `${style.persona} Vocabulary hints: ${style.vocabulary.join(', ')}. Punctuation: ${style.punctuation}. Quirks: ${style.quirks.join(', ')}. ${getBuddyPersona(buddyId)}`;
+    const relationshipSummary = `${relationship ? JSON.stringify(relationship) : 'new friendship'} | Mood: ${mood} | Availability: ${availability} | Activity: ${activity} | ${memoryContext} | Typing: ${style.typing.wpm} wpm, ${style.typing.pauseStyle}`;
+
+    let result = await aiService.generateChat({
       buddyId,
       displayName: buddy?.displayName || buddyId,
       handle: buddy?.handle || buddyId,
-      persona: getBuddyPersona(buddyId),
-      relationshipSummary: `${relationship ? JSON.stringify(relationship) : 'new friendship'} Mood: ${mood}. Current activity: ${activity}. Memory: ${memory.join(' | ') || 'No prior remembered details.'}`,
+      persona: personaWithStyle,
+      relationshipSummary,
       recentMessages,
       playerMessage: text,
     }, loadAISettings());
+
+    // Anti-repeat: check if AI reply duplicates recent replies
+    const candidateTexts = result.data.messages.map((message) => message.text);
+    const recentHashes = recentRepliesForBuddy.map(hashReply);
+    const isDupe = candidateTexts.some((candidateText) => isDuplicateReply(candidateText, recentHashes, recentRepliesForBuddy));
+    if (isDupe && !result.meta.fallback) {
+      // Retry once with explicit anti-repeat instruction
+      const retryRelationshipSummary = `${relationshipSummary} | IMPORTANT: Avoid repeating these exact phrases: ${recentRepliesForBuddy.slice(-3).join(' | ')}. Vary wording and keep it fresh.`;
+      try {
+        const retryResult = await aiService.generateChat({
+          buddyId,
+          displayName: buddy?.displayName || buddyId,
+          handle: buddy?.handle || buddyId,
+          persona: personaWithStyle,
+          relationshipSummary: retryRelationshipSummary,
+          recentMessages,
+          playerMessage: text,
+        }, { ...loadAISettings(), } as any);
+        // Only use retry if it is not also duplicate and not fallback
+        const retryTexts = retryResult.data.messages.map((message) => message.text);
+        const retryIsDupe = retryTexts.some((retryText) => isDuplicateReply(retryText, recentHashes, recentRepliesForBuddy));
+        if (!retryIsDupe || retryResult.meta.fallback) {
+          result = retryResult;
+        } else if (!retryIsDupe) {
+          result = retryResult;
+        }
+      } catch {
+        // keep original result on retry failure
+      }
+    }
+
+    // Link handling: inject occasional .local link if AI didn't include one, then capture
+    let finalCandidateTexts = result.data.messages.map((message) => message.text);
+    let detectedLinks = finalCandidateTexts.flatMap((candidateText) => extractLocalLinks(candidateText));
+    if (detectedLinks.length === 0) {
+      const chance = buddyId === 'nora' ? 38 : buddyId === 'maya' ? 32 : buddyId === 'ryan' ? 22 : 12;
+      const roll = hashString(`${buddyId}:${totalMinutes}:${text}:${finalCandidateTexts.join('|')}`) % 100;
+      if (roll < chance) {
+        const picked = pickRandomBuddyLink(buddyId, totalMinutes);
+        if (picked && result.data.messages[0]) {
+          result.data.messages[0].text = `${result.data.messages[0].text.trim()} ${picked.url}`;
+          finalCandidateTexts = result.data.messages.map((message) => message.text);
+          detectedLinks = finalCandidateTexts.flatMap((candidateText) => extractLocalLinks(candidateText));
+        }
+      }
+    }
+
+    // Persist recent replies (store raw texts) and update summary post-reply, plus shared links
+    const newReplyTexts = result.data.messages.map((message) => message.text.slice(0, 500));
+    // Avoid storing fallback generic replies as canonical fingerprints? We still store to avoid loops, but mark as fallback.
+    setPulseState((previous) => {
+      const existingReplies = previous.recentReplies[buddyId] || [];
+      const mergedReplies = [...existingReplies, ...newReplyTexts].slice(-6);
+      // Rebuild summary to include the new AI reply for next turn
+      const messagesWithReply = [...recentMessages, ...newReplyTexts.map((replyText) => ({ sender: 'buddy', text: replyText }))];
+      const postReplySummary = buildConversationSummary(messagesWithReply, previous.conversationSummaries[buddyId] || updatedSummary);
+
+      // Shared links: capture any .local links from the final AI reply
+      const existingSharedLinks = previous.sharedLinks || [];
+      const existingUrls = new Set(existingSharedLinks.map((link) => link.url.toLowerCase()));
+      const newSharedLinks: typeof existingSharedLinks = [];
+      detectedLinks.forEach((link) => {
+        const lower = link.url.toLowerCase();
+        if (existingUrls.has(lower) || newSharedLinks.some((entry) => entry.url.toLowerCase() === lower)) return;
+        // Try to find rich title/snippet from buddy pool, otherwise generic
+        const poolMatch = (() => {
+          try {
+            const pool = (pickRandomBuddyLink(buddyId, totalMinutes) as unknown as { host: string; title: string; snippet: string } | null);
+            return pool && pool.host === link.host ? pool : null;
+          } catch { return null; }
+        })();
+        const title = poolMatch?.title || `${link.host} — shared by ${buddy?.displayName || buddyId}`;
+        const snippet = poolMatch?.snippet || `Shared in Pulse by ${buddy?.displayName || buddyId} at Day ${Math.floor(totalMinutes / 1440) + 1}.`;
+        newSharedLinks.push({
+          id: `shared_${buddyId}_${link.host}_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+          url: link.url,
+          host: link.host,
+          title,
+          sharedBy: buddyId,
+          sharedByName: buddy?.displayName || buddyId,
+          minute: totalMinutes,
+          snippet,
+        });
+      });
+      const mergedSharedLinks = [...existingSharedLinks, ...newSharedLinks].slice(-30);
+      const existingDiscovered = new Set(previous.discoveredHosts || []);
+      newSharedLinks.forEach((link) => existingDiscovered.add(link.host.toLowerCase()));
+      const mergedDiscoveredHosts = Array.from(existingDiscovered).slice(0, 30);
+
+      return {
+        ...previous,
+        recentReplies: { ...previous.recentReplies, [buddyId]: mergedReplies },
+        conversationSummaries: { ...previous.conversationSummaries, [buddyId]: postReplySummary },
+        sharedLinks: mergedSharedLinks,
+        discoveredHosts: mergedDiscoveredHosts,
+      };
+    });
+
+    // Character image generation: if NPC agreed to send a photo, generate a small era-appropriate image via Fal (or fallback)
+    const rawImagePrompt = (result.data as any).imagePrompt as string | null | undefined;
+    const msgImagePrompt = result.data.messages.find((m: any) => (m as any).imagePrompt)?.imagePrompt as string | undefined;
+    const effectiveImagePrompt = (rawImagePrompt || msgImagePrompt || '').trim();
+    if (effectiveImagePrompt && effectiveImagePrompt.length > 8) {
+      try {
+        const { generateCharacterImage } = await import('../../ai/imageService');
+        const buddyName = buddy?.displayName || buddyId;
+        const imgRes = await generateCharacterImage(
+          { buddyId, buddyName, prompt: effectiveImagePrompt, size: { width: 320, height: 240 } },
+          loadAISettings()
+        );
+        // Attach to the last message so useSimulatedTyping can send it with the image
+        const lastIdx = result.data.messages.length - 1;
+        if (lastIdx >= 0 && result.data.messages[lastIdx]) {
+          (result.data.messages[lastIdx] as any).imageUrl = imgRes.url;
+          (result.data.messages[lastIdx] as any).imagePrompt = effectiveImagePrompt;
+          (result.data.messages[lastIdx] as any).imageCaption = (result.data as any).imageCaption || (result.data.messages[lastIdx] as any).imageCaption || '';
+        }
+      } catch (err) {
+        console.warn('Character image generation failed, using text only', err);
+      }
+    }
 
     triggerGeneratedResponse(buddyId, result.data);
   };
@@ -247,29 +673,105 @@ export const PulseMessengerApp: React.FC = () => {
     setPulseState((previous) => ({ ...previous, roomMessages: { ...previous.roomMessages, [room.id]: [...(previous.roomMessages[room.id] || []), playerMessage].slice(-80) } }));
     setRoomTyping(true);
 
-    const responderId = getRoomResponderId(room.id, room.participantIds, existingMessages.length);
-    const responder = engine.social.getBuddy(responderId);
+    const responderIds = getRoomResponderSequence(room.id, room.participantIds, existingMessages.length, text);
     const roomTopic = roomTopics[room.id] || room.topic;
-    const recentMessages = [...existingMessages, playerMessage].slice(-10).map((message) => ({
+    let recentMessages = [...existingMessages, playerMessage].slice(-10).map((message) => ({
       sender: message.senderId === 'player' ? 'player' : message.senderName,
       text: message.text,
     }));
 
     try {
-      const result = await aiService.generateChat({
-        buddyId: `room-${room.id}-${responderId}`,
-        displayName: responder?.displayName || responderId,
-        handle: responder?.handle || responderId,
-        persona: `${getBuddyPersona(responderId)} You are replying inside the group room "${room.name}". Room topic: ${roomTopic}. Keep the reply conversational and aware that other participants are present.`,
-        relationshipSummary: `Group room: ${room.name}. Participants: ${room.participantIds.join(', ')}.`,
-        recentMessages,
-        playerMessage: text,
-      }, loadAISettings());
-      const generatedText = result.data.messages[0]?.text?.trim();
-      const fallback = getRoomReply(room.id);
-      const reply = result.meta.fallback || !generatedText ? fallback : { senderId: responderId, text: generatedText };
-      const botMessage: PulseRoomMessage = { id: `room_${Date.now()}_reply`, senderId: reply.senderId, senderName: engine.social.getBuddy(reply.senderId)?.displayName || reply.senderId, text: reply.text, minute: minute + 1 };
-      setPulseState((previous) => ({ ...previous, roomMessages: { ...previous.roomMessages, [room.id]: [...(previous.roomMessages[room.id] || []), botMessage].slice(-80) } }));
+      for (let responderIndex = 0; responderIndex < responderIds.length; responderIndex++) {
+        const responderId = responderIds[responderIndex]!;
+        const responder = engine.social.getBuddy(responderId);
+        const style = getNpcStyle(responderId);
+        const persona = `${style.persona} You are replying inside the group room "${room.name}". Room topic: ${roomTopic}. Keep the reply conversational and aware that other participants (${responderIds.join(', ')}) are present.${responderIndex > 0 ? ' Another participant just replied before you — acknowledge or build on it briefly without repeating.' : ''}`;
+
+        if (responderIndex > 0) {
+          // Staggered typing pause between multiple responders
+          await new Promise((resolve) => setTimeout(resolve, 450 + (hashString(`${room.id}:${text}:${responderIndex}`) % 700)));
+        }
+
+        const result = await aiService.generateChat({
+          buddyId: `room-${room.id}-${responderId}-${responderIndex}`,
+          displayName: responder?.displayName || responderId,
+          handle: responder?.handle || responderId,
+          persona,
+          relationshipSummary: `Group room: ${room.name}. Participants: ${room.participantIds.join(', ')}. Responder #${responderIndex + 1} of ${responderIds.length}.`,
+          recentMessages: [...recentMessages],
+          playerMessage: text,
+        }, loadAISettings());
+
+        let generatedText = result.data.messages[0]?.text?.trim() || '';
+        let finalText = generatedText;
+        if (!finalText || result.meta.fallback) {
+          const fallback = getRoomReply(room.id);
+          if (responderIndex === 0) {
+            finalText = fallback.text;
+          } else {
+            const fallbackPools: Record<string, string[]> = {
+              'orion-lounge': ['lol yeah, that tracks', 'i was just thinking the same', 'anyone else getting that vibe?'],
+              'pc-help': ['try a different mirror, the main one is throttled', 'i had the same timeout last night', 'check the driver version first'],
+              'night-shift': ['that frequency comes back around 2am', 'putting this on the archive if you want it', 'the signal is quieter now'],
+            };
+            const pool = fallbackPools[room.id] || ['noted — i see what you mean', 'yeah, go on'];
+            finalText = pool[hashString(`${room.id}:${responderId}:${responderIndex}`) % pool.length]!;
+          }
+        }
+
+        // Occasional .local link injection for room replies
+        const existingRoomLinks = extractLocalLinks(finalText);
+        if (existingRoomLinks.length === 0) {
+          const chance = responderId === 'nora' ? 28 : responderId === 'maya' ? 22 : 15;
+          if (hashString(`${room.id}:${responderId}:${finalText}`) % 100 < chance) {
+            const picked = pickRandomBuddyLink(responderId, totalMinutes + responderIndex);
+            if (picked) finalText = `${finalText} ${picked.url}`;
+          }
+        }
+
+        const botMessage: PulseRoomMessage = {
+          id: `room_${Date.now()}_${responderId}_${responderIndex}_${Math.random().toString(36).slice(2, 4)}`,
+          senderId: responderId,
+          senderName: engine.social.getBuddy(responderId)?.displayName || responderId,
+          text: finalText,
+          minute: minute + 1 + responderIndex,
+        };
+
+        const roomLinks = extractLocalLinks(finalText);
+        setPulseState((previous) => {
+          const existingShared = previous.sharedLinks || [];
+          const existingUrls = new Set(existingShared.map((link) => link.url.toLowerCase()));
+          const newLinks: typeof existingShared = [];
+          roomLinks.forEach((link) => {
+            const lower = link.url.toLowerCase();
+            if (existingUrls.has(lower) || newLinks.some((entry) => entry.url.toLowerCase() === lower)) return;
+            newLinks.push({
+              id: `shared_room_${room.id}_${link.host}_${Date.now()}_${responderIndex}`,
+              url: link.url,
+              host: link.host,
+              title: `${link.host} — shared in ${room.name} by ${responder?.displayName || responderId}`,
+              sharedBy: responderId,
+              sharedByName: responder?.displayName || responderId,
+              minute: botMessage.minute,
+              snippet: `Shared in ${room.name} by ${responder?.displayName || responderId}`,
+            });
+          });
+          const mergedShared = [...existingShared, ...newLinks].slice(-30);
+          const discoveredSet = new Set(previous.discoveredHosts || []);
+          newLinks.forEach((link) => discoveredSet.add(link.host.toLowerCase()));
+          const nextMessages = [...(previous.roomMessages[room.id] || []), botMessage].slice(-80);
+          return {
+            ...previous,
+            roomMessages: { ...previous.roomMessages, [room.id]: nextMessages },
+            roomReadThrough: { ...previous.roomReadThrough, [room.id]: activeRoomId === room.id ? nextMessages.length : previous.roomReadThrough[room.id] ?? 0 },
+            sharedLinks: mergedShared,
+            discoveredHosts: Array.from(discoveredSet).slice(0, 30),
+          };
+        });
+
+        // Update recentMessages to include this reply for the next responder in the same turn
+        recentMessages = [...recentMessages, { sender: botMessage.senderName, text: botMessage.text }].slice(-10);
+      }
     } finally {
       setRoomTyping(false);
     }
@@ -326,38 +828,81 @@ export const PulseMessengerApp: React.FC = () => {
 
     pendingRooms.forEach((room) => {
       const existingMessages = pulseState.roomMessages[room.id] || [];
-      const responderId = getRoomResponderId(room.id, room.participantIds, existingMessages.length + activityBucket);
-      const responder = engine.social.getBuddy(responderId);
-      const recentMessages = existingMessages.slice(-8).map((message) => ({ sender: message.senderId === 'player' ? 'player' : message.senderName, text: message.text }));
-      void aiService.generateChat({
-        buddyId: `room-event-${room.id}-${activityBucket}`,
-        displayName: responder?.displayName || responderId,
-        handle: responder?.handle || responderId,
-        persona: `${getBuddyPersona(responderId)} You are posting one ambient message in the public room "${room.name}". Room topic: ${roomTopics[room.id] || room.topic}. Do not mention the player or claim that you are an AI.`,
-        relationshipSummary: `Ambient public room event at game minute ${totalMinutes}.`,
-        recentMessages,
-        playerMessage: `Write one short room message that feels like a real participant checking in during game minute ${totalMinutes}.`,
-      }, loadAISettings()).then((result) => {
-        const fallbackLines: Record<string, string> = {
-          'orion-lounge': 'anyone else still awake? the lounge is getting weirdly quiet.',
-          'pc-help': 'quick question: is anyone else getting a timeout from the driver mirror?',
-          'night-shift': 'the signal is clear for a minute. putting on something slow.',
-        };
-        const text = result.meta.fallback ? (fallbackLines[room.id] || 'someone just checked in.') : result.data.messages[0]?.text?.trim();
-        if (!text) return;
-        const nextMessage: PulseRoomMessage = { id: `room_event_${room.id}_${activityBucket}`, senderId: result.meta.fallback ? responderId : responderId, senderName: responder?.displayName || responderId, text, minute: totalMinutes, kind: 'chat' };
-        setPulseState((previous) => {
-          const messages = previous.roomMessages[room.id] || [];
-          if (messages.some((message) => message.id === nextMessage.id)) return previous;
-          const nextMessages = [...messages, nextMessage].slice(-80);
-          return {
-            ...previous,
-            roomMessages: { ...previous.roomMessages, [room.id]: nextMessages },
-            roomReadThrough: { ...previous.roomReadThrough, [room.id]: activeRoomId === room.id ? nextMessages.length : previous.roomReadThrough[room.id] ?? 0 },
+      const ambientCount = hashString(`${room.id}:${activityBucket}`) % 100 < 22 ? 2 : 1;
+      const responderSequence = getRoomResponderSequence(room.id, room.participantIds, existingMessages.length + activityBucket, `ambient-${activityBucket}`);
+      const selectedResponders = responderSequence.slice(0, ambientCount);
+      selectedResponders.forEach((responderId, responderIndex) => {
+        const responder = engine.social.getBuddy(responderId);
+        const recentMessages = existingMessages.slice(-8).map((message) => ({ sender: message.senderId === 'player' ? 'player' : message.senderName, text: message.text }));
+        const ambientStyle = getNpcStyle(responderId);
+        void aiService.generateChat({
+          buddyId: `room-event-${room.id}-${activityBucket}-${responderIndex}`,
+          displayName: responder?.displayName || responderId,
+          handle: responder?.handle || responderId,
+          persona: `${ambientStyle.persona} You are posting one ambient message in the public room "${room.name}". Room topic: ${roomTopics[room.id] || room.topic}. Do not mention the player or claim that you are an AI.${responderIndex > 0 ? ' Another participant just posted — respond naturally without repeating.' : ''}`,
+          relationshipSummary: `Ambient public room event at game minute ${totalMinutes} (#${responderIndex + 1}/${selectedResponders.length}).`,
+          recentMessages,
+          playerMessage: `Write one short room message that feels like a real participant checking in during game minute ${totalMinutes}.`,
+        }, loadAISettings()).then((result) => {
+          const fallbackPools: Record<string, string[]> = {
+            'orion-lounge': ['anyone else still awake? the lounge is getting weirdly quiet.', 'lounge is quiet — putting on some music if anyone wants in'],
+            'pc-help': ['quick question: is anyone else getting a timeout from the driver mirror?', 'mirror #2 is up but slow — try again in a bit'],
+            'night-shift': ['the signal is clear for a minute. putting on something slow.', 'low hum is back — you hear it too?'],
           };
-        });
-        if (activeRoomId !== room.id) soundManager.play('im_recv');
-      }).catch(() => {});
+          const pool = fallbackPools[room.id] || ['someone just checked in.'];
+          const fallbackText = pool[(hashString(`${room.id}:${activityBucket}:${responderIndex}`) % pool.length)]!;
+          const text = result.meta.fallback ? fallbackText : result.data.messages[0]?.text?.trim() || fallbackText;
+          if (!text) return;
+          let finalText = text;
+          const links = extractLocalLinks(finalText);
+          if (links.length === 0 && hashString(`${room.id}:${activityBucket}:${responderId}`) % 100 < 18) {
+            const picked = pickRandomBuddyLink(responderId, totalMinutes + responderIndex);
+            if (picked) finalText = `${finalText} ${picked.url}`;
+          }
+          const roomLinks = extractLocalLinks(finalText);
+          const nextMessage: PulseRoomMessage = {
+            id: `room_event_${room.id}_${activityBucket}_${responderIndex}`,
+            senderId: responderId,
+            senderName: responder?.displayName || responderId,
+            text: finalText,
+            minute: totalMinutes + responderIndex,
+            kind: 'chat',
+          };
+          setPulseState((previous) => {
+            const messages = previous.roomMessages[room.id] || [];
+            if (messages.some((message) => message.id === nextMessage.id)) return previous;
+            const existingShared = previous.sharedLinks || [];
+            const existingUrls = new Set(existingShared.map((link) => link.url.toLowerCase()));
+            const newLinks: typeof existingShared = [];
+            roomLinks.forEach((link) => {
+              const lower = link.url.toLowerCase();
+              if (existingUrls.has(lower) || newLinks.some((entry) => entry.url.toLowerCase() === lower)) return;
+              newLinks.push({
+                id: `shared_room_${room.id}_${link.host}_${Date.now()}_${responderIndex}`,
+                url: link.url,
+                host: link.host,
+                title: `${link.host} — shared in ${room.name} by ${responder?.displayName || responderId}`,
+                sharedBy: responderId,
+                sharedByName: responder?.displayName || responderId,
+                minute: nextMessage.minute,
+                snippet: `Shared in ${room.name} by ${responder?.displayName || responderId}`,
+              });
+            });
+            const mergedShared = [...existingShared, ...newLinks].slice(-30);
+            const discoveredSet = new Set(previous.discoveredHosts || []);
+            newLinks.forEach((link) => discoveredSet.add(link.host.toLowerCase()));
+            const nextMessages = [...messages, nextMessage].slice(-80);
+            return {
+              ...previous,
+              roomMessages: { ...previous.roomMessages, [room.id]: nextMessages },
+              roomReadThrough: { ...previous.roomReadThrough, [room.id]: activeRoomId === room.id ? nextMessages.length : previous.roomReadThrough[room.id] ?? 0 },
+              sharedLinks: mergedShared,
+              discoveredHosts: Array.from(discoveredSet).slice(0, 30),
+            };
+          });
+          if (activeRoomId !== room.id) soundManager.play('im_recv');
+        }).catch(() => {});
+      });
     });
   }, [session, totalMinutes, joinedRoomIds, pulseState.activityBuckets, pulseState.roomMessages, engine, activeRoomId]);
 
@@ -385,8 +930,10 @@ export const PulseMessengerApp: React.FC = () => {
 
   if (!session) return <PulseLoginSplash onLogin={setSession} />;
 
+  const skinClasses = pulseSkin === 'dark' ? 'bg-[#0f1419] text-gray-200' : pulseSkin === 'silver' ? 'bg-[#e8e8e8] text-black' : 'bg-[#ece9d8] text-black';
+
   return (
-    <div className="relative flex h-full w-full overflow-hidden bg-[#ece9d8] font-sans text-xs text-black select-none">
+    <div className={`relative flex h-full w-full overflow-hidden font-sans text-xs select-none ${skinClasses}`}>
       <div className="flex h-full w-56 shrink-0 flex-col border-r border-gray-400">
         <BuddyListWindow
           username={session.username}
@@ -405,6 +952,19 @@ export const PulseMessengerApp: React.FC = () => {
           onSignOut={() => { setPulseState((previous) => ({ ...previous, lastSeenTotalMinutes: totalMinutes })); deliveredOfflineForSession.current = false; setSession(null); setActiveRoomId(null); setView('contacts'); }}
           unreadCounts={unreadCounts}
           activityFeed={pulseState.activityFeed}
+          blockedBuddyIds={pulseState.blockedBuddyIds}
+          groupLabels={pulseState.groupLabels}
+          groupOrder={pulseState.groupOrder}
+          onBlockBuddy={handleBlockBuddy}
+          onUnblockBuddy={handleUnblockBuddy}
+          onRemoveBuddy={handleRemoveBuddy}
+          onInviteBuddyToRoom={handleInvite}
+          onRenameGroup={handleRenameGroup}
+          onReorderGroup={handleReorderGroup}
+          currentSlotId={currentSlotId}
+          onSwitchSlot={handleSwitchSlot}
+          pulseSkin={pulseSkin}
+          onChangeSkin={handleChangeSkin}
         />
       </div>
 
@@ -464,9 +1024,9 @@ export const PulseMessengerApp: React.FC = () => {
           rooms={PULSE_ROOMS}
           onClose={() => setSelectedBuddyId(null)}
           onChat={() => handleOpenChat(selectedBuddyId)}
-                      onBuzz={handleBuzz}
-            onInvite={(roomId) => handleInvite(selectedBuddyId, roomId)}
-            awayHistory={pulseState.activityFeed.filter((entry) => entry.buddyId === selectedBuddyId && entry.kind === 'away')}
+          onBuzz={handleBuzz}
+          onInvite={(roomId) => handleInvite(selectedBuddyId, roomId)}
+          awayHistory={pulseState.awayHistory[selectedBuddyId] || pulseState.activityFeed.filter((entry) => entry.buddyId === selectedBuddyId && entry.kind === 'away')}
 
         />
       )}

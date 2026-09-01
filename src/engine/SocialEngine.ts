@@ -225,7 +225,10 @@ export class SocialEngine {
     text: string,
     currentMinute: number,
     deliveredAway = false,
-    tags?: string[]
+    tags?: string[],
+    imageUrl?: string,
+    imagePrompt?: string,
+    imageCaption?: string
   ): MessageRecord {
     const day = Math.floor(currentMinute / 1440) + 1;
     const msg: MessageRecord = {
@@ -239,6 +242,9 @@ export class SocialEngine {
       isRead: senderId === 'player',
       deliveredAway,
       tags,
+      imageUrl,
+      imagePrompt,
+      imageCaption,
     };
 
     const existing = this.conversations.get(conversationId) || [];

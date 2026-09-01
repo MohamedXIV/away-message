@@ -140,6 +140,12 @@ export interface AICacheRecord {
   expiresAt: number;
 }
 
+export interface PulseStateRecord {
+  saveSlotId: string;            // Primary key: save slot id (e.g. 'slot_1', 'autosave')
+  state: unknown;                // PulsePersistedState JSON — stored as opaque to avoid circular imports
+  updatedAt: number;
+}
+
 // ==========================================
 // 2. Full Simulation Snapshot Interface
 // ==========================================
@@ -153,6 +159,7 @@ export interface FullSimulationSnapshot {
   relationships: RelationshipRecord[];
   narrativeState: NarrativeStateRecord[];
   telemetryLogs: TelemetryLogRecord[];
+  pulseState?: unknown;
 }
 
 // ==========================================
@@ -208,6 +215,7 @@ export const FullSimulationSnapshotSchema = z.object({
   relationships: z.array(z.any()),
   narrativeState: z.array(z.any()),
   telemetryLogs: z.array(z.any()),
+  pulseState: z.any().optional(),
 });
 
 // ==========================================

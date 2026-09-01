@@ -458,7 +458,10 @@ export class SimulationEngine {
           action.text,
           currentMinutes,
           false,
-          action.tags
+          action.tags,
+          (action as any).imageUrl,
+          (action as any).imagePrompt,
+          (action as any).imageCaption
         );
         this.notifySubscribers();
         return { success: true, data: msg };
@@ -472,7 +475,10 @@ export class SimulationEngine {
           action.text,
           action.timestampMinute ?? currentMinutes,
           action.deliveredAway ?? false,
-          action.tags
+          action.tags,
+          (action as any).imageUrl,
+          (action as any).imagePrompt,
+          (action as any).imageCaption
         );
         this.notifySubscribers();
         return { success: true, data: msg };

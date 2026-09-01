@@ -284,6 +284,9 @@ export interface MessageRecord {
   isRead: boolean;
   deliveredAway: boolean;
   tags?: string[];
+  imageUrl?: string;
+  imagePrompt?: string;
+  imageCaption?: string;
 }
 
 export interface SocialEngineState {
@@ -403,8 +406,8 @@ export type SimulationAction =
   | { type: 'VFS_EMPTY_TRASH' }
   | { type: 'SOFTWARE_INSTALL'; softwareId: string; selectedOptions?: Record<string, boolean> }
   | { type: 'SOFTWARE_UNINSTALL'; installedId: string }
-  | { type: 'SOCIAL_SEND_MESSAGE'; buddyId: string; text: string; tags?: string[] }
-  | { type: 'SOCIAL_RECEIVE_MESSAGE'; buddyId: string; text: string; timestampMinute?: number; deliveredAway?: boolean; tags?: string[] }
+  | { type: 'SOCIAL_SEND_MESSAGE'; buddyId: string; text: string; tags?: string[]; imageUrl?: string; imagePrompt?: string; imageCaption?: string }
+  | { type: 'SOCIAL_RECEIVE_MESSAGE'; buddyId: string; text: string; timestampMinute?: number; deliveredAway?: boolean; tags?: string[]; imageUrl?: string; imagePrompt?: string; imageCaption?: string }
   | { type: 'SOCIAL_APPLY_ACTION'; buddyId: string; socialAction: string }
   | { type: 'NARRATIVE_TRIGGER_BEAT'; beatId: string }
   | { type: 'NARRATIVE_SET_FLAG'; key: string; value: boolean | number | string }

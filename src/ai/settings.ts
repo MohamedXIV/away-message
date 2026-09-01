@@ -9,7 +9,7 @@ export function loadAISettings(): AISettings {
     const raw = window.sessionStorage.getItem(STORAGE_KEY);
     if (!raw) return { ...DEFAULT_AI_SETTINGS, byokKeys: {} };
     const parsed = JSON.parse(raw) as Partial<AISettings>;
-    const activeProvider: AIProviderId = parsed.activeProvider === 'groq' || parsed.activeProvider === 'openrouter' ? parsed.activeProvider : 'gemini';
+    const activeProvider: AIProviderId = parsed.activeProvider === 'groq' || parsed.activeProvider === 'openrouter' || parsed.activeProvider === 'fal' ? parsed.activeProvider : 'gemini';
     const byokKeys = parsed.byokKeys && typeof parsed.byokKeys === 'object' ? parsed.byokKeys : {};
     return { activeProvider, byokKeys };
   } catch {

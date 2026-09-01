@@ -48,12 +48,16 @@ export const PulseProfileCard: React.FC<PulseProfileCardProps> = ({ buddy, prese
           <button onClick={onBuzz} className="border border-[#825c25] bg-[#f4d58d] px-2 py-1 font-bold hover:bg-[#eec878]">Buzz</button>
         </div>
 
-        {awayHistory.length > 0 && <div className="border border-[#b2bdc8] bg-white p-2">
-          <div className="mb-1 font-bold text-[#274e78]">Away message history</div>
-          <div className="space-y-1 text-[10px] text-gray-600">
-            {awayHistory.slice(-3).reverse().map((entry) => <div key={entry.id}><div className="italic">“{entry.text.replace(`${buddy.displayName} is away: `, '')}”</div><div className="text-[9px] text-gray-400">Day {Math.floor(entry.minute / 1440) + 1}</div></div>)}
+        {awayHistory.length > 0 ? <div className="border border-[#b2bdc8] bg-white p-2">
+          <div className="mb-1 flex items-center justify-between font-bold text-[#274e78]"><span>Away message history</span><span className="text-[9px] font-normal text-gray-400">{awayHistory.length} entries</span></div>
+          <div className="space-y-1.5 text-[10px] text-gray-600">
+            {awayHistory.slice(-5).reverse().map((entry) => {
+              const cleanText = entry.text.replace(`${buddy.displayName} is away: `, '').replace(`${buddy.displayName} is away`, '').trim();
+              const dayLabel = `Day ${Math.floor(entry.minute / 1440) + 1} • ${String(Math.floor((entry.minute % 1440)/60)).padStart(2,'0')}:${String(entry.minute % 60).padStart(2,'0')}`;
+              return <div key={entry.id} className="border-l-2 border-[#a8b7c7] pl-1.5"><div className="italic leading-tight">“{cleanText || entry.text}”</div><div className="text-[9px] text-gray-400">{dayLabel}</div></div>;
+            })}
           </div>
-        </div>}
+        </div> : <div className="border border-dashed border-[#b2bdc8] bg-white p-2 text-[10px] text-gray-500">No away history yet — changes appear after buddies switch to away.</div>}
 
         <div className="border border-[#b2bdc8] bg-white p-2">
           <div className="mb-2 font-bold text-[#274e78]">Relationship snapshot</div>

@@ -8,7 +8,11 @@ export type SiteArchetypeId =
   | 'download_archive'
   | 'fan_club'
   | 'newsletter'
-  | 'webring_portal';
+  | 'webring_portal'
+  | 'geocities_table'
+  | 'myspace_profile'
+  | 'guestbook'
+  | 'blog_diary';
 
 export interface SiteArchetypeSpec {
   id: SiteArchetypeId;
@@ -90,8 +94,44 @@ export const SITE_ARCHETYPES: SiteArchetypeSpec[] = [
     direction: 'A portal that links several related hobby pages, with previous/next navigation and a web ring badge.',
     recommendedSections: 'ring welcome, member sites, previous and next links, ring rules',
     visualMotif: 'left navigation rail, link clusters, badges, and a visible ring-of-sites widget',
-    defaultLayout: 'columns',
+    defaultLayout: 'webring',
     theme: { primary: '#355070', secondary: '#c6d8ef', accent: '#eaac8b', paper: '#f5f8fc', text: '#1f3046' },
+  },
+  {
+    id: 'geocities_table',
+    label: 'geocities table shrine',
+    direction: 'A chaotic 90s table-based shrine with tiled background, marquee, hit counter, and clashing fonts. Intentionally crowded and nostalgic.',
+    recommendedSections: 'shrine intro, collection table, guestbook shout, webring nav',
+    visualMotif: 'table borders, tiled gif background, hit counter, marquee banner, clashing fonts, star dividers',
+    defaultLayout: 'geocities_table',
+    theme: { primary: '#0047ab', secondary: '#ffeb99', accent: '#ff6b35', paper: '#e0f0ff', text: '#0a1931' },
+  },
+  {
+    id: 'myspace_profile',
+    label: 'myspace profile',
+    direction: 'A MySpace-era profile with top 8, about me, interests, and comment wall. Slightly messy, personal, with music autoplay hint.',
+    recommendedSections: 'profile header, about me, interests, top friends, comments',
+    visualMotif: 'profile card, top 8 grid, comment wall, interests table, music player hint',
+    defaultLayout: 'myspace_profile',
+    theme: { primary: '#003366', secondary: '#ffffff', accent: '#ffcc00', paper: '#f0f4ff', text: '#1a1a2e' },
+  },
+  {
+    id: 'guestbook',
+    label: 'guestbook',
+    direction: 'A standalone guestbook with entries, sign form (fake), and thank you note. Warm, community-focused, slightly messy handwriting feel.',
+    recommendedSections: 'guestbook intro, recent entries, sign the book, thanks',
+    visualMotif: 'handwritten entries, entry cards with dates, fake form, thank you footer',
+    defaultLayout: 'guestbook',
+    theme: { primary: '#5a3e36', secondary: '#fff8dc', accent: '#d4a373', paper: '#fefae0', text: '#3e2723' },
+  },
+  {
+    id: 'blog_diary',
+    label: 'blog diary',
+    direction: 'A dated diary/blog with entries, mood icons, and comment counts. Intimate, chronological, with sidebar calendar.',
+    recommendedSections: 'latest entry, archive list, mood, calendar, links',
+    visualMotif: 'diary entries with dates, mood icons, calendar widget, archive list, soft paper',
+    defaultLayout: 'blog_diary',
+    theme: { primary: '#6c584c', secondary: '#f0ead2', accent: '#a98467', paper: '#fdf6ec', text: '#432818' },
   },
 ];
 

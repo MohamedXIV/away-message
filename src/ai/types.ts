@@ -1,4 +1,4 @@
-export type AIProviderId = 'gemini' | 'groq' | 'openrouter';
+export type AIProviderId = 'gemini' | 'groq' | 'openrouter' | 'fal';
 export type AIKeySource = 'env' | 'byok' | 'none';
 
 export interface AIProviderDefinition {
@@ -25,7 +25,18 @@ export interface GeneratedSiteLink {
   href: string;
 }
 
-export type GeneratedSiteLayout = 'centered' | 'columns' | 'forum' | 'catalog' | 'newspaper' | 'sidebar';
+export type GeneratedSiteLayout =
+  | 'centered'
+  | 'columns'
+  | 'forum'
+  | 'catalog'
+  | 'newspaper'
+  | 'sidebar'
+  | 'geocities_table'
+  | 'myspace_profile'
+  | 'guestbook'
+  | 'blog_diary'
+  | 'webring';
 
 export interface GeneratedSiteTheme {
   primary: string;
@@ -65,12 +76,16 @@ export type SocialAction =
 export interface GeneratedChatMessage {
   text: string;
   tone: string;
+  imagePrompt?: string | null;
+  imageCaption?: string | null;
 }
 
 export interface GeneratedChatResponse {
   messages: GeneratedChatMessage[];
   socialAction: SocialAction;
   storyHookId: string | null;
+  imagePrompt?: string | null;
+  imageCaption?: string | null;
 }
 
 export interface AIResultMeta {

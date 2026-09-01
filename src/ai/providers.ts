@@ -22,6 +22,13 @@ export const AI_PROVIDERS: AIProviderDefinition[] = [
     envKeyName: 'VITE_OPENROUTER_API_KEY',
     envModelName: 'VITE_OPENROUTER_MODEL',
   },
+  {
+    id: 'fal',
+    label: 'Fal.ai (images)',
+    defaultModel: 'fal-ai/flux/schnell',
+    envKeyName: 'VITE_FAL_API_KEY',
+    envModelName: 'VITE_FAL_MODEL',
+  },
 ];
 
 const env = (import.meta as unknown as { env: Record<string, string | undefined> }).env;

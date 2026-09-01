@@ -63,17 +63,44 @@ export const FileExplorerApp: React.FC<{ initialPath?: string }> = ({ initialPat
     (f) => f.parentPath === currentPath && f.path !== currentPath
   );
 
+  const FILE_TO_SOFTWARE: Record<string, string> = {
+    'pulse52_setup.exe': 'sw_pulse_52',
+    'retroamp_setup.exe': 'sw_retroamp_23',
+    'flashfetch_setup.exe': 'sw_flashfetch_31',
+    'zipmate_setup.exe': 'sw_zipmate_40',
+    'weatherbuddy_bundle.exe': 'sw_weatherbuddy_14',
+    'safesweep_setup.exe': 'sw_safesweep_20',
+    'photobox_setup.exe': 'sw_photobox_30',
+  };
+
+  const [installNotice, setInstallNotice] = useState<string | null>(null);
+
   const handleFileDoubleClick = (file: FileRecord) => {
     if (file.kind === 'directory') {
       navigateTo(file.path);
     } else if (file.kind === 'text') {
       openWindow('notepad', `Notepad - ${file.name}`, { filePath: file.path });
     } else if (file.kind === 'installer') {
-      openWindow('addremove', 'Orion Software Setup', { installerFile: file.path });
+      const softwareId = FILE_TO_SOFTWARE[file.name] || file.name.replace('.exe', '');
+      const result = dispatchAction({ type: 'SOFTWARE_INSTALL', softwareId, selectedOptions: {} } as any);
+      if (result.success) {
+        setInstallNotice(`Installed ${file.name} — check Desktop for shortcut.`);
+        setTimeout(() => setInstallNotice(null), 3000);
+      } else {
+        setInstallNotice(result.error || `Cannot install ${file.name}: requirements not met.`);
+        setTimeout(() => setInstallNotice(null), 3500);
+      }
+    } else if (file.kind === 'archive') {
+      // Open ZipMate for archives, or auto-extract via unzip command
+      openWindow('zipmate', `ZipMate - ${file.name}`, { archivePath: file.path });
     } else if (file.kind === 'shortcut' && file.appAssociation) {
       openWindow(file.appAssociation, file.name.replace('.lnk', ''));
     } else if (file.kind === 'executable' && file.appAssociation) {
       openWindow(file.appAssociation, file.name.replace('.exe', ''));
+    } else if (file.kind === 'audio' || file.kind === 'image') {
+      // For media files, try to open associated app
+      if (file.appAssociation) openWindow(file.appAssociation, file.name);
+      else openWindow('notepad', `Viewer - ${file.name}`, { filePath: file.path });
     }
   };
 
@@ -235,6 +262,13 @@ export const FileExplorerApp: React.FC<{ initialPath?: string }> = ({ initialPat
           )}
         </div>
       </div>
+
+      {/* Install Notice */}
+      {installNotice && (
+        <div className="mx-2 mb-1 rounded border border-blue-600 bg-[#e0f2f1] px-2 py-1 text-[11px] font-bold text-blue-900">
+          {installNotice}
+        </div>
+      )}
 
       {/* Status Bar */}
       <div className="flex items-center justify-between px-2 py-0.5 bg-[#dfdfdf] border-t border-gray-400 text-[11px] text-gray-700">

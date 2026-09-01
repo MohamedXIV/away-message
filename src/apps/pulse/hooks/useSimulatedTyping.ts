@@ -5,6 +5,7 @@ import { NpcDialogueScript, DialogueChoiceOption } from '../types';
 import { DIALOGUE_SCRIPTS } from '../data/dialogueTrees';
 import { parseNarrativeTag } from '../../../narrative/tagParser';
 import type { GeneratedChatResponse } from '../../../ai/types';
+import { getNpcStyle } from '../data/npcStyles';
 
 export interface TypingState {
   isTyping: boolean;
@@ -105,20 +106,33 @@ export function useSimulatedTyping(_activeConversationBuddyId: string | null) {
   const triggerNpcScript = useCallback((script: NpcDialogueScript) => {
     clearTimeouts();
     const buddy = engine.social.getBuddy(script.buddyId);
-    const wpm = buddy?.typingSpeedWpm ?? 60;
+    const style = getNpcStyle(script.buddyId);
+    // Prefer style profile wpm but respect engine's buddy speed if it exists; apply variance for human feel
+    const baseWpm = style.typing.wpm ?? buddy?.typingSpeedWpm ?? 60;
+    const varianceFactor = 1 + ((Math.random() * 2 - 1) * (style.typing.variance ?? 10) / 100);
+    const wpm = Math.max(35, Math.round(baseWpm * varianceFactor));
     const cps = (wpm * 5) / 60;
 
     let accumulatedDelay = 400;
 
     script.messages.forEach((msg, idx) => {
-      const typingDuration = Math.max(800, Math.min(3000, (msg.text.length / cps) * 1000));
+      // Apply style pause: Maya is hesitant (longer), Ryan is bursty (shorter)
+      const isLongPause = style.buddyId === 'maya' && msg.text.includes('...');
+      const hesitationExtra = isLongPause ? 500 : 0;
+      const typingDuration = Math.max(800, Math.min(4200, (msg.text.length / cps) * 1000 + hesitationExtra));
 
       const t1 = setTimeout(() => {
+        const indicatorText = (() => {
+          if (style.buddyId === 'maya') return 'maya is typing a message...';
+          if (style.buddyId === 'nora') return 'NightOwl87 is typing...';
+          if (style.buddyId === 'henderson') return `${buddy?.displayName || script.buddyId} is typing...`;
+          return `${buddy?.displayName || script.buddyId} is typing a message...`;
+        })();
         setTypingState((prev) => ({
           ...prev,
           isTyping: true,
           activeBuddyId: script.buddyId,
-          typingIndicatorText: (buddy?.displayName || script.buddyId) + ' is typing a message...',
+          typingIndicatorText: indicatorText,
           currentScriptId: script.id,
         }));
       }, accumulatedDelay);
@@ -131,8 +145,46 @@ export function useSimulatedTyping(_activeConversationBuddyId: string | null) {
           msg.text,
           engine.clock.getTotalMinutes(),
           false,
-          msg.tags
+          msg.tags,
+          (msg as any).imageUrl,
+          (msg as any).imagePrompt,
+          (msg as any).imageCaption
         );
+        // If there's an image, also save it to VFS as a small file for the era
+        const imageUrl = (msg as any).imageUrl as string | undefined;
+        if (imageUrl && imageUrl.startsWith('data:')) {
+          try {
+            const fileName = `Pulse_${script.buddyId}_${Date.now()}.jpg`;
+            // Estimate size from data URL length
+            const sizeBytes = Math.ceil((imageUrl.length * 3) / 4);
+            engine.dispatchAction({
+              type: 'VFS_CREATE_FILE',
+              file: {
+                name: fileName,
+                path: `C:/Pictures/${fileName}`,
+                parentPath: 'C:/Pictures',
+                kind: 'image',
+                sizeBytes: Math.min(sizeBytes, 80 * 1024),
+                metadata: { textContent: `Image from ${script.buddyId}: ${(msg as any).imagePrompt || ''}` },
+              },
+            });
+          } catch {}
+        } else if (imageUrl && imageUrl.startsWith('http')) {
+          // For http URLs (Fal), trigger a download to VFS
+          try {
+            const fileName = `Pulse_${script.buddyId}_${Date.now()}.jpg`;
+            const info = { fileName, totalBytes: 45 * 1024, sourceMaxKbps: 180, fileKind: 'image' as const, downloadUrl: imageUrl, sourceId: `pulse_image_${script.buddyId}`, targetDirectory: 'C:/Pictures' } as any;
+            engine.dispatchAction({
+              type: 'DOWNLOAD_START',
+              sourceId: info.sourceId,
+              url: info.downloadUrl,
+              fileName: info.fileName,
+              totalBytes: info.totalBytes,
+              sourceMaxKbps: info.sourceMaxKbps,
+              fileKind: 'image',
+            });
+          } catch {}
+        }
         soundManager.play('im_recv');
 
         if (msg.tags) {
@@ -158,13 +210,25 @@ export function useSimulatedTyping(_activeConversationBuddyId: string | null) {
 
   const triggerGeneratedResponse = useCallback((buddyId: string, response: GeneratedChatResponse) => {
     const socialTags = response.socialAction === 'none' ? undefined : [response.socialAction];
+    const topLevelImagePrompt = (response as any).imagePrompt as string | null | undefined;
+    const topLevelCaption = (response as any).imageCaption as string | null | undefined;
+    const topLevelUrl = (response as any).imageUrl as string | null | undefined;
     triggerNpcScript({
       id: `ai_${buddyId}_${Date.now()}`,
       buddyId,
-      messages: response.messages.map((message, index) => ({
-        text: message.text,
-        tags: index === response.messages.length - 1 ? socialTags : undefined,
-      })),
+      messages: response.messages.map((message, index) => {
+        const isLast = index === response.messages.length - 1;
+        const msgImagePrompt = (message as any).imagePrompt || (isLast ? topLevelImagePrompt : null);
+        const msgCaption = (message as any).imageCaption || (isLast ? topLevelCaption : null);
+        const msgUrl = (message as any).imageUrl || (isLast ? topLevelUrl : null);
+        return {
+          text: message.text,
+          tags: isLast ? socialTags : undefined,
+          imageUrl: msgUrl || undefined,
+          imagePrompt: msgImagePrompt || undefined,
+          imageCaption: msgCaption || undefined,
+        };
+      }),
       playerChoices: [],
     });
   }, [triggerNpcScript]);

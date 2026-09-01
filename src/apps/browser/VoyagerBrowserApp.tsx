@@ -20,6 +20,7 @@ interface VoyagerBrowserAppProps {
 export const VoyagerBrowserApp: React.FC<VoyagerBrowserAppProps> = ({ initialUrl = 'findit.local' }) => {
   const connectionType = useSimulationStore((s) => s.state.hardware.connectionType);
   const installedSoftware = useSimulationStore((s) => s.state.installedSoftware || []);
+  const dispatchAction = useSimulationStore((s) => s.dispatchAction);
 
   const [currentUrl, setCurrentUrl] = useState<string>(initialUrl);
   const [inputUrl, setInputUrl] = useState<string>(initialUrl);
@@ -27,6 +28,8 @@ export const VoyagerBrowserApp: React.FC<VoyagerBrowserAppProps> = ({ initialUrl
     { url: initialUrl, title: 'FindIt Web Search' },
   ]);
   const [historyIndex, setHistoryIndex] = useState(0);
+  const [isFileMenuOpen, setIsFileMenuOpen] = useState(false);
+  const [saveNotice, setSaveNotice] = useState<string | null>(null);
 
   const [isLoading, setIsLoading] = useState(false);
   const [loadProgress, setLoadProgress] = useState(0);
@@ -122,11 +125,17 @@ export const VoyagerBrowserApp: React.FC<VoyagerBrowserAppProps> = ({ initialUrl
   };
 
   useEffect(() => {
-    loadPage('findit.local', false);
+    loadPage(initialUrl || 'findit.local', false);
     return () => {
       router.abortCurrentLoad();
     };
   }, []);
+
+  useEffect(() => {
+    if (initialUrl && initialUrl !== currentUrl) {
+      loadPage(initialUrl, true);
+    }
+  }, [initialUrl]);
 
   const handleNavigateSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -161,29 +170,93 @@ export const VoyagerBrowserApp: React.FC<VoyagerBrowserAppProps> = ({ initialUrl
     loadPage('findit.local', true);
   };
 
-  const defaultParsedUrl: ParsedUrl = {
-    rawUrl: currentUrl,
-    normalizedUrl: currentUrl,
-    protocol: 'http:',
-    host: 'findit.local',
-    pathname: '/',
-    pathSegments: [],
-    searchParams: {},
-    hash: '',
+  const handleSavePage = () => {
+    setIsFileMenuOpen(false);
+    let fileName: string;
+    let pageContent: string;
+    if (generatedSite) {
+      fileName = `${currentUrl.replace(/^https?:\/\//, '').replace(/[^a-zA-Z0-9]/g, '_').slice(0, 30) || 'page'}.txt`;
+      if (!fileName.endsWith('.txt')) fileName += '.txt';
+      pageContent = `# ${generatedSite.siteName}\n# ${generatedSite.title}\n${generatedSite.tagline}\n\n${generatedSite.sections.map((s) => `## ${s.heading}\n${s.body}\n${s.items.join('\n')}`).join('\n\n')}\n\n---\nSaved from ${currentUrl} • ${generatedSite.archetype}`;
+    } else if (matchResult) {
+      fileName = `${(matchResult.host || 'page').replace('.local', '')}_page.txt`;
+      pageContent = `Saved page: ${matchResult.pageTitle}\nURL: ${currentUrl}\nHost: ${matchResult.host}\n\n---\nContent from ${currentUrl}`;
+    } else {
+      fileName = `page_${Date.now()}.txt`;
+      pageContent = `Saved page from ${currentUrl}\n\n---\nNo content available.`;
+    }
+    // Ensure unique name if exists, but let VFS handle overwrite for now
+    dispatchAction({
+      type: 'VFS_CREATE_FILE',
+      file: {
+        name: fileName,
+        path: `C:/Documents/${fileName}`,
+        parentPath: 'C:/Documents',
+        kind: 'text',
+        sizeBytes: pageContent.length,
+        content: pageContent,
+        metadata: { textContent: pageContent },
+      },
+    });
+    soundManager.play('im_send');
+    setSaveNotice(`Saved ${fileName} to C:/Documents`);
+    setTimeout(() => setSaveNotice(null), 2500);
   };
+
+  const defaultParsedUrl: ParsedUrl = useMemo(() => {
+    try {
+      const u = new URL(currentUrl.startsWith('http') ? currentUrl : `http://${currentUrl}`);
+      return {
+        rawUrl: currentUrl,
+        normalizedUrl: currentUrl,
+        protocol: (u.protocol === 'https:' ? 'https:' : 'http:') as 'http:' | 'https:',
+        host: u.hostname.toLowerCase() || 'findit.local',
+        pathname: u.pathname || '/',
+        pathSegments: u.pathname.split('/').filter(Boolean),
+        searchParams: Object.fromEntries(u.searchParams.entries()),
+        hash: u.hash || '',
+      };
+    } catch {
+      return {
+        rawUrl: currentUrl,
+        normalizedUrl: currentUrl,
+        protocol: 'http:' as const,
+        host: 'findit.local',
+        pathname: '/',
+        pathSegments: [],
+        searchParams: {},
+        hash: '',
+      };
+    }
+  }, [currentUrl]);
 
   const ActivePageComponent = matchResult?.component;
 
   return (
-    <div className="w-full h-full bg-[#ece9d8] text-black font-sans text-xs select-none flex flex-col border border-gray-400 overflow-hidden">
-      {/* Top Menu Bar */}
-      <div className="flex gap-3 px-2 py-0.5 bg-[#dfdfdf] border-b border-gray-400 text-xs text-gray-800">
-        <span className="hover:underline cursor-pointer">File</span>
-        <span className="hover:underline cursor-pointer">Edit</span>
-        <span className="hover:underline cursor-pointer">View</span>
+    <div className="w-full h-full bg-[#ece9d8] text-black font-sans text-xs select-none flex flex-col border border-gray-400 overflow-hidden" onClick={() => setIsFileMenuOpen(false)}>
+      {/* Top Menu Bar — now live */}
+      <div className="flex gap-3 px-2 py-0.5 bg-[#dfdfdf] border-b border-gray-400 text-xs text-gray-800 relative">
+        <div className="relative">
+          <button onClick={(e) => { e.stopPropagation(); setIsFileMenuOpen((v) => !v); }} className={`px-1.5 py-0.5 hover:bg-[#000080] hover:text-white ${isFileMenuOpen ? 'bg-[#000080] text-white' : ''}`}>File</button>
+          {isFileMenuOpen && (
+            <div className="absolute left-0 top-full z-40 mt-0.5 min-w-[180px] border border-gray-500 bg-[#c0c0c0] p-0.5 shadow-lg" onClick={(e) => e.stopPropagation()}>
+              <button onClick={() => { handleHome(); setIsFileMenuOpen(false); }} className="block w-full px-3 py-1 text-left hover:bg-[#000080] hover:text-white">New Window</button>
+              <button onClick={() => { setIsFileMenuOpen(false); }} className="block w-full px-3 py-1 text-left hover:bg-[#000080] hover:text-white">Open...</button>
+              <div className="my-0.5 h-px bg-gray-400" />
+              <button onClick={() => handleSavePage()} className="block w-full px-3 py-1 text-left hover:bg-[#000080] hover:text-white font-bold">💾 Save Page</button>
+              <button onClick={() => handleSavePage()} className="block w-full px-3 py-1 text-left hover:bg-[#000080] hover:text-white">Save As...</button>
+              <div className="my-0.5 h-px bg-gray-400" />
+              <button onClick={() => window.print?.()} className="block w-full px-3 py-1 text-left hover:bg-[#000080] hover:text-white">Print...</button>
+              <button onClick={() => setIsFileMenuOpen(false)} className="block w-full px-3 py-1 text-left hover:bg-[#000080] hover:text-white">Close</button>
+            </div>
+          )}
+        </div>
+        <span className="hover:underline cursor-pointer opacity-60">Edit</span>
+        <span className="hover:underline cursor-pointer opacity-60">View</span>
         <span className="hover:underline cursor-pointer">Favorites</span>
-        <span className="hover:underline cursor-pointer">Tools</span>
-        <span className="hover:underline cursor-pointer">Help</span>
+        <span className="hover:underline cursor-pointer opacity-60">Tools</span>
+        <span className="hover:underline cursor-pointer opacity-60">Help</span>
+        {saveNotice && <span className="ml-auto rounded bg-green-100 px-2 py-0.5 text-[11px] font-bold text-green-800 border border-green-300">✓ {saveNotice}</span>}
       </div>
 
       {/* Main Navigation Toolbar */}
@@ -230,6 +303,14 @@ export const VoyagerBrowserApp: React.FC<VoyagerBrowserAppProps> = ({ initialUrl
             className="px-3 py-1 bg-gradient-to-b from-blue-500 to-blue-700 hover:from-blue-600 hover:to-blue-800 text-white font-bold rounded text-xs shadow cursor-pointer"
           >
             Go
+          </button>
+          <button
+            type="button"
+            onClick={handleSavePage}
+            className="ml-1 rounded border border-gray-400 bg-white px-2 py-1 text-xs font-bold hover:bg-blue-50"
+            title="Save current page to C:/Documents"
+          >
+            💾 Save Page
           </button>
         </form>
       </div>

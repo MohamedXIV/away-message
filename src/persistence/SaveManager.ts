@@ -48,6 +48,7 @@ export class SaveManager {
         this.database.relationships,
         this.database.narrative_state,
         this.database.telemetry_logs,
+        ...(this.database.pulse_state ? [this.database.pulse_state] : []),
       ],
       async () => {
         // Save Master Slot
@@ -87,6 +88,19 @@ export class SaveManager {
         if (snapshot.telemetryLogs.length > 0) {
           await this.database.telemetry_logs.clear();
           await this.database.telemetry_logs.bulkPut(snapshot.telemetryLogs);
+        }
+
+        // Save slot-specific Pulse state if provided
+        if (snapshot.pulseState && (this.database as unknown as { pulse_state?: { put: (record: unknown) => Promise<void> } }).pulse_state) {
+          try {
+            await (this.database as unknown as { pulse_state: { put: (record: unknown) => Promise<void> } }).pulse_state.put({
+              saveSlotId: slotId,
+              state: snapshot.pulseState,
+              updatedAt: now,
+            });
+          } catch {
+            // Pulse state is best-effort; core save should not fail if this does
+          }
         }
       }
     );
@@ -141,6 +155,17 @@ export class SaveManager {
       this.database.telemetry_logs.toArray(),
     ]);
 
+    let pulseState: unknown = undefined;
+    try {
+      const pulseTable = (this.database as unknown as { pulse_state?: { get: (id: string) => Promise<{ state: unknown } | undefined> } }).pulse_state;
+      if (pulseTable) {
+        const pulseRecord = await pulseTable.get(slotId);
+        pulseState = pulseRecord?.state;
+      }
+    } catch {
+      pulseState = undefined;
+    }
+
     const snapshot: FullSimulationSnapshot = {
       saveSlot,
       vfsFiles,
@@ -150,6 +175,7 @@ export class SaveManager {
       relationships,
       narrativeState,
       telemetryLogs,
+      pulseState,
     };
 
     // Runtime validation
@@ -180,6 +206,12 @@ export class SaveManager {
    */
   public async deleteSave(slotId: string): Promise<void> {
     await this.database.saves.delete(slotId);
+    try {
+      const pulseTable = (this.database as unknown as { pulse_state?: { delete: (id: string) => Promise<void> } }).pulse_state;
+      if (pulseTable) await pulseTable.delete(slotId);
+    } catch {
+      // ignore
+    }
   }
 
   /**
@@ -201,20 +233,23 @@ export class SaveManager {
    * Resets all tables for a clean new game state.
    */
   public async clearAll(): Promise<void> {
+    const tables: unknown[] = [
+      this.database.saves,
+      this.database.vfs_files,
+      this.database.downloads,
+      this.database.installed_software,
+      this.database.messages,
+      this.database.relationships,
+      this.database.narrative_state,
+      this.database.telemetry_logs,
+    ];
+    const pulseTable = (this.database as unknown as { pulse_state?: unknown }).pulse_state;
+    if (pulseTable) tables.push(pulseTable);
     await this.database.transaction(
       'rw',
-      [
-        this.database.saves,
-        this.database.vfs_files,
-        this.database.downloads,
-        this.database.installed_software,
-        this.database.messages,
-        this.database.relationships,
-        this.database.narrative_state,
-        this.database.telemetry_logs,
-      ],
+      tables as never[],
       async () => {
-        await Promise.all([
+        const clears: Promise<void>[] = [
           this.database.saves.clear(),
           this.database.vfs_files.clear(),
           this.database.downloads.clear(),
@@ -223,7 +258,10 @@ export class SaveManager {
           this.database.relationships.clear(),
           this.database.narrative_state.clear(),
           this.database.telemetry_logs.clear(),
-        ]);
+        ];
+        const pulseClear = (this.database as unknown as { pulse_state?: { clear: () => Promise<void> } }).pulse_state;
+        if (pulseClear) clears.push(pulseClear.clear());
+        await Promise.all(clears);
       }
     );
   }

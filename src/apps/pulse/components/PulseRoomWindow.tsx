@@ -1,7 +1,11 @@
 import React, { useEffect, useRef, useState } from 'react';
 import type { PulseRoom } from '../data/pulseRooms';
 import { EmoticonPalette } from './EmoticonPalette';
-import { renderEmoticonNodes } from '../utils/emoticonParser';
+import { useSimulationStore } from '../../../store/useSimulationStore';
+import { useWindowStore } from '../../../store/useWindowStore';
+import { renderWithLinksAndEmoticons } from '../utils/linkDetector';
+import { getFileInfoFromUrl } from '../../../engine/fileUtils';
+import { soundManager } from '../../../audio/SoundManager';
 
 export interface PulseRoomMessage {
   id: string;
@@ -35,6 +39,28 @@ export const PulseRoomWindow: React.FC<PulseRoomWindowProps> = ({ room, messages
   const [isEditingTopic, setIsEditingTopic] = useState(false);
   const [topicDraft, setTopicDraft] = useState(topic || room.topic);
   const transcriptRef = useRef<HTMLDivElement>(null);
+  const isOrion60 = useSimulationStore((s) => s.state.hardware.osVersion === 'Orion_6.0');
+  const openWindow = useWindowStore((s) => s.openWindow);
+  const dispatchAction = useSimulationStore((s) => s.dispatchAction);
+  const handleOpenLink = (url: string) => openWindow('browser', { initialUrl: url });
+  const handleDownloadLink = (url: string) => {
+    const info = getFileInfoFromUrl(url);
+    if (!info) {
+      openWindow('browser', { initialUrl: url });
+      return;
+    }
+    dispatchAction({
+      type: 'DOWNLOAD_START',
+      sourceId: `room_${room.id}_${info.fileName}`,
+      url: info.downloadUrl,
+      fileName: info.fileName,
+      totalBytes: info.totalBytes,
+      sourceMaxKbps: info.sourceMaxKbps,
+      fileKind: info.fileKind as any,
+      appAssociation: info.appAssociation,
+    });
+    soundManager.play('im_send');
+  };
 
   useEffect(() => {
     transcriptRef.current?.scrollTo({ top: transcriptRef.current.scrollHeight });
@@ -65,12 +91,12 @@ export const PulseRoomWindow: React.FC<PulseRoomWindowProps> = ({ room, messages
           {messages.map((message) => message.kind === 'system' ? (
             <div key={message.id} className="mb-1.5 border-y border-dotted border-[#cad2da] bg-[#f3f5f7] px-2 py-1 text-center text-[10px] italic text-gray-500">{message.text}</div>
           ) : message.kind === 'whisper' ? (
-            <div key={message.id} className="mb-1.5 border border-dashed border-[#a88bbd] bg-[#faf3ff] px-2 py-1 text-[11px] text-[#653b7e]"><span className="font-bold">private whisper{message.targetId ? ` → ${participantNames[message.targetId] || message.targetId}` : ''}:</span> {renderEmoticonNodes(message.text)}</div>
+            <div key={message.id} className="mb-1.5 border border-dashed border-[#a88bbd] bg-[#faf3ff] px-2 py-1 text-[11px] text-[#653b7e]"><span className="font-bold">private whisper{message.targetId ? ` → ${participantNames[message.targetId] || message.targetId}` : ''}:</span> {renderWithLinksAndEmoticons(message.text, isOrion60, handleOpenLink, handleDownloadLink)}</div>
           ) : (
             <div key={message.id} className="mb-1.5 leading-5">
               <span className="mr-1 text-[10px] text-gray-400">[{String(Math.floor(message.minute / 60)).padStart(2, '0')}:{String(message.minute % 60).padStart(2, '0')}]</span>
               <button className="font-bold hover:underline" style={{ color: message.senderId === 'player' ? room.color : '#174a7c' }}>{message.senderName}:</button>
-              <span className="ml-1">{renderEmoticonNodes(message.text)}</span>
+              <span className="ml-1">{renderWithLinksAndEmoticons(message.text, isOrion60, handleOpenLink, handleDownloadLink)}</span>
             </div>
           ))}
           {isTyping && <div className="mt-3 border-t border-dotted border-gray-300 pt-2 text-[10px] italic text-gray-500">someone in the room is typing...</div>}

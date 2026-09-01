@@ -29,6 +29,7 @@ export const StartMenu: React.FC<StartMenuProps> = ({ isOpen, onClose, onOpenDia
   const [isRunDialogOpen, setIsRunDialogOpen] = useState(false);
   const [isShutDownDialogOpen, setIsShutDownDialogOpen] = useState(false);
   const [runCommandText, setRunCommandText] = useState('');
+  const [runError, setRunError] = useState<string | null>(null);
 
   const isOrion6 = osVersion === 'Orion_6.0';
 
@@ -56,11 +57,16 @@ export const StartMenu: React.FC<StartMenuProps> = ({ isOpen, onClose, onOpenDia
       onClose();
     } else if (cmd.startsWith('http://') || cmd.endsWith('.local')) {
       handleLaunch('browser', { initialUrl: cmd });
+      setIsRunDialogOpen(false);
+      setRunError(null);
+      return;
     } else {
       soundManager.play('error');
-      alert(`Cannot find file or command '${runCommandText}'. Verify name and try again.`);
+      setRunError(`Cannot find file or command '${runCommandText}'. Verify name and try again.`);
+      return;
     }
     setIsRunDialogOpen(false);
+    setRunError(null);
   };
 
   return (
@@ -193,6 +199,7 @@ export const StartMenu: React.FC<StartMenuProps> = ({ isOpen, onClose, onOpenDia
             <button
               className="flex items-center gap-2 px-3 py-1.5 hover:bg-orion-highlight hover:text-white text-left"
               onClick={() => {
+                setRunError(null);
                 setIsRunDialogOpen(true);
                 onClose();
               }}
@@ -240,7 +247,7 @@ export const StartMenu: React.FC<StartMenuProps> = ({ isOpen, onClose, onOpenDia
               <span>Run</span>
               <button
                 className="orion-button h-4 w-4 text-[10px] font-bold p-0 leading-none"
-                onClick={() => setIsRunDialogOpen(false)}
+                onClick={() => { setIsRunDialogOpen(false); setRunError(null); }}
               >
                 ✕
               </button>
@@ -255,11 +262,17 @@ export const StartMenu: React.FC<StartMenuProps> = ({ isOpen, onClose, onOpenDia
                   type="text"
                   autoFocus
                   value={runCommandText}
-                  onChange={(e) => setRunCommandText(e.target.value)}
+                  onChange={(e) => { setRunCommandText(e.target.value); if (runError) setRunError(null); }}
                   placeholder="e.g. notepad, terminal, http://findit.local"
                   className="orion-input flex-1"
                 />
               </div>
+              {runError && (
+                <div className="flex items-center gap-2 border border-red-600 bg-[#ffe0e0] px-2 py-1 text-[11px] text-red-800">
+                  <span>⚠️</span>
+                  <span>{runError}</span>
+                </div>
+              )}
               <div className="flex justify-end gap-2 mt-2">
                 <button type="submit" className="orion-button min-w-[70px] font-bold">
                   OK
@@ -267,7 +280,7 @@ export const StartMenu: React.FC<StartMenuProps> = ({ isOpen, onClose, onOpenDia
                 <button
                   type="button"
                   className="orion-button min-w-[70px]"
-                  onClick={() => setIsRunDialogOpen(false)}
+                  onClick={() => { setIsRunDialogOpen(false); setRunError(null); }}
                 >
                   Cancel
                 </button>
