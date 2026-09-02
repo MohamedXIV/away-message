@@ -13,6 +13,7 @@ import {
   DownloadTask,
   InstalledSoftwareRecord,
   SocialEngineState,
+  WorldState,
   NarrativeState,
   TelemetryStats,
   ConnectionType,
@@ -84,11 +85,14 @@ export interface SimulationStoreActions {
   installSoftware: (softwareId: string, selectedOptions?: Record<string, boolean>) => void;
   uninstallSoftware: (installedId: string) => void;
 
-  // Social & Narrative
+  // Social & World (sandbox)
   sendMessage: (buddyId: string, text: string, tags?: string[]) => void;
   applySocialAction: (buddyId: string, socialAction: string) => void;
-  triggerNarrativeBeat: (beatId: string) => void;
+  triggerNarrativeBeat: (beatId: string) => void; // deprecated alias
   setNarrativeFlag: (key: string, value: boolean | number | string) => void;
+  setWorldFlag: (key: string, value: boolean | number | string) => void;
+  triggerWorldEvent: (eventId: string) => void;
+  generateProceduralEvents: (opts?: { maxEvents?: number; useAI?: boolean }) => Promise<import('../engine/types').GlobalEvent[]>;
   scheduleAppointment: (appointment: Omit<Appointment, 'isCompleted' | 'isMissed'>) => void;
 }
 
@@ -266,11 +270,24 @@ export const useSimulationStore = create<SimulationStore>()(
       },
 
       setNarrativeFlag: (key, value) => {
-        get().dispatchAction({ type: 'NARRATIVE_SET_FLAG', key, value });
+        get().dispatchAction({ type: 'WORLD_SET_FLAG', key, value });
+      },
+
+      setWorldFlag: (key, value) => {
+        get().dispatchAction({ type: 'WORLD_SET_FLAG', key, value });
+      },
+
+      triggerWorldEvent: (eventId) => {
+        get().dispatchAction({ type: 'WORLD_TRIGGER_EVENT', eventId });
+      },
+
+      generateProceduralEvents: async (opts) => {
+        const { engine } = get();
+        return engine.generateProceduralEventsNow(opts);
       },
 
       scheduleAppointment: (appointment) => {
-        get().dispatchAction({ type: 'NARRATIVE_SCHEDULE_APPOINTMENT', appointment });
+        get().dispatchAction({ type: 'WORLD_SCHEDULE_APPOINTMENT', appointment });
       },
     };
   })
@@ -284,6 +301,7 @@ export const useVfsState = (): VirtualFileSystemState => useSimulationStore((s) 
 export const useDownloads = (): DownloadTask[] => useSimulationStore((s) => s.state.downloads);
 export const useInstalledSoftware = (): InstalledSoftwareRecord[] => useSimulationStore((s) => s.state.installedSoftware);
 export const useSocialState = (): SocialEngineState => useSimulationStore((s) => s.state.social);
+export const useWorldState = (): WorldState => useSimulationStore((s) => s.state.world);
 export const useNarrativeState = (): NarrativeState => useSimulationStore((s) => s.state.narrative);
 export const useTelemetryStats = (): TelemetryStats => useSimulationStore((s) => s.state.telemetry.stats);
 export const useActiveView = (): 'pc' | 'room' | 'cafe' | 'work' => useSimulationStore((s) => s.activeView);

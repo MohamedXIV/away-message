@@ -30,7 +30,7 @@ export const RoomScene: React.FC = () => {
   const player = useSimulationStore((s) => s.state.player);
   const hardware = useSimulationStore((s) => s.state.hardware);
   const downloads = useSimulationStore((s) => s.state.downloads);
-  const narrative = useSimulationStore((s) => s.state.narrative);
+  const world = useSimulationStore((s) => s.state.world);
 
   const switchView = useSimulationStore((s) => s.switchView);
   const interactRoom = useSimulationStore((s) => s.interactRoom);
@@ -144,8 +144,8 @@ export const RoomScene: React.FC = () => {
     restOrSleep(8);
   };
 
-  // Get Window Observation data
-  const windowData = getContextualWindowThought(time.day, timeOfDay, weather, narrative.flags);
+  // Get Window Observation data — sandbox uses world flags
+  const windowData = getContextualWindowThought(time.day, timeOfDay, weather, world.flags);
 
   const formattedTime = `${String(time.hour).padStart(2, '0')}:${String(time.minute).padStart(2, '0')}`;
 
@@ -270,7 +270,7 @@ export const RoomScene: React.FC = () => {
           day={time.day}
           playerCash={player.cash}
           playerEnergy={player.energy}
-          isCafeScheduled={time.day >= 11 || !!narrative.flags?.maya_cafe_scheduled}
+          isCafeScheduled={time.day >= 11 || !!world.flags?.maya_cafe_scheduled || world.triggeredEvents.some((e) => e.id === 'city_canal_festival' && e.isTriggered)}
           onSelectOption={handleSelectDoorAction}
           onClose={() => setActiveModal(null)}
         />

@@ -6,6 +6,7 @@ import {
   RamPressure,
 } from './types';
 import { EventBus } from './EventBus';
+import { isMinOsSatisfied, getReleaseById } from './OsCatalog';
 
 export class HardwareEngine {
   private state: HardwareState;
@@ -35,9 +36,11 @@ export class HardwareEngine {
   public checkRequirements(req: SoftwareRequirement): { compatible: boolean; reasons: string[] } {
     const reasons: string[] = [];
 
-    // OS Check
-    if (req.minOs === 'Orion_6.0' && this.state.osVersion === 'Orion_4.8') {
-      reasons.push('Requires Orion OS 6.0 or later (Current: Orion OS 4.8).');
+    // OS Check — use catalog ordering so 5.0/6.1/7.0-beta etc are understood
+    if (!isMinOsSatisfied(this.state.osVersion as any, req.minOs as any)) {
+      const cur = getReleaseById(this.state.osVersion as any);
+      const need = getReleaseById(req.minOs as any);
+      reasons.push(`Requires ${need ? need.displayName : req.minOs} or later (Current: ${cur ? cur.displayName : this.state.osVersion}).`);
     }
 
     // RAM Check
@@ -63,7 +66,12 @@ export class HardwareEngine {
   }
 
   public calculateRamPressure(runningAppsMemoryMB: number): RamPressure {
-    const osBaselineMB = this.state.osVersion === 'Orion_6.0' ? 160 : 64;
+    let osBaselineMB = 64;
+    const rel = getReleaseById(this.state.osVersion as any);
+    if (rel) osBaselineMB = rel.ramOverheadMB;
+    else if (String(this.state.osVersion).includes('7.0')) osBaselineMB = 195;
+    else if (String(this.state.osVersion).includes('6.')) osBaselineMB = 160;
+    else if (String(this.state.osVersion).includes('5.')) osBaselineMB = 96;
     const totalUsedMB = osBaselineMB + runningAppsMemoryMB;
     const freeMB = Math.max(0, this.state.ramMB - totalUsedMB);
     const pressureRatio = totalUsedMB / this.state.ramMB;
@@ -117,35 +125,36 @@ export class HardwareEngine {
   }
 
   public upgradeOs(targetOs: OsVersion): { success: boolean; error?: string } {
+    // Delegates to OsCatalog for any version (4.8/5.0/6.0/7.0/patches), kept for backward compat
     if (this.state.osVersion === targetOs) {
       return { success: false, error: `Already running ${targetOs}.` };
     }
-
+    try {
+      const { getReleaseById } = require('./OsCatalog');
+      const rel = getReleaseById(targetOs as any);
+      if (rel) {
+        if (this.state.ramMB < rel.requirements.minRamMB) {
+          return { success: false, error: `${rel.displayName} setup failed: Requires at least ${rel.requirements.minRamMB} MB RAM. Please upgrade memory first.` };
+        }
+        if (this.state.hddFreeGB < rel.requirements.minDiskGB) {
+          return { success: false, error: `${rel.displayName} setup failed: Requires at least ${rel.requirements.minDiskGB} GB free disk space.` };
+        }
+        const prevOs = this.state.osVersion;
+        this.state.osVersion = targetOs;
+        this.state.hddFreeGB = Math.max(0.5, Number((this.state.hddFreeGB - rel.installSizeGB).toFixed(2)));
+        this.eventBus.emit('hardware:os_migrated', { from: prevOs, to: targetOs } as any);
+        return { success: true };
+      }
+    } catch {}
+    // Fallback to legacy 6.0 check
     if (targetOs === 'Orion_6.0') {
-      if (this.state.ramMB < 768) {
-        return {
-          success: false,
-          error: 'Orion OS 6.0 setup failed: Requires at least 768 MB RAM. Please upgrade memory first.',
-        };
-      }
-      if (this.state.hddFreeGB < 2.0) {
-        return {
-          success: false,
-          error: 'Orion OS 6.0 setup failed: Requires at least 2.0 GB free disk space.',
-        };
-      }
+      if (this.state.ramMB < 768) return { success: false, error: 'Orion OS 6.0 setup failed: Requires at least 768 MB RAM. Please upgrade memory first.' };
+      if (this.state.hddFreeGB < 2.0) return { success: false, error: 'Orion OS 6.0 setup failed: Requires at least 2.0 GB free disk space.' };
     }
-
     const prevOs = this.state.osVersion;
     this.state.osVersion = targetOs;
-    // OS upgrade claims 1.5GB additional system storage
     this.state.hddFreeGB = Math.max(0.5, Number((this.state.hddFreeGB - 1.5).toFixed(2)));
-
-    this.eventBus.emit('hardware:os_migrated', {
-      from: prevOs,
-      to: targetOs,
-    });
-
+    this.eventBus.emit('hardware:os_migrated', { from: prevOs, to: targetOs } as any);
     return { success: true };
   }
 

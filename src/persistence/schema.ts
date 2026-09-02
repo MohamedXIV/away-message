@@ -37,8 +37,8 @@ export interface SaveSlotRecord {
     hddFreeGB: number;           // Calculated or stored
     connectionType: 'dialup_56k' | 'dsl_256k' | 'dsl_512k' | 'dsl_1m';
     connectionSpeedKbps: number; // 256, 512, 1024
-    osVersion: 'Orion_4.8' | 'Orion_6.0';
-    theme: 'orion_4_8' | 'orion_6_0';
+    osVersion: string; // heavy OS: 4.8/5.0/6.0/6.1/7.0-beta/7.0 + procedural
+    theme: string; // orion_4_8 / orion_5_0 / orion_6_0 / orion_7_0
     wallpaper: string;
   };
   narrativeFlags: Record<string, boolean | number | string>;
@@ -158,6 +158,8 @@ export interface FullSimulationSnapshot {
   messages: MessageRecord[];
   relationships: RelationshipRecord[];
   narrativeState: NarrativeStateRecord[];
+  worldState?: NarrativeStateRecord[];
+  osState?: NarrativeStateRecord[]; // heavy OS: currentOsId + patches + procedural catalog
   telemetryLogs: TelemetryLogRecord[];
   pulseState?: unknown;
 }
@@ -198,8 +200,8 @@ export const SaveSlotSchema = z.object({
     hddFreeGB: z.number(),
     connectionType: z.enum(['dialup_56k', 'dsl_256k', 'dsl_512k', 'dsl_1m']),
     connectionSpeedKbps: z.number(),
-    osVersion: z.enum(['Orion_4.8', 'Orion_6.0']),
-    theme: z.enum(['orion_4_8', 'orion_6_0']),
+    osVersion: z.string().regex(/^Orion_/).min(3),
+    theme: z.string().min(3),
     wallpaper: z.string(),
   }),
   narrativeFlags: z.record(z.union([z.boolean(), z.number(), z.string()])),
@@ -214,6 +216,8 @@ export const FullSimulationSnapshotSchema = z.object({
   messages: z.array(z.any()),
   relationships: z.array(z.any()),
   narrativeState: z.array(z.any()),
+  worldState: z.array(z.any()).optional(),
+  osState: z.array(z.any()).optional(),
   telemetryLogs: z.array(z.any()),
   pulseState: z.any().optional(),
 });

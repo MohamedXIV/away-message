@@ -37,6 +37,7 @@ export class SaveManager {
     };
 
     // Execute atomic multi-table transaction
+    const worldTable = (this.database as unknown as { world_state?: unknown }).world_state;
     await this.database.transaction(
       'rw',
       [
@@ -47,6 +48,7 @@ export class SaveManager {
         this.database.messages,
         this.database.relationships,
         this.database.narrative_state,
+        ...(worldTable ? [worldTable as never] : []),
         this.database.telemetry_logs,
         ...(this.database.pulse_state ? [this.database.pulse_state] : []),
       ],
@@ -83,6 +85,17 @@ export class SaveManager {
         await this.database.narrative_state.clear();
         if (snapshot.narrativeState.length > 0) {
           await this.database.narrative_state.bulkPut(snapshot.narrativeState);
+        }
+
+        const worldTable = (this.database as unknown as { world_state?: { clear: () => Promise<void>; bulkPut: (items: unknown[]) => Promise<void> } }).world_state;
+        if (worldTable) {
+          await worldTable.clear();
+          const worldState = (snapshot as any).worldState ?? snapshot.narrativeState;
+          const osState = (snapshot as any).osState;
+          const toPut: unknown[] = [];
+          if (worldState && worldState.length > 0) toPut.push(...worldState);
+          if (osState && osState.length > 0) toPut.push(...osState);
+          if (toPut.length > 0) await worldTable.bulkPut(toPut as any);
         }
 
         if (snapshot.telemetryLogs.length > 0) {
@@ -155,6 +168,23 @@ export class SaveManager {
       this.database.telemetry_logs.toArray(),
     ]);
 
+    let worldState: typeof narrativeState | undefined = undefined;
+    let osState: typeof narrativeState | undefined = undefined;
+    try {
+      const worldTable = (this.database as unknown as { world_state?: { toArray: () => Promise<typeof narrativeState> } }).world_state;
+      if (worldTable) {
+        const allWorld = await worldTable.toArray();
+        // Split by key prefix: os_ -> osState, else worldState
+        worldState = allWorld.filter((r: any) => !String(r.key).startsWith('os_'));
+        osState = allWorld.filter((r: any) => String(r.key).startsWith('os_'));
+        if (osState.length === 0) osState = undefined;
+        if (worldState.length === 0) worldState = undefined;
+      }
+    } catch {
+      worldState = undefined;
+      osState = undefined;
+    }
+
     let pulseState: unknown = undefined;
     try {
       const pulseTable = (this.database as unknown as { pulse_state?: { get: (id: string) => Promise<{ state: unknown } | undefined> } }).pulse_state;
@@ -173,7 +203,9 @@ export class SaveManager {
       installedSoftware,
       messages,
       relationships,
-      narrativeState,
+      narrativeState: worldState && worldState.length > 0 ? worldState : narrativeState,
+      worldState: worldState && worldState.length > 0 ? worldState : narrativeState,
+      osState: osState && osState.length > 0 ? osState : undefined,
       telemetryLogs,
       pulseState,
     };
@@ -243,6 +275,8 @@ export class SaveManager {
       this.database.narrative_state,
       this.database.telemetry_logs,
     ];
+    const worldTable = (this.database as unknown as { world_state?: unknown }).world_state;
+    if (worldTable) tables.push(worldTable);
     const pulseTable = (this.database as unknown as { pulse_state?: unknown }).pulse_state;
     if (pulseTable) tables.push(pulseTable);
     await this.database.transaction(
@@ -259,6 +293,8 @@ export class SaveManager {
           this.database.narrative_state.clear(),
           this.database.telemetry_logs.clear(),
         ];
+        const worldClear = (this.database as unknown as { world_state?: { clear: () => Promise<void> } }).world_state;
+        if (worldClear) clears.push(worldClear.clear());
         const pulseClear = (this.database as unknown as { pulse_state?: { clear: () => Promise<void> } }).pulse_state;
         if (pulseClear) clears.push(pulseClear.clear());
         await Promise.all(clears);

@@ -7,6 +7,7 @@ import { loadPulseState } from '../../apps/pulse/persistence';
 export const FindItSite: React.FC<SiteRouteProps> = (props) => {
   const currentDay = useSimulationStore((s) => s.state.time.day);
   const narrativeFlags = useSimulationStore((s) => s.state.narrative.flags);
+  const world = useSimulationStore((s) => s.state.world);
   const doNavigate = props.navigate || props.onNavigate || (() => {});
 
   const queryParams = { ...props.searchParams, ...props.queryParams };
@@ -14,7 +15,7 @@ export const FindItSite: React.FC<SiteRouteProps> = (props) => {
   const [searchQuery, setSearchQuery] = useState(initialQuery);
   const [hasSearched, setHasSearched] = useState(Boolean(initialQuery));
 
-  const indexedResults = searchInternet(searchQuery, currentDay, narrativeFlags);
+  const indexedResults = searchInternet(searchQuery, currentDay, narrativeFlags, world);
   const generatedResults = useMemo(() => generateFindItCandidates(searchQuery, currentDay), [searchQuery, currentDay]);
 
   const pulseState = useMemo(() => {

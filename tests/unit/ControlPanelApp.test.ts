@@ -46,6 +46,10 @@ describe('Control Panel, Hardware & Software Management', () => {
   it('handles OS version upgrade/switch cleanly', () => {
     expect(engine.hardware.getState().osVersion).toBe('Orion_4.8');
 
+    // Advance to Day 8 when Orion 6.0 is released (heavy OS: releaseDay gating)
+    engine.dispatchAction({ type: 'TIME_ADVANCE_MINUTES', minutes: 7 * 1440, reason: 'to Day 8' });
+    expect(engine.clock.getTime().day).toBe(8);
+
     // Upgrade RAM to 1024 MB to meet Orion 6.0 requirement (>= 768 MB)
     engine.dispatchAction({
       type: 'HARDWARE_UPGRADE_RAM',
@@ -61,5 +65,6 @@ describe('Control Panel, Hardware & Software Management', () => {
 
     expect(res.success).toBe(true);
     expect(engine.hardware.getState().osVersion).toBe('Orion_6.0');
+    expect(engine.os.getCurrentOsId()).toBe('Orion_6.0');
   });
 });

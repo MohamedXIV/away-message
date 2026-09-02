@@ -61,7 +61,8 @@ export interface WorkShiftResult {
 // ==========================================
 
 export type ConnectionType = 'dialup_56k' | 'dsl_256k' | 'dsl_512k' | 'dsl_1m';
-export type OsVersion = 'Orion_4.8' | 'Orion_6.0';
+// Core OS lineage — now heavy, supports 4.8 / 5.0 / 6.0 / 6.1 / 7.0-beta / 7.0 / 7.0.1 + procedural
+export type OsVersion = 'Orion_4.8' | 'Orion_5.0' | 'Orion_6.0' | 'Orion_6.1' | 'Orion_7.0-beta' | 'Orion_7.0' | 'Orion_7.0.1' | (string & {});
 
 export interface HardwareState {
   cpuTier: number;                  // 1 (Single-Core 450MHz), 2 (Dual-Core 800MHz)
@@ -83,6 +84,15 @@ export interface RamPressure {
   freeRamMB: number;
   pressureRatio: number;            // used / total
   status: 'nominal' | 'elevated' | 'critical';
+}
+
+export interface OsEngineState {
+  currentOsId: OsVersion;
+  installedPatchIds: OsVersion[];
+  lastBootAtMinute?: number;
+  lastInstallAtMinute?: number;
+  lastInstallLog?: string[];
+  pendingReboot?: boolean;
 }
 
 export interface SoftwareRequirement {
@@ -296,7 +306,7 @@ export interface SocialEngineState {
 }
 
 // ==========================================
-// NARRATIVE & APPOINTMENTS DOMAIN
+// WORLD / SANDBOX DOMAIN (replaces narrative beats)
 // ==========================================
 
 export interface Appointment {
@@ -319,13 +329,45 @@ export interface InkSemanticTag {
   raw: string;
 }
 
-export interface NarrativeState {
-  activeBeatId: string | null;
-  completedBeats: string[];
+// Sandbox global event shared with WorldEventsEngine
+export type GlobalEventCategory = 'os_release' | 'site_launch' | 'city_news' | 'economy' | 'culture' | 'system';
+
+export interface GlobalEvent {
+  id: string;
+  title: string;
+  description: string;
+  category: GlobalEventCategory;
+  triggerDay: number;
+  triggerHour?: number;
+  knowledgePrompt: string;
+  siteUrl?: string;
+  isTriggered: boolean;
+  triggeredAtMinute?: number;
+}
+
+export type BuddyAttitude = 'hyped' | 'curious' | 'skeptical' | 'annoyed' | 'indifferent' | 'worried';
+
+export interface BuddyEventKnowledge {
+  eventId: string;
+  attitude: BuddyAttitude;
+  personalTake: string; // one sentence, buddy-specific
+  learnedAtMinute: number;
+}
+
+export interface WorldState {
   flags: Record<string, boolean | number | string>;
   appointments: Appointment[];
   windowObservationHistory: string[];
+  triggeredEvents: GlobalEvent[];
+  // Per-buddy attitude bank — each buddy sees same event through different eyes
+  buddyKnowledge: Record<string, BuddyEventKnowledge[]>; // key: buddyId
 }
+
+// Deprecated alias — kept for backward compat during migration to sandbox
+export type NarrativeState = WorldState & {
+  activeBeatId?: string | null;
+  completedBeats?: string[];
+};
 
 // ==========================================
 // TELEMETRY DOMAIN
@@ -334,7 +376,7 @@ export interface NarrativeState {
 export interface TelemetryRecord {
   timestampMinutes: number;
   realTimestampMs: number;
-  category: 'economy' | 'hardware' | 'social' | 'software' | 'download' | 'narrative' | 'room';
+  category: 'economy' | 'hardware' | 'social' | 'software' | 'download' | 'world' | 'narrative' | 'room';
   action: string;
   data?: Record<string, unknown>;
 }
@@ -369,10 +411,13 @@ export interface SimulationState {
   time: GameTime;
   player: PlayerState;
   hardware: HardwareState;
+  os: OsEngineState;
   vfs: VirtualFileSystemState;
   downloads: DownloadTask[];
   installedSoftware: InstalledSoftwareRecord[];
   social: SocialEngineState;
+  world: WorldState;
+  /** @deprecated use world — kept for migration compat */
   narrative: NarrativeState;
   telemetry: {
     stats: TelemetryStats;
@@ -409,6 +454,11 @@ export type SimulationAction =
   | { type: 'SOCIAL_SEND_MESSAGE'; buddyId: string; text: string; tags?: string[]; imageUrl?: string; imagePrompt?: string; imageCaption?: string }
   | { type: 'SOCIAL_RECEIVE_MESSAGE'; buddyId: string; text: string; timestampMinute?: number; deliveredAway?: boolean; tags?: string[]; imageUrl?: string; imagePrompt?: string; imageCaption?: string }
   | { type: 'SOCIAL_APPLY_ACTION'; buddyId: string; socialAction: string }
+  | { type: 'WORLD_SET_FLAG'; key: string; value: boolean | number | string }
+  | { type: 'WORLD_TRIGGER_EVENT'; eventId: string }
+  | { type: 'WORLD_ADD_OBSERVATION'; entry: string }
+  | { type: 'WORLD_SCHEDULE_APPOINTMENT'; appointment: Omit<Appointment, 'isCompleted' | 'isMissed'> }
+  // Deprecated aliases — map to WORLD_* internally
   | { type: 'NARRATIVE_TRIGGER_BEAT'; beatId: string }
   | { type: 'NARRATIVE_SET_FLAG'; key: string; value: boolean | number | string }
   | { type: 'NARRATIVE_SCHEDULE_APPOINTMENT'; appointment: Omit<Appointment, 'isCompleted' | 'isMissed'> };
@@ -451,6 +501,10 @@ export interface SimulationEventMap {
   'social:status_changed': { buddyId: string; presence: BuddyPresence };
   'social:message_received': { message: MessageRecord };
   'social:relationship_updated': { buddyId: string; dimensions: RelationshipDimensions; delta: Partial<RelationshipDimensions> };
+  'world:flag_changed': { key: string; value: boolean | number | string };
+  'world:global_event_triggered': { event: GlobalEvent };
+  'world:appointment_scheduled': { appointment: Appointment };
+  // Deprecated narrative aliases
   'narrative:tag_emitted': { tag: InkSemanticTag };
   'narrative:beat_triggered': { beatId: string };
   'telemetry:event_logged': { record: TelemetryRecord };

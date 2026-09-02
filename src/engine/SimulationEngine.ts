@@ -2,7 +2,6 @@ import {
   SimulationState,
   SimulationAction,
   ActionResult,
-  NarrativeState,
 } from './types';
 import { GameClock } from './GameClock';
 import { EventBus } from './EventBus';
@@ -13,27 +12,26 @@ import { DownloadManager } from './DownloadManager';
 import { SoftwareRegistry } from './SoftwareRegistry';
 import { SocialEngine } from './SocialEngine';
 import { TelemetryEngine } from './TelemetryEngine';
+import { WorldEventsEngine } from './WorldEventsEngine';
+import { OsEngine } from './OsEngine';
 
 export class SimulationEngine {
-  public readonly clock: GameClock;
-  public readonly events: EventBus;
-  public readonly economy: EconomyEngine;
-  public readonly hardware: HardwareEngine;
-  public readonly vfs: FileSystemEngine;
-  public readonly downloads: DownloadManager;
-  public readonly software: SoftwareRegistry;
-  public readonly social: SocialEngine;
-  public readonly telemetry: TelemetryEngine;
+  public readonly clock!: GameClock;
+  public readonly events!: EventBus;
+  public readonly economy!: EconomyEngine;
+  public readonly hardware!: HardwareEngine;
+  public readonly os!: OsEngine;
+  public readonly vfs!: FileSystemEngine;
+  public readonly downloads!: DownloadManager;
+  public readonly software!: SoftwareRegistry;
+  public readonly social!: SocialEngine;
+  public readonly telemetry!: TelemetryEngine;
+  public readonly world!: WorldEventsEngine;
 
   private activeView: 'pc' | 'room' | 'cafe' | 'work' = 'pc';
-  private narrative: NarrativeState = {
-    activeBeatId: null,
-    completedBeats: [],
-    flags: {},
-    appointments: [],
-    windowObservationHistory: [],
-  };
   private subscribers: Set<(state: Readonly<SimulationState>) => void> = new Set();
+  private _procGenPending = false;
+  private _procGenLastDay = 0;
 
   constructor(initialState?: Partial<SimulationState>) {
     this.events = new EventBus();
@@ -45,6 +43,16 @@ export class SimulationEngine {
     this.economy = new EconomyEngine(this.events, initialState?.player);
     this.hardware = new HardwareEngine(this.events, initialState?.hardware);
     this.vfs = new FileSystemEngine(this.events, initialState?.vfs);
+    // World before OS so Os can sync from world
+    const worldInitial = (initialState as any)?.world ?? (initialState as any)?.narrative;
+    this.world = new WorldEventsEngine(this.events, worldInitial);
+    // OsEngine is core — sync with hardware osVersion
+    const osInitial = (initialState as any)?.os ?? { currentOsId: initialState?.hardware?.osVersion };
+    this.os = new OsEngine(this.events, { currentOsId: osInitial.currentOsId ?? initialState?.hardware?.osVersion, ...(osInitial as object) });
+    // Keep hardware.osVersion in sync with OsEngine (source of truth)
+    (this.hardware as any).state.osVersion = this.os.getCurrentOsId();
+    // Restore any procedural OS releases that were world-generated (for old saves)
+    try { this.os.syncFromWorldState({ triggeredEvents: this.world.getTriggeredEvents(), pendingEvents: this.world.getPendingEvents() } as any, this.clock.getTime().day); } catch {}
     this.downloads = new DownloadManager(
       {
         eventBus: this.events,
@@ -57,7 +65,7 @@ export class SimulationEngine {
       this.events,
       this.vfs,
       {
-        getOsVersion: () => this.hardware.getState().osVersion,
+        getOsVersion: () => this.os.getCurrentOsId() as any,
         getRamMb: () => this.hardware.getState().ramMB,
         getCpuTier: () => this.hardware.getState().cpuTier,
       },
@@ -70,9 +78,11 @@ export class SimulationEngine {
       initialState?.telemetry?.logs
     );
 
-    if (initialState?.narrative) {
-      this.narrative = { ...initialState.narrative };
-    }
+    // Rehydrate world events that may have been due before load
+    try {
+      this.world.checkAndTriggerEvents(this.clock.getTotalMinutes(), this.clock.getTime().day);
+      this.os.syncFromWorldState({ triggeredEvents: this.world.getTriggeredEvents(), pendingEvents: this.world.getPendingEvents() } as any, this.clock.getTime().day);
+    } catch {}
     this.activeView = initialState?.activeView ?? 'pc';
 
     this.registerInternalEventHandlers();
@@ -91,23 +101,37 @@ export class SimulationEngine {
   public getState(): Readonly<SimulationState> {
     const vfsState = this.vfs.getState();
     const downloadState = this.downloads.getState();
+    const worldState = this.world.getState();
+    const osState = this.os.getState();
+    // Sync hardware osVersion to OsEngine truth
+    const hwState = this.hardware.getState();
+    if ((hwState as any).osVersion !== osState.currentOsId) {
+      (this.hardware as any).state.osVersion = osState.currentOsId;
+    }
+
+    // Sandbox world state is canonical; narrative is deprecated alias (kept with buddyKnowledge for compat)
+    const narrativeAlias = {
+      activeBeatId: null as string | null,
+      completedBeats: [] as string[],
+      flags: { ...worldState.flags },
+      appointments: worldState.appointments.map((a) => ({ ...a })),
+      windowObservationHistory: [...worldState.windowObservationHistory],
+      triggeredEvents: [...worldState.triggeredEvents],
+      buddyKnowledge: { ...worldState.buddyKnowledge },
+    };
 
     return {
       version: 1,
       time: this.clock.getTime(),
       player: this.economy.getState(),
       hardware: this.hardware.getState(),
+      os: osState,
       vfs: vfsState,
       downloads: downloadState.tasks,
       installedSoftware: this.software.getInstalledSoftware(),
       social: this.social.getState(),
-      narrative: {
-        activeBeatId: this.narrative.activeBeatId,
-        completedBeats: [...this.narrative.completedBeats],
-        flags: { ...this.narrative.flags },
-        appointments: this.narrative.appointments.map(a => ({ ...a })),
-        windowObservationHistory: [...this.narrative.windowObservationHistory],
-      },
+      world: worldState,
+      narrative: narrativeAlias,
       telemetry: {
         stats: this.telemetry.getStats(),
         logs: [...this.telemetry.getLogs()],
@@ -126,6 +150,8 @@ export class SimulationEngine {
       const currentMinutes = this.clock.getTotalMinutes();
       this.downloads.advanceTime(tickResult.elapsedMinutes, currentMinutes);
       this.social.updatePresence(currentMinutes);
+      this.world.checkAndTriggerEvents(currentMinutes, tickResult.time.day);
+      try { this.os.syncFromWorldState({ triggeredEvents: this.world.getTriggeredEvents(), pendingEvents: this.world.getPendingEvents() } as any, tickResult.time.day); } catch {}
 
       this.events.emit('time:tick', {
         time: tickResult.time,
@@ -139,6 +165,7 @@ export class SimulationEngine {
           previousDay: prevDay,
           time: tickResult.time,
         });
+        this.maybeScheduleProceduralGeneration();
       }
 
       this.notifySubscribers();
@@ -152,6 +179,8 @@ export class SimulationEngine {
     const currentMinutes = this.clock.getTotalMinutes();
     this.downloads.advanceTime(minutes, currentMinutes);
     this.social.updatePresence(currentMinutes);
+    this.world.checkAndTriggerEvents(currentMinutes, jumpResult.newTime.day);
+    try { this.os.syncFromWorldState({ triggeredEvents: this.world.getTriggeredEvents(), pendingEvents: this.world.getPendingEvents() } as any, jumpResult.newTime.day); } catch {}
 
     this.events.emit('time:jump', {
       jumpMinutes: minutes,
@@ -165,9 +194,46 @@ export class SimulationEngine {
         previousDay: jumpResult.previousTime.day,
         time: jumpResult.newTime,
       });
+      this.maybeScheduleProceduralGeneration();
     }
 
     this.notifySubscribers();
+  }
+
+  // Governed procedural queue — keeps 2-3 future days filled. Throttled, non-blocking, template fallback if AI unavailable.
+  private maybeScheduleProceduralGeneration(): void {
+    const pending = this.world.getPendingEvents().length;
+    if (pending >= 3) return;
+    const currentDay = this.clock.getTime().day;
+    if (this._procGenPending || this._procGenLastDay === currentDay) return;
+    this._procGenPending = true;
+    this._procGenLastDay = currentDay;
+    const totalMinutes = this.clock.getTotalMinutes();
+    // Fire-and-forget, never blocks simulation
+    import('./ProceduralDirector')
+      .then(({ ProceduralDirector }) => {
+        const dir = new ProceduralDirector(this.world);
+        return dir.generateNextBatch(currentDay, totalMinutes, { maxEvents: 2, useAI: true });
+      })
+      .catch(() => {})
+      .finally(() => {
+        this._procGenPending = false;
+        // Notify so UI (CityWire) updates pending count
+        try { this.notifySubscribers(); } catch {}
+      });
+  }
+
+  public async generateProceduralEventsNow(options?: { maxEvents?: number; useAI?: boolean }): Promise<import('./types').GlobalEvent[]> {
+    const currentDay = this.clock.getTime().day;
+    const totalMinutes = this.clock.getTotalMinutes();
+    const { ProceduralDirector } = await import('./ProceduralDirector');
+    const dir = new ProceduralDirector(this.world);
+    const res = await dir.generateNextBatch(currentDay, totalMinutes, {
+      maxEvents: options?.maxEvents ?? 2,
+      useAI: options?.useAI ?? true,
+    });
+    this.notifySubscribers();
+    return res.events;
   }
 
   public dispatchAction(action: SimulationAction): ActionResult {
@@ -249,6 +315,7 @@ export class SimulationEngine {
         const newTotalMinutes = this.clock.getTotalMinutes();
         this.downloads.advanceTime(jump.elapsedMinutes, newTotalMinutes);
         this.social.updatePresence(newTotalMinutes);
+        this.world.checkAndTriggerEvents(newTotalMinutes, jump.newTime.day);
 
         if (jump.dayChanged) {
           this.events.emit('time:day_changed', {
@@ -282,6 +349,7 @@ export class SimulationEngine {
           this.economy.restoreEnergy(15);
         } else if (action.activity === 'window') {
           this.telemetry.recordWindowObservation();
+          this.world.addWindowObservation(`window_day${this.clock.getTime().day}_${this.clock.getTotalMinutes()}`);
         }
         this.telemetry.logEvent('room', `interact_${action.activity}`, currentMinutes);
         return { success: true };
@@ -325,15 +393,38 @@ export class SimulationEngine {
             error: `Cannot afford OS upgrade package ($${action.cost.toFixed(2)}).`,
           };
         }
-        const osRes = this.hardware.upgradeOs(action.targetOs);
-        if (!osRes.success) return { success: false, error: osRes.error };
-        this.economy.spendCash(action.cost, `Operating System Upgrade (${action.targetOs})`);
-        this.advanceGameMinutes(45, 'OS Upgrade Installation & Reboot');
+        // Core OS engine handles all lineage, RAM/disk/stability, and multi-reboot realism
+        const hwState = this.hardware.getState();
+        const can = this.os.canInstall(action.targetOs as any, hwState as any, this.clock.getTime().day);
+        if (!can.ok) return { success: false, error: can.reasons.join(' ') };
+        const targetRel = can.release!;
+        // Allocate disk upfront (heavy OS simulation)
+        if (!this.hardware.allocateDiskSpaceBytes(targetRel.installSizeGB * 1024 * 1024 * 1024)) {
+          return { success: false, error: `Not enough disk for ${targetRel.displayName} (${targetRel.installSizeGB}GB required). Free some space.` };
+        }
+        this.economy.spendCash(action.cost, `OS Upgrade (${targetRel.displayName})`);
+        const res = this.os.beginInstall(action.targetOs as any, hwState as any, this.clock.getTime().day, currentMinutes);
+        if (!res.success) {
+          // refund disk on failure
+          this.hardware.freeDiskSpaceBytes(targetRel.installSizeGB * 1024 * 1024 * 1024);
+          return { success: false, error: res.error };
+        }
+        // Realistic time: copying + reboots + finalizing (OsEngine logs minutes in install, we simulate)
+        const ramFactor = hwState.ramMB < 768 ? 1.6 : hwState.ramMB < 1024 ? 1.2 : 1.0;
+        const installMinutes = Math.round((22 + targetRel.installSizeGB * 14) * ramFactor) + (res.rebootCount ?? 2) * 3;
+        this.advanceGameMinutes(installMinutes, `OS Install: ${targetRel.displayName} + ${res.rebootCount ?? 2} reboots`);
+        // Sync hardware osVersion truth
+        (this.hardware as any).state.osVersion = this.os.getCurrentOsId();
+        // OS overhead already modeled via OsEngine.getRamOverheadMB() — HardwareEngine.calculateRamPressure reads it via sync? Keep hardware ramOverhead minimal here
         this.telemetry.logEvent('hardware', 'os_upgraded', currentMinutes, {
           targetOs: action.targetOs,
+          displayName: targetRel.displayName,
+          installMinutes,
+          reboots: res.rebootCount,
+          log: this.os.getInstallLog().slice(-3).join(' | '),
         });
         this.notifySubscribers();
-        return { success: true };
+        return { success: true, data: { ...res, release: targetRel, installMinutes } };
       }
 
       case 'DOWNLOAD_START': {
@@ -494,29 +585,51 @@ export class SimulationEngine {
         }
       }
 
+      case 'WORLD_SET_FLAG': {
+        this.world.setFlag(action.key, action.value);
+        this.events.emit('world:flag_changed', { key: action.key, value: action.value });
+        this.notifySubscribers();
+        return { success: true };
+      }
+
+      case 'WORLD_TRIGGER_EVENT': {
+        const evt = this.world.triggerEventById(action.eventId, currentMinutes);
+        if (!evt) return { success: false, error: `Event not found or already triggered: ${action.eventId}` };
+        this.notifySubscribers();
+        return { success: true, data: evt };
+      }
+
+      case 'WORLD_ADD_OBSERVATION': {
+        this.world.addWindowObservation(action.entry);
+        this.notifySubscribers();
+        return { success: true };
+      }
+
+      case 'WORLD_SCHEDULE_APPOINTMENT': {
+        const appt = this.world.scheduleAppointment(action.appointment);
+        this.events.emit('world:appointment_scheduled', { appointment: appt });
+        this.notifySubscribers();
+        return { success: true, data: appt };
+      }
+
+      // Deprecated narrative aliases — routed to world
       case 'NARRATIVE_TRIGGER_BEAT': {
-        this.narrative.activeBeatId = action.beatId;
-        if (!this.narrative.completedBeats.includes(action.beatId)) {
-          this.narrative.completedBeats.push(action.beatId);
-        }
-        this.events.emit('narrative:beat_triggered', { beatId: action.beatId });
+        // No-op in sandbox: beats removed. Keep for compat, emit but don't store.
+        this.events.emit('narrative:beat_triggered', { beatId: (action as any).beatId });
         this.notifySubscribers();
         return { success: true };
       }
 
       case 'NARRATIVE_SET_FLAG': {
-        this.narrative.flags[action.key] = action.value;
+        this.world.setFlag(action.key, action.value);
+        this.events.emit('world:flag_changed', { key: action.key, value: action.value });
         this.notifySubscribers();
         return { success: true };
       }
 
       case 'NARRATIVE_SCHEDULE_APPOINTMENT': {
-        const appt = {
-          ...action.appointment,
-          isCompleted: false,
-          isMissed: false,
-        };
-        this.narrative.appointments.push(appt);
+        const appt = this.world.scheduleAppointment(action.appointment);
+        this.events.emit('world:appointment_scheduled', { appointment: appt });
         this.notifySubscribers();
         return { success: true, data: appt };
       }
@@ -549,10 +662,153 @@ export class SimulationEngine {
     return JSON.parse(JSON.stringify(this.getState()));
   }
 
+  public exportFullSnapshot(saveSlotId = 'slot_1', saveName?: string): import('../persistence/schema').FullSimulationSnapshot {
+    const state = this.getState();
+    const now = Date.now();
+    const saveSlot: import('../persistence/schema').SaveSlotRecord = {
+      id: saveSlotId,
+      name: saveName || `Day ${state.time.day} • ${state.time.timeOfDay}`,
+      version: 1,
+      createdAt: now,
+      updatedAt: now,
+      day: state.time.day,
+      totalMinutes: state.time.totalMinutes,
+      clockState: {
+        day: state.time.day,
+        hour: state.time.hour,
+        minute: state.time.minute,
+        totalMinutes: state.time.totalMinutes,
+        timeOfDay: state.time.timeOfDay,
+        isPaused: this.clock.isPaused(),
+      },
+      playerState: {
+        cash: state.player.cash,
+        energy: state.player.energy,
+        fatigue: state.player.fatigue,
+        rentDueDay: state.player.rentDueDay,
+        rentAmount: state.player.rentAmount,
+        rentPaid: state.player.rentPaid,
+        consecutiveLateWarnings: 0,
+      },
+      hardwareState: {
+        cpuTier: state.hardware.cpuTier,
+        ramMB: state.hardware.ramMB,
+        hddTotalGB: state.hardware.hddTotalGB,
+        hddFreeGB: state.hardware.hddFreeGB,
+        connectionType: state.hardware.connectionType,
+        connectionSpeedKbps: state.hardware.connectionSpeedKbps,
+        osVersion: state.os.currentOsId as any,
+        theme: (this.os.getTheme() as any) || 'orion_4_8',
+        wallpaper: 'default',
+      },
+      narrativeFlags: { ...state.world.flags },
+      meta: { os: state.os, worldEvents: state.world.triggeredEvents.length },
+    };
+    // Build worldState records from world
+    const worldState: import('../persistence/schema').NarrativeStateRecord[] = [
+      { key: 'world_flags', value: state.world.flags, updatedAt: now },
+      { key: 'world_appointments', value: state.world.appointments, updatedAt: now },
+      { key: 'world_windowHistory', value: state.world.windowObservationHistory, updatedAt: now },
+      { key: 'world_triggeredEvents', value: state.world.triggeredEvents, updatedAt: now },
+      { key: 'world_buddyKnowledge', value: state.world.buddyKnowledge, updatedAt: now },
+    ];
+    const osState: import('../persistence/schema').NarrativeStateRecord[] = [
+      { key: 'os_state', value: state.os, updatedAt: now },
+    ];
+    return {
+      saveSlot,
+      vfsFiles: Object.values(state.vfs.files).map((f) => ({
+        id: f.id,
+        name: f.name,
+        path: f.path,
+        parentPath: f.parentPath,
+        kind: f.kind as any,
+        sizeBytes: f.sizeBytes,
+        content: f.content,
+        appAssociation: f.appAssociation,
+        metadata: f.metadata as any,
+        createdAt: f.createdAtMinute,
+        modifiedAt: f.modifiedAtMinute,
+      })),
+      downloads: state.downloads.map((d) => ({
+        id: d.id,
+        sourceId: d.sourceId,
+        url: d.sourceUrl,
+        fileName: d.fileName,
+        destinationPath: `${d.targetDirectory}/${d.fileName}`,
+        totalBytes: d.totalBytes,
+        downloadedBytes: d.downloadedBytes,
+        sourceMaxKbps: d.sourceMaxKbps,
+        status: d.status as any,
+        resumable: d.resumable,
+        startedAt: d.startedAtMinute,
+        completedAt: d.completedAtMinute,
+      })),
+      installedSoftware: state.installedSoftware.map((s) => ({
+        appId: s.appId,
+        version: s.version,
+        installPath: s.installPath,
+        occupiedSizeBytes: s.installedBytes,
+        isPortable: s.isPortable,
+        bundledComponents: [],
+        registeredInAddRemove: !s.isPortable,
+        desktopShortcut: s.shortcuts.length > 0,
+        startMenuEntry: true,
+        installedAt: s.installedAtMinute,
+      })),
+      messages: Object.entries(state.social.conversations).flatMap(([buddyId, msgs]) =>
+        msgs.map((m) => ({
+          id: m.id,
+          buddyId,
+          sender: m.senderId as any,
+          text: m.text,
+          timestamp: m.timestampMinute,
+          day: m.day,
+          isRead: m.isRead,
+        })),
+      ),
+      relationships: Object.entries(state.social.relationships).map(([buddyId, r]) => ({
+        buddyId,
+        familiarity: r.familiarity,
+        trust: r.trust,
+        comfort: r.comfort,
+        respect: r.respect,
+        annoyance: r.annoyance,
+        lastInteractionDay: state.time.day,
+        unlockedNotes: [],
+        flags: {},
+      })),
+      narrativeState: worldState,
+      worldState,
+      osState,
+      telemetryLogs: state.telemetry.logs.map((l) => ({
+        timestamp: l.timestampMinutes,
+        gameDay: Math.floor(l.timestampMinutes / 1440) + 1,
+        gameMinutes: l.timestampMinutes,
+        eventType: `${l.category}:${l.action}`,
+        payload: l.data ?? {},
+      })),
+      pulseState: undefined,
+    };
+  }
+
   public loadSnapshot(snapshot: SimulationState): void {
     this.clock.setTotalMinutes(snapshot.time.totalMinutes);
     this.economy.loadState(snapshot.player);
     this.hardware.loadState(snapshot.hardware);
+    // OsEngine — load from dedicated os field or fallback to hardware osVersion
+    const osSrc = (snapshot as any).os ?? { currentOsId: (snapshot as any).hardware?.osVersion };
+    if (osSrc) {
+      try { this.os.loadState(osSrc); } catch {}
+      // Sync hardware
+      const osId = this.os.getCurrentOsId();
+      (this.hardware as any).state.osVersion = osId;
+    }
+    // Re-sync procedural OS from world after load (for saves that had world os_release events)
+    try {
+      const worldSrc = (snapshot as any).world ?? (snapshot as any).narrative;
+      if (worldSrc) this.os.syncFromWorldState({ triggeredEvents: worldSrc.triggeredEvents ?? [], pendingEvents: [] } as any, this.clock.getTime().day);
+    } catch {}
     this.vfs.restoreState(snapshot.vfs);
     this.downloads.restoreState({
       tasks: snapshot.downloads,
@@ -561,7 +817,8 @@ export class SimulationEngine {
     });
     this.social.restoreState(snapshot.social);
     this.telemetry.loadState(snapshot.telemetry.stats, snapshot.telemetry.logs);
-    this.narrative = { ...snapshot.narrative };
+    const worldSrc = (snapshot as any).world ?? (snapshot as any).narrative;
+    if (worldSrc) this.world.loadState(worldSrc);
     this.activeView = snapshot.activeView;
     this.notifySubscribers();
   }

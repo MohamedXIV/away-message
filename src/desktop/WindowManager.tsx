@@ -17,6 +17,7 @@ import { WeatherBuddyApp } from '../apps/weatherbuddy/WeatherBuddyApp';
 import { SafeSweepApp } from '../apps/safesweep/SafeSweepApp';
 import { MailboxApp } from '../apps/mailbox/MailboxApp';
 import { AILabApp } from '../apps/ailab/AILabApp';
+import { InstallerWizard } from '../apps/installer/InstallerWizard';
 
 export interface AppRegistryProps {
   window: WindowState;
@@ -87,6 +88,9 @@ const defaultAppComponents: AppRegistry = {
 
   ailab: () => <AILabApp />,
   'app.ailab': () => <AILabApp />,
+
+  installer: ({ window }) => <InstallerWizard window={window} />,
+  'app.installer': ({ window }) => <InstallerWizard window={window} />,
 };
 
 interface WindowManagerProps {

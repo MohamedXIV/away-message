@@ -16,7 +16,7 @@ export const CafeScene: React.FC = () => {
   const switchView = useSimulationStore((s) => s.switchView);
   const spendCash = useSimulationStore((s) => s.spendCash);
   const advanceTime = useSimulationStore((s) => s.advanceTime);
-  const setNarrativeFlag = useSimulationStore((s) => s.setNarrativeFlag);
+  const setWorldFlag = useSimulationStore((s) => s.setWorldFlag);
   const applySocialAction = useSimulationStore((s) => s.applySocialAction);
 
   // Dialogue State
@@ -109,16 +109,17 @@ export const CafeScene: React.FC = () => {
     setCurrentBeatId(choice.nextBeatId);
   };
 
-  // Wrap up meeting
+  // Wrap up meeting — sandbox: just a world flag, no narrative beat
   const handleFinishMeeting = () => {
     soundManager.play('click');
     // Deduct coffee cost
     spendCash(4.00, 'Coffee at Starlight Café');
     // Advance 75 minutes
     advanceTime(75, 'Meeting Maya at Starlight Café');
-    // Set narrative flag & social state
-    setNarrativeFlag('maya_met_in_person', true);
-    applySocialAction('starlight_maya', 'maya_met_in_person');
+    // Set world flag & social state
+    setWorldFlag('maya_met_in_person', true);
+    setWorldFlag('maya_cafe_scheduled', true);
+    try { applySocialAction('starlight_maya', 'vulnerable_share'); } catch {}
 
     // Return to room
     switchView('room');

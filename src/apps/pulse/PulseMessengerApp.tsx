@@ -528,6 +528,19 @@ export const PulseMessengerApp: React.FC = () => {
 
     const personaWithStyle = `${style.persona} Vocabulary hints: ${style.vocabulary.join(', ')}. Punctuation: ${style.punctuation}. Quirks: ${style.quirks.join(', ')}. ${getBuddyPersona(buddyId)}`;
     const relationshipSummary = `${relationship ? JSON.stringify(relationship) : 'new friendship'} | Mood: ${mood} | Availability: ${availability} | Activity: ${activity} | ${memoryContext} | Typing: ${style.typing.wpm} wpm, ${style.typing.pauseStyle}`;
+    // Sandbox world knowledge — per-buddy attitude (B)
+    let worldKnowledge = '';
+    let currentGameDay = currentDay;
+    try {
+      const engineAny = engine as unknown as { world?: { getKnowledgeContextForBuddy: (buddyId: string, day: number) => string; getKnowledgeContext: (day: number) => string } ; clock?: { getTime: () => { day: number } } };
+      if (engineAny.world?.getKnowledgeContextForBuddy) {
+        worldKnowledge = engineAny.world.getKnowledgeContextForBuddy(buddyId, currentGameDay ?? 1);
+      } else if (engineAny.world?.getKnowledgeContext) {
+        worldKnowledge = engineAny.world.getKnowledgeContext(currentGameDay ?? 1);
+      } else if (engineAny.clock?.getTime) {
+        currentGameDay = engineAny.clock.getTime().day;
+      }
+    } catch {}
 
     let result = await aiService.generateChat({
       buddyId,
@@ -537,6 +550,8 @@ export const PulseMessengerApp: React.FC = () => {
       relationshipSummary,
       recentMessages,
       playerMessage: text,
+      worldKnowledge,
+      currentDay: currentGameDay,
     }, loadAISettings());
 
     // Anti-repeat: check if AI reply duplicates recent replies
@@ -555,6 +570,8 @@ export const PulseMessengerApp: React.FC = () => {
           relationshipSummary: retryRelationshipSummary,
           recentMessages,
           playerMessage: text,
+          worldKnowledge,
+          currentDay: currentGameDay,
         }, { ...loadAISettings(), } as any);
         // Only use retry if it is not also duplicate and not fallback
         const retryTexts = retryResult.data.messages.map((message) => message.text);
@@ -692,6 +709,12 @@ export const PulseMessengerApp: React.FC = () => {
           await new Promise((resolve) => setTimeout(resolve, 450 + (hashString(`${room.id}:${text}:${responderIndex}`) % 700)));
         }
 
+        // Per-buddy attitude for room responders
+        let roomWorldKnowledge = '';
+        try {
+          const eAny = engine as unknown as { world?: { getKnowledgeContextForBuddy: (bid:string, day:number)=>string; getKnowledgeContext: (day:number)=>string } };
+          roomWorldKnowledge = eAny.world?.getKnowledgeContextForBuddy?.(responderId, currentDay) ?? eAny.world?.getKnowledgeContext(currentDay) ?? '';
+        } catch {}
         const result = await aiService.generateChat({
           buddyId: `room-${room.id}-${responderId}-${responderIndex}`,
           displayName: responder?.displayName || responderId,
@@ -700,6 +723,8 @@ export const PulseMessengerApp: React.FC = () => {
           relationshipSummary: `Group room: ${room.name}. Participants: ${room.participantIds.join(', ')}. Responder #${responderIndex + 1} of ${responderIds.length}.`,
           recentMessages: [...recentMessages],
           playerMessage: text,
+          worldKnowledge: roomWorldKnowledge,
+          currentDay: currentDay,
         }, loadAISettings());
 
         let generatedText = result.data.messages[0]?.text?.trim() || '';
@@ -786,6 +811,11 @@ export const PulseMessengerApp: React.FC = () => {
     setPulseState((previous) => ({ ...previous, roomMessages: { ...previous.roomMessages, [room.id]: [...(previous.roomMessages[room.id] || []), whisper].slice(-80) }, roomReadThrough: { ...previous.roomReadThrough, [room.id]: (previous.roomMessages[room.id]?.length ?? 0) + 1 } }));
     setRoomTyping(true);
     try {
+      let whisperWorldKnowledge = '';
+      try {
+        const eAny = engine as unknown as { world?: { getKnowledgeContextForBuddy: (bid:string, day:number)=>string; getKnowledgeContext: (day:number)=>string } };
+        whisperWorldKnowledge = eAny.world?.getKnowledgeContextForBuddy?.(targetId, currentDay) ?? eAny.world?.getKnowledgeContext(currentDay) ?? '';
+      } catch {}
       const result = await aiService.generateChat({
         buddyId: `whisper-${room.id}-${targetId}`,
         displayName: target?.displayName || targetId,
@@ -794,6 +824,8 @@ export const PulseMessengerApp: React.FC = () => {
         relationshipSummary: `Private whisper in ${room.name}.`,
         recentMessages: [{ sender: 'player', text }],
         playerMessage: text,
+        worldKnowledge: whisperWorldKnowledge,
+        currentDay: currentDay,
       }, loadAISettings());
       const fallback = { senderId: targetId, text: targetId === 'maya' ? 'got it... keeping this between us.' : 'yeah, i see it. whisper me if anything changes.' };
       const replyText = result.meta.fallback ? fallback.text : result.data.messages[0]?.text?.trim();
@@ -835,6 +867,11 @@ export const PulseMessengerApp: React.FC = () => {
         const responder = engine.social.getBuddy(responderId);
         const recentMessages = existingMessages.slice(-8).map((message) => ({ sender: message.senderId === 'player' ? 'player' : message.senderName, text: message.text }));
         const ambientStyle = getNpcStyle(responderId);
+        let ambientWorldKnowledge = '';
+        try {
+          const eAny2 = engine as unknown as { world?: { getKnowledgeContextForBuddy: (bid:string, day:number)=>string; getKnowledgeContext: (day:number)=>string } };
+          ambientWorldKnowledge = eAny2.world?.getKnowledgeContextForBuddy?.(responderId, currentDay) ?? eAny2.world?.getKnowledgeContext(currentDay) ?? '';
+        } catch {}
         void aiService.generateChat({
           buddyId: `room-event-${room.id}-${activityBucket}-${responderIndex}`,
           displayName: responder?.displayName || responderId,
@@ -843,6 +880,8 @@ export const PulseMessengerApp: React.FC = () => {
           relationshipSummary: `Ambient public room event at game minute ${totalMinutes} (#${responderIndex + 1}/${selectedResponders.length}).`,
           recentMessages,
           playerMessage: `Write one short room message that feels like a real participant checking in during game minute ${totalMinutes}.`,
+          worldKnowledge: ambientWorldKnowledge,
+          currentDay: currentDay,
         }, loadAISettings()).then((result) => {
           const fallbackPools: Record<string, string[]> = {
             'orion-lounge': ['anyone else still awake? the lounge is getting weirdly quiet.', 'lounge is quiet — putting on some music if anyone wants in'],

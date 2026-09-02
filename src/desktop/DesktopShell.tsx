@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useSimulationStore } from '../store/useSimulationStore';
 import { useWindowStore } from '../store/useWindowStore';
+import { useDesktopStore } from '../store/useDesktopStore';
 import { soundManager } from '../audio/SoundManager';
 import { Taskbar } from './Taskbar';
 import { WindowManager } from './WindowManager';
@@ -76,19 +77,23 @@ export const DesktopShell: React.FC = () => {
   const vfsFiles = useSimulationStore((s) => s.state.vfs.files);
   const openWindow = useWindowStore((s) => s.openWindow);
 
-  const [wallpaper, setWallpaper] = useState<WallpaperPreset>(
-    osVersion === 'Orion_6.0' ? 'bliss_green' : 'classic_teal'
-  );
+  const wallpaper = useDesktopStore((s) => s.wallpaper);
+  const setWallpaper = useDesktopStore((s) => s.setWallpaper);
   const [selectedIconIds, setSelectedIconIds] = useState<string[]>([]);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; visible: boolean } | null>(null);
   const [marquee, setMarquee] = useState<{ startX: number; startY: number; currentX: number; currentY: number; active: boolean } | null>(null);
   const [isDialUpModalOpen, setIsDialUpModalOpen] = useState(false);
   const [iconPositions] = useState<Record<string, { x: number; y: number }>>({});
 
-  // Sync wallpaper when osVersion changes
+  // Sync wallpaper when osVersion changes only if not already customized (first load)
   useEffect(() => {
-    setWallpaper(osVersion === 'Orion_6.0' ? 'bliss_green' : 'classic_teal');
-  }, [osVersion]);
+    const stored = useDesktopStore.getState().wallpaper;
+    // Only auto-switch on OS change if user hasn't customized away from default for that OS
+    // Keep user's choice, but ensure initial load matches OS
+    if (!stored) {
+      setWallpaper(osVersion === 'Orion_6.0' ? 'bliss_green' : 'classic_teal');
+    }
+  }, [osVersion, setWallpaper]);
 
   // Derive theme attribute
   const themeAttr = osVersion === 'Orion_6.0' ? 'orion60' : 'orion48';
@@ -104,18 +109,47 @@ export const DesktopShell: React.FC = () => {
     { id: 'sys_ailab', label: 'AI Lab', appId: 'ailab', iconType: 'ai', gridX: 0, gridY: 6 },
   ];
 
-  // Dynamic VFS icons in C:/Desktop
+  // Dynamic VFS icons in C:/Desktop — shortcuts (.lnk) must open their target app
   const desktopVfsIcons: DesktopIconItem[] = Object.values(vfsFiles)
     .filter((f) => f.parentPath === 'C:/Desktop' && f.path !== 'C:/Desktop')
-    .map((f, idx) => ({
-      id: `vfs_${f.id || f.name}`,
-      label: f.name,
-      appId: f.kind === 'executable' || f.kind === 'installer' ? (f.appAssociation || 'fileexplorer') : 'notepad',
-      filePath: f.path,
-      iconType: f.kind === 'installer' ? 'installer' : f.kind === 'directory' ? 'folder' : 'text',
-      gridX: 1,
-      gridY: idx,
-    }));
+    .map((f, idx) => {
+      // For shortcuts, the appAssociation is the real target (e.g., app.flashfetch)
+      const isShortcut = f.kind === 'shortcut';
+      const isLaunchable = f.kind === 'executable' || f.kind === 'installer' || isShortcut;
+      let appId = 'notepad';
+      let iconType: DesktopIconItem['iconType'] = 'text';
+      if (isShortcut && f.appAssociation) {
+        appId = f.appAssociation;
+        // Map known apps to proper icons
+        if (f.appAssociation.includes('pulse')) iconType = 'pulse';
+        else if (f.appAssociation.includes('retroamp')) iconType = 'ai';
+        else if (f.appAssociation.includes('flashfetch')) iconType = 'installer';
+        else if (f.appAssociation.includes('zipmate')) iconType = 'folder';
+        else if (f.appAssociation.includes('photobox')) iconType = 'text';
+        else if (f.appAssociation.includes('weatherbuddy')) iconType = 'ai';
+        else if (f.appAssociation.includes('safesweep')) iconType = 'control';
+        else iconType = 'installer';
+      } else if (isLaunchable && f.appAssociation) {
+        appId = f.appAssociation;
+        iconType = f.kind === 'installer' ? 'installer' : 'text';
+      } else if (f.kind === 'directory') {
+        appId = 'fileexplorer';
+        iconType = 'folder';
+      }
+      // Hide .lnk extension for shortcuts (Windows behavior) — keep file as .lnk internally
+      const displayLabel = f.kind === 'shortcut' && f.name.toLowerCase().endsWith('.lnk')
+        ? f.name.slice(0, -4)
+        : f.name;
+      return {
+        id: `vfs_${f.id || f.name}`,
+        label: displayLabel,
+        appId,
+        filePath: f.path,
+        iconType,
+        gridX: 1,
+        gridY: idx,
+      };
+    });
 
   const allIcons = [...baseIcons, ...desktopVfsIcons];
 

@@ -3,6 +3,7 @@ import { SiteRouteProps } from '../types';
 import { useSimulationStore } from '../../store/useSimulationStore';
 import { useWindowStore } from '../../store/useWindowStore';
 import { soundManager } from '../../audio/SoundManager';
+import { getDownloadHubDynamicItems } from '../worldSiteHelpers';
 
 interface DownloadItem {
   id: string;
@@ -85,13 +86,26 @@ const DOWNLOAD_CATALOG: DownloadItem[] = [
 export const DownloadHubSite: React.FC<SiteRouteProps> = () => {
   const dispatchAction = useSimulationStore((s) => s.dispatchAction);
   const downloads = useSimulationStore((s) => s.state.downloads);
+  const world = useSimulationStore((s) => s.state.world);
+  const time = useSimulationStore((s) => s.state.time);
   const openWindow = useWindowStore((s) => s.openWindow);
   const [selectedCat, setSelectedCat] = useState<string>('ALL');
   const [notice, setNotice] = useState<string | null>(null);
 
+  const dynamicItems = getDownloadHubDynamicItems(world, time.day);
+  const mergedCatalog: DownloadItem[] = [...dynamicItems.map((d) => ({
+    id: d.id,
+    name: `${d.isNew ? '★ ' : ''}${d.name}`,
+    category: d.category as DownloadItem['category'],
+    version: d.version,
+    fileSizeBytes: d.fileSizeBytes,
+    downloadUrl: d.downloadUrl,
+    description: d.description,
+  })), ...DOWNLOAD_CATALOG];
+
   const filtered = selectedCat === 'ALL'
-    ? DOWNLOAD_CATALOG
-    : DOWNLOAD_CATALOG.filter((d) => d.category === selectedCat);
+    ? mergedCatalog
+    : mergedCatalog.filter((d) => d.category === selectedCat);
 
   const getDownloadStatus = (item: DownloadItem) => {
     const task = downloads.find((t) => t.sourceId === item.id || t.fileName === (item.downloadUrl.split('/').pop() || ''));
@@ -160,6 +174,15 @@ export const DownloadHubSite: React.FC<SiteRouteProps> = () => {
           </button>
         ))}
       </div>
+
+      {/* Live world banner */}
+      {dynamicItems.length > 0 && (
+        <div className="max-w-4xl w-full mt-2 bg-amber-50 border border-amber-300 px-3 py-1.5 text-[11px] font-bold text-amber-900 flex items-center gap-2">
+          <span>⬢ Live Wire:</span>
+          <span className="font-normal">{dynamicItems.length} new mirrors/editions from CityWire queue — Day {time.day}</span>
+          <span className="ml-auto text-[10px] font-mono opacity-60">via procedural</span>
+        </div>
+      )}
 
       {/* In-game download notice (replaces real browser alert) */}
       {notice && (

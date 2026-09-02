@@ -1,4 +1,6 @@
 import { SearchIndexEntry, SearchResultSummary } from './types';
+import type { WorldState } from '../engine/types';
+import { getProceduralSearchEntries } from './worldSiteHelpers';
 
 export const SEARCH_INDEX_DATABASE: SearchIndexEntry[] = [
   // ----------------------------------------------------
@@ -239,6 +241,7 @@ export class SearchEngine {
       category?: string;
       currentDay?: number;
       narrativeFlags?: Record<string, any>;
+      world?: WorldState;
       limit?: number;
     }
   ): SearchResultSummary {
@@ -248,6 +251,7 @@ export class SearchEngine {
     const category = options?.category ?? 'all';
     const flags = options?.narrativeFlags ?? {};
     const limit = options?.limit ?? 20;
+    const world = options?.world;
 
     if (!cleanQuery) {
       return {
@@ -268,7 +272,11 @@ export class SearchEngine {
 
     const matchedEntries: (SearchIndexEntry & { score: number })[] = [];
 
-    for (const entry of SEARCH_INDEX_DATABASE) {
+    // Merge procedural entries from live world (CityWire etc) — governed, same validation
+    const proceduralEntries: SearchIndexEntry[] = world ? (getProceduralSearchEntries(world, currentDay) as unknown as SearchIndexEntry[]) : [];
+    const allEntries = [...SEARCH_INDEX_DATABASE, ...proceduralEntries];
+
+    for (const entry of allEntries) {
       // 1. Day filter
       if (entry.availableFromDay > currentDay) continue;
       if (entry.availableUntilDay && entry.availableUntilDay < currentDay) continue;
@@ -349,9 +357,10 @@ export class SearchEngine {
 export function searchInternet(
   query: string,
   currentDay: number = 1,
-  narrativeFlags: Record<string, any> = {}
+  narrativeFlags: Record<string, any> = {},
+  world?: WorldState,
 ): SearchIndexEntry[] {
-  return SearchEngine.search(query, { currentDay, narrativeFlags }).results;
+  return SearchEngine.search(query, { currentDay, narrativeFlags, world }).results;
 }
 
 function slugifySiteName(value: string): string {

@@ -295,42 +295,35 @@ The fake internet should feel fragmented, hand-made, commercial, messy, and pers
 
 ---
 
-## Characters, Social Simulation, and Narrative
+## Characters, Social Simulation, and Narrative — SANDBOX UPDATE (AI-heavy)
 
-## 1. Narrative philosophy
+> **Deprecated:** Sections 1, 2, 10, 11, 12 in this file describe the old Ink deterministic model. The game is now a **sandbox AI experiment**: Ink beats are removed; `src/engine/WorldEventsEngine.ts` owns global events and every NPC's shared knowledge bank; all chat is via `src/ai/service.ts` with `worldKnowledge` injection. This doc is kept for historical reference; see `PROJECT.md` and `AI_LAB.md`.
 
-The game uses **authored deterministic narrative**, not runtime generative dialogue.
+## 1. Narrative philosophy (sandbox)
 
-The player must be able to trust that:
-- a contradiction may be intentional,
-- a secret is revealed because conditions were met,
-- a character remembers something because the game tracked it,
-- a relationship changed because of an authored/social action.
+The game now uses **sandbox generative dialogue grounded by world state**, not authored Ink beats.
 
-AI can be used during development, but runtime narrative does not depend on it.
+The player can still trust that:
+- relationship changes via closed `socialAction` enum applied deterministically (`SocialEngine.applySocialAction()`),
+- world events are shared identically to all NPCs via `WorldEventsEngine.getKnowledgeContext(day)`,
+- contradictions are now emergent from AI memory/context, not authored branches.
+
+AI is now **runtime-core**, not dev-only.
 
 ---
 
-## 2. Ink ownership
+## 2. World ownership (sandbox — replaces Ink)
 
-Ink owns:
-- authored prose,
-- dialogue branches,
-- response choices,
-- narrative sequencing inside a beat,
-- tags describing semantic outcomes.
+WorldEventsEngine owns:
+- global event catalog and trigger timing (`GLOBAL_EVENTS_CATALOG`, `checkAndTriggerEvents`),
+- world flags and appointment scheduling,
+- knowledge bank exposed to AI (`getKnowledgeContext`).
 
-Ink does not own:
-- money,
-- time,
-- PC hardware,
-- downloads,
-- schedules,
-- installed software,
-- authoritative relationship values,
-- world truth.
+AI owns:
+- surface dialogue text within those world constraints.
 
-The TypeScript simulation owns those.
+TypeScript simulation still owns:
+- money, time, PC hardware, downloads, schedules, installed software, authoritative relationship values, world truth.
 
 ---
 
@@ -517,47 +510,22 @@ The world should not wait for the player to open Messenger.
 
 ---
 
-## 10. Narrative beats
+## 10. Narrative beats — DEPRECATED (sandbox)
 
-Narrative should be authored as beats, not giant forced scenes.
-
-A beat defines:
-- trigger requirements,
-- purpose,
-- allowed information,
-- prohibited information,
-- possible outcomes,
-- semantic effects.
-
-Example:
+Beats are removed. Sandbox uses global events instead:
 
 ```text
-Beat: Maya First Personal Conversation
+GlobalEvent: MyPlace v2 launch
 
-Requires:
-- familiarity >= threshold
-- evening
-- Maya online
-- not previously triggered
+Trigger:
+- day 3, 14:00
 
-Purpose:
-- reveal work frustration
-- deepen social connection
+Knowledge injected to all NPCs:
+- "MyPlace just relaunched as v2 with profile songs and Top 8"
 
-May reveal:
-- she dislikes current job
-
-Must not reveal:
-- later personal secret
-
-Outcomes:
-- supportive
-- teasing
-- dismissive
-- topic change
+Outcome:
+- NPCs may reference it naturally when relevant; no scripted branch.
 ```
-
-Ink implements the actual lines and branching.
 
 ---
 

@@ -141,6 +141,8 @@ function chatCacheKey(request: ChatGenerationRequest, providerId: AIProviderId, 
     request.playerMessage.trim(),
     stable(lastMessages),
     request.relationshipSummary.trim(),
+    (request.worldKnowledge || '').trim(),
+    String(request.currentDay ?? ''),
   ].join(':');
 }
 
@@ -166,6 +168,10 @@ function buildSitePrompts(request: SiteGenerationRequest): { system: string; use
 }
 
 function buildChatPrompts(request: ChatGenerationRequest): { system: string; user: string } {
+  const worldKnowledge = request.worldKnowledge?.trim()
+    ? `World knowledge (sandbox global events the NPC is aware of):\n${request.worldKnowledge.trim()}`
+    : 'World knowledge: No major global events yet.';
+  const dayLine = request.currentDay ? `Current game day: ${request.currentDay}.` : '';
   return {
     system: [
       'You write one short, believable instant-message reply for a fictional NPC in a late-1990s/early-2000s desktop simulation.',
@@ -175,15 +181,18 @@ function buildChatPrompts(request: ChatGenerationRequest): { system: string; use
       'Prefer lowercase shorthand, pauses, emoticons, and era-appropriate tone when they fit the persona.',
       'You may occasionally share a fictional .local URL (e.g. http://rain-archive.local/ or http://nightboard.local/thread/104) when it naturally fits the conversation — keep links short and relevant, never real URLs.',
       'If the player asks for a photo/image and trust/comfort is high enough, you may agree and provide a short imagePrompt (10-20 words, era-appropriate, small low-res photo description) and optional imageCaption. Otherwise leave imagePrompt null. Never invent a photo you host; only describe it.',
+      'Use world knowledge to make conversation feel grounded in the current sandbox timeline. If a global event (e.g. Orion OS 7 release, MyPlace v2) is in world knowledge, you may reference it naturally when relevant; do not hallucinate events not listed.',
     ].join(' '),
     user: [
       `NPC: ${request.displayName} (${request.handle})`,
       `Persona: ${request.persona}`,
       `Relationship snapshot: ${request.relationshipSummary}`,
+      worldKnowledge,
+      dayLine,
       `Recent messages: ${JSON.stringify(request.recentMessages.slice(-8))}`,
       `Player message: ${request.playerMessage}`,
       'Reply with one or two short messages, not a monologue. If you share a link, include exactly one .local URL inline. If you agree to send a photo, set imagePrompt to a short description (e.g. "Maya at her desk, warm lamp, small photo") and imageCaption to a brief caption.',
-    ].join('\n'),
+    ].filter(Boolean).join('\n'),
   };
 }
 

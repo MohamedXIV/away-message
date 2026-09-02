@@ -63,17 +63,7 @@ export const FileExplorerApp: React.FC<{ initialPath?: string }> = ({ initialPat
     (f) => f.parentPath === currentPath && f.path !== currentPath
   );
 
-  const FILE_TO_SOFTWARE: Record<string, string> = {
-    'pulse52_setup.exe': 'sw_pulse_52',
-    'retroamp_setup.exe': 'sw_retroamp_23',
-    'flashfetch_setup.exe': 'sw_flashfetch_31',
-    'zipmate_setup.exe': 'sw_zipmate_40',
-    'weatherbuddy_bundle.exe': 'sw_weatherbuddy_14',
-    'safesweep_setup.exe': 'sw_safesweep_20',
-    'photobox_setup.exe': 'sw_photobox_30',
-  };
-
-  const [installNotice, setInstallNotice] = useState<string | null>(null);
+  const [_installNotice, _setInstallNotice] = useState<string | null>(null);
 
   const handleFileDoubleClick = (file: FileRecord) => {
     if (file.kind === 'directory') {
@@ -81,15 +71,9 @@ export const FileExplorerApp: React.FC<{ initialPath?: string }> = ({ initialPat
     } else if (file.kind === 'text') {
       openWindow('notepad', `Notepad - ${file.name}`, { filePath: file.path });
     } else if (file.kind === 'installer') {
-      const softwareId = FILE_TO_SOFTWARE[file.name] || file.name.replace('.exe', '');
-      const result = dispatchAction({ type: 'SOFTWARE_INSTALL', softwareId, selectedOptions: {} } as any);
-      if (result.success) {
-        setInstallNotice(`Installed ${file.name} — check Desktop for shortcut.`);
-        setTimeout(() => setInstallNotice(null), 3000);
-      } else {
-        setInstallNotice(result.error || `Cannot install ${file.name}: requirements not met.`);
-        setTimeout(() => setInstallNotice(null), 3500);
-      }
+      // Open heavy installation wizard instead of instant install
+      openWindow('installer', `Setup - ${file.name}`, { filePath: file.path });
+      return;
     } else if (file.kind === 'archive') {
       // Open ZipMate for archives, or auto-extract via unzip command
       openWindow('zipmate', `ZipMate - ${file.name}`, { archivePath: file.path });
@@ -135,6 +119,13 @@ export const FileExplorerApp: React.FC<{ initialPath?: string }> = ({ initialPat
       default:
         return '📄';
     }
+  };
+
+  const getDisplayName = (file: FileRecord) => {
+    if (file.kind === 'shortcut' && file.name.toLowerCase().endsWith('.lnk')) {
+      return file.name.slice(0, -4);
+    }
+    return file.name;
   };
 
   return (
@@ -220,7 +211,7 @@ export const FileExplorerApp: React.FC<{ initialPath?: string }> = ({ initialPat
                   }`}
                 >
                   <span className="text-3xl mb-1">{getFileIcon(file.kind)}</span>
-                  <span className="text-xs truncate w-full">{file.name}</span>
+                  <span className="text-xs truncate w-full">{getDisplayName(file)}</span>
                 </div>
               ))}
             </div>
@@ -248,7 +239,7 @@ export const FileExplorerApp: React.FC<{ initialPath?: string }> = ({ initialPat
                   >
                     <td className="py-1 px-2 flex items-center gap-1.5 truncate">
                       <span>{getFileIcon(file.kind)}</span>
-                      <span>{file.name}</span>
+                      <span>{getDisplayName(file)}</span>
                     </td>
                     <td className="py-1 px-2 font-mono">
                       {file.kind === 'directory' ? '--' : `${(file.sizeBytes / 1024).toFixed(1)} KB`}
@@ -263,10 +254,10 @@ export const FileExplorerApp: React.FC<{ initialPath?: string }> = ({ initialPat
         </div>
       </div>
 
-      {/* Install Notice */}
-      {installNotice && (
+      {/* Install Notice (handled by wizard now) */}
+      {_installNotice && (
         <div className="mx-2 mb-1 rounded border border-blue-600 bg-[#e0f2f1] px-2 py-1 text-[11px] font-bold text-blue-900">
-          {installNotice}
+          {_installNotice}
         </div>
       )}
 

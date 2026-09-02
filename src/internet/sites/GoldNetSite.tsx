@@ -2,12 +2,16 @@ import React, { useState } from 'react';
 import { SiteRouteProps } from '../types';
 import { useSimulationStore } from '../../store/useSimulationStore';
 import { soundManager } from '../../audio/SoundManager';
+import { getGoldNetPrice } from '../worldSiteHelpers';
 
 export const GoldNetSite: React.FC<SiteRouteProps> = () => {
   const playerCash = useSimulationStore((s) => s.state.player?.cash ?? 150.00);
+  const world = useSimulationStore((s) => s.state.world);
+  const time = useSimulationStore((s) => s.state.time);
   const accountNumber = '8904-2199-0012';
   const [transferAmount, setTransferAmount] = useState('');
   const [statusMsg, setStatusMsg] = useState('SSL 128-Bit Encryption Verified.');
+  const gold = getGoldNetPrice(world, time.day, 100);
 
   const handleTransfer = (e: React.FormEvent) => {
     e.preventDefault();
@@ -52,7 +56,19 @@ export const GoldNetSite: React.FC<SiteRouteProps> = () => {
         </span>
       </div>
 
-      {/* Main Account Details */}
+        {/* Live Market Tape */}
+        <div className="max-w-4xl w-full mt-3 bg-amber-50 border border-amber-300 px-3 py-2 flex items-center justify-between text-xs">
+          <div className="flex items-center gap-3">
+            <span className="font-bold text-amber-900">● GoldNet Spot</span>
+            <span className="font-mono font-bold text-lg text-slate-900">${gold.price.toFixed(2)}</span>
+            <span className={`text-[11px] font-bold px-1.5 py-0.5 rounded ${gold.delta > 0 ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' : gold.delta < 0 ? 'bg-red-100 text-red-800 border border-red-300' : 'bg-gray-100 text-gray-600'}`}>
+              {gold.delta > 0 ? `▲ +${gold.delta.toFixed(2)}` : gold.delta < 0 ? `▼ ${gold.delta.toFixed(2)}` : '— 0.00'} today
+            </span>
+          </div>
+          <span className="text-[11px] text-slate-500 font-mono">Day {time.day} • {gold.historyLabel}</span>
+        </div>
+
+        {/* Main Account Details */}
       <div className="max-w-4xl w-full bg-white border border-slate-300 p-4 space-y-4 shadow-sm">
         <div className="flex justify-between items-center border-b border-slate-200 pb-3">
           <div>

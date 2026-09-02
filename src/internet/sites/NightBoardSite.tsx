@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { SiteRouteProps } from '../types';
 import { soundManager } from '../../audio/SoundManager';
+import { useSimulationStore } from '../../store/useSimulationStore';
+import { getNightBoardDynamicThreads } from '../worldSiteHelpers';
 
 interface PostRecord {
   id: number;
@@ -100,7 +102,51 @@ const INITIAL_THREADS: ThreadRecord[] = [
 ];
 
 export const NightBoardSite: React.FC<SiteRouteProps> = (props) => {
-  const [threads, setThreads] = useState<ThreadRecord[]>(INITIAL_THREADS);
+  const world = useSimulationStore((s) => s.state.world);
+  const time = useSimulationStore((s) => s.state.time);
+  const dynamicThreads = getNightBoardDynamicThreads(world, time.day);
+  // Build merged list: static + dynamic procedural
+  const buildMerged = (): ThreadRecord[] => [
+    ...INITIAL_THREADS,
+    ...dynamicThreads.map((d) => ({
+      id: d.id,
+      title: d.title,
+      category: d.category,
+      replyCount: d.replyCount,
+      lastReplyDate: d.lastReplyDate,
+      posts: [{
+        id: 1,
+        author: 'CityWire Bot',
+        date: `Day ${world.triggeredEvents.find((e) => e.id === d.eventId)?.triggerDay ?? time.day}, ${String(world.triggeredEvents.find((e) => e.id === d.eventId)?.triggerHour ?? 10).padStart(2, '0')}:00`,
+        content: `${world.triggeredEvents.find((e) => e.id === d.eventId)?.description ?? d.title}\n\n— ${world.triggeredEvents.find((e) => e.id === d.eventId)?.knowledgePrompt ?? ''}`,
+        isOp: true,
+      }],
+    } as ThreadRecord)),
+  ];
+  const [threads, setThreads] = useState<ThreadRecord[]>(() => buildMerged());
+  // Keep dynamic threads in sync when world advances (without losing user replies)
+  React.useEffect(() => {
+    setThreads((prev) => {
+      const existingIds = new Set(prev.map((t) => t.id));
+      const toAdd = dynamicThreads
+        .filter((d) => !existingIds.has(d.id))
+        .map((d) => ({
+          id: d.id,
+          title: d.title,
+          category: d.category,
+          replyCount: d.replyCount,
+          lastReplyDate: d.lastReplyDate,
+          posts: [{
+            id: 1,
+            author: 'CityWire Bot',
+            date: `Day ${world.triggeredEvents.find((e) => e.id === d.eventId)?.triggerDay ?? time.day}, ${String(world.triggeredEvents.find((e) => e.id === d.eventId)?.triggerHour ?? 10).padStart(2, '0')}:00`,
+            content: `${world.triggeredEvents.find((e) => e.id === d.eventId)?.description ?? d.title}\n\n— ${world.triggeredEvents.find((e) => e.id === d.eventId)?.knowledgePrompt ?? ''}`,
+            isOp: true,
+          }],
+        } as ThreadRecord));
+      return toAdd.length ? [...prev, ...toAdd] : prev;
+    });
+  }, [dynamicThreads, world.triggeredEvents, time.day]);
   const effectiveParams = { ...props.params, ...props.routeParams };
   const threadIdParam = effectiveParams['threadId'];
   const activeThreadId = threadIdParam ? parseInt(threadIdParam, 10) : null;
@@ -163,6 +209,15 @@ export const NightBoardSite: React.FC<SiteRouteProps> = (props) => {
           </button>
         )}
       </div>
+
+      {/* Live Wire Banner */}
+      {dynamicThreads.length > 0 && (
+        <div className="max-w-4xl w-full mb-3 bg-emerald-950 border border-emerald-700 px-3 py-1.5 text-[11px] font-bold text-emerald-300 flex items-center gap-2">
+          <span>⬢ Live Wire:</span>
+          <span className="font-normal">{dynamicThreads.length} new threads mirrored from CityWire</span>
+          <span className="ml-auto text-[10px] font-mono opacity-60">Day {time.day} • procedural</span>
+        </div>
+      )}
 
       {/* Main Board Container */}
       <div className="max-w-4xl w-full">

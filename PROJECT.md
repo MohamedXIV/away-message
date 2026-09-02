@@ -1,25 +1,25 @@
-# Project: Away Message (14-Day Evaluation Build)
+# Project: Away Message (Sandbox AI Experiment)
 
 ## 1. Architecture Overview
-"Away Message" is a narrative-driven desktop simulation and 2D atmospheric life simulator set in the late 1990s / early 2000s.
+"Away Message" is a sandbox AI-driven desktop simulation and 2D atmospheric life simulator set in the late 1990s / early 2000s. Online/AI is now core — offline determinism and Ink beats have been removed.
 
 ### Layered Separation of Concerns
 1. **Pure TypeScript Simulation Engine (`src/engine/`)**:
    - Zero UI/React/Phaser/DOM dependencies. Fully headless, deterministic, and testable in pure Vitest.
-   - Authoritative owner of game clock, time advancement (`advanceGameMinutes(mins)`), money, energy, PC hardware specs, OS version, download queues, virtual file system, character schedules, relationship metrics, events, and telemetry.
+   - Authoritative owner of game clock, time advancement (`advanceGameMinutes(mins)`), money, energy, PC hardware specs, OS version, download queues, virtual file system, character schedules, relationship metrics, global world events, and telemetry.
 2. **Persistence Layer (`src/persistence/`)**:
    - IndexedDB powered by Dexie with explicit schema versions and migrations.
-   - Stores: `saves`, `vfs_files`, `downloads`, `installed_software`, `messages`, `relationships`, `narrative_state`, `telemetry_logs`.
+   - Stores: `saves`, `vfs_files`, `downloads`, `installed_software`, `messages`, `relationships`, `world_state` (+ legacy `narrative_state` alias), `telemetry_logs`, `ai_cache`, `pulse_state`.
    - Auto-save on discrete time jumps and day transitions; lossless reload support.
 3. **Desktop OS & UI Shell (`src/desktop/` & `src/apps/`)**:
    - React 19 + TypeScript + Tailwind CSS with retro beveled styles and CSS variables.
    - Dual OS generation themes: **Orion OS 4.8** (Win95/98 aesthetic) and **Orion OS 6.x** (XP/Aqua-style warmer aesthetic).
    - Window manager (z-indexing, drag, resize, minimize, maximize, taskbar, dock/start menu, system tray, notifications, CRT scanlines/glow shader overlay).
-   - 12+ period-authentic desktop applications and 18 local fake internet websites (`.local` routing, no external network requests).
-4. **Narrative & Ink Engine (`src/narrative/`)**:
-   - Authored deterministic branching dialogue using `inkjs`.
-   - Ink scripts receive read-only snapshot context from `SimulationEngine` and emit validated semantic tags (`# beat:`, `# effect:`, `# social:`).
-   - 14-day story arc across 4 characters: Ryan (`ryan_foodcart`), Maya (`starlight_maya`), Nora (`NightOwl87`), Mr. Henderson (`motel_office`).
+   - 12+ period-authentic desktop applications and 18+ local fake internet websites (`.local` routing) + infinite AI-generated sites via `src/ai/`.
+4. **World Events & Knowledge Bank (`src/engine/WorldEventsEngine.ts`) — replaces Ink**:
+   - Sandbox global events (MyPlace v2 launch, Orion OS 7 beta/release, canal festival, GoldNet surge, etc.) trigger by game day/hour via `checkAndTriggerEvents()`.
+   - Events set world flags (`event_<id>`) and are injected into every NPC's AI persona as `worldKnowledge` (`WorldEventsEngine.getKnowledgeContext(day)`).
+   - No scripted beats or Ink branches — all character chat is AI-generated (Gemini/Groq/OpenRouter/Fal) with validated `socialAction` enum; decisions are emergent.
 5. **2D Atmospheric Environment (`src/world/`)**:
    - Layered 2D Canvas/Phaser scene (Motel room, PC desk, window overlooking street, bed, kettle, door).
    - 5 time-of-day variants (`morning`, `day`, `evening`, `night`, `late_night`) + weather overlays.
@@ -65,8 +65,8 @@
 | 31 | WeatherBuddy & SearchMate Adware | Unsolicited desktop widget, bundled SearchMate browser toolbar injection, popup ads | M3 | docs/03 |
 | 32 | SafeSweep Anti-Adware Utility | Adware scanner, quarantine list, toolbar removal engine | M3 | docs/03 |
 | 33 | Mail Client & Notepad Editor | Email inbox/reader with attachments, text file editing and saving | M3 | docs/03 |
-| 34 | Inkjs Narrative Engine Integration | Compiled Ink JSON runner, state synchronization, semantic tag parser (`# beat:`, `# effect:`, `# social:`) | M4 | docs/04, 06 |
-| 35 | 14-Day Authored Story Script | Complete Day 1-14 branching dialogue for Ryan, Maya, Nora, Mr. Henderson across 3 narrative arcs | M4 | docs/00, 04, 06 |
+| 34 | WorldEventsEngine (Sandbox Knowledge Bank) | Global event catalog, `checkAndTriggerEvents()`, `getKnowledgeContext()` injection into AI chat, world flags | M4 | docs/04, 06 |
+| 35 | AI-Heavy Sandbox Chats | All Pulse/buddy/room chats via `src/ai/service.ts` (Gemini/Groq/OpenRouter/Fal), `worldKnowledge` + `relationshipSummary` grounded prompting | M4 | docs/04, 06 |
 | 36 | 2D Layered Room & Desk Environment | Phaser/Canvas 2D room (8 layers, 5 time-of-day phases, weather overlays, persistent street entities) | M4 | docs/02 |
 | 37 | Physical Room Interactables | PC Desk (14-day progressive clutter), Bed (sleep/rest), Kettle (tea/coffee), Window (observation), Door (errands/work) | M4 | docs/01, 02 |
 | 38 | In-Person Café Meeting Scene | Day 11-12 Maya meeting minigame/dialogue with physical atmosphere and post-meeting shift | M4 | docs/00, 04 |
@@ -84,7 +84,7 @@
 | **M1** | Core Architecture & Simulation Engine | Package/build setup, pure TS `SimulationEngine`, GameClock, EventBus, VFS, Downloads, Software Registry, Economy, Schedules, Dexie persistence, Web Audio synth | None | DONE |
 | **M2** | Desktop Environment & OS Systems | Window Manager, Orion OS 4.8 / 6.x themes, Desktop Shell, Taskbar, Start Menu, CRT shader, Dial-up sim, Add/Remove Programs, Terminal, File Explorer, Control Panel | M1 | DONE |
 | **M3** | Fake Internet, Browser & Desktop Apps | Voyager Browser, 18 Fake Internet sites, search index, Pulse Messenger (AIM), RetroAmp, FlashFetch, ZipMate, PhotoBox 3.0, WeatherBuddy/SearchMate adware, SafeSweep, Notepad | M1, M2 | DONE |
-| **M4** | Narrative Engine, 14-Day Story & 2D World | Ink narrative runner, 14-day dialogue trees for 4 buddies, 2D Phaser/Canvas room (8 layers, 5 lighting phases), room interactables, café meeting, Day 14 resolution modal | M1, M2, M3 | IN_PROGRESS |
+| **M4** | Sandbox World & 2D World | WorldEventsEngine (global events → knowledge bank), AI-driven sandbox chats, 2D Phaser/Canvas room (8 layers, 5 lighting phases), room interactables, café meeting (now world-flag based), Day 14 milestone modal (now optional) | M1, M2, M3 | IN_PROGRESS |
 | **M5** | Final Integration & 100% E2E Pass + Adversarial Hardening | Full game loop integration, passing 100% E2E tests (Tiers 1-4), Tier 5 Adversarial testing & chaos verification, telemetry export, evaluation build ready | M1, M2, M3, M4, E2E | PLANNED |
 | **E2E** | E2E Testing Track (Requirement-Driven) | Comprehensive Vitest suites + Playwright 4-tier test suite (Tiers 1-4: Feature coverage, boundaries, pairwise combinations, 14-day playthroughs), publish `TEST_READY.md` | M1 (for test infra) | IN_PROGRESS |
 
@@ -141,10 +141,10 @@ away-message/
 │   │   ├── InternetRouter.ts
 │   │   ├── searchIndex.ts
 │   │   └── sites/           # 18 .local websites
-│   ├── narrative/           # Ink Narrative Engine & Story Scripts
-│   │   ├── NarrativeEngine.ts
+│   ├── narrative/           # Deprecated Ink (kept for compat/tests, no longer canonical)
+│   │   ├── NarrativeEngine.ts  # deprecated — sandbox uses WorldEventsEngine
 │   │   ├── inkCompiler.ts
-│   │   └── scripts/         # Compiled Ink JSON & Ink sources
+│   │   └── scripts/         # legacy Ink sources
 │   ├── world/               # 2D Physical Environment (Phaser/Canvas)
 │   │   ├── RoomScene.tsx
 │   │   ├── RoomCanvas.ts
@@ -179,7 +179,7 @@ away-message/
 ### 5.1 SimulationEngine ↔ React View Model (Zustand)
 ```typescript
 export interface GameTime {
-  day: number;           // 1..14
+  day: number;           // 1..∞ sandbox
   hour: number;          // 0..23
   minute: number;        // 0..59
   totalMinutes: number;  // monotonic elapsed minutes
@@ -210,7 +210,8 @@ export interface SimulationState {
     buddies: Record<string, BuddyState>;
     conversations: Record<string, MessageRecord[]>;
   };
-  narrativeFlags: Record<string, boolean | number | string>;
+  world: WorldState; // sandbox: flags + appointments + windowObservationHistory + triggeredEvents
+  narrative: NarrativeState; // deprecated alias of world
   telemetry: TelemetryRecord[];
 }
 
@@ -224,24 +225,18 @@ export interface ISimulationEngine {
 }
 ```
 
-### 5.2 SimulationEngine ↔ Ink Narrative Engine
+### 5.2 SimulationEngine ↔ WorldEventsEngine (Sandbox) — replaces Ink
 ```typescript
-export interface InkNarrativeContext {
-  sim_current_day: number;
-  sim_player_cash: number;
-  sim_os_version: string;
-  sim_ram_mb: number;
-  sim_photobox_installed: boolean;
-  sim_weatherbuddy_installed: boolean;
-  sim_safesweep_installed: boolean;
-  sim_rent_paid: boolean;
-  sim_buddies_familiarity: Record<string, number>;
-  sim_buddies_trust: Record<string, number>;
+export interface WorldKnowledgeContext {
+  currentDay: number;
+  worldKnowledge: string; // getKnowledgeContext(day) — recent global events
+  worldFlags: Record<string, boolean|number|string>;
 }
 
-export interface InkSemanticTag {
-  type: 'beat' | 'effect' | 'social';
-  payload: Record<string, any>;
+export interface GlobalEvent {
+  id: string; title: string; category: GlobalEventCategory;
+  triggerDay: number; knowledgePrompt: string;
+  isTriggered: boolean;
 }
 ```
 

@@ -4,6 +4,14 @@ import { aiService } from '../../ai/service';
 import { loadAISettings, saveAISettings } from '../../ai/settings';
 import type { AIProviderId, AISettings, BenchmarkResult } from '../../ai/types';
 import { generateCharacterImage } from '../../ai/imageService';
+import { useSimulationStore } from '../../store/useSimulationStore';
+import { ProceduralDirector } from '../../engine/ProceduralDirector';
+import { pickTemplateEvents } from '../../ai/proceduralTemplates';
+import type { ProceduralWorldEvent } from '../../ai/proceduralSchemas';
+import { EventBus } from '../../engine/EventBus';
+import { WorldEventsEngine } from '../../engine/WorldEventsEngine';
+import { getAllReleases } from '../../engine/OsCatalog';
+import { pickOsTemplate, templateToRelease } from '../../ai/osReleaseTemplates';
 
 const TEST_HOST = 'midnight-board.local';
 
@@ -19,6 +27,35 @@ export const AILabApp: React.FC = () => {
   const [imageBuddy, setImageBuddy] = useState('maya');
   const [imageRunning, setImageRunning] = useState(false);
   const [imageResult, setImageResult] = useState<{ url: string; provider: string; fallback: boolean; error?: string } | null>(null);
+
+  // Procedural Director tuning
+  const engine = useSimulationStore((s) => s.engine);
+  const worldDay = useSimulationStore((s) => s.state.time.day);
+  const [procSeed, setProcSeed] = useState('oakhaven-lab');
+  const [procTone, setProcTone] = useState<'grounded' | 'whimsical' | 'melancholy' | 'hopeful'>('grounded');
+  const [procMaxEvents, setProcMaxEvents] = useState(2);
+  const [procUseAI, setProcUseAI] = useState(true);
+  const [procWeights, setProcWeights] = useState<Record<string, number>>({
+    os_release: 3,
+    site_launch: 3,
+    city_news: 3,
+    economy: 2,
+    culture: 2,
+    system: 1,
+  });
+  const [procPrefer, setProcPrefer] = useState<Record<string, boolean>>({ os_release: false, site_launch: false, city_news: false, economy: false, culture: false, system: false });
+  const [procBusy, setProcBusy] = useState(false);
+  const [procPreview, setProcPreview] = useState<ProceduralWorldEvent[] | null>(null);
+  const [procMeta, setProcMeta] = useState<{ source: string; latencyMs?: number; error?: string } | null>(null);
+  const [procInjectedIds, setProcInjectedIds] = useState<string[]>([]);
+
+  // OS heavy generation tuning
+  const [osFamily, setOsFamily] = useState<'5.x' | '6.x' | '7.x'>('7.x');
+  const [osKind, setOsKind] = useState<'major' | 'minor' | 'patch' | 'beta' | 'hotfix'>('minor');
+  const [osUseAI, setOsUseAI] = useState(true);
+  const [osBusy, setOsBusy] = useState(false);
+  const [osPreview, setOsPreview] = useState<unknown | null>(null);
+  const [osMeta, setOsMeta] = useState<{ source: string; error?: string } | null>(null);
 
   const activeProvider = useMemo(
     () => AI_PROVIDERS.find((provider) => provider.id === settings.activeProvider) || AI_PROVIDERS[0]!,
@@ -64,6 +101,233 @@ export const AILabApp: React.FC = () => {
       setNotice(`Image error: ${(err as Error).message}`);
     } finally {
       setImageRunning(false);
+    }
+  };
+
+  const buildWeightedAllowed = (): string[] => {
+    const out: string[] = [];
+    Object.entries(procWeights).forEach(([cat, w]) => {
+      for (let i = 0; i < Math.max(0, Math.min(5, w)); i++) out.push(cat);
+    });
+    return out.length > 0 ? out : ['city_news'];
+  };
+  const buildPreferList = (): string[] => Object.entries(procPrefer).filter(([, v]) => v).map(([k]) => k);
+
+  const runProcPreview = async () => {
+    if (procBusy) return;
+    setProcBusy(true);
+    setProcPreview(null);
+    setProcMeta(null);
+    setNotice('Procedural preview — dry run (no world inject) using same governance as live.');
+    try {
+      const allowed = buildWeightedAllowed();
+      const prefer = buildPreferList();
+      // Dry run with temp engine so we don't pollute real world
+      const tmpBus = new EventBus();
+      const tmpWorld = new WorldEventsEngine(tmpBus, { ...engine.world.getState(), triggeredEvents: engine.world.getTriggeredEvents() } as any);
+      // Copy pending too via inject
+      const templDry = pickTemplateEvents(procSeed || 'oakhaven-lab', worldDay, allowed, procMaxEvents);
+      if (!procUseAI) {
+        const preview = templDry.map((e) => ({ ...e, triggerDay: Math.max(worldDay + 1, e.triggerDay) }));
+        setProcPreview(preview as unknown as ProceduralWorldEvent[]);
+        setProcMeta({ source: 'template (dry)', latencyMs: 0 });
+      } else {
+        const director = new ProceduralDirector(tmpWorld);
+        const res = await director.generateNextBatch(worldDay, engine.clock.getTotalMinutes(), {
+          worldSeed: procSeed || 'oakhaven-lab',
+          maxEvents: procMaxEvents,
+          allowedCategories: allowed as any,
+          preferCategories: prefer as any,
+          tone: procTone,
+          useAI: true,
+        });
+        setProcPreview(res.events.map((e) => ({
+          id: e.id,
+          title: e.title,
+          description: e.description,
+          category: e.category,
+          triggerDay: e.triggerDay,
+          triggerHour: e.triggerHour,
+          knowledgePrompt: e.knowledgePrompt,
+          siteUrl: e.siteUrl ?? null,
+          cityWireHeadline: e.title,
+          cityWireBody: e.description,
+          cityWireByline: `CityWire Staff // Day ${e.triggerDay}`,
+        })) as unknown as ProceduralWorldEvent[]);
+        setProcMeta({ source: res.meta.source, latencyMs: res.meta.latencyMs, error: res.meta.error });
+      }
+      setNotice('Preview ready — review titles/knowledgePrompts before injecting.');
+    } catch (err) {
+      setNotice(`Preview error: ${(err as Error).message}`);
+    } finally {
+      setProcBusy(false);
+    }
+  };
+
+  const runProcInject = async () => {
+    if (procBusy) return;
+    setProcBusy(true);
+    setProcMeta(null);
+    setNotice('Injecting procedural batch into live world (governed, validated, queued for future days)...');
+    try {
+      const allowed = buildWeightedAllowed();
+      const prefer = buildPreferList();
+      const director = new ProceduralDirector(engine.world);
+      const res = await director.generateNextBatch(worldDay, engine.clock.getTotalMinutes(), {
+        worldSeed: procSeed || 'oakhaven-lab',
+        maxEvents: procMaxEvents,
+        allowedCategories: allowed as any,
+        preferCategories: prefer as any,
+        tone: procTone,
+        useAI: procUseAI,
+      });
+      setProcPreview(res.events.map((e) => ({
+        id: e.id,
+        title: e.title,
+        description: e.description,
+        category: e.category,
+        triggerDay: e.triggerDay,
+        triggerHour: e.triggerHour,
+        knowledgePrompt: e.knowledgePrompt,
+        siteUrl: e.siteUrl ?? null,
+        cityWireHeadline: e.title,
+        cityWireBody: e.description,
+        cityWireByline: `CityWire Staff // Day ${e.triggerDay}`,
+      })) as unknown as ProceduralWorldEvent[]);
+      setProcMeta({ source: res.meta.source, latencyMs: res.meta.latencyMs, error: res.meta.error });
+      setProcInjectedIds(res.events.map((e) => e.id));
+      setNotice(`Injected ${res.events.length} events via ${res.meta.source} — check CityWire & pending queue.`);
+    } catch (err) {
+      setNotice(`Inject error: ${(err as Error).message}`);
+    } finally {
+      setProcBusy(false);
+    }
+  };
+
+  const runOsPreview = async () => {
+    if (osBusy) return;
+    setOsBusy(true);
+    setOsPreview(null);
+    setOsMeta(null);
+    try {
+      if (!osUseAI) {
+        const tmpl = pickOsTemplate(procSeed || 'oakhaven-lab', osFamily, worldDay);
+        const rel = templateToRelease(tmpl, worldDay + 2);
+        setOsPreview({ ...rel, source: 'template' });
+        setOsMeta({ source: 'template' });
+      } else {
+        const { buildLorePrompt } = await import('../../ai/worldLore');
+        const lore = buildLorePrompt();
+        const system = `You generate ONE governed OS release for Orion OS in Oakhaven 1998-2006. Return JSON matching OsReleaseAiSchema exactly. Era-locked, .local only, mundane, no real brands. Family must be ${osFamily}, kind ${osKind}.`;
+        const user = `World seed: ${procSeed || 'oakhaven-lab'} | Day ${worldDay} | Family ${osFamily} | Current OS ${(engine as any).os.getCurrentOsId()} | Lore: ${lore.slice(0, 600)} | Generate one release for Day ${worldDay + 2}.`;
+        const { completeJson } = await import('../../ai/providers');
+        const { getProviderModel, resolveApiKey } = await import('../../ai/providers');
+        const { parseOsReleaseBatch } = await import('../../ai/osReleaseSchemas');
+        const providerId = settings.activeProvider;
+        const model = getProviderModel(providerId);
+        const { key } = resolveApiKey(providerId, settings);
+        if (!key) throw new Error('No API key for OS generation');
+        const osSchema: Record<string, unknown> = {
+          type: 'object',
+          additionalProperties: false,
+          properties: {
+            releases: {
+              type: 'array',
+              minItems: 1,
+              maxItems: 1,
+              items: {
+                type: 'object',
+                additionalProperties: false,
+                properties: {
+                  id: { type: 'string' },
+                  version: { type: 'string' },
+                  codename: { type: 'string' },
+                  displayName: { type: 'string' },
+                  family: { type: 'string', enum: ['4.x', '5.x', '6.x', '7.x'] },
+                  kind: { type: 'string', enum: ['major', 'minor', 'patch', 'beta', 'hotfix'] },
+                  channel: { type: 'string', enum: ['stable', 'beta', 'hotfix'] },
+                  changelog: { type: 'array', items: { type: 'string' } },
+                  blurb: { type: 'string' },
+                  installSizeGB: { type: 'number' },
+                  ramOverheadMB: { type: 'integer' },
+                  bootTimeSeconds: { type: 'integer' },
+                  minRamMB: { type: 'integer' },
+                  minDiskGB: { type: 'number' },
+                  price: { type: 'number' },
+                  theme: { type: 'string', enum: ['orion48', 'orion50', 'orion60', 'orion70'] },
+                },
+                required: ['id', 'version', 'displayName', 'family', 'kind', 'channel', 'changelog', 'installSizeGB', 'ramOverheadMB', 'bootTimeSeconds', 'minRamMB', 'minDiskGB', 'theme'],
+              },
+            },
+          },
+          required: ['releases'],
+        };
+        const controller = new AbortController();
+        const raw = await completeJson({
+          providerId,
+          model,
+          apiKey: key,
+          systemPrompt: system,
+          userPrompt: user,
+          jsonSchema: osSchema,
+          signal: controller.signal,
+        });
+        const parsed = parseOsReleaseBatch(raw as unknown);
+        setOsPreview({ ...(parsed.releases[0] as unknown as Record<string, unknown>), source: 'ai' } as unknown);
+        setOsMeta({ source: 'ai' });
+      }
+    } catch (err) {
+      const tmpl = pickOsTemplate(procSeed || 'oakhaven-lab', osFamily, worldDay);
+      const rel = templateToRelease(tmpl, worldDay + 2);
+      setOsPreview({ ...rel, source: 'template-fallback', error: (err as Error).message } as unknown);
+      setOsMeta({ source: 'template-fallback', error: (err as Error).message });
+    } finally {
+      setOsBusy(false);
+    }
+  };
+
+  const runOsInject = async () => {
+    if (osBusy || !osPreview) return;
+    setOsBusy(true);
+    try {
+      const preview = osPreview as unknown as { id:string; version:string; displayName:string; family: '4.x'|'5.x'|'6.x'|'7.x'; kind:'major'|'minor'|'patch'|'beta'|'hotfix'; channel:'stable'|'beta'|'hotfix'; changelog:string[]; blurb?:string; installSizeGB:number; ramOverheadMB:number; bootTimeSeconds:number; minRamMB:number; minDiskGB:number; price?:number; theme:'orion48'|'orion50'|'orion60'|'orion70' };
+      const rel = {
+        id: preview.id as any,
+        version: preview.version,
+        build: `${preview.version}.${1000 + Math.floor(Math.random()*9000)}`,
+        codename: (preview as any).codename ?? 'Procedural',
+        displayName: preview.displayName,
+        family: preview.family,
+        kind: preview.kind,
+        channel: preview.channel,
+        releaseDay: worldDay + 2,
+        changelog: preview.changelog,
+        requirements: { minRamMB: preview.minRamMB, minCpuTier: 1, minDiskGB: preview.minDiskGB },
+        installSizeGB: preview.installSizeGB,
+        ramOverheadMB: preview.ramOverheadMB,
+        bootTimeSeconds: preview.bootTimeSeconds,
+        theme: preview.theme,
+        price: preview.price ?? 0,
+        blurb: preview.blurb ?? '',
+        isProcedural: true,
+      } as unknown as import('../../engine/OsCatalog').OsRelease;
+      (engine as any).os.registerProceduralRelease(rel);
+      // Also create a world event so CityWire/NPCs know
+      engine.world.injectProceduralEvents([{
+        id: `os_${rel.id}`.replace(/[^a-z0-9_]/g,'_'),
+        title: rel.displayName,
+        description: rel.changelog.join(' • '),
+        category: 'os_release',
+        triggerDay: rel.releaseDay,
+        knowledgePrompt: `${rel.displayName} is out — ${rel.blurb} Needs ${rel.requirements.minRamMB}MB RAM.`,
+        siteUrl: 'http://orionsoft.local/',
+      } as any]);
+      setOsMeta({ source: 'injected' });
+      setNotice(`OS injected: ${rel.displayName} for Day ${rel.releaseDay} — check TechMart/Control Panel.`);
+    } catch (err) {
+      setNotice(`OS inject error: ${(err as Error).message}`);
+    } finally {
+      setOsBusy(false);
     }
   };
 
@@ -176,6 +440,80 @@ export const AILabApp: React.FC = () => {
             </div>
             <img src={imageResult.url} alt={imagePrompt} className="mt-2 max-h-60 w-auto border border-gray-400 bg-white object-contain" />
             <div className="mt-1 break-all font-mono text-[10px] text-gray-600">{imageResult.url.slice(0, 120)}{imageResult.url.length > 120 ? '…' : ''}</div>
+          </div>
+        )}
+      </section>
+
+      <section className="mb-3 border-2 border-[#6a1b9a] bg-white p-2">
+        <h2 className="mb-1 font-bold text-[#6a1b9a]">Procedural Wire Director — governed</h2>
+        <div className="text-[11px] text-gray-600">Seed + tone + category weights → AI proposes within Zod schema, .local only, era-locked, deduped. Templates guarantee offline. CityWire reads live world.</div>
+
+        <div className="mt-2 grid grid-cols-1 gap-2 md:grid-cols-2">
+          <label className="flex flex-col gap-1">World seed<input value={procSeed} onChange={(e) => setProcSeed(e.target.value)} className="border border-gray-500 px-2 py-1" placeholder="oakhaven-lab" /></label>
+          <label className="flex flex-col gap-1">Tone<select value={procTone} onChange={(e) => setProcTone(e.target.value as any)} className="border border-gray-500 bg-white px-2 py-1"><option value="grounded">grounded</option><option value="whimsical">whimsical</option><option value="melancholy">melancholy</option><option value="hopeful">hopeful</option></select></label>
+          <label className="flex flex-col gap-1">Max events<select value={procMaxEvents} onChange={(e) => setProcMaxEvents(parseInt(e.target.value, 10))} className="border border-gray-500 bg-white px-2 py-1"><option value={1}>1</option><option value={2}>2</option><option value={3}>3</option></select></label>
+          <label className="flex items-center gap-2 mt-4"><input type="checkbox" checked={procUseAI} onChange={(e) => setProcUseAI(e.target.checked)} /> Use AI (off = templates only)</label>
+        </div>
+
+        <div className="mt-3 border border-gray-300 bg-[#fafafa] p-2">
+          <div className="font-bold text-[11px]">Category weights (0–5, biased draw) + prefer boost</div>
+          <div className="mt-2 grid grid-cols-1 gap-2 md:grid-cols-2">
+            {Object.keys(procWeights).map((cat) => (
+              <div key={cat} className="flex items-center gap-2 border border-gray-200 bg-white px-2 py-1">
+                <span className="w-24 font-mono text-[11px]">{cat}</span>
+                <input type="range" min={0} max={5} value={procWeights[cat]} onChange={(e) => setProcWeights({ ...procWeights, [cat]: parseInt(e.target.value, 10) })} className="flex-1" />
+                <span className="w-4 text-center font-bold">{procWeights[cat]}</span>
+                <label className="flex items-center gap-1 text-[10px]"><input type="checkbox" checked={!!procPrefer[cat]} onChange={(e) => setProcPrefer({ ...procPrefer, [cat]: e.target.checked })} /> prefer</label>
+              </div>
+            ))}
+          </div>
+          <div className="mt-2 text-[10px] text-gray-600">Current day: <b>{worldDay}</b> • world pending: <b>{engine.world.getPendingEvents().length}</b> • triggered: <b>{engine.world.getTriggeredEvents().length}</b> • injected last: {procInjectedIds.join(', ') || '—'}</div>
+        </div>
+
+        <div className="mt-3 flex flex-wrap gap-2">
+          <button disabled={procBusy} onClick={runProcPreview} className="border border-gray-700 bg-white px-4 py-1 font-bold hover:bg-gray-50 disabled:opacity-60"> {procBusy ? 'Working…' : 'Preview (dry, no inject)'}</button>
+          <button disabled={procBusy} onClick={runProcInject} className="border border-gray-700 bg-[#6a1b9a] px-4 py-1 font-bold text-white hover:bg-[#7b22b3] disabled:opacity-60"> {procBusy ? 'Working…' : 'Generate & Inject into World'}</button>
+          {procMeta && <span className="px-2 py-1 text-[10px] bg-gray-100 border border-gray-300">source: <b>{procMeta.source}</b>{procMeta.latencyMs ? ` • ${procMeta.latencyMs}ms` : ''}{procMeta.error ? ` • ${procMeta.error.slice(0, 80)}` : ''}</span>}
+        </div>
+
+        {procPreview && (
+          <div className="mt-3 space-y-2">
+            {procPreview.map((e) => (
+              <article key={e.id} className="border border-gray-400 bg-[#fafafa] p-2">
+                <div className="flex flex-wrap items-center justify-between gap-2 font-bold text-[11px]">
+                  <span>{e.title}</span>
+                  <span className="bg-black text-white px-2 py-0.5 text-[9px] uppercase">{e.category} • Day {e.triggerDay} {e.triggerHour ? `@${e.triggerHour}:00` : ''}</span>
+                </div>
+                <div className="mt-1 text-[11px] text-gray-700">{e.description}</div>
+                <div className="mt-1 text-[11px] italic text-gray-600">NPC will say: “{e.knowledgePrompt}”</div>
+                {e.siteUrl && <div className="mt-1 font-mono text-[10px] text-blue-700">{e.siteUrl}</div>}
+                <div className="font-mono text-[9px] text-gray-400">id: {e.id}</div>
+              </article>
+            ))}
+          </div>
+        )}
+      </section>
+
+      <section className="mb-3 border-2 border-[#0f4a3c] bg-white p-2">
+        <h2 className="mb-1 font-bold text-[#0f4a3c]">Orion OS Lab — governed releases</h2>
+        <div className="text-[11px] text-gray-600">Family + kind → AI or template → validated via OsCatalog → installable in TechMart/Control Panel. Simulation: size, RAM, boot time, disk, theme.</div>
+        <div className="mt-2 grid grid-cols-1 gap-2 md:grid-cols-3">
+          <label className="flex flex-col gap-1">Family<select value={osFamily} onChange={(e) => setOsFamily(e.target.value as any)} className="border border-gray-500 bg-white px-2 py-1"><option value="5.x">5.x — Aperture</option><option value="6.x">6.x — Canal</option><option value="7.x">7.x — Gloss</option></select></label>
+          <label className="flex flex-col gap-1">Kind<select value={osKind} onChange={(e) => setOsKind(e.target.value as any)} className="border border-gray-500 bg-white px-2 py-1"><option value="major">major</option><option value="minor">minor</option><option value="patch">patch</option><option value="beta">beta</option><option value="hotfix">hotfix</option></select></label>
+          <label className="flex items-center gap-2 mt-4"><input type="checkbox" checked={osUseAI} onChange={(e) => setOsUseAI(e.target.checked)} /> Use AI</label>
+        </div>
+        <div className="mt-2 text-[10px] text-gray-600">Current OS: <b>{(engine as any).os.getCurrentOsId()}</b> • catalog: <b>{getAllReleases().length}</b> releases • pending OS events: <b>{engine.world.getPendingEvents().filter((e:any)=>e.category==='os_release').length}</b></div>
+        <div className="mt-3 flex flex-wrap gap-2">
+          <button disabled={osBusy} onClick={runOsPreview} className="border border-gray-700 bg-white px-4 py-1 font-bold hover:bg-gray-50 disabled:opacity-60">{osBusy ? 'Working…' : 'Preview OS (dry)'}</button>
+          <button disabled={osBusy || (osPreview as unknown) == null} onClick={runOsInject} className="border border-gray-700 bg-[#0f4a3c] px-4 py-1 font-bold text-white hover:bg-[#15604e] disabled:opacity-60">{osBusy ? 'Working…' : 'Inject OS into Catalog & World'}</button>
+          {osMeta && <span className="px-2 py-1 text-[10px] bg-gray-100 border border-gray-300">source: <b>{osMeta.source}</b>{(osMeta as any).error ? ` • ${(osMeta as any).error.slice(0,60)}` : ''}</span>}
+        </div>
+        {(osPreview as unknown) != null && (
+          <div className="mt-3 border border-gray-400 bg-[#fafafa] p-2">
+            <div className="font-bold text-xs">{(osPreview as any).displayName} <span className="font-mono text-[10px] text-gray-500">Build {(osPreview as any).build ?? (osPreview as any).version} • {(osPreview as any).theme} • {(osPreview as any).installSizeGB}GB • {(osPreview as any).ramOverheadMB}MB</span></div>
+            <div className="text-[11px] text-gray-700">{(osPreview as any).blurb ?? ''}</div>
+            <ul className="mt-1 list-disc pl-4 text-[11px] text-gray-600">{(((osPreview as any).changelog ?? []) as string[]).map((c:string,i:number)=><li key={i}>{c}</li>)}</ul>
+            <div className="font-mono text-[9px] text-gray-400">id: {(osPreview as any).id} • will appear as OS product Day {worldDay + 2} • TechMart/Control Panel</div>
           </div>
         )}
       </section>

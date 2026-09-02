@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { SiteRouteProps } from '../types';
 import { useSimulationStore } from '../../store/useSimulationStore';
 import { soundManager } from '../../audio/SoundManager';
+import { getTechMartDynamicState } from '../worldSiteHelpers';
+import { getAllReleases, getReleaseById } from '../../engine/OsCatalog';
 
 interface ProductItem {
   id: string;
@@ -79,18 +81,55 @@ const PRODUCTS: ProductItem[] = [
 
 export const TechMartSite: React.FC<SiteRouteProps> = () => {
   const hardware = useSimulationStore((s) => s.state.hardware);
+  const osState = useSimulationStore((s) => s.state.os);
   const playerCash = useSimulationStore((s) => s.state.player?.cash ?? 150.00);
   const dispatchAction = useSimulationStore((s) => s.dispatchAction);
+  const world = useSimulationStore((s) => s.state.world);
+  const time = useSimulationStore((s) => s.state.time);
 
   const [cart, setCart] = useState<ProductItem[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<string>('ALL');
   const [orderReceipt, setOrderReceipt] = useState<string | null>(null);
 
-  const filteredProducts = selectedCategory === 'ALL'
-    ? PRODUCTS
-    : PRODUCTS.filter((p) => p.category === selectedCategory);
+  // Dynamic world reactions: banners, price modifiers
+  const { banners, priceModifiers, featuredProductIds } = getTechMartDynamicState(world, time.day);
 
-  const cartTotal = cart.reduce((sum, item) => sum + item.price, 0);
+  // OS catalog is core — all 4.8/5.0/6.0/6.1/7.0-beta/7.0/7.0.1 + procedural AI releases
+  const osProducts: ProductItem[] = (() => {
+    try {
+      const engineOs = (useSimulationStore.getState().engine as any).os as { getAvailableReleases: (day:number, hw:any)=>any[] };
+      const hw = useSimulationStore.getState().state.hardware;
+      const available = engineOs ? engineOs.getAvailableReleases(time.day, hw as any) : (getAllReleases() as any[]).filter((r: any) => r.releaseDay <= time.day);
+      // Map to ProductItem
+      return available.map((r: any) => ({
+        id: `os_${r.id}`,
+        name: `${r.displayName}${r.kind === 'patch' || r.kind === 'hotfix' ? ' (Update)' : r.kind === 'beta' ? ' (Beta)' : ''}`,
+        category: 'OS' as const,
+        price: r.price ?? 0,
+        description: `${r.blurb ?? ''} — ${r.changelog.slice(0, 2).join(' • ')}`,
+        specs: `Build ${r.build} • ${r.installSizeGB}GB • ${r.requirements.minRamMB}MB RAM min • ${r.theme} • ${r.kind}`,
+        actionType: 'HARDWARE_UPGRADE_OS' as const,
+        payloadValue: r.id,
+        _release: r,
+        _kind: r.kind,
+      }));
+    } catch {
+      return [];
+    }
+  })();
+
+  const baseProductsWithoutOs = PRODUCTS.filter((p) => p.category !== 'OS');
+  const allProducts = [...baseProductsWithoutOs, ...osProducts];
+
+  const filteredProducts = selectedCategory === 'ALL'
+    ? allProducts
+    : allProducts.filter((p) => p.category === selectedCategory);
+
+  const effectivePrice = (prod: ProductItem) => {
+    const mult = priceModifiers[prod.id] ?? 1;
+    return prod.price * mult;
+  };
+  const cartTotal = cart.reduce((sum, item) => sum + effectivePrice(item as ProductItem), 0);
 
   const handleAddToCart = (product: ProductItem) => {
     setCart((prev) => [...prev, product]);
@@ -157,10 +196,31 @@ export const TechMartSite: React.FC<SiteRouteProps> = () => {
             Cash: ${playerCash.toFixed(2)}
           </div>
           <span className="text-[10px] text-blue-200">
-            Current Rig: {hardware.ramMB}MB RAM | {hardware.osVersion}
+            Current Rig: {hardware.ramMB}MB RAM | {(() => { const r = getReleaseById(osState.currentOsId as any); return r ? r.displayName : hardware.osVersion; })()}
+            {osState.installedPatchIds.length > 0 ? ` +${osState.installedPatchIds.length} patch` : ''} • {hardware.hddFreeGB.toFixed(1)}GB free
           </span>
         </div>
       </div>
+
+      {/* Live World Banners */}
+      {banners.length > 0 && (
+        <div className="max-w-4xl w-full mt-2 space-y-1">
+          {banners.map((b, idx) => (
+            <div
+              key={idx}
+              className={`px-3 py-1.5 text-[11px] font-bold border flex items-center gap-2 ${
+                b.tone === 'success' ? 'bg-emerald-50 border-emerald-300 text-emerald-900' :
+                b.tone === 'warning' ? 'bg-amber-50 border-amber-300 text-amber-900' :
+                'bg-blue-50 border-blue-300 text-blue-900'
+              }`}
+            >
+              <span>{b.tone === 'success' ? '✓' : b.tone === 'warning' ? '⚠' : '◉'}</span>
+              <span>{b.text}</span>
+              <span className="ml-auto text-[9px] font-mono opacity-60">via CityWire • Day {time.day}</span>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Categories & Cart Status Bar */}
       <div className="max-w-4xl w-full bg-[#e2e8f0] border-x border-b border-slate-300 px-3 py-1.5 flex justify-between items-center text-xs">
@@ -189,35 +249,67 @@ export const TechMartSite: React.FC<SiteRouteProps> = () => {
       <div className="max-w-4xl w-full grid grid-cols-3 gap-4 mt-4">
         {/* Products List */}
         <div className="col-span-2 space-y-3">
-          {filteredProducts.map((prod) => (
-            <div
-              key={prod.id}
-              className="bg-white border border-slate-300 p-3 rounded shadow-xs flex justify-between items-start hover:border-blue-400 transition-colors"
-            >
-              <div className="space-y-1 flex-1 pr-3">
-                <div className="flex items-center gap-2">
-                  <h3 className="font-bold text-sm text-blue-950">{prod.name}</h3>
-                  <span className="bg-slate-100 text-slate-600 border border-slate-300 text-[9px] px-1.5 py-0.2 rounded font-mono">
-                    {prod.category}
-                  </span>
+          {filteredProducts.map((prod) => {
+            const isOs = prod.category === 'OS';
+            const osCheck = (() => {
+              if (!isOs) return { can: true, reason: '' };
+              try {
+                const engOs = (useSimulationStore.getState().engine as any).os as { canInstall: (id:string, hw:any, day:number)=>{ok:boolean; reasons:string[]} };
+                const hw = useSimulationStore.getState().state.hardware;
+                const res = engOs.canInstall(prod.payloadValue as string, hw as any, time.day);
+                return { can: res.ok, reason: res.reasons[0] ?? '' };
+              } catch { return { can: true, reason: '' }; }
+            })();
+            const isPatch = isOs && (String(prod.specs).includes('patch') || String(prod.specs).includes('hotfix') || prod.price === 0);
+            return (
+              <div
+                key={prod.id}
+                className={`bg-white border p-3 rounded shadow-xs flex justify-between items-start transition-colors ${isOs && !osCheck.can ? 'border-amber-300 bg-amber-50/30' : 'border-slate-300 hover:border-blue-400'}`}
+              >
+                <div className="space-y-1 flex-1 pr-3">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h3 className="font-bold text-sm text-blue-950">{prod.name}</h3>
+                    <span className="bg-slate-100 text-slate-600 border border-slate-300 text-[9px] px-1.5 py-0.2 rounded font-mono">
+                      {prod.category}
+                    </span>
+                    {isOs && <span className={`text-[8px] px-1 py-0.5 rounded font-bold uppercase border ${isPatch ? 'bg-emerald-50 text-emerald-700 border-emerald-300' : prod.specs.includes('beta') ? 'bg-purple-50 text-purple-700 border-purple-300' : 'bg-blue-50 text-blue-700 border-blue-300'}`}>{isPatch ? 'PATCH' : prod.specs.includes('beta') ? 'BETA' : 'OS'}</span>}
+                    {isOs && osCheck.can && prod.price === 0 && <span className="bg-green-100 text-green-800 border border-green-300 text-[8px] px-1 py-0.5 rounded font-bold uppercase">FREE</span>}
+                  </div>
+                  <p className="text-xs text-slate-600">{prod.description}</p>
+                  <span className="text-[10px] text-slate-400 font-mono block">Specs: {prod.specs}</span>
+                  {isOs && !osCheck.can && <span className="text-[10px] text-amber-700 font-bold">⚠ {osCheck.reason}</span>}
+                  {isOs && osCheck.can && <span className="text-[10px] text-emerald-700">✓ Ready to install • {prod.specs.split('•')[0]?.trim()}</span>}
                 </div>
-                <p className="text-xs text-slate-600">{prod.description}</p>
-                <span className="text-[10px] text-slate-400 font-mono block">Specs: {prod.specs}</span>
-              </div>
 
-              <div className="text-right flex flex-col items-end gap-1.5 shrink-0">
-                <span className="text-base font-bold font-mono text-emerald-700">
-                  ${prod.price.toFixed(2)}
-                </span>
-                <button
-                  onClick={() => handleAddToCart(prod)}
-                  className="px-3 py-1 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold rounded text-xs shadow-xs cursor-pointer"
-                >
-                  + Add to Cart
-                </button>
+                <div className="text-right flex flex-col items-end gap-1.5 shrink-0">
+                  {(() => {
+                    const eff = effectivePrice(prod);
+                    const isInflated = eff !== prod.price;
+                    const isFeatured = featuredProductIds.includes(prod.id);
+                    return (
+                      <>
+                        <div className="flex items-center gap-1.5">
+                          {isFeatured && <span className="bg-amber-100 text-amber-800 border border-amber-300 text-[8px] px-1 py-0.5 rounded font-bold uppercase">Featured</span>}
+                          {isInflated && <span className="text-[10px] line-through text-slate-400">${prod.price.toFixed(2)}</span>}
+                          <span className={`text-base font-bold font-mono ${isInflated ? 'text-amber-700' : prod.price === 0 ? 'text-emerald-700' : 'text-emerald-700'}`}>
+                            {prod.price === 0 ? 'FREE' : `$${eff.toFixed(2)}`}
+                          </span>
+                        </div>
+                        {isInflated && <span className="text-[9px] text-amber-700 font-bold">+{Math.round((eff / prod.price - 1) * 100)}% market surge</span>}
+                        <button
+                          disabled={isOs && !osCheck.can}
+                          onClick={() => handleAddToCart({ ...prod, price: eff } as ProductItem)}
+                          className={`px-3 py-1 font-bold rounded text-xs shadow-xs ${isOs && !osCheck.can ? 'bg-gray-300 text-gray-600 cursor-not-allowed' : 'bg-amber-500 hover:bg-amber-600 text-slate-950 cursor-pointer'}`}
+                        >
+                          {isOs && !osCheck.can ? 'Blocked' : '+ Add to Cart'}
+                        </button>
+                      </>
+                    );
+                  })()}
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
 
         {/* Right Pane: Shopping Cart & Checkout */}

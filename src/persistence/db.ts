@@ -20,6 +20,7 @@ export class AwayMessageDB extends Dexie {
   messages!: Table<MessageRecord, string>;
   relationships!: Table<RelationshipRecord, string>;
   narrative_state!: Table<NarrativeStateRecord, string>;
+  world_state!: Table<NarrativeStateRecord, string>;
   telemetry_logs!: Table<TelemetryLogRecord, number>;
   ai_cache!: Table<AICacheRecord, string>;
   pulse_state!: Table<PulseStateRecord, string>;
@@ -36,6 +37,7 @@ export class AwayMessageDB extends Dexie {
       messages: 'id, buddyId, timestamp, isRead, [buddyId+timestamp]',
       relationships: 'buddyId, lastInteractionDay',
       narrative_state: 'key, updatedAt',
+      world_state: 'key, updatedAt',
       telemetry_logs: '++id, timestamp, gameDay, eventType',
     });
 
@@ -48,6 +50,7 @@ export class AwayMessageDB extends Dexie {
       messages: 'id, buddyId, timestamp, isRead, [buddyId+timestamp]',
       relationships: 'buddyId, lastInteractionDay',
       narrative_state: 'key, updatedAt',
+      world_state: 'key, updatedAt',
       telemetry_logs: '++id, timestamp, gameDay, eventType',
       ai_cache: 'key, kind, expiresAt, providerId',
     });
@@ -61,6 +64,21 @@ export class AwayMessageDB extends Dexie {
       messages: 'id, buddyId, timestamp, isRead, [buddyId+timestamp]',
       relationships: 'buddyId, lastInteractionDay',
       narrative_state: 'key, updatedAt',
+      world_state: 'key, updatedAt',
+      telemetry_logs: '++id, timestamp, gameDay, eventType',
+      ai_cache: 'key, kind, expiresAt, providerId',
+      pulse_state: 'saveSlotId',
+    });
+
+    this.version(4).stores({
+      saves: 'id, name, updatedAt, day',
+      vfs_files: 'id, path, parentPath, kind, name, createdAt',
+      downloads: 'id, status, startedAt, completedAt',
+      installed_software: 'appId, installedAt, version',
+      messages: 'id, buddyId, timestamp, isRead, [buddyId+timestamp]',
+      relationships: 'buddyId, lastInteractionDay',
+      narrative_state: 'key, updatedAt',
+      world_state: 'key, updatedAt',
       telemetry_logs: '++id, timestamp, gameDay, eventType',
       ai_cache: 'key, kind, expiresAt, providerId',
       pulse_state: 'saveSlotId',

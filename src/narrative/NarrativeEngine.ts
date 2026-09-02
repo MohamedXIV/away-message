@@ -195,7 +195,7 @@ export class NarrativeEngine {
       sim_henderson_respect: sim_buddies_respect['henderson'] ?? 40,
       sim_henderson_annoyance: sim_buddies_annoyance['henderson'] ?? 10,
       flags,
-      completedBeats: Array.from(new Set([...state.narrative.completedBeats, ...this.completedBeats])),
+      completedBeats: Array.from(new Set([...(state.narrative?.completedBeats ?? state.world?.triggeredEvents?.map((e: any) => e.id) ?? []), ...this.completedBeats])),
     };
 
     this.contextSnapshot = snapshot;

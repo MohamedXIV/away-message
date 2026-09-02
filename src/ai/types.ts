@@ -122,6 +122,8 @@ export interface ChatGenerationRequest {
   playerMessage: string;
   providerId?: AIProviderId;
   useCache?: boolean;
+  worldKnowledge?: string;
+  currentDay?: number;
 }
 
 export interface BenchmarkResult {

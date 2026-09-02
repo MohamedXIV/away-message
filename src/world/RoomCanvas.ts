@@ -9,6 +9,7 @@ import {
   WindowCondensationDrop,
 } from './types';
 import { ROOM_HOTSPOTS } from './data/roomInteractables';
+import type { OsVersion } from '../engine/types';
 
 export interface RoomCanvasOptions {
   canvas: HTMLCanvasElement;
@@ -16,7 +17,7 @@ export interface RoomCanvasOptions {
   hour: number;
   minute: number;
   weather?: WeatherType;
-  osVersion?: 'Orion_4.8' | 'Orion_6.0';
+  osVersion?: OsVersion;
   hasActiveDownloads?: boolean;
   onHotspotClick?: (id: RoomHotspotId) => void;
   onHotspotHover?: (id: RoomHotspotId | null) => void;
@@ -41,7 +42,7 @@ export class RoomCanvasRenderer {
   public hour = 8;
   public minute = 0;
   public weather: WeatherType = 'clear';
-  public osVersion: 'Orion_4.8' | 'Orion_6.0' = 'Orion_4.8';
+  public osVersion: OsVersion = 'Orion_4.8';
   public hasActiveDownloads = false;
 
   // Interaction
@@ -82,7 +83,7 @@ export class RoomCanvasRenderer {
     hour: number;
     minute: number;
     weather?: WeatherType;
-    osVersion?: 'Orion_4.8' | 'Orion_6.0';
+    osVersion?: OsVersion;
     hasActiveDownloads?: boolean;
   }) {
     this.day = params.day;
@@ -712,14 +713,21 @@ export class RoomCanvasRenderer {
     const screenY = monY + 4;
     const screenW = monW - 8;
     const screenH = monH - 12;
-    const isOrion6 = this.osVersion === 'Orion_6.0';
 
-    // Screen content color
-    ctx.fillStyle = isOrion6 ? '#1f48ab' : '#008080'; // XP blue vs Win95 teal
+    // Screen content color — heavy OS: each family has its own tint
+    const isOrion70 = String(this.osVersion).includes('7.0');
+    const isOrion6b = String(this.osVersion).includes('6.');
+    const isOrion50 = String(this.osVersion).includes('5.');
+    let screenColor = '#008080'; // 4.8 teal
+    let taskbarColor = '#c0c0c0';
+    if (isOrion70) { screenColor = '#0f1f4d'; taskbarColor = '#1a2a6a'; } // deep glossy navy
+    else if (isOrion6b) { screenColor = '#1f48ab'; taskbarColor = '#1b5e20'; }
+    else if (isOrion50) { screenColor = '#2a5a8a'; taskbarColor = '#3a6b35'; }
+    ctx.fillStyle = screenColor;
     ctx.fillRect(screenX, screenY, screenW, screenH);
 
     // Miniature Taskbar on CRT
-    ctx.fillStyle = isOrion6 ? '#1b5e20' : '#c0c0c0';
+    ctx.fillStyle = taskbarColor;
     ctx.fillRect(screenX, screenY + screenH - 4, screenW, 4);
 
     // Glowing Power LED on monitor

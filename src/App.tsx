@@ -10,7 +10,6 @@ import {
   useSimulationStore,
   useActiveView,
   useGameTime,
-  useNarrativeState,
 } from './store/useSimulationStore';
 import { useAudioStore } from './store/useAudioStore';
 
@@ -19,12 +18,13 @@ export const App: React.FC = () => {
   useSimulationTicker({ enabled: true });
 
   const unlockAudio = useAudioStore((s) => s.unlockAudio);
-  const osVersion = useSimulationStore((s) => s.state.hardware.osVersion);
+  const osState = useSimulationStore((s) => s.state.os);
+  const osVersion = osState.currentOsId as string;
   const activeView = useActiveView();
   const switchView = useSimulationStore((s) => s.switchView);
-  const setNarrativeFlag = useSimulationStore((s) => s.setNarrativeFlag);
+  const setWorldFlag = useSimulationStore((s) => s.setWorldFlag);
   const time = useGameTime();
-  const narrative = useNarrativeState();
+  const world = useSimulationStore((s) => s.state.world);
 
   const [showDay14Modal, setShowDay14Modal] = useState<boolean>(false);
 
@@ -62,16 +62,16 @@ export const App: React.FC = () => {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [activeView, switchView]);
 
-  // Check for Day 14 evaluation completion
+  // Sandbox: no Day 14 gate — show milestone modal once at Day 15 for flavor, then never again
   useEffect(() => {
-    if (time.day >= 15 && !narrative.flags?.free_play_unlocked && !showDay14Modal) {
+    if (time.day >= 15 && !world.flags?.free_play_unlocked && !showDay14Modal) {
       setShowDay14Modal(true);
     }
-  }, [time.day, narrative.flags?.free_play_unlocked, showDay14Modal]);
+  }, [time.day, world.flags?.free_play_unlocked, showDay14Modal]);
 
   const handleContinueFreePlay = () => {
-    setNarrativeFlag('free_play_unlocked', true);
-    setNarrativeFlag('day14_evaluation_completed', true);
+    setWorldFlag('free_play_unlocked', true);
+    setWorldFlag('sandbox_milestone_seen', true);
     setShowDay14Modal(false);
   };
 
@@ -86,7 +86,13 @@ export const App: React.FC = () => {
     window.location.reload();
   };
 
-  const themeAttr = osVersion === 'Orion_6.0' ? 'orion60' : 'orion48';
+  // Orion OS themes: 4.8→orion48, 5.x→orion50, 6.x→orion60, 7.x→orion70 (AI releases use same mapping)
+  const themeAttr = (() => {
+    if (osVersion.includes('7.0')) return 'orion70';
+    if (osVersion.includes('6.')) return 'orion60';
+    if (osVersion.includes('5.')) return 'orion50';
+    return 'orion48';
+  })();
 
   return (
     <div data-theme={themeAttr} className="w-full h-full overflow-hidden select-none bg-black">

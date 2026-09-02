@@ -31,14 +31,14 @@ export const Day14ResolutionModal: React.FC<Day14ResolutionModalProps> = ({
   const hardware = simState.hardware;
   const installedSoftware = simState.installedSoftware;
   const social = simState.social;
-  const narrative = simState.narrative;
+  const world = simState.world;
   const telemetry = simState.telemetry;
 
   // Extract metrics
   const cashEarned = telemetry.stats?.totalMoneyEarned ?? 0;
   const foodCartShifts = telemetry.stats?.workShiftsCompleted ?? 0;
   const windowObservations = telemetry.stats?.windowObservationsCount ?? 0;
-  const isMayaMetInPerson = !!narrative.flags?.maya_met_in_person;
+  const isMayaMetInPerson = !!world.flags?.maya_met_in_person;
   const mayaRel = social.relationships?.starlight_maya;
   const ryanRel = social.relationships?.ryan_foodcart;
   const noraRel = social.relationships?.NightOwl87;
@@ -76,7 +76,8 @@ export const Day14ResolutionModal: React.FC<Day14ResolutionModalProps> = ({
           nora: noraRel,
         },
       },
-      narrativeFlags: narrative.flags,
+      worldFlags: world.flags,
+      triggeredEvents: world.triggeredEvents,
       rawTelemetryStats: telemetry.stats,
     };
 

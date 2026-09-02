@@ -2,6 +2,7 @@ import React from 'react';
 import type { BuddyCharacter, BuddyPresence, RelationshipDimensions } from '../../../engine/types';
 import type { PulseRoom } from '../data/pulseRooms';
 import type { PulseActivityEntry } from '../types';
+import { useSimulationStore } from '../../../store/useSimulationStore';
 
 interface PulseProfileCardProps {
   buddy: BuddyCharacter;
@@ -24,6 +25,8 @@ const meterItems: Array<{ key: keyof RelationshipDimensions; label: string; colo
 
 export const PulseProfileCard: React.FC<PulseProfileCardProps> = ({ buddy, presence, relationship, rooms, onClose, onChat, onBuzz, onInvite, awayHistory = [] }) => {
   const avatarLetter = buddy.displayName.trim().charAt(0).toUpperCase() || '?';
+  const buddyKnowledge = useSimulationStore((s) => s.state.world.buddyKnowledge?.[buddy.id] ?? []);
+  const worldEvents = useSimulationStore((s) => s.state.world.triggeredEvents);
 
   return (
     <div className="absolute right-3 top-3 z-30 w-72 border-2 border-[#38516e] bg-[#edf2f8] font-sans text-xs text-[#18283b] shadow-[6px_6px_0_rgba(15,35,60,0.26)]">
@@ -71,6 +74,26 @@ export const PulseProfileCard: React.FC<PulseProfileCardProps> = ({ buddy, prese
             );
           })}
         </div>
+
+        {buddyKnowledge.length > 0 && (
+          <div className="border border-[#b2bdc8] bg-white p-2">
+            <div className="mb-1 font-bold text-[#274e78]">World take — same news, different eyes</div>
+            <div className="space-y-1.5">
+              {buddyKnowledge.slice(-3).reverse().map((k) => {
+                const evt = worldEvents.find((e) => e.id === k.eventId);
+                return (
+                  <div key={k.eventId} className="border-l-2 border-[#a8b7c7] pl-1.5">
+                    <div className="flex items-center gap-1 text-[10px] font-bold">
+                      <span className={`px-1 py-0.5 text-[8px] uppercase text-white ${k.attitude === 'hyped' ? 'bg-emerald-600' : k.attitude === 'annoyed' ? 'bg-red-600' : k.attitude === 'skeptical' ? 'bg-amber-600' : k.attitude === 'worried' ? 'bg-orange-600' : k.attitude === 'curious' ? 'bg-sky-600' : 'bg-gray-500'}`}>{k.attitude}</span>
+                      <span className="truncate text-[#183b61]">{evt?.title ?? k.eventId}</span>
+                    </div>
+                    <div className="text-[10px] italic leading-tight text-gray-600">“{k.personalTake}”</div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         <label className="block text-[10px] font-bold text-gray-600" htmlFor="profile-room-invite">Invite to room</label>
         <select id="profile-room-invite" defaultValue="" onChange={(event) => { if (event.target.value) onInvite(event.target.value); }} className="w-full border border-gray-500 bg-white px-2 py-1 text-[11px]">
