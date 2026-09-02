@@ -93,6 +93,36 @@ export interface OsEngineState {
   lastInstallAtMinute?: number;
   lastInstallLog?: string[];
   pendingReboot?: boolean;
+  proceduralCatalog?: any[];
+}
+
+export interface PulseEngineState {
+  currentPulseId: string;
+  installedPatchIds: string[];
+  lastUpdateAtMinute?: number;
+  lastUpdateLog?: string[];
+  pendingReboot?: boolean;
+  proceduralCatalog?: any[];
+}
+
+export interface MyPlaceEngineState {
+  currentMyPlaceId: string;
+  lastUpdateAtMinute?: number;
+  lastUpdateLog?: string[];
+  userProfile: {
+    username: string;
+    displayName: string;
+    headline: string;
+    bio: string;
+    interests: string[];
+    songTitle: string;
+    avatarGlyph: string;
+    top8: Array<{ handle: string; name: string; avatar: string }>;
+    glitterIntensity: number;
+    tiledBackground?: string;
+  };
+  guestbook: Record<string, Array<{ author: string; text: string; date: string; minute: number }>>;
+  proceduralCatalog?: any[];
 }
 
 export interface SoftwareRequirement {
@@ -329,8 +359,8 @@ export interface InkSemanticTag {
   raw: string;
 }
 
-// Sandbox global event shared with WorldEventsEngine
-export type GlobalEventCategory = 'os_release' | 'site_launch' | 'city_news' | 'economy' | 'culture' | 'system';
+// Sandbox global event shared with WorldEventsEngine — includes pulse_update like OS
+export type GlobalEventCategory = 'os_release' | 'pulse_update' | 'site_launch' | 'city_news' | 'economy' | 'culture' | 'system';
 
 export interface GlobalEvent {
   id: string;
@@ -412,6 +442,8 @@ export interface SimulationState {
   player: PlayerState;
   hardware: HardwareState;
   os: OsEngineState;
+  pulse: PulseEngineState;
+  myplace: MyPlaceEngineState;
   vfs: VirtualFileSystemState;
   downloads: DownloadTask[];
   installedSoftware: InstalledSoftwareRecord[];

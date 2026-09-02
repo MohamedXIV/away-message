@@ -23,7 +23,7 @@ const PROCEDURAL_JSON_SCHEMA = {
           id: { type: 'string', pattern: '^[a-z0-9_]+$', maxLength: 40 },
           title: { type: 'string', minLength: 6, maxLength: 80 },
           description: { type: 'string', minLength: 20, maxLength: 400 },
-          category: { type: 'string', enum: ['os_release', 'site_launch', 'city_news', 'economy', 'culture', 'system'] },
+          category: { type: 'string', enum: ['os_release', 'pulse_update', 'site_launch', 'city_news', 'economy', 'culture', 'system'] },
           triggerDay: { type: 'integer', minimum: 1, maximum: 365 },
           triggerHour: { type: 'integer', minimum: 0, maximum: 23 },
           knowledgePrompt: { type: 'string', minLength: 20, maxLength: 220 },
@@ -137,7 +137,7 @@ export class ProceduralDirector {
   ): Promise<{ events: GlobalEvent[]; meta: { source: 'ai' | 'template' | 'mixed'; latencyMs: number; error?: string } }> {
     const startedAt = performance.now();
     const maxEvents = Math.max(1, Math.min(3, options.maxEvents ?? 2));
-    const allowedCategories = options.allowedCategories ?? ['city_news', 'site_launch', 'economy', 'culture', 'system', 'os_release'];
+    const allowedCategories = options.allowedCategories ?? ['city_news', 'site_launch', 'economy', 'culture', 'system', 'os_release', 'pulse_update'];
     const seed = options.worldSeed ?? `oakhaven-${currentDay}`;
     const existingIds = new Set([...this.world.getTriggeredEvents().map((e) => e.id), ...this.world.getPendingEvents().map((e) => e.id)]);
     const recentTitles = this.world.getTriggeredEvents().slice(-6).map((e) => e.title);

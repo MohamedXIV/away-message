@@ -4,7 +4,7 @@ export const AI_PROVIDERS: AIProviderDefinition[] = [
   {
     id: 'gemini',
     label: 'Google Gemini',
-    defaultModel: 'gemini-3.1-flash-lite',
+    defaultModel: 'gemini-1.5-flash',
     envKeyName: 'VITE_GEMINI_API_KEY',
     envModelName: 'VITE_GEMINI_MODEL',
   },
@@ -60,6 +60,16 @@ export function resolveApiKey(
 
 export function hasConfiguredKey(providerId: AIProviderId, settings: AISettings): boolean {
   return resolveApiKey(providerId, settings).source !== 'none';
+}
+
+export function isPlausibleKey(providerId: AIProviderId, key: string): boolean {
+  const trimmed = key.trim();
+  if (!trimmed) return false;
+  if (providerId === 'gemini') return trimmed.startsWith('AIza') && trimmed.length > 20;
+  if (providerId === 'groq') return trimmed.startsWith('gsk_') && trimmed.length > 20;
+  if (providerId === 'openrouter') return trimmed.startsWith('sk-') && trimmed.length > 20;
+  if (providerId === 'fal') return trimmed.length > 10;
+  return trimmed.length > 10;
 }
 
 export interface ProviderCompletionInput {

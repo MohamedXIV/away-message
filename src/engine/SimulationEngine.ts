@@ -14,6 +14,8 @@ import { SocialEngine } from './SocialEngine';
 import { TelemetryEngine } from './TelemetryEngine';
 import { WorldEventsEngine } from './WorldEventsEngine';
 import { OsEngine } from './OsEngine';
+import { PulseEngine } from './PulseEngine';
+import { MyPlaceEngine } from './MyPlaceEngine';
 
 export class SimulationEngine {
   public readonly clock!: GameClock;
@@ -21,6 +23,8 @@ export class SimulationEngine {
   public readonly economy!: EconomyEngine;
   public readonly hardware!: HardwareEngine;
   public readonly os!: OsEngine;
+  public readonly pulse!: PulseEngine;
+  public readonly myplace!: MyPlaceEngine;
   public readonly vfs!: FileSystemEngine;
   public readonly downloads!: DownloadManager;
   public readonly software!: SoftwareRegistry;
@@ -32,6 +36,9 @@ export class SimulationEngine {
   private subscribers: Set<(state: Readonly<SimulationState>) => void> = new Set();
   private _procGenPending = false;
   private _procGenLastDay = 0;
+  private _cachedState: Readonly<SimulationState> | null = null;
+  private _cachedStateVersion = -1;
+  private _stateVersion = 0;
 
   constructor(initialState?: Partial<SimulationState>) {
     this.events = new EventBus();
@@ -49,6 +56,12 @@ export class SimulationEngine {
     // OsEngine is core — sync with hardware osVersion
     const osInitial = (initialState as any)?.os ?? { currentOsId: initialState?.hardware?.osVersion };
     this.os = new OsEngine(this.events, { currentOsId: osInitial.currentOsId ?? initialState?.hardware?.osVersion, ...(osInitial as object) });
+    // PulseEngine — mirrors OsEngine for the IM client
+    const pulseInitial = (initialState as any)?.pulse ?? { currentPulseId: 'pulse_5.2' };
+    this.pulse = new PulseEngine(this.events, pulseInitial);
+    // MyPlaceEngine — heavy, versioned like Orion OS
+    const myplaceInitial = (initialState as any)?.myplace;
+    this.myplace = new MyPlaceEngine(this.events, myplaceInitial);
     // Keep hardware.osVersion in sync with OsEngine (source of truth)
     (this.hardware as any).state.osVersion = this.os.getCurrentOsId();
     // Restore any procedural OS releases that were world-generated (for old saves)
@@ -96,13 +109,35 @@ export class SimulationEngine {
     this.events.on('economy:cash_changed', ({ newCash }) => {
       this.telemetry.updateCashBounds(newCash);
     });
+
+    // Keep PulseEngine in sync when Pulse is installed via SoftwareRegistry
+    this.events.on('software:installed' as any, ({ software }: any) => {
+      if (software?.appId === 'app.pulse' || software?.appId === 'app.pulse_messenger' || String(software?.appId).includes('pulse')) {
+        const version = String(software.version || '');
+        // Try to find a PulseRelease matching this version
+        try {
+          const { getAllPulseReleases } = require('./PulseCatalog');
+          const all = getAllPulseReleases() as Array<{ id: string; version: string }>;
+          const match = all.find((r) => r.version === version) || all.find((r) => r.id.includes(version.replace('.', '_')));
+          if (match) {
+            (this.pulse as any).currentPulseId = match.id;
+          }
+        } catch {}
+      }
+    });
   }
 
   public getState(): Readonly<SimulationState> {
+    // Cheap cache: if version hasn't changed, return same object reference to keep getSnapshot stable
+    if (this._cachedState && this._cachedStateVersion === this._stateVersion) {
+      return this._cachedState;
+    }
     const vfsState = this.vfs.getState();
     const downloadState = this.downloads.getState();
     const worldState = this.world.getState();
     const osState = this.os.getState();
+    const pulseState = this.pulse.getState();
+    const myplaceState = this.myplace.getState();
     // Sync hardware osVersion to OsEngine truth
     const hwState = this.hardware.getState();
     if ((hwState as any).osVersion !== osState.currentOsId) {
@@ -120,12 +155,14 @@ export class SimulationEngine {
       buddyKnowledge: { ...worldState.buddyKnowledge },
     };
 
-    return {
+    const newState: Readonly<SimulationState> = {
       version: 1,
       time: this.clock.getTime(),
       player: this.economy.getState(),
       hardware: this.hardware.getState(),
       os: osState,
+      pulse: pulseState,
+      myplace: myplaceState,
       vfs: vfsState,
       downloads: downloadState.tasks,
       installedSoftware: this.software.getInstalledSoftware(),
@@ -138,6 +175,9 @@ export class SimulationEngine {
       },
       activeView: this.activeView,
     };
+    this._cachedState = newState;
+    this._cachedStateVersion = this._stateVersion;
+    return newState;
   }
 
   public advanceRealTime(deltaRealSeconds: number): void {
@@ -152,6 +192,23 @@ export class SimulationEngine {
       this.social.updatePresence(currentMinutes);
       this.world.checkAndTriggerEvents(currentMinutes, tickResult.time.day);
       try { this.os.syncFromWorldState({ triggeredEvents: this.world.getTriggeredEvents(), pendingEvents: this.world.getPendingEvents() } as any, tickResult.time.day); } catch {}
+      try { this.myplace.syncFromWorldState({ triggeredEvents: this.world.getTriggeredEvents() } as any, tickResult.time.day, currentMinutes); } catch {}
+      // MyPlace NPCs may change their profile and then message you about it (governed)
+      if (tickResult.dayChanged) {
+        void this.myplace.maybeUpdateRandomNpcProfile(tickResult.time.day, currentMinutes).then((res) => {
+          if (res) {
+            const link = `http://myplace.local/${res.username}`;
+            const texts: Record<string, string> = {
+              maya_x: `hey — i changed my MyPlace a bit, new bio and song. what do you think? ${link}`,
+              tacocart_ryan: `yo changed my MyPlace — added some new stuff. check it? ${link} lmk`,
+              nightowl87: `updated my MyPlace — new headline. does it read okay? ${link}`,
+            };
+            const text = texts[res.username] ?? `updated my MyPlace — ${res.profile.headline} ${link}`;
+            try { this.social.sendMessage(res.username, res.username, 'player', text, currentMinutes, false, ['myplace_update']); } catch {}
+            try { this.events.emit('social:message_received' as any, { message: { senderId: res.username, text } }); } catch {}
+          }
+        }).catch(() => {});
+      }
 
       this.events.emit('time:tick', {
         time: tickResult.time,
@@ -181,6 +238,21 @@ export class SimulationEngine {
     this.social.updatePresence(currentMinutes);
     this.world.checkAndTriggerEvents(currentMinutes, jumpResult.newTime.day);
     try { this.os.syncFromWorldState({ triggeredEvents: this.world.getTriggeredEvents(), pendingEvents: this.world.getPendingEvents() } as any, jumpResult.newTime.day); } catch {}
+    try { this.myplace.syncFromWorldState({ triggeredEvents: this.world.getTriggeredEvents() } as any, jumpResult.newTime.day, currentMinutes); } catch {}
+    if (jumpResult.dayChanged) {
+      void this.myplace.maybeUpdateRandomNpcProfile(jumpResult.newTime.day, currentMinutes).then((res) => {
+        if (res) {
+          const link = `http://myplace.local/${res.username}`;
+          const texts: Record<string, string> = {
+            maya_x: `hey — i changed my MyPlace a bit, new bio and song. what do you think? ${link}`,
+            tacocart_ryan: `yo changed my MyPlace — added some new stuff. check it? ${link} lmk`,
+            nightowl87: `updated my MyPlace — new headline. does it read okay? ${link}`,
+          };
+          const text = texts[res.username] ?? `updated my MyPlace — ${res.profile.headline} ${link}`;
+          try { this.social.sendMessage(res.username, res.username, 'player', text, currentMinutes, false, ['myplace_update']); } catch {}
+        }
+      }).catch(() => {});
+    }
 
     this.events.emit('time:jump', {
       jumpMinutes: minutes,
@@ -648,6 +720,9 @@ export class SimulationEngine {
   }
 
   private notifySubscribers(): void {
+    this._stateVersion++;
+    // Invalidate cache so next getState() rebuilds
+    this._cachedState = null;
     const currentState = this.getState();
     for (const listener of this.subscribers) {
       try {
@@ -714,6 +789,8 @@ export class SimulationEngine {
     ];
     const osState: import('../persistence/schema').NarrativeStateRecord[] = [
       { key: 'os_state', value: state.os, updatedAt: now },
+      { key: 'os_pulse_state', value: state.pulse, updatedAt: now },
+      { key: 'os_myplace_state', value: state.myplace, updatedAt: now },
     ];
     return {
       saveSlot,
@@ -804,10 +881,23 @@ export class SimulationEngine {
       const osId = this.os.getCurrentOsId();
       (this.hardware as any).state.osVersion = osId;
     }
-    // Re-sync procedural OS from world after load (for saves that had world os_release events)
+    // PulseEngine
+    const pulseSrc = (snapshot as any).pulse ?? { currentPulseId: 'pulse_5.2' };
+    if (pulseSrc) {
+      try { this.pulse.loadState(pulseSrc); } catch {}
+    }
+    // MyPlaceEngine
+    const myplaceSrc = (snapshot as any).myplace;
+    if (myplaceSrc) {
+      try { this.myplace.loadState(myplaceSrc); } catch {}
+    }
+    // Re-sync procedural OS/MyPlace from world after load (for saves that had world events)
     try {
       const worldSrc = (snapshot as any).world ?? (snapshot as any).narrative;
-      if (worldSrc) this.os.syncFromWorldState({ triggeredEvents: worldSrc.triggeredEvents ?? [], pendingEvents: [] } as any, this.clock.getTime().day);
+      if (worldSrc) {
+        this.os.syncFromWorldState({ triggeredEvents: worldSrc.triggeredEvents ?? [], pendingEvents: [] } as any, this.clock.getTime().day);
+        this.myplace.syncFromWorldState({ triggeredEvents: worldSrc.triggeredEvents ?? [] } as any, this.clock.getTime().day, this.clock.getTotalMinutes());
+      }
     } catch {}
     this.vfs.restoreState(snapshot.vfs);
     this.downloads.restoreState({

@@ -27,6 +27,7 @@ export interface WindowState {
   maxSize?: WindowSize;
   isResizable: boolean;
   isModal?: boolean;
+  isFrameless?: boolean;
   customState?: Record<string, any>;
   previousPosition?: WindowPosition;
   previousSize?: WindowSize;
@@ -43,6 +44,7 @@ export interface OpenWindowConfig {
   maxSize?: WindowSize;
   isResizable?: boolean;
   isModal?: boolean;
+  isFrameless?: boolean;
   customState?: Record<string, any>;
 }
 
@@ -259,6 +261,11 @@ export const useWindowStore = create<WindowStore>()(
         y: Math.max(30, 40 + cascadeStep),
       };
 
+      // Pulse keeps standard WindowFrame but starts tall-narrow like the screenshot (360×560)
+      const framelessDefault = false;
+      const isPulse = config.appId === 'pulse' || config.appId === 'app.pulse' || config.appId === 'pulse_messenger';
+      const pulseDefaultSize = { width: 360, height: 560 } as WindowSize;
+      const pulseMinSize = { width: 340, height: 460 } as WindowSize;
       const newWindow: WindowState = {
         id,
         appId: config.appId,
@@ -269,11 +276,12 @@ export const useWindowStore = create<WindowStore>()(
         isMaximized: false,
         zIndex: newZIndex,
         position: initialPos,
-        size: config.defaultSize ?? DEFAULT_SIZE,
-        minSize: config.minSize ?? DEFAULT_MIN_SIZE,
+        size: config.defaultSize ?? (isPulse ? pulseDefaultSize : framelessDefault ? { width: 640, height: 480 } : DEFAULT_SIZE),
+        minSize: config.minSize ?? (isPulse ? pulseMinSize : framelessDefault ? { width: 360, height: 380 } : DEFAULT_MIN_SIZE),
         maxSize: config.maxSize,
         isResizable: config.isResizable ?? true,
         isModal: config.isModal ?? false,
+        isFrameless: config.isFrameless ?? framelessDefault,
         customState: config.customState ?? {},
       };
 

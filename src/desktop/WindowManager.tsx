@@ -143,6 +143,69 @@ export const WindowManager: React.FC<WindowManagerProps> = ({ customAppRegistry 
         const AppComponent = registry[win.appId] || DefaultAppPlaceholder;
         const isActive = activeWindowId === win.id;
 
+        // Frameless windows (Pulse) — draggable via header, with custom chrome
+        if (win.isFrameless) {
+          return (
+            <div
+              key={win.id}
+              className="pointer-events-auto absolute"
+              style={{
+                left: win.position.x,
+                top: win.position.y,
+                width: win.size.width,
+                height: win.size.height,
+                zIndex: win.zIndex,
+              }}
+              onMouseDown={() => focusWindow(win.id)}
+            >
+              <div className={`w-full h-full overflow-hidden shadow-2xl border flex flex-col ${isActive ? 'border-[#38516e]' : 'border-gray-500'} `}>
+                {/* Custom frameless title bar — drag handle + window controls */}
+                <div
+                  className={`h-6 flex items-center justify-between px-2 text-white text-xs font-bold select-none ${isActive ? 'bg-[#27456d]' : 'bg-gray-600'}`}
+                  onMouseDown={(e) => {
+                    const startX = e.clientX;
+                    const startY = e.clientY;
+                    const startPos = { ...win.position };
+                    const onMove = (ev: MouseEvent) => {
+                      const dx = ev.clientX - startX;
+                      const dy = ev.clientY - startY;
+                      const { setWindowPosition } = useWindowStore.getState();
+                      setWindowPosition(win.id, { x: startPos.x + dx, y: startPos.y + dy });
+                    };
+                    const onUp = () => {
+                      window.removeEventListener('mousemove', onMove);
+                      window.removeEventListener('mouseup', onUp);
+                    };
+                    window.addEventListener('mousemove', onMove);
+                    window.addEventListener('mouseup', onUp);
+                  }}
+                >
+                  <span className="flex items-center gap-1.5 truncate"><span>💬</span> {win.title}</span>
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={(e) => { e.stopPropagation(); const { minimizeWindow } = useWindowStore.getState(); minimizeWindow(win.id); }}
+                      className="w-5 h-4 bg-[#d7d7d7] hover:bg-[#e8e8e8] text-black text-[10px] leading-none border border-gray-400"
+                      title="Minimize"
+                    >
+                      _
+                    </button>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); closeWindow(win.id); }}
+                      className="w-5 h-4 bg-[#c0392b] hover:bg-[#e74c3c] text-white text-[10px] leading-none border border-gray-400"
+                      title="Close"
+                    >
+                      ×
+                    </button>
+                  </div>
+                </div>
+                <div className="flex-1 min-h-0 overflow-hidden bg-white">
+                  <AppComponent window={win} />
+                </div>
+              </div>
+            </div>
+          );
+        }
+
         return (
           <div key={win.id} className="pointer-events-auto">
             {/* Modal Backdrop if window is modal */}

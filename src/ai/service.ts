@@ -5,6 +5,7 @@ import {
   getProviderModel,
   resolveApiKey,
   completeJson,
+  isPlausibleKey,
 } from './providers';
 import { getSiteArchetype } from './siteArchetypes';
 import type {
@@ -387,10 +388,10 @@ export class AIGenerationService {
     }
 
     const { key, source } = resolveApiKey(providerId, settings);
-    if (!key) {
+    if (!key || !isPlausibleKey(providerId, key)) {
       return {
         data: makeFallbackSite(request),
-        meta: { providerId, model, keySource: 'none', latencyMs: Math.round(performance.now() - startedAt), fromCache: false, fallback: true, error: 'No API key configured.' },
+        meta: { providerId, model, keySource: 'none', latencyMs: Math.round(performance.now() - startedAt), fromCache: false, fallback: true, error: !key ? 'No API key configured.' : 'API key format invalid — using offline fallback.' },
       };
     }
 
@@ -431,10 +432,10 @@ export class AIGenerationService {
     }
 
     const { key, source } = resolveApiKey(providerId, settings);
-    if (!key) {
+    if (!key || !isPlausibleKey(providerId, key)) {
       return {
         data: makeFallbackChat(request),
-        meta: { providerId, model, keySource: 'none', latencyMs: Math.round(performance.now() - startedAt), fromCache: false, fallback: true, error: 'No API key configured.' },
+        meta: { providerId, model, keySource: 'none', latencyMs: Math.round(performance.now() - startedAt), fromCache: false, fallback: true, error: !key ? 'No API key configured.' : 'API key format invalid — using offline fallback.' },
       };
     }
 

@@ -93,15 +93,37 @@ export const DownloadHubSite: React.FC<SiteRouteProps> = () => {
   const [notice, setNotice] = useState<string | null>(null);
 
   const dynamicItems = getDownloadHubDynamicItems(world, time.day);
-  const mergedCatalog: DownloadItem[] = [...dynamicItems.map((d) => ({
-    id: d.id,
-    name: `${d.isNew ? '★ ' : ''}${d.name}`,
-    category: d.category as DownloadItem['category'],
-    version: d.version,
-    fileSizeBytes: d.fileSizeBytes,
-    downloadUrl: d.downloadUrl,
-    description: d.description,
-  })), ...DOWNLOAD_CATALOG];
+  // Pulse releases as heavy versioned downloads (like OS)
+  const pulseDynamic: DownloadItem[] = (() => {
+    try {
+      const enginePulse = (useSimulationStore.getState().engine as any).pulse as { getAvailableReleases: (day:number, hw:any, os:any)=>Array<{id:string; displayName:string; version:string; installSizeMB:number; blurb?:string; changelog:string[]}> };
+      const hw = useSimulationStore.getState().state.hardware;
+      const osVer = useSimulationStore.getState().state.os.currentOsId;
+      const avail = enginePulse ? enginePulse.getAvailableReleases(time.day, hw as any, osVer as any) : [];
+      return avail.map((r: any) => ({
+        id: r.id,
+        name: r.displayName,
+        category: 'Internet' as const,
+        version: r.version,
+        fileSizeBytes: r.installSizeMB * 1024 * 1024,
+        downloadUrl: `http://downloadhub.local/files/${r.id}.exe`,
+        description: `${r.blurb ?? ''} — ${r.changelog.slice(0, 2).join(' • ')}`,
+      }));
+    } catch { return []; }
+  })();
+  const mergedCatalog: DownloadItem[] = [
+    ...pulseDynamic,
+    ...dynamicItems.map((d) => ({
+      id: d.id,
+      name: `${d.isNew ? '★ ' : ''}${d.name}`,
+      category: d.category as DownloadItem['category'],
+      version: d.version,
+      fileSizeBytes: d.fileSizeBytes,
+      downloadUrl: d.downloadUrl,
+      description: d.description,
+    })),
+    ...DOWNLOAD_CATALOG,
+  ];
 
   const filtered = selectedCat === 'ALL'
     ? mergedCatalog
