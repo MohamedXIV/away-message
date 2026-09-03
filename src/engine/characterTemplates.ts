@@ -772,6 +772,133 @@ export function pickTop8NewsLine(seed: string, ownerName: string, rank: number):
   return pickFromPool(TOP8_NEWS_LINES, `${seed}:top8news`).replaceAll('{name}', name).replaceAll('{rank}', String(r));
 }
 
+// ==========================================
+// P5.6 — BOARD & MAIL LINES (NPC-authored threads, cross-talk replies, mail chains)
+// {name} = another buddy's display name, {event}/{location} filled by caller.
+// ==========================================
+
+/** Weekly NPC-authored thread starters per archetype (title + body). */
+export const BOARD_THREAD_TOPICS: Record<CharacterArchetype, Array<{ title: string; body: string }>> = {
+  coworker: [
+    { title: 'best cheap eats near 4th & industrial?', body: 'settling a debate. price, portion, hours. go.' },
+    { title: 'shift swap board — post yours here', body: 'got tuesday, need friday. or the other way. whatever, post it.' },
+    { title: 'psa: the vending machine by the depot eats quarters', body: 'lost 75 cents. consider this a public service announcement.' },
+  ],
+  nightowl: [
+    { title: '3am log: the hum changed pitch again', body: 'down 2hz after the substation work. recordings attached to my usual spot. discuss.' },
+    { title: 'unindexed box — need a second pair of eyes', body: 'found a box with no tag and bad handwriting. if you like mysteries, this one is yours.' },
+    { title: 'quietest hour poll', body: 'when does this town actually sleep? my money is on 4:40am. data welcome.' },
+  ],
+  student: [
+    { title: 'anyone selling last semester notes??', body: 'will pay in snacks and eternal gratitude lol' },
+    { title: 'campus laundry machine #3 is HAUNTED (jk... unless?)', body: 'it ate my quarters AND my favorite shirt. thread for fellow victims' },
+    { title: 'study group forming?? night edition', body: 'library closes too early. motel parking lot? bring chips' },
+  ],
+  trader: [
+    { title: 'daily board: what moved overnight', body: 'post your fills. no hype, numbers only.' },
+    { title: 'backup dial-up providers ranked', body: 'primary went down twice this week. ranking every fallback i tried.' },
+    { title: 'iso: working parallel cable', body: 'will trade a spare hub. no lowballing, i know what i have.' },
+  ],
+  artist: [
+    { title: 'rain recordings vol. 4 — feedback wanted ~', body: 'new batch from the canal nights. tell me which take breathes best.' },
+    { title: 'looking for a wall (legal ones only)', body: 'have sketches, have permission slip, need a big flat legal wall.' },
+    { title: 'tape swap anyone?', body: 'made a 60-min mix of slow rainy stuff. will dub a copy for anyone who asks ~' },
+  ],
+  regular: [
+    { title: 'lost: one grey scarf near the motel office', body: 'if found please leave at the front desk. reward: gratitude.' },
+    { title: 'reminder: quiet hours start at 10pm', body: 'posting this with love. the walls are thin and so is my patience.' },
+    { title: 'community board: odd jobs wanted/offered', body: 'post jobs or availability. keep it neighborly.' },
+  ],
+};
+
+/** Event-driven thread starters ({event} = short world-event title). */
+export const BOARD_EVENT_THREADS: Array<{ title: string; body: string }> = [
+  { title: 'did anyone else see: {event}??', body: 'just saw the news. thread for reactions, details, sightings.' },
+  { title: '{event} — megathread', body: 'keeping it all in one place. post updates as they come.' },
+];
+
+/** Cross-talk replies — {name} is another NPC the replier addresses by name. */
+export const BOARD_REPLIES: string[] = [
+  'seconding this. {name}, you called it last week lol',
+  '{name} was literally just saying this. anyway +1',
+  'hard agree. {name}, thoughts? you usually have data',
+  'lol {name} owes me a soda, i predicted exactly this',
+  'quoting {name} from the lounge: "told you so". so. told you so.',
+  'interesting. {name} disagrees but i am on your side on this one',
+];
+
+/** Plain replies (no cross-talk) for variety. */
+export const BOARD_PLAIN_REPLIES: string[] = [
+  'lol this is exactly the content i come here for',
+  'saving this thread. good stuff.',
+  'can confirm, saw the same thing last night',
+  '+1. nothing to add, just +1',
+  'this board never disappoints',
+];
+
+/** Post-meeting thank-you mail ({location} filled by caller). */
+export const MAIL_THANKS_LINES: string[] = [
+  'hey — last night at {location} was really good. thanks for showing up. lets do it again sometime :)',
+  'still thinking about {location}. glad we did that. you are good company, you know?',
+];
+/** Apology mail after the NPC flaked ({location} filled by caller). */
+export const MAIL_APOLOGY_LINES: string[] = [
+  'ok this needed more than a chat message: i am sorry about {location}. no excuses, i messed up. let me make it up to you — dinner is on me.',
+  'writing properly because you deserve it: sorry i missed {location}. i feel awful. tell me how to fix it?',
+];
+/** Farewell mail when a buddy goes distant/gone (longer than the Pulse line). */
+export const MAIL_FAREWELL_LINES: string[] = [
+  'hey. i am writing this instead of saying it because i would chicken out. i need to go quiet for a while. it is not all you — mostly it is me and the noise in my head. keep the light on? maybe i will be back.',
+  'so... i am gone for a bit. dont write back, i mean it kindly — i just need the static to stop. take care of yourself. you were a good friend.',
+];
+/** Welcome-back mail on return. */
+export const MAIL_WELCOME_LINES: string[] = [
+  'hey. i am back. saw your messages (all of them). thank you for not giving up on me. coffee soon? please say yes.',
+  'ok. the quiet helped and i missed you. i am back online and i would like to start over, if that is okay.',
+];
+
+function fillBoard(text: string, replacements: Record<string, string>): string {
+  let out = text;
+  for (const [key, value] of Object.entries(replacements)) out = out.replaceAll(`{${key}}`, value);
+  return out;
+}
+
+export function pickBoardTopic(archetype: CharacterArchetype, week: number, slot: number): { title: string; body: string } {
+  const arch = CHARACTER_ARCHETYPES[archetype] ? archetype : 'regular';
+  const pool = BOARD_THREAD_TOPICS[arch];
+  const entry = pool[(week * 2 + slot) % pool.length]!;
+  return { title: entry.title, body: entry.body };
+}
+
+export function pickBoardEventThread(seed: string, eventTitle: string): { title: string; body: string } {
+  const entry = BOARD_EVENT_THREADS[hashSeed(seed) % BOARD_EVENT_THREADS.length]!;
+  const clean = eventTitle.trim().slice(0, 60) || 'the latest news';
+  return { title: fillBoard(entry.title, { event: clean }), body: fillBoard(entry.body, { event: clean }) };
+}
+
+export function pickBoardReply(seed: string, otherName?: string): string {
+  if (otherName && otherName.trim()) {
+    return pickFromPool(BOARD_REPLIES, `${seed}:xreply`).replaceAll('{name}', otherName.trim().slice(0, 40));
+  }
+  return pickFromPool(BOARD_PLAIN_REPLIES, `${seed}:preply`);
+}
+
+export function pickMailThanks(seed: string, location: string): string {
+  return pickFromPool(MAIL_THANKS_LINES, `${seed}:mailthanks`).replaceAll('{location}', location);
+}
+
+export function pickMailApology(seed: string, location: string): string {
+  return pickFromPool(MAIL_APOLOGY_LINES, `${seed}:mailapology`).replaceAll('{location}', location);
+}
+
+export function pickMailFarewell(seed: string): string {
+  return pickFromPool(MAIL_FAREWELL_LINES, `${seed}:mailfarewell`);
+}
+
+export function pickMailWelcome(seed: string): string {
+  return pickFromPool(MAIL_WELCOME_LINES, `${seed}:mailwelcome`);
+}
+
 export interface InitiativeDecision {
   stage: RelationshipStage;
   presenceStatus: BuddyPresenceStatus;

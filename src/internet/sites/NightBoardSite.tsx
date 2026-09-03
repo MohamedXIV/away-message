@@ -3,6 +3,7 @@ import { SiteRouteProps } from '../types';
 import { soundManager } from '../../audio/SoundManager';
 import { useSimulationStore } from '../../store/useSimulationStore';
 import { getNightBoardDynamicThreads } from '../worldSiteHelpers';
+import { buildWeeklyNpcThreads, npcThreadWeek, type NpcThread } from '../../engine/BoardDirector';
 
 interface PostRecord {
   id: number;
@@ -104,10 +105,43 @@ const INITIAL_THREADS: ThreadRecord[] = [
 export const NightBoardSite: React.FC<SiteRouteProps> = (props) => {
   const world = useSimulationStore((s) => s.state.world);
   const time = useSimulationStore((s) => s.state.time);
+  const engine = useSimulationStore((s) => s.engine);
   const dynamicThreads = getNightBoardDynamicThreads(world, time.day);
-  // Build merged list: static + dynamic procedural
+  // P5.6 NPC-authored threads: deterministic per week (current + previous stay visible)
+  const npcThreads: NpcThread[] = (() => {
+    try {
+      const buddies = engine.social.getBuddies().map((b) => ({
+        id: b.id,
+        displayName: b.displayName,
+        handle: b.handle,
+        archetype: b.archetype,
+        stage: engine.social.getRelationshipStage(b.id),
+        status: b.status,
+      }));
+      const aff = (a: string, b: string): number => {
+        try { return engine.social.getAffinity(a, b); } catch { return 0; }
+      };
+      const titles = world.triggeredEvents.map((e) => e.title);
+      const week = npcThreadWeek(time.day);
+      const weeks = [week - 1, week].filter((w) => w >= 0);
+      return weeks.flatMap((w) => buildWeeklyNpcThreads(w * 7 + 1, buddies, aff, titles));
+    } catch { return []; }
+  })();
+  const toThreadRecord = (n: NpcThread): ThreadRecord => ({
+    id: n.numericId,
+    title: n.title,
+    category: '/lounge/ - Resident voices',
+    replyCount: n.replies.length,
+    lastReplyDate: `Day ${n.day}`,
+    posts: [
+      { id: 1, author: n.author, tripcode: `!${n.authorHandle.toLowerCase().slice(0, 12)}`, date: `Day ${n.day}`, content: n.body, isOp: true },
+      ...n.replies.map((r, i) => ({ id: i + 2, author: r.author, tripcode: `!${r.authorHandle.toLowerCase().slice(0, 12)}`, date: `Day ${n.day}`, content: r.text })),
+    ],
+  });
+  // Build merged list: static + dynamic procedural + NPC voices
   const buildMerged = (): ThreadRecord[] => [
     ...INITIAL_THREADS,
+    ...npcThreads.map(toThreadRecord),
     ...dynamicThreads.map((d) => ({
       id: d.id,
       title: d.title,
@@ -144,6 +178,10 @@ export const NightBoardSite: React.FC<SiteRouteProps> = (props) => {
             isOp: true,
           }],
         } as ThreadRecord));
+      // NPC voice threads merge the same way (deterministic ids → no dupes, user replies kept)
+      for (const n of npcThreads.map(toThreadRecord)) {
+        if (!existingIds.has(n.id) && !toAdd.some((t) => t.id === n.id)) toAdd.push(n);
+      }
       return toAdd.length ? [...prev, ...toAdd] : prev;
     });
   }, [dynamicThreads, world.triggeredEvents, time.day]);

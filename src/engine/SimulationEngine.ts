@@ -402,6 +402,7 @@ export class SimulationEngine {
         if (active && active !== buddyId && active !== '') return; // governor: wait your turn
         this.world.setFlag(strainedKey, true);
         this.world.setFlag(sharpKey, 'confronted');
+        this.world.setFlag(`${sharpKey}_day`, day);
         if (!active || active === '') this.world.setFlag('sharp_active', buddyId);
         const text = pickConfrontLine(resolveArchetype(buddyId, buddy.archetype), `${buddyId}:${day}:sharp`);
         this.social.sendMessage(buddyId, buddyId, 'player', text, currentMinutes, false, ['sharp', 'confrontation']);
@@ -415,6 +416,7 @@ export class SimulationEngine {
         if (active && active !== buddyId && active !== '') return;
         this.social.setBuddyStatus(buddyId, 'distant');
         this.world.setFlag(sharpKey, 'distant');
+        this.world.setFlag(`${sharpKey}_day`, day);
         this.world.setFlag(`distant_${buddyId}_until`, day + 7);
         this.world.setFlag('sharp_active', buddyId);
         const text = pickFarewellLine(resolveArchetype(buddyId, buddy.archetype), `${buddyId}:${day}:sharp`);
@@ -426,6 +428,7 @@ export class SimulationEngine {
         // Genuinely gone: stays in roster as epitaph (memories kept), presence forced dark
         this.social.setBuddyStatus(buddyId, 'gone');
         this.world.setFlag(sharpKey, 'gone');
+        this.world.setFlag(`${sharpKey}_day`, day);
         if (this.world.getFlag('sharp_active') === buddyId) this.world.setFlag('sharp_active', '');
         const text = pickFarewellLine(resolveArchetype(buddyId, buddy.archetype), `${buddyId}:${day}:sharp:gone`);
         this.social.sendMessage(buddyId, buddyId, 'player', text, currentMinutes, false, ['sharp', 'gone']);
@@ -460,6 +463,7 @@ export class SimulationEngine {
         const rels = this.social.getRelationships(buddy.id);
         if (rels) this.social.adjustRelationship(buddy.id, { annoyance: 25, trust: Math.max(5, rels.trust - 10) });
         this.world.setFlag(`sharp_${buddy.id}`, 'returned');
+        this.world.setFlag(`sharp_${buddy.id}_day`, newDay);
         this.world.setFlag(`strained_${buddy.id}`, false);
         if (this.world.getFlag('sharp_active') === buddy.id) this.world.setFlag('sharp_active', '');
         const text = pickReturnLine(resolveArchetype(buddy.id, buddy.archetype), `${buddy.id}:${newDay}:return`);

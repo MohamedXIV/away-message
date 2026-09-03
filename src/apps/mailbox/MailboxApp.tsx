@@ -1,5 +1,8 @@
 import React, { useState } from 'react';
 import { soundManager } from '../../audio/SoundManager';
+import { useSimulationStore } from '../../store/useSimulationStore';
+import { buildNpcMailForDay, gameDayToMailDate, type NpcMail } from '../../engine/BoardDirector';
+import { locationLabel } from '../../engine/AppointmentDirector';
 
 interface EmailMessage {
   id: string;
@@ -65,18 +68,78 @@ const INITIAL_EMAILS: EmailMessage[] = [
 
 export const MailboxApp: React.FC = () => {
   const [emails, setEmails] = useState<EmailMessage[]>(INITIAL_EMAILS);
+  // P5.6 NPC mail chains: deterministic per day from live sharp/appointment history
+  // (farewell/welcome on transition days, thanks/apology the morning after meetings).
+  const engine = useSimulationStore((s) => s.engine);
+  const today = useSimulationStore((s) => s.state.time.day);
+  const npcMails: NpcMail[] = (() => {
+    try {
+      const buddies = engine.social.getBuddies().map((b) => ({
+        id: b.id,
+        displayName: b.displayName,
+        handle: b.handle,
+        archetype: b.archetype,
+        stage: engine.social.getRelationshipStage(b.id),
+        status: b.status,
+      }));
+      const sharps = engine.social.getBuddies().map((b) => {
+        const state = engine.world.getFlag(`sharp_${b.id}`);
+        const stateDay = engine.world.getFlag(`sharp_${b.id}_day`);
+        return {
+          buddyId: b.id,
+          state: typeof state === 'string' ? state : '',
+          stateDay: typeof stateDay === 'number' ? stateDay : 0,
+        };
+      });
+      const meetings = engine.world.getAppointments().map((a) => ({
+        buddyId: a.characterId,
+        targetDay: a.targetDay,
+        status: a.status,
+        npcShowed: a.npcShowed,
+        playerShowed: a.playerShowed,
+        locationLabel: locationLabel(a.locationId),
+      }));
+      const collected: NpcMail[] = [];
+      for (let d = 1; d <= Math.max(1, today); d++) {
+        collected.push(...buildNpcMailForDay({ day: d, buddies, sharps, meetings }));
+      }
+      return collected.slice(-12);
+    } catch { return []; }
+  })();
+  const toEmail = (m: NpcMail): EmailMessage => ({
+    id: m.key,
+    sender: m.sender,
+    senderEmail: m.senderEmail,
+    subject: m.subject,
+    date: gameDayToMailDate(m.day),
+    body: m.body,
+    folder: 'inbox',
+    isRead: readNpcIds.has(m.key),
+  });
+  const allEmails = [...npcMails.map(toEmail).reverse(), ...emails];
   const [activeFolder, setActiveFolder] = useState<'inbox' | 'sent' | 'drafts' | 'trash'>('inbox');
   const [selectedEmailId, setSelectedEmailId] = useState<string>('em_1');
   const [isComposeOpen, setIsComposeOpen] = useState(false);
   const [composeTo, setComposeTo] = useState('');
   const [composeSubject, setComposeSubject] = useState('');
   const [composeBody, setComposeBody] = useState('');
+  // NPC mail is derived (deterministic per day), so read flags live separately
+  const [readNpcIds, setReadNpcIds] = useState<Set<string>>(new Set());
 
-  const currentFolderEmails = emails.filter((e) => e.folder === activeFolder);
-  const selectedEmail = emails.find((e) => e.id === selectedEmailId) || currentFolderEmails[0];
+  const currentFolderEmails = allEmails.filter((e) => e.folder === activeFolder);
+  const selectedEmail = allEmails.find((e) => e.id === selectedEmailId) || currentFolderEmails[0];
 
   const handleSelectEmail = (email: EmailMessage) => {
     setSelectedEmailId(email.id);
+    if (email.id.startsWith('npcmail_')) {
+      setReadNpcIds((prev) => {
+        if (prev.has(email.id)) return prev;
+        const next = new Set(prev);
+        next.add(email.id);
+        return next;
+      });
+      return;
+    }
     if (!email.isRead) {
       setEmails((prev) =>
         prev.map((e) => (e.id === email.id ? { ...e, isRead: true } : e))
@@ -114,7 +177,7 @@ export const MailboxApp: React.FC = () => {
     );
   };
 
-  const unreadInboxCount = emails.filter((e) => e.folder === 'inbox' && !e.isRead).length;
+  const unreadInboxCount = allEmails.filter((e) => e.folder === 'inbox' && !e.isRead).length;
 
   return (
     <div className="w-full h-full bg-[#ece9d8] text-black font-sans text-xs select-none flex flex-col border border-gray-400 overflow-hidden">
@@ -354,7 +417,7 @@ export const MailboxApp: React.FC = () => {
 
       {/* Footer Status Bar */}
       <div className="bg-[#dfdfdf] border-t border-gray-400 px-2 py-1 flex justify-between items-center text-[10px] text-gray-600">
-        <span>{emails.length} total messages ({unreadInboxCount} unread)</span>
+        <span>{allEmails.length} total messages ({unreadInboxCount} unread)</span>
         <span>Connected to POP3/SMTP mail.starlitemotel.local</span>
       </div>
     </div>
