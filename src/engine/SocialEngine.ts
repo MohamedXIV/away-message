@@ -24,6 +24,28 @@ export const STRAINED_ANNOYANCE = 60;
 export const DISTANT_ANNOYANCE = 85;
 export const GONE_ANNOYANCE = 95;
 
+// P4 buddy-to-buddy affinity bounds (room turns give +2, capped +6/pair/day)
+export const MAX_AFFINITY = 100;
+export const ROOM_BUMP_PER_TURN = 2;
+export const ROOM_BUMP_DAILY_CAP = 6;
+
+/** Canonical affinity key: ids sorted alphabetically so (a,b) === (b,a). */
+export function affinityKey(a: string, b: string): string {
+  const x = normalizeBuddyId(a);
+  const y = normalizeBuddyId(b);
+  return x < y ? `${x}__${y}` : `${y}__${x}`;
+}
+
+/** Hand-authored starting ties between the core 4 (everyone else starts at 0). */
+export const SEED_AFFINITIES: Record<string, number> = {
+  maya__ryan: 15,
+  henderson__maya: 10,
+  henderson__ryan: 10,
+  maya__nora: 5,
+  henderson__nora: 0,
+  nora__ryan: -5,
+};
+
 function hashText(value: string): number {
   let hash = 0;
   for (let index = 0; index < value.length; index += 1) hash = (hash * 31 + value.charCodeAt(index)) >>> 0;
@@ -50,6 +72,9 @@ export class SocialEngine {
   // P3 long-term memory: immortal facts + promise ledger per buddy
   private coreMemories: Map<string, CoreMemory[]> = new Map();
   private promises: Map<string, PromiseRecord[]> = new Map();
+  // P4 buddy-to-buddy affinities ("a__b" sorted keys) + room-bump daily caps
+  private affinities: Map<string, number> = new Map();
+  private affinityCaps: Map<string, number> = new Map();
   private eventBus: EventBus;
 
   constructor(eventBus: EventBus, initialState?: SocialEngineState) {
@@ -111,6 +136,15 @@ export class SocialEngine {
     this.conversations.delete(id);
     this.coreMemories.delete(id);
     this.promises.delete(id);
+    // P4: drop every affinity pair and cap entry involving this buddy
+    for (const key of Array.from(this.affinities.keys())) {
+      const parts = key.split('__');
+      if (parts.includes(id)) this.affinities.delete(key);
+    }
+    for (const key of Array.from(this.affinityCaps.keys())) {
+      const pairPart = key.slice(0, key.lastIndexOf('_'));
+      if (pairPart.split('__').includes(id)) this.affinityCaps.delete(key);
+    }
     this.eventBus.emit('social:buddy_removed', { buddyId: id });
     return true;
   }
@@ -131,6 +165,12 @@ export class SocialEngine {
     const proms: Record<string, PromiseRecord[]> = {};
     for (const [id, items] of this.promises.entries()) proms[id] = items.map(p => ({ ...p }));
 
+    const affs: Record<string, number> = {};
+    for (const [key, value] of this.affinities.entries()) affs[key] = value;
+
+    const caps: Record<string, number> = {};
+    for (const [key, value] of this.affinityCaps.entries()) caps[key] = value;
+
     // Persist only procedural buddy defs (core 4 are code-owned and re-seeded).
     const buddyDefs: Record<string, BuddyCharacter> = {};
     for (const [id, b] of this.buddies.entries()) {
@@ -144,7 +184,7 @@ export class SocialEngine {
       };
     }
 
-    return { relationships: rels, presence: pres, conversations: convs, buddies: buddyDefs, coreMemories: mems, promises: proms };
+    return { relationships: rels, presence: pres, conversations: convs, buddies: buddyDefs, coreMemories: mems, promises: proms, affinities: affs, affinityCaps: caps };
   }
 
   private static sanitizeMemoryText(text: string, max: number): string {
@@ -231,11 +271,35 @@ export class SocialEngine {
       }
     }
 
+    // P4 affinities restore (validated + clamped; corrupt values fall back to 0/seed)
+    this.affinities.clear();
+    if (state.affinities) {
+      for (const [key, value] of Object.entries(state.affinities)) {
+        if (typeof key !== 'string' || typeof value !== 'number' || !Number.isFinite(value)) continue;
+        const parts = key.split('__');
+        if (parts.length !== 2 || !parts[0] || !parts[1] || parts[0] === parts[1]) continue;
+        const canonical = affinityKey(parts[0], parts[1]);
+        if (canonical !== key) continue;
+        this.affinities.set(key, Math.max(-MAX_AFFINITY, Math.min(MAX_AFFINITY, Math.round(value))));
+      }
+    }
+    this.affinityCaps.clear();
+    if (state.affinityCaps) {
+      for (const [key, value] of Object.entries(state.affinityCaps)) {
+        if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) continue;
+        this.affinityCaps.set(key, Math.min(ROOM_BUMP_DAILY_CAP, Math.round(value)));
+      }
+    }
+
     // Backfill empty presence/conversations for any buddy missing them (old saves).
     for (const buddy of this.buddies.values()) {
       if (!this.relationships.has(buddy.id)) this.relationships.set(buddy.id, { ...buddy.initialRelationships });
       if (!this.presence.has(buddy.id)) this.presence.set(buddy.id, { status: 'offline', awayMessage: '' });
       if (!this.conversations.has(buddy.id)) this.conversations.set(buddy.id, []);
+    }
+    // P4 affinity seeds: existing saves win, seeds only fill gaps (old saves get the core-4 ties)
+    for (const [key, value] of Object.entries(SEED_AFFINITIES)) {
+      if (!this.affinities.has(key)) this.affinities.set(key, value);
     }
   }
 
@@ -245,6 +309,7 @@ export class SocialEngine {
       this.presence.set(buddy.id, { status: 'offline', awayMessage: '' });
       this.conversations.set(buddy.id, []);
     }
+    for (const [key, value] of Object.entries(SEED_AFFINITIES)) this.affinities.set(key, value);
   }
 
   private initializeCharacters(): void {
@@ -608,6 +673,82 @@ export class SocialEngine {
       ? open.map((p) => `"${p.text}"${p.dueDay !== undefined ? ` (due d${p.dueDay})` : ''}`).join(' | ')
       : 'No open promises.';
     return `LongTerm: ${memoryLine} | OpenPromises: ${promiseLine}`;
+  }
+
+  // ==========================================
+  // P4 — BUDDY-TO-BUDDY AFFINITIES (C2 matrix)
+  // ==========================================
+
+  /** Current affinity between two buddies (-100..100, 0 = neutral strangers). */
+  public getAffinity(rawA: string, rawB: string): number {
+    const a = normalizeBuddyId(rawA);
+    const b = normalizeBuddyId(rawB);
+    if (a === b) return 0;
+    return this.affinities.get(affinityKey(a, b)) ?? 0;
+  }
+
+  /**
+   * Shift an affinity pair by delta (clamped -100..100). Both buddies must exist
+   * and differ; self-pairs and unknown ids are ignored (returns current value).
+   */
+  public adjustAffinity(rawA: string, rawB: string, delta: number): number {
+    const a = normalizeBuddyId(rawA);
+    const b = normalizeBuddyId(rawB);
+    if (a === b || !this.buddies.has(a) || !this.buddies.has(b)) return this.getAffinity(a, b);
+    if (typeof delta !== 'number' || !Number.isFinite(delta) || delta === 0) return this.getAffinity(a, b);
+    const next = Math.max(-MAX_AFFINITY, Math.min(MAX_AFFINITY, Math.round(this.getAffinity(a, b) + delta)));
+    this.affinities.set(affinityKey(a, b), next);
+    return next;
+  }
+
+  /**
+   * Shared room turn: every pair among participants grows closer (+2),
+   * capped at +6 per pair per day (anti-farming). Returns bumped pair count.
+   */
+  public bumpRoomAffinity(rawParticipantIds: string[], day: number): number {
+    const ids = Array.from(new Set(rawParticipantIds.map(normalizeBuddyId))).filter((id) => this.buddies.has(id));
+    if (ids.length < 2) return 0;
+    const safeDay = Math.max(1, Math.floor(day) || 1);
+    let bumped = 0;
+    for (let i = 0; i < ids.length; i++) {
+      for (let j = i + 1; j < ids.length; j++) {
+        const key = affinityKey(ids[i]!, ids[j]!);
+        const capKey = `${key}_${safeDay}`;
+        const used = this.affinityCaps.get(capKey) ?? 0;
+        if (used >= ROOM_BUMP_DAILY_CAP) continue;
+        const add = Math.min(ROOM_BUMP_PER_TURN, ROOM_BUMP_DAILY_CAP - used);
+        this.adjustAffinity(ids[i]!, ids[j]!, add);
+        this.affinityCaps.set(capKey, used + add);
+        bumped++;
+      }
+    }
+    // Prune caps older than the window so the map stays tiny
+    for (const capKey of Array.from(this.affinityCaps.keys())) {
+      const dayPart = Number(capKey.slice(capKey.lastIndexOf('_') + 1));
+      if (Number.isFinite(dayPart) && dayPart < safeDay - 2) this.affinityCaps.delete(capKey);
+    }
+    return bumped;
+  }
+
+  /**
+   * Compact buddy-to-buddy context for prompt injection ("Others: Maya↔Ryan: warm (+15)").
+   * Only notable ties (|v| >= 5), max 6, strongest first. Empty string when none.
+   */
+  public buildAffinityContext(rawBuddyId: string): string {
+    const buddyId = normalizeBuddyId(rawBuddyId);
+    if (!this.buddies.has(buddyId)) return '';
+    const entries: Array<{ name: string; label: string; value: number }> = [];
+    for (const other of this.buddies.values()) {
+      if (other.id === buddyId) continue;
+      const value = this.getAffinity(buddyId, other.id);
+      if (Math.abs(value) < 5) continue;
+      const label = value >= 30 ? 'deep bond' : value >= 10 ? 'warm' : value <= -30 ? 'bitter' : 'tense';
+      entries.push({ name: other.displayName, label, value });
+    }
+    if (entries.length === 0) return '';
+    entries.sort((a, b) => Math.abs(b.value) - Math.abs(a.value));
+    const parts = entries.slice(0, 6).map((e) => `${e.name}: ${e.label} (${e.value >= 0 ? '+' : ''}${e.value})`);
+    return `Others: ${parts.join(' • ')}`;
   }
 
   public sendMessage(

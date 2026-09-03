@@ -348,6 +348,10 @@ export interface SocialEngineState {
   // P3 long-term memory: immortal facts + promises per buddy (persisted, capped)
   coreMemories?: Record<string, CoreMemory[]>;
   promises?: Record<string, PromiseRecord[]>;
+  // P4 buddy-to-buddy affinities: sorted "a__b" keys → -100..100 (persisted)
+  affinities?: Record<string, number>;
+  // P4 room-bump daily caps: "a__b_day" keys → used points (persisted, pruned)
+  affinityCaps?: Record<string, number>;
 }
 
 // ==========================================

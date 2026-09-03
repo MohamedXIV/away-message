@@ -21,7 +21,8 @@ import type { PulseActivityEntry, PulseActivityKind } from './types';
 import { getNpcStyle, getNpcMoodLabel, getNpcAvailabilityLabel, getNpcActivityLabel } from './data/npcStyles';
 import { extractFactsFromPlayerMessage, extractPromisesFromPlayerMessage, looksLikeCompletion, buildConversationSummary, buildMemoryContext, hashReply, isDuplicateReply } from './utils/conversationMemory';
 import { extractLocalLinks, pickRandomBuddyLink } from './utils/linkDetector';
-import { CHARACTER_ARCHETYPES, pickTemplateOfflineLine, shouldInitiateContact, pickInitiativeText, resolveArchetype, type InitiativeKind } from '../../engine/characterTemplates';
+import { CHARACTER_ARCHETYPES, pickTemplateOfflineLine } from '../../engine/characterTemplates';
+import { planInitiatives } from './utils/initiatives';
 import type { BuddyCharacter } from '../../engine/types';
 
 function getBuddyPersona(buddyId: string, buddy?: BuddyCharacter | null): string {
@@ -58,6 +59,18 @@ export function hashString(value: string): number {
   for (let index = 0; index < value.length; index += 1) hash = (hash * 31 + value.charCodeAt(index)) >>> 0;
   return hash;
 }
+
+// P4 — governed social actions honoured from free-chat AI replies.
+// Mirrors the GeneratedChatResponseSchema enum minus 'none' (no-op); anything else is ignored.
+const CHAT_SOCIAL_ACTIONS = new Set([
+  'empathy',
+  'remembered_detail',
+  'tease_playful',
+  'dismissive',
+  'vulnerable_share',
+  'work_camaraderie',
+  'intellectual_curiosity',
+]);
 
 export const OFFLINE_MESSAGE_POOLS: Record<string, string[]> = {
   maya: [
@@ -198,6 +211,8 @@ export const PulseMessengerApp: React.FC = () => {
   const triggeredDayScripts = useRef<Set<string>>(new Set());
   const previousPresence = useRef<Record<string, string>>({});
   const deliveredOfflineForSession = useRef(false);
+  // P4 — last game day the mid-session initiative pass ran (login pass sets it too)
+  const lastInitiativeDay = useRef<number>(0);
 
   const {
     typingState,
@@ -257,13 +272,22 @@ export const PulseMessengerApp: React.FC = () => {
     if (changes.length > 0) {
       setPulseState((previous) => {
         const nextAwayHistory = { ...previous.awayHistory };
-        changes.forEach((entry) => {
+        // P4 fix: dedupe by id (remounts/tick bursts used to stack identical away entries)
+        const seenIds = new Set<string>();
+        (previous.activityFeed || []).forEach((entry) => seenIds.add(entry.id));
+        Object.values(nextAwayHistory).forEach((entries) => entries.forEach((entry) => seenIds.add(entry.id)));
+        const freshChanges = changes.filter((entry) => {
+          if (seenIds.has(entry.id)) return false;
+          seenIds.add(entry.id);
+          return true;
+        });
+        freshChanges.forEach((entry) => {
           if (entry.kind === 'away') {
             const existing = nextAwayHistory[entry.buddyId] || [];
             nextAwayHistory[entry.buddyId] = [...existing, entry].slice(-20);
           }
         });
-        return { ...previous, activityFeed: [...previous.activityFeed, ...changes].slice(-80), awayHistory: nextAwayHistory };
+        return { ...previous, activityFeed: [...previous.activityFeed, ...freshChanges].slice(-80), awayHistory: nextAwayHistory };
       });
     }
   }, [engine, presenceMap, session, totalMinutes]);
@@ -337,45 +361,36 @@ export const PulseMessengerApp: React.FC = () => {
         offlineActivities.push({ id: `offline_${buddy.id}_${timestampMinute}`, buddyId: buddy.id, kind: 'message', text: `${buddy.displayName} left you an offline message.`, minute: timestampMinute, createdAt: Date.now() - (totalMinutes - timestampMinute) * 60000, isRead: false });
       });
     }
-    // P3 — NPC initiatives (rules pick the moment + template voice; AI only paraphrases in live chat).
-    // Fires once per session login, max once/day/buddy (persisted in initiatedToday).
+    // P3/P4 — NPC initiatives (rules pick the moment + template voice; AI only paraphrases in live chat).
+    // Login pass: every eligible buddy, max once/day/buddy (persisted in initiatedToday).
     const initiatedToday: Record<string, number> = { ...(pulseState.initiatedToday || {}) };
     const initiativeDay = Math.floor(totalMinutes / 1440) + 1;
     try {
-      const engineAny = engine as unknown as { world?: { getTriggeredEvents?: () => Array<{ title?: string; triggerDay?: number }> } };
-      const worldEvents = engineAny.world?.getTriggeredEvents?.() || [];
-      const freshEvents = worldEvents.filter((e) => typeof e.triggerDay === 'number' && (e.triggerDay === initiativeDay || e.triggerDay === initiativeDay - 1) && typeof e.title === 'string' && e.title.trim().length > 3);
-      for (const buddy of engine.social.getBuddies()) {
-        if (pulseState.blockedBuddyIds.includes(buddy.id)) continue;
-        if (initiatedToday[buddy.id] === initiativeDay) continue;
-        if (buddy.status === 'distant' || buddy.status === 'gone' || buddy.status === 'blocked') continue;
-        const stage = engine.social.getRelationshipStage(buddy.id);
-        const pres = engine.social.getPresence(buddy.id);
-        const mood = engine.social.getDailyMood(buddy.id, initiativeDay);
-        const roll = hashString(`${buddy.id}:${initiativeDay}:init`) % 100;
-        if (!shouldInitiateContact({ stage, presenceStatus: pres?.status ?? 'offline', mood, initiatedToday: false, roll })) continue;
-        // Kind pick: open promise → reminder, fresh world event → share, else check-in (close: rare cafe invite)
-        const open = engine.social.getOpenPromises(buddy.id);
-        const kindRoll = hashString(`${buddy.id}:${initiativeDay}:kind`) % 100;
-        let kind: InitiativeKind = 'checkin';
-        let eventTitle: string | undefined;
-        if (open.length > 0 && kindRoll < 40) {
-          kind = 'promise_reminder';
-        } else if (freshEvents.length > 0 && kindRoll < 75) {
-          kind = 'event_share';
-          eventTitle = freshEvents[hashString(`${buddy.id}:${initiativeDay}:evt`) % freshEvents.length]?.title;
-        }
-        if (kind === 'checkin' && stage === 'close' && (hashString(`${buddy.id}:${initiativeDay}:cafe`) % 100) < 10) kind = 'cafe_invite';
-        const text = pickInitiativeText(resolveArchetype(buddy.id, buddy.archetype), kind, `${buddy.id}:${initiativeDay}`, { eventTitle, promiseText: open[0]?.text });
-        engine.dispatchAction({ type: 'SOCIAL_RECEIVE_MESSAGE', buddyId: buddy.id, text, deliveredAway: false, tags: ['initiative', kind] });
-        initiatedToday[buddy.id] = initiativeDay;
-        offlineActivities.push({ id: `initiative_${buddy.id}_${initiativeDay}`, buddyId: buddy.id, kind: 'message', text: `${buddy.displayName} messaged you first.`, minute: totalMinutes, createdAt: Date.now(), isRead: false });
+      const { plans, initiatedToday: updated } = planInitiatives(engine, {
+        day: initiativeDay,
+        blockedIds: pulseState.blockedBuddyIds,
+        initiatedToday,
+        maxCount: Number.MAX_SAFE_INTEGER,
+        salt: 'login',
+      });
+      for (const plan of plans) {
+        engine.dispatchAction({ type: 'SOCIAL_RECEIVE_MESSAGE', buddyId: plan.buddyId, text: plan.text, deliveredAway: false, tags: ['initiative', plan.kind] });
+        offlineActivities.push({ id: `initiative_${plan.buddyId}_${initiativeDay}`, buddyId: plan.buddyId, kind: 'message', text: `${plan.displayName} messaged you first.`, minute: totalMinutes, createdAt: Date.now(), isRead: false });
       }
+      Object.assign(initiatedToday, updated);
     } catch { /* initiatives never break login */ }
+    lastInitiativeDay.current = initiativeDay;
     const mergedActivities = [...missedActivities, ...offlineActivities].sort((a, b) => a.minute - b.minute);
     setPulseState((previous) => {
+      // P4 fix: drop activities already in the feed (same deterministic ids across sessions)
+      const seenIds = new Set<string>((previous.activityFeed || []).map((entry) => entry.id));
+      const freshActivities = mergedActivities.filter((entry) => {
+        if (seenIds.has(entry.id)) return false;
+        seenIds.add(entry.id);
+        return true;
+      });
       const nextAwayHistory = { ...previous.awayHistory };
-      mergedActivities.forEach((entry) => {
+      freshActivities.forEach((entry) => {
         if (entry.kind === 'away') {
           const existing = nextAwayHistory[entry.buddyId] || [];
           if (!existing.some((e) => e.id === entry.id)) nextAwayHistory[entry.buddyId] = [...existing, entry].slice(-20);
@@ -396,9 +411,43 @@ export const PulseMessengerApp: React.FC = () => {
       const discoveredSet = new Set(previous.discoveredHosts || []);
       newLinksToAdd.forEach((link) => discoveredSet.add(link.host.toLowerCase()));
       const mergedDiscoveredHosts = Array.from(discoveredSet).slice(0, 30);
-      return { ...previous, lastSeenTotalMinutes: totalMinutes, initiatedToday, activityFeed: [...previous.activityFeed, ...mergedActivities].slice(-80), awayHistory: nextAwayHistory, sharedLinks: mergedSharedLinks, discoveredHosts: mergedDiscoveredHosts };
+      return { ...previous, lastSeenTotalMinutes: totalMinutes, initiatedToday, activityFeed: [...previous.activityFeed, ...freshActivities].slice(-80), awayHistory: nextAwayHistory, sharedLinks: mergedSharedLinks, discoveredHosts: mergedDiscoveredHosts };
     });
   }, [engine, pulseState.lastSeenTotalMinutes, session, totalMinutes]);
+  // P4 — mid-session day-change initiative pass: a new day while logged in feels alive too.
+  // Capped at 2 plans/day, priority-ordered; initiatedToday (persisted) prevents login-pass overlap.
+  useEffect(() => {
+    if (!session || !Number.isFinite(totalMinutes)) return;
+    const day = Math.floor(totalMinutes / 1440) + 1;
+    if (lastInitiativeDay.current === day) return;
+    lastInitiativeDay.current = day;
+    try {
+      const { plans, initiatedToday } = planInitiatives(engine, {
+        day,
+        blockedIds: pulseState.blockedBuddyIds,
+        initiatedToday: pulseState.initiatedToday || {},
+        maxCount: 2,
+        salt: 'daypass',
+      });
+      if (plans.length === 0) return;
+      for (const plan of plans) {
+        engine.dispatchAction({ type: 'SOCIAL_RECEIVE_MESSAGE', buddyId: plan.buddyId, text: plan.text, deliveredAway: false, tags: ['initiative', plan.kind] });
+      }
+      setPulseState((previous) => ({
+        ...previous,
+        initiatedToday,
+        activityFeed: [...previous.activityFeed, ...plans.map((plan) => ({
+          id: `initiative_${plan.buddyId}_${day}`,
+          buddyId: plan.buddyId,
+          kind: 'message' as const,
+          text: `${plan.displayName} messaged you first.`,
+          minute: totalMinutes,
+          createdAt: Date.now(),
+          isRead: false,
+        }))].slice(-80),
+      }));
+    } catch { /* day-pass never breaks the session */ }
+  }, [engine, session, totalMinutes, currentDay, pulseState.blockedBuddyIds, pulseState.initiatedToday]);
   const unreadCounts: Record<string, number> = {};
   Object.entries(conversations).forEach(([buddyId, msgs]) => {
     const unreads = msgs.filter((message) => !message.isRead && message.senderId !== 'player').length;
@@ -599,12 +648,14 @@ export const PulseMessengerApp: React.FC = () => {
     let relationshipStage = 'acquaintance';
     let dailyMood = 'steady';
     let longTermContext = '';
+    let affinityContext = '';
     try {
       relationshipStage = engine.social.getRelationshipStage(buddyId);
       dailyMood = engine.social.getDailyMood(buddyId, currentDay);
       longTermContext = engine.social.buildLongTermContext(buddyId);
+      affinityContext = engine.social.buildAffinityContext(buddyId);
     } catch { /* prompt enrichment is best-effort */ }
-    const relationshipSummary = `${relationship ? JSON.stringify(relationship) : 'new friendship'} | Stage: ${relationshipStage} | DailyMood: ${dailyMood} | Mood: ${mood} | Availability: ${availability} | Activity: ${activity} | ${memoryContext} | ${longTermContext} | Typing: ${style.typing.wpm} wpm, ${style.typing.pauseStyle}`;
+    const relationshipSummary = `${relationship ? JSON.stringify(relationship) : 'new friendship'} | Stage: ${relationshipStage} | DailyMood: ${dailyMood} | Mood: ${mood} | Availability: ${availability} | Activity: ${activity} | ${memoryContext} | ${longTermContext}${affinityContext ? ` | ${affinityContext}` : ''} | Typing: ${style.typing.wpm} wpm, ${style.typing.pauseStyle}`;
     // Sandbox world knowledge — per-buddy attitude (B)
     let worldKnowledge = '';
     let currentGameDay = currentDay;
@@ -679,9 +730,17 @@ export const PulseMessengerApp: React.FC = () => {
       }
     }
 
+    // P4 — free chat moves relationships: honour the model's chosen socialAction (governed set only).
+    // Fallback/generic replies and 'none' never move the needle; extremes flow into the P3 sharp ladder.
+    try {
+      const action = (result.data as { socialAction?: unknown }).socialAction;
+      if (!result.meta.fallback && typeof action === 'string' && CHAT_SOCIAL_ACTIONS.has(action)) {
+        engine.dispatchAction({ type: 'SOCIAL_APPLY_ACTION', buddyId, socialAction: action });
+      }
+    } catch { /* relationship nudge never blocks chat */ }
+
     // Persist recent replies (store raw texts) and update summary post-reply, plus shared links
     const newReplyTexts = result.data.messages.map((message) => message.text.slice(0, 500));
-    // Avoid storing fallback generic replies as canonical fingerprints? We still store to avoid loops, but mark as fallback.
     setPulseState((previous) => {
       const existingReplies = previous.recentReplies[buddyId] || [];
       const mergedReplies = [...existingReplies, ...newReplyTexts].slice(-6);
@@ -874,6 +933,11 @@ export const PulseMessengerApp: React.FC = () => {
         // Update recentMessages to include this reply for the next responder in the same turn
         recentMessages = [...recentMessages, { sender: botMessage.senderName, text: botMessage.text }].slice(-10);
       }
+      // P4 — shared room turns build buddy-to-buddy affinity (engine caps +6/pair/day)
+      try {
+        const responders = responderIds.filter((id) => engine.social.getBuddy(id));
+        if (responders.length >= 2) engine.social.bumpRoomAffinity(responders, currentDay);
+      } catch { /* affinity bump never breaks rooms */ }
     } finally {
       setRoomTyping(false);
     }
@@ -906,6 +970,13 @@ export const PulseMessengerApp: React.FC = () => {
       }, loadAISettings());
       const fallback = { senderId: targetId, text: targetId === 'maya' ? 'got it... keeping this between us.' : 'yeah, i see it. whisper me if anything changes.' };
       const replyText = result.meta.fallback ? fallback.text : result.data.messages[0]?.text?.trim();
+      // P4 — whispers are 1:1 exchanges, so the model's socialAction counts like a DM
+      try {
+        const action = (result.data as { socialAction?: unknown }).socialAction;
+        if (!result.meta.fallback && typeof action === 'string' && CHAT_SOCIAL_ACTIONS.has(action)) {
+          engine.dispatchAction({ type: 'SOCIAL_APPLY_ACTION', buddyId: targetId, socialAction: action });
+        }
+      } catch { /* relationship nudge never blocks chat */ }
       if (replyText) {
         const reply: PulseRoomMessage = { id: `whisper_${Date.now()}_reply`, senderId: targetId, senderName: target?.displayName || targetId, text: replyText, minute: totalMinutes + 1, kind: 'whisper' };
         setPulseState((previous) => ({ ...previous, roomMessages: { ...previous.roomMessages, [room.id]: [...(previous.roomMessages[room.id] || []), reply].slice(-80) } }));

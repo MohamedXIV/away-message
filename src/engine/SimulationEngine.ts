@@ -407,7 +407,7 @@ export class SimulationEngine {
         if (!active || active === '') this.world.setFlag('sharp_active', buddyId);
         const text = pickConfrontLine(resolveArchetype(buddyId, buddy.archetype), `${buddyId}:${day}:sharp`);
         this.social.sendMessage(buddyId, buddyId, 'player', text, currentMinutes, false, ['sharp', 'confrontation']);
-        this.telemetry.logEvent('social', 'relationship_confrontation', currentMinutes, { buddyId, annoyance: rels.annoyance });
+        this.telemetry.logEvent('social', 'relationship_confrontation', currentMinutes, { buddyId, annoyance: rels.annoyance, witnesses: this.shiftWitnessAffinities(buddyId, -4) });
         return;
       }
       if (core) return; // core buddies stay strained — they never walk away
@@ -421,7 +421,7 @@ export class SimulationEngine {
         this.world.setFlag('sharp_active', buddyId);
         const text = pickFarewellLine(resolveArchetype(buddyId, buddy.archetype), `${buddyId}:${day}:sharp`);
         this.social.sendMessage(buddyId, buddyId, 'player', text, currentMinutes, false, ['sharp', 'farewell']);
-        this.telemetry.logEvent('social', 'buddy_distant', currentMinutes, { buddyId });
+        this.telemetry.logEvent('social', 'buddy_distant', currentMinutes, { buddyId, witnesses: this.shiftWitnessAffinities(buddyId, -10) });
         return;
       }
       if (sharpState === 'distant' && rels.annoyance >= GONE_ANNOYANCE) {
@@ -431,7 +431,7 @@ export class SimulationEngine {
         if (this.world.getFlag('sharp_active') === buddyId) this.world.setFlag('sharp_active', '');
         const text = pickFarewellLine(resolveArchetype(buddyId, buddy.archetype), `${buddyId}:${day}:sharp:gone`);
         this.social.sendMessage(buddyId, buddyId, 'player', text, currentMinutes, false, ['sharp', 'gone']);
-        this.telemetry.logEvent('social', 'buddy_gone', currentMinutes, { buddyId });
+        this.telemetry.logEvent('social', 'buddy_gone', currentMinutes, { buddyId, witnesses: this.shiftWitnessAffinities(buddyId, -10) });
       }
     } catch { /* sharp events never break the tick */ }
   }
@@ -450,7 +450,7 @@ export class SimulationEngine {
           const text = pickInitiativeText(resolveArchetype(buddyId, buddy?.archetype), 'promise_reminder', `${buddyId}:${newDay}:nag`, { promiseText: promise.text });
           this.social.sendMessage(buddyId, buddyId, 'player', text, currentMinutes, false, ['promise', 'broken']);
         }
-        this.telemetry.logEvent('social', 'promise_broken', currentMinutes, { buddyId, promiseId: promise.id });
+        this.telemetry.logEvent('social', 'promise_broken', currentMinutes, { buddyId, promiseId: promise.id, witnesses: this.shiftWitnessAffinities(buddyId, -4) });
       }
     } catch { /* promises never break the tick */ }
     try {
@@ -466,9 +466,25 @@ export class SimulationEngine {
         if (this.world.getFlag('sharp_active') === buddy.id) this.world.setFlag('sharp_active', '');
         const text = pickReturnLine(resolveArchetype(buddy.id, buddy.archetype), `${buddy.id}:${newDay}:return`);
         this.social.sendMessage(buddy.id, buddy.id, 'player', text, currentMinutes, false, ['sharp', 'return']);
-        this.telemetry.logEvent('social', 'buddy_returned', currentMinutes, { buddyId: buddy.id });
+        this.telemetry.logEvent('social', 'buddy_returned', currentMinutes, { buddyId: buddy.id, witnesses: this.shiftWitnessAffinities(buddy.id, 8) });
       }
     } catch { /* returns never break the tick */ }
+  }
+
+  /** P4 — the player's close friends notice what happens to their mutuals (affinity witness shift). */
+  private shiftWitnessAffinities(targetId: string, delta: number): number {
+    let count = 0;
+    try {
+      for (const buddy of this.social.getBuddies()) {
+        if (buddy.id === targetId) continue;
+        if (buddy.status === 'distant' || buddy.status === 'gone' || buddy.status === 'blocked') continue;
+        const stage = this.social.getRelationshipStage(buddy.id);
+        if (stage !== 'friend' && stage !== 'close') continue;
+        this.social.adjustAffinity(buddy.id, targetId, delta);
+        count++;
+      }
+    } catch { /* witness shifts never break the tick */ }
+    return count;
   }
 
   public async generateProceduralEventsNow(options?: { maxEvents?: number; useAI?: boolean }): Promise<import('./types').GlobalEvent[]> {

@@ -571,7 +571,19 @@ export const CAFE_INVITE_LINES: string[] = [
   'wanna meet at the cafe sometime soon? been too long.',
 ];
 
-export type InitiativeKind = 'checkin' | 'event_share' | 'promise_reminder' | 'cafe_invite';
+/** C2 gossip lines — {name} is going through a visible rough patch (distant) or vanished (gone). */
+export const GOSSIP_DISTANT_LINES: string[] = [
+  'hey... have you heard from {name} lately? theyve gone quiet on me.',
+  'kinda worried about {name} tbh. they pulled away. you noticed?',
+  '{name} has been distant. hope theyre okay...',
+];
+export const GOSSIP_GONE_LINES: string[] = [
+  'hey. {name} is just... gone. vanished. do you know what happened?',
+  '{name} disappeared on me. if you hear from them, tell them i asked?',
+  'still no word from {name}. that one stings.',
+];
+
+export type InitiativeKind = 'checkin' | 'event_share' | 'promise_reminder' | 'cafe_invite' | 'gossip';
 
 function pickFromPool(pool: string[], seed: string): string {
   return pool[hashSeed(seed) % pool.length]!;
@@ -615,6 +627,18 @@ export function pickFarewellLine(archetype: CharacterArchetype, seed: string): s
 export function pickReturnLine(archetype: CharacterArchetype, seed: string): string {
   const arch = CHARACTER_ARCHETYPES[archetype] ? archetype : 'regular';
   return pickFromPool(ARCHETYPE_RETURN_LINES[arch], `${seed}:return`);
+}
+
+/** C2 gossip line about another buddy's visible absence (name + status filled by caller). */
+export function pickGossipLine(
+  _archetype: CharacterArchetype,
+  seed: string,
+  targetName: string,
+  status: 'distant' | 'gone'
+): string {
+  const pool = status === 'gone' ? GOSSIP_GONE_LINES : GOSSIP_DISTANT_LINES;
+  const name = targetName.trim().slice(0, 40) || 'they';
+  return pickFromPool(pool, `${seed}:gossip:${status}`).replaceAll('{name}', name);
 }
 
 export interface InitiativeDecision {

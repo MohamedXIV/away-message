@@ -617,6 +617,7 @@ export const AILabApp: React.FC = () => {
             const mems = engine.social.getCoreMemories(b.id);
             const open = engine.social.getOpenPromises(b.id);
             const sharp = (engine.world.getFlag(`sharp_${b.id}`) as string) || '—';
+            const ties = engine.social.buildAffinityContext(b.id);
             return (
               <div key={b.id} className="border border-gray-300 bg-[#fafafa] p-2 text-[11px]">
                 <div className="flex flex-wrap items-center gap-2">
@@ -629,6 +630,7 @@ export const AILabApp: React.FC = () => {
                 {rel && <div className="mt-1 font-mono text-[10px] text-gray-600">fam {rel.familiarity} • trust {rel.trust} • comfort {rel.comfort} • respect {rel.respect} • annoy {rel.annoyance}</div>}
                 {mems.length > 0 && <ul className="mt-1 list-disc pl-4 text-gray-700">{mems.map((m) => <li key={m.id}>[{m.kind} d{m.day}] {m.text}</li>)}</ul>}
                 {open.length > 0 && <div className="mt-1 text-gray-700">promises: {open.map((p) => `“${p.text}”${p.dueDay !== undefined ? ` (due d${p.dueDay})` : ''}`).join(' • ')}</div>}
+                {ties && <div className="mt-1 text-gray-700">{ties}</div>}
               </div>
             );
           })}
