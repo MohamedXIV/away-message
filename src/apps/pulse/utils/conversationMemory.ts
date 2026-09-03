@@ -63,6 +63,67 @@ export function extractFactsFromPlayerMessage(text: string): string[] {
   return facts.slice(0, 2);
 }
 
+export interface ExtractedPromise {
+  /** Player commitment text, trimmed to a usable snippet (<= 140 chars). */
+  text: string;
+  /** Days from today the commitment seems due (0 = today/tonight, 1 = tomorrow). Undefined = no clear due date. */
+  dueDayOffset?: number;
+}
+
+const PROMISE_PATTERNS: RegExp[] = [
+  /i promise\b(.{3,120})/i,
+  /i will\b(.{3,120})/i,
+  /i['’]ll\b(.{3,120})/i,
+  /let['’]?s meet\b(.{0,100})/i,
+  /i['’]?m coming\b(.{0,100})/i,
+  /i['’]?ll come\b(.{0,100})/i,
+  /i['’]?ll call\b(.{0,100})/i,
+  /i['’]?ll be there\b(.{0,60})/i,
+];
+
+/**
+ * P3 — extract explicit player commitments ("i promise...", "i'll call...").
+ * Conservative: only fires on clear commitment phrasing. Pure + deterministic.
+ */
+export function extractPromisesFromPlayerMessage(text: string, maxLen = 140): ExtractedPromise[] {
+  const trimmed = text.trim();
+  if (!trimmed) return [];
+  const lower = trimmed.toLowerCase();
+  const out: ExtractedPromise[] = [];
+  for (const pattern of PROMISE_PATTERNS) {
+    const match = trimmed.match(pattern);
+    if (!match) continue;
+    const snippet = trimmed.slice(0, maxLen).replace(/\s+/g, ' ').trim();
+    if (snippet.length < 8) continue;
+    let dueDayOffset: number | undefined;
+    if (lower.includes('tomorrow')) dueDayOffset = 1;
+    else if (lower.includes('tonight') || lower.includes('today') || lower.includes('later')) dueDayOffset = 0;
+    else if (lower.includes('weekend') || lower.includes('saturday') || lower.includes('sunday')) dueDayOffset = 3;
+    out.push({ text: snippet, dueDayOffset });
+    break; // one promise per message max — keeps the ledger clean
+  }
+  return out;
+}
+
+const COMPLETION_PATTERNS: RegExp[] = [
+  /\bdid it\b/i,
+  /\bi did\b/i,
+  /\bdone\b/i,
+  /\bfinished\b/i,
+  /\bi went\b/i,
+  /\bi called\b/i,
+  /\bi came\b/i,
+  /\btook care of it\b/i,
+  /\ball done\b/i,
+];
+
+/** P3 — does this player message read like a follow-through on an open promise? */
+export function looksLikeCompletion(text: string): boolean {
+  const trimmed = text.trim();
+  if (trimmed.length < 3 || trimmed.length > 200) return false;
+  return COMPLETION_PATTERNS.some((pattern) => pattern.test(trimmed));
+}
+
 export function buildConversationSummary(recentMessages: Array<{ sender: string; text: string }>, previousSummary: string, maxLen = 520): string {
   if (recentMessages.length === 0) return previousSummary || 'No prior conversation.';
   // Build a compressed transcript: last 6 exchanges summarized as "Player: ... / Buddy: ..."

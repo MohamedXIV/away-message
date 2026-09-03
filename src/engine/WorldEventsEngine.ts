@@ -2,7 +2,9 @@
 // Sandbox global events + world knowledge bank — replaces Ink/Narrative beats.
 
 import { EventBus } from './EventBus';
-import { Appointment, GlobalEvent, WorldState, BuddyAttitude, BuddyEventKnowledge } from './types';
+import { Appointment, GlobalEvent, WorldState, BuddyAttitude, BuddyEventKnowledge, CharacterArchetype } from './types';
+import { normalizeBuddyId } from './SocialEngine';
+import { ARCHETYPE_ATTITUDES, resolveArchetype } from './characterTemplates';
 
 // Re-export for convenience
 export type { GlobalEvent, WorldState };
@@ -86,6 +88,34 @@ export class WorldEventsEngine {
   private pendingEvents: Map<string, Omit<GlobalEvent, 'isTriggered' | 'triggeredAtMinute'>> = new Map();
   private _cachedState: WorldEventsState | null = null;
   private _stateVersion = 0;
+  // Optional roster provider (set by SimulationEngine): lets attitudes cover dynamic
+  // buddies via their archetype instead of the legacy 4-id table.
+  private buddyProvider: (() => Array<{ id: string; archetype?: CharacterArchetype }>) | null = null;
+
+  public setBuddyProvider(provider: (() => Array<{ id: string; archetype?: CharacterArchetype }>) | null): void {
+    this.buddyProvider = provider;
+    this.bumpVersion();
+  }
+
+  private listBuddyIds(): string[] {
+    if (this.buddyProvider) {
+      try {
+        const ids = this.buddyProvider().map((b) => b.id);
+        if (ids.length > 0) return ids;
+      } catch { /* fall through to legacy list */ }
+    }
+    return ['ryan', 'maya', 'nora', 'henderson'];
+  }
+
+  private archetypeFor(buddyId: string): CharacterArchetype {
+    if (this.buddyProvider) {
+      try {
+        const found = this.buddyProvider().find((b) => b.id === buddyId);
+        if (found) return resolveArchetype(buddyId, found.archetype);
+      } catch { /* fall through */ }
+    }
+    return resolveArchetype(buddyId);
+  }
   private buddyKnowledge: Map<string, BuddyEventKnowledge[]> = new Map(); // buddyId -> knowledge[]
 
   constructor(eventBus: EventBus, initialState?: Partial<WorldEventsState>) {
@@ -135,12 +165,14 @@ export class WorldEventsEngine {
         this.pendingEvents.delete(e.id);
       }
     }
-    // Restore per-buddy attitudes
+    // Restore per-buddy attitudes (normalize old handle keys to canonical ids)
     this.buddyKnowledge.clear();
     const rawKnowledge = (state as unknown as { buddyKnowledge?: Record<string, BuddyEventKnowledge[]> }).buddyKnowledge;
     if (rawKnowledge) {
-      for (const [bid, list] of Object.entries(rawKnowledge)) {
-        this.buddyKnowledge.set(bid, list.map((k) => ({ ...k })));
+      for (const [rawBid, list] of Object.entries(rawKnowledge)) {
+        const bid = normalizeBuddyId(rawBid);
+        const existing = this.buddyKnowledge.get(bid) ?? [];
+        this.buddyKnowledge.set(bid, [...existing, ...list.map((k) => ({ ...k }))].slice(-20));
       }
     }
     // Ensure pending still contains non-triggered catalog entries
@@ -156,7 +188,7 @@ export class WorldEventsEngine {
     this.bumpVersion();
   }
 
-  // --- Per-buddy attitude generation (deterministic, palette-based) ---
+  // --- Per-buddy attitude generation (deterministic, archetype palette-based) ---
   private hashStr(value: string): number {
     let h = 0;
     for (let i = 0; i < value.length; i++) h = (h * 31 + value.charCodeAt(i)) >>> 0;
@@ -166,54 +198,26 @@ export class WorldEventsEngine {
   private attitudeForBuddy(buddyId: string, evt: GlobalEvent): { attitude: BuddyAttitude; personalTake: string } {
     const cat = evt.category;
     const lower = (evt.title + ' ' + evt.knowledgePrompt).toLowerCase();
-    // Personality palettes
-    const palettes: Record<string, Record<string, { att: BuddyAttitude; takes: string[] }>> = {
-      ryan: {
-        os_release: { att: 'hyped', takes: ["gonna camp TechMart for the box", "benchmarked it on my rig already", "my cart is ready"] },
-        site_launch: { att: 'curious', takes: ["checking if my band page survives v2", "hope my links don't break"] },
-        economy: { att: 'hyped', takes: ["flipped a stick and bought tacos", "watching BidBay like a hawk"] },
-        culture: { att: 'curious', takes: ["glitter is wild but fun", "need that tiler for my page"] },
-        city_news: { att: 'indifferent', takes: ["saw it from the cart", "night market sounds good after shift"] },
-        system: { att: 'worried', takes: ["throttle will kill my downloads", "gonna queue overnight"] },
-      },
-      maya: {
-        os_release: { att: 'skeptical', takes: ["glossy is pretty but my 512 is fine", "not upgrading just for a dock"] },
-        site_launch: { att: 'annoyed', takes: ["Top 8 feels like ranking friends", "autoplay blasts at 2am"] },
-        economy: { att: 'indifferent', takes: ["not my game", "glad someone made money"] },
-        culture: { att: 'curious', takes: ["love the canal rain song", "tiling stars is kinda pretty"] },
-        city_news: { att: 'curious', takes: ["night market by the canal — want to go?", "hum kept me up, heard it too?"] },
-        system: { att: 'annoyed', takes: ["throttle ruins my playlist loads", "will stay up late anyway"] },
-      },
-      nora: {
-        os_release: { att: 'skeptical', takes: ["skin backport is the real story", "bench says 7 is slower on 512"] },
-        site_launch: { att: 'curious', takes: ["threaded replies will save NightBoard", "archiving the launch"] },
-        economy: { att: 'curious', takes: ["watching GoldNet like a tape", "canal air moves markets"] },
-        culture: { att: 'skeptical', takes: ["glitter is archival noise", "counter tracks the decay"] },
-        city_news: { att: 'hyped', takes: ["hum is infrastructure — logged it", "have a spectral capture"] },
-        system: { att: 'curious', takes: ["throttle is a good control variable", "logging packet loss"] },
-      },
-      henderson: {
-        os_release: { att: 'indifferent', takes: ["as long as the office PC boots", "support ends for 4.8?"] },
-        site_launch: { att: 'indifferent', takes: ["keep it quiet after 10pm", "no glitter in the lobby"] },
-        economy: { att: 'worried', takes: ["rent still due regardless", "don’t gamble rent on GoldNet"] },
-        culture: { att: 'annoyed', takes: ["glitter slows the office machine", "please no autoplay in hours"] },
-        city_news: { att: 'curious', takes: ["night market needs a permit?", "hum is the substation, per city"] },
-        system: { att: 'worried', takes: ["maintenance affects motel DSL too", "guests complained last time"] },
-      },
-    };
-    const buddyPalette = palettes[buddyId] ?? palettes['ryan']!;
+    // Archetype palette keeps the original 4 voices byte-identical
+    // (coworker=ryan, artist=maya, nightowl=nora, regular=henderson).
+    const archetype = this.archetypeFor(buddyId);
+    const buddyPalette = ARCHETYPE_ATTITUDES[archetype];
     const entry = buddyPalette[cat] ?? buddyPalette['city_news']!;
     // Deterministic pick among takes + slight variance by id hash
     const idx = this.hashStr(`${buddyId}:${evt.id}`) % entry.takes.length;
     const take = entry.takes[idx]!;
-    // Override for strong keywords
-    if (lower.includes('glitter') && buddyId === 'maya') return { attitude: 'annoyed', personalTake: "glitter is pretty for 5 seconds then my 56k dies — " + take };
-    if (lower.includes('orion 7') && buddyId === 'nora') return { attitude: 'skeptical', personalTake: take };
+    // Override for strong keywords (preserved from the legacy table)
+    if (lower.includes('glitter') && (buddyId === 'maya' || archetype === 'artist')) {
+      return { attitude: 'annoyed', personalTake: "glitter is pretty for 5 seconds then my 56k dies — " + take };
+    }
+    if (lower.includes('orion 7') && (buddyId === 'nora' || archetype === 'nightowl')) {
+      return { attitude: 'skeptical', personalTake: take };
+    }
     return { attitude: entry.att, personalTake: take };
   }
 
   private ensureBuddyAttitudes(evt: GlobalEvent, atMinute: number): void {
-    const buddies = ['ryan', 'maya', 'nora', 'henderson'];
+    const buddies = this.listBuddyIds();
     let changed = false;
     for (const bid of buddies) {
       const list = this.buddyKnowledge.get(bid) ?? [];
@@ -221,6 +225,24 @@ export class WorldEventsEngine {
       const { attitude, personalTake } = this.attitudeForBuddy(bid, evt);
       list.push({ eventId: evt.id, attitude, personalTake, learnedAtMinute: atMinute });
       this.buddyKnowledge.set(bid, list.slice(-20));
+      changed = true;
+    }
+    if (changed) this.bumpVersion();
+  }
+
+  /**
+   * Backfill attitudes for a late-registered buddy across all triggered events
+   * (so a newcomer shares the timeline instead of seeing blank takes).
+   */
+  public ensureAttitudesForBuddy(rawBuddyId: string, atMinute: number): void {
+    const buddyId = normalizeBuddyId(rawBuddyId);
+    let changed = false;
+    for (const evt of this.triggeredEvents.values()) {
+      const list = this.buddyKnowledge.get(buddyId) ?? [];
+      if (list.some((k) => k.eventId === evt.id)) continue;
+      const { attitude, personalTake } = this.attitudeForBuddy(buddyId, evt);
+      list.push({ eventId: evt.id, attitude, personalTake, learnedAtMinute: atMinute });
+      this.buddyKnowledge.set(buddyId, list.slice(-20));
       changed = true;
     }
     if (changed) this.bumpVersion();
@@ -285,7 +307,8 @@ export class WorldEventsEngine {
   }
 
   /** Per-buddy knowledge context — same events but with that buddy's attitude/take */
-  public getKnowledgeContextForBuddy(buddyId: string, currentDay: number, maxEvents = 4): string {
+  public getKnowledgeContextForBuddy(rawBuddyId: string, currentDay: number, maxEvents = 4): string {
+    const buddyId = normalizeBuddyId(rawBuddyId);
     const triggered = this.getTriggeredEvents().filter((e) => e.triggerDay <= currentDay).slice(-maxEvents);
     if (triggered.length === 0) return 'No major world events yet — early days, quiet internet.';
     const knowledge = this.buddyKnowledge.get(buddyId) ?? [];
@@ -300,12 +323,12 @@ export class WorldEventsEngine {
       .join('\n');
   }
 
-  public getBuddyKnowledge(buddyId: string): BuddyEventKnowledge[] {
-    return [...(this.buddyKnowledge.get(buddyId) ?? [])];
+  public getBuddyKnowledge(rawBuddyId: string): BuddyEventKnowledge[] {
+    return [...(this.buddyKnowledge.get(normalizeBuddyId(rawBuddyId)) ?? [])];
   }
 
   /** Per-buddy knowledge check — for sandbox every buddy knows every triggered event */
-  public isEventKnownToBuddy(_buddyId: string, eventId: string): boolean {
+  public isEventKnownToBuddy(_rawBuddyId: string, eventId: string): boolean {
     return this.triggeredEvents.has(eventId);
   }
 

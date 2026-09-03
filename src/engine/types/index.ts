@@ -297,14 +297,24 @@ export interface ScheduleBlock {
   awayMessage: string;
 }
 
+export type CharacterArchetype = 'coworker' | 'nightowl' | 'student' | 'trader' | 'artist' | 'regular';
+export type BuddyLifecycleStatus = 'stranger' | 'acquaintance' | 'friend' | 'close' | 'distant' | 'gone' | 'blocked';
+export type BuddyMetVia = 'nightboard' | 'myplace' | 'pulse-room' | 'work' | 'intro' | 'core';
+
 export interface BuddyCharacter {
   id: string;
   displayName: string;
   handle: string;
   avatarUrl?: string;
-  schedule: Record<number, ScheduleBlock[]>; // Keyed by day (1..14)
+  schedule: Record<number, ScheduleBlock[]>; // Keyed by day (1..14 legacy, 1..7 weekly for dynamic)
   initialRelationships: RelationshipDimensions;
   typingSpeedWpm: number;
+  // Dynamic-roster metadata (optional so legacy defs keep compiling)
+  archetype?: CharacterArchetype;
+  status?: BuddyLifecycleStatus;
+  metVia?: BuddyMetVia;
+  isProcedural?: boolean;
+  createdDay?: number;
 }
 
 export interface BuddyPresence {
@@ -333,7 +343,39 @@ export interface SocialEngineState {
   relationships: Record<string, RelationshipDimensions>;
   presence: Record<string, BuddyPresence>;
   conversations: Record<string, MessageRecord[]>;
+  // Dynamic roster: buddy definitions (core 4 are code-owned; procedural ones persist here)
+  buddies?: Record<string, BuddyCharacter>;
+  // P3 long-term memory: immortal facts + promises per buddy (persisted, capped)
+  coreMemories?: Record<string, CoreMemory[]>;
+  promises?: Record<string, PromiseRecord[]>;
 }
+
+// ==========================================
+// P3 — MEMORY & RELATIONSHIP DEPTH
+// ==========================================
+
+/** Immortal per-buddy memory: survives the rolling 6-message window, injected into every prompt. */
+export interface CoreMemory {
+  id: string;
+  text: string; // <= 160 chars
+  kind: 'fact' | 'promise_kept' | 'promise_broken' | 'first_meeting' | 'shared_moment';
+  day: number;
+}
+
+/** A commitment the player made to a buddy. Kept/broken explicitly move trust. */
+export interface PromiseRecord {
+  id: string;
+  text: string; // <= 140 chars
+  status: 'open' | 'kept' | 'broken';
+  createdDay: number;
+  dueDay?: number;
+}
+
+/** Relationship stage derived deterministically from dimensions (never stored, always computed). */
+export type RelationshipStage = 'stranger' | 'acquaintance' | 'friend' | 'close' | 'strained';
+
+/** Daily mood: deterministic hash per (buddy, day), overridden to 'cold' when strained. */
+export type DailyMood = 'warm' | 'steady' | 'tired' | 'off' | 'cold';
 
 // ==========================================
 // WORLD / SANDBOX DOMAIN (replaces narrative beats)
@@ -486,6 +528,8 @@ export type SimulationAction =
   | { type: 'SOCIAL_SEND_MESSAGE'; buddyId: string; text: string; tags?: string[]; imageUrl?: string; imagePrompt?: string; imageCaption?: string }
   | { type: 'SOCIAL_RECEIVE_MESSAGE'; buddyId: string; text: string; timestampMinute?: number; deliveredAway?: boolean; tags?: string[]; imageUrl?: string; imagePrompt?: string; imageCaption?: string }
   | { type: 'SOCIAL_APPLY_ACTION'; buddyId: string; socialAction: string }
+  | { type: 'SOCIAL_ADD_BUDDY'; buddy: BuddyCharacter; introText?: string; silent?: boolean }
+  | { type: 'SOCIAL_REMOVE_BUDDY'; buddyId: string }
   | { type: 'WORLD_SET_FLAG'; key: string; value: boolean | number | string }
   | { type: 'WORLD_TRIGGER_EVENT'; eventId: string }
   | { type: 'WORLD_ADD_OBSERVATION'; entry: string }
@@ -533,6 +577,10 @@ export interface SimulationEventMap {
   'social:status_changed': { buddyId: string; presence: BuddyPresence };
   'social:message_received': { message: MessageRecord };
   'social:relationship_updated': { buddyId: string; dimensions: RelationshipDimensions; delta: Partial<RelationshipDimensions> };
+  'social:buddy_registered': { buddy: BuddyCharacter };
+  'social:buddy_removed': { buddyId: string };
+  'social:buddy_status_changed': { buddyId: string; status: BuddyLifecycleStatus };
+  'social:promise_resolved': { buddyId: string; promiseId: string; kept: boolean };
   'world:flag_changed': { key: string; value: boolean | number | string };
   'world:global_event_triggered': { event: GlobalEvent };
   'world:appointment_scheduled': { appointment: Appointment };

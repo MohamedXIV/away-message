@@ -64,6 +64,8 @@ export interface PulsePersistedState {
   sharedLinks: PulseSharedLink[];
   discoveredHosts: string[];
   pulseSkin: PulseSkin;
+  // P3 — NPC initiatives: last game day each buddy messaged first (day-keyed, max once/day)
+  initiatedToday?: Record<string, number>;
 }
 
 function makeSeedMessages(): Record<string, PulseRoomMessage[]> {
@@ -102,6 +104,7 @@ export function makeDefaultPulseState(): PulsePersistedState {
     sharedLinks: [],
     discoveredHosts: [],
     pulseSkin: 'blue',
+    initiatedToday: {},
   };
 }
 
@@ -212,10 +215,11 @@ export function loadPulseState(slotId?: string): PulsePersistedState {
     const groupLabels: Record<string, string> = {};
     if ((parsed as Record<string, unknown>).groupLabels && typeof (parsed as Record<string, unknown>).groupLabels === 'object') {
       Object.entries((parsed as Record<string, unknown>).groupLabels as Record<string, unknown>).forEach(([groupId, label]) => {
-        if (typeof label === 'string' && label.trim().length > 0 && !!PULSE_GROUPS[groupId as keyof typeof PULSE_GROUPS]) groupLabels[groupId] = label.trim().slice(0, 32);
+        // Keep labels for known groups plus the dynamic 'uncategorized' bucket; drop anything else
+        if (typeof label === 'string' && label.trim().length > 0 && (!!PULSE_GROUPS[groupId as keyof typeof PULSE_GROUPS] || groupId === 'uncategorized')) groupLabels[groupId] = label.trim().slice(0, 32);
       });
     }
-    const knownGroupIds = new Set(Object.keys(PULSE_GROUPS));
+    const knownGroupIds = new Set([...Object.keys(PULSE_GROUPS), 'uncategorized']);
     const rawGroupOrder = Array.isArray((parsed as Record<string, unknown>).groupOrder)
       ? ((parsed as Record<string, unknown>).groupOrder as unknown[]).filter((id): id is string => typeof id === 'string' && knownGroupIds.has(id))
       : fallback.groupOrder;
@@ -233,7 +237,13 @@ export function loadPulseState(slotId?: string): PulsePersistedState {
     sharedLinks.forEach((link) => discoveredSet.add(link.host.toLowerCase()));
     const mergedDiscoveredHosts = Array.from(discoveredSet).slice(0, 30);
     const pulseSkin: PulseSkin = (parsed as Record<string, unknown>).pulseSkin === 'silver' ? 'silver' : (parsed as Record<string, unknown>).pulseSkin === 'dark' ? 'dark' : 'blue';
-    return { version: 1, joinedRoomIds, roomMessages, roomTopics, roomReadThrough, activityBuckets, activityFeed, awayHistory, lastSeenTotalMinutes, conversationMemory, conversationSummaries, recentReplies, buddyFacts, npcMood, npcActivity, friendRequestStatus, blockedBuddyIds, groupLabels, groupOrder, sharedLinks, discoveredHosts: mergedDiscoveredHosts, pulseSkin };
+    const initiatedToday: Record<string, number> = {};
+    if ((parsed as Record<string, unknown>).initiatedToday && typeof (parsed as Record<string, unknown>).initiatedToday === 'object') {
+      Object.entries((parsed as Record<string, unknown>).initiatedToday as Record<string, unknown>).forEach(([buddyId, value]) => {
+        if (typeof value === 'number' && Number.isFinite(value)) initiatedToday[buddyId] = Math.max(1, Math.floor(value));
+      });
+    }
+    return { version: 1, joinedRoomIds, roomMessages, roomTopics, roomReadThrough, activityBuckets, activityFeed, awayHistory, lastSeenTotalMinutes, conversationMemory, conversationSummaries, recentReplies, buddyFacts, npcMood, npcActivity, friendRequestStatus, blockedBuddyIds, groupLabels, groupOrder, sharedLinks, discoveredHosts: mergedDiscoveredHosts, pulseSkin, initiatedToday };
   } catch {
     return fallback;
   }

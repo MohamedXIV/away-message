@@ -8,6 +8,8 @@ import {
   registerProceduralMyPlaceRelease,
   type MyPlaceRelease,
 } from './MyPlaceCatalog';
+import { CHARACTER_ARCHETYPES } from './characterTemplates';
+import type { CharacterArchetype } from './types';
 
 export interface MyPlaceProfile {
   username: string;
@@ -20,8 +22,8 @@ export interface MyPlaceProfile {
   top8: Array<{ handle: string; name: string; avatar: string }>;
   glitterIntensity: number; // 0..5
   tiledBackground?: string; // e.g. 'stars', 'hearts', null
-  visibility: 'public' | 'friendsOnly';
-  themeColor?: string;
+  archetype?: CharacterArchetype;
+  visibility?: 'public' | 'friendsOnly';
 }
 
 export interface MyPlaceEngineState {
@@ -63,6 +65,7 @@ const DEFAULT_NPC_PROFILES: Record<string, MyPlaceProfile> = {
     ],
     glitterIntensity: 1,
     visibility: 'public',
+    archetype: 'artist',
   },
   tacocart_ryan: {
     username: 'tacocart_ryan',
@@ -75,6 +78,7 @@ const DEFAULT_NPC_PROFILES: Record<string, MyPlaceProfile> = {
     top8: [{ handle: 'maya_x', name: 'Maya', avatar: '📷' }],
     glitterIntensity: 0,
     visibility: 'public',
+    archetype: 'coworker',
   },
   nightowl87: {
     username: 'nightowl87',
@@ -87,6 +91,7 @@ const DEFAULT_NPC_PROFILES: Record<string, MyPlaceProfile> = {
     top8: [{ handle: 'maya_x', name: 'Maya', avatar: '📷' }],
     glitterIntensity: 0,
     visibility: 'friendsOnly',
+    archetype: 'nightowl',
   },
 };
 
@@ -240,6 +245,42 @@ export class MyPlaceEngine {
     return p ? { ...p, top8: p.top8.map((t) => ({ ...t })) } : undefined;
   }
 
+  private static readonly ARCHETYPE_AVATARS: Record<CharacterArchetype, string> = {
+    coworker: '🧰',
+    nightowl: '🦉',
+    student: '🎒',
+    trader: '📈',
+    artist: '🎸',
+    regular: '🙂',
+  };
+
+  /**
+   * Ensure a MyPlace page exists for a newly registered buddy.
+   * Stub is derived from the archetype template (not hardcoded per-id), so any
+   * CharacterEngine buddy gets a sensible page on first sight.
+   */
+  public ensureNpcProfile(input: { username: string; displayName: string; archetype?: CharacterArchetype }): MyPlaceProfile {
+    const existing = this.npcProfiles.get(input.username);
+    if (existing) return { ...existing, top8: existing.top8.map((t) => ({ ...t })) };
+    const archetype: CharacterArchetype = input.archetype && CHARACTER_ARCHETYPES[input.archetype] ? input.archetype : 'regular';
+    const template = CHARACTER_ARCHETYPES[archetype];
+    const stub: MyPlaceProfile = {
+      username: input.username,
+      displayName: input.displayName,
+      headline: `${input.displayName} • Oakhaven local`,
+      bio: template.personaHint,
+      interests: [...template.defaultInterests],
+      songTitle: template.defaultSong,
+      avatarGlyph: MyPlaceEngine.ARCHETYPE_AVATARS[archetype],
+      top8: [],
+      glitterIntensity: 0,
+      visibility: 'public',
+      archetype,
+    };
+    this.npcProfiles.set(input.username, stub);
+    return { ...stub, top8: [] };
+  }
+
   public getAllNpcProfiles(): Record<string, MyPlaceProfile> {
     const out: Record<string, MyPlaceProfile> = {};
     for (const [k, v] of this.npcProfiles.entries()) out[k] = { ...v, top8: v.top8.map((t) => ({ ...t })) };
@@ -255,13 +296,15 @@ export class MyPlaceEngine {
     this.eventBus.emit('myplace:profile_updated' as any, { username, profile: { ...updated } });
   }
 
-  // AI-driven periodic NPC profile mutation — governed, personality-consistent
+  // AI-driven periodic NPC profile mutation — governed, personality-consistent.
+  // Candidates are ALL npc profiles (core 3 keep their exact legacy personas/picks).
   public async maybeUpdateRandomNpcProfile(currentDay: number, currentMinute: number, _socialEngine?: { getRelationships: (id: string) => unknown }): Promise<{ username: string; profile: MyPlaceProfile } | null> {
     // Throttle: only once every 2 days, 30% chance
     if (currentDay < 3) return null;
     const roll = this.hash(`${this.currentMyPlaceId}:${currentDay}`) % 100;
     if (roll > 35) return null;
-    const candidates = ['maya_x', 'tacocart_ryan', 'nightowl87'];
+    const candidates = [...this.npcProfiles.keys()];
+    if (candidates.length === 0) return null;
     const pickIdx = this.hash(`pick:${currentDay}:${currentMinute}`) % candidates.length;
     const username = candidates[pickIdx]!;
     const current = this.npcProfiles.get(username);
@@ -274,7 +317,8 @@ export class MyPlaceEngine {
         tacocart_ryan: 'Ryan — practical, teasing, tacos, hardware, energetic',
         nightowl87: 'Nora — dry humor, night archivist, canal hum, cryptic but warm',
       };
-      const persona = personaMap[username] ?? 'Believable Oakhaven resident';
+      const archetype = current.archetype && CHARACTER_ARCHETYPES[current.archetype] ? current.archetype : undefined;
+      const persona = personaMap[username] ?? (archetype ? CHARACTER_ARCHETYPES[archetype].personaHint : 'Believable Oakhaven resident');
       const features = this.getCurrentRelease().features;
       const prompt = `You are updating MyPlace profile for ${username} (${persona}). Current headline: "${current.headline}" Bio: "${current.bio}" Interests: ${current.interests.join(', ')} Song: "${current.songTitle}" Features available: ${JSON.stringify(features)} Current day: ${currentDay}. Generate a NEW headline (<=60 chars), bio (1-2 sentences, <=180 chars), interests (3-5 tags), and songTitle (if music enabled, else keep). Keep it personality-consistent, mundane, 2005-appropriate, no real brands. Return JSON.`;
       const { loadAISettings } = await import('../ai/settings');
@@ -329,18 +373,28 @@ export class MyPlaceEngine {
         }
       }
     } catch {}
-    // Fallback: deterministic template mutation
+    // Fallback: deterministic template mutation (core 3 keep legacy patches verbatim)
     const fallbacks: Record<string, Partial<MyPlaceProfile>> = {
       maya_x: { headline: 'Darkroom nights // new film roll', bio: 'Developed a new roll of canal night shots. The neon is bleeding just right.', interests: ['Film Cameras', 'Rain', 'Neon'], songTitle: 'Night Canal (New Mix)' },
       tacocart_ryan: { headline: 'Tacos + test bench // 512MB stick for sale', bio: 'Cart is busy. Also testing a spare stick on the bench.', interests: ['Tacos', 'Benchmarks', 'Salsa'], songTitle: 'Grill Hiss FM' },
       nightowl87: { headline: 'Hum log updated // 03:14 AM', bio: 'New capture below the sluice. Frequency shifted 2Hz after the substation work.', interests: ['Audio Forensics', 'Canals', 'Logs'], songTitle: 'Hum Log 03 — Sluice' },
     };
-    const patch = fallbacks[username];
-    if (patch) {
-      this.updateNpcProfile(username, patch);
+    const legacy = fallbacks[username];
+    if (legacy) {
+      this.updateNpcProfile(username, legacy);
       return { username, profile: this.getNpcProfile(username)! };
     }
-    return null;
+    // Generic archetype fallback for dynamic buddies
+    const arch = current.archetype && CHARACTER_ARCHETYPES[current.archetype] ? current.archetype : 'regular';
+    const template = CHARACTER_ARCHETYPES[arch];
+    const patch: Partial<MyPlaceProfile> = {
+      headline: `${current.displayName} update // day ${currentDay}`,
+      bio: `${template.blurb} — refreshed my headline and song.`,
+      interests: [...template.defaultInterests],
+      songTitle: template.defaultSong,
+    };
+    this.updateNpcProfile(username, patch);
+    return { username, profile: this.getNpcProfile(username)! };
   }
 
   private hash(value: string): number {

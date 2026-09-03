@@ -39,9 +39,10 @@ export const Day14ResolutionModal: React.FC<Day14ResolutionModalProps> = ({
   const foodCartShifts = telemetry.stats?.workShiftsCompleted ?? 0;
   const windowObservations = telemetry.stats?.windowObservationsCount ?? 0;
   const isMayaMetInPerson = !!world.flags?.maya_met_in_person;
-  const mayaRel = social.relationships?.starlight_maya;
-  const ryanRel = social.relationships?.ryan_foodcart;
-  const noraRel = social.relationships?.NightOwl87;
+  // Canonical engine ids are maya/ryan/nora (handles are starlight_maya/ryan_foodcart/NightOwl87)
+  const mayaRel = (social.relationships as any)?.maya ?? (social.relationships as any)?.starlight_maya;
+  const ryanRel = (social.relationships as any)?.ryan ?? (social.relationships as any)?.ryan_foodcart;
+  const noraRel = (social.relationships as any)?.nora ?? (social.relationships as any)?.NightOwl87;
 
   const isOs6 = hardware.osVersion === 'Orion_6.0';
   const hasMaxRam = hardware.ramMB >= 1024;

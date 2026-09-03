@@ -16,6 +16,10 @@ import { WorldEventsEngine } from './WorldEventsEngine';
 import { OsEngine } from './OsEngine';
 import { PulseEngine } from './PulseEngine';
 import { MyPlaceEngine } from './MyPlaceEngine';
+import { validatePersistedBuddy } from './CharacterEngine';
+import { generateNewcomer, shouldAutoDiscover, NEWCOMER_METVIA_ROTATION } from './CharacterDirector';
+import { STRAINED_ANNOYANCE, DISTANT_ANNOYANCE, GONE_ANNOYANCE } from './SocialEngine';
+import { pickConfrontLine, pickFarewellLine, pickReturnLine, pickInitiativeText, resolveArchetype, isCoreBuddyId } from './characterTemplates';
 
 export class SimulationEngine {
   public readonly clock!: GameClock;
@@ -104,10 +108,37 @@ export class SimulationEngine {
   private registerInternalEventHandlers(): void {
     this.events.on('time:day_changed', ({ newDay }) => {
       this.economy.handleDayTransition(newDay);
+      // P3 daily relationship pass: overdue promises + distant returns (rules only, no AI)
+      this.processRelationshipDaily(newDay);
     });
 
     this.events.on('economy:cash_changed', ({ newCash }) => {
       this.telemetry.updateCashBounds(newCash);
+    });
+
+    // Unified roster: world attitudes + MyPlace pages follow SocialEngine registrations.
+    this.world.setBuddyProvider(() =>
+      this.social.getBuddies().map((b) => ({ id: b.id, archetype: b.archetype }))
+    );
+    this.events.on('social:buddy_registered', ({ buddy }: any) => {
+      try {
+        this.world.ensureAttitudesForBuddy(buddy.id, this.clock.getTotalMinutes());
+      } catch { /* attitudes are best-effort */ }
+      try {
+        this.myplace.ensureNpcProfile({
+          username: buddy.handle || buddy.id,
+          displayName: buddy.displayName,
+          archetype: buddy.archetype,
+        });
+        // Also index by raw id so MyPlace routing works with either key
+        if (buddy.handle && buddy.handle !== buddy.id) {
+          this.myplace.ensureNpcProfile({
+            username: buddy.id,
+            displayName: buddy.displayName,
+            archetype: buddy.archetype,
+          });
+        }
+      } catch { /* MyPlace stub is best-effort */ }
     });
 
     // Keep PulseEngine in sync when Pulse is installed via SoftwareRegistry
@@ -223,6 +254,7 @@ export class SimulationEngine {
           time: tickResult.time,
         });
         this.maybeScheduleProceduralGeneration();
+        this.maybeAutoDiscoverNewcomer(tickResult.time.day);
       }
 
       this.notifySubscribers();
@@ -267,6 +299,7 @@ export class SimulationEngine {
         time: jumpResult.newTime,
       });
       this.maybeScheduleProceduralGeneration();
+      this.maybeAutoDiscoverNewcomer(jumpResult.newTime.day);
     }
 
     this.notifySubscribers();
@@ -293,6 +326,149 @@ export class SimulationEngine {
         // Notify so UI (CityWire) updates pending count
         try { this.notifySubscribers(); } catch {}
       });
+  }
+
+  /**
+   * Sandbox auto-discovery: every few days a stranger can appear from the net
+   * or work, register as a buddy, and say hi. Throttled + deterministic
+   * (see shouldAutoDiscover); AI enriches when a key exists, templates otherwise.
+   * Fire-and-forget — never blocks the simulation tick.
+   */
+  private maybeAutoDiscoverNewcomer(day: number): void {
+    try {
+      const lastRaw = this.world.getFlag('newcomer_last_day');
+      const lastDay = typeof lastRaw === 'number' ? lastRaw : 0;
+      if (!shouldAutoDiscover(day, lastDay)) return;
+      const proceduralCount = this.social.getBuddies().filter((b) => b.isProcedural).length;
+      const metVia = NEWCOMER_METVIA_ROTATION[proceduralCount % NEWCOMER_METVIA_ROTATION.length]!;
+      const existingIds = this.social.getBuddies().map((b) => b.id);
+      void generateNewcomer({ metVia, day, seed: `auto-day-${day}`, useAI: true }, { existingIds })
+        .then((res) => {
+          const added = this.dispatchAction({ type: 'SOCIAL_ADD_BUDDY', buddy: res.definition, introText: res.introText });
+          if (!added.success) return;
+          // NightBoard meetings leave a public trace → auto thread via existing machinery
+          if (metVia === 'nightboard') {
+            try {
+              this.world.injectProceduralEvents([{
+                id: `met_${res.definition.id}`.replace(/[^a-z0-9_]/g, '_').slice(0, 40),
+                title: `New voice on NightBoard: ${res.definition.displayName}`,
+                description: `${res.definition.displayName} (${res.definition.handle}) showed up asking about the canal hum thread.`,
+                category: 'city_news',
+                triggerDay: day,
+                triggerHour: 22,
+                knowledgePrompt: `A newcomer (${res.definition.displayName}) appeared on NightBoard and added you on Pulse.`,
+                siteUrl: 'http://nightboard.local/',
+              }]);
+            } catch { /* trace is best-effort */ }
+          }
+          this.world.setFlag('newcomer_last_day', day);
+          this.notifySubscribers();
+        })
+        .catch(() => {});
+    } catch { /* auto-discovery never breaks the tick */ }
+  }
+
+  // ==========================================
+  // P3 — SHARP RELATIONSHIP EVENTS (governed, rules-only, template-voiced)
+  // Ladder for sustained dismissiveness: confrontation → distant (7 days) → gone.
+  // Core 4 are protected: they cap at a strained confrontation, they never leave.
+  // Governor: a single active sharp event at a time (world flag 'sharp_active').
+  // ==========================================
+
+  private checkSharpRelationship(rawBuddyId: string, currentMinutes: number): void {
+    try {
+      const buddy = this.social.getBuddy(rawBuddyId);
+      if (!buddy) return;
+      const buddyId = buddy.id;
+      const rels = this.social.getRelationships(buddyId);
+      if (!rels) return;
+      const day = this.clock.getTime().day;
+      const core = isCoreBuddyId(buddyId);
+      const strainedKey = `strained_${buddyId}`;
+      const sharpKey = `sharp_${buddyId}`;
+      const sharpState = this.world.getFlag(sharpKey);
+
+      // Repair: strained flag set but annoyance cooled well below the line → silent repair
+      if (this.world.getFlag(strainedKey) && rels.annoyance < STRAINED_ANNOYANCE - 10) {
+        this.world.setFlag(strainedKey, false);
+        if (this.world.getFlag('sharp_active') === buddyId) this.world.setFlag('sharp_active', '');
+        if (sharpState === 'confronted') this.world.setFlag(sharpKey, '');
+        this.telemetry.logEvent('social', 'relationship_repaired', currentMinutes, { buddyId });
+        return;
+      }
+      if (rels.annoyance < STRAINED_ANNOYANCE) return;
+
+      // Confrontation (once per strained episode)
+      if (!this.world.getFlag(strainedKey)) {
+        const active = this.world.getFlag('sharp_active');
+        if (active && active !== buddyId && active !== '') return; // governor: wait your turn
+        this.world.setFlag(strainedKey, true);
+        this.world.setFlag(sharpKey, 'confronted');
+        if (!active || active === '') this.world.setFlag('sharp_active', buddyId);
+        const text = pickConfrontLine(resolveArchetype(buddyId, buddy.archetype), `${buddyId}:${day}:sharp`);
+        this.social.sendMessage(buddyId, buddyId, 'player', text, currentMinutes, false, ['sharp', 'confrontation']);
+        this.telemetry.logEvent('social', 'relationship_confrontation', currentMinutes, { buddyId, annoyance: rels.annoyance });
+        return;
+      }
+      if (core) return; // core buddies stay strained — they never walk away
+
+      if (sharpState === 'confronted' && rels.annoyance >= DISTANT_ANNOYANCE) {
+        const active = this.world.getFlag('sharp_active');
+        if (active && active !== buddyId && active !== '') return;
+        this.social.setBuddyStatus(buddyId, 'distant');
+        this.world.setFlag(sharpKey, 'distant');
+        this.world.setFlag(`distant_${buddyId}_until`, day + 7);
+        this.world.setFlag('sharp_active', buddyId);
+        const text = pickFarewellLine(resolveArchetype(buddyId, buddy.archetype), `${buddyId}:${day}:sharp`);
+        this.social.sendMessage(buddyId, buddyId, 'player', text, currentMinutes, false, ['sharp', 'farewell']);
+        this.telemetry.logEvent('social', 'buddy_distant', currentMinutes, { buddyId });
+        return;
+      }
+      if (sharpState === 'distant' && rels.annoyance >= GONE_ANNOYANCE) {
+        // Genuinely gone: stays in roster as epitaph (memories kept), presence forced dark
+        this.social.setBuddyStatus(buddyId, 'gone');
+        this.world.setFlag(sharpKey, 'gone');
+        if (this.world.getFlag('sharp_active') === buddyId) this.world.setFlag('sharp_active', '');
+        const text = pickFarewellLine(resolveArchetype(buddyId, buddy.archetype), `${buddyId}:${day}:sharp:gone`);
+        this.social.sendMessage(buddyId, buddyId, 'player', text, currentMinutes, false, ['sharp', 'gone']);
+        this.telemetry.logEvent('social', 'buddy_gone', currentMinutes, { buddyId });
+      }
+    } catch { /* sharp events never break the tick */ }
+  }
+
+  /** P3 daily pass: overdue promises break + distant buddies return. Rules only, no AI. */
+  private processRelationshipDaily(newDay: number): void {
+    const currentMinutes = this.clock.getTotalMinutes();
+    try {
+      const broken = this.social.checkPromiseDues(newDay);
+      for (const { buddyId, promise } of broken) {
+        const stage = this.social.getRelationshipStage(buddyId);
+        // Only friend+ buddies complain out loud, and only once per day per buddy
+        if ((stage === 'friend' || stage === 'close') && !this.world.getFlag(`promise_nag_${buddyId}_${newDay}`)) {
+          this.world.setFlag(`promise_nag_${buddyId}_${newDay}`, true);
+          const buddy = this.social.getBuddy(buddyId);
+          const text = pickInitiativeText(resolveArchetype(buddyId, buddy?.archetype), 'promise_reminder', `${buddyId}:${newDay}:nag`, { promiseText: promise.text });
+          this.social.sendMessage(buddyId, buddyId, 'player', text, currentMinutes, false, ['promise', 'broken']);
+        }
+        this.telemetry.logEvent('social', 'promise_broken', currentMinutes, { buddyId, promiseId: promise.id });
+      }
+    } catch { /* promises never break the tick */ }
+    try {
+      for (const buddy of this.social.getBuddies()) {
+        if (buddy.status !== 'distant') continue;
+        const until = this.world.getFlag(`distant_${buddy.id}_until`);
+        if (typeof until === 'number' && newDay < until) continue;
+        this.social.setBuddyStatus(buddy.id, 'acquaintance');
+        const rels = this.social.getRelationships(buddy.id);
+        if (rels) this.social.adjustRelationship(buddy.id, { annoyance: 25, trust: Math.max(5, rels.trust - 10) });
+        this.world.setFlag(`sharp_${buddy.id}`, 'returned');
+        this.world.setFlag(`strained_${buddy.id}`, false);
+        if (this.world.getFlag('sharp_active') === buddy.id) this.world.setFlag('sharp_active', '');
+        const text = pickReturnLine(resolveArchetype(buddy.id, buddy.archetype), `${buddy.id}:${newDay}:return`);
+        this.social.sendMessage(buddy.id, buddy.id, 'player', text, currentMinutes, false, ['sharp', 'return']);
+        this.telemetry.logEvent('social', 'buddy_returned', currentMinutes, { buddyId: buddy.id });
+      }
+    } catch { /* returns never break the tick */ }
   }
 
   public async generateProceduralEventsNow(options?: { maxEvents?: number; useAI?: boolean }): Promise<import('./types').GlobalEvent[]> {
@@ -650,8 +826,51 @@ export class SimulationEngine {
       case 'SOCIAL_APPLY_ACTION': {
         try {
           const rels = this.social.applySocialAction(action.buddyId, action.socialAction);
+          // P3 sharp-event ladder: sustained dismissiveness has consequences (rules only)
+          this.checkSharpRelationship(action.buddyId, currentMinutes);
           this.notifySubscribers();
           return { success: true, data: rels };
+        } catch (err: unknown) {
+          return { success: false, error: (err as Error).message };
+        }
+      }
+
+      case 'SOCIAL_ADD_BUDDY': {
+        try {
+          const checked = validatePersistedBuddy(action.buddy);
+          if (!checked.ok || !checked.definition) return { success: false, error: checked.error ?? 'Invalid buddy definition.' };
+          const registered = this.social.registerBuddy(checked.definition);
+          // P3 origin memory: every buddy remembers how you met (immortal, shown in prompts)
+          const meetDay = this.clock.getTime().day;
+          this.social.addCoreMemory(registered.id, {
+            text: `First met on Day ${meetDay} via ${registered.metVia ?? 'intro'}.`,
+            kind: 'first_meeting',
+            day: meetDay,
+          });
+          // 'social:buddy_registered' fans out to attitudes + MyPlace stub (see registerInternalEventHandlers)
+          if (!action.silent) {
+            const text = (action.introText?.trim() || `hey, i'm ${registered.displayName} — nice meeting you!`).slice(0, 500);
+            this.social.sendMessage(registered.id, registered.id, 'player', text, currentMinutes, true, ['intro', 'newcomer']);
+          }
+          this.telemetry.logEvent('social', 'buddy_added', currentMinutes, {
+            buddyId: registered.id,
+            metVia: registered.metVia ?? 'intro',
+            silent: !!action.silent,
+          });
+          this.notifySubscribers();
+          return { success: true, data: registered };
+        } catch (err: unknown) {
+          return { success: false, error: (err as Error).message };
+        }
+      }
+
+      case 'SOCIAL_REMOVE_BUDDY': {
+        try {
+          const ok = this.social.removeBuddy(action.buddyId);
+          if (!ok) return { success: false, error: `Buddy not found: ${action.buddyId}` };
+          this.telemetry.logEvent('social', 'buddy_removed', currentMinutes, { buddyId: action.buddyId });
+          this.notifySubscribers();
+          return { success: true };
         } catch (err: unknown) {
           return { success: false, error: (err as Error).message };
         }

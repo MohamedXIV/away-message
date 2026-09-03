@@ -19,17 +19,26 @@ import { soundManager } from '../../audio/SoundManager';
 import { loadPulseState, savePulseState, getCurrentPulseSlotId, setCurrentPulseSlotId, type PulsePersistedState, type PulseSkin } from './persistence';
 import type { PulseActivityEntry, PulseActivityKind } from './types';
 import { getNpcStyle, getNpcMoodLabel, getNpcAvailabilityLabel, getNpcActivityLabel } from './data/npcStyles';
-import { extractFactsFromPlayerMessage, buildConversationSummary, buildMemoryContext, hashReply, isDuplicateReply } from './utils/conversationMemory';
+import { extractFactsFromPlayerMessage, extractPromisesFromPlayerMessage, looksLikeCompletion, buildConversationSummary, buildMemoryContext, hashReply, isDuplicateReply } from './utils/conversationMemory';
 import { extractLocalLinks, pickRandomBuddyLink } from './utils/linkDetector';
+import { CHARACTER_ARCHETYPES, pickTemplateOfflineLine, shouldInitiateContact, pickInitiativeText, resolveArchetype, type InitiativeKind } from '../../engine/characterTemplates';
+import type { BuddyCharacter } from '../../engine/types';
 
-function getBuddyPersona(buddyId: string): string {
+function getBuddyPersona(buddyId: string, buddy?: BuddyCharacter | null): string {
   const personas: Record<string, string> = {
     ryan: 'Warm, impulsive food-cart coworker. Uses casual slang, jokes, and short messages. He avoids heavy emotional talks unless trust is high.',
     maya: 'Quiet, observant, creative, and a little guarded. Uses lowercase, pauses, music references, and gentle honesty. She warms up slowly.',
     nora: 'Night-owl archivist with dry humor. Curious about strange details, concise, slightly cryptic, but not supernatural.',
     henderson: 'Professional motel manager. Formal, practical, and terse. He cares about rent, schedules, and keeping the property calm.',
   };
-  return personas[buddyId] || 'A believable online friend with a distinct but grounded personality.';
+  if (personas[buddyId]) return personas[buddyId]!;
+  // Dynamic buddies speak from their archetype template (governed, offline-safe).
+  const archetype = buddy?.archetype && CHARACTER_ARCHETYPES[buddy.archetype] ? buddy.archetype : undefined;
+  if (archetype) {
+    const template = CHARACTER_ARCHETYPES[archetype];
+    return `${template.personaHint} Vocabulary hints: ${template.vocabulary.join(', ')}. Quirks: ${template.quirks.join(', ')}.`;
+  }
+  return 'A believable online friend with a distinct but grounded personality.';
 }
 
 function getRoomReply(roomId: string): { senderId: string; text: string } {
@@ -85,10 +94,17 @@ export const OFFLINE_MESSAGE_POOLS: Record<string, string[]> = {
   ],
 };
 
-export function pickOfflineMessage(buddyId: string, minute: number): string {
-  const pool = OFFLINE_MESSAGE_POOLS[buddyId] || [`hey, you missed me at ${minute}. ping me later?`];
-  const index = hashString(`${buddyId}:${minute}`) % pool.length;
-  return pool[index] || pool[0]!;
+export function pickOfflineMessage(buddyId: string, minute: number, archetype?: BuddyCharacter['archetype']): string {
+  const pool = OFFLINE_MESSAGE_POOLS[buddyId];
+  if (pool) {
+    const index = hashString(`${buddyId}:${minute}`) % pool.length;
+    return pool[index] || pool[0]!;
+  }
+  // Dynamic buddies use their archetype's offline voice; unknown falls back to generic.
+  if (archetype && CHARACTER_ARCHETYPES[archetype]) {
+    return pickTemplateOfflineLine(archetype, minute);
+  }
+  return `hey, you missed me at ${minute}. ping me later?`;
 }
 
 export function collectMissedPresenceActivities(
@@ -276,7 +292,7 @@ export const PulseMessengerApp: React.FC = () => {
         const maxOffset = Math.max(10, elapsed - 12);
         const offset = 10 + (hash % Math.min( maxOffset, 720));
         const timestampMinute = Math.min(totalMinutes - 2, Math.max(pulseState.lastSeenTotalMinutes + 10, pulseState.lastSeenTotalMinutes + offset));
-        const text = pickOfflineMessage(buddy.id, timestampMinute);
+        const text = pickOfflineMessage(buddy.id, timestampMinute, buddy.archetype);
         // Capture any .local links from offline message for sharedLinks / FindIt discovery
         extractLocalLinks(text).forEach((link) => {
           const lower = link.url.toLowerCase();
@@ -298,7 +314,7 @@ export const PulseMessengerApp: React.FC = () => {
           if (buddy.id === 'maya' || buddy.id === 'ryan') {
             const secondOffset = Math.min(offset + 45, elapsed - 4);
             const secondMinute = Math.min(totalMinutes - 1, pulseState.lastSeenTotalMinutes + secondOffset);
-            const secondText = pickOfflineMessage(buddy.id, secondMinute + 999);
+            const secondText = pickOfflineMessage(buddy.id, secondMinute + 999, buddy.archetype);
             if (secondText !== text) {
               extractLocalLinks(secondText).forEach((link) => {
                 const lower = link.url.toLowerCase();
@@ -321,6 +337,41 @@ export const PulseMessengerApp: React.FC = () => {
         offlineActivities.push({ id: `offline_${buddy.id}_${timestampMinute}`, buddyId: buddy.id, kind: 'message', text: `${buddy.displayName} left you an offline message.`, minute: timestampMinute, createdAt: Date.now() - (totalMinutes - timestampMinute) * 60000, isRead: false });
       });
     }
+    // P3 — NPC initiatives (rules pick the moment + template voice; AI only paraphrases in live chat).
+    // Fires once per session login, max once/day/buddy (persisted in initiatedToday).
+    const initiatedToday: Record<string, number> = { ...(pulseState.initiatedToday || {}) };
+    const initiativeDay = Math.floor(totalMinutes / 1440) + 1;
+    try {
+      const engineAny = engine as unknown as { world?: { getTriggeredEvents?: () => Array<{ title?: string; triggerDay?: number }> } };
+      const worldEvents = engineAny.world?.getTriggeredEvents?.() || [];
+      const freshEvents = worldEvents.filter((e) => typeof e.triggerDay === 'number' && (e.triggerDay === initiativeDay || e.triggerDay === initiativeDay - 1) && typeof e.title === 'string' && e.title.trim().length > 3);
+      for (const buddy of engine.social.getBuddies()) {
+        if (pulseState.blockedBuddyIds.includes(buddy.id)) continue;
+        if (initiatedToday[buddy.id] === initiativeDay) continue;
+        if (buddy.status === 'distant' || buddy.status === 'gone' || buddy.status === 'blocked') continue;
+        const stage = engine.social.getRelationshipStage(buddy.id);
+        const pres = engine.social.getPresence(buddy.id);
+        const mood = engine.social.getDailyMood(buddy.id, initiativeDay);
+        const roll = hashString(`${buddy.id}:${initiativeDay}:init`) % 100;
+        if (!shouldInitiateContact({ stage, presenceStatus: pres?.status ?? 'offline', mood, initiatedToday: false, roll })) continue;
+        // Kind pick: open promise → reminder, fresh world event → share, else check-in (close: rare cafe invite)
+        const open = engine.social.getOpenPromises(buddy.id);
+        const kindRoll = hashString(`${buddy.id}:${initiativeDay}:kind`) % 100;
+        let kind: InitiativeKind = 'checkin';
+        let eventTitle: string | undefined;
+        if (open.length > 0 && kindRoll < 40) {
+          kind = 'promise_reminder';
+        } else if (freshEvents.length > 0 && kindRoll < 75) {
+          kind = 'event_share';
+          eventTitle = freshEvents[hashString(`${buddy.id}:${initiativeDay}:evt`) % freshEvents.length]?.title;
+        }
+        if (kind === 'checkin' && stage === 'close' && (hashString(`${buddy.id}:${initiativeDay}:cafe`) % 100) < 10) kind = 'cafe_invite';
+        const text = pickInitiativeText(resolveArchetype(buddy.id, buddy.archetype), kind, `${buddy.id}:${initiativeDay}`, { eventTitle, promiseText: open[0]?.text });
+        engine.dispatchAction({ type: 'SOCIAL_RECEIVE_MESSAGE', buddyId: buddy.id, text, deliveredAway: false, tags: ['initiative', kind] });
+        initiatedToday[buddy.id] = initiativeDay;
+        offlineActivities.push({ id: `initiative_${buddy.id}_${initiativeDay}`, buddyId: buddy.id, kind: 'message', text: `${buddy.displayName} messaged you first.`, minute: totalMinutes, createdAt: Date.now(), isRead: false });
+      }
+    } catch { /* initiatives never break login */ }
     const mergedActivities = [...missedActivities, ...offlineActivities].sort((a, b) => a.minute - b.minute);
     setPulseState((previous) => {
       const nextAwayHistory = { ...previous.awayHistory };
@@ -345,7 +396,7 @@ export const PulseMessengerApp: React.FC = () => {
       const discoveredSet = new Set(previous.discoveredHosts || []);
       newLinksToAdd.forEach((link) => discoveredSet.add(link.host.toLowerCase()));
       const mergedDiscoveredHosts = Array.from(discoveredSet).slice(0, 30);
-      return { ...previous, lastSeenTotalMinutes: totalMinutes, activityFeed: [...previous.activityFeed, ...mergedActivities].slice(-80), awayHistory: nextAwayHistory, sharedLinks: mergedSharedLinks, discoveredHosts: mergedDiscoveredHosts };
+      return { ...previous, lastSeenTotalMinutes: totalMinutes, initiatedToday, activityFeed: [...previous.activityFeed, ...mergedActivities].slice(-80), awayHistory: nextAwayHistory, sharedLinks: mergedSharedLinks, discoveredHosts: mergedDiscoveredHosts };
     });
   }, [engine, pulseState.lastSeenTotalMinutes, session, totalMinutes]);
   const unreadCounts: Record<string, number> = {};
@@ -492,6 +543,23 @@ export const PulseMessengerApp: React.FC = () => {
     }
     engine.dispatchAction({ type: 'SOCIAL_SEND_MESSAGE', buddyId, text });
 
+    // P3 — promise ledger: capture commitments, detect follow-through (rules only, no AI)
+    try {
+      const gameDay = Math.floor(totalMinutes / 1440) + 1;
+      for (const extracted of extractPromisesFromPlayerMessage(text)) {
+        engine.social.addPromise(
+          buddyId,
+          extracted.text,
+          gameDay,
+          extracted.dueDayOffset !== undefined ? gameDay + extracted.dueDayOffset : undefined
+        );
+      }
+      if (looksLikeCompletion(text)) {
+        const open = engine.social.getOpenPromises(buddyId);
+        if (open.length > 0 && open[0]) engine.social.resolvePromise(buddyId, open[0].id, true, gameDay);
+      }
+    } catch { /* promise ledger never blocks chat */ }
+
     const buddy = engine.social.getBuddy(buddyId);
     const relationship = engine.social.getRelationships(buddyId);
     const presence = engine.social.getPresence(buddyId);
@@ -526,8 +594,17 @@ export const PulseMessengerApp: React.FC = () => {
 
     const recentMessages = recentMessagesForSummary;
 
-    const personaWithStyle = `${style.persona} Vocabulary hints: ${style.vocabulary.join(', ')}. Punctuation: ${style.punctuation}. Quirks: ${style.quirks.join(', ')}. ${getBuddyPersona(buddyId)}`;
-    const relationshipSummary = `${relationship ? JSON.stringify(relationship) : 'new friendship'} | Mood: ${mood} | Availability: ${availability} | Activity: ${activity} | ${memoryContext} | Typing: ${style.typing.wpm} wpm, ${style.typing.pauseStyle}`;
+    const personaWithStyle = `${style.persona} Vocabulary hints: ${style.vocabulary.join(', ')}. Punctuation: ${style.punctuation}. Quirks: ${style.quirks.join(', ')}. ${getBuddyPersona(buddyId, buddy)}`;
+    // P3 — stage/mood/long-term memory injected so the NPC honours history (AI paraphrases, rules decide)
+    let relationshipStage = 'acquaintance';
+    let dailyMood = 'steady';
+    let longTermContext = '';
+    try {
+      relationshipStage = engine.social.getRelationshipStage(buddyId);
+      dailyMood = engine.social.getDailyMood(buddyId, currentDay);
+      longTermContext = engine.social.buildLongTermContext(buddyId);
+    } catch { /* prompt enrichment is best-effort */ }
+    const relationshipSummary = `${relationship ? JSON.stringify(relationship) : 'new friendship'} | Stage: ${relationshipStage} | DailyMood: ${dailyMood} | Mood: ${mood} | Availability: ${availability} | Activity: ${activity} | ${memoryContext} | ${longTermContext} | Typing: ${style.typing.wpm} wpm, ${style.typing.pauseStyle}`;
     // Sandbox world knowledge — per-buddy attitude (B)
     let worldKnowledge = '';
     let currentGameDay = currentDay;
@@ -820,7 +897,7 @@ export const PulseMessengerApp: React.FC = () => {
         buddyId: `whisper-${room.id}-${targetId}`,
         displayName: target?.displayName || targetId,
         handle: target?.handle || targetId,
-        persona: `${getBuddyPersona(targetId)} You are receiving a private whisper from the player inside the room "${room.name}". Reply privately in one short line and do not expose the whisper to the room.`,
+        persona: `${getBuddyPersona(targetId, target ?? undefined)} You are receiving a private whisper from the player inside the room "${room.name}". Reply privately in one short line and do not expose the whisper to the room.`,
         relationshipSummary: `Private whisper in ${room.name}.`,
         recentMessages: [{ sender: 'player', text }],
         playerMessage: text,

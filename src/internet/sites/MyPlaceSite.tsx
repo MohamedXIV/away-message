@@ -3,6 +3,12 @@ import { SiteRouteProps } from '../types';
 import { useSimulationStore } from '../../store/useSimulationStore';
 import { soundManager } from '../../audio/SoundManager';
 import { getMyPlaceReleaseById } from '../../engine/MyPlaceCatalog';
+import { buildCharacter } from '../../engine/CharacterEngine';
+
+function slugBuddyId(value: string): string {
+  const slug = value.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 32);
+  return /^[a-z]/.test(slug) ? slug : `pal_${slug}`;
+}
 
 // MySpace 2005 heavily inspired — table layout, tiled bg, contact box, customizable per character, AI-mutable.
 
@@ -11,6 +17,8 @@ export const MyPlaceSite: React.FC<SiteRouteProps> = (props) => {
   const engine = useSimulationStore((s) => s.engine);
   const myplaceState = useSimulationStore((s) => s.state.myplace);
   const time = useSimulationStore((s) => s.state.time);
+  const dispatchAction = useSimulationStore((s) => s.dispatchAction);
+  const [friendNotice, setFriendNotice] = useState<string | null>(null);
 
   const effectiveParams = { ...props.params, ...props.routeParams };
   // Default to YOUR page (wanderer06) — not Maya — and routing is strict
@@ -179,7 +187,55 @@ export const MyPlaceSite: React.FC<SiteRouteProps> = (props) => {
                 >
                   ✉ Send Message
                 </button>
-                <button className="w-full bg-[#fef3c7] hover:bg-[#fde68a] border border-[#fcd34d] text-[#92400e] font-bold py-1 text-xs">+ Add to Friends</button>
+                {(() => {
+                  if (isOwnProfile) return null;
+                  const already =
+                    engine.social.getBuddy(currentUsername) ??
+                    engine.social.getBuddies().find((b) => b.handle === currentUsername);
+                  if (already) {
+                    return (
+                      <div className="w-full bg-green-50 border border-green-300 text-green-800 text-xs py-1 text-center font-bold">
+                        ✓ In your Pulse list — say hi!
+                      </div>
+                    );
+                  }
+                  return (
+                    <>
+                      <button
+                        onClick={() => {
+                          try {
+                            const npc = engine.myplace.getNpcProfile(currentUsername);
+                            const { definition } = buildCharacter({
+                              id: slugBuddyId(currentUsername),
+                              displayName: profile.displayName.slice(0, 40),
+                              handle: currentUsername.slice(0, 40),
+                              archetype: npc?.archetype ?? 'regular',
+                              metVia: 'myplace',
+                              createdDay: time.day,
+                              status: 'acquaintance',
+                            });
+                            const res = dispatchAction({ type: 'SOCIAL_ADD_BUDDY', buddy: definition, silent: true });
+                            if (res.success) {
+                              setFriendNotice(`${profile.displayName} added! Say hi on Pulse.`);
+                              soundManager.play('invite');
+                            } else {
+                              setFriendNotice(res.error ?? 'Could not add friend.');
+                            }
+                          } catch (err) {
+                            setFriendNotice((err as Error).message);
+                          }
+                          window.setTimeout(() => setFriendNotice(null), 3000);
+                        }}
+                        className="w-full bg-[#fef3c7] hover:bg-[#fde68a] border border-[#fcd34d] text-[#92400e] font-bold py-1 text-xs"
+                      >
+                        + Add to Friends
+                      </button>
+                      {friendNotice && (
+                        <div className="text-[11px] text-center text-[#1e3a8a] bg-blue-50 border border-blue-200 py-1">{friendNotice}</div>
+                      )}
+                    </>
+                  );
+                })()}
                 <div className="grid grid-cols-2 gap-1 pt-1">
                   <a className="text-[11px] text-blue-700 hover:underline" href="#" onClick={(e) => e.preventDefault()}>Forward to Friend</a>
                   <a className="text-[11px] text-blue-700 hover:underline" href="#" onClick={(e) => e.preventDefault()}>Add to Favorites</a>

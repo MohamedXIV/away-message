@@ -98,12 +98,12 @@ export const CafeScene: React.FC = () => {
       setCurrentExpression(choice.mayaReactionExpression);
     }
 
-    // Apply social impact
+    // Apply social impact — canonical engine id is 'maya' (handle is starlight_maya)
     if (choice.socialActionName) {
-      applySocialAction('starlight_maya', choice.socialActionName);
+      applySocialAction('maya', choice.socialActionName);
     }
     if (choice.socialTag) {
-      applySocialAction('starlight_maya', choice.socialTag);
+      applySocialAction('maya', choice.socialTag);
     }
 
     setCurrentBeatId(choice.nextBeatId);
@@ -119,7 +119,7 @@ export const CafeScene: React.FC = () => {
     // Set world flag & social state
     setWorldFlag('maya_met_in_person', true);
     setWorldFlag('maya_cafe_scheduled', true);
-    try { applySocialAction('starlight_maya', 'vulnerable_share'); } catch {}
+    try { applySocialAction('maya', 'vulnerable_share'); } catch {}
 
     // Return to room
     switchView('room');

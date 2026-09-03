@@ -93,23 +93,33 @@ export const BuddyListWindow: React.FC<BuddyListWindowProps> = ({
   const effectiveGroupOrder = useMemo(() => {
     const knownIds = Object.keys(PULSE_GROUPS);
     if (groupOrder && groupOrder.length > 0) {
-      const filtered = groupOrder.filter((id) => knownIds.includes(id));
+      const filtered = groupOrder.filter((id) => knownIds.includes(id) || id === 'uncategorized');
       knownIds.forEach((id) => { if (!filtered.includes(id)) filtered.push(id); });
       return filtered;
     }
     return knownIds;
   }, [groupOrder]);
 
-  const groupedBuddies = effectiveGroupOrder.map((groupId) => {
-    const group = PULSE_GROUPS[groupId];
-    if (!group) return null;
-    const label = groupLabels[groupId] || group.label;
-    return {
-      id: groupId,
-      label,
-      buddies: visibleBuddies.filter(({ buddy }) => group.memberIds.includes(buddy.id)),
-    };
-  }).filter(Boolean) as Array<{ id: string; label: string; buddies: typeof visibleBuddies }>;
+  const groupedBuddies = useMemo(() => {
+    const knownMemberIds = new Set(Object.values(PULSE_GROUPS).flatMap((g) => g.memberIds));
+    const mapped = effectiveGroupOrder.map((groupId) => {
+      if (groupId === 'uncategorized') return null; // handled below, only when non-empty
+      const group = PULSE_GROUPS[groupId];
+      if (!group) return null;
+      const label = groupLabels[groupId] || group.label;
+      return {
+        id: groupId,
+        label,
+        buddies: visibleBuddies.filter(({ buddy }) => group.memberIds.includes(buddy.id)),
+      };
+    }).filter(Boolean) as Array<{ id: string; label: string; buddies: typeof visibleBuddies }>;
+    // Dynamic buddies not listed in any static group land here instead of being invisible
+    const ungrouped = visibleBuddies.filter(({ buddy }) => !knownMemberIds.has(buddy.id));
+    if (ungrouped.length > 0) {
+      mapped.push({ id: 'uncategorized', label: groupLabels['uncategorized'] || 'Others', buddies: ungrouped });
+    }
+    return mapped;
+  }, [effectiveGroupOrder, visibleBuddies, groupLabels]);
 
   const activeCount = visibleBuddies.filter(({ presence }) => presence.status !== 'offline').length;
   const contextBuddy = contextMenu ? buddies.find((buddy) => buddy.id === contextMenu.buddyId) : undefined;

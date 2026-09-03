@@ -12,6 +12,8 @@ import { EventBus } from '../../engine/EventBus';
 import { WorldEventsEngine } from '../../engine/WorldEventsEngine';
 import { getAllReleases } from '../../engine/OsCatalog';
 import { pickOsTemplate, templateToRelease } from '../../ai/osReleaseTemplates';
+import { generateNewcomer, NEWCOMER_METVIA_ROTATION } from '../../engine/CharacterDirector';
+import type { BuddyMetVia, CharacterArchetype } from '../../engine/types';
 
 const TEST_HOST = 'midnight-board.local';
 
@@ -56,6 +58,14 @@ export const AILabApp: React.FC = () => {
   const [osBusy, setOsBusy] = useState(false);
   const [osPreview, setOsPreview] = useState<unknown | null>(null);
   const [osMeta, setOsMeta] = useState<{ source: string; error?: string } | null>(null);
+
+  // Character Lab — governed newcomers
+  const [charArchetype, setCharArchetype] = useState<CharacterArchetype | 'random'>('random');
+  const [charMetVia, setCharMetVia] = useState<BuddyMetVia>('nightboard');
+  const [charUseAI, setCharUseAI] = useState(true);
+  const [charBusy, setCharBusy] = useState(false);
+  const [charPreview, setCharPreview] = useState<unknown | null>(null);
+  const [charMeta, setCharMeta] = useState<{ source: string; error?: string } | null>(null);
 
   const activeProvider = useMemo(
     () => AI_PROVIDERS.find((provider) => provider.id === settings.activeProvider) || AI_PROVIDERS[0]!,
@@ -331,6 +341,60 @@ export const AILabApp: React.FC = () => {
     }
   };
 
+  const runCharPreview = async () => {
+    if (charBusy) return;
+    setCharBusy(true);
+    setCharPreview(null);
+    setCharMeta(null);
+    try {
+      const existingIds = engine.social.getBuddies().map((b) => b.id);
+      const res = await generateNewcomer(
+        {
+          metVia: charMetVia,
+          day: worldDay,
+          seed: `${procSeed || 'oakhaven-lab'}-char-${worldDay}`,
+          archetype: charArchetype === 'random' ? undefined : charArchetype,
+          useAI: charUseAI,
+        },
+        { existingIds }
+      );
+      setCharPreview({ ...res, definition: { ...res.definition } });
+      setCharMeta({ source: res.source, error: res.error });
+    } catch (err) {
+      setCharMeta({ source: 'error', error: (err as Error).message });
+    } finally {
+      setCharBusy(false);
+    }
+  };
+
+  const runCharInject = async () => {
+    if (charBusy || (charPreview as unknown) == null) return;
+    setCharBusy(true);
+    try {
+      const preview = charPreview as unknown as {
+        definition: { id: string; displayName: string };
+        introText: string;
+      };
+      const res = engine.dispatchAction({
+        type: 'SOCIAL_ADD_BUDDY',
+        buddy: (charPreview as any).definition,
+        introText: preview.introText,
+      });
+      if (res.success) {
+        setCharMeta({ source: 'injected' });
+        setNotice(`${preview.definition.displayName} added! Say hi on Pulse — check the Others group.`);
+        setCharPreview(null);
+      } else {
+        setCharMeta({ source: 'failed', error: res.error });
+        setNotice(`Add failed: ${res.error} — preview again for a fresh id.`);
+      }
+    } catch (err) {
+      setNotice(`Add error: ${(err as Error).message}`);
+    } finally {
+      setCharBusy(false);
+    }
+  };
+
   const runBenchmarks = async () => {
     if (running) return;
     setRunning(true);
@@ -516,6 +580,59 @@ export const AILabApp: React.FC = () => {
             <div className="font-mono text-[9px] text-gray-400">id: {(osPreview as any).id} • will appear as OS product Day {worldDay + 2} • TechMart/Control Panel</div>
           </div>
         )}
+      </section>
+
+      <section className="mb-3 border-2 border-[#1d4e89] bg-white p-2">
+        <h2 className="mb-1 font-bold text-[#1d4e89]">Character Lab — governed newcomers</h2>
+        <div className="text-[11px] text-gray-600">Archetype + meeting place → AI or template → validated via CharacterEngine → added to Pulse + MyPlace. Offline-safe: templates always work.</div>
+        <div className="mt-2 grid grid-cols-1 gap-2 md:grid-cols-3">
+          <label className="flex flex-col gap-1">Archetype<select value={charArchetype} onChange={(e) => setCharArchetype(e.target.value as any)} className="border border-gray-500 bg-white px-2 py-1"><option value="random">random</option><option value="coworker">coworker</option><option value="nightowl">nightowl</option><option value="student">student</option><option value="trader">trader</option><option value="artist">artist</option><option value="regular">regular</option></select></label>
+          <label className="flex flex-col gap-1">Met via<select value={charMetVia} onChange={(e) => setCharMetVia(e.target.value as BuddyMetVia)} className="border border-gray-500 bg-white px-2 py-1">{NEWCOMER_METVIA_ROTATION.map((m) => <option key={m} value={m}>{m}</option>)}</select></label>
+          <label className="flex items-center gap-2 mt-4"><input type="checkbox" checked={charUseAI} onChange={(e) => setCharUseAI(e.target.checked)} /> Use AI</label>
+        </div>
+        <div className="mt-2 text-[10px] text-gray-600">Buddies now: <b>{engine.social.getBuddies().length}</b> • procedural: <b>{engine.social.getBuddies().filter((b) => b.isProcedural).length}</b> • Day <b>{worldDay}</b></div>
+        <div className="mt-3 flex flex-wrap gap-2">
+          <button disabled={charBusy} onClick={runCharPreview} className="border border-gray-700 bg-white px-4 py-1 font-bold hover:bg-gray-50 disabled:opacity-60">{charBusy ? 'Working…' : 'Preview newcomer (dry)'}</button>
+          <button disabled={charBusy || (charPreview as unknown) == null} onClick={runCharInject} className="border border-gray-700 bg-[#1d4e89] px-4 py-1 font-bold text-white hover:bg-[#27619f] disabled:opacity-60">{charBusy ? 'Working…' : 'Add to World + Pulse'}</button>
+          {charMeta && <span className="px-2 py-1 text-[10px] bg-gray-100 border border-gray-300">source: <b>{charMeta.source}</b>{charMeta.error ? ` • ${charMeta.error.slice(0,60)}` : ''}</span>}
+        </div>
+        {(charPreview as unknown) != null && (
+          <div className="mt-3 border border-gray-400 bg-[#fafafa] p-2">
+            <div className="font-bold text-xs">{(charPreview as any).definition.displayName} <span className="font-mono text-[10px] text-gray-500">@{(charPreview as any).definition.handle} • {(charPreview as any).definition.archetype} • met via {(charPreview as any).definition.metVia}</span></div>
+            <div className="text-[11px] text-gray-700 italic mt-1">“{(charPreview as any).introText}”</div>
+            <div className="text-[11px] text-gray-600 mt-1">{(charPreview as any).profilePatch.headline} — {(charPreview as any).profilePatch.bio}</div>
+            <div className="font-mono text-[9px] text-gray-400">id: {(charPreview as any).definition.id} • MyPlace: http://myplace.local/{(charPreview as any).definition.id}</div>
+          </div>
+        )}
+      </section>
+
+      <section className="mb-3 border-2 border-[#8a4b00] bg-white p-2">
+        <h2 className="mb-1 font-bold text-[#8a4b00]">Relationship Lab — memory, stages &amp; sharp events (read-only)</h2>
+        <div className="text-[11px] text-gray-600">Hidden dimensions, derived stage, daily mood, immortal memories, open promises and lifecycle status per buddy. Rules decide, AI only paraphrases.</div>
+        <div className="mt-2 space-y-1">
+          {engine.social.getBuddies().map((b) => {
+            const rel = engine.social.getRelationships(b.id);
+            const stage = engine.social.getRelationshipStage(b.id);
+            const mood = engine.social.getDailyMood(b.id, worldDay);
+            const mems = engine.social.getCoreMemories(b.id);
+            const open = engine.social.getOpenPromises(b.id);
+            const sharp = (engine.world.getFlag(`sharp_${b.id}`) as string) || '—';
+            return (
+              <div key={b.id} className="border border-gray-300 bg-[#fafafa] p-2 text-[11px]">
+                <div className="flex flex-wrap items-center gap-2">
+                  <b>{b.displayName}</b>
+                  <span className="font-mono text-[10px] text-gray-500">@{b.handle} • {b.archetype ?? '?'} • status: {b.status ?? '—'}</span>
+                  <span className="border border-[#8a4b00] px-1 font-bold text-[#8a4b00]">stage: {stage}</span>
+                  <span className="border border-gray-400 px-1">mood: {mood}</span>
+                  {sharp !== '—' && sharp !== '' && <span className="border border-red-600 px-1 font-bold text-red-700">sharp: {sharp}</span>}
+                </div>
+                {rel && <div className="mt-1 font-mono text-[10px] text-gray-600">fam {rel.familiarity} • trust {rel.trust} • comfort {rel.comfort} • respect {rel.respect} • annoy {rel.annoyance}</div>}
+                {mems.length > 0 && <ul className="mt-1 list-disc pl-4 text-gray-700">{mems.map((m) => <li key={m.id}>[{m.kind} d{m.day}] {m.text}</li>)}</ul>}
+                {open.length > 0 && <div className="mt-1 text-gray-700">promises: {open.map((p) => `“${p.text}”${p.dueDay !== undefined ? ` (due d${p.dueDay})` : ''}`).join(' • ')}</div>}
+              </div>
+            );
+          })}
+        </div>
       </section>
 
       <section className="border border-gray-500 bg-white p-2">
