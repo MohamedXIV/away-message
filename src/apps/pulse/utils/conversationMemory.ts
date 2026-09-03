@@ -124,6 +124,23 @@ export function looksLikeCompletion(text: string): boolean {
   return COMPLETION_PATTERNS.some((pattern) => pattern.test(trimmed));
 }
 
+const PHOTO_PATTERNS: RegExp[] = [
+  /photo/i,
+  /picture/i,
+  /\bpic\b/i,
+  /\bimage\b/i,
+  /that shot/i,
+  /camera roll/i,
+  /still have that/i,
+];
+
+/** P5.5 — is the player asking about a shared photo? (drives the recall hint) */
+export function looksLikePhotoQuestion(text: string): boolean {
+  const trimmed = text.trim();
+  if (trimmed.length < 3 || trimmed.length > 200) return false;
+  return PHOTO_PATTERNS.some((pattern) => pattern.test(trimmed));
+}
+
 export function buildConversationSummary(recentMessages: Array<{ sender: string; text: string }>, previousSummary: string, maxLen = 520): string {
   if (recentMessages.length === 0) return previousSummary || 'No prior conversation.';
   // Build a compressed transcript: last 6 exchanges summarized as "Player: ... / Buddy: ..."

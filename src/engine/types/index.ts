@@ -362,7 +362,7 @@ export interface SocialEngineState {
 export interface CoreMemory {
   id: string;
   text: string; // <= 160 chars
-  kind: 'fact' | 'promise_kept' | 'promise_broken' | 'first_meeting' | 'shared_moment';
+  kind: 'fact' | 'promise_kept' | 'promise_broken' | 'first_meeting' | 'shared_moment' | 'shared_photo';
   day: number;
 }
 

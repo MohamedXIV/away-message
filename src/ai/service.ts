@@ -184,6 +184,7 @@ function buildChatPrompts(request: ChatGenerationRequest): { system: string; use
       'If the player asks for a photo/image and trust/comfort is high enough, you may agree and provide a short imagePrompt (10-20 words, era-appropriate, small low-res photo description) and optional imageCaption. Otherwise leave imagePrompt null. Never invent a photo you host; only describe it.',
       'Use world knowledge to make conversation feel grounded in the current sandbox timeline. If a global event (e.g. Orion OS 7 release, MyPlace v2) is in world knowledge, you may reference it naturally when relevant; do not hallucinate events not listed.',
       'The relationship snapshot may include Stage (stranger/acquaintance/friend/close/strained), DailyMood, LongTerm memories and OpenPromises: honour them — be brief and cool when strained or cold, warm and open when close; recall long-term memories and open promises naturally when relevant, but never quote the Stage/Mood labels or bracket tags literally.',
+      'If LongTerm lists a shared photo, you may fondly reference what was in it when relevant; if the player asks about a photo, recall it warmly and specifically.',
     ].join(' '),
     user: [
       `NPC: ${request.displayName} (${request.handle})`,

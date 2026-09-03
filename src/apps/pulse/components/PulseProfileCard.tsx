@@ -25,12 +25,16 @@ const meterItems: Array<{ key: keyof RelationshipDimensions; label: string; colo
 
 const EMPTY_KNOWLEDGE: import('../../../engine/types').BuddyEventKnowledge[] = [];
 const EMPTY_EVENTS: import('../../../engine/types').GlobalEvent[] = [];
+const EMPTY_PHOTOS: import('../../../engine/types').CoreMemory[] = [];
 
 export const PulseProfileCard: React.FC<PulseProfileCardProps> = ({ buddy, presence, relationship, rooms, onClose, onChat, onBuzz, onInvite, awayHistory = [] }) => {
   const avatarLetter = buddy.displayName.trim().charAt(0).toUpperCase() || '?';
   // Use stable selectors — avoid creating new [] on every getSnapshot call
   const buddyKnowledge = useSimulationStore((s) => s.state.world.buddyKnowledge?.[buddy.id] ?? EMPTY_KNOWLEDGE);
   const worldEvents = useSimulationStore((s) => s.state.world.triggeredEvents ?? EMPTY_EVENTS);
+  // P5.5 visual album: immortal shared-photo memories (stable reference from cached engine state)
+  const photoMemories = useSimulationStore((s) => s.state.social.coreMemories?.[buddy.id] ?? EMPTY_PHOTOS);
+  const photos = photoMemories.filter((m) => m.kind === 'shared_photo');
 
   return (
     <div className="absolute right-3 top-3 z-30 w-72 border-2 border-[#38516e] bg-[#edf2f8] font-sans text-xs text-[#18283b] shadow-[6px_6px_0_rgba(15,35,60,0.26)]">
@@ -78,6 +82,17 @@ export const PulseProfileCard: React.FC<PulseProfileCardProps> = ({ buddy, prese
             );
           })}
         </div>
+
+        {photos.length > 0 && (
+          <div className="border border-[#b2bdc8] bg-white p-2">
+            <div className="mb-1 flex items-center justify-between font-bold text-[#274e78]"><span>Shared photos</span><span className="text-[9px] font-normal text-gray-400">{photos.length} immortal</span></div>
+            <div className="space-y-1.5 text-[10px] text-gray-600">
+              {photos.slice(-3).reverse().map((photo) => (
+                <div key={photo.id} className="border-l-2 border-[#c18b45] pl-1.5"><div className="italic leading-tight">📷 “{photo.text.replace(/^Shared a photo, Day \d+: /, '')}”</div><div className="text-[9px] text-gray-400">Day {photo.day} • never forgotten</div></div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {buddyKnowledge.length > 0 && (
           <div className="border border-[#b2bdc8] bg-white p-2">

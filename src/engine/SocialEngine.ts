@@ -19,6 +19,8 @@ import { validatePersistedBuddy } from './CharacterEngine';
 // P3 long-term memory caps (keeps prompt injection bounded and saves small)
 export const MAX_CORE_MEMORIES = 8;
 export const MAX_OPEN_PROMISES = 5;
+// P5.5 visual memory: at most 3 immortal photos per buddy (facts must survive too)
+export const MAX_PHOTO_MEMORIES = 3;
 // P3 sharp-event thresholds (annoyance scale 0..100; dismissive gives +8)
 export const STRAINED_ANNOYANCE = 60;
 export const DISTANT_ANNOYANCE = 85;
@@ -192,7 +194,7 @@ export class SocialEngine {
   }
 
   private static isValidMemoryKind(kind: unknown): kind is CoreMemory['kind'] {
-    return kind === 'fact' || kind === 'promise_kept' || kind === 'promise_broken' || kind === 'first_meeting' || kind === 'shared_moment';
+    return kind === 'fact' || kind === 'promise_kept' || kind === 'promise_broken' || kind === 'first_meeting' || kind === 'shared_moment' || kind === 'shared_photo';
   }
 
   public restoreState(state: SocialEngineState): void {
@@ -789,6 +791,20 @@ export class SocialEngine {
     const existing = this.conversations.get(conversationId) || [];
     existing.push(msg);
     this.conversations.set(conversationId, existing);
+
+    // P5.5 visual memory: buddy-sent photos become immortal (capped so facts survive too).
+    // Covers every photo path (AI chat, scripts) since all funnel through here.
+    if (senderId !== 'player' && (imagePrompt || imageUrl) && this.buddies.has(conversationId)) {
+      const photos = (this.coreMemories.get(conversationId) || []).filter((m) => m.kind === 'shared_photo');
+      if (photos.length < MAX_PHOTO_MEMORIES) {
+        const caption = String(imageCaption || imagePrompt || 'a photo').trim().replace(/\s+/g, ' ').slice(0, 100);
+        this.addCoreMemory(conversationId, {
+          text: `Shared a photo, Day ${day}: "${caption}"`,
+          kind: 'shared_photo',
+          day,
+        });
+      }
+    }
 
     this.eventBus.emit('social:message_received', { message: { ...msg } });
     return { ...msg };

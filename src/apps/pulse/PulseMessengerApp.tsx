@@ -19,7 +19,7 @@ import { soundManager } from '../../audio/SoundManager';
 import { loadPulseState, savePulseState, getCurrentPulseSlotId, setCurrentPulseSlotId, type PulsePersistedState, type PulseSkin } from './persistence';
 import type { PulseActivityEntry, PulseActivityKind } from './types';
 import { getNpcStyle, getNpcMoodLabel, getNpcAvailabilityLabel, getNpcActivityLabel } from './data/npcStyles';
-import { extractFactsFromPlayerMessage, extractPromisesFromPlayerMessage, looksLikeCompletion, buildConversationSummary, buildMemoryContext, hashReply, isDuplicateReply } from './utils/conversationMemory';
+import { extractFactsFromPlayerMessage, extractPromisesFromPlayerMessage, looksLikeCompletion, looksLikePhotoQuestion, buildConversationSummary, buildMemoryContext, hashReply, isDuplicateReply } from './utils/conversationMemory';
 import { extractLocalLinks, pickRandomBuddyLink, pickTopicalBuddyLink } from './utils/linkDetector';
 import { CHARACTER_ARCHETYPES, pickTemplateOfflineLine, pickRoomExitLine } from '../../engine/characterTemplates';
 import { planInitiatives } from './utils/initiatives';
@@ -659,13 +659,18 @@ export const PulseMessengerApp: React.FC = () => {
     let dailyMood = 'steady';
     let longTermContext = '';
     let affinityContext = '';
+    let photoRecallHint = '';
     try {
       relationshipStage = engine.social.getRelationshipStage(buddyId);
       dailyMood = engine.social.getDailyMood(buddyId, currentDay);
       longTermContext = engine.social.buildLongTermContext(buddyId);
       affinityContext = engine.social.buildAffinityContext(buddyId);
+      // P5.5 visual recall: photo questions get an explicit nudge so the NPC answers from LongTerm
+      if (looksLikePhotoQuestion(text) && engine.social.getCoreMemories(buddyId).some((m) => m.kind === 'shared_photo')) {
+        photoRecallHint = ' The player is asking about a shared photo — recall it warmly and specifically from the LongTerm memories.';
+      }
     } catch { /* prompt enrichment is best-effort */ }
-    const relationshipSummary = `${relationship ? JSON.stringify(relationship) : 'new friendship'} | Stage: ${relationshipStage} | DailyMood: ${dailyMood} | Mood: ${mood} | Availability: ${availability} | Activity: ${activity} | ${memoryContext} | ${longTermContext}${affinityContext ? ` | ${affinityContext}` : ''} | Typing: ${style.typing.wpm} wpm, ${style.typing.pauseStyle}`;
+    const relationshipSummary = `${relationship ? JSON.stringify(relationship) : 'new friendship'} | Stage: ${relationshipStage} | DailyMood: ${dailyMood} | Mood: ${mood} | Availability: ${availability} | Activity: ${activity} | ${memoryContext} | ${longTermContext}${affinityContext ? ` | ${affinityContext}` : ''}${photoRecallHint} | Typing: ${style.typing.wpm} wpm, ${style.typing.pauseStyle}`;
     // Sandbox world knowledge — per-buddy attitude (B)
     let worldKnowledge = '';
     let currentGameDay = currentDay;
