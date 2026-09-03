@@ -4,7 +4,7 @@ export const AI_PROVIDERS: AIProviderDefinition[] = [
   {
     id: 'gemini',
     label: 'Google Gemini',
-    defaultModel: 'gemini-2.0-flash',
+    defaultModel: 'gemini-3.1-flash-lite',
     envKeyName: 'VITE_GEMINI_API_KEY',
     envModelName: 'VITE_GEMINI_MODEL',
   },
@@ -39,16 +39,9 @@ export function getProviderDefinition(providerId: AIProviderId): AIProviderDefin
   return provider;
 }
 
-const MODEL_ALIASES: Record<string, string> = {
-  'gemini-3.1-flash-lite': 'gemini-2.0-flash',
-  'gemini-3.1-flash': 'gemini-2.0-flash',
-  'gemini-1.5-flash': 'gemini-2.0-flash',
-};
-
 export function getProviderModel(providerId: AIProviderId): string {
   const definition = getProviderDefinition(providerId);
-  const raw = env[definition.envModelName]?.trim() || definition.defaultModel;
-  return MODEL_ALIASES[raw] ?? raw;
+  return env[definition.envModelName]?.trim() || definition.defaultModel;
 }
 
 export function resolveApiKey(
