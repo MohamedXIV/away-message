@@ -16,11 +16,11 @@ import { TelemetryEngine } from './TelemetryEngine';
 import { WorldEventsEngine } from './WorldEventsEngine';
 import { OsEngine } from './OsEngine';
 import { PulseEngine } from './PulseEngine';
-import { MyPlaceEngine } from './MyPlaceEngine';
+import { MyPlaceEngine, CORE_PROFILE_ALIASES } from './MyPlaceEngine';
 import { validatePersistedBuddy } from './CharacterEngine';
 import { generateNewcomer, shouldAutoDiscover, NEWCOMER_METVIA_ROTATION } from './CharacterDirector';
 import { STRAINED_ANNOYANCE, DISTANT_ANNOYANCE, GONE_ANNOYANCE } from './SocialEngine';
-import { pickConfrontLine, pickFarewellLine, pickReturnLine, pickInitiativeText, pickRsvpLine, pickStoodUpLine, pickMeetingApologyLine, pickShiftWrapLine, pickArchiveWrapLine, resolveArchetype, isCoreBuddyId } from './characterTemplates';
+import { pickConfrontLine, pickFarewellLine, pickReturnLine, pickInitiativeText, pickRsvpLine, pickStoodUpLine, pickMeetingApologyLine, pickShiftWrapLine, pickArchiveWrapLine, pickGuestbookLine, pickGuestbookReplyLine, pickTop8NewsLine, resolveArchetype, isCoreBuddyId } from './characterTemplates';
 import { parseMeetupProposal, isMeetupCancelText, decideRsvp, decideNpcShow, appointmentRoll, locationLabel, LOCATION_SLOTS, pickCoopDetail, SHIFT_WAGE } from './AppointmentDirector';
 
 export class SimulationEngine {
@@ -114,6 +114,9 @@ export class SimulationEngine {
       this.processRelationshipDaily(newDay);
       // P5 daily meeting pass: RSVP for tomorrow + resolve the past (rules only, no AI)
       this.processAppointmentsDaily(newDay);
+      // P5.4 daily MyPlace life: Top 8 re-rank + guestbook notes and replies (rules only)
+      this.refreshTop8Periodic(newDay);
+      this.processGuestbookDaily(newDay);
     });
 
     this.events.on('economy:cash_changed', ({ newCash }) => {
@@ -124,25 +127,14 @@ export class SimulationEngine {
     this.world.setBuddyProvider(() =>
       this.social.getBuddies().map((b) => ({ id: b.id, archetype: b.archetype }))
     );
+    // Core buddies never pass through registerBuddy — stub their pages up front
+    // (procedural ones are stubbed by the handler below as they arrive).
+    for (const buddy of this.social.getBuddies()) this.ensureMyPlaceStub(buddy);
     this.events.on('social:buddy_registered', ({ buddy }: any) => {
       try {
         this.world.ensureAttitudesForBuddy(buddy.id, this.clock.getTotalMinutes());
       } catch { /* attitudes are best-effort */ }
-      try {
-        this.myplace.ensureNpcProfile({
-          username: buddy.handle || buddy.id,
-          displayName: buddy.displayName,
-          archetype: buddy.archetype,
-        });
-        // Also index by raw id so MyPlace routing works with either key
-        if (buddy.handle && buddy.handle !== buddy.id) {
-          this.myplace.ensureNpcProfile({
-            username: buddy.id,
-            displayName: buddy.displayName,
-            archetype: buddy.archetype,
-          });
-        }
-      } catch { /* MyPlace stub is best-effort */ }
+      this.ensureMyPlaceStub(buddy);
     });
 
     // Keep PulseEngine in sync when Pulse is installed via SoftwareRegistry
@@ -240,7 +232,9 @@ export class SimulationEngine {
             };
             const text = texts[res.username] ?? `updated my MyPlace — ${res.profile.headline} ${link}`;
             try { this.social.sendMessage(res.username, res.username, 'player', text, currentMinutes, false, ['myplace_update']); } catch {}
+            this.maybeCoCommentProfileUpdate(res.username, tickResult.time.day, currentMinutes);
             try { this.events.emit('social:message_received' as any, { message: { senderId: res.username, text } }); } catch {}
+            this.maybeCoCommentProfileUpdate(res.username, tickResult.time.day, currentMinutes);
           }
         }).catch(() => {});
       }
@@ -656,10 +650,162 @@ export class SimulationEngine {
     } catch { return false; }
   }
 
+  /** P5.4 co-comment: when an NPC refreshes their page, a mutual friend may sign the guestbook. */
+  private maybeCoCommentProfileUpdate(username: string, day: number, currentMinutes: number): void {
+    try {
+      if (appointmentRoll(`${username}:${day}:gbco`) >= 50) return;
+      const owner = this.social.getBuddies().find((b) =>
+        b.handle === username || b.id === username
+        || CORE_PROFILE_ALIASES[b.id] === username || CORE_PROFILE_ALIASES[b.handle] === username);
+      const candidates = this.social.getBuddies().filter((b) => {
+        if (owner && b.id === owner.id) return false;
+        if (b.status === 'distant' || b.status === 'gone' || b.status === 'blocked') return false;
+        const stage = this.social.getRelationshipStage(b.id);
+        return stage === 'friend' || stage === 'close';
+      });
+      if (candidates.length === 0) return;
+      const commenter = candidates[appointmentRoll(`${username}:${day}:gbco2`) % candidates.length]!;
+      const ownerProfile = this.myplace.getNpcProfile(username);
+      const authorKey = this.resolveProfileUsername(commenter) ?? commenter.handle;
+      this.myplace.addGuestbookComment(username, authorKey, pickGuestbookLine(`${username}:${day}:gbco`, ownerProfile?.displayName ?? username), currentMinutes);
+      this.telemetry.logEvent('social', 'myplace_guestbook', currentMinutes, { from: commenter.id, to: username });
+    } catch { /* co-comments never break the tick */ }
+  }
+
+  /** P5.4 stub MyPlace pages for a buddy (handle + id keys so routing works either way). */
+  private ensureMyPlaceStub(buddy: { handle?: string; id: string; displayName: string; archetype?: any }): void {
+    try {
+      this.myplace.ensureNpcProfile({
+        username: buddy.handle || buddy.id,
+        displayName: buddy.displayName,
+        archetype: buddy.archetype,
+      });
+      // Also index by raw id so MyPlace routing works with either key
+      if (buddy.handle && buddy.handle !== buddy.id) {
+        this.myplace.ensureNpcProfile({
+          username: buddy.id,
+          displayName: buddy.displayName,
+          archetype: buddy.archetype,
+        });
+      }
+    } catch { /* MyPlace stub is best-effort */ }
+  }
+
   /** P5 daily pass: RSVP for tomorrow + resolve the past. Rules only, no AI. */
   private processAppointmentsDaily(newDay: number): void {
     this.runRsvpPass(newDay);
     this.resolveDueAppointments(newDay);
+  }
+
+  // ==========================================
+  // P5.4 — MYPLACE SOCIAL LIFE (Top 8 + guestbook, rules-only, template-voiced)
+  // Top 8s re-rank from live C2 affinities every 3rd day; entries celebrate.
+  // Guestbooks get NPC→NPC notes daily; owners reply to the player's notes.
+  // ==========================================
+
+  /**
+   * Which profile page belongs to a buddy. Legacy rich profiles win over stubs:
+   * alias (maya_x) → handle → id, so notes land where players actually look.
+   */
+  private resolveProfileUsername(buddy: { id: string; handle: string }): string | null {
+    try {
+      const alias = CORE_PROFILE_ALIASES[buddy.id] ?? CORE_PROFILE_ALIASES[buddy.handle];
+      if (alias && this.myplace.getNpcProfile(alias)) return alias;
+      if (this.myplace.getNpcProfile(buddy.handle)) return buddy.handle;
+      if (this.myplace.getNpcProfile(buddy.id)) return buddy.id;
+    } catch { /* resolution is best-effort */ }
+    return null;
+  }
+
+  private static top8StageBonus(stage: string): number {
+    if (stage === 'close') return 30;
+    if (stage === 'friend') return 20;
+    if (stage === 'acquaintance') return 10;
+    if (stage === 'stranger') return 0;
+    return -50; // strained: out of the running
+  }
+
+  /** Periodic Top 8 re-rank from live affinities (days 4, 7, 10, ...). Rules only. */
+  private refreshTop8Periodic(newDay: number): void {
+    if (newDay <= 1 || newDay % 3 !== 1) return;
+    try {
+      const minutes = this.clock.getTotalMinutes();
+      for (const buddy of this.social.getBuddies()) {
+        if (buddy.status === 'distant' || buddy.status === 'gone' || buddy.status === 'blocked') continue;
+        const profileKey = this.resolveProfileUsername(buddy);
+        if (!profileKey) continue;
+        const ranked = this.social.getBuddies()
+          .filter((o) => o.id !== buddy.id && o.status !== 'distant' && o.status !== 'gone' && o.status !== 'blocked')
+          .map((o) => ({
+            buddy: o,
+            score: this.social.getAffinity(buddy.id, o.id) + SimulationEngine.top8StageBonus(this.social.getRelationshipStage(o.id)),
+          }))
+          .sort((x, y) => y.score - x.score || (x.buddy.id < y.buddy.id ? -1 : 1))
+          .slice(0, 8);
+        const prevTop3 = String(this.world.getFlag(`top3_${profileKey}`) || '').split(',').filter(Boolean);
+        const nextTop3 = ranked.slice(0, 3).map((s) => s.buddy.id);
+        this.myplace.setNpcTop8(profileKey, ranked.map((s) => {
+          const uname = this.resolveProfileUsername(s.buddy) ?? s.buddy.handle;
+          const avatar = this.myplace.getNpcProfile(uname)?.avatarGlyph || '📷';
+          return { handle: uname, name: s.buddy.displayName, avatar };
+        }));
+        this.world.setFlag(`top3_${profileKey}`, nextTop3.join(','));
+        // Entries celebrate (positive-only news, one per day max)
+        const entered = nextTop3.filter((id) => !prevTop3.includes(id));
+        if (entered.length > 0 && !this.world.getFlag(`top8news_${newDay}`)) {
+          const entering = this.social.getBuddy(entered[0]!);
+          if (entering) {
+            const stage = this.social.getRelationshipStage(entering.id);
+            if (stage === 'friend' || stage === 'close') {
+              this.world.setFlag(`top8news_${newDay}`, true);
+              const rank = nextTop3.indexOf(entering.id) + 1;
+              this.social.sendMessage(entering.id, entering.id, 'player', pickTop8NewsLine(`${profileKey}:${newDay}`, buddy.displayName, rank), minutes, false, ['myplace', 'top8']);
+              this.telemetry.logEvent('social', 'myplace_top8_news', minutes, { buddyId: entering.id, owner: profileKey, rank });
+            }
+          }
+        }
+      }
+    } catch { /* Top 8 never breaks the tick */ }
+  }
+
+  /** Daily guestbook life: NPC→NPC notes (max 2) + owner replies to yesterday's player notes (max 2). */
+  private processGuestbookDaily(newDay: number): void {
+    try {
+      const minutes = this.clock.getTotalMinutes();
+      const active = this.social.getBuddies().filter((b) => b.status !== 'distant' && b.status !== 'gone' && b.status !== 'blocked');
+      if (active.length >= 2) {
+        for (let slot = 0; slot < 2; slot++) {
+          const writer = active[appointmentRoll(`${newDay}:gbw:${slot}`) % active.length]!;
+          const others = active.filter((b) => b.id !== writer.id);
+          if (others.length === 0) continue;
+          const target = others[appointmentRoll(`${newDay}:gbt:${slot}`) % others.length]!;
+          const targetKey = this.resolveProfileUsername(target);
+          if (!targetKey) continue;
+          // Guestbook culture is casual: any active, non-strained buddy signs
+          if (this.social.getRelationshipStage(writer.id) === 'strained') continue;
+          const writerKey = this.resolveProfileUsername(writer) ?? writer.handle;
+          this.myplace.addGuestbookComment(targetKey, writerKey, pickGuestbookLine(`${targetKey}:${newDay}:${slot}`, target.displayName), minutes);
+          this.telemetry.logEvent('social', 'myplace_guestbook', minutes, { from: writer.id, to: targetKey });
+        }
+      }
+      let replies = 0;
+      for (const buddy of this.social.getBuddies()) {
+        if (replies >= 2) break;
+        if (buddy.status === 'distant' || buddy.status === 'gone' || buddy.status === 'blocked') continue;
+        const key = this.resolveProfileUsername(buddy);
+        if (!key) continue;
+        const entries = this.myplace.getGuestbook(key);
+        const playerNote = entries.find((e) => e.author === 'wanderer06' && Math.floor(e.minute / 1440) + 1 === newDay - 1);
+        if (!playerNote) continue;
+        const alreadyReplied = entries.some((e) => e.minute > playerNote.minute
+          && (e.author === key || e.author === buddy.handle || e.author === buddy.id));
+        if (alreadyReplied) continue;
+        if (appointmentRoll(`${key}:${newDay}:gbreply`) >= 60) continue;
+        this.myplace.addGuestbookComment(key, key, pickGuestbookReplyLine(`${key}:${newDay}`), minutes);
+        replies++;
+        this.telemetry.logEvent('social', 'myplace_guestbook_reply', minutes, { to: key });
+      }
+    } catch { /* guestbook never breaks the tick */ }
   }
 
   public async generateProceduralEventsNow(options?: { maxEvents?: number; useAI?: boolean }): Promise<import('./types').GlobalEvent[]> {

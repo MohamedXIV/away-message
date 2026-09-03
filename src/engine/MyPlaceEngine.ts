@@ -36,6 +36,20 @@ export interface MyPlaceEngineState {
   proceduralCatalog?: MyPlaceRelease[];
 }
 
+/**
+ * P5.4 legacy handle aliases: engine buddy ids/handles predate these profile keys
+ * (buddy 'maya' / handle 'starlight_maya' ↔ profile 'maya_x'). Used to resolve
+ * which profile page belongs to a buddy.
+ */
+export const CORE_PROFILE_ALIASES: Record<string, string> = {
+  maya: 'maya_x',
+  starlight_maya: 'maya_x',
+  ryan: 'tacocart_ryan',
+  ryan_foodcart: 'tacocart_ryan',
+  nora: 'nightowl87',
+  NightOwl87: 'nightowl87',
+};
+
 const DEFAULT_PROFILE: MyPlaceProfile = {
   username: 'wanderer06',
   displayName: 'wanderer06',
@@ -49,8 +63,7 @@ const DEFAULT_PROFILE: MyPlaceProfile = {
   visibility: 'public',
 };
 
-const DEFAULT_NPC_PROFILES: Record<string, MyPlaceProfile> = {
-  maya_x: {
+const DEFAULT_NPC_PROFILES: Record<string, MyPlaceProfile> = {  maya_x: {
     username: 'maya_x',
     displayName: 'Maya Lin',
     headline: 'Taking 35mm photos in the rain // 4th St Diner shifts',
@@ -411,6 +424,25 @@ export class MyPlaceEngine {
     const list = this.guestbook.get(username) ?? [];
     list.unshift({ author, text, date: 'Just now', minute });
     this.guestbook.set(username, list.slice(0, 20));
+  }
+
+  /**
+   * P5.4 governed Top 8 rewrite (periodic refresh from live affinities).
+   * Validated + capped at 8; unknown profiles rejected. Returns success.
+   */
+  public setNpcTop8(username: string, top8: Array<{ handle: string; name: string; avatar: string }>): boolean {
+    const existing = this.npcProfiles.get(username);
+    if (!existing || !Array.isArray(top8)) return false;
+    const clean = top8
+      .filter((t) => t && typeof t.handle === 'string' && t.handle.trim() && typeof t.name === 'string' && t.name.trim())
+      .slice(0, 8)
+      .map((t) => ({
+        handle: t.handle.trim().slice(0, 40),
+        name: t.name.trim().slice(0, 40),
+        avatar: typeof t.avatar === 'string' && t.avatar ? t.avatar.slice(0, 8) : '📷',
+      }));
+    existing.top8 = clean;
+    return true;
   }
 
   private log(msg: string): void {

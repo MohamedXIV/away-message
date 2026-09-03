@@ -731,6 +731,47 @@ export function pickRoomExitLine(seed: string): string {
   return pickFromPool(ROOM_EXIT_LINES, `${seed}:roomexit`);
 }
 
+// ==========================================
+// P5.4 — MYPLACE SOCIAL LINES ({name} = profile owner display name)
+// ==========================================
+
+/** NPC → NPC guestbook notes left on each other's pages. */
+export const GUESTBOOK_LINES: string[] = [
+  'love the new look, {name}!! this page keeps getting better',
+  'stopping by to say hi — the new song is stuck in my head lol',
+  'your photos!! okay, teaching me your ways soon, {name}?',
+  'this headline is so you. never change, {name}',
+  'came for the glitter, stayed for the bio. 10/10 page',
+  'added your song to my rotation, {name}!!',
+];
+/** Profile-owner replies to the player's guestbook notes. */
+export const GUESTBOOK_REPLY_LINES: string[] = [
+  'thanks for stopping by!! means a lot :)',
+  'hey!! saw your note — you are the best lol',
+  'aww thank you!! come back anytime :)',
+];
+/** Celebration when an NPC enters someone's Top 3 (positive-only news). */
+export const TOP8_NEWS_LINES: string[] = [
+  'omg {name} put me at #{rank} on their page!! made my whole day lol',
+  'guess who just made {name}\u2019s top #{rank}?? me!! okay im happy',
+  '{name} ranked me #{rank}!! screen-shotting this forever lol',
+];
+
+export function pickGuestbookLine(seed: string, ownerName: string): string {
+  const name = ownerName.trim().slice(0, 40) || 'friend';
+  return pickFromPool(GUESTBOOK_LINES, `${seed}:guestbook`).replaceAll('{name}', name);
+}
+
+export function pickGuestbookReplyLine(seed: string): string {
+  return pickFromPool(GUESTBOOK_REPLY_LINES, `${seed}:gbreply`);
+}
+
+export function pickTop8NewsLine(seed: string, ownerName: string, rank: number): string {
+  const name = ownerName.trim().slice(0, 40) || 'friend';
+  const r = Math.max(1, Math.min(3, Math.floor(rank) || 1));
+  return pickFromPool(TOP8_NEWS_LINES, `${seed}:top8news`).replaceAll('{name}', name).replaceAll('{rank}', String(r));
+}
+
 export interface InitiativeDecision {
   stage: RelationshipStage;
   presenceStatus: BuddyPresenceStatus;
