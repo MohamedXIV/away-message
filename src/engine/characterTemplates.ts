@@ -629,8 +629,7 @@ export function pickReturnLine(archetype: CharacterArchetype, seed: string): str
   return pickFromPool(ARCHETYPE_RETURN_LINES[arch], `${seed}:return`);
 }
 
-/** C2 gossip line about another buddy's visible absence (name + status filled by caller). */
-export function pickGossipLine(
+/** C2 gossip line about another buddy's visible absence (name + status filled by caller). */export function pickGossipLine(
   _archetype: CharacterArchetype,
   seed: string,
   targetName: string,
@@ -639,6 +638,56 @@ export function pickGossipLine(
   const pool = status === 'gone' ? GOSSIP_GONE_LINES : GOSSIP_DISTANT_LINES;
   const name = targetName.trim().slice(0, 40) || 'they';
   return pickFromPool(pool, `${seed}:gossip:${status}`).replaceAll('{name}', name);
+}
+
+// ==========================================
+// P5 — LIVE MEETING LINES (shared pools, {location}/{dayref} filled by caller)
+// ==========================================
+
+/** NPC confirmations — sent the day before (or same-day for tonight plans). */
+export const APPT_RSVP_YES_LINES: string[] = [
+  'sounds good — see you at {location} {dayref}!',
+  'yes! {location} {dayref}, dont be late lol',
+  'ok, {location} {dayref}. looking forward to it :)',
+];
+/** NPC declines — only sent when strained (rare by design). */
+export const APPT_RSVP_NO_LINES: string[] = [
+  'honestly... i dont think {location} {dayref} is a good idea. not right now.',
+  'gonna pass on {location} {dayref}. sorry. things feel off.',
+  'cant do {location} {dayref}. maybe some other time.',
+];
+/** NPC maybes — low mood days. */
+export const APPT_RSVP_MAYBE_LINES: string[] = [
+  'maybe... {location} {dayref}? ill try, no promises lol',
+  '{location} {dayref} — probably. ping me that day?',
+  'tentative yes for {location} {dayref}. depends how the day goes.',
+];
+/** NPC showed up, player didn't — one salty line, feeds the sharp ladder via dims. */
+export const APPT_STOOD_UP_LINES: string[] = [
+  'waited at {location}... guess something came up.',
+  'i was at {location}. you never showed. cool. cool cool.',
+  'sat at {location} for a while. hope youre okay, honestly a bit hurt.',
+];
+/** NPC flaked — apology lines. */
+export const APPT_APOLOGY_LINES: string[] = [
+  'im really sorry about {location} — i flaked. can i make it up to you?',
+  'sorry i missed {location}... no good excuse. forgive me?',
+  'i feel awful about {location}. let me reschedule, my treat?',
+];
+
+export type RsvpLineKind = 'yes' | 'no' | 'maybe';
+
+export function pickRsvpLine(kind: RsvpLineKind, seed: string, location: string, dayRef: string): string {
+  const pool = kind === 'no' ? APPT_RSVP_NO_LINES : kind === 'maybe' ? APPT_RSVP_MAYBE_LINES : APPT_RSVP_YES_LINES;
+  return pickFromPool(pool, `${seed}:rsvp:${kind}`).replaceAll('{location}', location).replaceAll('{dayref}', dayRef);
+}
+
+export function pickStoodUpLine(seed: string, location: string): string {
+  return pickFromPool(APPT_STOOD_UP_LINES, `${seed}:stoodup`).replaceAll('{location}', location);
+}
+
+export function pickMeetingApologyLine(seed: string, location: string): string {
+  return pickFromPool(APPT_APOLOGY_LINES, `${seed}:apptapology`).replaceAll('{location}', location);
 }
 
 export interface InitiativeDecision {

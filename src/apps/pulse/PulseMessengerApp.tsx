@@ -614,6 +614,8 @@ export const PulseMessengerApp: React.FC = () => {
         const open = engine.social.getOpenPromises(buddyId);
         if (open.length > 0 && open[0]) engine.social.resolvePromise(buddyId, open[0].id, true, gameDay);
       }
+      // P5 — meetup proposals/cancellations emerge from natural chat (rules only, no AI)
+      engine.handleMeetupChat(buddyId, text, gameDay);
     } catch { /* promise ledger never blocks chat */ }
 
     const buddy = engine.social.getBuddy(buddyId);

@@ -349,10 +349,33 @@ export class WorldEventsEngine {
   }
 
   public scheduleAppointment(appt: Omit<Appointment, 'isCompleted' | 'isMissed'>): Appointment {
-    const full: Appointment = { ...appt, isCompleted: false, isMissed: false };
+    const full: Appointment = { ...appt, isCompleted: false, isMissed: false, status: appt.status ?? 'scheduled' };
     this.appointments.push(full);
     this.bumpVersion();
-    return full;
+    return { ...full };
+  }
+
+  public getAppointments(): Appointment[] {
+    return this.appointments.map((a) => ({ ...a }));
+  }
+
+  /**
+   * P5 governed patch for the live-meeting lifecycle (status/rsvp/show flags).
+   * Unknown ids and illegal keys are ignored; returns the patched copy or null.
+   */
+  public updateAppointment(id: string, patch: Partial<Pick<Appointment, 'status' | 'rsvp' | 'npcShowed' | 'playerShowed' | 'isCompleted' | 'isMissed'>>): Appointment | null {
+    const appt = this.appointments.find((a) => a.id === id);
+    if (!appt) return null;
+    const statuses = ['scheduled', 'confirmed', 'happened', 'missed', 'cancelled'];
+    const rsvps = ['yes', 'no', 'maybe'];
+    if (patch.status !== undefined && statuses.includes(patch.status)) appt.status = patch.status;
+    if (patch.rsvp !== undefined && rsvps.includes(patch.rsvp)) appt.rsvp = patch.rsvp;
+    if (typeof patch.npcShowed === 'boolean') appt.npcShowed = patch.npcShowed;
+    if (typeof patch.playerShowed === 'boolean') appt.playerShowed = patch.playerShowed;
+    if (typeof patch.isCompleted === 'boolean') appt.isCompleted = patch.isCompleted;
+    if (typeof patch.isMissed === 'boolean') appt.isMissed = patch.isMissed;
+    this.bumpVersion();
+    return { ...appt };
   }
 
   public addWindowObservation(entry: string): void {

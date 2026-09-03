@@ -395,7 +395,18 @@ export interface Appointment {
   description: string;
   isCompleted: boolean;
   isMissed: boolean;
+  // P5 live-meeting lifecycle (optional so legacy/old-save appointments keep working)
+  status?: AppointmentStatus;       // default 'scheduled'
+  rsvp?: AppointmentRsvp;           // NPC reply, decided by rules
+  npcShowed?: boolean;
+  playerShowed?: boolean;
 }
+
+/** P5 live-meeting lifecycle: scheduled → confirmed → happened/missed, or cancelled. */
+export type AppointmentStatus = 'scheduled' | 'confirmed' | 'happened' | 'missed' | 'cancelled';
+
+/** P5 NPC reply to a planned meeting (rules-only, messaged to the player). */
+export type AppointmentRsvp = 'yes' | 'no' | 'maybe';
 
 export interface InkSemanticTag {
   type: 'beat' | 'effect' | 'social';

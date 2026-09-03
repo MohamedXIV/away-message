@@ -606,9 +606,21 @@ export const AILabApp: React.FC = () => {
         )}
       </section>
 
+      <section className="mb-3 border-2 border-[#6a4a00] bg-white p-2">
+        <h2 className="mb-1 font-bold text-[#6a4a00]">Meeting Board — live appointments (read-only)</h2>
+        <div className="text-[11px] text-gray-600">Plans emerge from chat (“lets meet at the cafe tomorrow”). NPCs RSVP the day before, then show or flake by rules. Visit the place (or DM for the lobby) on the day to show up yourself.</div>
+        <div className="mt-2 space-y-1">
+          {engine.world.getAppointments().length === 0 && <div className="text-[11px] italic text-gray-500">No appointments yet — propose one in Pulse chat.</div>}
+          {engine.world.getAppointments().map((a) => (
+            <div key={a.id} className="border border-gray-300 bg-[#fafafa] p-2 font-mono text-[10px] text-gray-700">
+              <b>{a.characterId}</b> @ {a.locationId} • day {a.targetDay} • status: <b>{a.status ?? 'scheduled'}</b> • rsvp: {a.rsvp ?? '—'} • npc: {a.npcShowed === undefined ? '—' : a.npcShowed ? 'showed' : 'no-show'} • you: {a.playerShowed === undefined ? '—' : a.playerShowed ? 'showed' : 'absent'}
+            </div>
+          ))}
+        </div>
+      </section>
+
       <section className="mb-3 border-2 border-[#8a4b00] bg-white p-2">
-        <h2 className="mb-1 font-bold text-[#8a4b00]">Relationship Lab — memory, stages &amp; sharp events (read-only)</h2>
-        <div className="text-[11px] text-gray-600">Hidden dimensions, derived stage, daily mood, immortal memories, open promises and lifecycle status per buddy. Rules decide, AI only paraphrases.</div>
+        <h2 className="mb-1 font-bold text-[#8a4b00]">Relationship Lab — memory, stages &amp; sharp events (read-only)</h2>        <div className="text-[11px] text-gray-600">Hidden dimensions, derived stage, daily mood, immortal memories, open promises and lifecycle status per buddy. Rules decide, AI only paraphrases.</div>
         <div className="mt-2 space-y-1">
           {engine.social.getBuddies().map((b) => {
             const rel = engine.social.getRelationships(b.id);
