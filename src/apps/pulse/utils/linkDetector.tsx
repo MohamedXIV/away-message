@@ -198,6 +198,72 @@ export function pickRandomBuddyLink(buddyId: string, seedMinute: number): { host
   return { ...entry, url: `http://${entry.host}${entry.path}` };
 }
 
+// Stopwords for topical scoring — short glue words that prove nothing about relevance.
+const LINK_STOPWORDS = new Set([
+  'that', 'this', 'with', 'from', 'have', 'what', 'when', 'about', 'just', 'like', 'know',
+  'your', 'youre', 'really', 'there', 'here', 'they', 'them', 'then', 'than', 'been', 'were',
+  'will', 'would', 'could', 'should', 'your', 'mine', 'ours', 'very', 'much', 'more', 'most',
+  'some', 'such', 'only', 'also', 'well', 'yeah', 'okay', 'lol', 'hey', 'hello', 'thanks',
+]);
+
+function tokenizeForLinkScore(text: string): Set<string> {
+  const tokens = new Set<string>();
+  for (const raw of text.toLowerCase().split(/[^a-z0-9]+/)) {
+    if (raw.length < 4 || LINK_STOPWORDS.has(raw)) continue;
+    tokens.add(raw);
+    // Light stemming: plural → singular so "tacos" matches "taco"
+    if (raw.endsWith('s') && raw.length > 4 && !raw.endsWith('ss')) tokens.add(raw.slice(0, -1));
+  }
+  return tokens;
+}
+
+/**
+ * Anti-spam topical picker: scores each pool entry against the live conversation
+ * (title + snippet + host keywords vs message tokens) and returns the best match
+ * only when it clears MIN_LINK_SCORE. Otherwise null — no link is better than a
+ * random one. Deterministic for the same inputs.
+ */
+export const MIN_LINK_SCORE = 2;
+
+export function scoreLinkForContext(
+  entry: { host: string; path: string; title: string; snippet: string },
+  contextText: string
+): number {
+  const context = tokenizeForLinkScore(contextText);
+  if (context.size === 0) return 0;
+  const haystack = tokenizeForLinkScore(`${entry.title} ${entry.snippet} ${entry.host.replace(/\./g, ' ')} ${entry.path.replace(/[/_-]/g, ' ')}`);
+  let score = 0;
+  for (const token of context) {
+    if (haystack.has(token)) score += 1;
+  }
+  return score;
+}
+
+export function pickTopicalBuddyLink(
+  buddyId: string,
+  contextText: string,
+  seedSalt: string
+): { host: string; path: string; title: string; snippet: string; url: string } | null {
+  const pool = BUDDY_LINK_POOLS[buddyId];
+  if (!pool || pool.length === 0 || !contextText.trim()) return null;
+  let best: (typeof pool)[number] | null = null;
+  let bestScore = 0;
+  for (const entry of pool) {
+    const score = scoreLinkForContext(entry, contextText);
+    if (score > bestScore) {
+      bestScore = score;
+      best = entry;
+    }
+  }
+  if (!best || bestScore < MIN_LINK_SCORE) return null;
+  // Tie-break deterministically among top scorers so reloads stay stable
+  const top = pool.filter((entry) => scoreLinkForContext(entry, contextText) === bestScore);
+  let hash = 0;
+  for (let i = 0; i < seedSalt.length; i++) hash = (hash * 31 + seedSalt.charCodeAt(i)) >>> 0;
+  const picked = top[hash % top.length]!;
+  return { ...picked, url: `http://${picked.host}${picked.path}` };
+}
+
 export function getDiscoverableLinkForQuery(query: string, host: string): string {
   // Helper to generate a fictional URL for a query that was shared via Pulse
   const clean = query.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 24) || 'discovery';

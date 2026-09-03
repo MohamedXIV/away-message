@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
-import { extractLocalLinks, BUDDY_LINK_POOLS, pickRandomBuddyLink } from '../../src/apps/pulse/utils/linkDetector';
+import { extractLocalLinks, BUDDY_LINK_POOLS, pickRandomBuddyLink, pickTopicalBuddyLink, scoreLinkForContext, MIN_LINK_SCORE } from '../../src/apps/pulse/utils/linkDetector';
 import { loadPulseState, makeDefaultPulseState, savePulseState } from '../../src/apps/pulse/persistence';
-import { OFFLINE_MESSAGE_POOLS } from '../../src/apps/pulse/PulseMessengerApp';
+import { OFFLINE_MESSAGE_POOLS, pickOfflineMessage } from '../../src/apps/pulse/PulseMessengerApp';
 
 describe('Pulse .local Link Detection', () => {
   it('extracts single and multiple .local links', () => {
@@ -47,6 +47,32 @@ describe('Pulse .local Link Detection', () => {
     expect(hasLink((OFFLINE_MESSAGE_POOLS as Record<string, string[]>)['ryan'])).toBe(true);
     expect(hasLink((OFFLINE_MESSAGE_POOLS as Record<string, string[]>)['nora'])).toBe(true);
     expect(hasLink((OFFLINE_MESSAGE_POOLS as Record<string, string[]>)['henderson'])).toBe(true);
+  });
+
+  it('scores topical relevance: tacos match the taco cart, rain does not', () => {
+    const tacoEntry = (BUDDY_LINK_POOLS as Record<string, Array<{ host: string; path: string; title: string; snippet: string }>>)['ryan']!.find((e) => e.host === 'taco-cart.local')!;
+    expect(scoreLinkForContext(tacoEntry, 'i really want tacos after this shift')).toBeGreaterThanOrEqual(MIN_LINK_SCORE);
+    expect(scoreLinkForContext(tacoEntry, 'the rain is so heavy tonight, listening to music')).toBeLessThan(MIN_LINK_SCORE);
+  });
+
+  it('picks a topical link for matching chat and nothing for unrelated chat', () => {
+    const picked = pickTopicalBuddyLink('ryan', 'dude im starving, tacos sound amazing right now', 'salt1');
+    expect(picked?.host).toBe('taco-cart.local');
+    expect(pickTopicalBuddyLink('ryan', 'how was your day at the office, anything new', 'salt1')).toBeNull();
+    expect(pickTopicalBuddyLink('maya', 'that rain recording last night was beautiful', 'salt2')?.host).toBe('rain-archive.local');
+    // Deterministic for the same inputs
+    expect(pickTopicalBuddyLink('ryan', 'tacos tacos tacos', 'salt1')).toEqual(pickTopicalBuddyLink('ryan', 'tacos tacos tacos', 'salt1'));
+    expect(pickTopicalBuddyLink('ghost', 'tacos', 'salt1')).toBeNull();
+  });
+
+  it('offline picker avoids links when the previous offline message had one', () => {
+    // Maya pool has both kinds; with avoidLink every pick across minutes must be link-free
+    for (const minute of [0, 1, 2, 3, 4, 5, 100, 999, 12345]) {
+      expect(extractLocalLinks(pickOfflineMessage('maya', minute, undefined, true))).toHaveLength(0);
+    }
+    // Without the flag, links still appear sometimes (discoverability preserved)
+    const anyWithLink = [0, 1, 2, 3, 4, 5].some((m) => extractLocalLinks(pickOfflineMessage('maya', m)).length > 0);
+    expect(anyWithLink).toBe(true);
   });
 });
 

@@ -20,7 +20,7 @@ import { loadPulseState, savePulseState, getCurrentPulseSlotId, setCurrentPulseS
 import type { PulseActivityEntry, PulseActivityKind } from './types';
 import { getNpcStyle, getNpcMoodLabel, getNpcAvailabilityLabel, getNpcActivityLabel } from './data/npcStyles';
 import { extractFactsFromPlayerMessage, extractPromisesFromPlayerMessage, looksLikeCompletion, buildConversationSummary, buildMemoryContext, hashReply, isDuplicateReply } from './utils/conversationMemory';
-import { extractLocalLinks, pickRandomBuddyLink } from './utils/linkDetector';
+import { extractLocalLinks, pickRandomBuddyLink, pickTopicalBuddyLink } from './utils/linkDetector';
 import { CHARACTER_ARCHETYPES, pickTemplateOfflineLine } from '../../engine/characterTemplates';
 import { planInitiatives } from './utils/initiatives';
 import type { BuddyCharacter } from '../../engine/types';
@@ -107,11 +107,15 @@ export const OFFLINE_MESSAGE_POOLS: Record<string, string[]> = {
   ],
 };
 
-export function pickOfflineMessage(buddyId: string, minute: number, archetype?: BuddyCharacter['archetype']): string {
+export function pickOfflineMessage(buddyId: string, minute: number, archetype?: BuddyCharacter['archetype'], avoidLink = false): string {
   const pool = OFFLINE_MESSAGE_POOLS[buddyId];
   if (pool) {
-    const index = hashString(`${buddyId}:${minute}`) % pool.length;
-    return pool[index] || pool[0]!;
+    // Anti-spam: when the buddy's previous offline message already carried a link,
+    // force a link-free line so links never arrive back-to-back.
+    const candidates = avoidLink ? pool.filter((line) => extractLocalLinks(line).length === 0) : pool;
+    const usable = candidates.length > 0 ? candidates : pool;
+    const index = hashString(`${buddyId}:${minute}:${avoidLink ? 'nolink' : 'any'}`) % usable.length;
+    return usable[index] || usable[0]!;
   }
   // Dynamic buddies use their archetype's offline voice; unknown falls back to generic.
   if (archetype && CHARACTER_ARCHETYPES[archetype]) {
@@ -316,7 +320,10 @@ export const PulseMessengerApp: React.FC = () => {
         const maxOffset = Math.max(10, elapsed - 12);
         const offset = 10 + (hash % Math.min( maxOffset, 720));
         const timestampMinute = Math.min(totalMinutes - 2, Math.max(pulseState.lastSeenTotalMinutes + 10, pulseState.lastSeenTotalMinutes + offset));
-        const text = pickOfflineMessage(buddy.id, timestampMinute, buddy.archetype);
+        // Anti-spam: never leave two link-bearing offline messages in a row
+        const previousOffline = engine.social.getMessages(buddy.id).filter((m) => m.senderId === buddy.id && m.tags?.includes('offline-message'));
+        const lastHadLink = previousOffline.length > 0 && extractLocalLinks(previousOffline[previousOffline.length - 1]!.text).length > 0;
+        const text = pickOfflineMessage(buddy.id, timestampMinute, buddy.archetype, lastHadLink);
         // Capture any .local links from offline message for sharedLinks / FindIt discovery
         extractLocalLinks(text).forEach((link) => {
           const lower = link.url.toLowerCase();
@@ -338,7 +345,7 @@ export const PulseMessengerApp: React.FC = () => {
           if (buddy.id === 'maya' || buddy.id === 'ryan') {
             const secondOffset = Math.min(offset + 45, elapsed - 4);
             const secondMinute = Math.min(totalMinutes - 1, pulseState.lastSeenTotalMinutes + secondOffset);
-            const secondText = pickOfflineMessage(buddy.id, secondMinute + 999, buddy.archetype);
+            const secondText = pickOfflineMessage(buddy.id, secondMinute + 999, buddy.archetype, extractLocalLinks(text).length > 0);
             if (secondText !== text) {
               extractLocalLinks(secondText).forEach((link) => {
                 const lower = link.url.toLowerCase();
@@ -714,14 +721,17 @@ export const PulseMessengerApp: React.FC = () => {
       }
     }
 
-    // Link handling: inject occasional .local link if AI didn't include one, then capture
+    // Link handling: inject a .local link only when topical AND fresh — never random spam.
+    // A link must (a) roll under a low per-buddy chance, (b) beat the relevance threshold
+    // against the live conversation, and (c) not follow another link within the last 4 messages.
     let finalCandidateTexts = result.data.messages.map((message) => message.text);
     let detectedLinks = finalCandidateTexts.flatMap((candidateText) => extractLocalLinks(candidateText));
     if (detectedLinks.length === 0) {
-      const chance = buddyId === 'nora' ? 38 : buddyId === 'maya' ? 32 : buddyId === 'ryan' ? 22 : 12;
+      const chance = buddyId === 'nora' ? 14 : buddyId === 'maya' ? 12 : buddyId === 'ryan' ? 8 : 6;
+      const recentHadLink = recentMessagesForSummary.slice(-4).some((message) => extractLocalLinks(message.text).length > 0);
       const roll = hashString(`${buddyId}:${totalMinutes}:${text}:${finalCandidateTexts.join('|')}`) % 100;
-      if (roll < chance) {
-        const picked = pickRandomBuddyLink(buddyId, totalMinutes);
+      if (!recentHadLink && roll < chance) {
+        const picked = pickTopicalBuddyLink(buddyId, `${text} ${finalCandidateTexts.join(' ')}`, `${buddyId}:${totalMinutes}:${text.length}`);
         if (picked && result.data.messages[0]) {
           result.data.messages[0].text = `${result.data.messages[0].text.trim()} ${picked.url}`;
           finalCandidateTexts = result.data.messages.map((message) => message.text);
@@ -880,12 +890,13 @@ export const PulseMessengerApp: React.FC = () => {
           }
         }
 
-        // Occasional .local link injection for room replies
+        // Topical-only .local link injection for room replies (low chance + relevance + cooldown)
         const existingRoomLinks = extractLocalLinks(finalText);
         if (existingRoomLinks.length === 0) {
-          const chance = responderId === 'nora' ? 28 : responderId === 'maya' ? 22 : 15;
-          if (hashString(`${room.id}:${responderId}:${finalText}`) % 100 < chance) {
-            const picked = pickRandomBuddyLink(responderId, totalMinutes + responderIndex);
+          const chance = responderId === 'nora' ? 10 : responderId === 'maya' ? 8 : 6;
+          const roomHadLink = existingMessages.slice(-6).some((message) => extractLocalLinks(message.text).length > 0);
+          if (!roomHadLink && hashString(`${room.id}:${responderId}:${finalText}`) % 100 < chance) {
+            const picked = pickTopicalBuddyLink(responderId, `${text} ${finalText}`, `${room.id}:${responderId}:${totalMinutes}`);
             if (picked) finalText = `${finalText} ${picked.url}`;
           }
         }
@@ -1042,8 +1053,10 @@ export const PulseMessengerApp: React.FC = () => {
           if (!text) return;
           let finalText = text;
           const links = extractLocalLinks(finalText);
-          if (links.length === 0 && hashString(`${room.id}:${activityBucket}:${responderId}`) % 100 < 18) {
-            const picked = pickRandomBuddyLink(responderId, totalMinutes + responderIndex);
+          // Ambient links: rare (7%), topical only, and never twice in a row
+          const ambientHadLink = existingMessages.slice(-6).some((message) => extractLocalLinks(message.text).length > 0);
+          if (links.length === 0 && !ambientHadLink && hashString(`${room.id}:${activityBucket}:${responderId}`) % 100 < 7) {
+            const picked = pickTopicalBuddyLink(responderId, finalText, `${room.id}:${activityBucket}:${responderId}`);
             if (picked) finalText = `${finalText} ${picked.url}`;
           }
           const roomLinks = extractLocalLinks(finalText);
