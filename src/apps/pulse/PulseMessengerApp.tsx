@@ -21,8 +21,9 @@ import type { PulseActivityEntry, PulseActivityKind } from './types';
 import { getNpcStyle, getNpcMoodLabel, getNpcAvailabilityLabel, getNpcActivityLabel } from './data/npcStyles';
 import { extractFactsFromPlayerMessage, extractPromisesFromPlayerMessage, looksLikeCompletion, buildConversationSummary, buildMemoryContext, hashReply, isDuplicateReply } from './utils/conversationMemory';
 import { extractLocalLinks, pickRandomBuddyLink, pickTopicalBuddyLink } from './utils/linkDetector';
-import { CHARACTER_ARCHETYPES, pickTemplateOfflineLine } from '../../engine/characterTemplates';
+import { CHARACTER_ARCHETYPES, pickTemplateOfflineLine, pickRoomExitLine } from '../../engine/characterTemplates';
 import { planInitiatives } from './utils/initiatives';
+import { computeRoomMood, pickDirectTarget, buildRoomContext, roomMoodInstruction, directAddressInstruction, type RoomPair, type DirectTarget } from '../../engine/RoomDirector';
 import type { BuddyCharacter } from '../../engine/types';
 
 function getBuddyPersona(buddyId: string, buddy?: BuddyCharacter | null): string {
@@ -845,12 +846,42 @@ export const PulseMessengerApp: React.FC = () => {
       text: message.text,
     }));
 
+    // P5.3 room physics: group mood from buddy-to-buddy affinities (rules only, computed once per turn)
+    const roomPairs: RoomPair[] = [];
+    try {
+      const parts = room.participantIds
+        .map((id) => ({ id, name: engine.social.getBuddy(id)?.displayName || id }))
+        .filter((p) => engine.social.getBuddy(p.id));
+      for (let i = 0; i < parts.length; i++) {
+        for (let j = i + 1; j < parts.length; j++) {
+          roomPairs.push({
+            aId: parts[i]!.id, aName: parts[i]!.name,
+            bId: parts[j]!.id, bName: parts[j]!.name,
+            affinity: engine.social.getAffinity(parts[i]!.id, parts[j]!.id),
+          });
+        }
+      }
+    } catch { /* mood falls back to steady */ }
+    const { mood: roomMood } = computeRoomMood(roomPairs);
+    const roomContext = buildRoomContext(room.name, roomMood, roomPairs);
+    const directedPairs: Array<[string, string]> = [];
+
     try {
       for (let responderIndex = 0; responderIndex < responderIds.length; responderIndex++) {
         const responderId = responderIds[responderIndex]!;
         const responder = engine.social.getBuddy(responderId);
         const style = getNpcStyle(responderId);
-        const persona = `${style.persona} You are replying inside the group room "${room.name}". Room topic: ${roomTopic}. Keep the reply conversational and aware that other participants (${responderIds.join(', ')}) are present.${responderIndex > 0 ? ' Another participant just replied before you — acknowledge or build on it briefly without repeating.' : ''}`;
+        // P5.3 direct address: rules pick the target + tone, AI only phrases it
+        let directTarget: DirectTarget | null = null;
+        let responderStage = 'acquaintance';
+        try {
+          const others = room.participantIds
+            .filter((id) => id !== responderId)
+            .map((id) => ({ id, name: engine.social.getBuddy(id)?.displayName || id, affinity: engine.social.getAffinity(responderId, id) }));
+          directTarget = pickDirectTarget(responderId, others, hashString(`${room.id}:${responderId}:${text}:${currentDay}`) % 100);
+          responderStage = engine.social.getRelationshipStage(responderId);
+        } catch { /* directed address is best-effort */ }
+        const persona = `${style.persona} You are replying inside the group room "${room.name}". Room topic: ${roomTopic}. Keep the reply conversational and aware that other participants (${responderIds.join(', ')}) are present.${responderIndex > 0 ? ' Another participant just replied before you — acknowledge or build on it briefly without repeating.' : ''} ${roomMoodInstruction(roomMood)}${directTarget ? ` ${directAddressInstruction(directTarget)}` : ''}`;
 
         if (responderIndex > 0) {
           // Staggered typing pause between multiple responders
@@ -868,7 +899,7 @@ export const PulseMessengerApp: React.FC = () => {
           displayName: responder?.displayName || responderId,
           handle: responder?.handle || responderId,
           persona,
-          relationshipSummary: `Group room: ${room.name}. Participants: ${room.participantIds.join(', ')}. Responder #${responderIndex + 1} of ${responderIds.length}.`,
+          relationshipSummary: `Group room: ${room.name}. ${roomContext} My stage with the player: ${responderStage}. Responder #${responderIndex + 1} of ${responderIds.length}.`,
           recentMessages: [...recentMessages],
           playerMessage: text,
           worldKnowledge: roomWorldKnowledge,
@@ -892,9 +923,21 @@ export const PulseMessengerApp: React.FC = () => {
           }
         }
 
+        // P5.3 friction exit: rubbed-raw in a tense/cold room → exit line INSTEAD of a reply.
+        // Per-turn only: no mute state, the buddy is simply quiet after leaving.
+        let roomExited = false;
+        try {
+          const friction = roomPairs.some((p) => (p.aId === responderId || p.bId === responderId) && p.affinity <= -30);
+          if ((roomMood === 'tense' || roomMood === 'cold') && friction && hashString(`${room.id}:${responderId}:${text}:exit`) % 100 < 20) {
+            finalText = pickRoomExitLine(`${room.id}:${responderId}:${currentDay}`);
+            roomExited = true;
+          }
+        } catch { /* exits never break rooms */ }
+        if (directTarget && !roomExited) directedPairs.push([responderId, directTarget.id]);
+
         // Topical-only .local link injection for room replies (low chance + relevance + cooldown)
         const existingRoomLinks = extractLocalLinks(finalText);
-        if (existingRoomLinks.length === 0) {
+        if (!roomExited && existingRoomLinks.length === 0) {
           const chance = responderId === 'nora' ? 10 : responderId === 'maya' ? 8 : 6;
           const roomHadLink = existingMessages.slice(-6).some((message) => extractLocalLinks(message.text).length > 0);
           if (!roomHadLink && hashString(`${room.id}:${responderId}:${finalText}`) % 100 < chance) {
@@ -946,10 +989,15 @@ export const PulseMessengerApp: React.FC = () => {
         // Update recentMessages to include this reply for the next responder in the same turn
         recentMessages = [...recentMessages, { sender: botMessage.senderName, text: botMessage.text }].slice(-10);
       }
-      // P4 — shared room turns build buddy-to-buddy affinity (engine caps +6/pair/day)
+      // P4/P5.3 — shared room turns build buddy-to-buddy affinity (mood-weighted, capped +6/pair/day)
       try {
         const responders = responderIds.filter((id) => engine.social.getBuddy(id));
-        if (responders.length >= 2) engine.social.bumpRoomAffinity(responders, currentDay);
+        if (responders.length >= 2) {
+          const points = roomMood === 'lively' ? 3 : roomMood === 'tense' ? 1 : roomMood === 'cold' ? 0 : 2;
+          engine.social.bumpRoomAffinity(responders, currentDay, points);
+          // Directed-address pairs earn one extra point through the same daily cap
+          for (const [a, b] of directedPairs) engine.social.bumpRoomAffinity([a, b], currentDay, 1);
+        }
       } catch { /* affinity bump never breaks rooms */ }
     } finally {
       setRoomTyping(false);

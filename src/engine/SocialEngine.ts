@@ -702,12 +702,15 @@ export class SocialEngine {
   }
 
   /**
-   * Shared room turn: every pair among participants grows closer (+2),
+   * Shared room turn: every pair among participants grows closer by `points`
+   * (P5.3 mood-weighted: lively 3, warm/steady 2, tense 1, cold 0),
    * capped at +6 per pair per day (anti-farming). Returns bumped pair count.
    */
-  public bumpRoomAffinity(rawParticipantIds: string[], day: number): number {
+  public bumpRoomAffinity(rawParticipantIds: string[], day: number, points = ROOM_BUMP_PER_TURN): number {
     const ids = Array.from(new Set(rawParticipantIds.map(normalizeBuddyId))).filter((id) => this.buddies.has(id));
     if (ids.length < 2) return 0;
+    const gain = Math.max(0, Math.min(ROOM_BUMP_PER_TURN + 1, Math.floor(points) || 0));
+    if (gain === 0) return 0;
     const safeDay = Math.max(1, Math.floor(day) || 1);
     let bumped = 0;
     for (let i = 0; i < ids.length; i++) {
@@ -716,7 +719,7 @@ export class SocialEngine {
         const capKey = `${key}_${safeDay}`;
         const used = this.affinityCaps.get(capKey) ?? 0;
         if (used >= ROOM_BUMP_DAILY_CAP) continue;
-        const add = Math.min(ROOM_BUMP_PER_TURN, ROOM_BUMP_DAILY_CAP - used);
+        const add = Math.min(gain, ROOM_BUMP_DAILY_CAP - used);
         this.adjustAffinity(ids[i]!, ids[j]!, add);
         this.affinityCaps.set(capKey, used + add);
         bumped++;

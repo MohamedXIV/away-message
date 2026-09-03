@@ -715,6 +715,22 @@ export function pickArchiveWrapLine(seed: string, detail: string): string {
   return pickFromPool(ARCHIVE_WRAP_LINES, `${seed}:archivewrap`).replaceAll('{detail}', detail.slice(0, 120));
 }
 
+// ==========================================
+// P5.3 — ROOM EXIT LINES (tense rooms: a rubbed-raw buddy posts this INSTEAD
+// of a normal reply — per-turn only, no mute state, no save impact)
+// ==========================================
+
+export const ROOM_EXIT_LINES: string[] = [
+  'ok i need air. later.',
+  'yeah im gonna step out for a bit. dont wait up.',
+  'this vibe is off tonight. catching you all later.',
+  'not feeling this convo. im out — no hard feelings.',
+];
+
+export function pickRoomExitLine(seed: string): string {
+  return pickFromPool(ROOM_EXIT_LINES, `${seed}:roomexit`);
+}
+
 export interface InitiativeDecision {
   stage: RelationshipStage;
   presenceStatus: BuddyPresenceStatus;
