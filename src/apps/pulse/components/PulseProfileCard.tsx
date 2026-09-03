@@ -23,10 +23,14 @@ const meterItems: Array<{ key: keyof RelationshipDimensions; label: string; colo
   { key: 'respect', label: 'Respect', color: '#8668a8' },
 ];
 
+const EMPTY_KNOWLEDGE: import('../../../engine/types').BuddyEventKnowledge[] = [];
+const EMPTY_EVENTS: import('../../../engine/types').GlobalEvent[] = [];
+
 export const PulseProfileCard: React.FC<PulseProfileCardProps> = ({ buddy, presence, relationship, rooms, onClose, onChat, onBuzz, onInvite, awayHistory = [] }) => {
   const avatarLetter = buddy.displayName.trim().charAt(0).toUpperCase() || '?';
-  const buddyKnowledge = useSimulationStore((s) => s.state.world.buddyKnowledge?.[buddy.id] ?? []);
-  const worldEvents = useSimulationStore((s) => s.state.world.triggeredEvents);
+  // Use stable selectors — avoid creating new [] on every getSnapshot call
+  const buddyKnowledge = useSimulationStore((s) => s.state.world.buddyKnowledge?.[buddy.id] ?? EMPTY_KNOWLEDGE);
+  const worldEvents = useSimulationStore((s) => s.state.world.triggeredEvents ?? EMPTY_EVENTS);
 
   return (
     <div className="absolute right-3 top-3 z-30 w-72 border-2 border-[#38516e] bg-[#edf2f8] font-sans text-xs text-[#18283b] shadow-[6px_6px_0_rgba(15,35,60,0.26)]">

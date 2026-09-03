@@ -84,6 +84,8 @@ export class WorldEventsEngine {
   private windowObservationHistory: string[] = [];
   private triggeredEvents: Map<string, GlobalEvent> = new Map();
   private pendingEvents: Map<string, Omit<GlobalEvent, 'isTriggered' | 'triggeredAtMinute'>> = new Map();
+  private _cachedState: WorldEventsState | null = null;
+  private _stateVersion = 0;
   private buddyKnowledge: Map<string, BuddyEventKnowledge[]> = new Map(); // buddyId -> knowledge[]
 
   constructor(eventBus: EventBus, initialState?: Partial<WorldEventsState>) {
@@ -100,15 +102,23 @@ export class WorldEventsEngine {
   }
 
   public getState(): WorldEventsState {
+    if (this._cachedState) return this._cachedState;
     const buddyKnowledge: Record<string, BuddyEventKnowledge[]> = {};
     for (const [k, v] of this.buddyKnowledge.entries()) buddyKnowledge[k] = v.map((e) => ({ ...e }));
-    return {
+    const state: WorldEventsState = {
       flags: Object.fromEntries(this.flags.entries()),
       appointments: this.appointments.map((a) => ({ ...a })),
       windowObservationHistory: [...this.windowObservationHistory],
       triggeredEvents: Array.from(this.triggeredEvents.values()).map((e) => ({ ...e })),
       buddyKnowledge,
     };
+    this._cachedState = state;
+    return state;
+  }
+
+  private bumpVersion(): void {
+    this._stateVersion++;
+    this._cachedState = null;
   }
 
   public loadState(state: Partial<WorldEventsState>): void {
@@ -143,6 +153,7 @@ export class WorldEventsEngine {
     for (const evt of this.triggeredEvents.values()) {
       this.ensureBuddyAttitudes(evt, evt.triggeredAtMinute ?? 0);
     }
+    this.bumpVersion();
   }
 
   // --- Per-buddy attitude generation (deterministic, palette-based) ---
@@ -203,14 +214,16 @@ export class WorldEventsEngine {
 
   private ensureBuddyAttitudes(evt: GlobalEvent, atMinute: number): void {
     const buddies = ['ryan', 'maya', 'nora', 'henderson'];
+    let changed = false;
     for (const bid of buddies) {
       const list = this.buddyKnowledge.get(bid) ?? [];
       if (list.some((k) => k.eventId === evt.id)) continue;
       const { attitude, personalTake } = this.attitudeForBuddy(bid, evt);
       list.push({ eventId: evt.id, attitude, personalTake, learnedAtMinute: atMinute });
-      // keep last 20
       this.buddyKnowledge.set(bid, list.slice(-20));
+      changed = true;
     }
+    if (changed) this.bumpVersion();
   }
 
   /** Called on every time advance to check for newly due global events */
@@ -230,11 +243,11 @@ export class WorldEventsEngine {
         newlyTriggered.push(event);
         this.ensureBuddyAttitudes(event, currentTotalMinutes);
         this.eventBus.emit('world:global_event_triggered' as any, { event: { ...event } });
-        // Also set a flag so search/sites can gate on it
         this.flags.set(`event_${id}`, true);
         this.flags.set(`event_${id}_day`, currentDay);
       }
     }
+    if (newlyTriggered.length > 0) this.bumpVersion();
     return newlyTriggered;
   }
 
@@ -251,6 +264,7 @@ export class WorldEventsEngine {
     this.ensureBuddyAttitudes(event, currentTotalMinutes);
     this.eventBus.emit('world:global_event_triggered' as any, { event: { ...event } });
     this.flags.set(`event_${eventId}`, true);
+    this.bumpVersion();
     return event;
   }
 
@@ -299,6 +313,7 @@ export class WorldEventsEngine {
 
   public setFlag(key: string, value: boolean | number | string): void {
     this.flags.set(key, value);
+    this.bumpVersion();
   }
 
   public getFlag(key: string): boolean | number | string | undefined {
@@ -313,15 +328,16 @@ export class WorldEventsEngine {
   public scheduleAppointment(appt: Omit<Appointment, 'isCompleted' | 'isMissed'>): Appointment {
     const full: Appointment = { ...appt, isCompleted: false, isMissed: false };
     this.appointments.push(full);
+    this.bumpVersion();
     return full;
   }
 
   public addWindowObservation(entry: string): void {
     this.windowObservationHistory.push(entry);
-    // Keep last 100
     if (this.windowObservationHistory.length > 100) {
       this.windowObservationHistory = this.windowObservationHistory.slice(-100);
     }
+    this.bumpVersion();
   }
 
   public getFlags(): Record<string, boolean | number | string> {
@@ -336,7 +352,6 @@ export class WorldEventsEngine {
     const added: string[] = [];
     for (const evt of events) {
       if (this.triggeredEvents.has(evt.id) || this.pendingEvents.has(evt.id)) continue;
-      // Validate id
       if (!/^[a-z0-9_]+$/.test(evt.id)) continue;
       this.pendingEvents.set(evt.id, {
         id: evt.id,
@@ -350,6 +365,7 @@ export class WorldEventsEngine {
       });
       added.push(evt.id);
     }
+    if (added.length > 0) this.bumpVersion();
     return added;
   }
 
