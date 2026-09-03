@@ -4,7 +4,7 @@ export const AI_PROVIDERS: AIProviderDefinition[] = [
   {
     id: 'gemini',
     label: 'Google Gemini',
-    defaultModel: 'gemini-1.5-flash',
+    defaultModel: 'gemini-2.0-flash',
     envKeyName: 'VITE_GEMINI_API_KEY',
     envModelName: 'VITE_GEMINI_MODEL',
   },
@@ -40,8 +40,9 @@ export function getProviderDefinition(providerId: AIProviderId): AIProviderDefin
 }
 
 const MODEL_ALIASES: Record<string, string> = {
-  'gemini-3.1-flash-lite': 'gemini-1.5-flash',
-  'gemini-3.1-flash': 'gemini-1.5-flash',
+  'gemini-3.1-flash-lite': 'gemini-2.0-flash',
+  'gemini-3.1-flash': 'gemini-2.0-flash',
+  'gemini-1.5-flash': 'gemini-2.0-flash',
 };
 
 export function getProviderModel(providerId: AIProviderId): string {
@@ -97,28 +98,49 @@ export async function completeJson(input: ProviderCompletionInput): Promise<unkn
 }
 
 async function completeGemini(input: ProviderCompletionInput): Promise<unknown> {
-  const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(input.model)}:generateContent?key=${encodeURIComponent(input.apiKey)}`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      signal: input.signal,
-      body: JSON.stringify({
-        system_instruction: { parts: [{ text: input.systemPrompt }] },
-        contents: [{ role: 'user', parts: [{ text: input.userPrompt }] }],
-        generationConfig: {
-          responseMimeType: 'application/json',
-          responseSchema: input.jsonSchema,
-          temperature: 0.8,
-        },
-      }),
-    }
-  );
+  const tryFetch = async (version: 'v1' | 'v1beta', model: string): Promise<Response> => {
+    return fetch(
+      `https://generativelanguage.googleapis.com/${version}/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(input.apiKey)}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        signal: input.signal,
+        body: JSON.stringify({
+          system_instruction: { parts: [{ text: input.systemPrompt }] },
+          contents: [{ role: 'user', parts: [{ text: input.userPrompt }] }],
+          generationConfig: {
+            responseMimeType: 'application/json',
+            responseSchema: input.jsonSchema,
+            temperature: 0.8,
+          },
+        }),
+      }
+    );
+  };
 
-  const payload = await readJsonResponse(response);
-  const text = payload?.candidates?.[0]?.content?.parts?.map((part: { text?: string }) => part.text || '').join('');
-  if (!text) throw new Error('Gemini returned an empty response.');
-  return JSON.parse(text);
+  // Try v1 with requested model, then fallback to v1beta and alternative model names
+  const modelsToTry = [input.model, 'gemini-1.5-flash', 'gemini-1.5-flash-8b', 'gemini-2.0-flash'];
+  let lastError: unknown = null;
+  for (const ver of ['v1', 'v1beta'] as const) {
+    for (const mdl of modelsToTry) {
+      try {
+        const response = await tryFetch(ver, mdl);
+        const payload = await readJsonResponse(response);
+        const text = payload?.candidates?.[0]?.content?.parts?.map((part: { text?: string }) => part.text || '').join('');
+        if (!text) throw new Error('Gemini returned an empty response.');
+        return JSON.parse(text);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        // Only retry on "not found" / model errors, otherwise rethrow
+        if (msg.toLowerCase().includes('not found') || msg.toLowerCase().includes('is not found') || msg.toLowerCase().includes('not supported')) {
+          lastError = err;
+          continue;
+        }
+        throw err;
+      }
+    }
+  }
+  throw lastError ?? new Error('Gemini: all model/version combos failed');
 }
 
 async function completeOpenAICompatible(input: ProviderCompletionInput, endpoint: string): Promise<unknown> {
