@@ -39,9 +39,15 @@ export function getProviderDefinition(providerId: AIProviderId): AIProviderDefin
   return provider;
 }
 
+const MODEL_ALIASES: Record<string, string> = {
+  'gemini-3.1-flash-lite': 'gemini-1.5-flash',
+  'gemini-3.1-flash': 'gemini-1.5-flash',
+};
+
 export function getProviderModel(providerId: AIProviderId): string {
   const definition = getProviderDefinition(providerId);
-  return env[definition.envModelName]?.trim() || definition.defaultModel;
+  const raw = env[definition.envModelName]?.trim() || definition.defaultModel;
+  return MODEL_ALIASES[raw] ?? raw;
 }
 
 export function resolveApiKey(
@@ -62,14 +68,11 @@ export function hasConfiguredKey(providerId: AIProviderId, settings: AISettings)
   return resolveApiKey(providerId, settings).source !== 'none';
 }
 
-export function isPlausibleKey(providerId: AIProviderId, key: string): boolean {
+export function isPlausibleKey(_providerId: AIProviderId, key: string): boolean {
   const trimmed = key.trim();
-  if (!trimmed) return false;
-  if (providerId === 'gemini') return trimmed.startsWith('AIza') && trimmed.length > 20;
-  if (providerId === 'groq') return trimmed.startsWith('gsk_') && trimmed.length > 20;
-  if (providerId === 'openrouter') return trimmed.startsWith('sk-') && trimmed.length > 20;
-  if (providerId === 'fal') return trimmed.length > 10;
-  return trimmed.length > 10;
+  if (!trimmed || trimmed.length < 10) return false;
+  if (trimmed.toLowerCase().includes('placeholder') || trimmed.toLowerCase().includes('your_key')) return false;
+  return true;
 }
 
 export interface ProviderCompletionInput {
