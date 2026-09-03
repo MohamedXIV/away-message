@@ -20,8 +20,8 @@ import { MyPlaceEngine } from './MyPlaceEngine';
 import { validatePersistedBuddy } from './CharacterEngine';
 import { generateNewcomer, shouldAutoDiscover, NEWCOMER_METVIA_ROTATION } from './CharacterDirector';
 import { STRAINED_ANNOYANCE, DISTANT_ANNOYANCE, GONE_ANNOYANCE } from './SocialEngine';
-import { pickConfrontLine, pickFarewellLine, pickReturnLine, pickInitiativeText, pickRsvpLine, pickStoodUpLine, pickMeetingApologyLine, resolveArchetype, isCoreBuddyId } from './characterTemplates';
-import { parseMeetupProposal, isMeetupCancelText, decideRsvp, decideNpcShow, appointmentRoll, locationLabel, LOCATION_SLOTS } from './AppointmentDirector';
+import { pickConfrontLine, pickFarewellLine, pickReturnLine, pickInitiativeText, pickRsvpLine, pickStoodUpLine, pickMeetingApologyLine, pickShiftWrapLine, pickArchiveWrapLine, resolveArchetype, isCoreBuddyId } from './characterTemplates';
+import { parseMeetupProposal, isMeetupCancelText, decideRsvp, decideNpcShow, appointmentRoll, locationLabel, LOCATION_SLOTS, pickCoopDetail, SHIFT_WAGE } from './AppointmentDirector';
 
 export class SimulationEngine {
   public readonly clock!: GameClock;
@@ -601,9 +601,30 @@ export class SimulationEngine {
           && decideNpcShow({ rsvp: appt.rsvp, stage, mood, roll: appointmentRoll(`${appt.id}:show`) });
         if (npcShowed && playerShowed) {
           this.world.updateAppointment(appt.id, { status: 'happened', isCompleted: true, npcShowed: true, playerShowed: true });
-          this.social.applySocialAction(buddy.id, appt.locationId === 'cafe' ? 'vulnerable_share' : 'work_camaraderie');
-          this.social.addCoreMemory(buddy.id, { text: `Met ${name} at ${label}, Day ${appt.targetDay}.`, kind: 'shared_moment', day: appt.targetDay });
-          this.telemetry.logEvent('social', 'appointment_happened', minutes, { buddyId: buddy.id, appointmentId: appt.id });
+          // P5.2 co-op enrichment: joint work pays more (dims x2 + wage/flavor), cafe stays intimate
+          const isShift = appt.locationId === 'work' && (buddy.id === 'ryan' || buddy.archetype === 'coworker');
+          const isArchive = appt.locationId === 'archive';
+          if (isShift || isArchive) {
+            const detail = pickCoopDetail(appt.id, isShift ? 'shift' : 'archive');
+            const action = isShift ? 'work_camaraderie' : 'intellectual_curiosity';
+            this.social.applySocialAction(buddy.id, action);
+            this.social.applySocialAction(buddy.id, action);
+            if (isShift) this.economy.earnCash(SHIFT_WAGE, `Side shift with ${name}`);
+            this.social.addCoreMemory(buddy.id, {
+              text: isShift
+                ? `Worked a side shift with ${name}, Day ${appt.targetDay}: ${detail}.`
+                : `Indexed the archive with ${name}, Day ${appt.targetDay}: ${detail}.`,
+              kind: 'shared_moment',
+              day: appt.targetDay,
+            });
+            const wrap = isShift ? pickShiftWrapLine(appt.id, detail) : pickArchiveWrapLine(appt.id, detail);
+            this.social.sendMessage(buddy.id, buddy.id, 'player', wrap, minutes, false, ['appointment', isShift ? 'shift' : 'archive']);
+            this.telemetry.logEvent('social', 'appointment_happened', minutes, { buddyId: buddy.id, appointmentId: appt.id, coop: isShift ? 'shift' : 'archive' });
+          } else {
+            this.social.applySocialAction(buddy.id, appt.locationId === 'cafe' ? 'vulnerable_share' : 'work_camaraderie');
+            this.social.addCoreMemory(buddy.id, { text: `Met ${name} at ${label}, Day ${appt.targetDay}.`, kind: 'shared_moment', day: appt.targetDay });
+            this.telemetry.logEvent('social', 'appointment_happened', minutes, { buddyId: buddy.id, appointmentId: appt.id });
+          }
         } else if (npcShowed && !playerShowed) {
           this.world.updateAppointment(appt.id, { status: 'missed', isMissed: true, npcShowed: true, playerShowed: false });
           this.social.applySocialAction(buddy.id, 'dismissive');
@@ -624,13 +645,14 @@ export class SimulationEngine {
     } catch { /* resolution never breaks the tick */ }
   }
 
-  /** Player attendance: cafe/work = visited the view that day; lobby = DM'd that day. */
+  /** Player attendance: cafe/work = visited the view that day; lobby = DM'd; archive = real joint effort (2+ DMs). */
   private didPlayerAttend(appt: Appointment, buddyId: string): boolean {
     if (appt.locationId === 'cafe' || appt.locationId === 'work') {
       return this.world.getFlag(`visited_${appt.locationId}_${appt.targetDay}`) === true;
     }
     try {
-      return this.social.getMessages(buddyId).some((m) => m.senderId === 'player' && m.day === appt.targetDay);
+      const playerMsgs = this.social.getMessages(buddyId).filter((m) => m.senderId === 'player' && m.day === appt.targetDay);
+      return appt.locationId === 'archive' ? playerMsgs.length >= 2 : playerMsgs.length >= 1;
     } catch { return false; }
   }
 

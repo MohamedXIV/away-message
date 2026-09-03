@@ -690,6 +690,31 @@ export function pickMeetingApologyLine(seed: string, location: string): string {
   return pickFromPool(APPT_APOLOGY_LINES, `${seed}:apptapology`).replaceAll('{location}', location);
 }
 
+// ==========================================
+// P5.2 — CO-OP WRAP-UP LINES ({detail} = the night's deterministic mini-event)
+// ==========================================
+
+/** Side-shift wrap-ups (Ryan-flavoured, used for work meetings that happen). */
+export const SHIFT_WRAP_LINES: string[] = [
+  'yo that shift was WILD. {detail} — we survived tho lol. you earned that pay',
+  'we make a good crew lol. {detail} — see? told you it would be fun',
+  'shift done. {detail} — thanks for jumping in, seriously',
+];
+/** Archive-night wrap-ups (Nora-flavoured, used for archive meetings that happen). */
+export const ARCHIVE_WRAP_LINES: string[] = [
+  'productive night. {detail} — filing it under unsolved. thanks for the hands.',
+  'found something. {detail} — you have good eyes for this.',
+  'archive +2% sorted. {detail} — same time next week?',
+];
+
+export function pickShiftWrapLine(seed: string, detail: string): string {
+  return pickFromPool(SHIFT_WRAP_LINES, `${seed}:shiftwrap`).replaceAll('{detail}', detail.slice(0, 120));
+}
+
+export function pickArchiveWrapLine(seed: string, detail: string): string {
+  return pickFromPool(ARCHIVE_WRAP_LINES, `${seed}:archivewrap`).replaceAll('{detail}', detail.slice(0, 120));
+}
+
 export interface InitiativeDecision {
   stage: RelationshipStage;
   presenceStatus: BuddyPresenceStatus;

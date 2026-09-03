@@ -8,6 +8,8 @@ import {
   appointmentRoll,
   locationLabel,
   LOCATION_SLOTS,
+  pickCoopDetail,
+  SHIFT_WAGE,
 } from '../../src/engine/AppointmentDirector';
 
 describe('P5 meetup parsing (pure rules)', () => {
@@ -114,5 +116,70 @@ describe('P5 live meetings (SimulationEngine)', () => {
     sim.dispatchAction({ type: 'VIEW_SWITCH', view: 'cafe' });
     expect(sim.world.getFlag('visited_cafe_1')).toBe(true);
     expect(sim.world.getFlag('visited_work_1')).not.toBe(true);
+  });
+});
+
+describe('P5.2 joint work (SimulationEngine)', () => {
+  let sim: SimulationEngine;
+  beforeEach(() => { sim = new SimulationEngine(); });
+
+  it('parses archive proposals', () => {
+    expect(parseMeetupProposal('help me sort the logs tomorrow night?')).toEqual({ locationId: 'archive', dayOffset: 1 });
+    expect(parseMeetupProposal('help index the archive tonight')).toEqual({ locationId: 'archive', dayOffset: 0 });
+    expect(LOCATION_SLOTS.archive.start).toBe(1320);
+    expect(locationLabel('archive')).toBe('the archive room');
+  });
+
+  it('picks deterministic co-op details per appointment', () => {
+    expect(pickCoopDetail('appt_x', 'shift')).toBe(pickCoopDetail('appt_x', 'shift'));
+    expect(typeof pickCoopDetail('appt_x', 'archive')).toBe('string');
+  });
+
+  it('a completed side shift pays wages, doubles dims and leaves a detailed memory', () => {
+    const relBefore = sim.social.getRelationships('ryan')!;
+    sim.handleMeetupChat('ryan', 'work together tomorrow?', 1);
+    sim.advanceGameMinutes(24 * 60, 'sleep into day 2');
+    sim.dispatchAction({ type: 'VIEW_SWITCH', view: 'work' });
+    const cashBeforeResolve = sim.getState().player.cash;
+    sim.advanceGameMinutes(24 * 60, 'sleep into day 3');
+    const appt = sim.world.getAppointments().find((a) => a.characterId === 'ryan')!;
+    if (appt.npcShowed && appt.playerShowed) {
+      expect(appt.status).toBe('happened');
+      // One day transition (food 10) plus the shift wage
+      expect(sim.getState().player.cash).toBe(cashBeforeResolve - 10 + SHIFT_WAGE);
+      const relAfter = sim.social.getRelationships('ryan')!;
+      expect(relAfter.familiarity).toBeGreaterThan(relBefore.familiarity + 4); // double camaraderie
+      const mem = sim.social.getCoreMemories('ryan').find((m) => m.kind === 'shared_moment' && m.text.includes('side shift'))!;
+      expect(mem).toBeDefined();
+      expect(sim.social.getMessages('ryan').some((m) => m.tags?.includes('shift'))).toBe(true);
+    } else {
+      // NPC flaked by rules — still a resolved meeting, just not the co-op path
+      expect(appt.status).toBe('missed');
+    }
+  });
+
+  it('an archive night needs real effort: 2+ DMs that day', () => {
+    sim.handleMeetupChat('nora', 'help me sort the logs tomorrow?', 1);
+    sim.advanceGameMinutes(24 * 60, 'sleep into day 2');
+    // One DM is not enough for archive attendance
+    sim.dispatchAction({ type: 'SOCIAL_SEND_MESSAGE', buddyId: 'nora', text: 'ready when you are' });
+    sim.dispatchAction({ type: 'SOCIAL_SEND_MESSAGE', buddyId: 'nora', text: 'starting with the 1987 box' });
+    sim.advanceGameMinutes(24 * 60, 'sleep into day 3');
+    const appt = sim.world.getAppointments().find((a) => a.characterId === 'nora')!;
+    expect(appt.playerShowed).toBe(true);
+    if (appt.npcShowed) {
+      expect(appt.status).toBe('happened');
+      expect(sim.social.getMessages('nora').some((m) => m.tags?.includes('archive'))).toBe(true);
+      expect(sim.social.getCoreMemories('nora').some((m) => m.text.includes('archive'))).toBe(true);
+    }
+  });
+
+  it('a single DM does not count as archive attendance', () => {
+    sim.handleMeetupChat('nora', 'help index the archive tomorrow?', 1);
+    sim.advanceGameMinutes(24 * 60, 'sleep into day 2');
+    sim.dispatchAction({ type: 'SOCIAL_SEND_MESSAGE', buddyId: 'nora', text: 'hey' });
+    sim.advanceGameMinutes(24 * 60, 'sleep into day 3');
+    const appt = sim.world.getAppointments().find((a) => a.characterId === 'nora')!;
+    expect(appt.playerShowed).toBe(false);
   });
 });

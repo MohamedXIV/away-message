@@ -4,20 +4,25 @@
 
 import type { AppointmentRsvp, DailyMood, RelationshipStage } from './types';
 
-export type MeetingLocation = 'cafe' | 'work' | 'motel_lobby';
+export type MeetingLocation = 'cafe' | 'work' | 'motel_lobby' | 'archive';
 
 /** Fixed daily slots per meeting location (minute of day). */
 export const LOCATION_SLOTS: Record<MeetingLocation, { start: number; end: number }> = {
   cafe: { start: 18 * 60, end: 19 * 60 + 30 },
   work: { start: 9 * 60, end: 12 * 60 },
   motel_lobby: { start: 20 * 60, end: 20 * 60 + 30 },
+  archive: { start: 22 * 60, end: 23 * 60 + 30 },
 };
 
 export function locationLabel(location: string): string {
   if (location === 'work') return 'work';
   if (location === 'motel_lobby') return 'the motel lobby';
+  if (location === 'archive') return 'the archive room';
   return 'the cafe';
 }
+
+/** P5.2 co-op wage for a completed side shift (modest: shorter than a full work shift). */
+export const SHIFT_WAGE = 24;
 
 function hashText(value: string): number {
   let hash = 0;
@@ -30,7 +35,7 @@ export function appointmentRoll(seed: string): number {
   return hashText(seed) % 100;
 }
 
-const MEET_WORDS = /\bmeet\b|meet up|meetup|get together|hang out|coffee|caf[eé]\b|see you at|come by|come over|shift together|work together|grab a bite|tacos tomorrow/i;
+const MEET_WORDS = /\bmeet\b|meet up|meetup|get together|hang out|coffee|caf[eé]\b|see you at|come by|come over|shift together|work together|grab a bite|tacos tomorrow|help (out|me|with)|sort the logs|index/i;
 const CANCEL_WORDS = /can['’]?t make it|won['’]?t make it|can['’]?t come|cant come|won['’]?t be there|have to cancel|gotta cancel|rain check|\bcancel\b|can['’]?t go\b/i;
 
 export interface MeetupProposal {
@@ -55,7 +60,8 @@ export function parseMeetupProposal(text: string): MeetupProposal | null {
   else if (lower.includes('weekend') || lower.includes('saturday') || lower.includes('sunday')) dayOffset = 3;
   if (dayOffset === null) return null;
   let locationId: MeetingLocation = 'cafe';
-  if (/work|shift|cart/.test(lower)) locationId = 'work';
+  if (/archive|sort the logs|index.*logs?|help.*logs?/.test(lower)) locationId = 'archive';
+  else if (/work|shift|cart/.test(lower)) locationId = 'work';
   else if (/lobby|motel/.test(lower)) locationId = 'motel_lobby';
   else if (/caf[eé]|coffee|taco|bite|diner/.test(lower)) locationId = 'cafe';
   return { locationId, dayOffset };
@@ -89,4 +95,32 @@ export function decideNpcShow(opts: { rsvp: AppointmentRsvp | undefined; stage: 
   if (opts.mood === 'off') return opts.roll >= 40;
   if (opts.rsvp === 'maybe') return opts.roll >= 25;
   return true;
+}
+
+// ==========================================
+// P5.2 — CO-OP MINI-EVENTS (deterministic flavor inside joint work)
+// Each completed shift/archive night draws one detail by hash; the wrap-up
+// message and the immortal memory carry it, so nights feel distinct.
+// ==========================================
+
+export const SHIFT_DETAILS: string[] = [
+  'a brutal dinner rush that emptied the tip jar (in a good way)',
+  'a customer who paid in exact change and told riddles',
+  'the fryer acting up right at peak hour',
+  'a health inspector with a clipboard and no sense of humor',
+  'running out of napkins mid-rush and improvising',
+];
+
+export const ARCHIVE_DETAILS: string[] = [
+  'a logbook page dated 1987 with your street on it',
+  'a mislabeled box of motel keys, none of them tagged',
+  'a tape with 40 seconds of canal hum and nothing else',
+  'an index card referencing a thread that no longer exists',
+  'a photo negative of the lobby with the furniture rearranged',
+];
+
+/** Deterministic co-op detail for an appointment (stable across reloads). */
+export function pickCoopDetail(appointmentId: string, kind: 'shift' | 'archive'): string {
+  const pool = kind === 'shift' ? SHIFT_DETAILS : ARCHIVE_DETAILS;
+  return pool[appointmentRoll(`${appointmentId}:coop`) % pool.length]!;
 }
