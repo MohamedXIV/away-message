@@ -163,6 +163,13 @@ export const StartMenu: React.FC<StartMenuProps> = ({ isOpen, onClose, onOpenDia
                     <PlaySquare className="w-4 h-4 text-indigo-600" />
                     <span>Add/Remove Programs</span>
                   </button>
+                  <button
+                    className="flex items-center gap-2 px-3 py-1.5 hover:bg-orion-highlight hover:text-white text-left"
+                    onClick={() => handleLaunch('savegame')}
+                  >
+                    <span className="w-4 h-4 text-center text-[13px] leading-4">💾</span>
+                    <span>Save / Load Game</span>
+                  </button>
                 </div>
               )}
             </div>

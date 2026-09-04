@@ -16,6 +16,7 @@ import { PhotoBoxApp } from '../apps/photobox/PhotoBoxApp';
 import { WeatherBuddyApp } from '../apps/weatherbuddy/WeatherBuddyApp';
 import { SafeSweepApp } from '../apps/safesweep/SafeSweepApp';
 import { MailboxApp } from '../apps/mailbox/MailboxApp';
+import { SaveLoadApp } from '../apps/savegame/SaveLoadApp';
 import { AILabApp } from '../apps/ailab/AILabApp';
 import { InstallerWizard } from '../apps/installer/InstallerWizard';
 
@@ -86,6 +87,8 @@ const defaultAppComponents: AppRegistry = {
   mailbox: () => <MailboxApp />,
   'app.mailbox': () => <MailboxApp />,
 
+  savegame: () => <SaveLoadApp />,
+  'app.savegame': () => <SaveLoadApp />,
   ailab: () => <AILabApp />,
   'app.ailab': () => <AILabApp />,
 

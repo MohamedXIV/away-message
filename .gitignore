@@ -39,3 +39,6 @@ test_hex.txt
 # OS
 .DS_Store
 Thumbs.db
+
+# itch.io upload artifact (rebuilt via npm run build:itch)
+itch/

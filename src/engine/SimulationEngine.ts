@@ -1748,6 +1748,9 @@ export class SimulationEngine {
   }
 
   public exportSnapshot(): SimulationState {
+    // Bypass the getState() reference cache: direct sub-engine mutations
+    // (tests, bridge writes) don't bump the version, and saves must be truth.
+    this._cachedState = null;
     return JSON.parse(JSON.stringify(this.getState()));
   }
 

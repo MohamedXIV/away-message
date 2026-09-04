@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import type Dexie from 'dexie';
+import type { SimulationState } from '../engine/types';
 
 // ==========================================
 // 1. Database Table Entity Interfaces
@@ -43,6 +44,13 @@ export interface SaveSlotRecord {
   };
   narrativeFlags: Record<string, boolean | number | string>;
   meta?: Record<string, unknown>;
+  /**
+   * P9 document snapshot: the full live SimulationState (complete by
+   * construction — getState() already carries affinities, promises, pantry,
+   * location, deliveries, wage overrides...). Stored unindexed, so no Dexie
+   * migration is needed. Absent on legacy multi-table saves.
+   */
+  snapshot?: SimulationState;
 }
 
 export interface VfsFileRecord {

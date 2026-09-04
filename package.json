@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "build:itch": "npm run build && node -e \"require('fs').mkdirSync('itch',{recursive:true})\" && cd dist && npx bestzip ../itch/away-message-demo.zip *",
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
@@ -33,6 +34,7 @@
     "@types/react-dom": "^19.0.3",
     "@vitejs/plugin-react": "^4.3.4",
     "autoprefixer": "^10.4.20",
+    "bestzip": "^3.0.3",
     "fake-indexeddb": "^6.0.0",
     "jsdom": "^26.0.0",
     "postcss": "^8.5.2",

@@ -135,6 +135,9 @@ function getDefaultIcon(appId: string): string {
       return '🛡️';
     case 'dialup':
       return '📞';
+    case 'savegame':
+    case 'app.savegame':
+      return '💾';
     case 'ailab':
     case 'app.ailab':
       return '✨';
@@ -189,6 +192,9 @@ function getDefaultTitle(appId: string): string {
       return 'SafeSweep Anti-Adware';
     case 'dialup':
       return 'Dial-Up Connection';
+    case 'savegame':
+    case 'app.savegame':
+      return 'Save / Load Game';
     case 'ailab':
     case 'app.ailab':
       return 'Away Message AI Lab';
