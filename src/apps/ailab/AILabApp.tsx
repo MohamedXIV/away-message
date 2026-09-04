@@ -13,6 +13,7 @@ import { WorldEventsEngine } from '../../engine/WorldEventsEngine';
 import { getAllReleases } from '../../engine/OsCatalog';
 import { pickOsTemplate, templateToRelease } from '../../ai/osReleaseTemplates';
 import { generateNewcomer, NEWCOMER_METVIA_ROTATION } from '../../engine/CharacterDirector';
+import { getWeatherForDay } from '../../engine/WeatherEngine';
 import type { BuddyMetVia, CharacterArchetype } from '../../engine/types';
 
 const TEST_HOST = 'midnight-board.local';
@@ -606,9 +607,51 @@ export const AILabApp: React.FC = () => {
         )}
       </section>
 
+      <section className="mb-3 border-2 border-[#2f6b2f] bg-white p-2">
+        <h2 className="mb-1 font-bold text-[#2f6b2f]">Life Board — body, weather, rent (read-only)</h2>
+        <div className="text-[11px] text-gray-600">The real side at a glance: hunger/health/sleep, the sky, and the countdown to rent. Lenient by design — floors, never traps.</div>
+        {(() => {
+          const body = engine.economy.getState();
+          const maxEnergy = engine.economy.effectiveMaxEnergy();
+          const rentOverdue = engine.world.getFlag('rent_overdue');
+          const todayAppts = engine.world.getAppointments().filter((a) => a.targetDay === worldDay);
+          return (
+            <div className="mt-2 grid grid-cols-1 gap-2 md:grid-cols-3 text-[11px]">
+              <div className="border border-gray-300 bg-[#fafafa] p-2">
+                <div className="font-bold">Body</div>
+                <div className="font-mono text-[10px] text-gray-600">
+                  energy {body.energy}/{maxEnergy} • hunger {Math.round(body.hunger)} • health {Math.round(body.health)} • sleep debt {body.sleepDebt}
+                </div>
+                <div className="mt-1 text-gray-600">
+                  {body.hunger >= 80 ? '⚠️ starving — energy capped, eat something.' : body.hunger >= 55 ? 'getting hungry.' : 'fed.'}
+                  {' '}{body.sleepDebt >= 4 ? '😴 heavy debt — sleep early.' : body.sleepDebt > 0 ? 'a little tired.' : 'rested.'}
+                </div>
+              </div>
+              <div className="border border-gray-300 bg-[#fafafa] p-2">
+                <div className="font-bold">Sky &amp; rent</div>
+                <div className="font-mono text-[10px] text-gray-600">
+                  today: {(() => { try { const w = getWeatherForDay(worldDay); return `${w.label} ${w.icon}`; } catch { return '?'; } })()}
+                </div>
+                <div className="mt-1 text-gray-600">
+                  rent ${body.rentAmount.toFixed(2)} due day {body.rentDueDay} — {body.rentPaid ? '✅ paid' : rentOverdue ? '❌ OVERDUE (downloads napping)' : `⏳ ${Math.max(0, body.rentDueDay - worldDay)} days left`}
+                </div>
+              </div>
+              <div className="border border-gray-300 bg-[#fafafa] p-2">
+                <div className="font-bold">Today (day {worldDay})</div>
+                <div className="font-mono text-[10px] text-gray-600">
+                  meetings: {todayAppts.length} • cash ${body.cash.toFixed(2)}
+                </div>
+                <div className="mt-1 text-gray-600">
+                  {todayAppts.length === 0 ? 'nothing scheduled — propose something on Pulse.' : todayAppts.map((a) => `${a.characterId}@${a.locationId} (${a.status ?? 'scheduled'})`).join(' • ')}
+                </div>
+              </div>
+            </div>
+          );
+        })()}
+      </section>
+
       <section className="mb-3 border-2 border-[#6a4a00] bg-white p-2">
-        <h2 className="mb-1 font-bold text-[#6a4a00]">Meeting Board — live appointments (read-only)</h2>
-        <div className="text-[11px] text-gray-600">Plans emerge from chat (“lets meet at the cafe tomorrow”). NPCs RSVP the day before, then show or flake by rules. Visit the place (or DM for the lobby) on the day to show up yourself.</div>
+        <h2 className="mb-1 font-bold text-[#6a4a00]">Meeting Board — live appointments (read-only)</h2>        <div className="text-[11px] text-gray-600">Plans emerge from chat (“lets meet at the cafe tomorrow”). NPCs RSVP the day before, then show or flake by rules. Visit the place (or DM for the lobby) on the day to show up yourself.</div>
         <div className="mt-2 space-y-1">
           {engine.world.getAppointments().length === 0 && <div className="text-[11px] italic text-gray-500">No appointments yet — propose one in Pulse chat.</div>}
           {engine.world.getAppointments().map((a) => (

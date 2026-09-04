@@ -228,6 +228,16 @@ export const RoomScene: React.FC = () => {
                 style={{ width: `${player.energy}%` }}
               />
             </div>
+            {/* P6.6 hunger at a glance (fills as hunger rises — eat something!) */}
+            <div className="flex items-center gap-1 font-mono text-[11px]" title={`Hunger ${Math.round(player.hunger ?? 0)}%`}>
+              <span>🍜</span>
+              <div className="w-12 h-2 bg-slate-800 rounded-full border border-slate-700 overflow-hidden">
+                <div
+                  className={`h-full transition-all duration-300 ${(player.hunger ?? 0) >= 80 ? 'bg-red-500' : (player.hunger ?? 0) >= 55 ? 'bg-amber-500' : 'bg-emerald-600'}`}
+                  style={{ width: `${Math.min(100, Math.round(player.hunger ?? 0))}%` }}
+                />
+              </div>
+            </div>
           </div>
         </div>
 
