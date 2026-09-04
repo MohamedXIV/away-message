@@ -52,7 +52,7 @@ export interface SimulationStoreActions {
   payRent: () => void;
   payInternet: () => void;
   restOrSleep: (wakeHour?: number) => void;
-  interactRoom: (activity: 'tea' | 'coffee' | 'meal' | 'shower' | 'window') => void;
+  interactRoom: (activity: 'tea' | 'coffee' | 'meal' | 'groceries' | 'shower' | 'window') => void;
 
   // Hardware & OS
   upgradeRam: (ramMB: number, cost: number) => void;

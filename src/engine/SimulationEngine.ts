@@ -216,6 +216,7 @@ export class SimulationEngine {
     if (tickResult.elapsedMinutes > 0) {
       const currentMinutes = this.clock.getTotalMinutes();
       this.downloads.advanceTime(tickResult.elapsedMinutes, currentMinutes);
+      this.economy.advanceTime(tickResult.elapsedMinutes); // P6.1 hunger rises with time
       this.social.updatePresence(currentMinutes);
       this.world.checkAndTriggerEvents(currentMinutes, tickResult.time.day);
       try { this.os.syncFromWorldState({ triggeredEvents: this.world.getTriggeredEvents(), pendingEvents: this.world.getPendingEvents() } as any, tickResult.time.day); } catch {}
@@ -265,6 +266,7 @@ export class SimulationEngine {
     const jumpResult = this.clock.advanceMinutes(minutes);
     const currentMinutes = this.clock.getTotalMinutes();
     this.downloads.advanceTime(minutes, currentMinutes);
+    this.economy.advanceTime(minutes); // P6.1 hunger rises with time
     this.social.updatePresence(currentMinutes);
     this.world.checkAndTriggerEvents(currentMinutes, jumpResult.newTime.day);
     try { this.os.syncFromWorldState({ triggeredEvents: this.world.getTriggeredEvents(), pendingEvents: this.world.getPendingEvents() } as any, jumpResult.newTime.day); } catch {}
@@ -902,9 +904,11 @@ export class SimulationEngine {
 
       case 'PLAYER_REST_OR_SLEEP': {
         const wakeHour = action.wakeHour ?? 8;
+        const bedtimeHour = this.clock.getTime().hour; // P6.1 sleep quality needs bedtime
         const jump = this.clock.jumpToNextMorning(wakeHour);
         const hoursSlept = jump.elapsedMinutes / 60;
-        this.economy.restOrSleep(hoursSlept);
+        this.economy.restOrSleep(hoursSlept, bedtimeHour);
+        this.economy.advanceTime(jump.elapsedMinutes); // P6.1 you still get hungry overnight (slowly)
         const newTotalMinutes = this.clock.getTotalMinutes();
         this.downloads.advanceTime(jump.elapsedMinutes, newTotalMinutes);
         this.social.updatePresence(newTotalMinutes);
@@ -931,15 +935,27 @@ export class SimulationEngine {
           tea: 6,
           coffee: 5,
           meal: 15,
+          groceries: 30,
           shower: 12,
           window: 4,
         };
         const dur = durations[action.activity] ?? 10;
+        // P6.1 noodles cost pantry money now (broke → honest failure, not free food)
+        if (action.activity === 'meal') {
+          const res = this.economy.eatMeal('noodles');
+          if (!res.success) return { success: false, error: res.error };
+        }
+        if (action.activity === 'groceries') {
+          const res = this.economy.eatMeal('groceries');
+          if (!res.success) return { success: false, error: res.error };
+        }
         this.advanceGameMinutes(dur, `Room interaction: ${action.activity}`);
         if (action.activity === 'tea' || action.activity === 'coffee') {
           this.economy.restoreEnergy(5);
-        } else if (action.activity === 'meal') {
-          this.economy.restoreEnergy(15);
+        } else if (action.activity === 'meal' || action.activity === 'groceries') {
+          // Energy already handled inside eatMeal; time still passes above
+        } else if (action.activity === 'shower') {
+          this.economy.showerBoost();
         } else if (action.activity === 'window') {
           this.telemetry.recordWindowObservation();
           this.world.addWindowObservation(`window_day${this.clock.getTime().day}_${this.clock.getTotalMinutes()}`);

@@ -145,8 +145,8 @@ describe('P5.2 joint work (SimulationEngine)', () => {
     const appt = sim.world.getAppointments().find((a) => a.characterId === 'ryan')!;
     if (appt.npcShowed && appt.playerShowed) {
       expect(appt.status).toBe('happened');
-      // One day transition (food 10) plus the shift wage
-      expect(sim.getState().player.cash).toBe(cashBeforeResolve - 10 + SHIFT_WAGE);
+      // Day-3 transition: $10 sundry + $4 forced chips (starving from travel) + shift wage
+      expect(sim.getState().player.cash).toBe(cashBeforeResolve - 10 - 4 + SHIFT_WAGE);
       const relAfter = sim.social.getRelationships('ryan')!;
       expect(relAfter.familiarity).toBeGreaterThan(relBefore.familiarity + 4); // double camaraderie
       const mem = sim.social.getCoreMemories('ryan').find((m) => m.kind === 'shared_moment' && m.text.includes('side shift'))!;

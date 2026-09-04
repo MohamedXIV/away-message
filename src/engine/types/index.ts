@@ -45,6 +45,10 @@ export interface PlayerState {
   internetBillAmount: number;// $25.00
   internetBillPaid: boolean;
   dailyFoodCost: number;     // $10.00 / day
+  // P6.1 body: hunger rises with time, health drifts with care, sleepDebt caps energy
+  hunger: number;            // 0..100 (100 = starving)
+  health: number;            // 0..100 (lenient: floor effects only, never death)
+  sleepDebt: number;         // 0+ (late/short nights accumulate, good nights repay)
 }
 
 export interface WorkShiftResult {
@@ -525,7 +529,7 @@ export type SimulationAction =
   | { type: 'PLAYER_PAY_RENT' }
   | { type: 'PLAYER_PAY_INTERNET' }
   | { type: 'PLAYER_REST_OR_SLEEP'; wakeHour?: number }
-  | { type: 'PLAYER_INTERACT_ROOM'; activity: 'tea' | 'coffee' | 'meal' | 'shower' | 'window' }
+  | { type: 'PLAYER_INTERACT_ROOM'; activity: 'tea' | 'coffee' | 'meal' | 'groceries' | 'shower' | 'window' }
   | { type: 'HARDWARE_UPGRADE_RAM'; ramMB: number; cost: number }
   | { type: 'HARDWARE_UPGRADE_CONNECTION'; connectionType: ConnectionType; cost: number }
   | { type: 'HARDWARE_UPGRADE_OS'; targetOs: OsVersion; cost: number }

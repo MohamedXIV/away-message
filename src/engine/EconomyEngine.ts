@@ -18,6 +18,10 @@ export class EconomyEngine {
       internetBillAmount: initialState?.internetBillAmount ?? 25.0,
       internetBillPaid: initialState?.internetBillPaid ?? false,
       dailyFoodCost: initialState?.dailyFoodCost ?? 10.0,
+      // P6.1 body (old saves backfill to a fresh, healthy start)
+      hunger: initialState?.hunger ?? 30,
+      health: initialState?.health ?? 90,
+      sleepDebt: initialState?.sleepDebt ?? 0,
     };
   }
 
@@ -144,7 +148,7 @@ export class EconomyEngine {
   public restoreEnergy(amount: number): void {
     if (amount <= 0) return;
     const prev = this.state.energy;
-    this.state.energy = Math.min(100, this.state.energy + amount);
+    this.state.energy = Math.min(this.effectiveMaxEnergy(), this.state.energy + amount);
     this.eventBus.emit('economy:energy_changed', {
       previousEnergy: prev,
       newEnergy: this.state.energy,
@@ -156,20 +160,91 @@ export class EconomyEngine {
     this.state.fatigue = Math.min(100, Math.max(0, this.state.fatigue + amount));
   }
 
-  public restOrSleep(hours: number): void {
-    if (hours >= 6) {
-      this.state.energy = 100;
+  public restOrSleep(hours: number, bedtimeHour?: number): void {
+    // P6.1 sleep quality: crashing after 2am halves recovery and adds debt;
+    // short nights repay proportionally; good nights clear debt.
+    const lateNight = bedtimeHour !== undefined && bedtimeHour >= 2 && bedtimeHour < 6;
+    if (hours >= 6 && !lateNight) {
+      // Good nights repay debt first, then restore to the (improved) ceiling —
+      // heavy debt takes several good nights to fully clear.
+      this.state.sleepDebt = Math.max(0, this.state.sleepDebt - 3);
+      this.state.energy = this.effectiveMaxEnergy();
       this.state.fatigue = 0;
+    } else if (hours >= 6) {
+      this.restoreEnergy(50);
+      this.state.fatigue = Math.max(0, this.state.fatigue - 40);
+      this.state.sleepDebt = Math.min(10, this.state.sleepDebt + 2);
     } else {
       this.restoreEnergy(hours * 15);
       this.state.fatigue = Math.max(0, this.state.fatigue - (hours * 20));
+      this.state.sleepDebt = Math.min(10, this.state.sleepDebt + 1);
     }
+  }
+
+  // ==========================================
+  // P6.1 — BODY (hunger / health / sleep debt)
+  // Lenient by design: penalties cap energy and nudge, never trap or kill.
+  // ==========================================
+
+  /** Time passes: hunger rises ~3/hour. Called from every simulation time path. */
+  public advanceTime(minutes: number): void {
+    if (minutes <= 0) return;
+    this.state.hunger = Math.min(100, this.state.hunger + minutes * 0.05);
+  }
+
+  /**
+   * Energy ceiling from body state: starving -20, each sleep debt -3 (max -30),
+   * poor health -10. Floor 40 — the day is always playable.
+   */
+  public effectiveMaxEnergy(): number {
+    let max = 100;
+    if (this.state.hunger >= 80) max -= 20;
+    max -= Math.min(30, Math.floor(this.state.sleepDebt) * 3);
+    if (this.state.health < 40) max -= 10;
+    return Math.max(40, max);
+  }
+
+  /** Eat a meal. Returns false when broke (no debt, no shame — just hunger). */
+  public eatMeal(kind: 'noodles' | 'groceries' | 'snack'): { success: boolean; error?: string } {
+    const specs: Record<string, { cost: number; hungerRelief: number; energyGain: number; healthGain: number }> = {
+      noodles: { cost: 3, hungerRelief: 35, energyGain: 10, healthGain: 0 },
+      groceries: { cost: 8, hungerRelief: 70, energyGain: 12, healthGain: 3 },
+      snack: { cost: 2, hungerRelief: 15, energyGain: 5, healthGain: -1 },
+    };
+    const spec = specs[kind];
+    if (!spec) return { success: false, error: `Unknown meal: ${kind}` };
+    if (!this.spendCash(spec.cost, `Meal (${kind})`)) {
+      return { success: false, error: `Cannot afford ${kind} ($${spec.cost.toFixed(2)}).` };
+    }
+    this.state.hunger = Math.max(0, this.state.hunger - spec.hungerRelief);
+    this.state.health = Math.min(100, Math.max(0, this.state.health + spec.healthGain));
+    this.restoreEnergy(spec.energyGain);
+    return { success: true };
+  }
+
+  /** Hot shower: small health bump + a little energy. Kindness, not strategy. */
+  public showerBoost(): void {
+    this.state.health = Math.min(100, this.state.health + 2);
+    this.restoreEnergy(3);
   }
 
   public handleDayTransition(newDay: number): void {
     // Deduct basic food & sundry expense if cash allows
     if (this.state.cash >= this.state.dailyFoodCost) {
       this.spendCash(this.state.dailyFoodCost, `Daily food & sundry expenses (Day ${newDay})`);
+    }
+
+    // P6.1 body drift (lenient, self-correcting):
+    // - starving all day costs health; eating well restores it
+    // - utterly starving forces a sad $4 chips run (or more health loss when broke)
+    if (this.state.hunger >= 90) this.state.health = Math.max(0, this.state.health - 3);
+    else if (this.state.hunger < 50) this.state.health = Math.min(100, this.state.health + 3);
+    if (this.state.hunger >= 85) {
+      if (this.spendCash(4, `Late-night chips (too hungry to sleep, Day ${newDay})`)) {
+        this.state.hunger = Math.min(this.state.hunger, 70);
+      } else {
+        this.state.health = Math.max(0, this.state.health - 5);
+      }
     }
 
     // Check Rent Status

@@ -22,6 +22,7 @@ import { getNpcStyle, getNpcMoodLabel, getNpcAvailabilityLabel, getNpcActivityLa
 import { extractFactsFromPlayerMessage, extractPromisesFromPlayerMessage, looksLikeCompletion, looksLikePhotoQuestion, buildConversationSummary, buildMemoryContext, hashReply, isDuplicateReply } from './utils/conversationMemory';
 import { extractLocalLinks, pickRandomBuddyLink, pickTopicalBuddyLink } from './utils/linkDetector';
 import { CHARACTER_ARCHETYPES, pickTemplateOfflineLine, pickRoomExitLine } from '../../engine/characterTemplates';
+import { buildBodyHint } from '../../engine/BodyDirector';
 import { planInitiatives } from './utils/initiatives';
 import { computeRoomMood, pickDirectTarget, buildRoomContext, roomMoodInstruction, directAddressInstruction, type RoomPair, type DirectTarget } from '../../engine/RoomDirector';
 import type { BuddyCharacter } from '../../engine/types';
@@ -624,7 +625,13 @@ export const PulseMessengerApp: React.FC = () => {
     const presence = engine.social.getPresence(buddyId);
     const gameHour = Math.floor((totalMinutes % 1440) / 60);
     let playerEnergy = 80;
-    try { playerEnergy = (engine as unknown as { economy: { getState: () => { energy: number } } }).economy.getState().energy ?? 80; } catch { playerEnergy = 80; }
+    let bodyHint = '';
+    try {
+      const playerState = (engine as unknown as { economy: { getState: () => { energy: number; hunger: number; health: number; sleepDebt: number } } }).economy.getState();
+      playerEnergy = playerState.energy ?? 80;
+      // P6.1 NPCs notice the body (exhausted/starving/unwell) — care, never nagging
+      bodyHint = buildBodyHint({ energy: playerState.energy ?? 80, hunger: playerState.hunger ?? 0, health: playerState.health ?? 100, sleepDebt: playerState.sleepDebt ?? 0 });
+    } catch { playerEnergy = 80; }
     const style = getNpcStyle(buddyId);
     const mood = getNpcMoodLabel(presence, relationship, gameHour, playerEnergy);
     const availability = getNpcAvailabilityLabel(presence, gameHour);
@@ -670,7 +677,7 @@ export const PulseMessengerApp: React.FC = () => {
         photoRecallHint = ' The player is asking about a shared photo — recall it warmly and specifically from the LongTerm memories.';
       }
     } catch { /* prompt enrichment is best-effort */ }
-    const relationshipSummary = `${relationship ? JSON.stringify(relationship) : 'new friendship'} | Stage: ${relationshipStage} | DailyMood: ${dailyMood} | Mood: ${mood} | Availability: ${availability} | Activity: ${activity} | ${memoryContext} | ${longTermContext}${affinityContext ? ` | ${affinityContext}` : ''}${photoRecallHint} | Typing: ${style.typing.wpm} wpm, ${style.typing.pauseStyle}`;
+    const relationshipSummary = `${relationship ? JSON.stringify(relationship) : 'new friendship'} | Stage: ${relationshipStage} | DailyMood: ${dailyMood} | Mood: ${mood} | Availability: ${availability} | Activity: ${activity} | ${memoryContext} | ${longTermContext}${affinityContext ? ` | ${affinityContext}` : ''}${photoRecallHint}${bodyHint ? ` | ${bodyHint}` : ''} | Typing: ${style.typing.wpm} wpm, ${style.typing.pauseStyle}`;
     // Sandbox world knowledge — per-buddy attitude (B)
     let worldKnowledge = '';
     let currentGameDay = currentDay;
