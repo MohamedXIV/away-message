@@ -20,9 +20,10 @@ import { MyPlaceEngine, CORE_PROFILE_ALIASES } from './MyPlaceEngine';
 import { validatePersistedBuddy } from './CharacterEngine';
 import { generateNewcomer, shouldAutoDiscover, NEWCOMER_METVIA_ROTATION } from './CharacterDirector';
 import { STRAINED_ANNOYANCE, DISTANT_ANNOYANCE, GONE_ANNOYANCE } from './SocialEngine';
-import { pickConfrontLine, pickFarewellLine, pickReturnLine, pickInitiativeText, pickRsvpLine, pickStoodUpLine, pickMeetingApologyLine, pickShiftWrapLine, pickArchiveWrapLine, pickGuestbookLine, pickGuestbookReplyLine, pickTop8NewsLine, resolveArchetype, isCoreBuddyId } from './characterTemplates';
+import { pickConfrontLine, pickFarewellLine, pickReturnLine, pickInitiativeText, pickRsvpLine, pickStoodUpLine, pickMeetingApologyLine, pickShiftWrapLine, pickArchiveWrapLine, pickGuestbookLine, pickGuestbookReplyLine, pickTop8NewsLine, pickOutingMayaLine, pickOutingNoraLine, resolveArchetype, isCoreBuddyId } from './characterTemplates';
 import { parseMeetupProposal, isMeetupCancelText, decideRsvp, decideNpcShow, appointmentRoll, locationLabel, LOCATION_SLOTS, pickCoopDetail, SHIFT_WAGE } from './AppointmentDirector';
-import { getWeatherForDay, isSevereWeather, shiftWageBonus } from './WeatherEngine';
+import { getWeatherForDay, isSevereWeather, isWetWeather, shiftWageBonus } from './WeatherEngine';
+import { OUTINGS, isValidOutingId, mayaDinerEncounter, noraCanalEncounter, buildLaundromatRumor, MIN_OUTING_ENERGY, type OutingId } from './OutingDirector';
 
 export class SimulationEngine {
   public readonly clock!: GameClock;
@@ -714,6 +715,88 @@ export class SimulationEngine {
   }
 
   // ==========================================
+  // P6.3 — CITY OUTINGS (diner / canal / laundromat, rules-only)
+  // Deterministic encounters feed memories + dims + Pulse messages;
+  // the laundromat returns a rumor in the action result (UI notice).
+  // ==========================================
+
+  private static isBuddyAvailable(buddy: { status?: string } | undefined): boolean {
+    return !!buddy && buddy.status !== 'distant' && buddy.status !== 'gone' && buddy.status !== 'blocked';
+  }
+
+  public doCityOuting(rawOutingId: string): ActionResult & { data?: { summary: string; encounterBuddyId?: string; rumor?: string } } {
+    try {
+      if (!isValidOutingId(rawOutingId)) return { success: false, error: `Unknown outing: ${rawOutingId}` };
+      const outingId: OutingId = rawOutingId;
+      const spec = OUTINGS[outingId];
+      const day = this.clock.getTime().day;
+      const hour = this.clock.getTime().hour;
+      const minutes = this.clock.getTotalMinutes();
+      const player = this.economy.getState();
+      if (player.energy < MIN_OUTING_ENERGY) {
+        return { success: false, error: `Too tired to head out (need ${MIN_OUTING_ENERGY}% energy). Rest first.` };
+      }
+      if (spec.cost > 0 && !this.economy.canAfford(spec.cost)) {
+        return { success: false, error: `Cannot afford ${spec.label} ($${spec.cost.toFixed(2)}).` };
+      }
+      const weather = getWeatherForDay(day);
+      if (outingId === 'canal_walk' && weather.condition === 'storm') {
+        return { success: false, error: 'Canal storm outside — the walkway is closed. Come back after the front passes.' };
+      }
+      if (spec.cost > 0) this.economy.spendCash(spec.cost, `City outing (${spec.label})`);
+      this.advanceGameMinutes(spec.minutes, `City outing: ${spec.label}`);
+      if (spec.energyDelta < 0) this.economy.consumeEnergy(-spec.energyDelta);
+      else this.economy.restoreEnergy(spec.energyDelta);
+      this.economy.addHunger(spec.hungerDelta);
+      this.economy.addHealth(spec.healthDelta);
+
+      // Encounters (deterministic per day; buddies must be present and available)
+      if (outingId === 'diner_soup' || outingId === 'diner_platter' || outingId === 'diner_pie') {
+        const maya = this.social.getBuddy('maya');
+        if (SimulationEngine.isBuddyAvailable(maya) && maya && mayaDinerEncounter(hour, day)) {
+          const buddyId = maya.id;
+          this.social.applySocialAction(buddyId, 'remembered_detail');
+          this.social.addCoreMemory(buddyId, { text: `Ran into Maya working the diner, Day ${day}.`, kind: 'shared_moment', day });
+          this.social.sendMessage(buddyId, buddyId, 'player', pickOutingMayaLine(`${outingId}:${day}`), this.clock.getTotalMinutes(), false, ['outing', 'diner']);
+          this.telemetry.logEvent('social', 'outing_encounter', minutes, { buddyId, outing: outingId });
+          this.notifySubscribers();
+          return { success: true, data: { summary: `Hearty ${spec.label} at the diner — and Maya was on shift!`, encounterBuddyId: buddyId } };
+        }
+        this.telemetry.logEvent('room', 'outing_diner', minutes, { outing: outingId });
+        this.notifySubscribers();
+        return { success: true, data: { summary: `Hearty ${spec.label} at the diner. Quiet tables, good coffee.` } };
+      }
+      if (outingId === 'canal_walk') {
+        const nora = this.social.getBuddy('nora');
+        const raining = isWetWeather(weather.condition);
+        if (SimulationEngine.isBuddyAvailable(nora) && nora && noraCanalEncounter(hour, day, raining)) {
+          const buddyId = nora.id;
+          this.social.applySocialAction(buddyId, 'intellectual_curiosity');
+          this.social.addCoreMemory(buddyId, { text: `Walked the canal with Nora, Day ${day}${raining ? ' in the rain' : ''}.`, kind: 'shared_moment', day });
+          this.social.sendMessage(buddyId, buddyId, 'player', pickOutingNoraLine(`${outingId}:${day}`), this.clock.getTotalMinutes(), false, ['outing', 'canal']);
+          this.telemetry.logEvent('social', 'outing_encounter', minutes, { buddyId, outing: outingId });
+          this.notifySubscribers();
+          return { success: true, data: { summary: `Canal walk${raining ? ' in the rain' : ''} — crossed paths with Nora.`, encounterBuddyId: buddyId } };
+        }
+        this.telemetry.logEvent('room', 'outing_walk', minutes, { outing: outingId });
+        this.notifySubscribers();
+        return { success: true, data: { summary: `Canal walk${raining ? ' in the rain' : ''}. Cleared your head.` } };
+      }
+      // laundromat: rumor for the UI notice (no NPC message — dryers, not drama)
+      const pairs = this.social.getBuddies()
+        .filter((b) => SimulationEngine.isBuddyAvailable(b))
+        .flatMap((a, i, list) => list.slice(i + 1).map((b) => ({ aName: a.displayName, bName: b.displayName, affinity: this.social.getAffinity(a.id, b.id) })));
+      const titles = this.world.getTriggeredEvents().map((e) => e.title);
+      const rumor = buildLaundromatRumor(pairs, titles, `${day}`);
+      this.telemetry.logEvent('room', 'outing_laundromat', minutes, { rumor });
+      this.notifySubscribers();
+      return { success: true, data: { summary: 'Laundromat: warm dryers, folded clothes.', rumor } };
+    } catch {
+      return { success: false, error: 'Outing failed.' };
+    }
+  }
+
+  // ==========================================
   // P5.4 — MYPLACE SOCIAL LIFE (Top 8 + guestbook, rules-only, template-voiced)
   // Top 8s re-rank from live C2 affinities every 3rd day; entries celebrate.
   // Guestbooks get NPC→NPC notes daily; owners reply to the player's notes.
@@ -972,6 +1055,10 @@ export class SimulationEngine {
         }
         this.telemetry.logEvent('room', `interact_${action.activity}`, currentMinutes);
         return { success: true };
+      }
+
+      case 'PLAYER_CITY_OUTING': {
+        return this.doCityOuting(action.outingId);
       }
 
       case 'HARDWARE_UPGRADE_RAM': {

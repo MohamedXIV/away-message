@@ -228,6 +228,17 @@ export class EconomyEngine {
     this.restoreEnergy(3);
   }
 
+  /** P6.3 direct body nudges for outings (clamped, signed deltas). */
+  public addHunger(delta: number): void {
+    if (!Number.isFinite(delta) || delta === 0) return;
+    this.state.hunger = Math.min(100, Math.max(0, this.state.hunger + delta));
+  }
+
+  public addHealth(delta: number): void {
+    if (!Number.isFinite(delta) || delta === 0) return;
+    this.state.health = Math.min(100, Math.max(0, this.state.health + delta));
+  }
+
   public handleDayTransition(newDay: number): void {
     // Deduct basic food & sundry expense if cash allows
     if (this.state.cash >= this.state.dailyFoodCost) {

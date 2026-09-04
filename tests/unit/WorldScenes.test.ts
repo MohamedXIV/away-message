@@ -117,24 +117,29 @@ describe('2D World Scenes, Atmosphere, Interactables & App Integration', () => {
 
       expect(noodles).toBeDefined();
       expect(noodles?.durationMinutes).toBe(15);
-      expect(noodles?.energyChange).toBe(15);
-      expect(noodles?.cashCost).toBe(2.00);
+      expect(noodles?.energyChange).toBe(10);
+      expect(noodles?.cashCost).toBe(3.00);
     });
 
     it('defines door options with work shifts and cafe visit', () => {
       const work = DOOR_OPTIONS.find((d) => d.actionType === 'work');
-      const walk = DOOR_OPTIONS.find((d) => d.actionType === 'walk');
+      const walk = DOOR_OPTIONS.find((d) => d.id === 'canal_walk');
       const cafe = DOOR_OPTIONS.find((d) => d.actionType === 'cafe');
+      const diner = DOOR_OPTIONS.find((d) => d.actionType === 'diner');
+      const laundromat = DOOR_OPTIONS.find((d) => d.id === 'laundromat');
 
       expect(work).toBeDefined();
       expect(work?.durationMinutes).toBe(240);
       expect(work?.cashReward).toBe(62.00);
 
       expect(walk).toBeDefined();
-      expect(walk?.durationMinutes).toBe(30);
+      expect(walk?.durationMinutes).toBe(45);
 
       expect(cafe).toBeDefined();
       expect(cafe?.durationMinutes).toBe(75);
+
+      expect(diner).toBeDefined();
+      expect(laundromat).toBeDefined();
     });
   });
 

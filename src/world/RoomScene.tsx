@@ -5,6 +5,7 @@ import { useSimulationStore } from '../store/useSimulationStore';
 import { soundManager } from '../audio/SoundManager';
 import { RoomCanvasRenderer, getTimeOfDayFromHour } from './RoomCanvas';
 import { RoomHotspotId, RoomActivityOption, WeatherType } from './types';
+import { getWeatherForDay } from '../engine/WeatherEngine';
 import { WindowObservationModal } from './modals/WindowObservationModal';
 import { BeverageModal } from './modals/BeverageModal';
 import { DoorActionModal } from './modals/DoorActionModal';
@@ -37,18 +38,30 @@ export const RoomScene: React.FC = () => {
   const workShift = useSimulationStore((s) => s.workShift);
   const restOrSleep = useSimulationStore((s) => s.restOrSleep);
   const spendCash = useSimulationStore((s) => s.spendCash);
-  const advanceTime = useSimulationStore((s) => s.advanceTime);
+  const cityOuting = useSimulationStore((s) => s.cityOuting);
 
   // Active Modals
   const [activeModal, setActiveModal] = useState<
     'window' | 'beverage' | 'door' | 'sleep' | null
   >(null);
 
-  // Weather determination (e.g. Days 3, 7, 12 rain, else clear/cloudy)
+  // Weather: live engine forecast mapped to the canvas vocabulary (was a hardcoded 3-day hack)
+  const liveCondition = getWeatherForDay(time.day).condition;
   const weather: WeatherType =
-    time.day === 3 || time.day === 7 || time.day === 12 ? 'rain' : 'clear';
+    liveCondition === 'rain' || liveCondition === 'drizzle' || liveCondition === 'storm' ? 'rain'
+    : liveCondition === 'overcast' || liveCondition === 'fog' ? 'cloudy'
+    : 'clear';
   const timeOfDay = getTimeOfDayFromHour(time.hour);
   const hasActiveDownloads = downloads.some((d) => d.status === 'downloading');
+
+  // Outing result notice (city outings report back: encounters, rumors, failures)
+  const [outingNotice, setOutingNotice] = useState<string | null>(null);
+  const outingNoticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const flashOutingNotice = (text: string) => {
+    setOutingNotice(text);
+    if (outingNoticeTimer.current) clearTimeout(outingNoticeTimer.current);
+    outingNoticeTimer.current = setTimeout(() => setOutingNotice(null), 5200);
+  };
 
   // Hotspot Click Handling
   const handleHotspotClick = (id: RoomHotspotId) => {
@@ -117,9 +130,9 @@ export const RoomScene: React.FC = () => {
     }
   }, [time.day, time.hour, time.minute, weather, hardware.osVersion, hasActiveDownloads]);
 
-  // Handle Beverage Selection
+  // Handle Beverage Selection (meal money is charged by the engine — never double-spend here)
   const handleSelectBeverage = (option: RoomActivityOption) => {
-    if (option.cashCost && option.cashCost > 0) {
+    if (option.cashCost && option.cashCost > 0 && option.actionType !== 'meal') {
       spendCash(option.cashCost, option.title);
     }
     if (option.actionType === 'tea' || option.actionType === 'coffee' || option.actionType === 'meal') {
@@ -127,12 +140,19 @@ export const RoomScene: React.FC = () => {
     }
   };
 
-  // Handle Door Action Selection
+  // Handle Door Action Selection (outings resolve fully in the engine and report back)
   const handleSelectDoorAction = (option: RoomActivityOption) => {
     if (option.actionType === 'work') {
       workShift(option.durationMinutes, option.cashReward);
-    } else if (option.actionType === 'walk') {
-      advanceTime(30, 'Walk around canal');
+    } else if (option.actionType === 'diner' || option.actionType === 'outing') {
+      const res = cityOuting(option.id) as unknown as { success: boolean; error?: string; data?: { summary?: string; rumor?: string } };
+      if (res && (res as { success: boolean }).success) {
+        const data = (res as { data?: { summary?: string; rumor?: string } }).data;
+        flashOutingNotice([data?.summary, data?.rumor].filter(Boolean).join(' — ') || 'You head out and come back.');
+        soundManager.play('door_open');
+      } else {
+        flashOutingNotice((res as { error?: string })?.error || 'You decide to stay in.');
+      }
     } else if (option.actionType === 'cafe') {
       if (option.cashCost) spendCash(option.cashCost, 'Bus to Starlight Café');
       switchView('cafe');
@@ -242,6 +262,11 @@ export const RoomScene: React.FC = () => {
           ref={canvasRef}
           className="max-w-full max-h-full aspect-[16/9] shadow-2xl object-contain border border-slate-800 rounded"
         />
+        {outingNotice && (
+          <div className="absolute bottom-3 left-1/2 -translate-x-1/2 max-w-[90%] bg-slate-900/95 border border-amber-500/60 rounded px-3 py-1.5 text-[11px] text-amber-100 shadow-xl text-center">
+            {outingNotice}
+          </div>
+        )}
       </div>
 
       {/* Modals */}

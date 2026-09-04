@@ -53,6 +53,7 @@ export interface SimulationStoreActions {
   payInternet: () => void;
   restOrSleep: (wakeHour?: number) => void;
   interactRoom: (activity: 'tea' | 'coffee' | 'meal' | 'groceries' | 'shower' | 'window') => void;
+  cityOuting: (outingId: string) => ActionResult;
 
   // Hardware & OS
   upgradeRam: (ramMB: number, cost: number) => void;
@@ -189,6 +190,10 @@ export const useSimulationStore = create<SimulationStore>()(
 
       interactRoom: (activity) => {
         get().dispatchAction({ type: 'PLAYER_INTERACT_ROOM', activity });
+      },
+
+      cityOuting: (outingId) => {
+        return get().dispatchAction({ type: 'PLAYER_CITY_OUTING', outingId });
       },
 
       upgradeRam: (ramMB, cost) => {

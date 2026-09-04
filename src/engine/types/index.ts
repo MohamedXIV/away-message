@@ -530,6 +530,7 @@ export type SimulationAction =
   | { type: 'PLAYER_PAY_INTERNET' }
   | { type: 'PLAYER_REST_OR_SLEEP'; wakeHour?: number }
   | { type: 'PLAYER_INTERACT_ROOM'; activity: 'tea' | 'coffee' | 'meal' | 'groceries' | 'shower' | 'window' }
+  | { type: 'PLAYER_CITY_OUTING'; outingId: string }
   | { type: 'HARDWARE_UPGRADE_RAM'; ramMB: number; cost: number }
   | { type: 'HARDWARE_UPGRADE_CONNECTION'; connectionType: ConnectionType; cost: number }
   | { type: 'HARDWARE_UPGRADE_OS'; targetOs: OsVersion; cost: number }

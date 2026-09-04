@@ -899,6 +899,31 @@ export function pickMailWelcome(seed: string): string {
   return pickFromPool(MAIL_WELCOME_LINES, `${seed}:mailwelcome`);
 }
 
+// ==========================================
+// P6.3 — OUTING ENCOUNTER LINES (sent on chance meetings out in the city)
+// ==========================================
+
+/** Maya spots you at the diner during her shift. */
+export const OUTING_MAYA_LINES: string[] = [
+  'hey!! you came to the diner?? shouldve told me, i wouldve saved you the good booth lol',
+  'omg hi!! on my break in like ten — dont you dare leave before i sit down',
+  'you have great timing, slow hour. sit, i will bring you coffee on the house ~',
+];
+/** Nora crosses paths with you on the late canal walk. */
+export const OUTING_NORA_LINES: string[] = [
+  'oh. it is you. walking the canal too? the hum is louder tonight.',
+  'couldnt sleep either? walk with me a bit. i found something weird upstream.',
+  'hey. good night for it — quiet water, loud wires. stay a while?',
+];
+
+export function pickOutingMayaLine(seed: string): string {
+  return pickFromPool(OUTING_MAYA_LINES, `${seed}:outingmaya`);
+}
+
+export function pickOutingNoraLine(seed: string): string {
+  return pickFromPool(OUTING_NORA_LINES, `${seed}:outingnora`);
+}
+
 export interface InitiativeDecision {
   stage: RelationshipStage;
   presenceStatus: BuddyPresenceStatus;
