@@ -94,6 +94,16 @@ export const BEVERAGE_OPTIONS: RoomActivityOption[] = [
     cashCost: 3.00,
     actionType: 'meal',
   },
+  {
+    id: 'cook_groceries',
+    title: 'Cook Pantry Groceries',
+    description: 'Thirty minutes at the hotplate: rice, beans, an egg. Real food, real cheap — the rent-week special.',
+    icon: '🍳',
+    durationMinutes: 30,
+    energyChange: 12,
+    cashCost: 8.00,
+    actionType: 'groceries',
+  },
 ];
 
 export const DOOR_OPTIONS: RoomActivityOption[] = [
@@ -105,6 +115,16 @@ export const DOOR_OPTIONS: RoomActivityOption[] = [
     durationMinutes: 240,
     energyChange: -40,
     cashReward: 62.00,
+    actionType: 'work',
+  },
+  {
+    id: 'overtime_shift',
+    title: 'Overtime Cart Shift (3h)',
+    description: 'An extra evening top-up shift when the cart runs late. Shorter, lighter pay — perfect rent-week rescue money.',
+    icon: '🌙',
+    durationMinutes: 180,
+    energyChange: -30,
+    cashReward: 52.00,
     actionType: 'work',
   },
   {

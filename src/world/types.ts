@@ -110,5 +110,5 @@ export interface RoomActivityOption {
   energyChange: number;
   cashCost?: number;
   cashReward?: number;
-  actionType: 'tea' | 'coffee' | 'meal' | 'shower' | 'window' | 'work' | 'sleep' | 'walk' | 'cafe' | 'diner' | 'outing';
+  actionType: 'tea' | 'coffee' | 'meal' | 'groceries' | 'shower' | 'window' | 'work' | 'sleep' | 'walk' | 'cafe' | 'diner' | 'outing';
 }

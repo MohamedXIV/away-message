@@ -924,6 +924,51 @@ export function pickOutingNoraLine(seed: string): string {
   return pickFromPool(OUTING_NORA_LINES, `${seed}:outingnora`);
 }
 
+// ==========================================
+// P6.4 — RENT LADDER LINES (Henderson: formal, escalating, never cruel)
+// ==========================================
+
+/** Gentle reminder two days before rent is due. */
+export const RENT_REMINDER_LINES: string[] = [
+  'Good morning. A friendly reminder that Room 104 rent (${amount}) is due on day {day}. Front desk, anytime before 8pm.',
+  'Hello — rent of ${amount} comes due on day {day}. Pay at the desk when convenient. Thank you.',
+];
+/** Stern same-day warning. */
+export const RENT_STERN_LINES: string[] = [
+  'Room 104: rent of ${amount} is due TODAY. Please settle at the front desk to avoid a late fee.',
+  'Final courtesy notice: ${amount} due today for Room 104. The ledger waits for no one.',
+];
+/** Daily overdue nudge (capped 1/day, kind but firm). */
+export const RENT_NUDGE_LINES: string[] = [
+  'Room 104 account is past due (${amount}). I have paused your download line until we settle. The desk is open.',
+  'A reminder that Room 104 remains unpaid (${amount}). Downloads are paused meantime — come see me.',
+];
+/** Thank-you on payment. */
+export const RENT_THANKS_LINES: string[] = [
+  'Payment received for Room 104. Thank you — a pleasure doing business. Download line restored.',
+  'Room 104 is settled. Much appreciated. Your line is back to full speed.',
+];
+
+function fillRent(text: string, amount: number, day: number): string {
+  return text.replaceAll('{amount}', `$${amount.toFixed(2)}`).replaceAll('{day}', String(day)).replaceAll('${amount}', `$${amount.toFixed(2)}`);
+}
+
+export function pickRentReminderLine(seed: string, amount: number, day: number): string {
+  return fillRent(pickFromPool(RENT_REMINDER_LINES, `${seed}:rentremind`), amount, day);
+}
+
+export function pickRentSternLine(seed: string, amount: number, day: number): string {
+  return fillRent(pickFromPool(RENT_STERN_LINES, `${seed}:rentstern`), amount, day);
+}
+
+export function pickRentNudgeLine(seed: string, amount: number): string {
+  return fillRent(pickFromPool(RENT_NUDGE_LINES, `${seed}:rentnudge`), amount, 0);
+}
+
+export function pickRentThanksLine(seed: string): string {
+  return pickFromPool(RENT_THANKS_LINES, `${seed}:rentthanks`);
+}
+
 export interface InitiativeDecision {
   stage: RelationshipStage;
   presenceStatus: BuddyPresenceStatus;

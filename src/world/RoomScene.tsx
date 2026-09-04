@@ -130,12 +130,12 @@ export const RoomScene: React.FC = () => {
     }
   }, [time.day, time.hour, time.minute, weather, hardware.osVersion, hasActiveDownloads]);
 
-  // Handle Beverage Selection (meal money is charged by the engine — never double-spend here)
+  // Handle Beverage Selection (meal/grocery money is charged by the engine — never double-spend here)
   const handleSelectBeverage = (option: RoomActivityOption) => {
-    if (option.cashCost && option.cashCost > 0 && option.actionType !== 'meal') {
+    if (option.cashCost && option.cashCost > 0 && option.actionType !== 'meal' && option.actionType !== 'groceries') {
       spendCash(option.cashCost, option.title);
     }
-    if (option.actionType === 'tea' || option.actionType === 'coffee' || option.actionType === 'meal') {
+    if (option.actionType === 'tea' || option.actionType === 'coffee' || option.actionType === 'meal' || option.actionType === 'groceries') {
       interactRoom(option.actionType);
     }
   };

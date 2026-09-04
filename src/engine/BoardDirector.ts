@@ -264,6 +264,47 @@ export function gameDayToMailDate(day: number): string {
 }
 
 // ==========================================
+// P6.4 RENT MAIL (paper trail for the escalation ladder)
+// ==========================================
+
+export interface RentMailContext {
+  day: number;
+  dueDay: number;
+  paid: boolean;
+  amount: number;
+}
+
+/**
+ * P6.4 rent paper trail, reconstructed from world flags so notices survive
+ * payment: processRentDaily stamps `rentmail_due_{dueDay}` on the reminder
+ * and `rentmail_overdue_{dueDay}` on the second notice (values: amount cents).
+ */
+export function buildRentMailHistory(flags: Record<string, boolean | number | string>): NpcMail[] {
+  const out: NpcMail[] = [];
+  for (const [key, value] of Object.entries(flags)) {
+    const match = key.match(/^rentmail_(due|overdue)_(\d+)$/);
+    if (!match || typeof value !== 'number') continue;
+    const kind = match[1]!;
+    const dueDay = Math.max(1, parseInt(match[2]!, 10) || 1);
+    const amount = value / 100;
+    const day = kind === 'due' ? dueDay : dueDay + 1;
+    out.push({
+      key: `rentmail_${kind}_${dueDay}`,
+      buddyId: 'henderson',
+      sender: 'Mr. Henderson',
+      senderEmail: 'desk@starlitemotel.local',
+      subject: kind === 'due' ? `Room 104 rent due — $${amount.toFixed(2)}` : 'Second notice — Room 104',
+      body: kind === 'due'
+        ? `Dear occupant of Room 104,\n\nThis is a reminder that your weekly rent of $${amount.toFixed(2)} is due today. Please settle at the front desk before 8pm to avoid a late fee.\n\nNote: the DSL wall port stays active regardless. Downloads, however, nap until we settle.\n\n- Front Desk Management`
+        : `Dear occupant,\n\nRoom 104 remains unpaid ($${amount.toFixed(2)} plus any late fee). Your download line is paused until we settle — browsing still works, patience still free.\n\nCome see me at the desk.\n\n- Front Desk Management`,
+      day,
+    });
+  }
+  out.sort((a, b) => a.day - b.day);
+  return out;
+}
+
+// ==========================================
 // P6.2 WEEKLY WEATHER THREAD (deterministic forecast chat)
 // ==========================================
 

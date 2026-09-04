@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { soundManager } from '../../audio/SoundManager';
 import { useSimulationStore } from '../../store/useSimulationStore';
-import { buildNpcMailForDay, gameDayToMailDate, type NpcMail } from '../../engine/BoardDirector';
+import { buildNpcMailForDay, buildRentMailHistory, gameDayToMailDate, type NpcMail } from '../../engine/BoardDirector';
 import { locationLabel } from '../../engine/AppointmentDirector';
 
 interface EmailMessage {
@@ -103,7 +103,14 @@ export const MailboxApp: React.FC = () => {
       for (let d = 1; d <= Math.max(1, today); d++) {
         collected.push(...buildNpcMailForDay({ day: d, buddies, sharps, meetings }));
       }
-      return collected.slice(-12);
+      const trimmed = collected.slice(-10);
+      // P6.4 rent paper trail (survives payment — reconstructed from flags; never trimmed away)
+      try {
+        for (const rent of buildRentMailHistory(engine.world.getFlags())) {
+          if (!trimmed.some((m) => m.key === rent.key)) trimmed.push(rent);
+        }
+      } catch { /* rent mail is best-effort */ }
+      return trimmed.slice(-12);
     } catch { return []; }
   })();
   const toEmail = (m: NpcMail): EmailMessage => ({
@@ -131,7 +138,8 @@ export const MailboxApp: React.FC = () => {
 
   const handleSelectEmail = (email: EmailMessage) => {
     setSelectedEmailId(email.id);
-    if (email.id.startsWith('npcmail_')) {
+    // Derived mail (NPC chains + rent notices) tracks reads separately from local state
+    if (!emails.some((e) => e.id === email.id)) {
       setReadNpcIds((prev) => {
         if (prev.has(email.id)) return prev;
         const next = new Set(prev);

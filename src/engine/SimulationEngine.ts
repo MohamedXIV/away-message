@@ -20,7 +20,7 @@ import { MyPlaceEngine, CORE_PROFILE_ALIASES } from './MyPlaceEngine';
 import { validatePersistedBuddy } from './CharacterEngine';
 import { generateNewcomer, shouldAutoDiscover, NEWCOMER_METVIA_ROTATION } from './CharacterDirector';
 import { STRAINED_ANNOYANCE, DISTANT_ANNOYANCE, GONE_ANNOYANCE } from './SocialEngine';
-import { pickConfrontLine, pickFarewellLine, pickReturnLine, pickInitiativeText, pickRsvpLine, pickStoodUpLine, pickMeetingApologyLine, pickShiftWrapLine, pickArchiveWrapLine, pickGuestbookLine, pickGuestbookReplyLine, pickTop8NewsLine, pickOutingMayaLine, pickOutingNoraLine, resolveArchetype, isCoreBuddyId } from './characterTemplates';
+import { pickConfrontLine, pickFarewellLine, pickReturnLine, pickInitiativeText, pickRsvpLine, pickStoodUpLine, pickMeetingApologyLine, pickShiftWrapLine, pickArchiveWrapLine, pickGuestbookLine, pickGuestbookReplyLine, pickTop8NewsLine, pickOutingMayaLine, pickOutingNoraLine, pickRentReminderLine, pickRentSternLine, pickRentNudgeLine, pickRentThanksLine, resolveArchetype, isCoreBuddyId } from './characterTemplates';
 import { parseMeetupProposal, isMeetupCancelText, decideRsvp, decideNpcShow, appointmentRoll, locationLabel, LOCATION_SLOTS, pickCoopDetail, SHIFT_WAGE } from './AppointmentDirector';
 import { getWeatherForDay, isSevereWeather, isWetWeather, shiftWageBonus } from './WeatherEngine';
 import { OUTINGS, isValidOutingId, mayaDinerEncounter, noraCanalEncounter, buildLaundromatRumor, MIN_OUTING_ENERGY, type OutingId } from './OutingDirector';
@@ -119,6 +119,8 @@ export class SimulationEngine {
       // P5.4 daily MyPlace life: Top 8 re-rank + guestbook notes and replies (rules only)
       this.refreshTop8Periodic(newDay);
       this.processGuestbookDaily(newDay);
+      // P6.4 daily rent ladder: reminders, warnings, overdue nudges (rules only)
+      this.processRentDaily(newDay);
     });
 
     this.events.on('economy:cash_changed', ({ newCash }) => {
@@ -715,6 +717,50 @@ export class SimulationEngine {
   }
 
   // ==========================================
+  // P6.4 — RENT LADDER (Henderson: remind → warn → pause downloads → thanks)
+  // Lenient teeth: browsing works, new downloads nap until paid. Paper trail
+  // goes to Mailbox via rentmail_* flags; Pulse carries the human voice.
+  // ==========================================
+
+  private sendHendersonNote(text: string, tags: string[], currentMinutes: number, event: string, extra?: Record<string, unknown>): void {
+    this.social.sendMessage('henderson', 'henderson', 'player', text, currentMinutes, false, ['rent', ...tags]);
+    this.telemetry.logEvent('economy', event, currentMinutes, { buddyId: 'henderson', ...(extra ?? {}) });
+  }
+
+  /** Daily rent pass: gentle reminder → stern warning → overdue nudges. Rules only. */
+  private processRentDaily(newDay: number): void {
+    try {
+      const minutes = this.clock.getTotalMinutes();
+      const { rentDueDay: dueDay, rentPaid: paid, rentAmount: amount } = this.economy.getState();
+      if (paid) {
+        if (this.world.getFlag('rent_overdue')) this.world.setFlag('rent_overdue', false);
+        return;
+      }
+      if (newDay === dueDay - 2 && !this.world.getFlag(`rent_reminded_${dueDay}`)) {
+        this.world.setFlag(`rent_reminded_${dueDay}`, true);
+        this.world.setFlag(`rentmail_due_${dueDay}`, Math.round(amount * 100));
+        this.sendHendersonNote(pickRentReminderLine(`${dueDay}`, amount, dueDay), ['reminder'], minutes, 'rent_reminded', { dueDay });
+      } else if (newDay === dueDay && !this.world.getFlag(`rent_warned_${dueDay}`)) {
+        this.world.setFlag(`rent_warned_${dueDay}`, true);
+        this.sendHendersonNote(pickRentSternLine(`${dueDay}`, amount, dueDay), ['warning'], minutes, 'rent_warned', { dueDay });
+      } else if (newDay > dueDay) {
+        // Catch-up for multi-day jumps: stamp the paper trail silently
+        // (messages stay current-rung only — no backdated nag spam)
+        if (!this.world.getFlag(`rent_reminded_${dueDay}`)) this.world.setFlag(`rent_reminded_${dueDay}`, true);
+        if (!this.world.getFlag(`rentmail_due_${dueDay}`)) this.world.setFlag(`rentmail_due_${dueDay}`, Math.round(amount * 100));
+        if (!this.world.getFlag('rent_overdue')) {
+          this.world.setFlag('rent_overdue', true);
+          this.world.setFlag(`rentmail_overdue_${dueDay}`, Math.round(amount * 100));
+        }
+        if (!this.world.getFlag(`rent_nudge_${newDay}`)) {
+          this.world.setFlag(`rent_nudge_${newDay}`, true);
+          this.sendHendersonNote(pickRentNudgeLine(`${newDay}`, amount), ['nudge'], minutes, 'rent_nudged', { dueDay });
+        }
+      }
+    } catch { /* rent never breaks the tick */ }
+  }
+
+  // ==========================================
   // P6.3 — CITY OUTINGS (diner / canal / laundromat, rules-only)
   // Deterministic encounters feed memories + dims + Pulse messages;
   // the laundromat returns a rumor in the action result (UI notice).
@@ -980,6 +1026,11 @@ export class SimulationEngine {
       case 'PLAYER_PAY_RENT': {
         const rentRes = this.economy.payRent();
         if (!rentRes.success) return { success: false, error: rentRes.error };
+        // P6.4 kindness restored: line unpaused + Henderson says thanks
+        if (this.world.getFlag('rent_overdue')) this.world.setFlag('rent_overdue', false);
+        try {
+          this.sendHendersonNote(pickRentThanksLine(`paid${this.clock.getTime().day}`), ['thanks'], currentMinutes, 'rent_thanked', {});
+        } catch { /* thanks is best-effort */ }
         this.telemetry.logEvent('economy', 'rent_paid', currentMinutes, {
           day: this.clock.getTime().day,
         });
@@ -1134,6 +1185,10 @@ export class SimulationEngine {
       }
 
       case 'DOWNLOAD_START': {
+        // P6.4 lenient teeth: overdue rent pauses NEW downloads (browsing still works)
+        if (this.world.getFlag('rent_overdue')) {
+          return { success: false, error: 'Download line paused by the front desk — settle Room 104 rent to resume.' };
+        }
         try {
           const task = this.downloads.startDownload({
             sourceId: action.sourceId,
