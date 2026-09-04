@@ -1,22 +1,6 @@
 import React, { useState } from 'react';
 import { useSimulationStore } from '../../store/useSimulationStore';
-
-interface ForecastDay {
-  dayName: string;
-  tempHighF: number;
-  tempLowF: number;
-  condition: string;
-  icon: string;
-}
-
-const FORECAST_DAYS: ForecastDay[] = [
-  { dayName: 'Mon', tempHighF: 68, tempLowF: 54, condition: 'Heavy Overcast', icon: '☁️' },
-  { dayName: 'Tue', tempHighF: 62, tempLowF: 48, condition: 'Industrial Canal Rain', icon: '🌧️' },
-  { dayName: 'Wed', tempHighF: 58, tempLowF: 46, condition: 'Persistent Rain & Mist', icon: '🌧️' },
-  { dayName: 'Thu', tempHighF: 64, tempLowF: 50, condition: 'Overcast & Humid', icon: '☁️' },
-  { dayName: 'Fri', tempHighF: 59, tempLowF: 45, condition: 'Canal Fog & Drizzle', icon: '🌫️' },
-  { dayName: 'Sat', tempHighF: 66, tempLowF: 52, condition: 'Break in Clouds', icon: '⛅' },
-];
+import { getForecast, gameDayName, type DayWeather } from '../../engine/WeatherEngine';
 
 export const WeatherBuddyApp: React.FC = () => {
   const currentDay = useSimulationStore((s) => s.state.time.day);
@@ -37,7 +21,10 @@ export const WeatherBuddyApp: React.FC = () => {
     return `${c}°C`;
   };
 
-  const currentCondition = FORECAST_DAYS[((currentDay - 1) % FORECAST_DAYS.length)] || FORECAST_DAYS[0]!;
+  // P6.2 live forecast: 6 real game days starting today (deterministic engine, not a static table)
+  const forecast: DayWeather[] = getForecast(currentDay, 6);
+  const currentCondition = forecast[0]!;
+  const dayLabel = (day: number): string => gameDayName(day);
 
   return (
     <div className="w-full h-full bg-gradient-to-b from-sky-400 via-sky-200 to-amber-100 text-black font-sans text-xs select-none flex flex-col justify-between p-3 border-2 border-emerald-600 shadow-2xl relative overflow-hidden">
@@ -77,11 +64,11 @@ export const WeatherBuddyApp: React.FC = () => {
         {/* Current Weather Stats */}
         <div className="text-right">
           <div className="text-3xl font-extrabold text-slate-800 font-mono">
-            {toDisplayTemp(currentCondition.tempHighF)}
+            {toDisplayTemp(currentCondition.highF)}
           </div>
-          <div className="text-xs font-bold text-slate-700">{currentCondition.condition}</div>
+          <div className="text-xs font-bold text-slate-700">{currentCondition.label}</div>
           <div className="text-[10px] text-slate-500">
-            Low: {toDisplayTemp(currentCondition.tempLowF)} | Humidity: 88%
+            Low: {toDisplayTemp(currentCondition.lowF)} | Humidity: 88%
           </div>
         </div>
       </div>
@@ -92,12 +79,12 @@ export const WeatherBuddyApp: React.FC = () => {
           5-Day Forecast:
         </span>
         <div className="grid grid-cols-5 gap-1 text-center">
-          {FORECAST_DAYS.slice(0, 5).map((d, i) => (
-            <div key={i} className="bg-white/80 p-1 rounded border border-emerald-100 flex flex-col items-center">
-              <span className="font-bold text-[10px] text-gray-700">{d.dayName}</span>
+          {forecast.slice(1, 6).map((d) => (
+            <div key={d.day} className="bg-white/80 p-1 rounded border border-emerald-100 flex flex-col items-center">
+              <span className="font-bold text-[10px] text-gray-700">{dayLabel(d.day)}</span>
               <span className="text-base my-0.5">{d.icon}</span>
               <span className="font-mono text-[10px] font-bold text-gray-800">
-                {toDisplayTemp(d.tempHighF)}
+                {toDisplayTemp(d.highF)}
               </span>
             </div>
           ))}

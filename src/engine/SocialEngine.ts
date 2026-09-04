@@ -13,6 +13,7 @@ import {
   ScheduleBlock,
 } from './types';
 import { EventBus } from './EventBus';
+import { getWeatherForDay, isWetWeather } from './WeatherEngine';
 import { validateCharacterId, isValidSchedule, isCoreBuddyId } from './characterTemplates';
 import { validatePersistedBuddy } from './CharacterEngine';
 
@@ -617,13 +618,22 @@ export class SocialEngine {
 
   /** Daily mood: deterministic per (buddy, day); strained buddies are always cold. */
   public getDailyMood(rawBuddyId: string, day: number): DailyMood {
-    const rel = this.relationships.get(normalizeBuddyId(rawBuddyId));
+    const id = normalizeBuddyId(rawBuddyId);
+    const rel = this.relationships.get(id);
     if (rel && rel.annoyance >= STRAINED_ANNOYANCE) return 'cold';
-    const roll = hashText(`${normalizeBuddyId(rawBuddyId)}:${Math.max(1, Math.floor(day) || 1)}`) % 100;
-    if (roll < 35) return 'warm';
-    if (roll < 70) return 'steady';
-    if (roll < 88) return 'tired';
-    return 'off';
+    const roll = hashText(`${id}:${Math.max(1, Math.floor(day) || 1)}`) % 100;
+    let mood: DailyMood;
+    if (roll < 35) mood = 'warm';
+    else if (roll < 70) mood = 'steady';
+    else if (roll < 88) mood = 'tired';
+    else mood = 'off';
+    // P6.2 Maya loves the rain: wet days lift her one step (strained-cold is exempt above)
+    if (id === 'maya' && isWetWeather(getWeatherForDay(day).condition)) {
+      if (mood === 'off') mood = 'tired';
+      else if (mood === 'tired') mood = 'steady';
+      else if (mood === 'steady') mood = 'warm';
+    }
+    return mood;
   }
 
   /**

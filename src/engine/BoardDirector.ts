@@ -59,6 +59,37 @@ function activeSorted(buddies: BoardBuddy[]): BoardBuddy[] {
     .sort((a, b) => (a.id < b.id ? -1 : 1));
 }
 
+function buildThreadReplies(
+  eligible: BoardBuddy[],
+  authorId: string,
+  seedBase: string,
+  count: number,
+  affinities: (a: string, b: string) => number
+): NpcThreadReply[] {
+  const out: NpcThreadReply[] = [];
+  const replierPool = eligible.filter((b) => b.id !== authorId);
+  if (replierPool.length === 0) return out;
+  for (let i = 0; i < count; i++) {
+    const replier = replierPool[hashStr(`${seedBase}:r${i}`) % replierPool.length]!;
+    // Cross-talk: address the present buddy this replier feels strongest about (50%)
+    let addressName: string | undefined;
+    const others = eligible.filter((b) => b.id !== replier.id && b.id !== authorId);
+    if (others.length > 0 && hashStr(`${seedBase}:x${i}`) % 100 < 50) {
+      let best = others[0]!;
+      for (const o of others) {
+        if (Math.abs(affinities(replier.id, o.id)) > Math.abs(affinities(replier.id, best.id))) best = o;
+      }
+      if (Math.abs(affinities(replier.id, best.id)) >= 10) addressName = best.displayName;
+    }
+    out.push({
+      author: replier.displayName,
+      authorHandle: replier.handle,
+      text: pickBoardReply(`${seedBase}:reply${i}`, addressName),
+    });
+  }
+  return out;
+}
+
 /**
  * Weekly NPC threads for the week containing `day`: 2 archetype-flavoured
  * starters (2 cross-talk replies each) + 1 world-event thread when there is
@@ -75,30 +106,8 @@ export function buildWeeklyNpcThreads(
   const week = npcThreadWeek(day);
   const threads: NpcThread[] = [];
 
-  const makeReplies = (authorId: string, seedBase: string, count: number): NpcThreadReply[] => {
-    const out: NpcThreadReply[] = [];
-    const replierPool = eligible.filter((b) => b.id !== authorId);
-    if (replierPool.length === 0) return out;
-    for (let i = 0; i < count; i++) {
-      const replier = replierPool[hashStr(`${seedBase}:r${i}`) % replierPool.length]!;
-      // Cross-talk: address the present buddy this replier feels strongest about (50%)
-      let addressName: string | undefined;
-      const others = eligible.filter((b) => b.id !== replier.id && b.id !== authorId);
-      if (others.length > 0 && hashStr(`${seedBase}:x${i}`) % 100 < 50) {
-        let best = others[0]!;
-        for (const o of others) {
-          if (Math.abs(affinities(replier.id, o.id)) > Math.abs(affinities(replier.id, best.id))) best = o;
-        }
-        if (Math.abs(affinities(replier.id, best.id)) >= 10) addressName = best.displayName;
-      }
-      out.push({
-        author: replier.displayName,
-        authorHandle: replier.handle,
-        text: pickBoardReply(`${seedBase}:reply${i}`, addressName),
-      });
-    }
-    return out;
-  };
+  const makeReplies = (authorId: string, seedBase: string, count: number): NpcThreadReply[] =>
+    buildThreadReplies(eligible, authorId, seedBase, count, affinities);
 
   for (let slot = 0; slot < 2; slot++) {
     const author = eligible[hashStr(`w${week}:a${slot}`) % eligible.length]!;
@@ -252,4 +261,60 @@ export function gameDayToMailDate(day: number): string {
   const date = new Date(2006, 7, 21 + Math.max(1, Math.floor(day) || 1));
   const label = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
   return `${label} 08:00 PM`;
+}
+
+// ==========================================
+// P6.2 WEEKLY WEATHER THREAD (deterministic forecast chat)
+// ==========================================
+
+const WEATHER_SEVERITY: Record<string, number> = {
+  storm: 6, rain: 5, heat: 4, fog: 3, drizzle: 2, overcast: 1, clear: 0,
+};
+
+/**
+ * One weather thread per week: the most dramatic day leads, the 7-day strip
+ * is the body. Authors rotate to whoever loves (or hates) it most:
+ * wet weeks → Maya, heat → Ryan, fog → Nora, else round-robin.
+ */
+export function buildWeeklyWeatherThread(
+  day: number,
+  buddies: BoardBuddy[],
+  getWeather: (day: number) => { condition: string; label: string; icon: string; highF: number },
+  dayName: (day: number) => string,
+  affinities: (a: string, b: string) => number = () => 0
+): NpcThread | null {
+  const eligible = activeSorted(buddies);
+  if (eligible.length === 0) return null;
+  const week = npcThreadWeek(day);
+  const firstDay = week * 7 + 1;
+  const strip = [0, 1, 2, 3, 4, 5, 6].map((i) => ({ day: firstDay + i, weather: getWeather(firstDay + i) }));
+  let lead = strip[0]!;
+  for (const entry of strip) {
+    if ((WEATHER_SEVERITY[entry.weather.condition] ?? 0) > (WEATHER_SEVERITY[lead.weather.condition] ?? 0)) lead = entry;
+  }
+  const severe = lead.weather.condition;
+  let author = eligible[hashStr(`wx${week}:a`) % eligible.length]!;
+  const lover = severe === 'heat'
+    ? eligible.find((b) => b.id === 'ryan')
+    : severe === 'fog'
+      ? eligible.find((b) => b.id === 'nora')
+      : (severe === 'rain' || severe === 'drizzle' || severe === 'storm')
+        ? eligible.find((b) => b.id === 'maya')
+        : undefined;
+  if (lover) author = lover;
+  const key = `npcweather_${week}`;
+  const body = strip.map((s) => `${dayName(s.day)} ${s.weather.icon} ${s.weather.highF}F`).join(' / ');
+  const title = severe === 'storm'
+    ? `STORM incoming ${dayName(lead.day)} ${lead.weather.icon} — megathread`
+    : `week ahead: ${lead.weather.label.toLowerCase()} ${lead.weather.icon} (peak ${dayName(lead.day)})`;
+  return {
+    key,
+    numericId: 9600 + week,
+    title,
+    author: author.displayName,
+    authorHandle: author.handle,
+    day: firstDay,
+    body: `forecast strip, take it or leave it: ${body}. plan accordingly, people.`,
+    replies: buildThreadReplies(eligible, author.id, `${key}:${author.id}`, 1, affinities),
+  };
 }

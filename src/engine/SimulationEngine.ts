@@ -22,6 +22,7 @@ import { generateNewcomer, shouldAutoDiscover, NEWCOMER_METVIA_ROTATION } from '
 import { STRAINED_ANNOYANCE, DISTANT_ANNOYANCE, GONE_ANNOYANCE } from './SocialEngine';
 import { pickConfrontLine, pickFarewellLine, pickReturnLine, pickInitiativeText, pickRsvpLine, pickStoodUpLine, pickMeetingApologyLine, pickShiftWrapLine, pickArchiveWrapLine, pickGuestbookLine, pickGuestbookReplyLine, pickTop8NewsLine, resolveArchetype, isCoreBuddyId } from './characterTemplates';
 import { parseMeetupProposal, isMeetupCancelText, decideRsvp, decideNpcShow, appointmentRoll, locationLabel, LOCATION_SLOTS, pickCoopDetail, SHIFT_WAGE } from './AppointmentDirector';
+import { getWeatherForDay, isSevereWeather, shiftWageBonus } from './WeatherEngine';
 
 export class SimulationEngine {
   public readonly clock!: GameClock;
@@ -609,7 +610,8 @@ export class SimulationEngine {
             const action = isShift ? 'work_camaraderie' : 'intellectual_curiosity';
             this.social.applySocialAction(buddy.id, action);
             this.social.applySocialAction(buddy.id, action);
-            if (isShift) this.economy.earnCash(SHIFT_WAGE, `Side shift with ${name}`);
+            // P6.2 heat waves pay +$6 (thirsty town, busy cart)
+            if (isShift) this.economy.earnCash(SHIFT_WAGE + shiftWageBonus(getWeatherForDay(appt.targetDay).condition), `Side shift with ${name}`);
             this.social.addCoreMemory(buddy.id, {
               text: isShift
                 ? `Worked a side shift with ${name}, Day ${appt.targetDay}: ${detail}.`
@@ -626,11 +628,19 @@ export class SimulationEngine {
             this.telemetry.logEvent('social', 'appointment_happened', minutes, { buddyId: buddy.id, appointmentId: appt.id });
           }
         } else if (npcShowed && !playerShowed) {
-          this.world.updateAppointment(appt.id, { status: 'missed', isMissed: true, npcShowed: true, playerShowed: false });
-          this.social.applySocialAction(buddy.id, 'dismissive');
-          this.social.addCoreMemory(buddy.id, { text: `Stood up ${name} at ${label}, Day ${appt.targetDay}.`, kind: 'fact', day: appt.targetDay });
-          this.social.sendMessage(buddy.id, buddy.id, 'player', pickStoodUpLine(appt.id, label), minutes, false, ['appointment', 'missed']);
-          this.telemetry.logEvent('social', 'appointment_missed', minutes, { buddyId: buddy.id, appointmentId: appt.id });
+          // P6.2 severe weather (fog/storm) is a legitimate excuse: missed, but no hard feelings
+          const excused = isSevereWeather(getWeatherForDay(appt.targetDay).condition);
+          if (excused) {
+            this.world.updateAppointment(appt.id, { status: 'missed', isMissed: true, npcShowed: true, playerShowed: false });
+            this.social.addCoreMemory(buddy.id, { text: `Severe weather kept you from ${label}, Day ${appt.targetDay}. No hard feelings.`, kind: 'fact', day: appt.targetDay });
+            this.telemetry.logEvent('social', 'appointment_excused', minutes, { buddyId: buddy.id, appointmentId: appt.id });
+          } else {
+            this.world.updateAppointment(appt.id, { status: 'missed', isMissed: true, npcShowed: true, playerShowed: false });
+            this.social.applySocialAction(buddy.id, 'dismissive');
+            this.social.addCoreMemory(buddy.id, { text: `Stood up ${name} at ${label}, Day ${appt.targetDay}.`, kind: 'fact', day: appt.targetDay });
+            this.social.sendMessage(buddy.id, buddy.id, 'player', pickStoodUpLine(appt.id, label), minutes, false, ['appointment', 'missed']);
+            this.telemetry.logEvent('social', 'appointment_missed', minutes, { buddyId: buddy.id, appointmentId: appt.id });
+          }
         } else if (!npcShowed && playerShowed) {
           this.world.updateAppointment(appt.id, { status: 'missed', isMissed: true, npcShowed: false, playerShowed: true });
           this.social.applySocialAction(buddy.id, 'dismissive');

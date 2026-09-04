@@ -3,7 +3,8 @@ import { SiteRouteProps } from '../types';
 import { soundManager } from '../../audio/SoundManager';
 import { useSimulationStore } from '../../store/useSimulationStore';
 import { getNightBoardDynamicThreads } from '../worldSiteHelpers';
-import { buildWeeklyNpcThreads, npcThreadWeek, type NpcThread } from '../../engine/BoardDirector';
+import { buildWeeklyNpcThreads, buildWeeklyWeatherThread, npcThreadWeek, type NpcThread } from '../../engine/BoardDirector';
+import { getWeatherForDay, gameDayName } from '../../engine/WeatherEngine';
 
 interface PostRecord {
   id: number;
@@ -124,7 +125,13 @@ export const NightBoardSite: React.FC<SiteRouteProps> = (props) => {
       const titles = world.triggeredEvents.map((e) => e.title);
       const week = npcThreadWeek(time.day);
       const weeks = [week - 1, week].filter((w) => w >= 0);
-      return weeks.flatMap((w) => buildWeeklyNpcThreads(w * 7 + 1, buddies, aff, titles));
+      const out = weeks.flatMap((w) => buildWeeklyNpcThreads(w * 7 + 1, buddies, aff, titles));
+      // P6.2 weekly weather thread rides along (same weeks, deterministic ids)
+      for (const w of weeks) {
+        const wx = buildWeeklyWeatherThread(w * 7 + 1, buddies, getWeatherForDay, gameDayName, aff);
+        if (wx) out.push(wx);
+      }
+      return out;
     } catch { return []; }
   })();
   const toThreadRecord = (n: NpcThread): ThreadRecord => ({
