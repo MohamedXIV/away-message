@@ -40,6 +40,8 @@ describe('P6.6 leniency guarantees', () => {
   it('work is always available as a way back (no death spiral)', () => {
     sim.advanceGameMinutes(7 * 24 * 60, 'a week of neglect');
     (sim.economy as any).state.energy = 45; // floor-ish, worst realistic case
+    // P7: walk to the cart first (ignoreFatigue not needed at 45% energy)
+    expect(sim.dispatchAction({ type: 'TRAVEL_TO', to: 'cart', mode: 'walk' }).success).toBe(true);
     const res = sim.dispatchAction({ type: 'PLAYER_WORK_SHIFT', durationMinutes: 240, wage: 62 });
     expect(res.success).toBe(true);
   });

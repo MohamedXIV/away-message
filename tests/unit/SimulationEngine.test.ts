@@ -40,6 +40,8 @@ describe('SimulationEngine (Authoritative Master Coordinator)', () => {
   });
 
   it('dispatches work shift action updating money and advancing time', () => {
+    // P7: shifts are worked at the food cart — travel there first
+    expect(sim.dispatchAction({ type: 'TRAVEL_TO', to: 'cart', mode: 'walk' }).success).toBe(true);
     const res = sim.dispatchAction({
       type: 'PLAYER_WORK_SHIFT',
       durationMinutes: 240,
@@ -49,8 +51,8 @@ describe('SimulationEngine (Authoritative Master Coordinator)', () => {
     expect(res.success).toBe(true);
     const state = sim.getState();
     expect(state.player.cash).toBe(100.0);
-    expect(state.time.hour).toBe(12); // 8 + 4
-    expect(state.time.minute).toBe(0);
+    expect(state.time.hour).toBe(12); // 8 + 4 (+15m walk, still hour 12)
+    expect(state.time.minute).toBe(15); // 15-minute walk to the cart
   });
 
   it('dispatches hardware upgrade actions with cash deduction', () => {

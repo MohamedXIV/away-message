@@ -118,6 +118,8 @@ describe('P6 job applications (SimulationEngine)', () => {
 
   it('closed outings fail honestly at night', () => {
     sim.advanceGameMinutes(15 * 60, 'to 23:00'); // 08:00 → 23:00
+    // P7: travel first (no hour gate on travel itself), then the diner refuses
+    expect(sim.dispatchAction({ type: 'TRAVEL_TO', to: 'diner', mode: 'walk' }).success).toBe(true);
     const res = sim.dispatchAction({ type: 'PLAYER_CITY_OUTING', outingId: 'diner_soup' });
     expect(res.success).toBe(false);
     expect(res.error).toContain('closed');

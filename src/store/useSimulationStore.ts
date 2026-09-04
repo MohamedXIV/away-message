@@ -29,7 +29,7 @@ export interface SimulationStoreState {
   engine: SimulationEngine;
   state: SimulationState;
   isPaused: boolean;
-  activeView: 'pc' | 'room' | 'cafe' | 'work';
+  activeView: 'pc' | 'room' | 'cafe' | 'work' | 'city';
 }
 
 export interface SimulationStoreActions {
@@ -43,7 +43,7 @@ export interface SimulationStoreActions {
   // Time & View
   advanceTime: (minutes: number, reason?: string) => void;
   setPaused: (paused: boolean) => void;
-  switchView: (view: 'pc' | 'room' | 'cafe' | 'work') => void;
+  switchView: (view: 'pc' | 'room' | 'cafe' | 'work' | 'city') => void;
 
   // Economy & Player
   earnCash: (amount: number, reason: string) => void;
@@ -314,7 +314,7 @@ export const useSocialState = (): SocialEngineState => useSimulationStore((s) =>
 export const useWorldState = (): WorldState => useSimulationStore((s) => s.state.world);
 export const useNarrativeState = (): NarrativeState => useSimulationStore((s) => s.state.narrative);
 export const useTelemetryStats = (): TelemetryStats => useSimulationStore((s) => s.state.telemetry.stats);
-export const useActiveView = (): 'pc' | 'room' | 'cafe' | 'work' => useSimulationStore((s) => s.activeView);
+export const useActiveView = (): 'pc' | 'room' | 'cafe' | 'work' | 'city' => useSimulationStore((s) => s.activeView);
 export const useIsPaused = (): boolean => useSimulationStore((s) => s.isPaused);
 
 /**

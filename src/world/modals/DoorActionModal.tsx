@@ -1,10 +1,10 @@
 // src/world/modals/DoorActionModal.tsx
 
 import React from 'react';
-import { DOOR_OPTIONS, isOptionOpen, openHoursLabel } from '../data/roomInteractables';
-import { RoomActivityOption } from '../types';
 import { soundManager } from '../../audio/SoundManager';
-import { DoorOpen, X, Sparkles, Briefcase } from 'lucide-react';
+import { DoorOpen, X, Briefcase } from 'lucide-react';
+import { CityMapView } from '../components/CityMapView';
+import type { CityNodeId, TravelMode } from '../../engine/CityMap';
 
 export interface JobBoardEntry {
   gigId: string;
@@ -18,14 +18,15 @@ export interface JobBoardEntry {
 }
 
 interface DoorActionModalProps {
-  day: number;
   hour: number;
   playerCash: number;
   playerEnergy: number;
-  isCafeScheduled: boolean;
+  playerLocation: CityNodeId;
+  raining: boolean;
+  storming: boolean;
   jobs: JobBoardEntry[];
   onApplyGig: (gigId: string) => string | null;
-  onSelectOption: (option: RoomActivityOption) => void;
+  onTravel: (to: CityNodeId, mode: TravelMode) => void;
   onClose: () => void;
 }
 
@@ -39,21 +40,17 @@ function formatDuration(totalMin: number): string {
 }
 
 export const DoorActionModal: React.FC<DoorActionModalProps> = ({
-  day,
   hour,
   playerCash,
   playerEnergy,
-  isCafeScheduled,
+  playerLocation,
+  raining,
+  storming,
   jobs,
   onApplyGig,
-  onSelectOption,
+  onTravel,
   onClose,
 }) => {
-  const handleSelect = (option: RoomActivityOption) => {
-    soundManager.play('door_open');
-    onSelectOption(option);
-    onClose();
-  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 select-none animate-in fade-in duration-200">
@@ -75,94 +72,23 @@ export const DoorActionModal: React.FC<DoorActionModalProps> = ({
           </button>
         </div>
 
-        {/* Single scroll area: outings + job board */}
+        {/* Single scroll area: city map + job board */}
         <div className="p-4 space-y-4 overflow-y-auto flex-1">
           <p className="text-xs text-slate-400">
-            Step out into the motel corridor and head into the city for work, fresh air,
-            or social appointments.
+            Oakhaven at a glance. Pick a destination — travel time counts, and the
+            street sometimes has opinions.
           </p>
 
-          {/* Outings */}
-          <div className="space-y-2">
-            {DOOR_OPTIONS.map((opt) => {
-              const isCafe = opt.actionType === 'cafe';
-              const isAvailable = !isCafe || isCafeScheduled || day >= 11;
-              const hasEnoughEnergy = opt.actionType !== 'work' || playerEnergy >= 25;
-              const canAfford = !opt.cashCost || playerCash >= opt.cashCost;
-              const openNow = isOptionOpen(opt, hour);
-              const isEnabled = isAvailable && hasEnoughEnergy && canAfford && openNow;
-              const closedReason = !openNow && opt.openHours
-                ? `Closed — opens ${openHoursLabel(opt.openHours).split('–')[0]}`
-                : !canAfford ? 'Not enough cash'
-                : !hasEnoughEnergy ? 'Too tired'
-                : !isAvailable ? 'Not scheduled'
-                : null;
-              return (
-                <div
-                  key={opt.id}
-                  className={`p-3 border rounded transition-colors ${
-                    isCafe && isAvailable
-                      ? 'bg-amber-950/30 border-amber-500/60'
-                      : 'bg-slate-800/80 border-slate-700'
-                  } ${isEnabled ? 'hover:border-slate-500' : 'opacity-75'}`}
-                >
-                  <div className="flex items-start gap-3">
-                    <div className="text-2xl pt-0.5">{opt.icon}</div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between gap-2">
-                        <div className="flex items-center gap-1.5 min-w-0">
-                          <h4 className="font-bold text-xs text-slate-100 truncate">{opt.title}</h4>
-                          {isCafe && isAvailable && (
-                            <span className="px-1.5 py-0.2 bg-amber-500/20 text-amber-300 text-[10px] font-bold rounded flex items-center gap-0.5 shrink-0">
-                              <Sparkles className="w-2.5 h-2.5" /> Scheduled
-                            </span>
-                          )}
-                        </div>
-                        <span className="text-[11px] font-mono text-amber-400 shrink-0">{formatDuration(opt.durationMinutes)}</span>
-                      </div>
-
-                      <p className="text-[11px] text-slate-400 mt-1 leading-relaxed">{opt.description}</p>
-
-                      <div className="mt-1.5 flex items-center gap-x-3 gap-y-1 text-[11px] font-mono flex-wrap">
-                        {opt.cashReward ? (
-                          <span className="text-green-400 font-bold">+${opt.cashReward.toFixed(2)} Wages</span>
-                        ) : null}
-                        {opt.cashCost ? (
-                          <span>Cost: <span className={canAfford ? 'text-slate-200' : 'text-red-400 font-bold'}>${opt.cashCost.toFixed(2)}</span></span>
-                        ) : null}
-                        <span className={opt.energyChange < 0 ? 'text-amber-400' : 'text-cyan-400'}>
-                          {opt.energyChange > 0 ? `+${opt.energyChange}` : opt.energyChange} Energy
-                        </span>
-                        {opt.openHours ? (
-                          <span className={`inline-flex items-center gap-1 ${openNow ? 'text-emerald-400' : 'text-red-400 font-bold'}`}>
-                            <span className={`h-1.5 w-1.5 rounded-full ${openNow ? 'bg-emerald-400' : 'bg-red-400'}`} />
-                            {openNow ? `Open ${openHoursLabel(opt.openHours)}` : `Closed · ${openHoursLabel(opt.openHours)}`}
-                          </span>
-                        ) : null}
-                      </div>
-                      {closedReason && !isEnabled ? (
-                        <div className="mt-1 text-[10px] text-red-300/90 italic">{closedReason}</div>
-                      ) : null}
-                    </div>
-
-                    <button
-                      onClick={() => handleSelect(opt)}
-                      disabled={!isEnabled}
-                      className={`px-3 py-1.5 rounded text-xs font-bold shrink-0 self-center transition-all ${
-                        isEnabled
-                          ? isCafe
-                            ? 'bg-amber-500 hover:bg-amber-400 text-slate-950 shadow cursor-pointer'
-                            : 'bg-slate-200 hover:bg-white text-slate-950 shadow cursor-pointer'
-                          : 'bg-slate-700 text-slate-500 cursor-not-allowed'
-                      }`}
-                    >
-                      Go
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+          {/* City map */}
+          <CityMapView
+            currentNode={playerLocation}
+            hour={hour}
+            cash={playerCash}
+            energy={playerEnergy}
+            raining={raining}
+            storming={storming}
+            onTravel={onTravel}
+          />
 
           {/* Job Board */}
           <div className="border-t border-slate-700 pt-3">

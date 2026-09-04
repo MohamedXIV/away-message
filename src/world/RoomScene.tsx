@@ -5,7 +5,13 @@ import { useSimulationStore } from '../store/useSimulationStore';
 import { soundManager } from '../audio/SoundManager';
 import { RoomCanvasRenderer, getTimeOfDayFromHour } from './RoomCanvas';
 import { RoomHotspotId, RoomActivityOption, WeatherType } from './types';
-import { getWeatherForDay } from '../engine/WeatherEngine';
+import { getWeatherForDay, isWetWeather } from '../engine/WeatherEngine';
+import { CITY_NODES, type CityNodeId, type TravelMode } from '../engine/CityMap';
+import { CityPlaceView } from './components/CityPlaceView';
+
+function playerLocationLabel(location: CityNodeId): string {
+  return CITY_NODES[location]?.name ?? location;
+}
 import { WindowObservationModal } from './modals/WindowObservationModal';
 import { BeverageModal } from './modals/BeverageModal';
 import { DoorActionModal } from './modals/DoorActionModal';
@@ -35,10 +41,8 @@ export const RoomScene: React.FC = () => {
 
   const switchView = useSimulationStore((s) => s.switchView);
   const interactRoom = useSimulationStore((s) => s.interactRoom);
-  const workShift = useSimulationStore((s) => s.workShift);
   const restOrSleep = useSimulationStore((s) => s.restOrSleep);
   const spendCash = useSimulationStore((s) => s.spendCash);
-  const cityOuting = useSimulationStore((s) => s.cityOuting);
   const applyGig = useSimulationStore((s) => s.applyGig);
 
   // Active Modals
@@ -171,23 +175,25 @@ export const RoomScene: React.FC = () => {
   };
 
   // Handle Door Action Selection (outings resolve fully in the engine and report back)
-  const handleSelectDoorAction = (option: RoomActivityOption) => {
-    if (option.actionType === 'work') {
-      workShift(option.durationMinutes, option.cashReward);
-    } else if (option.actionType === 'diner' || option.actionType === 'outing') {
-      const res = cityOuting(option.id) as unknown as { success: boolean; error?: string; data?: { summary?: string; rumor?: string } };
-      if (res && (res as { success: boolean }).success) {
-        const data = (res as { data?: { summary?: string; rumor?: string } }).data;
-        flashOutingNotice([data?.summary, data?.rumor].filter(Boolean).join(' — ') || 'You head out and come back.');
+  const dispatchTravel = (to: CityNodeId, mode: TravelMode): void => {
+    try {
+      const res = useSimulationStore.getState().dispatchAction({ type: 'TRAVEL_TO', to, mode }) as unknown as {
+        success: boolean; error?: string; data?: { summary?: string; encounter?: string };
+      };
+      if (res && res.success) {
+        const data = res.data ?? {};
+        flashOutingNotice([data.summary, data.encounter].filter(Boolean).join(' — ') || 'You head out.');
         soundManager.play('door_open');
       } else {
-        flashOutingNotice((res as { error?: string })?.error || 'You decide to stay in.');
+        flashOutingNotice(res?.error || 'You decide to stay in.');
       }
-    } else if (option.actionType === 'cafe') {
-      if (option.cashCost) spendCash(option.cashCost, 'Bus to Starlight Café');
-      switchView('cafe');
+    } catch {
+      flashOutingNotice('You decide to stay in.');
     }
   };
+
+  // P7 location chip for the HUD
+  const playerLocation: CityNodeId = player.location ?? 'home';
 
   // Handle Bed Sleep (alarm: wake hour + minute from the modal)
   const handleConfirmSleep = (wakeHour: number, wakeMinute: number) => {
@@ -212,6 +218,29 @@ export const RoomScene: React.FC = () => {
 
   const formattedTime = `${String(time.hour).padStart(2, '0')}:${String(time.minute).padStart(2, '0')}`;
 
+  // P7 away from home: the place screen replaces the room canvas
+  if (playerLocation !== 'home') {
+    return (
+      <div className="relative w-full h-full bg-slate-950 flex flex-col select-none overflow-hidden font-sans">
+        <CityPlaceView location={playerLocation} onOpenMap={() => setActiveModal('door')} />
+        {activeModal === 'door' && (
+          <DoorActionModal
+            hour={time.hour}
+            playerCash={player.cash}
+            playerEnergy={player.energy}
+            playerLocation={playerLocation}
+            raining={isWetWeather(getWeatherForDay(time.day).condition)}
+            storming={getWeatherForDay(time.day).condition === 'storm'}
+            jobs={jobBoardEntries}
+            onApplyGig={handleApplyGig}
+            onTravel={dispatchTravel}
+            onClose={() => setActiveModal(null)}
+          />
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="relative w-full h-full bg-slate-950 flex flex-col select-none overflow-hidden font-sans">
       {/* Top Atmospheric HUD Bar */}
@@ -219,7 +248,7 @@ export const RoomScene: React.FC = () => {
         {/* Left: Location & Time */}
         <div className="flex items-center gap-3">
           <div className="font-bold text-amber-300 flex items-center gap-1.5">
-            <span>Motel Room 104</span>
+            <span>{playerLocation === 'home' ? 'Motel Room 104' : `📍 ${playerLocationLabel(playerLocation)}`}</span>
           </div>
           <div className="h-3 w-[1px] bg-slate-700" />
           <div className="flex items-center gap-1.5 font-mono text-slate-300">
@@ -346,14 +375,15 @@ export const RoomScene: React.FC = () => {
 
       {activeModal === 'door' && (
         <DoorActionModal
-          day={time.day}
           hour={time.hour}
           playerCash={player.cash}
           playerEnergy={player.energy}
-          isCafeScheduled={time.day >= 11 || !!world.flags?.maya_cafe_scheduled || world.triggeredEvents.some((e) => e.id === 'city_canal_festival' && e.isTriggered)}
+          playerLocation={player.location ?? 'home'}
+          raining={isWetWeather(getWeatherForDay(time.day).condition)}
+          storming={getWeatherForDay(time.day).condition === 'storm'}
           jobs={jobBoardEntries}
           onApplyGig={handleApplyGig}
-          onSelectOption={handleSelectDoorAction}
+          onTravel={dispatchTravel}
           onClose={() => setActiveModal(null)}
         />
       )}

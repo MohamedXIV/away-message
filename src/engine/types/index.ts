@@ -51,6 +51,8 @@ export interface PlayerState {
   sleepDebt: number;         // 0+ (late/short nights accumulate, good nights repay)
   // P6 pantry: finite ingredients (noodles cups, grocery bags). Snack is vending (infinite).
   pantry: { noodles: number; groceries: number };
+  // P7 where the player physically is (map travel, persisted)
+  location: import('../CityMap').CityNodeId;
 }
 
 export interface WorkShiftResult {
@@ -521,13 +523,13 @@ export interface SimulationState {
     stats: TelemetryStats;
     logs: TelemetryRecord[];
   };
-  activeView: 'pc' | 'room' | 'cafe' | 'work';
+  activeView: 'pc' | 'room' | 'cafe' | 'work' | 'city';
 }
 
 export type SimulationAction =
   | { type: 'TIME_ADVANCE_MINUTES'; minutes: number; reason?: string }
   | { type: 'TIME_SET_PAUSED'; paused: boolean }
-  | { type: 'VIEW_SWITCH'; view: 'pc' | 'room' | 'cafe' | 'work' }
+  | { type: 'VIEW_SWITCH'; view: 'pc' | 'room' | 'cafe' | 'work' | 'city' }
   | { type: 'PLAYER_EARN_CASH'; amount: number; reason: string }
   | { type: 'PLAYER_SPEND_CASH'; amount: number; reason: string }
   | { type: 'PLAYER_WORK_SHIFT'; durationMinutes?: number; wage?: number }
@@ -538,6 +540,7 @@ export type SimulationAction =
   | { type: 'PLAYER_CITY_OUTING'; outingId: string }
   | { type: 'PLAYER_PLACE_ORDER'; items: Array<{ sku: string; qty: number }>; fulfillment: 'pickup' | 'delivery' }
   | { type: 'JOB_APPLY'; gigId: string }
+  | { type: 'TRAVEL_TO'; to: import('../CityMap').CityNodeId; mode: 'walk' | 'bus' }
   | { type: 'HARDWARE_UPGRADE_RAM'; ramMB: number; cost: number }
   | { type: 'HARDWARE_UPGRADE_CONNECTION'; connectionType: ConnectionType; cost: number }
   | { type: 'HARDWARE_UPGRADE_OS'; targetOs: OsVersion; cost: number }

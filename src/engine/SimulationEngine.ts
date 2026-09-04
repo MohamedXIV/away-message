@@ -26,6 +26,7 @@ import { parseMeetupProposal, isMeetupCancelText, decideRsvp, decideNpcShow, app
 import { getWeatherForDay, isSevereWeather, isWetWeather, shiftWageBonus } from './WeatherEngine';
 import { OUTINGS, isValidOutingId, isOutingOpen, outingHoursLabel, mayaDinerEncounter, noraCanalEncounter, buildLaundromatRumor, MIN_OUTING_ENERGY, type OutingId } from './OutingDirector';
 import { GIGS, jobRoll, replyDelayMinutes, decideApplication } from './JobDirector';
+import { CITY_NODES, isCityNodeId, quoteTravel, walkEnergyCost, rollStreetEncounter, BUS_FARE, type CityNodeId, type TravelMode } from './CityMap';
 
 export class SimulationEngine {
   public readonly clock!: GameClock;
@@ -43,7 +44,7 @@ export class SimulationEngine {
   public readonly telemetry!: TelemetryEngine;
   public readonly world!: WorldEventsEngine;
 
-  private activeView: 'pc' | 'room' | 'cafe' | 'work' = 'pc';
+  private activeView: 'pc' | 'room' | 'cafe' | 'work' | 'city' = 'pc';
   private subscribers: Set<(state: Readonly<SimulationState>) => void> = new Set();
   private _procGenPending = false;
   private _procGenLastDay = 0;
@@ -731,6 +732,92 @@ export class SimulationEngine {
   }
 
   // ==========================================
+  // P7 — CITY TRAVEL (location sim: walk/bus, encounters, gating)
+  // One-way legs; the map UI chains them. Arrival raises visited_* flags
+  // (meetings keep working). Outings/room/work actions gate on location.
+  // ==========================================
+
+  /** Where an outing must happen (null = anywhere/legacy). */
+  private static outingHomeNode(outingId: string): CityNodeId | null {
+    if (outingId === 'diner_soup' || outingId === 'diner_platter' || outingId === 'diner_pie') return 'diner';
+    if (outingId === 'canal_walk') return 'canal';
+    if (outingId === 'laundromat') return 'laundry';
+    return null;
+  }
+
+  private static requireLocation(have: CityNodeId, want: CityNodeId): string | null {
+    if (have === want) return null;
+    return `You're at ${CITY_NODES[have].name} — travel to ${CITY_NODES[want].name} first.`;
+  }
+
+  public travelTo(rawTo: unknown, rawMode: unknown, options?: { ignoreFatigue?: boolean }): ActionResult & { data?: { summary: string; encounter?: string; minutes: number; cost: number } } {
+    try {
+      if (!isCityNodeId(rawTo)) return { success: false, error: `Unknown destination.` };
+      const to: CityNodeId = rawTo;
+      const mode: TravelMode = rawMode === 'bus' ? 'bus' : 'walk';
+      const from = this.economy.getLocation();
+      if (from === to) return { success: true, data: { summary: `Already at ${CITY_NODES[to].name}.`, minutes: 0, cost: 0 } };
+      const day = this.clock.getTime().day;
+      const weather = getWeatherForDay(day);
+      if (to === 'canal' && weather.condition === 'storm') {
+        return { success: false, error: 'Canal walkway closed in the storm. Come back after the front passes.' };
+      }
+      const quote = quoteTravel(from, to, mode, isWetWeather(weather.condition));
+      if (quote.busUsed && !this.economy.canAfford(BUS_FARE)) {
+        return { success: false, error: `Bus fare is $${BUS_FARE.toFixed(2)} — walk it instead?` };
+      }
+      const walkCost = quote.mode === 'walk' ? walkEnergyCost(quote.minutes) : 0;
+      // P7 leniency: the auto-trip home never strands the player, whatever the legs feel like
+      if (!options?.ignoreFatigue && this.economy.getState().energy < 10 && walkCost > 0) {
+        return { success: false, error: 'Too tired to walk there (need 10% energy). Take the bus or rest.' };
+      }
+      if (quote.busUsed) this.economy.spendCash(BUS_FARE, `Bus to ${CITY_NODES[to].name}`);
+      this.advanceGameMinutes(quote.minutes, `Travel: ${CITY_NODES[from].name} → ${CITY_NODES[to].name} (${quote.mode})`);
+      if (walkCost > 0) this.economy.consumeEnergy(walkCost);
+      this.economy.setLocation(to);
+      // Arrival counts for meetings (same flags the legacy views raise)
+      if (to === 'cafe' || to === 'cart') {
+        try { this.world.setFlag(`visited_${to === 'cafe' ? 'cafe' : 'work'}_${day}`, true); } catch { /* attendance is best-effort */ }
+      }
+      // One street encounter per trip (deterministic, capped by design)
+      let encounterText: string | undefined;
+      try {
+        const candidates = this.social.getBuddies()
+          .filter((b) => b.status !== 'distant' && b.status !== 'gone' && b.status !== 'blocked')
+          .map((b) => ({ id: b.id, name: b.displayName }));
+        const encounter = rollStreetEncounter(from, to, day, isWetWeather(weather.condition), candidates);
+        if (encounter && encounter.kind !== 'quiet') {
+          if (encounter.cashDelta !== 0) this.economy.earnCash(encounter.cashDelta, 'Street find');
+          if (encounter.energyDelta !== 0) {
+            if (encounter.energyDelta < 0) this.economy.consumeEnergy(-encounter.energyDelta);
+            else this.economy.restoreEnergy(encounter.energyDelta);
+          }
+          if (encounter.familiarityBuddyId) {
+            const rels = this.social.getRelationships(encounter.familiarityBuddyId);
+            if (rels) this.social.adjustRelationship(encounter.familiarityBuddyId, { familiarity: Math.min(100, rels.familiarity + 3) });
+          }
+          encounterText = encounter.text;
+          this.telemetry.logEvent('room', 'street_encounter', this.clock.getTotalMinutes(), { kind: encounter.kind, from, to });
+        }
+      } catch { /* encounters never break travel */ }
+      const route = quote.path.map((n) => CITY_NODES[n].name).join(' → ');
+      this.telemetry.logEvent('room', 'travel', this.clock.getTotalMinutes(), { from, to, mode: quote.mode, minutes: quote.minutes });
+      this.notifySubscribers();
+      return {
+        success: true,
+        data: {
+          summary: `${route} (${quote.minutes}m${quote.busUsed ? `, bus $${BUS_FARE.toFixed(2)}` : ', on foot'}) — now at ${CITY_NODES[to].name}.`,
+          encounter: encounterText,
+          minutes: quote.minutes,
+          cost: quote.cost,
+        },
+      };
+    } catch {
+      return { success: false, error: 'Travel failed.' };
+    }
+  }
+
+  // ==========================================
   // P6 — JOB BOARD (apply now, hear back in 4–10h, never instant)
   // Acceptance creates a real next-day work appointment (gig wage honored);
   // rejection is a kind Pulse note with zero penalty. State in world flags.
@@ -935,6 +1022,12 @@ export class SimulationEngine {
       if (!isValidOutingId(rawOutingId)) return { success: false, error: `Unknown outing: ${rawOutingId}` };
       const outingId: OutingId = rawOutingId;
       const spec = OUTINGS[outingId];
+      // P7 gating: outings happen where they happen
+      const homeNode = SimulationEngine.outingHomeNode(outingId);
+      if (homeNode) {
+        const err = SimulationEngine.requireLocation(this.economy.getLocation(), homeNode);
+        if (err) return { success: false, error: err };
+      }
       const day = this.clock.getTime().day;
       const hour = this.clock.getTime().hour;
       const minutes = this.clock.getTotalMinutes();
@@ -1146,6 +1239,11 @@ export class SimulationEngine {
       }
 
       case 'VIEW_SWITCH': {
+        // P7: sitting at the PC/room from out in the city walks you home first (time charged)
+        if ((action.view === 'pc' || action.view === 'room') && this.economy.getLocation() !== 'home') {
+          const home = this.travelTo('home', 'walk', { ignoreFatigue: true });
+          if (!home.success) return { success: false, error: home.error };
+        }
         this.activeView = action.view;
         // P5: visiting cafe/work counts as showing up for that day's meetings there
         if (action.view === 'cafe' || action.view === 'work') {
@@ -1177,6 +1275,9 @@ export class SimulationEngine {
       }
 
       case 'PLAYER_WORK_SHIFT': {
+        // P7 gating: shifts are worked at the food cart
+        const cartErr = SimulationEngine.requireLocation(this.economy.getLocation(), 'cart');
+        if (cartErr) return { success: false, error: cartErr };
         const shiftRes = this.economy.performWorkShift(action.durationMinutes, action.wage);
         if (!shiftRes.success) return { success: false, error: shiftRes.error };
         this.advanceGameMinutes(action.durationMinutes ?? 240, 'Work Shift');
@@ -1241,6 +1342,9 @@ export class SimulationEngine {
       }
 
       case 'PLAYER_INTERACT_ROOM': {
+        // P7 gating: room comforts live in Room 104
+        const roomErr = SimulationEngine.requireLocation(this.economy.getLocation(), 'home');
+        if (roomErr) return { success: false, error: roomErr };
         const durations: Record<string, number> = {
           tea: 6,
           coffee: 5,
@@ -1276,6 +1380,10 @@ export class SimulationEngine {
 
       case 'PLAYER_CITY_OUTING': {
         return this.doCityOuting(action.outingId);
+      }
+
+      case 'TRAVEL_TO': {
+        return this.travelTo((action as { to: unknown }).to, (action as { mode: unknown }).mode);
       }
 
       case 'JOB_APPLY': {

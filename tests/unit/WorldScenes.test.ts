@@ -193,10 +193,12 @@ describe('2D World Scenes, Atmosphere, Interactables & App Integration', () => {
       const initialEnergy = engine.getState().player.energy;
       const initialMinutes = engine.clock.getTotalMinutes();
 
+      // P7: shifts run at the cart — 15m walk there first
+      expect(engine.dispatchAction({ type: 'TRAVEL_TO', to: 'cart', mode: 'walk' }).success).toBe(true);
       const res = engine.dispatchAction({ type: 'PLAYER_WORK_SHIFT', durationMinutes: 240, wage: 62 });
       expect(res.success).toBe(true);
 
-      expect(engine.clock.getTotalMinutes()).toBe(initialMinutes + 240);
+      expect(engine.clock.getTotalMinutes()).toBe(initialMinutes + 15 + 240);
       expect(engine.getState().player.cash).toBe(initialCash + 62);
       expect(engine.getState().player.energy).toBeLessThan(initialEnergy);
     });

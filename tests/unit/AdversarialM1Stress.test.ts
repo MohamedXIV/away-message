@@ -636,8 +636,10 @@ describe('Adversarial Stress Test Suite — Milestone 1 Engine', () => {
         manager: 'browser',
       });
 
-      const shift1 = sim.dispatchAction({ type: 'PLAYER_WORK_SHIFT', durationMinutes: 240, wage: 62.0 });
+      const shift1 = sim.dispatchAction({ type: 'TRAVEL_TO', to: 'cart', mode: 'walk' });
       expect(shift1.success).toBe(true);
+      const shift1b = sim.dispatchAction({ type: 'PLAYER_WORK_SHIFT', durationMinutes: 240, wage: 62.0 });
+      expect(shift1b.success).toBe(true);
       expect(sim.getState().player.cash).toBe(100.0);
 
       sim.dispatchAction({ type: 'PLAYER_INTERACT_ROOM', activity: 'tea' });
@@ -652,9 +654,7 @@ describe('Adversarial Stress Test Suite — Milestone 1 Engine', () => {
       for (let day = 2; day <= 6; day++) {
         sim.dispatchAction({ type: 'PLAYER_WORK_SHIFT', durationMinutes: 240, wage: 62.0 });
         sim.dispatchAction({ type: 'PLAYER_REST_OR_SLEEP', wakeHour: 8 });
-      }
-
-      expect(sim.getState().time.day).toBe(7);
+      }      expect(sim.getState().time.day).toBe(7);
       expect(sim.getState().player.cash).toBeGreaterThan(300);
 
       const rentPay = sim.dispatchAction({ type: 'PLAYER_PAY_RENT' });

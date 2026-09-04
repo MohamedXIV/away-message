@@ -73,7 +73,7 @@ export class TelemetryEngine {
     });
   }
 
-  public recordPlayTime(deltaRealSeconds: number, currentView: 'pc' | 'room' | 'cafe' | 'work'): void {
+  public recordPlayTime(deltaRealSeconds: number, currentView: 'pc' | 'room' | 'cafe' | 'work' | 'city'): void {
     this.stats.totalRealPlayTimeSeconds += deltaRealSeconds;
     const minutes = deltaRealSeconds / 60;
     if (currentView === 'pc') {

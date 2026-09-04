@@ -1,5 +1,6 @@
 import { PlayerState, EnergyStatus, WorkShiftResult } from './types';
 import { EventBus } from './EventBus';
+import { isCityNodeId, type CityNodeId } from './CityMap';
 
 export class EconomyEngine {
   private state: PlayerState;
@@ -27,6 +28,8 @@ export class EconomyEngine {
         noodles: initialState?.pantry?.noodles ?? 2,
         groceries: initialState?.pantry?.groceries ?? 0,
       },
+      // P7 physical location (old saves wake up at home)
+      location: isCityNodeId(initialState?.location) ? initialState.location : 'home',
     };
   }
 
@@ -236,6 +239,16 @@ export class EconomyEngine {
   public addPantry(kind: 'noodles' | 'groceries', qty: number): void {
     if ((kind !== 'noodles' && kind !== 'groceries') || !Number.isFinite(qty) || qty <= 0) return;
     this.state.pantry[kind] = Math.min(99, (this.state.pantry[kind] ?? 0) + Math.floor(qty));
+  }
+
+  /** P7 physical location access for travel. */
+  public getLocation(): CityNodeId {
+    return this.state.location;
+  }
+
+  public setLocation(next: CityNodeId): void {
+    if (!isCityNodeId(next)) return;
+    this.state.location = next;
   }
 
   /** Hot shower: small health bump + a little energy. Kindness, not strategy. */
