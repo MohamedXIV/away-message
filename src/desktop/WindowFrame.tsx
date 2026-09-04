@@ -16,7 +16,7 @@ export const WindowFrame: React.FC<WindowFrameProps> = memo(({ window: winState,
   const frameRef = useRef<HTMLDivElement>(null);
 
   const focusWindow = useWindowStore((s) => s.focusWindow);
-  const closeWindow = useWindowStore((s) => s.closeWindow);
+  const closeOrTrayWindow = useWindowStore((s) => s.closeOrTrayWindow);
   const minimizeWindow = useWindowStore((s) => s.minimizeWindow);
   const toggleMaximize = useWindowStore((s) => s.toggleMaximize);
   const setWindowPosition = useWindowStore((s) => s.setWindowPosition);
@@ -215,10 +215,10 @@ export const WindowFrame: React.FC<WindowFrameProps> = memo(({ window: winState,
             </button>
           )}
 
-          {/* Close Button */}
+          {/* Close Button (signed-in Pulse minimizes to the tray instead) */}
           <button
-            onClick={() => closeWindow(winState.id)}
-            title="Close"
+            onClick={() => closeOrTrayWindow(winState.id)}
+            title={String(winState.appId).includes('pulse') && (winState.customState as any)?.pulseSignedIn ? 'Minimize to tray' : 'Close'}
             className={
               isOrion6
                 ? 'w-5 h-5 rounded bg-[#d32f2f] hover:bg-[#f44336] text-white flex items-center justify-center text-xs font-bold border border-white/40'

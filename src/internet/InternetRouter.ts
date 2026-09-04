@@ -3,6 +3,7 @@ import { Default404Page } from './sites/Default404Page';
 import { FindItSite } from './sites/FindItSite';
 import { DownloadHubSite } from './sites/DownloadHubSite';
 import { PulseChatSite } from './sites/PulseChatSite';
+import { PulseWebSite } from './sites/PulseWebSite';
 import { TechMartSite } from './sites/TechMartSite';
 import { BidBaySite } from './sites/BidBaySite';
 import { MyPlaceSite } from './sites/MyPlaceSite';
@@ -222,6 +223,14 @@ export class InternetRouter {
       pathPattern: '/',
       component: PulseChatSite,
       pageTitle: 'Pulse Messenger — Stay Connected',
+    });
+
+    // 3b. Pulse Web Client (full messenger in the browser, same live session)
+    this.registerRoute({
+      host: 'pulse.local',
+      pathPattern: '/',
+      component: PulseWebSite,
+      pageTitle: 'Pulse Web Messenger',
     });
 
     // 4. TechMart Direct

@@ -20,7 +20,7 @@ export const PulseChatSite: React.FC<SiteRouteProps> = (props) => {
         </div>
 
         <button
-          onClick={() => doNavigate('downloadhub.local')}
+          onClick={() => doNavigate('pulse.local')}
           className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded text-xs shadow cursor-pointer"
         >
           ⬇ Download Pulse 5.2

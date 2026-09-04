@@ -8,7 +8,7 @@ import { AddRemoveApp } from '../apps/addremove/AddRemoveApp';
 import { NotepadApp } from '../apps/notepad/NotepadApp';
 import { TrashApp } from '../apps/trash/TrashApp';
 import { VoyagerBrowserApp } from '../apps/browser/VoyagerBrowserApp';
-import { PulseMessengerApp } from '../apps/pulse/PulseMessengerApp';
+import { PulseAppGate } from '../apps/pulse/components/PulseAppGate';
 import { RetroAmpApp } from '../apps/retroamp/RetroAmpApp';
 import { FlashFetchApp } from '../apps/flashfetch/FlashFetchApp';
 import { ZipMateApp } from '../apps/zipmate/ZipMateApp';
@@ -58,10 +58,10 @@ const defaultAppComponents: AppRegistry = {
   voyager: ({ window }) => <VoyagerBrowserApp initialUrl={window.customState?.initialUrl} />,
   'app.voyager': ({ window }) => <VoyagerBrowserApp initialUrl={window.customState?.initialUrl} />,
 
-  pulse: () => <PulseMessengerApp />,
-  'app.pulse': () => <PulseMessengerApp />,
-  pulse_messenger: () => <PulseMessengerApp />,
-  'app.pulse_messenger': () => <PulseMessengerApp />,
+  pulse: () => <PulseAppGate />,
+  'app.pulse': () => <PulseAppGate />,
+  pulse_messenger: () => <PulseAppGate />,
+  'app.pulse_messenger': () => <PulseAppGate />,
 
   retroamp: () => <RetroAmpApp />,
   'app.retroamp': () => <RetroAmpApp />,
@@ -102,6 +102,7 @@ export const WindowManager: React.FC<WindowManagerProps> = ({ customAppRegistry 
   const windowOrder = useWindowStore((s) => s.windowOrder);
   const activeWindowId = useWindowStore((s) => s.activeWindowId);
   const closeWindow = useWindowStore((s) => s.closeWindow);
+  const closeOrTrayWindow = useWindowStore((s) => s.closeOrTrayWindow);
   const focusWindow = useWindowStore((s) => s.focusWindow);
 
   const registry = useMemo(() => {
@@ -121,7 +122,7 @@ export const WindowManager: React.FC<WindowManagerProps> = ({ customAppRegistry 
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.altKey && e.key === 'F4' && activeWindowId) {
         e.preventDefault();
-        closeWindow(activeWindowId);
+        closeOrTrayWindow(activeWindowId);
       } else if (e.altKey && e.key === 'Tab') {
         e.preventDefault();
         if (visibleWindows.length > 1) {
@@ -135,7 +136,7 @@ export const WindowManager: React.FC<WindowManagerProps> = ({ customAppRegistry 
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [activeWindowId, visibleWindows, closeWindow, focusWindow]);
+  }, [activeWindowId, visibleWindows, closeOrTrayWindow, focusWindow]);
 
   return (
     <div className="absolute inset-0 pointer-events-none overflow-hidden" id="window-manager-root">

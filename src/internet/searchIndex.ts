@@ -9,8 +9,8 @@ export const SEARCH_INDEX_DATABASE: SearchIndexEntry[] = [
   {
     id: 'search_pulse_download',
     title: 'Pulse Messenger 5.2 - Official Free Download',
-    url: 'http://pulsechat.local/download',
-    snippet: 'Stay connected with your friends and coworkers! Download Pulse 5.2 featuring custom away messages, tabbed chat, and sound alerts.',
+    url: 'http://pulse.local/',
+    snippet: 'Stay connected with your friends and coworkers! Download Pulse 5.2 featuring custom away messages, tabbed chat, and sound alerts. Sign up for a free Pulse ID.',
     category: 'software',
     keywords: ['pulse', 'messenger', 'chat', 'im', 'instant', 'download', 'away', 'message', 'aim', 'msn', 'friends'],
     availableFromDay: 1,

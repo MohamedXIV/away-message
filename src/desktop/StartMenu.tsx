@@ -24,6 +24,8 @@ export const StartMenu: React.FC<StartMenuProps> = ({ isOpen, onClose, onOpenDia
   const osVersion = useSimulationStore((s) => s.state.hardware.osVersion);
   const dispatchAction = useSimulationStore((s) => s.dispatchAction);
   const openWindow = useWindowStore((s) => s.openWindow);
+  // Pulse never ships with the OS — its menu entry appears only after install.
+  const isPulseInstalled = useSimulationStore((s) => s.state.installedSoftware.some((sw: any) => String(sw.appId).includes('pulse')));
 
   const [activeSubmenu, setActiveSubmenu] = useState<'programs' | 'accessories' | 'internet' | 'settings' | 'documents' | null>(null);
   const [isRunDialogOpen, setIsRunDialogOpen] = useState(false);
@@ -130,13 +132,15 @@ export const StartMenu: React.FC<StartMenuProps> = ({ isOpen, onClose, onOpenDia
                     <Globe className="w-4 h-4 text-blue-600" />
                     <span>Voyager Browser</span>
                   </button>
-                  <button
-                    className="flex items-center gap-2 px-3 py-1.5 hover:bg-orion-highlight hover:text-white text-left"
-                    onClick={() => handleLaunch('pulse')}
-                  >
-                    <MessageSquare className="w-4 h-4 text-amber-500" />
-                    <span>Pulse Messenger</span>
-                  </button>
+                  {isPulseInstalled && (
+                    <button
+                      className="flex items-center gap-2 px-3 py-1.5 hover:bg-orion-highlight hover:text-white text-left"
+                      onClick={() => handleLaunch('pulse')}
+                    >
+                      <MessageSquare className="w-4 h-4 text-amber-500" />
+                      <span>Pulse Messenger</span>
+                    </button>
+                  )}
                   <button
                     className="flex items-center gap-2 px-3 py-1.5 hover:bg-orion-highlight hover:text-white text-left"
                     onClick={() => handleLaunch('notepad')}

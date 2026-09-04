@@ -26,6 +26,7 @@ export const Taskbar: React.FC<TaskbarProps> = ({ onOpenDialUp }) => {
   const closeWindow = useWindowStore((s) => s.closeWindow);
   const openWindow = useWindowStore((s) => s.openWindow);
   const minimizeAll = useWindowStore((s) => s.minimizeAll);
+  const isPulseInstalled = useSimulationStore((s) => s.state.installedSoftware.some((sw: any) => String(sw.appId).includes('pulse')));
 
   const [isStartMenuOpen, setIsStartMenuOpen] = useState(false);
   const [tabContextMenu, setTabContextMenu] = useState<{ windowId: string; x: number; y: number } | null>(null);
@@ -114,13 +115,15 @@ export const Taskbar: React.FC<TaskbarProps> = ({ onOpenDialUp }) => {
           >
             <Globe className="w-3.5 h-3.5 text-cyan-600 drop-shadow-sm" />
           </button>
-          <button
-            onClick={() => openWindow('pulse')}
-            title="Pulse Messenger"
-            className="p-1 hover:bg-white/20 rounded cursor-pointer text-gray-700"
-          >
-            <MessageSquare className="w-3.5 h-3.5 text-amber-500 drop-shadow-sm" />
-          </button>
+          {isPulseInstalled && (
+            <button
+              onClick={() => openWindow('pulse')}
+              title="Pulse Messenger"
+              className="p-1 hover:bg-white/20 rounded cursor-pointer text-gray-700"
+            >
+              <MessageSquare className="w-3.5 h-3.5 text-amber-500 drop-shadow-sm" />
+            </button>
+          )}
           <button
             onClick={() => {
               soundManager.play('click');

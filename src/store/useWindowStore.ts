@@ -63,6 +63,11 @@ export interface WindowStoreActions {
     customState?: Record<string, any>
   ) => string;
   closeWindow: (id: string) => void;
+  /**
+   * Close, except a signed-in Pulse window minimizes to the tray instead.
+   * (Signed-out login panel closes normally — nothing to protect.)
+   */
+  closeOrTrayWindow: (id: string) => void;
   minimizeWindow: (id: string) => void;
   maximizeWindow: (id: string) => void;
   unmaximizeWindow: (id: string) => void;
@@ -264,7 +269,8 @@ export const useWindowStore = create<WindowStore>()(
       // Pulse keeps standard WindowFrame but starts tall-narrow like the screenshot (360×560)
       const framelessDefault = false;
       const isPulse = config.appId === 'pulse' || config.appId === 'app.pulse' || config.appId === 'pulse_messenger';
-      const pulseDefaultSize = { width: 360, height: 560 } as WindowSize;
+      // Pulse opens tall-narrow on the login panel (360×620), then goes rectangular on sign-in
+      const pulseDefaultSize = { width: 360, height: 620 } as WindowSize;
       const pulseMinSize = { width: 340, height: 460 } as WindowSize;
       const newWindow: WindowState = {
         id,
@@ -327,6 +333,19 @@ export const useWindowStore = create<WindowStore>()(
         },
         activeWindowId: nextActiveId,
       }));
+    },
+
+    closeOrTrayWindow: (id: string) => {
+      const { windows } = get();
+      const target = windows[id];
+      if (!target) return;
+      const isPulse = String(target.appId).includes('pulse');
+      const signedIn = (target.customState as Record<string, any> | undefined)?.pulseSignedIn === true;
+      if (isPulse && signedIn) {
+        get().minimizeWindow(id);
+        return;
+      }
+      get().closeWindow(id);
     },
 
     minimizeWindow: (id: string) => {

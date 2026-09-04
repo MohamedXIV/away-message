@@ -1,5 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import { soundManager } from '../../../audio/SoundManager';
+import {
+  loadPulseAccounts,
+  checkPulseCredentials,
+  signUpPulseAccount,
+  loadPulseCredentials,
+  savePulseCredentials,
+  type PulseAccount,
+} from '../persistence';
 
 export interface PulseLoginSession {
   username: string;
@@ -15,11 +23,16 @@ interface PulseLoginSplashProps {
 const SMILEY_WINK = '😉';
 
 export const PulseLoginSplash: React.FC<PulseLoginSplashProps> = ({ onLogin }) => {
-  const [username, setUsername] = useState('wanderer06');
-  const [password, setPassword] = useState('');
-  const [remember, setRemember] = useState(true);
+  const [accounts, setAccounts] = useState<PulseAccount[]>(() => loadPulseAccounts());
+  const [mode, setMode] = useState<'signin' | 'signup'>('signin');
+  const [username, setUsername] = useState(() => loadPulseCredentials()?.id ?? 'wanderer06');
+  const [password, setPassword] = useState(() => loadPulseCredentials()?.password ?? '');
+  const [confirm, setConfirm] = useState('');
+  const [remember, setRemember] = useState(() => loadPulseCredentials()?.remember ?? true);
+  const [autoSign, setAutoSign] = useState(() => loadPulseCredentials()?.autoSign ?? false);
   const [status, setStatus] = useState<'available' | 'invisible'>('available');
   const [isSigningIn, setIsSigningIn] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [wink, setWink] = useState(false);
   // Face state machine: asleep (grey, idle) → suspicious (wrong creds, 0.5s)
   // → happy (correct login, ~1s blend) → onLogin opens the app.
@@ -45,45 +58,55 @@ export const PulseLoginSplash: React.FC<PulseLoginSplashProps> = ({ onLogin }) =
     return () => window.clearInterval(id);
   }, [face]);
 
-  const flashSuspicious = () => {
+  const flashSuspicious = (message: string) => {
+    setError(message);
     setFace('suspicious');
-    soundManager.play('click');
+    soundManager.play('error');
     if (suspiciousTimer.current !== null) window.clearTimeout(suspiciousTimer.current);
     suspiciousTimer.current = window.setTimeout(() => setFace('asleep'), 500);
   };
 
-  const handleSubmit = (event: React.FormEvent) => {
-    event.preventDefault();
-    if (!username.trim() || isSigningIn) return;
-    // Saved-password bridge: a remembered password must match when one exists
-    // (empty password is always wrong — the face says so).
-    try {
-      const saved = window.localStorage.getItem('pulse_saved_password');
-      if (!password || (saved && password !== saved)) {
-        flashSuspicious();
-        return;
-      }
-    } catch {
-      if (!password) {
-        flashSuspicious();
-        return;
-      }
-    }
+  const completeLogin = (id: string) => {
+    setError(null);
     setFace('happy');
     setIsSigningIn(true);
     soundManager.play('door_open');
+    savePulseCredentials(remember ? { id, password, remember: true, autoSign } : null);
     window.setTimeout(() => {
-      try {
-        if (remember && password) window.localStorage.setItem('pulse_saved_password', password);
-        else window.localStorage.removeItem('pulse_saved_password');
-      } catch { /* persistence is best-effort */ }
       onLogin({
-        username: username.trim(),
+        username: id,
         status: status === 'invisible' ? 'away' : 'online',
         awayMessage: remember ? 'back online :)' : 'just signed in',
         signedInAt: Date.now(),
       });
     }, 1000);
+  };
+
+  const handleSubmit = (event: React.FormEvent) => {
+    event.preventDefault();
+    if (isSigningIn) return;
+    const id = username.trim();
+    if (!id) {
+      flashSuspicious('Enter a Pulse ID first.');
+      return;
+    }
+    if (mode === 'signup') {
+      const res = signUpPulseAccount(accounts, id, password, confirm);
+      if (!res.ok) {
+        flashSuspicious(res.error ?? 'Could not create that ID.');
+        return;
+      }
+      setAccounts(res.accounts);
+      completeLogin(id);
+      return;
+    }
+    const res = checkPulseCredentials(accounts, id, password);
+    setAccounts(res.accounts);
+    if (!res.ok) {
+      flashSuspicious('Wrong ID or password — try again.');
+      return;
+    }
+    completeLogin(id);
   };
 
   const isAsleep = face === 'asleep';
@@ -105,7 +128,7 @@ export const PulseLoginSplash: React.FC<PulseLoginSplashProps> = ({ onLogin }) =
         </div>
       </div>
 
-      {/* Winking smiley hero — asleep (grey) by default, livens up on login */}
+      {/* Smiley hero — asleep (grey) by default, livens up on login */}
       <div className="flex flex-col items-center bg-gradient-to-b from-white to-[#e9e3f5] border-b border-[#c8b8e6] px-4 py-5">
         <div
           className={`relative flex h-[92px] w-[92px] items-center justify-center rounded-full border-4 border-[#4a1a6b] shadow-[0_6px_16px_rgba(75,30,110,0.35),inset_0_2px_0_rgba(255,255,255,0.9)] select-none ${
@@ -198,32 +221,75 @@ export const PulseLoginSplash: React.FC<PulseLoginSplashProps> = ({ onLogin }) =
               <a className="text-[11px] text-[#5b2d8f] underline decoration-dotted underline-offset-2 hover:text-[#3b1a5e]" href="#" onClick={(e) => e.preventDefault()}>Forgot your password?</a>
             </div>
           </div>
+          {mode === 'signup' && (
+            <div>
+              <label className="mb-1 block font-bold text-[#3b1a5e]" htmlFor="pulse-confirm">Confirm password</label>
+              <input
+                id="pulse-confirm"
+                value={confirm}
+                onChange={(e) => setConfirm(e.target.value)}
+                type="password"
+                placeholder="••••••••"
+                className="w-full rounded border border-[#a99bd6] bg-white px-2.5 py-2 shadow-[inset_0_1px_2px_rgba(0,0,0,0.08)] outline-none focus:border-[#5b2d8f] focus:ring-2 focus:ring-[#d8c8f5]"
+                autoComplete="new-password"
+              />
+            </div>
+          )}
 
-          <div className="flex items-center gap-2">
-            <label className="block flex-1 font-bold text-[#3b1a5e]">Status</label>
-            <select value={status} onChange={(e) => setStatus(e.target.value as any)} className="flex-1 rounded border border-[#a99bd6] bg-white px-2 py-1.5 text-xs">
-              <option value="available">Available — I am Online</option>
-              <option value="invisible">Invisible — lurk quietly</option>
-            </select>
-          </div>
+          {mode === 'signin' && (
+            <div className="flex items-center gap-2">
+              <label className="block flex-1 font-bold text-[#3b1a5e]">Status</label>
+              <select value={status} onChange={(e) => setStatus(e.target.value as any)} className="flex-1 rounded border border-[#a99bd6] bg-white px-2 py-1.5 text-xs">
+                <option value="available">Available — I am Online</option>
+                <option value="invisible">Invisible — lurk quietly</option>
+              </select>
+            </div>
+          )}
 
-          <label className="flex items-center gap-2 text-[11px] text-[#3b1a5e]">
-            <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} className="accent-[#5b2d8f]" />
-            Remember my ID & Password
-          </label>
-          <label className="flex items-center gap-2 text-[11px] text-[#5b4a7a]">
-            <input type="checkbox" defaultChecked className="accent-[#5b2d8f]" /> Sign in automatically
-          </label>
+          {error && (
+            <div className="rounded border border-red-300 bg-red-50 px-2.5 py-2 text-[11px] font-bold text-red-700">
+              {error}
+            </div>
+          )}
+
+          {mode === 'signin' && (
+            <>
+              <label className="flex items-center gap-2 text-[11px] text-[#3b1a5e]">
+                <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} className="accent-[#5b2d8f]" />
+                Remember my ID & Password
+              </label>
+              <label className="flex items-center gap-2 text-[11px] text-[#5b4a7a]">
+                <input type="checkbox" checked={autoSign} onChange={(e) => setAutoSign(e.target.checked)} className="accent-[#5b2d8f]" />
+                Sign in automatically
+              </label>
+            </>
+          )}
 
           <button
             disabled={isSigningIn || !username.trim()}
             className="w-full rounded bg-gradient-to-b from-[#6a3fb8] to-[#4a2390] px-3 py-2.5 font-bold text-white shadow-[0_2px_0_#2a1550] hover:from-[#7550c0] hover:to-[#512aa0] disabled:cursor-wait disabled:opacity-60"
           >
-            {isSigningIn ? 'Signing in…' : 'Sign In'}
+            {isSigningIn ? (mode === 'signup' ? 'Creating ID…' : 'Signing in…') : mode === 'signup' ? 'Create Pulse ID' : 'Sign In'}
           </button>
 
           <div className="flex justify-center gap-3 text-[11px]">
-            <a className="text-[#5b2d8f] underline decoration-dotted underline-offset-2" href="#" onClick={(e) => e.preventDefault()}>Get a new Pulse ID</a>
+            {mode === 'signin' ? (
+              <a
+                className="text-[#5b2d8f] underline decoration-dotted underline-offset-2"
+                href="#"
+                onClick={(e) => { e.preventDefault(); setError(null); setMode('signup'); }}
+              >
+                Get a new Pulse ID
+              </a>
+            ) : (
+              <a
+                className="text-[#5b2d8f] underline decoration-dotted underline-offset-2"
+                href="#"
+                onClick={(e) => { e.preventDefault(); setError(null); setMode('signin'); }}
+              >
+                ← Back to sign in
+              </a>
+            )}
             <span className="text-[#9a8ab8]">•</span>
             <a className="text-[#5b2d8f] underline decoration-dotted underline-offset-2" href="#" onClick={(e) => e.preventDefault()}>Privacy</a>
           </div>

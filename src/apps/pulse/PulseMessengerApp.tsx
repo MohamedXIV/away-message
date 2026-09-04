@@ -16,7 +16,8 @@ import { DIALOGUE_SCRIPTS } from './data/dialogueTrees';
 import { aiService } from '../../ai/service';
 import { loadAISettings } from '../../ai/settings';
 import { soundManager } from '../../audio/SoundManager';
-import { loadPulseState, savePulseState, getCurrentPulseSlotId, setCurrentPulseSlotId, type PulsePersistedState, type PulseSkin } from './persistence';
+import { loadPulseState, savePulseState, getCurrentPulseSlotId, setCurrentPulseSlotId, loadPulseCredentials, loadPulseAccounts, findPulseAccount, type PulsePersistedState, type PulseSkin } from './persistence';
+import { useWindowStore } from '../../store/useWindowStore';
 import type { PulseActivityEntry, PulseActivityKind } from './types';
 import { getNpcStyle, getNpcMoodLabel, getNpcAvailabilityLabel, getNpcActivityLabel } from './data/npcStyles';
 import { extractFactsFromPlayerMessage, extractPromisesFromPlayerMessage, looksLikeCompletion, looksLikePhotoQuestion, buildConversationSummary, buildMemoryContext, hashReply, isDuplicateReply } from './utils/conversationMemory';
@@ -55,6 +56,22 @@ export function getRoomResponderId(roomId: string, participantIds: string[], mes
   if (participantIds.length === 0) return 'nora';
   const offset = roomId.split('').reduce((sum, character) => sum + character.charCodeAt(0), 0);
   return participantIds[(offset + messageCount) % participantIds.length] ?? participantIds[0] ?? 'nora';
+}
+
+// Offline-delivery guard shared across mounts (desktop window + web client):
+// keyed by slot + lastSeen so two live mounts can never double-deliver.
+const deliveredOfflineKeys = new Set<string>();
+
+function tryAutoSign(): PulseLoginSession | null {
+  try {
+    const creds = loadPulseCredentials();
+    if (!creds || !creds.autoSign || !creds.id) return null;
+    const account = findPulseAccount(loadPulseAccounts(), creds.id);
+    if (!account || (creds.password && account.password !== creds.password)) return null;
+    return { username: account.id, status: 'online', awayMessage: 'back online :)', signedInAt: Date.now() };
+  } catch {
+    return null;
+  }
 }
 
 export function hashString(value: string): number {
@@ -203,7 +220,7 @@ export const PulseMessengerApp: React.FC = () => {
 
   usePulseAudio();
 
-  const [session, setSession] = useState<PulseLoginSession | null>(null);
+  const [session, setSession] = useState<PulseLoginSession | null>(() => tryAutoSign());
   const [openBuddyIds, setOpenBuddyIds] = useState<string[]>(['maya']);
   const [activeBuddyId, setActiveBuddyId] = useState<string>('maya');
   const [view, setView] = useState<PulseListView>('contacts');
@@ -233,6 +250,26 @@ export const PulseMessengerApp: React.FC = () => {
   const { activeToasts, dismissToast } = usePulseNotifications(activeBuddyId);
 
   const { joinedRoomIds, roomMessages, roomTopics, friendRequestStatus, pulseSkin } = pulseState;
+
+  // Two window shapes, one app: tall login panel, rectangular messenger.
+  // Web-client mounts have no OS window — the lookup simply finds nothing.
+  useEffect(() => {
+    try {
+      const wins = useWindowStore.getState().windows;
+      const pulseWin = Object.values(wins).find((w) => !!w && String(w.appId).includes('pulse'));
+      if (!pulseWin) return;
+      const setWindowSize = useWindowStore.getState().setWindowSize;
+      const updateWindowCustomState = useWindowStore.getState().updateWindowCustomState;
+      if (session) {
+        if (pulseWin.size.width < 500 || pulseWin.size.height > 540) {
+          setWindowSize(pulseWin.id, { width: 620, height: 480 });
+        }
+      } else if (pulseWin.size.width > 420 || pulseWin.size.height < 540) {
+        setWindowSize(pulseWin.id, { width: 360, height: 620 });
+      }
+      updateWindowCustomState(pulseWin.id, { pulseSignedIn: !!session });
+    } catch { /* window shaping is best-effort */ }
+  }, [session]);
 
   useEffect(() => {
     savePulseState(pulseState, currentSlotId);
@@ -301,7 +338,14 @@ export const PulseMessengerApp: React.FC = () => {
 
   useEffect(() => {
     if (!session || deliveredOfflineForSession.current || !Number.isFinite(totalMinutes)) return;
+    // Cross-mount guard: desktop window + web client share one engine — deliver once.
+    const offlineKey = `${currentSlotId}:${pulseState.lastSeenTotalMinutes}`;
+    if (deliveredOfflineKeys.has(offlineKey)) {
+      deliveredOfflineForSession.current = true;
+      return;
+    }
     deliveredOfflineForSession.current = true;
+    deliveredOfflineKeys.add(offlineKey);
     const elapsed = totalMinutes - pulseState.lastSeenTotalMinutes;
     const buddyIds = engine.social.getBuddies().map((buddy) => buddy.id).filter((id) => !pulseState.blockedBuddyIds.includes(id));
     const missedActivities = collectMissedPresenceActivities(pulseState.lastSeenTotalMinutes, totalMinutes, (id) => engine.social.getBuddy(id) as any, buddyIds);

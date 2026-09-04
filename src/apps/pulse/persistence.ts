@@ -5,6 +5,8 @@ import { db } from '../../persistence/db';
 
 const STORAGE_KEY = 'away_message_pulse_state_v1';
 const SLOT_STORAGE_KEY = 'pulse_current_slot';
+const ACCOUNTS_KEY_PREFIX = 'away_message_pulse_accounts:';
+const CREDS_KEY_PREFIX = 'away_message_pulse_creds:';
 
 export function getCurrentPulseSlotId(): string {
   if (typeof window === 'undefined') return 'slot_1';
@@ -29,6 +31,157 @@ export function getPulseSlotStorageKey(slotId: string): string {
 
 export type FriendRequestStatus = 'pending' | 'accepted' | 'ignored';
 export type PulseSkin = 'blue' | 'silver' | 'dark';
+
+/** A real Pulse account: ID + password, created via sign-up (or first sign-in). */
+export interface PulseAccount {
+  id: string;
+  password: string;
+  createdAt: number;
+}
+
+/** Remembered login form state per slot (game-local convenience, plain text). */
+export interface PulseCredentials {
+  id: string;
+  password: string;
+  remember: boolean;
+  autoSign: boolean;
+}
+
+function accountsKey(slotId: string): string {
+  return `${ACCOUNTS_KEY_PREFIX}${slotId}`;
+}
+
+function credsKey(slotId: string): string {
+  return `${CREDS_KEY_PREFIX}${slotId}`;
+}
+
+function cleanId(id: string): string {
+  return id.trim().slice(0, 32);
+}
+
+/** Load all Pulse accounts for a slot (empty when nobody signed up yet). */
+export function loadPulseAccounts(slotId?: string): PulseAccount[] {
+  if (typeof window === 'undefined') return [];
+  const effectiveSlotId = slotId || getCurrentPulseSlotId();
+  // Migrate the pre-accounts single saved password into a wanderer06 account
+  const legacyFallback = (): PulseAccount[] => {
+    try {
+      const legacy = window.localStorage.getItem('pulse_saved_password');
+      if (legacy) return [{ id: 'wanderer06', password: legacy, createdAt: Date.now() }];
+    } catch { /* ignore */ }
+    return [];
+  };
+  try {
+    const raw = window.localStorage.getItem(accountsKey(effectiveSlotId));
+    if (!raw) return legacyFallback();
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) return legacyFallback();
+    const accounts = parsed
+      .filter((a): a is PulseAccount => Boolean(a && typeof a === 'object'
+        && typeof (a as PulseAccount).id === 'string' && (a as PulseAccount).id.trim()
+        && typeof (a as PulseAccount).password === 'string'))
+      .map((a) => ({ id: cleanId(a.id), password: a.password.slice(0, 64), createdAt: typeof a.createdAt === 'number' ? a.createdAt : Date.now() }))
+      .slice(0, 10);
+    return accounts.length > 0 ? accounts : legacyFallback();
+  } catch {
+    return legacyFallback();
+  }
+}
+
+function savePulseAccounts(accounts: PulseAccount[], slotId?: string): void {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(accountsKey(slotId || getCurrentPulseSlotId()), JSON.stringify(accounts.slice(0, 10)));
+  } catch { /* persistence is best-effort */ }
+}
+
+export function findPulseAccount(accounts: PulseAccount[], id: string): PulseAccount | undefined {
+  const clean = cleanId(id).toLowerCase();
+  return accounts.find((a) => a.id.toLowerCase() === clean);
+}
+
+/**
+ * Validate credentials against accounts.
+ * - Unknown ID + non-empty password → creates the account (frictionless first sign-up).
+ * - Known ID + matching password → ok.
+ * - Otherwise → { ok: false } (wrong password / empty password).
+ */
+export function checkPulseCredentials(
+  accounts: PulseAccount[],
+  id: string,
+  password: string,
+  slotId?: string
+): { ok: boolean; accounts: PulseAccount[]; created: boolean } {
+  const clean = cleanId(id);
+  if (!clean || !password) return { ok: false, accounts, created: false };
+  const existing = findPulseAccount(accounts, clean);
+  if (!existing) {
+    const next = [...accounts, { id: clean, password: password.slice(0, 64), createdAt: Date.now() }];
+    savePulseAccounts(next, slotId);
+    return { ok: true, accounts: next, created: true };
+  }
+  if (existing.password !== password) return { ok: false, accounts, created: false };
+  return { ok: true, accounts, created: false };
+}
+
+/**
+ * Explicit sign-up: ID must be fresh (case-insensitive), password non-empty
+ * and confirmed. Returns the updated accounts on success.
+ */
+export function signUpPulseAccount(
+  accounts: PulseAccount[],
+  id: string,
+  password: string,
+  confirm: string,
+  slotId?: string
+): { ok: boolean; error?: string; accounts: PulseAccount[] } {
+  const clean = cleanId(id);
+  if (clean.length < 3) return { ok: false, error: 'Pick an ID with at least 3 characters.', accounts };
+  if (!/^[a-zA-Z0-9_.-]+$/.test(clean)) return { ok: false, error: 'IDs may only use letters, numbers, _ . -', accounts };
+  if (!password) return { ok: false, error: 'Choose a password.', accounts };
+  if (password !== confirm) return { ok: false, error: 'Passwords do not match.', accounts };
+  if (findPulseAccount(accounts, clean)) return { ok: false, error: 'That ID is already taken on this PC.', accounts };
+  const next = [...accounts, { id: clean, password: password.slice(0, 64), createdAt: Date.now() }];
+  savePulseAccounts(next, slotId);
+  return { ok: true, accounts: next };
+}
+
+/** Load remembered login-form state for a slot (null when Remember was off). */
+export function loadPulseCredentials(slotId?: string): PulseCredentials | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = window.localStorage.getItem(credsKey(slotId || getCurrentPulseSlotId()));
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<PulseCredentials>;
+    if (typeof parsed.id !== 'string' || !parsed.id.trim() || !parsed.remember) return null;
+    return {
+      id: cleanId(parsed.id),
+      password: typeof parsed.password === 'string' ? parsed.password.slice(0, 64) : '',
+      remember: true,
+      autoSign: parsed.autoSign === true,
+    };
+  } catch {
+    return null;
+  }
+}
+
+/** Save (or clear, when remember is off) the login-form state for a slot. */
+export function savePulseCredentials(creds: PulseCredentials | null, slotId?: string): void {
+  if (typeof window === 'undefined') return;
+  const key = credsKey(slotId || getCurrentPulseSlotId());
+  try {
+    if (!creds || !creds.remember) {
+      window.localStorage.removeItem(key);
+      return;
+    }
+    window.localStorage.setItem(key, JSON.stringify({
+      id: cleanId(creds.id),
+      password: creds.password.slice(0, 64),
+      remember: true,
+      autoSign: creds.autoSign === true,
+    }));
+  } catch { /* persistence is best-effort */ }
+}
 
 export interface PulseSharedLink {
   id: string;

@@ -102,11 +102,12 @@ export const DesktopShell: React.FC = () => {
   const baseIcons: DesktopIconItem[] = [
     { id: 'sys_computer', label: 'My Computer', appId: 'fileexplorer', iconType: 'computer', gridX: 0, gridY: 0 },
     { id: 'sys_browser', label: 'Voyager Browser', appId: 'browser', iconType: 'browser', gridX: 0, gridY: 1 },
-    { id: 'sys_pulse', label: 'Pulse Messenger', appId: 'pulse', iconType: 'pulse', gridX: 0, gridY: 2 },
-    { id: 'sys_terminal', label: 'Terminal CLI', appId: 'terminal', iconType: 'terminal', gridX: 0, gridY: 3 },
-    { id: 'sys_control', label: 'Control Panel', appId: 'controlpanel', iconType: 'control', gridX: 0, gridY: 4 },
-    { id: 'sys_trash', label: 'Recycle Bin', appId: 'trash', iconType: 'trash', gridX: 0, gridY: 5 },
-    { id: 'sys_ailab', label: 'AI Lab', appId: 'ailab', iconType: 'ai', gridX: 0, gridY: 6 },
+    // NOTE: no Pulse icon here on purpose — Pulse never ships with the OS.
+    // Its desktop shortcut appears only after installing from the official site.
+    { id: 'sys_terminal', label: 'Terminal CLI', appId: 'terminal', iconType: 'terminal', gridX: 0, gridY: 2 },
+    { id: 'sys_control', label: 'Control Panel', appId: 'controlpanel', iconType: 'control', gridX: 0, gridY: 3 },
+    { id: 'sys_trash', label: 'Recycle Bin', appId: 'trash', iconType: 'trash', gridX: 0, gridY: 4 },
+    { id: 'sys_ailab', label: 'AI Lab', appId: 'ailab', iconType: 'ai', gridX: 0, gridY: 5 },
   ];
 
   // Dynamic VFS icons in C:/Desktop — shortcuts (.lnk) must open their target app
