@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useSimulationStore } from '../../store/useSimulationStore';
 import { BuddyListWindow } from './components/BuddyListWindow';
 import { ChatWindow } from './components/ChatWindow';
@@ -19,12 +19,19 @@ import { soundManager } from '../../audio/SoundManager';
 import { loadPulseState, savePulseState, getCurrentPulseSlotId, setCurrentPulseSlotId, loadPulseCredentials, loadPulseAccounts, findPulseAccount, type PulsePersistedState, type PulseSkin } from './persistence';
 import { useWindowStore } from '../../store/useWindowStore';
 import type { PulseActivityEntry, PulseActivityKind } from './types';
-import { getNpcStyle, getNpcMoodLabel, getNpcAvailabilityLabel, getNpcActivityLabel } from './data/npcStyles';
-import { extractFactsFromPlayerMessage, extractPromisesFromPlayerMessage, looksLikeCompletion, looksLikePhotoQuestion, buildConversationSummary, buildMemoryContext, hashReply, isDuplicateReply } from './utils/conversationMemory';
-import { extractLocalLinks, pickRandomBuddyLink, pickTopicalBuddyLink } from './utils/linkDetector';
+import { getNpcStyle } from './data/npcStyles';
+import { hashReply, isDuplicateReply } from './utils/conversationMemory';
+import { extractLocalLinks, pickTopicalBuddyLink } from './utils/linkDetector';
+import {
+  buildDmChatContext,
+  buddyPersonaLine,
+  runChatLedger,
+  honorSocialAction,
+  computeExchangeUpdate,
+  readMemorySlices,
+  subscribePulseMemoryChanged,
+} from './utils/chatContext';
 import { CHARACTER_ARCHETYPES, pickTemplateOfflineLine, pickRoomExitLine } from '../../engine/characterTemplates';
-import { buildBodyHint } from '../../engine/BodyDirector';
-import { weatherLineForDay } from '../../engine/WeatherEngine';
 import { planInitiatives } from './utils/initiatives';
 import { computeRoomMood, pickDirectTarget, buildRoomContext, roomMoodInstruction, directAddressInstruction, type RoomPair, type DirectTarget } from '../../engine/RoomDirector';
 import type { BuddyCharacter } from '../../engine/types';
@@ -274,6 +281,13 @@ export const PulseMessengerApp: React.FC = () => {
   useEffect(() => {
     savePulseState(pulseState, currentSlotId);
   }, [pulseState, currentSlotId]);
+
+  // Cross-surface memory: CafeScene writes shared slices straight to storage —
+  // refresh from the source of truth when it does (e.g. both open at once).
+  useEffect(() => subscribePulseMemoryChanged(() => {
+    const fresh = readMemorySlices();
+    setPulseState((previous) => ({ ...previous, ...fresh }));
+  }), []);
 
   const handleChangeSkin = (skin: PulseSkin) => {
     setPulseState((previous) => ({ ...previous, pulseSkin: skin }));
@@ -646,101 +660,30 @@ export const PulseMessengerApp: React.FC = () => {
     }
     engine.dispatchAction({ type: 'SOCIAL_SEND_MESSAGE', buddyId, text });
 
-    // P3 — promise ledger: capture commitments, detect follow-through (rules only, no AI)
-    try {
-      const gameDay = Math.floor(totalMinutes / 1440) + 1;
-      for (const extracted of extractPromisesFromPlayerMessage(text)) {
-        engine.social.addPromise(
-          buddyId,
-          extracted.text,
-          gameDay,
-          extracted.dueDayOffset !== undefined ? gameDay + extracted.dueDayOffset : undefined
-        );
-      }
-      if (looksLikeCompletion(text)) {
-        const open = engine.social.getOpenPromises(buddyId);
-        if (open.length > 0 && open[0]) engine.social.resolvePromise(buddyId, open[0].id, true, gameDay);
-      }
-      // P5 — meetup proposals/cancellations emerge from natural chat (rules only, no AI)
-      engine.handleMeetupChat(buddyId, text, gameDay);
-    } catch { /* promise ledger never blocks chat */ }
+    // Shared pre-send ledger + DM-grade context (P8/A1 — CafeScene uses the same path)
+    runChatLedger(engine, buddyId, text, totalMinutes);
 
     const buddy = engine.social.getBuddy(buddyId);
-    const relationship = engine.social.getRelationships(buddyId);
-    const presence = engine.social.getPresence(buddyId);
-    const gameHour = Math.floor((totalMinutes % 1440) / 60);
-    let playerEnergy = 80;
-    let bodyHint = '';
-    try {
-      const playerState = (engine as unknown as { economy: { getState: () => { energy: number; hunger: number; health: number; sleepDebt: number } } }).economy.getState();
-      playerEnergy = playerState.energy ?? 80;
-      // P6.1 NPCs notice the body (exhausted/starving/unwell) — care, never nagging
-      bodyHint = buildBodyHint({ energy: playerState.energy ?? 80, hunger: playerState.hunger ?? 0, health: playerState.health ?? 100, sleepDebt: playerState.sleepDebt ?? 0 });
-    } catch { playerEnergy = 80; }
-    const style = getNpcStyle(buddyId);
-    const mood = getNpcMoodLabel(presence, relationship, gameHour, playerEnergy);
-    const availability = getNpcAvailabilityLabel(presence, gameHour);
-    const activity = getNpcActivityLabel(presence, buddyId, gameHour);
-    const existingMemory = pulseState.conversationMemory[buddyId] || [];
-    const existingFacts = pulseState.buddyFacts[buddyId] || [];
-    const newFacts = extractFactsFromPlayerMessage(text);
-    const mergedFacts = [...existingFacts, ...newFacts].slice(-12);
-    const recentMessagesForSummary = engine.social.getMessages(buddyId).slice(-8).map((message) => ({
-      sender: message.senderId === 'player' ? 'player' : 'buddy',
-      text: message.text,
-    }));
-    const previousSummary = pulseState.conversationSummaries[buddyId] || '';
-    const updatedSummary = buildConversationSummary(recentMessagesForSummary, previousSummary);
-    const recentRepliesForBuddy = pulseState.recentReplies[buddyId] || [];
-    const memoryContext = buildMemoryContext([...existingMemory, `Player said: ${text}`].slice(-6), mergedFacts, updatedSummary, recentRepliesForBuddy);
+    const ctx = buildDmChatContext({
+      engine,
+      buddyId,
+      playerText: text,
+      pulse: pulseState,
+      day: currentDay,
+      totalMinutes,
+    });
+    const recentMessagesForSummary = ctx.recentMessagesForSummary;
+    const updatedSummary = ctx.updatedSummary;
+    const recentRepliesForBuddy = ctx.recentRepliesForBuddy;
 
-    setPulseState((previous) => ({
-      ...previous,
-      conversationMemory: { ...previous.conversationMemory, [buddyId]: [...(previous.conversationMemory[buddyId] || []), `Player said: ${text}`].slice(-6) },
-      conversationSummaries: { ...previous.conversationSummaries, [buddyId]: updatedSummary },
-      buddyFacts: { ...previous.buddyFacts, [buddyId]: mergedFacts },
-      npcMood: { ...previous.npcMood, [buddyId]: mood },
-      npcActivity: { ...previous.npcActivity, [buddyId]: activity },
-    }));
+    setPulseState((previous) => ({ ...previous, ...ctx.preSendPatch }));
 
-    const recentMessages = recentMessagesForSummary;
+    const recentMessages = ctx.recentMessages;
 
-    const personaWithStyle = `${style.persona} Vocabulary hints: ${style.vocabulary.join(', ')}. Punctuation: ${style.punctuation}. Quirks: ${style.quirks.join(', ')}. ${getBuddyPersona(buddyId, buddy)}`;
-    // P3 — stage/mood/long-term memory injected so the NPC honours history (AI paraphrases, rules decide)
-    let relationshipStage = 'acquaintance';
-    let dailyMood = 'steady';
-    let longTermContext = '';
-    let affinityContext = '';
-    let photoRecallHint = '';
-    // P6.2 everyone talks about the weather (deterministic, same for all buddies today)
-    let weatherLine = '';
-    try {
-      weatherLine = weatherLineForDay(currentDay);
-    } catch { /* weather is best-effort */ }
-    try {
-      relationshipStage = engine.social.getRelationshipStage(buddyId);
-      dailyMood = engine.social.getDailyMood(buddyId, currentDay);
-      longTermContext = engine.social.buildLongTermContext(buddyId);
-      affinityContext = engine.social.buildAffinityContext(buddyId);
-      // P5.5 visual recall: photo questions get an explicit nudge so the NPC answers from LongTerm
-      if (looksLikePhotoQuestion(text) && engine.social.getCoreMemories(buddyId).some((m) => m.kind === 'shared_photo')) {
-        photoRecallHint = ' The player is asking about a shared photo — recall it warmly and specifically from the LongTerm memories.';
-      }
-    } catch { /* prompt enrichment is best-effort */ }
-    const relationshipSummary = `${relationship ? JSON.stringify(relationship) : 'new friendship'} | Stage: ${relationshipStage} | DailyMood: ${dailyMood} | Mood: ${mood} | Availability: ${availability} | Activity: ${activity} | ${weatherLine} | ${memoryContext} | ${longTermContext}${affinityContext ? ` | ${affinityContext}` : ''}${photoRecallHint}${bodyHint ? ` | ${bodyHint}` : ''} | Typing: ${style.typing.wpm} wpm, ${style.typing.pauseStyle}`;
-    // Sandbox world knowledge — per-buddy attitude (B)
-    let worldKnowledge = '';
-    let currentGameDay = currentDay;
-    try {
-      const engineAny = engine as unknown as { world?: { getKnowledgeContextForBuddy: (buddyId: string, day: number) => string; getKnowledgeContext: (day: number) => string } ; clock?: { getTime: () => { day: number } } };
-      if (engineAny.world?.getKnowledgeContextForBuddy) {
-        worldKnowledge = engineAny.world.getKnowledgeContextForBuddy(buddyId, currentGameDay ?? 1);
-      } else if (engineAny.world?.getKnowledgeContext) {
-        worldKnowledge = engineAny.world.getKnowledgeContext(currentGameDay ?? 1);
-      } else if (engineAny.clock?.getTime) {
-        currentGameDay = engineAny.clock.getTime().day;
-      }
-    } catch {}
+    const personaWithStyle = ctx.persona;
+    const relationshipSummary = ctx.relationshipSummary;
+    let worldKnowledge = ctx.worldKnowledge;
+    let currentGameDay = ctx.currentDay;
 
     let result = await aiService.generateChat({
       buddyId,
@@ -807,60 +750,28 @@ export const PulseMessengerApp: React.FC = () => {
 
     // P4 — free chat moves relationships: honour the model's chosen socialAction (governed set only).
     // Fallback/generic replies and 'none' never move the needle; extremes flow into the P3 sharp ladder.
-    try {
-      const action = (result.data as { socialAction?: unknown }).socialAction;
-      if (!result.meta.fallback && typeof action === 'string' && CHAT_SOCIAL_ACTIONS.has(action)) {
-        engine.dispatchAction({ type: 'SOCIAL_APPLY_ACTION', buddyId, socialAction: action });
-      }
-    } catch { /* relationship nudge never blocks chat */ }
+    honorSocialAction(engine, buddyId, (result.data as { socialAction?: unknown }).socialAction, !result.meta.fallback);
 
     // Persist recent replies (store raw texts) and update summary post-reply, plus shared links
-    const newReplyTexts = result.data.messages.map((message) => message.text.slice(0, 500));
     setPulseState((previous) => {
-      const existingReplies = previous.recentReplies[buddyId] || [];
-      const mergedReplies = [...existingReplies, ...newReplyTexts].slice(-6);
-      // Rebuild summary to include the new AI reply for next turn
-      const messagesWithReply = [...recentMessages, ...newReplyTexts.map((replyText) => ({ sender: 'buddy', text: replyText }))];
-      const postReplySummary = buildConversationSummary(messagesWithReply, previous.conversationSummaries[buddyId] || updatedSummary);
-
-      // Shared links: capture any .local links from the final AI reply
-      const existingSharedLinks = previous.sharedLinks || [];
-      const existingUrls = new Set(existingSharedLinks.map((link) => link.url.toLowerCase()));
-      const newSharedLinks: typeof existingSharedLinks = [];
-      detectedLinks.forEach((link) => {
-        const lower = link.url.toLowerCase();
-        if (existingUrls.has(lower) || newSharedLinks.some((entry) => entry.url.toLowerCase() === lower)) return;
-        // Try to find rich title/snippet from buddy pool, otherwise generic
-        const poolMatch = (() => {
-          try {
-            const pool = (pickRandomBuddyLink(buddyId, totalMinutes) as unknown as { host: string; title: string; snippet: string } | null);
-            return pool && pool.host === link.host ? pool : null;
-          } catch { return null; }
-        })();
-        const title = poolMatch?.title || `${link.host} — shared by ${buddy?.displayName || buddyId}`;
-        const snippet = poolMatch?.snippet || `Shared in Pulse by ${buddy?.displayName || buddyId} at Day ${Math.floor(totalMinutes / 1440) + 1}.`;
-        newSharedLinks.push({
-          id: `shared_${buddyId}_${link.host}_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
-          url: link.url,
-          host: link.host,
-          title,
-          sharedBy: buddyId,
-          sharedByName: buddy?.displayName || buddyId,
-          minute: totalMinutes,
-          snippet,
-        });
+      const upd = computeExchangeUpdate({
+        npcTexts: result.data.messages.map((message) => message.text),
+        existingReplies: previous.recentReplies[buddyId] || [],
+        previousSummary: previous.conversationSummaries[buddyId] || updatedSummary,
+        recentMessages,
+        detectedLinks,
+        displayName: ctx.displayName,
+        buddyId,
+        totalMinutes,
+        existingSharedLinks: previous.sharedLinks || [],
+        existingDiscoveredHosts: previous.discoveredHosts || [],
       });
-      const mergedSharedLinks = [...existingSharedLinks, ...newSharedLinks].slice(-30);
-      const existingDiscovered = new Set(previous.discoveredHosts || []);
-      newSharedLinks.forEach((link) => existingDiscovered.add(link.host.toLowerCase()));
-      const mergedDiscoveredHosts = Array.from(existingDiscovered).slice(0, 30);
-
       return {
         ...previous,
-        recentReplies: { ...previous.recentReplies, [buddyId]: mergedReplies },
-        conversationSummaries: { ...previous.conversationSummaries, [buddyId]: postReplySummary },
-        sharedLinks: mergedSharedLinks,
-        discoveredHosts: mergedDiscoveredHosts,
+        recentReplies: { ...previous.recentReplies, [buddyId]: upd.mergedReplies },
+        conversationSummaries: { ...previous.conversationSummaries, [buddyId]: upd.postReplySummary },
+        sharedLinks: upd.mergedSharedLinks,
+        discoveredHosts: upd.mergedDiscoveredHosts,
       };
     });
 
@@ -1240,6 +1151,26 @@ export const PulseMessengerApp: React.FC = () => {
   engine.social.getBuddies().forEach((buddy) => { buddiesMap[buddy.id] = buddy; });
   const activeRoom = activeRoomId ? getPulseRoom(activeRoomId) : undefined;
 
+  // AI reply suggestions for the player (P8/B2): same live context as the NPC side.
+  const suggestionFetcher = useCallback(async (bid: string): Promise<string[]> => {
+    const buddy = engine.social.getBuddy(bid);
+    const recent = engine.social.getMessages(bid).slice(-6).map((message) => ({
+      sender: message.senderId === 'player' ? 'player' : 'buddy',
+      text: message.text,
+    }));
+    const relationship = engine.social.getRelationships(bid);
+    const memoryHint = (pulseState.buddyFacts[bid] || []).slice(-1)[0] || '';
+    const result = await aiService.suggestReplies({
+      buddyId: bid,
+      displayName: buddy?.displayName || bid,
+      buddyPersona: buddyPersonaLine(bid, buddy),
+      relationshipSummary: relationship ? JSON.stringify(relationship) : 'new friendship',
+      recentMessages: recent,
+      memoryHint,
+    }, loadAISettings());
+    return result.data.replies;
+  }, [engine, pulseState.buddyFacts]);
+
   if (!session) return <PulseLoginSplash onLogin={setSession} />;
 
   const skinClasses = pulseSkin === 'dark' ? 'bg-[#0f1419] text-gray-200' : pulseSkin === 'silver' ? 'bg-[#e8e8e8] text-black' : 'bg-[#ece9d8] text-black';
@@ -1320,6 +1251,7 @@ export const PulseMessengerApp: React.FC = () => {
             onSendMessage={handleSendMessage}
             onBuzz={() => handleBuzz()}
             onSelectChoice={selectPlayerChoice}
+            suggestionFetcher={suggestionFetcher}
           />
         )}
       </div>

@@ -126,6 +126,22 @@ export interface ChatGenerationRequest {
   currentDay?: number;
 }
 
+export interface ReplySuggestionRequest {
+  buddyId: string;
+  displayName: string;
+  /** Short NPC persona line so suggestions fit who the player is talking to. */
+  buddyPersona?: string;
+  relationshipSummary: string;
+  recentMessages: Array<{ sender: string; text: string }>;
+  /** One recalled fact/memory to ground a suggestion (optional). */
+  memoryHint?: string;
+  providerId?: AIProviderId;
+}
+
+export interface SuggestedReplies {
+  replies: string[];
+}
+
 export interface BenchmarkResult {
   kind: 'site' | 'chat';
   providerId: AIProviderId;

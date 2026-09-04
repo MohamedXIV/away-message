@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { GeneratedChatResponse, GeneratedSiteContent } from './types';
+import type { GeneratedChatResponse, GeneratedSiteContent, SuggestedReplies } from './types';
 
 const boundedText = (max: number) => z.string().trim().min(1).max(max);
 
@@ -69,4 +69,24 @@ export function parseGeneratedSite(value: unknown): GeneratedSiteContent {
 
 export function parseGeneratedChat(value: unknown): GeneratedChatResponse {
   return GeneratedChatResponseSchema.parse(value);
+}
+
+export const SuggestedRepliesSchema = z.object({
+  replies: z.array(boundedText(120)).min(3).max(3),
+}).strict();
+
+/** Lenient parse: trims/dedupes model output into exactly 3 replies, or throws. */
+export function parseSuggestedReplies(value: unknown): SuggestedReplies {
+  const parsed = SuggestedRepliesSchema.parse(value);
+  const seen = new Set<string>();
+  const replies = parsed.replies
+    .map((reply) => reply.trim().replace(/\s+/g, ' ').slice(0, 120))
+    .filter((reply) => {
+      const key = reply.toLowerCase();
+      if (!key || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  if (replies.length < 3) throw new Error('Expected 3 distinct suggested replies.');
+  return { replies };
 }

@@ -11,7 +11,7 @@ import {
   BEVERAGE_OPTIONS,
   DOOR_OPTIONS,
 } from '../../src/world/data/roomInteractables';
-import { CAFE_DIALOGUE_BEATS } from '../../src/world/data/cafeDialogue';
+import { toneToExpression } from '../../src/world/CafeScene';
 import { SimulationEngine } from '../../src/engine/SimulationEngine';
 
 describe('2D World Scenes, Atmosphere, Interactables & App Integration', () => {
@@ -256,37 +256,16 @@ describe('2D World Scenes, Atmosphere, Interactables & App Integration', () => {
     });
   });
 
-  describe('6. In-Person Café Scene Dialogue Tree & Social Action Tags', () => {
-    it('contains a valid, fully connected 5-beat dialogue tree for Maya café meeting', () => {
-      expect(CAFE_DIALOGUE_BEATS.intro).toBeDefined();
-      expect(CAFE_DIALOGUE_BEATS.beat_drinks).toBeDefined();
-      expect(CAFE_DIALOGUE_BEATS.beat_maya_job).toBeDefined();
-      expect(CAFE_DIALOGUE_BEATS.beat_interests).toBeDefined();
-      expect(CAFE_DIALOGUE_BEATS.beat_conclusion).toBeDefined();
-
-      // Verify Intro choices lead to beat_drinks
-      for (const choice of CAFE_DIALOGUE_BEATS.intro!.choices!) {
-        expect(choice.nextBeatId).toBe('beat_drinks');
-      }
-
-      // Verify beat_drinks choices lead to beat_maya_job
-      for (const choice of CAFE_DIALOGUE_BEATS.beat_drinks!.choices!) {
-        expect(choice.nextBeatId).toBe('beat_maya_job');
-      }
-
-      // Verify beat_maya_job has empathic/detail/playful choices leading to beat_interests
-      const mayaJobChoices = CAFE_DIALOGUE_BEATS.beat_maya_job!.choices!;
-      expect(mayaJobChoices.length).toBeGreaterThanOrEqual(3);
-      expect(mayaJobChoices.some((c) => c.socialTag === 'empathy')).toBe(true);
-      expect(mayaJobChoices.some((c) => c.socialTag === 'remembered_detail')).toBe(true);
-      expect(mayaJobChoices.some((c) => c.socialTag === 'tease_playful')).toBe(true);
-
-      for (const choice of mayaJobChoices) {
-        expect(choice.nextBeatId).toBe('beat_interests');
-      }
-
-      // Verify beat_conclusion ends the meeting
-      expect(CAFE_DIALOGUE_BEATS.beat_conclusion!.isEnd).toBe(true);
+  describe('6. Free Café Chat: tone-driven expressions (no scripted tree)', () => {
+    it('maps reply tones to Maya canvas expressions', () => {
+      expect(toneToExpression('happy', 'neutral')).toBe('smile');
+      expect(toneToExpression('so HAPPY!!', 'neutral')).toBe('smile');
+      expect(toneToExpression('shy', 'neutral')).toBe('shy');
+      expect(toneToExpression('surprised', 'neutral')).toBe('surprised');
+      expect(toneToExpression('thoughtful', 'neutral')).toBe('thoughtful');
+      expect(toneToExpression('sad and quiet', 'neutral')).toBe('thoughtful');
+      expect(toneToExpression('distracted', 'smile')).toBe('smile');
+      expect(toneToExpression(undefined, 'shy')).toBe('shy');
     });
 
     it('simulates in-person meeting effects: advances 75m, deducts $4 coffee, sets maya_met_in_person', () => {

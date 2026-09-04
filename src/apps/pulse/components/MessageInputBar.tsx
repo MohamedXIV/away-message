@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 
 import { EmoticonPalette } from './EmoticonPalette';
 
@@ -7,6 +7,9 @@ interface MessageInputBarProps {
   onBuzz?: () => void;
   playerTypingText?: string;
   isPlayerTyping?: boolean;
+  /** AI-suggested reply to drop into the input (editable — never auto-sent). */
+  pendingSuggestion?: string | null;
+  onSuggestionUsed?: () => void;
 }
 
 export const MessageInputBar: React.FC<MessageInputBarProps> = ({
@@ -14,9 +17,18 @@ export const MessageInputBar: React.FC<MessageInputBarProps> = ({
   onBuzz,
   playerTypingText = '',
   isPlayerTyping = false,
+  pendingSuggestion = null,
+  onSuggestionUsed,
 }) => {
   const [inputText, setInputText] = useState('');
   const [isPaletteOpen, setIsPaletteOpen] = useState(false);
+
+  useEffect(() => {
+    if (pendingSuggestion) {
+      setInputText(pendingSuggestion);
+      onSuggestionUsed?.();
+    }
+  }, [pendingSuggestion, onSuggestionUsed]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();

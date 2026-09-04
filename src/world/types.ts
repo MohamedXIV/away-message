@@ -78,28 +78,9 @@ export type MayaExpression =
   | 'surprised'
   | 'shy';
 
-export interface CafeDialogueChoice {
-  id: string;
-  text: string;
-  nextBeatId: string;
-  socialTag?: string; // e.g. 'empathy', 'remembered_detail', 'tease_playful'
-  socialActionName?: string;
-  trustDelta?: number;
-  comfortDelta?: number;
-  familiarityDelta?: number;
-  customReactionText?: string;
-  mayaReactionExpression?: MayaExpression;
-}
-
-export interface CafeDialogueBeat {
-  id: string;
-  speaker: 'Maya' | 'You';
-  expression?: MayaExpression;
-  text: string;
-  choices?: CafeDialogueChoice[];
-  nextBeatId?: string;
-  isEnd?: boolean;
-}
+// NOTE (P8): the scripted cafe dialogue tree (CafeDialogueChoice/CafeDialogueBeat)
+// is retired — CafeScene is free AI chat on shared Pulse memory. The expression
+// enum above survives (driven by reply tone now).
 
 export interface RoomActivityOption {
   id: string;

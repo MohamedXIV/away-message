@@ -1,5 +1,5 @@
 import { readAICache, writeAICache } from './cache';
-import { parseGeneratedChat, parseGeneratedSite } from './schemas';
+import { parseGeneratedChat, parseGeneratedSite, parseSuggestedReplies } from './schemas';
 import {
   AI_PROVIDERS,
   getProviderModel,
@@ -16,7 +16,9 @@ import type {
   ChatGenerationRequest,
   GeneratedChatResponse,
   GeneratedSiteContent,
+  ReplySuggestionRequest,
   SiteGenerationRequest,
+  SuggestedReplies,
 } from './types';
 
 const SITE_PROMPT_VERSION = 'site-v3';
@@ -109,6 +111,20 @@ const CHAT_JSON_SCHEMA: Record<string, unknown> = {
   required: ['messages', 'socialAction', 'storyHookId'],
 };
 
+const REPLIES_JSON_SCHEMA: Record<string, unknown> = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    replies: {
+      type: 'array',
+      items: { type: 'string' },
+      minItems: 3,
+      maxItems: 3,
+    },
+  },
+  required: ['replies'],
+};
+
 export const DEFAULT_AI_SETTINGS: AISettings = {
   activeProvider: 'gemini',
   byokKeys: {},
@@ -196,6 +212,26 @@ function buildChatPrompts(request: ChatGenerationRequest): { system: string; use
       `Recent messages: ${JSON.stringify(request.recentMessages.slice(-8))}`,
       `Player message: ${request.playerMessage}`,
       'Reply with one or two short messages, not a monologue. If you share a link, include exactly one .local URL inline. If you agree to send a photo, set imagePrompt to a short description (e.g. "Maya at her desk, warm lamp, small photo") and imageCaption to a brief caption.',
+    ].filter(Boolean).join('\n'),
+  };
+}
+
+function buildReplyPrompts(request: ReplySuggestionRequest): { system: string; user: string } {
+  return {
+    system: [
+      'You write 3 short reply options FOR THE PLAYER in a late-1990s/early-2000s instant-message chat with a fictional NPC.',
+      'Return JSON only and follow the provided schema exactly.',
+      'Write in the player\'s voice (first person, casual, lowercase shorthand ok) — never as the NPC, never narrate the NPC.',
+      'Make the three options feel distinct: one warm/supportive, one playful/teasing, one honest/curious that follows up on what the NPC just said.',
+      'Each reply must be one or two short sentences, 120 characters max. No .local URLs, no emoticon spam.',
+      'Ground at least one reply in the relationship or memory context when relevant; otherwise react to the latest NPC message.',
+    ].join(' '),
+    user: [
+      `Chatting with: ${request.displayName}${request.buddyPersona ? ` (${request.buddyPersona})` : ''}`,
+      `Relationship snapshot: ${request.relationshipSummary}`,
+      request.memoryHint ? `Recalled memory you may build on: ${request.memoryHint}` : '',
+      `Recent messages: ${JSON.stringify(request.recentMessages.slice(-6))}`,
+      'Suggest exactly 3 replies the player could send next.',
     ].filter(Boolean).join('\n'),
   };
 }
@@ -314,8 +350,19 @@ function makeFallbackSite(request: SiteGenerationRequest): GeneratedSiteContent 
   };
 }
 
-function makeFallbackChat(request: ChatGenerationRequest): GeneratedChatResponse {
-  const name = request.displayName || request.buddyId;
+/** Offline-safe player reply options (warm / playful / honest). No AI needed. */
+function makeFallbackReplies(request: ReplySuggestionRequest): SuggestedReplies {
+  const name = (request.displayName || 'them').split(' ')[0];
+  return {
+    replies: [
+      `that really means a lot, ${name} — thanks for telling me`,
+      'haha okay, you got me curious now — go on',
+      'wait, really? tell me more about that part',
+    ],
+  };
+}
+
+function makeFallbackChat(request: ChatGenerationRequest): GeneratedChatResponse {  const name = request.displayName || request.buddyId;
   return {
     messages: [{ text: `uhh hey, ${name} here... connection's being weird. what were you saying?`, tone: 'distracted' }],
     socialAction: 'none',
@@ -458,8 +505,43 @@ export class AIGenerationService {
     }
   }
 
-  public async benchmarkSite(request: SiteGenerationRequest, settings: AISettings): Promise<BenchmarkResult> {
+  /**
+   * Suggest 3 short replies FOR THE PLAYER, grounded in the live relationship
+   * context. Always fresh (no cache — the refresh button must vary). Falls
+   * back to offline-safe generic options without a key.
+   */
+  public async suggestReplies(
+    request: ReplySuggestionRequest,
+    settings: AISettings = DEFAULT_AI_SETTINGS
+  ): Promise<AIResult<SuggestedReplies>> {
     const providerId = request.providerId || settings.activeProvider;
+    const model = getProviderModel(providerId);
+    const startedAt = performance.now();
+
+    const { key, source } = resolveApiKey(providerId, settings);
+    if (!key || !isPlausibleKey(providerId, key)) {
+      return {
+        data: makeFallbackReplies(request),
+        meta: { providerId, model, keySource: 'none', latencyMs: Math.round(performance.now() - startedAt), fromCache: false, fallback: true, error: !key ? 'No API key configured.' : 'API key format invalid — using offline fallback.' },
+      };
+    }
+
+    try {
+      const prompts = buildReplyPrompts(request);
+      const parsed = parseSuggestedReplies(await invokeProvider(providerId, model, key, prompts.system, prompts.user, REPLIES_JSON_SCHEMA));
+      return {
+        data: parsed,
+        meta: { providerId, model, keySource: source, latencyMs: Math.round(performance.now() - startedAt), fromCache: false, fallback: false },
+      };
+    } catch (error) {
+      return {
+        data: makeFallbackReplies(request),
+        meta: { providerId, model, keySource: source, latencyMs: Math.round(performance.now() - startedAt), fromCache: false, fallback: true, error: error instanceof Error ? error.message : 'Unknown AI error.' },
+      };
+    }
+  }
+
+  public async benchmarkSite(request: SiteGenerationRequest, settings: AISettings): Promise<BenchmarkResult> {    const providerId = request.providerId || settings.activeProvider;
     const result = await this.generateSite({ ...request, providerId, useCache: false }, settings);
     return {
       kind: 'site',
