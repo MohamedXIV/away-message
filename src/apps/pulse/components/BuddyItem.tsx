@@ -8,6 +8,17 @@ interface BuddyItemProps {
   onOpenChat: (buddyId: string) => void;
   onInspect?: (buddyId: string) => void;
   onContextMenu?: (buddyId: string, event: React.MouseEvent<HTMLDivElement>) => void;
+  // P6.5 last footprint for offline buddies (e.g. "last seen Day 2, 21:05")
+  lastSeen?: string;
+}
+
+/** P6.5 formatter: absolute game minute → "last seen Day D, HH:MM" ('' when never). */
+export function formatLastSeen(minute: number): string {
+  if (!Number.isFinite(minute) || minute <= 0) return '';
+  const day = Math.floor(minute / 1440) + 1;
+  const hh = String(Math.floor((minute % 1440) / 60)).padStart(2, '0');
+  const mm = String(minute % 60).padStart(2, '0');
+  return `last seen Day ${day}, ${hh}:${mm}`;
 }
 
 export const BuddyItem: React.FC<BuddyItemProps> = ({
@@ -17,6 +28,7 @@ export const BuddyItem: React.FC<BuddyItemProps> = ({
   onOpenChat,
   onInspect,
   onContextMenu,
+  lastSeen,
 }) => {
   const statusDotColor = {
     online: 'bg-green-500',
@@ -53,7 +65,9 @@ export const BuddyItem: React.FC<BuddyItemProps> = ({
         </div>
 
         <span className="text-[10px] text-gray-500 truncate block italic">
-          {presence.awayMessage ? `"${presence.awayMessage}"` : presence.status}
+          {presence.status === 'offline' && lastSeen
+            ? lastSeen
+            : presence.awayMessage ? `"${presence.awayMessage}"` : presence.status}
         </span>
       </div>
     </div>

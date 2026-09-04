@@ -10,7 +10,7 @@ import { WindowObservationModal } from './modals/WindowObservationModal';
 import { BeverageModal } from './modals/BeverageModal';
 import { DoorActionModal } from './modals/DoorActionModal';
 import { SleepTransitionModal } from './modals/SleepTransitionModal';
-import { getContextualWindowThought } from './data/windowThoughts';
+import { getContextualWindowThought, getStreetSighting } from './data/windowThoughts';
 import {
   Monitor,
   CloudRain,
@@ -166,6 +166,19 @@ export const RoomScene: React.FC = () => {
 
   // Get Window Observation data — sandbox uses world flags
   const windowData = getContextualWindowThought(time.day, timeOfDay, weather, world.flags);
+  // P6.5 live street sighting: who is visible out there right now (schedules made visible)
+  const streetSighting = (() => {
+    try {
+      const engine = useSimulationStore.getState().engine;
+      const sightBuddies = engine.social.getBuddies().map((b) => ({
+        id: b.id,
+        displayName: b.displayName,
+        presenceStatus: engine.social.getPresence(b.id)?.status ?? 'offline',
+        lifecycleStatus: b.status,
+      }));
+      return getStreetSighting(sightBuddies, timeOfDay, time.day);
+    } catch { return null; }
+  })();
 
   const formattedTime = `${String(time.hour).padStart(2, '0')}:${String(time.minute).padStart(2, '0')}`;
 
@@ -278,6 +291,7 @@ export const RoomScene: React.FC = () => {
           thoughtText={windowData.thought}
           entity={windowData.entity}
           mood={windowData.mood}
+          sighting={streetSighting}
           onClose={() => setActiveModal(null)}
         />
       )}

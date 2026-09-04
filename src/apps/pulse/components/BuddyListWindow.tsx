@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { useSimulationStore } from '../../../store/useSimulationStore';
 import { UserProfileHeader } from './UserProfileHeader';
 import { BuddyGroup } from './BuddyGroup';
+import { formatLastSeen } from './BuddyItem';
 import { PULSE_GROUPS, PULSE_ROOMS } from '../data/pulseRooms';
 import type { PulseLoginSession } from './PulseLoginSplash';
 import type { PulseActivityEntry } from '../types';
@@ -84,9 +85,19 @@ export const BuddyListWindow: React.FC<BuddyListWindowProps> = ({
 
   const buddiesWithPresence = useMemo(() => buddies
     .filter((buddy) => buddy.displayName.toLowerCase().includes(searchFilter.toLowerCase()) || buddy.handle.toLowerCase().includes(searchFilter.toLowerCase()))
-    .map((buddy) => ({ buddy, presence: presenceMap[buddy.id] || { status: 'offline', awayMessage: '' } }))
-    .sort((a, b) => (presenceRank[a.presence.status] ?? 9) - (presenceRank[b.presence.status] ?? 9)), [buddies, presenceMap, searchFilter]);
-
+    .map((buddy) => {
+      const presence = presenceMap[buddy.id] || { status: 'offline', awayMessage: '' };
+      // P6.5 last footprint for offline buddies (reads engine conversations, no new state)
+      let lastSeen: string | undefined;
+      try {
+        if (presence.status === 'offline') {
+          const label = formatLastSeen(engine.social.getLastActivityMinute(buddy.id));
+          if (label) lastSeen = label;
+        }
+      } catch { /* last-seen is best-effort */ }
+      return { buddy, presence, lastSeen };
+    })
+    .sort((a, b) => (presenceRank[a.presence.status] ?? 9) - (presenceRank[b.presence.status] ?? 9)), [buddies, presenceMap, searchFilter, engine]);
   const visibleBuddies = useMemo(() => buddiesWithPresence.filter(({ buddy }) => !blockedBuddyIds.includes(buddy.id)), [buddiesWithPresence, blockedBuddyIds]);
   const blockedBuddies = useMemo(() => buddiesWithPresence.filter(({ buddy }) => blockedBuddyIds.includes(buddy.id)), [buddiesWithPresence, blockedBuddyIds]);
 

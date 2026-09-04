@@ -97,8 +97,7 @@ export function getContextualWindowThought(
   timeOfDay: TimeOfDay,
   weather: WeatherType,
   flags: Record<string, any> = {}
-): { thought: string; entity: PersistentStreetEntity | null; mood: string } {
-  // Find matching thoughts
+): { thought: string; entity: PersistentStreetEntity | null; mood: string } {  // Find matching thoughts
   const matchingThoughts = WINDOW_THOUGHTS.filter((t) => {
     if (t.minDay !== undefined && day < t.minDay) return false;
     if (t.maxDay !== undefined && day > t.maxDay) return false;
@@ -130,4 +129,80 @@ export function getContextualWindowThought(
     entity: selectedEntity,
     mood: selectedThought.mood,
   };
+}
+
+// ==========================================
+// P6.5 — STREET SIGHTINGS (schedules made visible)
+// Which buddies can be seen from the window right now, from live presence.
+// Distant/gone buddies are conspicuously absent. Pure + deterministic.
+// ==========================================
+
+export interface SightingBuddy {
+  id: string;
+  displayName: string;
+  presenceStatus: string; // 'online' | 'away' | 'offline' | ...
+  lifecycleStatus?: string;
+}
+
+const STREET_SIGHTINGS: Record<string, Array<{ times: TimeOfDay[]; text: string }>> = {
+  ryan: [
+    { times: ['morning', 'day'], text: 'Ryan’s cart glows two blocks down, steam rolling off the grill.' },
+    { times: ['evening', 'night'], text: 'Ryan is closing the cart, counting the till under the awning light.' },
+  ],
+  maya: [
+    { times: ['morning', 'day'], text: 'Maya hurries past with a camera bag, late for something as usual.' },
+    { times: ['evening', 'night'], text: 'Maya’s silhouette crosses the diner window across the street.' },
+  ],
+  nora: [
+    { times: ['night', 'late_night'], text: 'A figure with a small flashlight picks along the canal path — Nora, on another night round.' },
+    { times: ['evening'], text: 'Nora slips into the alley with a duffel bag full of God-knows-what.' },
+  ],
+  henderson: [
+    { times: ['morning', 'day'], text: 'Mr. Henderson props the motel office door open and waters the plastic plant.' },
+    { times: ['evening'], text: 'Henderson does his evening round, keys jingling, checking every door twice.' },
+  ],
+};
+
+const ABSENT_SIGHTING_LINES: string[] = [
+  '{name} hasn’t been seen in days. The street feels emptier.',
+  'No sign of {name} lately. Even the regulars noticed.',
+  'You catch yourself looking for {name} out there. Nothing.',
+];
+
+/**
+ * One street sighting for the window, or null when the street is quiet.
+ * Visible (online/away) buddies with a time-appropriate line win; absent
+ * (distant/gone) buddies surface as melancholy notes ~30% of the time.
+ */
+export function getStreetSighting(
+  buddies: SightingBuddy[],
+  timeOfDay: TimeOfDay,
+  seedDay: number
+): string | null {
+  const hash = (s: string): number => {
+    let h = 0;
+    for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
+    return h;
+  };
+  const absent = buddies.filter((b) => b.lifecycleStatus === 'distant' || b.lifecycleStatus === 'gone');
+  if (absent.length > 0 && hash(`absent:${seedDay}`) % 100 < 30) {
+    const missing = absent[hash(`who:${seedDay}`) % absent.length]!;
+    const line = ABSENT_SIGHTING_LINES[hash(`line:${seedDay}`) % ABSENT_SIGHTING_LINES.length]!;
+    return line.replaceAll('{name}', missing.displayName);
+  }
+  const visible = buddies.filter((b) => b.presenceStatus === 'online' || b.presenceStatus === 'away');
+  const options: string[] = [];
+  for (const buddy of visible) {
+    const pools = STREET_SIGHTINGS[buddy.id];
+    if (pools) {
+      for (const pool of pools) {
+        if (pool.times.includes(timeOfDay)) options.push(pool.text);
+      }
+    } else {
+      // Procedural friends get a generic but personal line
+      options.push(`A familiar face crosses the street below — ${buddy.displayName}, one of your newer friends.`);
+    }
+  }
+  if (options.length === 0) return null;
+  return options[hash(`seen:${seedDay}:${timeOfDay}`) % options.length]!;
 }

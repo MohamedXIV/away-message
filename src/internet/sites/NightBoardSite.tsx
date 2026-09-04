@@ -139,10 +139,10 @@ export const NightBoardSite: React.FC<SiteRouteProps> = (props) => {
     title: n.title,
     category: '/lounge/ - Resident voices',
     replyCount: n.replies.length,
-    lastReplyDate: `Day ${n.day}`,
+    lastReplyDate: `Day ${n.replies.length > 0 ? n.replies[n.replies.length - 1]!.day : n.day}`,
     posts: [
       { id: 1, author: n.author, tripcode: `!${n.authorHandle.toLowerCase().slice(0, 12)}`, date: `Day ${n.day}`, content: n.body, isOp: true },
-      ...n.replies.map((r, i) => ({ id: i + 2, author: r.author, tripcode: `!${r.authorHandle.toLowerCase().slice(0, 12)}`, date: `Day ${n.day}`, content: r.text })),
+      ...n.replies.map((r, i) => ({ id: i + 2, author: r.author, tripcode: `!${r.authorHandle.toLowerCase().slice(0, 12)}`, date: `Day ${r.day}`, content: r.text })),
     ],
   });
   // Build merged list: static + dynamic procedural + NPC voices

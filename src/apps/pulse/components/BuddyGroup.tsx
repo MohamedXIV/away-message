@@ -5,7 +5,7 @@ import { BuddyItem } from './BuddyItem';
 interface BuddyGroupProps {
   title: string;
   groupId?: string;
-  buddies: Array<{ buddy: BuddyCharacter; presence: BuddyPresence }>;
+  buddies: Array<{ buddy: BuddyCharacter; presence: BuddyPresence; lastSeen?: string }>;
   unreadCounts: Record<string, number>;
   onOpenChat: (buddyId: string) => void;
   onInspect?: (buddyId: string) => void;
@@ -103,7 +103,7 @@ export const BuddyGroup: React.FC<BuddyGroupProps> = ({
 
       {isExpanded && (
         <div className="pl-2 space-y-0.5">
-          {buddies.map(({ buddy, presence }) => (
+          {buddies.map(({ buddy, presence, lastSeen }) => (
             <BuddyItem
               key={buddy.id}
               buddy={buddy}
@@ -112,6 +112,7 @@ export const BuddyGroup: React.FC<BuddyGroupProps> = ({
               onOpenChat={onOpenChat}
               onInspect={onInspect}
               onContextMenu={onContextMenu}
+              lastSeen={lastSeen}
             />
           ))}
         </div>

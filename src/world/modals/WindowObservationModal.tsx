@@ -13,6 +13,8 @@ interface WindowObservationModalProps {
   entity: PersistentStreetEntity | null;
   mood: string;
   onClose: () => void;
+  // P6.5 live street sighting (who is visible out there right now)
+  sighting?: string | null;
 }
 
 export const WindowObservationModal: React.FC<WindowObservationModalProps> = ({
@@ -23,6 +25,7 @@ export const WindowObservationModal: React.FC<WindowObservationModalProps> = ({
   entity,
   mood,
   onClose,
+  sighting = null,
 }) => {
   const getWeatherIcon = () => {
     if (weather === 'rain') return <CloudRain className="w-4 h-4 text-blue-400" />;
@@ -56,6 +59,11 @@ export const WindowObservationModal: React.FC<WindowObservationModalProps> = ({
             <p className="text-amber-200/90 font-serif italic text-base leading-relaxed tracking-wide drop-shadow-md">
               "{thoughtText}"
             </p>
+            {sighting && (
+              <p className="mt-2 text-[11px] text-sky-300/90 italic">
+                👀 {sighting}
+              </p>
+            )}
             <div className="mt-2 text-xs font-mono text-slate-400 uppercase tracking-widest">
               — Mood: {mood}
             </div>

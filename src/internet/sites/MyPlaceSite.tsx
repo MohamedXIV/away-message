@@ -156,6 +156,18 @@ export const MyPlaceSite: React.FC<SiteRouteProps> = (props) => {
           <span className="font-bold text-[#003399]">{profile.displayName} <span className="font-normal text-gray-600">• myplace.local/{profile.username}</span></span>
           <span className="text-gray-600">MyPlace {currentRelease.version} <span className={`ml-1 px-1 py-0.5 text-[9px] font-bold border ${currentRelease.channel === 'beta' ? 'bg-purple-100 border-purple-300 text-purple-800' : 'bg-green-100 border-green-300 text-green-800'}`}>{currentRelease.version}</span> • Build {currentRelease.build}</span>
         </div>
+        {!isOwnProfile && (() => {
+          // P6.5 live footprint: presence straight from the buddy's schedule
+          try {
+            const buddy = engine.social.getBuddy(currentUsername) ?? engine.social.getBuddies().find((b) => b.handle === currentUsername);
+            if (!buddy) return null;
+            const pres = engine.social.getPresence(buddy.id);
+            if (!pres) return null;
+            const dot = pres.status === 'online' ? '🟢' : pres.status === 'away' ? '🟡' : '⚪';
+            const label = pres.status === 'online' ? 'online now' : pres.status === 'away' ? `away: ${pres.awayMessage || 'be right back'}` : 'offline';
+            return <div className="bg-white border-b border-gray-200 px-3 py-1 text-[10px] text-gray-600">{dot} {label} on Pulse</div>;
+          } catch { return null; }
+        })()}
         {availableUpdates.length > 0 && (
           <div className="bg-amber-100 border-b border-amber-300 px-3 py-1.5 flex items-center justify-between text-amber-900">
             <span className="text-xs">⬢ New MyPlace: <b>{availableUpdates[0]!.displayName}</b> — {availableUpdates[0]!.blurb}</span>

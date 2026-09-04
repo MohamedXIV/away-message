@@ -35,6 +35,7 @@ export interface NpcThreadReply {
   author: string;
   authorHandle: string;
   text: string;
+  day: number;
 }
 
 export interface NpcThread {
@@ -64,7 +65,9 @@ function buildThreadReplies(
   authorId: string,
   seedBase: string,
   count: number,
-  affinities: (a: string, b: string) => number
+  affinities: (a: string, b: string) => number,
+  opDay: number,
+  weekStartDay: number
 ): NpcThreadReply[] {
   const out: NpcThreadReply[] = [];
   const replierPool = eligible.filter((b) => b.id !== authorId);
@@ -85,6 +88,8 @@ function buildThreadReplies(
       author: replier.displayName,
       authorHandle: replier.handle,
       text: pickBoardReply(`${seedBase}:reply${i}`, addressName),
+      // P6.5 timed posts: replies land 1..3 days after the OP, inside the same week
+      day: Math.min(opDay + 1 + i, weekStartDay + 6),
     });
   }
   return out;
@@ -104,24 +109,27 @@ export function buildWeeklyNpcThreads(
   const eligible = activeSorted(buddies);
   if (eligible.length === 0) return [];
   const week = npcThreadWeek(day);
+  const weekStartDay = week * 7 + 1;
   const threads: NpcThread[] = [];
 
-  const makeReplies = (authorId: string, seedBase: string, count: number): NpcThreadReply[] =>
-    buildThreadReplies(eligible, authorId, seedBase, count, affinities);
+  const makeReplies = (authorId: string, seedBase: string, count: number, opDay: number): NpcThreadReply[] =>
+    buildThreadReplies(eligible, authorId, seedBase, count, affinities, opDay, weekStartDay);
 
   for (let slot = 0; slot < 2; slot++) {
     const author = eligible[hashStr(`w${week}:a${slot}`) % eligible.length]!;
     const topic = pickBoardTopic(resolveArchetype(author.id, author.archetype), week, slot);
     const key = `npcweek_${week}_${slot}`;
+    // P6.5 timed OPs: threads open across the first two days of their week
+    const opDay = weekStartDay + (hashStr(`${key}:op`) % 2);
     threads.push({
       key,
       numericId: 9000 + week * 10 + slot,
       title: topic.title,
       author: author.displayName,
       authorHandle: author.handle,
-      day: week * 7 + 1,
+      day: opDay,
       body: topic.body,
-      replies: makeReplies(author.id, `${key}:${author.id}`, 2),
+      replies: makeReplies(author.id, `${key}:${author.id}`, 2, opDay),
     });
   }
 
@@ -131,15 +139,16 @@ export function buildWeeklyNpcThreads(
     const title = freshTitles[hashStr(`w${week}:et`) % freshTitles.length]!;
     const evt = pickBoardEventThread(`w${week}:eb`, title);
     const key = `npcevent_${week}`;
+    const opDay = weekStartDay + (hashStr(`${key}:op`) % 2);
     threads.push({
       key,
       numericId: 9500 + week,
       title: evt.title,
       author: author.displayName,
       authorHandle: author.handle,
-      day: week * 7 + 1,
+      day: opDay,
       body: evt.body,
-      replies: makeReplies(author.id, `${key}:${author.id}`, 1),
+      replies: makeReplies(author.id, `${key}:${author.id}`, 1, opDay),
     });
   }
   return threads;
@@ -348,14 +357,15 @@ export function buildWeeklyWeatherThread(
   const title = severe === 'storm'
     ? `STORM incoming ${dayName(lead.day)} ${lead.weather.icon} — megathread`
     : `week ahead: ${lead.weather.label.toLowerCase()} ${lead.weather.icon} (peak ${dayName(lead.day)})`;
+  const opDay = firstDay + (hashStr(`${key}:op`) % 2);
   return {
     key,
     numericId: 9600 + week,
     title,
     author: author.displayName,
     authorHandle: author.handle,
-    day: firstDay,
+    day: opDay,
     body: `forecast strip, take it or leave it: ${body}. plan accordingly, people.`,
-    replies: buildThreadReplies(eligible, author.id, `${key}:${author.id}`, 1, affinities),
+    replies: buildThreadReplies(eligible, author.id, `${key}:${author.id}`, 1, affinities, opDay, firstDay),
   };
 }

@@ -851,4 +851,14 @@ export class SocialEngine {
     const msgs = this.conversations.get(normalizeBuddyId(rawConversationId)) || [];
     return msgs.map(m => ({ ...m }));
   }
+
+  /** P6.5 last footprint: latest conversation minute with a buddy (either direction), 0 when never. */
+  public getLastActivityMinute(rawBuddyId: string): number {
+    const msgs = this.conversations.get(normalizeBuddyId(rawBuddyId)) || [];
+    let last = 0;
+    for (const m of msgs) {
+      if (typeof m.timestampMinute === 'number' && m.timestampMinute > last) last = m.timestampMinute;
+    }
+    return last;
+  }
 }
