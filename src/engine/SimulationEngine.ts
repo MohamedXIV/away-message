@@ -10,6 +10,7 @@ import { EconomyEngine } from './EconomyEngine';
 import { HardwareEngine } from './HardwareEngine';
 import { FileSystemEngine } from './FileSystemEngine';
 import { DownloadManager } from './DownloadManager';
+import { DeliveryEngine, GROCERY_SKUS, type Fulfillment } from './DeliveryEngine';
 import { SoftwareRegistry } from './SoftwareRegistry';
 import { SocialEngine } from './SocialEngine';
 import { TelemetryEngine } from './TelemetryEngine';
@@ -20,10 +21,11 @@ import { MyPlaceEngine, CORE_PROFILE_ALIASES } from './MyPlaceEngine';
 import { validatePersistedBuddy } from './CharacterEngine';
 import { generateNewcomer, shouldAutoDiscover, NEWCOMER_METVIA_ROTATION } from './CharacterDirector';
 import { STRAINED_ANNOYANCE, DISTANT_ANNOYANCE, GONE_ANNOYANCE } from './SocialEngine';
-import { pickConfrontLine, pickFarewellLine, pickReturnLine, pickInitiativeText, pickRsvpLine, pickStoodUpLine, pickMeetingApologyLine, pickShiftWrapLine, pickArchiveWrapLine, pickGuestbookLine, pickGuestbookReplyLine, pickTop8NewsLine, pickOutingMayaLine, pickOutingNoraLine, pickRentReminderLine, pickRentSternLine, pickRentNudgeLine, pickRentThanksLine, resolveArchetype, isCoreBuddyId } from './characterTemplates';
+import { pickConfrontLine, pickFarewellLine, pickReturnLine, pickInitiativeText, pickRsvpLine, pickStoodUpLine, pickMeetingApologyLine, pickShiftWrapLine, pickGigWrapLine, pickArchiveWrapLine, pickGuestbookLine, pickGuestbookReplyLine, pickTop8NewsLine, pickOutingMayaLine, pickOutingNoraLine, pickRentReminderLine, pickRentSternLine, pickRentNudgeLine, pickRentThanksLine, pickJobAcceptLine, pickJobRejectLine, resolveArchetype, isCoreBuddyId } from './characterTemplates';
 import { parseMeetupProposal, isMeetupCancelText, decideRsvp, decideNpcShow, appointmentRoll, locationLabel, LOCATION_SLOTS, pickCoopDetail, SHIFT_WAGE } from './AppointmentDirector';
 import { getWeatherForDay, isSevereWeather, isWetWeather, shiftWageBonus } from './WeatherEngine';
-import { OUTINGS, isValidOutingId, mayaDinerEncounter, noraCanalEncounter, buildLaundromatRumor, MIN_OUTING_ENERGY, type OutingId } from './OutingDirector';
+import { OUTINGS, isValidOutingId, isOutingOpen, outingHoursLabel, mayaDinerEncounter, noraCanalEncounter, buildLaundromatRumor, MIN_OUTING_ENERGY, type OutingId } from './OutingDirector';
+import { GIGS, jobRoll, replyDelayMinutes, decideApplication } from './JobDirector';
 
 export class SimulationEngine {
   public readonly clock!: GameClock;
@@ -35,6 +37,7 @@ export class SimulationEngine {
   public readonly myplace!: MyPlaceEngine;
   public readonly vfs!: FileSystemEngine;
   public readonly downloads!: DownloadManager;
+  public readonly delivery!: DeliveryEngine;
   public readonly software!: SoftwareRegistry;
   public readonly social!: SocialEngine;
   public readonly telemetry!: TelemetryEngine;
@@ -82,6 +85,8 @@ export class SimulationEngine {
       },
       initialState?.downloads ? { tasks: initialState.downloads, maxConcurrentBrowser: 1, maxConcurrentFlashFetch: 4 } : undefined
     );
+    // P6 CornerMart parcels (persisted order history)
+    this.delivery = new DeliveryEngine((initialState as any)?.deliveries);
     this.software = new SoftwareRegistry(
       this.events,
       this.vfs,
@@ -165,6 +170,7 @@ export class SimulationEngine {
     }
     const vfsState = this.vfs.getState();
     const downloadState = this.downloads.getState();
+    const deliveryState = this.delivery.getState();
     const worldState = this.world.getState();
     const osState = this.os.getState();
     const pulseState = this.pulse.getState();
@@ -196,6 +202,7 @@ export class SimulationEngine {
       myplace: myplaceState,
       vfs: vfsState,
       downloads: downloadState.tasks,
+      deliveries: deliveryState,
       installedSoftware: this.software.getInstalledSoftware(),
       social: this.social.getState(),
       world: worldState,
@@ -221,6 +228,8 @@ export class SimulationEngine {
       const currentMinutes = this.clock.getTotalMinutes();
       this.downloads.advanceTime(tickResult.elapsedMinutes, currentMinutes);
       this.economy.advanceTime(tickResult.elapsedMinutes); // P6.1 hunger rises with time
+      this.processDeliveries(); // P6 courier arrivals
+      this.processJobReplies(); // P6 job board replies land here too
       this.social.updatePresence(currentMinutes);
       this.world.checkAndTriggerEvents(currentMinutes, tickResult.time.day);
       try { this.os.syncFromWorldState({ triggeredEvents: this.world.getTriggeredEvents(), pendingEvents: this.world.getPendingEvents() } as any, tickResult.time.day); } catch {}
@@ -271,6 +280,8 @@ export class SimulationEngine {
     const currentMinutes = this.clock.getTotalMinutes();
     this.downloads.advanceTime(minutes, currentMinutes);
     this.economy.advanceTime(minutes); // P6.1 hunger rises with time
+    this.processDeliveries(); // P6 courier arrivals
+    this.processJobReplies(); // P6 job board replies land here (never instant)
     this.social.updatePresence(currentMinutes);
     this.world.checkAndTriggerEvents(currentMinutes, jumpResult.newTime.day);
     try { this.os.syncFromWorldState({ triggeredEvents: this.world.getTriggeredEvents(), pendingEvents: this.world.getPendingEvents() } as any, jumpResult.newTime.day); } catch {}
@@ -606,15 +617,16 @@ export class SimulationEngine {
         if (npcShowed && playerShowed) {
           this.world.updateAppointment(appt.id, { status: 'happened', isCompleted: true, npcShowed: true, playerShowed: true });
           // P5.2 co-op enrichment: joint work pays more (dims x2 + wage/flavor), cafe stays intimate
-          const isShift = appt.locationId === 'work' && (buddy.id === 'ryan' || buddy.archetype === 'coworker');
+          // P6 gig shifts ride the same path (marked by gig_ id prefix, any contact)
+          const isShift = appt.locationId === 'work' && (buddy.id === 'ryan' || buddy.archetype === 'coworker' || appt.id.startsWith('gig_'));
           const isArchive = appt.locationId === 'archive';
           if (isShift || isArchive) {
             const detail = pickCoopDetail(appt.id, isShift ? 'shift' : 'archive');
             const action = isShift ? 'work_camaraderie' : 'intellectual_curiosity';
             this.social.applySocialAction(buddy.id, action);
             this.social.applySocialAction(buddy.id, action);
-            // P6.2 heat waves pay +$6 (thirsty town, busy cart)
-            if (isShift) this.economy.earnCash(SHIFT_WAGE + shiftWageBonus(getWeatherForDay(appt.targetDay).condition), `Side shift with ${name}`);
+            // P6.2 heat waves pay +$6 (thirsty town, busy cart); P6 gig shifts pay their wage
+            if (isShift) this.economy.earnCash((appt.wageOverride ?? SHIFT_WAGE) + shiftWageBonus(getWeatherForDay(appt.targetDay).condition), `Side shift with ${name}`);
             this.social.addCoreMemory(buddy.id, {
               text: isShift
                 ? `Worked a side shift with ${name}, Day ${appt.targetDay}: ${detail}.`
@@ -622,7 +634,9 @@ export class SimulationEngine {
               kind: 'shared_moment',
               day: appt.targetDay,
             });
-            const wrap = isShift ? pickShiftWrapLine(appt.id, detail) : pickArchiveWrapLine(appt.id, detail);
+            const wrap = appt.id.startsWith('gig_')
+              ? pickGigWrapLine(appt.id, detail)
+              : isShift ? pickShiftWrapLine(appt.id, detail) : pickArchiveWrapLine(appt.id, detail);
             this.social.sendMessage(buddy.id, buddy.id, 'player', wrap, minutes, false, ['appointment', isShift ? 'shift' : 'archive']);
             this.telemetry.logEvent('social', 'appointment_happened', minutes, { buddyId: buddy.id, appointmentId: appt.id, coop: isShift ? 'shift' : 'archive' });
           } else {
@@ -717,6 +731,152 @@ export class SimulationEngine {
   }
 
   // ==========================================
+  // P6 — JOB BOARD (apply now, hear back in 4–10h, never instant)
+  // Acceptance creates a real next-day work appointment (gig wage honored);
+  // rejection is a kind Pulse note with zero penalty. State in world flags.
+  // ==========================================
+
+  /** Job board for UI: gigs + pending/resolved status per gig. */
+  public getJobBoard(): Array<{ gig: import('./JobDirector').Gig; pending: boolean; appliedMinute: number }> {
+    try {
+      return Object.values(GIGS).map((gig) => {
+        const applied = this.world.getFlag(`jobapp_${gig.id}`);
+        const done = this.world.getFlag(`jobapp_${gig.id}_done`);
+        const pending = typeof applied === 'number' && applied > 0 && !done;
+        return { gig, pending, appliedMinute: pending ? (applied as number) : 0 };
+      });
+    } catch { return []; }
+  }
+
+  private applyForGig(gigId: string): ActionResult {
+    try {
+      const gig = GIGS[gigId];
+      if (!gig) return { success: false, error: `Unknown gig: ${gigId}` };
+      const applied = this.world.getFlag(`jobapp_${gigId}`);
+      const done = this.world.getFlag(`jobapp_${gigId}_done`);
+      if (typeof applied === 'number' && applied > 0 && !done) {
+        return { success: false, error: 'Already applied — waiting to hear back.' };
+      }
+      if (this.economy.getState().energy < gig.minEnergy) {
+        return { success: false, error: `Too tired to take ${gig.title} (need ${gig.minEnergy}% energy to apply).` };
+      }
+      const now = this.clock.getTotalMinutes();
+      this.world.setFlag(`jobapp_${gigId}`, now);
+      this.world.setFlag(`jobapp_${gigId}_done`, false);
+      this.telemetry.logEvent('economy', 'job_applied', now, { gigId });
+      this.notifySubscribers();
+      return { success: true };
+    } catch {
+      return { success: false, error: 'Application failed.' };
+    }
+  }
+
+  /** Resolve due applications: accept → appointment + note; reject → kind note. */
+  private processJobReplies(): void {
+    try {
+      const now = this.clock.getTotalMinutes();
+      const day = this.clock.getTime().day;
+      for (const gig of Object.values(GIGS)) {
+        const applied = this.world.getFlag(`jobapp_${gig.id}`);
+        const done = this.world.getFlag(`jobapp_${gig.id}_done`);
+        if (typeof applied !== 'number' || applied <= 0 || done) continue;
+        if (now < applied + replyDelayMinutes(gig.id, applied)) continue;
+        const contact = this.social.getBuddy(gig.contactBuddyId);
+        const gone = !contact || contact.status === 'distant' || contact.status === 'gone' || contact.status === 'blocked';
+        const stage = contact ? this.social.getRelationshipStage(contact.id) : 'stranger';
+        const { accepted, odds } = decideApplication({
+          baseOdds: gig.baseOdds, contactStage: stage, contactGone: gone, roll: jobRoll(`job:${gig.id}:${applied}`),
+        });
+        this.world.setFlag(`jobapp_${gig.id}_done`, true);
+        if (accepted && contact) {
+          const targetDay = day + 1;
+          this.world.scheduleAppointment({
+            id: `gig_${gig.id}_${targetDay}_${applied % 1000}`.slice(0, 60),
+            characterId: contact.id,
+            locationId: 'work',
+            targetDay,
+            startMinute: 9 * 60,
+            endMinute: Math.min(9 * 60 + gig.durationMin, 12 * 60),
+            description: `${gig.title} (job board, $${gig.pay})`,
+            status: 'confirmed',
+            rsvp: 'yes',
+            wageOverride: gig.pay,
+          });
+          this.social.sendMessage(contact.id, contact.id, 'player', pickJobAcceptLine(`${gig.id}:${day}`, gig.title, 'tomorrow'), now, false, ['job', 'accepted']);
+          this.telemetry.logEvent('economy', 'job_accepted', now, { gigId: gig.id, odds });
+        } else if (contact) {
+          this.social.sendMessage(contact.id, contact.id, 'player', pickJobRejectLine(`${gig.id}:${day}`, gig.title), now, false, ['job', 'rejected']);
+          this.telemetry.logEvent('economy', 'job_rejected', now, { gigId: gig.id, odds });
+        }
+      }
+    } catch { /* job replies never break the tick */ }
+  }
+
+  // ==========================================
+  // P6 — CORNERMART ORDERS (pickup trip vs 2–24h courier, rules-only)
+  // Pickup: 30-min errand + a little energy, pantry now. Delivery: free but
+  // slow (deterministic ETA); completion credits the pantry + notifies.
+  // ==========================================
+
+  public placeGroceryOrder(
+    rawItems: Array<{ sku: string; qty: number }>,
+    fulfillment: Fulfillment,
+    nowMinute: number
+  ): ActionResult & { data?: { orderId: string; etaMinute: number; summary: string } } {
+    try {
+      const items = (rawItems || [])
+        .filter((i) => i && GROCERY_SKUS[i.sku] && Number.isFinite(i.qty) && i.qty >= 1)
+        .map((i) => ({ sku: i.sku, qty: Math.min(9, Math.floor(i.qty)) }));
+      if (items.length === 0) return { success: false, error: 'Cart is empty.' };
+      const total = items.reduce((sum, i) => sum + GROCERY_SKUS[i.sku]!.price * i.qty, 0);
+      if (!this.economy.canAfford(total)) {
+        return { success: false, error: `Cannot afford $${total.toFixed(2)} order.` };
+      }
+      if (fulfillment === 'pickup') {
+        if (this.economy.getState().energy < 20) {
+          return { success: false, error: 'Too tired for a store run (need 20% energy).' };
+        }
+        this.economy.spendCash(total, 'CornerMart pickup');
+        this.advanceGameMinutes(30, 'CornerMart pickup run');
+        this.economy.consumeEnergy(5);
+        for (const item of items) {
+          const sku = GROCERY_SKUS[item.sku]!;
+          this.economy.addPantry(sku.pantry, sku.qty * item.qty);
+        }
+        const order = this.delivery.recordPickup(items, total, this.clock.getTotalMinutes());
+        this.telemetry.logEvent('economy', 'order_pickup', this.clock.getTotalMinutes(), { orderId: order.id, total });
+        this.notifySubscribers();
+        return { success: true, data: { orderId: order.id, etaMinute: this.clock.getTotalMinutes(), summary: 'Picked up from CornerMart — pantry stocked.' } };
+      }
+      this.economy.spendCash(total, 'CornerMart delivery');
+      const order = this.delivery.placeDelivery(items, total, nowMinute);
+      this.telemetry.logEvent('economy', 'order_placed', nowMinute, { orderId: order.id, total, etaMinute: order.readyMinute });
+      this.notifySubscribers();
+      const etaH = Math.round((order.readyMinute - nowMinute) / 60);
+      return { success: true, data: { orderId: order.id, etaMinute: order.readyMinute, summary: `Courier on the way — about ${etaH}h. Check Mailbox parcels.` } };
+    } catch {
+      return { success: false, error: 'Order failed.' };
+    }
+  }
+
+  /** Credit arrived courier orders to the pantry (called from every time path). */
+  private processDeliveries(): void {
+    try {
+      const now = this.clock.getTotalMinutes();
+      const arrived = this.delivery.completeDue(now);
+      for (const order of arrived) {
+        for (const item of order.items) {
+          const sku = GROCERY_SKUS[item.sku];
+          if (sku) this.economy.addPantry(sku.pantry, sku.qty * item.qty);
+        }
+        this.world.setFlag(`delivery_arrived_${order.id}`, true);
+        this.telemetry.logEvent('economy', 'order_delivered', now, { orderId: order.id });
+      }
+      if (arrived.length > 0) this.notifySubscribers();
+    } catch { /* deliveries never break the tick */ }
+  }
+
+  // ==========================================
   // P6.4 — RENT LADDER (Henderson: remind → warn → pause downloads → thanks)
   // Lenient teeth: browsing works, new downloads nap until paid. Paper trail
   // goes to Mailbox via rentmail_* flags; Pulse carries the human voice.
@@ -784,6 +944,10 @@ export class SimulationEngine {
       }
       if (spec.cost > 0 && !this.economy.canAfford(spec.cost)) {
         return { success: false, error: `Cannot afford ${spec.label} ($${spec.cost.toFixed(2)}).` };
+      }
+      // P6 the city keeps time — closed places fail honestly (UI gates too)
+      if (!isOutingOpen(outingId, hour)) {
+        return { success: false, error: `${spec.label} is closed now (open ${outingHoursLabel(outingId)}).` };
       }
       const weather = getWeatherForDay(day);
       if (outingId === 'canal_walk' && weather.condition === 'storm') {
@@ -1049,10 +1213,12 @@ export class SimulationEngine {
       case 'PLAYER_REST_OR_SLEEP': {
         const wakeHour = action.wakeHour ?? 8;
         const bedtimeHour = this.clock.getTime().hour; // P6.1 sleep quality needs bedtime
-        const jump = this.clock.jumpToNextMorning(wakeHour);
+        const jump = this.clock.jumpToNextMorning(wakeHour, action.wakeMinute ?? 0);
         const hoursSlept = jump.elapsedMinutes / 60;
         this.economy.restOrSleep(hoursSlept, bedtimeHour);
         this.economy.advanceTime(jump.elapsedMinutes); // P6.1 you still get hungry overnight (slowly)
+        this.processDeliveries(); // P6 couriers arrive while you sleep
+        this.processJobReplies(); // P6 replies wait in the morning
         const newTotalMinutes = this.clock.getTotalMinutes();
         this.downloads.advanceTime(jump.elapsedMinutes, newTotalMinutes);
         this.social.updatePresence(newTotalMinutes);
@@ -1110,6 +1276,14 @@ export class SimulationEngine {
 
       case 'PLAYER_CITY_OUTING': {
         return this.doCityOuting(action.outingId);
+      }
+
+      case 'JOB_APPLY': {
+        return this.applyForGig(action.gigId);
+      }
+
+      case 'PLAYER_PLACE_ORDER': {
+        return this.placeGroceryOrder(action.items, action.fulfillment, currentMinutes);
       }
 
       case 'HARDWARE_UPGRADE_RAM': {

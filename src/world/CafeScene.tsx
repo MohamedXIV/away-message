@@ -37,8 +37,9 @@ export const CafeScene: React.FC = () => {
     if (!canvasRef.current) return;
 
     const canvas = canvasRef.current;
-    canvas.width = 960;
-    canvas.height = 540;
+    // Hi-DPI backing store (relative-space drawing — sharpen only, never stretch)
+    canvas.width = 1600;
+    canvas.height = 900;
 
     const renderer = new CafeCanvasRenderer({
       canvas,

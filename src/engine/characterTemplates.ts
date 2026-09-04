@@ -700,6 +700,11 @@ export const SHIFT_WRAP_LINES: string[] = [
   'we make a good crew lol. {detail} — see? told you it would be fun',
   'shift done. {detail} — thanks for jumping in, seriously',
 ];
+/** Gig-shift wrap-ups (neutral voice — any contact can send these). */
+export const GIG_WRAP_LINES: string[] = [
+  'good work today. {detail} — you earned every cent of that pay.',
+  'shift done, and honestly? you were great. {detail} — come back anytime.',
+];
 /** Archive-night wrap-ups (Nora-flavoured, used for archive meetings that happen). */
 export const ARCHIVE_WRAP_LINES: string[] = [
   'productive night. {detail} — filing it under unsolved. thanks for the hands.',
@@ -709,6 +714,10 @@ export const ARCHIVE_WRAP_LINES: string[] = [
 
 export function pickShiftWrapLine(seed: string, detail: string): string {
   return pickFromPool(SHIFT_WRAP_LINES, `${seed}:shiftwrap`).replaceAll('{detail}', detail.slice(0, 120));
+}
+
+export function pickGigWrapLine(seed: string, detail: string): string {
+  return pickFromPool(GIG_WRAP_LINES, `${seed}:gigwrap`).replaceAll('{detail}', detail.slice(0, 120));
 }
 
 export function pickArchiveWrapLine(seed: string, detail: string): string {
@@ -967,6 +976,30 @@ export function pickRentNudgeLine(seed: string, amount: number): string {
 
 export function pickRentThanksLine(seed: string): string {
   return pickFromPool(RENT_THANKS_LINES, `${seed}:rentthanks`);
+}
+
+// ==========================================
+// P6 — JOB BOARD LINES ({gig} = gig title, {day} filled by caller)
+// ==========================================
+
+/** Gig acceptance notes (the shift itself arrives as a real appointment). */
+export const JOB_ACCEPT_LINES: string[] = [
+  'good news — youre on for {gig} {day}! come by, dont be late. it is all set on my end.',
+  '{gig} {day} — you got it! see you there. wear something you can move in lol',
+];
+/** Gig rejections (kind, no penalty — lenient town). */
+export const JOB_REJECT_LINES: string[] = [
+  'hey, sorry — {gig} went to someone else this time. nothing personal, timing. try again soon?',
+  'bad news on {gig}: they already filled it. i put in a word for next time though.',
+];
+
+export function pickJobAcceptLine(seed: string, gig: string, dayRef: string): string {
+  return pickFromPool(JOB_ACCEPT_LINES, `${seed}:jobaccept`)
+    .replaceAll('{gig}', gig.slice(0, 60)).replaceAll('{day}', dayRef);
+}
+
+export function pickJobRejectLine(seed: string, gig: string): string {
+  return pickFromPool(JOB_REJECT_LINES, `${seed}:jobreject`).replaceAll('{gig}', gig.slice(0, 60));
 }
 
 export interface InitiativeDecision {

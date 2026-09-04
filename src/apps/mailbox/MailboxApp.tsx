@@ -270,6 +270,31 @@ export const MailboxApp: React.FC = () => {
 
         {/* Right: Message List (Top) & Email Preview (Bottom) */}
         <div className="flex-1 flex flex-col overflow-hidden bg-white">
+          {/* P6 parcels: pending courier orders with ETA + recent arrivals */}
+          {(() => {
+            let orders: Array<{ id: string; items: Array<{ sku: string; qty: number }>; fulfillment: string; readyMinute: number; status: string }> = [];
+            try { orders = (engine.delivery.getState().orders as typeof orders) ?? []; } catch { orders = []; }
+            if (orders.length === 0) return null;
+            const fmtEta = (minute: number): string => {
+              const day = Math.floor(minute / 1440) + 1;
+              const hh = String(Math.floor((minute % 1440) / 60)).padStart(2, '0');
+              const mm = String(minute % 60).padStart(2, '0');
+              return `Day ${day}, ${hh}:${mm}`;
+            };
+            const pending = orders.filter((o) => o.status === 'transit');
+            const done = orders.filter((o) => o.status === 'done').slice(-3).reverse();
+            return (
+              <div className="border-b border-gray-400 bg-amber-50 px-2 py-1.5 text-[11px] space-y-0.5 max-h-20 overflow-y-auto">
+                <div className="font-bold text-amber-900">📦 CornerMart parcels</div>
+                {pending.map((o) => (
+                  <div key={o.id} className="text-gray-700">🚚 {o.items.map((i) => `${i.sku}×${i.qty}`).join(', ')} — arriving {fmtEta(o.readyMinute)}</div>
+                ))}
+                {done.map((o) => (
+                  <div key={o.id} className="text-green-800">✓ {o.items.map((i) => `${i.sku}×${i.qty}`).join(', ')} — {o.fulfillment === 'pickup' ? 'picked up' : 'delivered to pantry'}</div>
+                ))}
+              </div>
+            );
+          })()}
           {/* Messages Table */}
           <div className="h-44 border-b border-gray-400 overflow-y-auto">
             <table className="w-full text-left text-xs border-collapse font-sans">

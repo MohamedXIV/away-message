@@ -51,9 +51,10 @@ export interface SimulationStoreActions {
   workShift: (durationMinutes?: number, wage?: number) => void;
   payRent: () => void;
   payInternet: () => void;
-  restOrSleep: (wakeHour?: number) => void;
+  restOrSleep: (wakeHour?: number, wakeMinute?: number) => void;
   interactRoom: (activity: 'tea' | 'coffee' | 'meal' | 'groceries' | 'shower' | 'window') => void;
   cityOuting: (outingId: string) => ActionResult;
+  applyGig: (gigId: string) => ActionResult;
 
   // Hardware & OS
   upgradeRam: (ramMB: number, cost: number) => void;
@@ -184,8 +185,8 @@ export const useSimulationStore = create<SimulationStore>()(
         get().dispatchAction({ type: 'PLAYER_PAY_INTERNET' });
       },
 
-      restOrSleep: (wakeHour) => {
-        get().dispatchAction({ type: 'PLAYER_REST_OR_SLEEP', wakeHour });
+      restOrSleep: (wakeHour, wakeMinute) => {
+        get().dispatchAction({ type: 'PLAYER_REST_OR_SLEEP', wakeHour, wakeMinute });
       },
 
       interactRoom: (activity) => {
@@ -194,6 +195,10 @@ export const useSimulationStore = create<SimulationStore>()(
 
       cityOuting: (outingId) => {
         return get().dispatchAction({ type: 'PLAYER_CITY_OUTING', outingId });
+      },
+
+      applyGig: (gigId) => {
+        return get().dispatchAction({ type: 'JOB_APPLY', gigId });
       },
 
       upgradeRam: (ramMB, cost) => {

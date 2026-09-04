@@ -363,7 +363,7 @@ export class WorldEventsEngine {
    * P5 governed patch for the live-meeting lifecycle (status/rsvp/show flags).
    * Unknown ids and illegal keys are ignored; returns the patched copy or null.
    */
-  public updateAppointment(id: string, patch: Partial<Pick<Appointment, 'status' | 'rsvp' | 'npcShowed' | 'playerShowed' | 'isCompleted' | 'isMissed'>>): Appointment | null {
+  public updateAppointment(id: string, patch: Partial<Pick<Appointment, 'status' | 'rsvp' | 'npcShowed' | 'playerShowed' | 'isCompleted' | 'isMissed' | 'wageOverride'>>): Appointment | null {
     const appt = this.appointments.find((a) => a.id === id);
     if (!appt) return null;
     const statuses = ['scheduled', 'confirmed', 'happened', 'missed', 'cancelled'];
@@ -374,6 +374,9 @@ export class WorldEventsEngine {
     if (typeof patch.playerShowed === 'boolean') appt.playerShowed = patch.playerShowed;
     if (typeof patch.isCompleted === 'boolean') appt.isCompleted = patch.isCompleted;
     if (typeof patch.isMissed === 'boolean') appt.isMissed = patch.isMissed;
+    if (typeof patch.wageOverride === 'number' && Number.isFinite(patch.wageOverride) && patch.wageOverride >= 0) {
+      appt.wageOverride = Math.min(500, Math.round(patch.wageOverride));
+    }
     this.bumpVersion();
     return { ...appt };
   }

@@ -23,18 +23,29 @@ describe('P6.1 hunger and meals', () => {
   it('noodles cost money and relieve hunger', () => {
     const cash = economy.getState().cash;
     economy.advanceTime(10 * 60); // hunger 30 → 60
+    expect(economy.getState().pantry.noodles).toBe(2); // stocked starter pantry
     const res = economy.eatMeal('noodles');
     expect(res.success).toBe(true);
     expect(economy.getState().cash).toBe(cash - 3);
     expect(economy.getState().hunger).toBe(60 - 35);
+    expect(economy.getState().pantry.noodles).toBe(1);
   });
 
   it('groceries feed well and heal a little', () => {
+    (economy as any).state.pantry.groceries = 1;
     economy.advanceTime(20 * 60); // hunger 90
     const healthBefore = economy.getState().health;
     expect(economy.eatMeal('groceries').success).toBe(true);
     expect(economy.getState().hunger).toBe(90 - 70);
     expect(economy.getState().health).toBe(Math.min(100, healthBefore + 3));
+    expect(economy.getState().pantry.groceries).toBe(0);
+  });
+
+  it('empty pantry blocks meals (buy more first)', () => {
+    (economy as any).state.pantry.noodles = 0;
+    const res = economy.eatMeal('noodles');
+    expect(res.success).toBe(false);
+    expect(res.error).toContain('pantry');
   });
 
   it('broke players cannot eat (honest failure, no debt)', () => {
@@ -140,6 +151,7 @@ describe('P6.1 simulation wiring', () => {
   });
 
   it('groceries work through the room action (UI button arrives in P6.3)', () => {
+    (sim.economy as any).state.pantry.groceries = 1;
     sim.advanceGameMinutes(20 * 60, 'long day');
     const res = sim.dispatchAction({ type: 'PLAYER_INTERACT_ROOM', activity: 'groceries' });
     expect(res.success).toBe(true);

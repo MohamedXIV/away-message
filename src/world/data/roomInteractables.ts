@@ -106,6 +106,23 @@ export const BEVERAGE_OPTIONS: RoomActivityOption[] = [
   },
 ];
 
+// P6 place hours: the city keeps time — diners, carts and laundromats open/close.
+// Absent openHours = always open (canal, bus). Overnight ranges wrap past midnight.
+/** Pure opening-hours check (testable, deterministic). */
+export function isOptionOpen(opt: { openHours?: [number, number] }, hour: number): boolean {
+  if (!opt.openHours) return true;
+  const [start, end] = opt.openHours;
+  const h = ((Math.floor(hour) % 24) + 24) % 24;
+  if (start <= end) return h >= start && h < end;
+  return h >= start || h < end;
+}
+
+export function openHoursLabel(openHours?: [number, number]): string {
+  if (!openHours) return '';
+  const fmt = (h: number): string => `${String(((h % 24) + 24) % 24).padStart(2, '0')}:00`;
+  return `${fmt(openHours[0])}–${fmt(openHours[1])}`;
+}
+
 export const DOOR_OPTIONS: RoomActivityOption[] = [
   {
     id: 'food_cart_shift',
@@ -116,6 +133,7 @@ export const DOOR_OPTIONS: RoomActivityOption[] = [
     energyChange: -40,
     cashReward: 62.00,
     actionType: 'work',
+    openHours: [16, 23],
   },
   {
     id: 'overtime_shift',
@@ -126,6 +144,7 @@ export const DOOR_OPTIONS: RoomActivityOption[] = [
     energyChange: -30,
     cashReward: 52.00,
     actionType: 'work',
+    openHours: [17, 23],
   },
   {
     id: 'canal_walk',
@@ -145,6 +164,7 @@ export const DOOR_OPTIONS: RoomActivityOption[] = [
     energyChange: 6,
     cashCost: 5.00,
     actionType: 'diner',
+    openHours: [11, 22],
   },
   {
     id: 'diner_platter',
@@ -155,6 +175,7 @@ export const DOOR_OPTIONS: RoomActivityOption[] = [
     energyChange: 10,
     cashCost: 11.00,
     actionType: 'diner',
+    openHours: [11, 22],
   },
   {
     id: 'diner_pie',
@@ -165,6 +186,7 @@ export const DOOR_OPTIONS: RoomActivityOption[] = [
     energyChange: 6,
     cashCost: 4.00,
     actionType: 'diner',
+    openHours: [11, 22],
   },
   {
     id: 'laundromat',
@@ -175,6 +197,7 @@ export const DOOR_OPTIONS: RoomActivityOption[] = [
     energyChange: -3,
     cashCost: 4.00,
     actionType: 'outing',
+    openHours: [7, 23],
   },
   {
     id: 'visit_cafe',

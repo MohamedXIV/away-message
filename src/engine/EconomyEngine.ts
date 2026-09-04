@@ -22,6 +22,11 @@ export class EconomyEngine {
       hunger: initialState?.hunger ?? 30,
       health: initialState?.health ?? 90,
       sleepDebt: initialState?.sleepDebt ?? 0,
+      // P6 pantry (old saves start with 2 noodle cups, no groceries)
+      pantry: {
+        noodles: initialState?.pantry?.noodles ?? 2,
+        groceries: initialState?.pantry?.groceries ?? 0,
+      },
     };
   }
 
@@ -204,22 +209,33 @@ export class EconomyEngine {
     return Math.max(40, max);
   }
 
-  /** Eat a meal. Returns false when broke (no debt, no shame — just hunger). */
+  /** Eat a meal. Needs pantry stock (except vending snacks) + cash. */
   public eatMeal(kind: 'noodles' | 'groceries' | 'snack'): { success: boolean; error?: string } {
-    const specs: Record<string, { cost: number; hungerRelief: number; energyGain: number; healthGain: number }> = {
-      noodles: { cost: 3, hungerRelief: 35, energyGain: 10, healthGain: 0 },
-      groceries: { cost: 8, hungerRelief: 70, energyGain: 12, healthGain: 3 },
+    const specs: Record<string, { cost: number; hungerRelief: number; energyGain: number; healthGain: number; pantry?: 'noodles' | 'groceries' }> = {
+      noodles: { cost: 3, hungerRelief: 35, energyGain: 10, healthGain: 0, pantry: 'noodles' },
+      groceries: { cost: 8, hungerRelief: 70, energyGain: 12, healthGain: 3, pantry: 'groceries' },
       snack: { cost: 2, hungerRelief: 15, energyGain: 5, healthGain: -1 },
     };
     const spec = specs[kind];
     if (!spec) return { success: false, error: `Unknown meal: ${kind}` };
+    // P6 pantry: ingredients are finite — buy more at CornerMart (TechMart groceries)
+    if (spec.pantry && (this.state.pantry[spec.pantry] ?? 0) < 1) {
+      return { success: false, error: `No ${spec.pantry} left in the pantry — order more first.` };
+    }
     if (!this.spendCash(spec.cost, `Meal (${kind})`)) {
       return { success: false, error: `Cannot afford ${kind} ($${spec.cost.toFixed(2)}).` };
     }
+    if (spec.pantry) this.state.pantry[spec.pantry] -= 1;
     this.state.hunger = Math.max(0, this.state.hunger - spec.hungerRelief);
     this.state.health = Math.min(100, Math.max(0, this.state.health + spec.healthGain));
     this.restoreEnergy(spec.energyGain);
     return { success: true };
+  }
+
+  /** P6 pantry credit (deliveries, pickups). Unknown keys ignored. */
+  public addPantry(kind: 'noodles' | 'groceries', qty: number): void {
+    if ((kind !== 'noodles' && kind !== 'groceries') || !Number.isFinite(qty) || qty <= 0) return;
+    this.state.pantry[kind] = Math.min(99, (this.state.pantry[kind] ?? 0) + Math.floor(qty));
   }
 
   /** Hot shower: small health bump + a little energy. Kindness, not strategy. */

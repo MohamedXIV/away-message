@@ -96,6 +96,7 @@ describe('P6.4 relief valves (data + engine)', () => {
   it('offers home cooking in the kettle options and honors it', () => {
     const groceries = BEVERAGE_OPTIONS.find((b) => b.id === 'cook_groceries')!;
     expect(groceries.cashCost).toBe(8);
+    (sim.economy as any).state.pantry.groceries = 1; // stocked pantry required
     sim.advanceGameMinutes(20 * 60, 'long day'); // hunger 30 → 90
     const cashBefore = sim.getState().player.cash;
     const res = sim.dispatchAction({ type: 'PLAYER_INTERACT_ROOM', activity: 'groceries' });

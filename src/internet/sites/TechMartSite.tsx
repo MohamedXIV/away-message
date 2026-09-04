@@ -8,11 +8,11 @@ import { getAllReleases, getReleaseById } from '../../engine/OsCatalog';
 interface ProductItem {
   id: string;
   name: string;
-  category: 'RAM' | 'OS' | 'Modem' | 'Storage';
+  category: 'RAM' | 'OS' | 'Modem' | 'Storage' | 'Groceries';
   price: number;
   description: string;
   specs: string;
-  actionType: 'HARDWARE_UPGRADE_RAM' | 'HARDWARE_UPGRADE_OS' | 'HARDWARE_UPGRADE_CONNECTION';
+  actionType: 'HARDWARE_UPGRADE_RAM' | 'HARDWARE_UPGRADE_OS' | 'HARDWARE_UPGRADE_CONNECTION' | 'ORDER_PHYSICAL';
   payloadValue: any;
 }
 
@@ -77,6 +77,47 @@ const PRODUCTS: ProductItem[] = [
     actionType: 'HARDWARE_UPGRADE_CONNECTION',
     payloadValue: 'dsl_1m',
   },
+  // CornerMart physical line — groceries arrive by courier or self pickup (finite pantry!)
+  {
+    id: 'groc_noodle_cup',
+    name: 'Spicy Cup Noodles',
+    category: 'Groceries',
+    price: 2.00,
+    description: 'One foam cup. Pantry stock for lonely nights — not infinite, buy ahead.',
+    specs: 'Pantry: +1 noodles',
+    actionType: 'ORDER_PHYSICAL',
+    payloadValue: 'noodles_cup',
+  },
+  {
+    id: 'groc_noodle_6',
+    name: 'Noodle 6-Pack',
+    category: 'Groceries',
+    price: 10.00,
+    description: 'Six foam cups, one strip. The bulk student special.',
+    specs: 'Pantry: +6 noodles',
+    actionType: 'ORDER_PHYSICAL',
+    payloadValue: 'noodle_6pack',
+  },
+  {
+    id: 'groc_bag',
+    name: 'Grocery Bag (rice, beans, eggs)',
+    category: 'Groceries',
+    price: 8.00,
+    description: 'Cook real food at the hotplate. Feeds well and heals a little.',
+    specs: 'Pantry: +1 groceries',
+    actionType: 'ORDER_PHYSICAL',
+    payloadValue: 'grocery_bag',
+  },
+  {
+    id: 'groc_feast',
+    name: 'Feast Box (party groceries)',
+    category: 'Groceries',
+    price: 20.00,
+    description: 'Triple bags for heavy weeks or hungry friends.',
+    specs: 'Pantry: +3 groceries',
+    actionType: 'ORDER_PHYSICAL',
+    payloadValue: 'grocery_feast',
+  },
 ];
 
 export const TechMartSite: React.FC<SiteRouteProps> = () => {
@@ -90,6 +131,8 @@ export const TechMartSite: React.FC<SiteRouteProps> = () => {
   const [cart, setCart] = useState<ProductItem[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<string>('ALL');
   const [orderReceipt, setOrderReceipt] = useState<string | null>(null);
+  // CornerMart fulfillment: fast trip vs slow free courier
+  const [fulfillment, setFulfillment] = useState<'pickup' | 'delivery'>('delivery');
 
   // Dynamic world reactions: banners, price modifiers
   const { banners, priceModifiers, featuredProductIds } = getTechMartDynamicState(world, time.day);
@@ -170,7 +213,21 @@ export const TechMartSite: React.FC<SiteRouteProps> = () => {
       }
     });
 
-    setOrderReceipt(`Order #TM-${Math.floor(Math.random() * 89999 + 10000)} successfully placed! Installed upgrades to your PC.`);
+    // CornerMart physical line: one grocery order (pickup trip vs slow courier)
+    const groceryItems = cart.filter((item) => item.actionType === 'ORDER_PHYSICAL');
+    let groceryNote = '';
+    if (groceryItems.length > 0) {
+      const res = dispatchAction({
+        type: 'PLAYER_PLACE_ORDER',
+        items: groceryItems.map((item) => ({ sku: String(item.payloadValue), qty: 1 })),
+        fulfillment,
+      }) as unknown as { success: boolean; error?: string; data?: { summary?: string } };
+      groceryNote = res && (res as { success: boolean }).success
+        ? ` Groceries: ${(res as { data?: { summary?: string } }).data?.summary ?? 'ordered.'}`
+        : ` Groceries FAILED: ${(res as { error?: string }).error ?? 'unknown error.'}`;
+    }
+
+    setOrderReceipt(`Order #TM-${Math.floor(Math.random() * 89999 + 10000)} successfully placed! Installed upgrades to your PC.${groceryNote}`);
     setCart([]);
     soundManager.play('im_send');
   };
@@ -225,7 +282,7 @@ export const TechMartSite: React.FC<SiteRouteProps> = () => {
       {/* Categories & Cart Status Bar */}
       <div className="max-w-4xl w-full bg-[#e2e8f0] border-x border-b border-slate-300 px-3 py-1.5 flex justify-between items-center text-xs">
         <div className="flex gap-2">
-          {['ALL', 'RAM', 'OS', 'Modem'].map((cat) => (
+          {['ALL', 'RAM', 'OS', 'Modem', 'Groceries'].map((cat) => (
             <button
               key={cat}
               onClick={() => setSelectedCategory(cat)}
@@ -346,6 +403,20 @@ export const TechMartSite: React.FC<SiteRouteProps> = () => {
               <span>Total:</span>
               <span className="font-mono text-emerald-700">${cartTotal.toFixed(2)}</span>
             </div>
+
+            {cart.some((item) => item.actionType === 'ORDER_PHYSICAL') && (
+              <div className="border border-slate-200 rounded p-2 space-y-1 bg-slate-50">
+                <div className="font-bold text-[11px] text-slate-700">📦 CornerMart fulfillment:</div>
+                <label className="flex items-start gap-1.5 text-[11px] cursor-pointer">
+                  <input type="radio" name="fulfill" checked={fulfillment === 'delivery'} onChange={() => setFulfillment('delivery')} className="mt-0.5" />
+                  <span><b>🚚 Courier</b> — free, arrives in 2–24h. Effortless.</span>
+                </label>
+                <label className="flex items-start gap-1.5 text-[11px] cursor-pointer">
+                  <input type="radio" name="fulfill" checked={fulfillment === 'pickup'} onChange={() => setFulfillment('pickup')} className="mt-0.5" />
+                  <span><b>🏃 Pickup</b> — 30-min trip, −5 energy. Pantry now.</span>
+                </label>
+              </div>
+            )}
 
             <button
               onClick={handleCheckout}

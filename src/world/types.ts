@@ -111,4 +111,6 @@ export interface RoomActivityOption {
   cashCost?: number;
   cashReward?: number;
   actionType: 'tea' | 'coffee' | 'meal' | 'groceries' | 'shower' | 'window' | 'work' | 'sleep' | 'walk' | 'cafe' | 'diner' | 'outing';
+  /** Opening hours [startHour, endHour) in 24h — absent means always open. */
+  openHours?: [number, number];
 }

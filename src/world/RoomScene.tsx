@@ -39,6 +39,7 @@ export const RoomScene: React.FC = () => {
   const restOrSleep = useSimulationStore((s) => s.restOrSleep);
   const spendCash = useSimulationStore((s) => s.spendCash);
   const cityOuting = useSimulationStore((s) => s.cityOuting);
+  const applyGig = useSimulationStore((s) => s.applyGig);
 
   // Active Modals
   const [activeModal, setActiveModal] = useState<
@@ -94,9 +95,10 @@ export const RoomScene: React.FC = () => {
     if (!canvasRef.current) return;
 
     const canvas = canvasRef.current;
-    // Set internal resolution
-    canvas.width = 960;
-    canvas.height = 540;
+    // Hi-DPI backing store: the renderer draws in relative 0..1 space, so a
+    // bigger buffer only sharpens — CSS aspect-contain guarantees no stretching.
+    canvas.width = 1600;
+    canvas.height = 900;
 
     const renderer = new RoomCanvasRenderer({
       canvas,
@@ -140,6 +142,34 @@ export const RoomScene: React.FC = () => {
     }
   };
 
+  // P6 Job Board data (gigs + pending state, straight from the engine)
+  const jobBoardEntries = (() => {
+    try {
+      const engine = useSimulationStore.getState().engine;
+      return engine.getJobBoard().map(({ gig, pending }) => ({
+        gigId: gig.id,
+        title: gig.title,
+        blurb: gig.blurb,
+        pay: gig.pay,
+        durationMin: gig.durationMin,
+        minEnergy: gig.minEnergy,
+        contactName: engine.social.getBuddy(gig.contactBuddyId)?.displayName ?? gig.contactBuddyId,
+        pending,
+      }));
+    } catch { return []; }
+  })();
+
+  const handleApplyGig = (gigId: string): string | null => {
+    const res = applyGig(gigId) as unknown as { success: boolean; error?: string };
+    if (res && res.success) {
+      flashOutingNotice('Application sent — you will hear back on Pulse in a few hours.');
+      return null;
+    }
+    const err = (res as { error?: string })?.error || 'Could not apply.';
+    flashOutingNotice(err);
+    return err;
+  };
+
   // Handle Door Action Selection (outings resolve fully in the engine and report back)
   const handleSelectDoorAction = (option: RoomActivityOption) => {
     if (option.actionType === 'work') {
@@ -159,9 +189,9 @@ export const RoomScene: React.FC = () => {
     }
   };
 
-  // Handle Bed Sleep
-  const handleConfirmSleep = () => {
-    restOrSleep(8);
+  // Handle Bed Sleep (alarm: wake hour + minute from the modal)
+  const handleConfirmSleep = (wakeHour: number, wakeMinute: number) => {
+    restOrSleep(wakeHour, wakeMinute);
   };
 
   // Get Window Observation data — sandbox uses world flags
@@ -317,9 +347,12 @@ export const RoomScene: React.FC = () => {
       {activeModal === 'door' && (
         <DoorActionModal
           day={time.day}
+          hour={time.hour}
           playerCash={player.cash}
           playerEnergy={player.energy}
           isCafeScheduled={time.day >= 11 || !!world.flags?.maya_cafe_scheduled || world.triggeredEvents.some((e) => e.id === 'city_canal_festival' && e.isTriggered)}
+          jobs={jobBoardEntries}
+          onApplyGig={handleApplyGig}
           onSelectOption={handleSelectDoorAction}
           onClose={() => setActiveModal(null)}
         />

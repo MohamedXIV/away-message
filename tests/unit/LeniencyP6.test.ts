@@ -27,7 +27,10 @@ describe('P6.6 leniency guarantees', () => {
   it('recovery always works from the bottom', () => {
     sim.advanceGameMinutes(14 * 24 * 60, 'two weeks of neglect');
     sim.economy.earnCash(100, 'test funds');
-    // Eat + sleep their way back
+    // Real restock loop: pickup order → pantry → cook
+    const order = sim.dispatchAction({ type: 'PLAYER_PLACE_ORDER', items: [{ sku: 'grocery_bag', qty: 1 }], fulfillment: 'pickup' });
+    expect(order.success).toBe(true);
+    expect(sim.getState().player.pantry.groceries).toBe(1);
     expect(sim.dispatchAction({ type: 'PLAYER_INTERACT_ROOM', activity: 'groceries' }).success).toBe(true);
     expect(sim.getState().player.hunger).toBeLessThanOrEqual(45);
     sim.dispatchAction({ type: 'PLAYER_REST_OR_SLEEP', wakeHour: 8 } as any);

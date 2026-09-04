@@ -25,6 +25,31 @@ export const OUTINGS: Record<OutingId, OutingSpec> = {
 /** Minimum energy to head out (lenient — the displeased alternative is staying home). */
 export const MIN_OUTING_ENERGY = 15;
 
+/** Opening hours per outing (absent = always open). The city keeps time. */
+export const OUTING_HOURS: Record<OutingId, [number, number] | undefined> = {
+  diner_soup: [11, 22],
+  diner_platter: [11, 22],
+  diner_pie: [11, 22],
+  canal_walk: undefined,
+  laundromat: [7, 23],
+};
+
+export function isOutingOpen(outingId: OutingId, hour: number): boolean {
+  const range = OUTING_HOURS[outingId];
+  if (!range) return true;
+  const [start, end] = range;
+  const h = ((Math.floor(hour) % 24) + 24) % 24;
+  if (start <= end) return h >= start && h < end;
+  return h >= start || h < end;
+}
+
+export function outingHoursLabel(outingId: OutingId): string {
+  const range = OUTING_HOURS[outingId];
+  if (!range) return '';
+  const fmt = (h: number): string => `${String(((h % 24) + 24) % 24).padStart(2, '0')}:00`;
+  return `${fmt(range[0])}–${fmt(range[1])}`;
+}
+
 export function isValidOutingId(value: unknown): value is OutingId {
   return typeof value === 'string' && (value as string) in OUTINGS;
 }

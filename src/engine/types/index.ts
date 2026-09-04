@@ -49,6 +49,8 @@ export interface PlayerState {
   hunger: number;            // 0..100 (100 = starving)
   health: number;            // 0..100 (lenient: floor effects only, never death)
   sleepDebt: number;         // 0+ (late/short nights accumulate, good nights repay)
+  // P6 pantry: finite ingredients (noodles cups, grocery bags). Snack is vending (infinite).
+  pantry: { noodles: number; groceries: number };
 }
 
 export interface WorkShiftResult {
@@ -404,6 +406,8 @@ export interface Appointment {
   rsvp?: AppointmentRsvp;           // NPC reply, decided by rules
   npcShowed?: boolean;
   playerShowed?: boolean;
+  // P6 job-board shifts pay their gig wage instead of the standard side-shift wage
+  wageOverride?: number;
 }
 
 /** P5 live-meeting lifecycle: scheduled → confirmed → happened/missed, or cancelled. */
@@ -507,6 +511,7 @@ export interface SimulationState {
   myplace: MyPlaceEngineState;
   vfs: VirtualFileSystemState;
   downloads: DownloadTask[];
+  deliveries: import('../DeliveryEngine').DeliveryEngineState;
   installedSoftware: InstalledSoftwareRecord[];
   social: SocialEngineState;
   world: WorldState;
@@ -528,9 +533,11 @@ export type SimulationAction =
   | { type: 'PLAYER_WORK_SHIFT'; durationMinutes?: number; wage?: number }
   | { type: 'PLAYER_PAY_RENT' }
   | { type: 'PLAYER_PAY_INTERNET' }
-  | { type: 'PLAYER_REST_OR_SLEEP'; wakeHour?: number }
+  | { type: 'PLAYER_REST_OR_SLEEP'; wakeHour?: number; wakeMinute?: number }
   | { type: 'PLAYER_INTERACT_ROOM'; activity: 'tea' | 'coffee' | 'meal' | 'groceries' | 'shower' | 'window' }
   | { type: 'PLAYER_CITY_OUTING'; outingId: string }
+  | { type: 'PLAYER_PLACE_ORDER'; items: Array<{ sku: string; qty: number }>; fulfillment: 'pickup' | 'delivery' }
+  | { type: 'JOB_APPLY'; gigId: string }
   | { type: 'HARDWARE_UPGRADE_RAM'; ramMB: number; cost: number }
   | { type: 'HARDWARE_UPGRADE_CONNECTION'; connectionType: ConnectionType; cost: number }
   | { type: 'HARDWARE_UPGRADE_OS'; targetOs: OsVersion; cost: number }

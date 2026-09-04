@@ -102,13 +102,14 @@ export class GameClock {
     return Math.max(0, targetTotalMinutes - this.totalMinutes);
   }
 
-  public jumpToNextMorning(wakeHour = 8): TimeJumpResult {
+  public jumpToNextMorning(wakeHour = 8, wakeMinute = 0): TimeJumpResult {
     const current = this.getTime();
     let targetDay = current.day;
-    if (current.hour >= wakeHour) {
+    const cleanMinute = Math.max(0, Math.min(59, Math.floor(wakeMinute) || 0));
+    if (current.hour > wakeHour || (current.hour === wakeHour && current.minute >= cleanMinute)) {
       targetDay += 1;
     }
-    const minutesToJump = this.calculateMinutesUntil(targetDay, wakeHour, 0);
+    const minutesToJump = this.calculateMinutesUntil(targetDay, wakeHour, cleanMinute);
     return this.advanceMinutes(minutesToJump);
   }
 
