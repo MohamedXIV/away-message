@@ -15,6 +15,7 @@ Game versions use SemVer (`0.x.y` while in demo); save *format* versions are tra
 - New visible social battery meter: talking, flirting and going out spend it, sleep and solitude repay it — bold talk out of character costs big, and landing badly can empty the whole bar until you apologize
 - Reply suggestions are colour-coded by tone (warm green, romantic pink, cold blue) with their battery price on each chip
 - Pulse 6.0: buddies tint their own names in chat and use animated emoticons (upgrade to feel it)
+- Buddies form their own reads of you: quiet types seem distant until kept promises prove otherwise — and comparing notes aligns their views (cold reads get fewer check-ins, the distrusted get no favors)
 
 ### Changed
 - Save format v4 (v2/v3 saves upgrade on load; newer-than-current saves are still refused)

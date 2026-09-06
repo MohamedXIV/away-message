@@ -15,6 +15,7 @@ import {
   NpcBondState,
   NpcInteractionLog,
   NpcRomanceStage,
+  PlayerReadState,
   PromiseRecord,
   RelationshipStage,
   SocialEngineState,
@@ -161,6 +162,8 @@ export class SocialEngine {
   private agenda: Map<string, AgendaItem[]> = new Map();
   private mediations: MediationRecord[] = [];
   private npcSocialLog: NpcInteractionLog[] = [];
+  // Introvert protagonist: each buddy's read of the player (beliefs + certainty)
+  private playerReads: Map<string, PlayerReadState> = new Map();
   private eventBus: EventBus;
 
   constructor(eventBus: EventBus, initialState?: SocialEngineState) {
@@ -234,6 +237,7 @@ export class SocialEngine {
     this.agenda.delete(id);
     this.mediations = this.mediations.filter((m) => m.requesterId !== id && m.targetId !== id);
     this.npcSocialLog = this.npcSocialLog.filter((l) => l.firstId !== id && l.secondId !== id);
+    this.playerReads.delete(id);
     // P4: drop every affinity pair and cap entry involving this buddy
     for (const key of Array.from(this.affinities.keys())) {
       const parts = key.split('__');
@@ -280,6 +284,10 @@ export class SocialEngine {
     for (const [id, items] of this.agenda.entries()) agenda[id] = items.map((a) => ({ ...a }));
     const mediations = this.mediations.map((m) => ({ ...m }));
     const npcSocialLog = this.npcSocialLog.map((l) => ({ ...l }));
+    const playerReads: Record<string, PlayerReadState> = {};
+    for (const [id, read] of this.playerReads.entries()) {
+      playerReads[id] = { beliefs: { ...read.beliefs }, certainty: read.certainty, updatedDay: read.updatedDay };
+    }
 
     // Persist only procedural buddy defs (core 4 are code-owned and re-seeded).
     const buddyDefs: Record<string, BuddyCharacter> = {};
@@ -295,7 +303,7 @@ export class SocialEngine {
       };
     }
 
-    return { relationships: rels, presence: pres, conversations: convs, buddies: buddyDefs, coreMemories: mems, promises: proms, affinities: affs, affinityCaps: caps, npcBonds: bonds, agenda, mediations, npcSocialLog };
+    return { relationships: rels, presence: pres, conversations: convs, buddies: buddyDefs, coreMemories: mems, promises: proms, affinities: affs, affinityCaps: caps, npcBonds: bonds, agenda, mediations, npcSocialLog, playerReads };
   }
 
   private static sanitizeMemoryText(text: string, max: number): string {
@@ -491,6 +499,21 @@ export class SocialEngine {
           line: String((item as NpcInteractionLog).line || '').slice(0, 140),
         });
         if (this.npcSocialLog.length >= MAX_NPC_SOCIAL_LOG) break;
+      }
+    }
+    // Reads of the player (validated + clamped; absent in older saves → neutral priors)
+    this.playerReads.clear();
+    if (state.playerReads) {
+      for (const [rawId, read] of Object.entries(state.playerReads)) {
+        const id = normalizeBuddyId(rawId);
+        if (!read || typeof read !== 'object') continue;
+        const beliefs = clampTraits((read as PlayerReadState).beliefs as Partial<CharacterTraits>);
+        const certainty = (read as PlayerReadState).certainty;
+        this.playerReads.set(id, {
+          beliefs,
+          certainty: typeof certainty === 'number' && Number.isFinite(certainty) ? Math.max(0, Math.min(100, Math.round(certainty))) : 0,
+          updatedDay: Number.isFinite((read as PlayerReadState).updatedDay) ? Math.max(1, Math.floor((read as PlayerReadState).updatedDay)) : 1,
+        });
       }
     }
 
@@ -796,6 +819,8 @@ export class SocialEngine {
       kind: kept ? 'promise_kept' : 'promise_broken',
       day,
     });
+    // The buddy reads the player through kept/broken words (loyalty + discipline).
+    this.observePlayerTrait(buddyId, kept ? { loyalty: 85, discipline: 75 } : { loyalty: 20, discipline: 35 }, day);
     const relationships = this.applySocialAction(buddyId, kept ? 'remembered_detail' : 'dismissive');
     this.eventBus.emit('social:promise_resolved', { buddyId, promiseId, kept });
     return { promise: { ...record }, relationships };
@@ -1154,6 +1179,8 @@ export class SocialEngine {
     if (choice === 'ignore') {
       record.status = 'ignored';
       record.resolvedDay = safeDay;
+      // Brushed off: the requester reads you a little colder and flakier.
+      this.observePlayerTrait(record.requesterId, { warmth: 40, discipline: 45 }, safeDay);
       if (rel) {
         this.adjustRelationship(record.requesterId, {
           ...normalizeRelationshipDims(rel),
@@ -1171,6 +1198,8 @@ export class SocialEngine {
         this.adjustNpcBond(record.requesterId, record.targetId, { trust: 3, comfort: 2 }, safeDay);
         this.adjustNpcBond(record.targetId, record.requesterId, { trust: 3, comfort: 2 }, safeDay);
       }
+      // You showed up: the requester reads you loyal and kind.
+      this.observePlayerTrait(record.requesterId, { loyalty: 80, warmth: 70 }, safeDay);
       this.applySocialAction(record.requesterId, 'remembered_detail');
     } else {
       // badmouth: recorded, damage lands only if the pair compares notes later.
@@ -1214,6 +1243,8 @@ export class SocialEngine {
           kind: 'fact',
           day: safeDay,
         });
+        // Both now read you as disloyal (they have proof).
+        this.observePlayerTrait(buddyId, { loyalty: 10 }, safeDay);
       }
       this.eventBus.emit('social:mediation_exposed' as any, { mediation: { ...m } });
       exposed.push({ ...m });
@@ -1295,6 +1326,110 @@ export class SocialEngine {
       involvements.push(stage === 'dating' ? `dating ${other.displayName} since day ${since}` : `crush on ${other.displayName}`);
     }
     return involvements.length > 0 ? `Romance: ${involvements.slice(0, 3).join('; ')}` : 'Romance: single';
+  }
+
+  // ---------- Reads of the player ----------
+
+  /** Neutral prior: strangers assume an average stranger (certainty 0). */
+  public static neutralPlayerRead(): PlayerReadState {
+    return {
+      beliefs: { shyness: 50, warmth: 50, discipline: 50, spontaneity: 50, loyalty: 50 },
+      certainty: 0,
+      updatedDay: 1,
+    };
+  }
+
+  /** A buddy's current read of the player (copy; unknown buddies read neutral). */
+  public getPlayerRead(rawId: string): PlayerReadState {
+    const stored = this.playerReads.get(normalizeBuddyId(rawId));
+    if (!stored) return SocialEngine.neutralPlayerRead();
+    return { beliefs: { ...stored.beliefs }, certainty: stored.certainty, updatedDay: stored.updatedDay };
+  }
+
+  /**
+   * Fold one observation into a buddy's read (beliefs 0..100 per dim).
+   * Early observations swing hard; certainty (+8 each, capped) slows learning —
+   * first impressions form fast and correct slowly. Unknown buddies are ignored.
+   */
+  public observePlayerTrait(rawId: string, obs: Partial<CharacterTraits>, day: number): void {
+    const id = normalizeBuddyId(rawId);
+    if (!this.buddies.has(id)) return;
+    const safeDay = Math.max(1, Math.floor(day) || 1);
+    const current = this.playerReads.get(id) ?? SocialEngine.neutralPlayerRead();
+    const beliefs: CharacterTraits = { ...current.beliefs };
+    for (const [k, v] of Object.entries(obs)) {
+      const key = k as keyof CharacterTraits;
+      if (typeof v !== 'number' || !Number.isFinite(v) || !(key in beliefs)) continue;
+      const target = Math.max(0, Math.min(100, Math.round(v)));
+      const rate = 0.25 * (1 - (current.certainty / 100) * 0.6);
+      beliefs[key] = Math.max(0, Math.min(100, Math.round(beliefs[key] + (target - beliefs[key]) * rate)));
+    }
+    this.playerReads.set(id, {
+      beliefs,
+      certainty: Math.min(100, current.certainty + 8),
+      updatedDay: safeDay,
+    });
+  }
+
+  /**
+   * Blend two buddies' reads toward each other (they compared notes about the
+   * player). Only when both are fairly sure (certainty >= 40); silent by
+   * design — the shift surfaces in their "read of you" lines, not in a log.
+   */
+  public alignPlayerReads(rawA: string, rawB: string, day: number): boolean {
+    const a = normalizeBuddyId(rawA);
+    const b = normalizeBuddyId(rawB);
+    if (!a || !b || a === b || !this.buddies.has(a) || !this.buddies.has(b)) return false;
+    const readA = this.playerReads.get(a);
+    const readB = this.playerReads.get(b);
+    if (!readA || !readB || readA.certainty < 40 || readB.certainty < 40) return false;
+    const safeDay = Math.max(1, Math.floor(day) || 1);
+    const blend = (mine: number, theirs: number): number =>
+      Math.max(0, Math.min(100, Math.round(mine + (theirs - mine) * 0.1)));
+    const beliefsA: CharacterTraits = {
+      shyness: blend(readA.beliefs.shyness, readB.beliefs.shyness),
+      warmth: blend(readA.beliefs.warmth, readB.beliefs.warmth),
+      discipline: blend(readA.beliefs.discipline, readB.beliefs.discipline),
+      spontaneity: blend(readA.beliefs.spontaneity, readB.beliefs.spontaneity),
+      loyalty: blend(readA.beliefs.loyalty, readB.beliefs.loyalty),
+    };
+    const beliefsB: CharacterTraits = {
+      shyness: blend(readB.beliefs.shyness, readA.beliefs.shyness),
+      warmth: blend(readB.beliefs.warmth, readA.beliefs.warmth),
+      discipline: blend(readB.beliefs.discipline, readA.beliefs.discipline),
+      spontaneity: blend(readB.beliefs.spontaneity, readA.beliefs.spontaneity),
+      loyalty: blend(readB.beliefs.loyalty, readA.beliefs.loyalty),
+    };
+    this.playerReads.set(a, { beliefs: beliefsA, certainty: readA.certainty, updatedDay: safeDay });
+    this.playerReads.set(b, { beliefs: beliefsB, certainty: readB.certainty, updatedDay: safeDay });
+    return true;
+  }
+
+  /**
+   * Qualitative "read of you" line for prompts ("quiet but kind, warming up").
+   * Empty while the buddy has no real impression yet (certainty < 25) so the
+   * model defaults to stranger-polite instead of inventing judgments.
+   */
+  public buildPlayerReadContext(rawId: string): string {
+    const id = normalizeBuddyId(rawId);
+    if (!this.buddies.has(id)) return '';
+    const read = this.playerReads.get(id);
+    if (!read || read.certainty < 25) return '';
+    const b = read.beliefs;
+    const labels: string[] = [];
+    if (b.shyness >= 65) labels.push('quiet');
+    else if (b.shyness <= 35) labels.push('outgoing');
+    if (b.warmth >= 65) labels.push('kind');
+    else if (b.warmth <= 35) labels.push('distant');
+    if (b.spontaneity >= 65) labels.push('spontaneous');
+    else if (b.spontaneity <= 35) labels.push('homebody');
+    if (b.loyalty >= 65) labels.push('trustworthy');
+    else if (b.loyalty <= 35) labels.push('unreliable');
+    if (b.discipline >= 65) labels.push('reliable');
+    else if (b.discipline <= 35) labels.push('flaky');
+    const confidence = read.certainty >= 60 ? 'clearly' : read.certainty >= 40 ? 'starting to seem' : 'maybe';
+    const traits = labels.slice(0, 3).join(', ') || 'hard to read';
+    return `Their read of you: ${traits} (${confidence})`;
   }
 
   public sendMessage(

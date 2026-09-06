@@ -1147,6 +1147,20 @@ export function traitsForBuddy(buddyId: string, archetype: CharacterArchetype): 
   return { ...CHARACTER_ARCHETYPES[archetype].defaultTraits };
 }
 
+/**
+ * The PLAYER is a fixed character with a story, not an avatar: introverted,
+ * homebound, shy, taciturn. Buddies never see these numbers — each builds
+ * its own read through observation (see SocialEngine playerReads), starting
+ * neutral and often misreading quiet as cold. Exported as canon + test anchor.
+ */
+export const PLAYER_TRAITS: CharacterTraits = {
+  shyness: 85,
+  warmth: 55,
+  discipline: 60,
+  spontaneity: 25,
+  loyalty: 70,
+};
+
 // ==========================================
 // CHARACTER LIVES — leave lines, agenda labels, run-in spots, mediation asks
 // Rules pick the line (seeded); AI only paraphrases inside live chat.

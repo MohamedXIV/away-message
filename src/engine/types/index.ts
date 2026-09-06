@@ -393,6 +393,8 @@ export interface SocialEngineState {
   mediations?: MediationRecord[];
   // Character Lives (v4): witnessable NPC↔NPC moments, capped (persisted)
   npcSocialLog?: NpcInteractionLog[];
+  // Introvert protagonist (v4): each buddy's read of the player, keyed by buddy id (persisted)
+  playerReads?: Record<string, PlayerReadState>;
 }
 
 // ==========================================
@@ -485,6 +487,17 @@ export interface NpcInteractionLog {
   secondId: string;
   location: string; // display label from the template pool
   line: string;     // witness line (<= 140 chars)
+}
+
+/**
+ * One buddy's read of the PLAYER (the introvert protagonist). Beliefs start
+ * neutral (50s) — strangers misread quiet as cold until behavior teaches
+ * them otherwise. Certainty 0..100 slows learning as it grows.
+ */
+export interface PlayerReadState {
+  beliefs: CharacterTraits;
+  certainty: number; // 0..100
+  updatedDay: number;
 }
 
 // ==========================================

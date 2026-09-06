@@ -241,6 +241,7 @@ export function migrateSnapshotToV4(snapshot: SimulationState, fromVersion: numb
       agenda: { ...(social.agenda ?? {}) },
       mediations: Array.isArray(social.mediations) ? [...social.mediations] : [],
       npcSocialLog: Array.isArray(social.npcSocialLog) ? [...social.npcSocialLog] : [],
+      playerReads: { ...(social.playerReads ?? {}) },
     },
   } as SimulationState;
 }

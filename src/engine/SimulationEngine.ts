@@ -664,6 +664,10 @@ export class SimulationEngine {
           line: `${this.buddyDisplayName(a)} and ${this.buddyDisplayName(b)} ${verb} at ${spot}.`,
         });
         this.social.checkMediationExposure(a, b, day);
+        // Certain pairs compare notes about the player too (silent convergence).
+        if (this.social.getPlayerRead(a).certainty >= 40 && this.social.getPlayerRead(b).certainty >= 40) {
+          if (rollSeeded100(`align:${key}:${day}`) < 30) this.social.alignPlayerReads(a, b, day);
+        }
         this.telemetry.logEvent('social', 'npc_runin', currentMinutes, { a, b, action });
         done.add(key);
         run++;
@@ -750,6 +754,8 @@ export class SimulationEngine {
       if (asked >= 2) break;
       const last = this.world.getFlag(`medask_${buddy.id}`);
       if (typeof last === 'number' && day - last < 4) continue;
+      // Nobody asks favors of someone they read as disloyal.
+      if (this.social.getPlayerRead(buddy.id).beliefs.loyalty < 20) continue;
       const traits = this.social.getTraits(buddy.id);
       if (rollSeeded100(`medask:${buddy.id}:${day}`) >= 8 + traits.warmth * 0.08) continue;
       const others = buddies.filter((o) => o.id !== buddy.id);
@@ -808,6 +814,8 @@ export class SimulationEngine {
       this.world.setFlag(apologizeKey, false);
       this.economy.rechargeSocialBattery(BATTERY_APOLOGY_REWARD);
       this.social.applySocialAction(buddyId, 'apologize');
+      // Owning it reads loyal and kind.
+      this.social.observePlayerTrait(buddyId, { loyalty: 65, warmth: 60 }, day);
       return { ok: true };
     }
     const assessment = classifyPlayerTone(text);
@@ -815,6 +823,19 @@ export class SimulationEngine {
       return { ok: false, error: pickInnerVoice('blocked', `${buddyId}:${day}`) };
     }
     this.economy.spendSocialBattery(assessment.upfrontCost);
+    // Every line teaches the buddy something: tone first, brevity second.
+    if (assessment.tone === 'warm') {
+      this.social.observePlayerTrait(buddyId, { warmth: 80 }, day);
+    } else if (assessment.tone === 'cold') {
+      this.social.observePlayerTrait(buddyId, { warmth: 15 }, day);
+    } else if (assessment.boldness > 0) {
+      this.social.observePlayerTrait(buddyId, { spontaneity: 75, warmth: 70 }, day);
+    } else {
+      this.social.observePlayerTrait(buddyId, {
+        shyness: text.length < 25 ? 75 : text.length > 120 ? 35 : 55,
+        warmth: 55,
+      }, day);
+    }
     if (assessment.boldness > 0) {
       const rels = this.social.getRelationships(buddyId);
       const reception = receptionForBoldAct({
@@ -927,6 +948,8 @@ export class SimulationEngine {
           kind: 'fact',
           day: safeDay,
         });
+        // Cancelling reads flaky and a little disloyal.
+        this.social.observePlayerTrait(buddyId, { discipline: 35, loyalty: 45 }, safeDay);
         this.telemetry.logEvent('social', 'appointment_cancelled', this.clock.getTotalMinutes(), { buddyId, appointmentId: target.id });
         return null;
       }
@@ -1457,6 +1480,8 @@ export class SimulationEngine {
           const buddyId = maya.id;
           this.social.applySocialAction(buddyId, 'remembered_detail');
           this.social.addCoreMemory(buddyId, { text: `Ran into Maya working the diner, Day ${day}.`, kind: 'shared_moment', day });
+          // Showing up in person reads spontaneous.
+          this.social.observePlayerTrait(buddyId, { spontaneity: 70 }, day);
           this.social.sendMessage(buddyId, buddyId, 'player', pickOutingMayaLine(`${outingId}:${day}`), this.clock.getTotalMinutes(), false, ['outing', 'diner']);
           this.telemetry.logEvent('social', 'outing_encounter', minutes, { buddyId, outing: outingId });
           this.notifySubscribers();
@@ -1473,6 +1498,8 @@ export class SimulationEngine {
           const buddyId = nora.id;
           this.social.applySocialAction(buddyId, 'intellectual_curiosity');
           this.social.addCoreMemory(buddyId, { text: `Walked the canal with Nora, Day ${day}${raining ? ' in the rain' : ''}.`, kind: 'shared_moment', day });
+          // Showing up in person reads spontaneous.
+          this.social.observePlayerTrait(buddyId, { spontaneity: 70 }, day);
           this.social.sendMessage(buddyId, buddyId, 'player', pickOutingNoraLine(`${outingId}:${day}`), this.clock.getTotalMinutes(), false, ['outing', 'canal']);
           this.telemetry.logEvent('social', 'outing_encounter', minutes, { buddyId, outing: outingId });
           this.notifySubscribers();

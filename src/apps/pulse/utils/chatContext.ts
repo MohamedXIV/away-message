@@ -55,6 +55,7 @@ export interface ChatEngine {
     buildBondContext?(id: string): string;
     buildRomanceContext?(id: string): string;
     getAgenda?(id: string, day?: number): Array<{ kind: string; label: string; day: number }>;
+    buildPlayerReadContext?(id: string): string;
   };
   dispatchAction(action: { type: string; buddyId?: string; socialAction?: string; [key: string]: any }): unknown;
   handleMeetupChat?(buddyId: string, text: string, day: number): void;
@@ -276,6 +277,7 @@ export function buildDmChatContext(input: DmContextInput): DmChatContext {
   let romanceContext = '';
   let plansLine = '';
   let receptionHint = '';
+  let playerReadLine = '';
   let photoRecallHint = '';
   let weatherLine = '';
   try {
@@ -291,6 +293,8 @@ export function buildDmChatContext(input: DmContextInput): DmChatContext {
     romanceContext = engine.social.buildRomanceContext?.(buddyId) ?? '';
     // Bold-act reception: the rules judged the player's line at send time.
     receptionHint = engine.getReceptionHint?.(buddyId, currentDay) ?? '';
+    // Their read of the player (qualitative, rules-built — never numbers).
+    playerReadLine = engine.social.buildPlayerReadContext?.(buddyId) ?? '';
     try {
       const agenda = engine.social.getAgenda?.(buddyId, currentDay) ?? [];
       if (agenda.length > 0) {
@@ -302,7 +306,7 @@ export function buildDmChatContext(input: DmContextInput): DmChatContext {
     }
   } catch { /* prompt enrichment is best-effort */ }
   const sceneSuffix = input.sceneContext ? ` | Scene: ${input.sceneContext}` : '';
-  const relationshipSummary = `${relationship ? JSON.stringify(relationship) : 'new friendship'} | Stage: ${relationshipStage} | DailyMood: ${dailyMood} | Mood: ${mood} | Availability: ${availability} | Activity: ${activity} | ${weatherLine} | ${memoryContext} | ${longTermContext}${affinityContext ? ` | ${affinityContext}` : ''}${bondContext ? ` | ${bondContext}` : ''}${romanceContext ? ` | ${romanceContext}` : ''}${plansLine ? ` | ${plansLine}` : ''}${receptionHint ? ` | Reception: ${receptionHint}` : ''}${photoRecallHint}${bodyHint ? ` | ${bodyHint}` : ''}${sceneSuffix} | Typing: ${style.typing.wpm} wpm, ${style.typing.pauseStyle}`;
+  const relationshipSummary = `${relationship ? JSON.stringify(relationship) : 'new friendship'} | Stage: ${relationshipStage} | DailyMood: ${dailyMood} | Mood: ${mood} | Availability: ${availability} | Activity: ${activity} | ${weatherLine} | ${memoryContext} | ${longTermContext}${affinityContext ? ` | ${affinityContext}` : ''}${bondContext ? ` | ${bondContext}` : ''}${romanceContext ? ` | ${romanceContext}` : ''}${plansLine ? ` | ${plansLine}` : ''}${receptionHint ? ` | Reception: ${receptionHint}` : ''}${playerReadLine ? ` | ${playerReadLine}` : ''}${photoRecallHint}${bodyHint ? ` | ${bodyHint}` : ''}${sceneSuffix} | Typing: ${style.typing.wpm} wpm, ${style.typing.pauseStyle}`;
 
   let worldKnowledge = '';
   let currentGameDay = currentDay;

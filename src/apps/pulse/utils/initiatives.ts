@@ -32,6 +32,8 @@ export interface InitiativeEngine {
     // Character Lives: fixed temperament for the nerve gate + shy buzz.
     // Absent on legacy stubs → the gate is skipped (legacy behavior preserved).
     getTraits?(id: string): { shyness: number; warmth: number; spontaneity: number } | undefined;
+    // A buddy's read of the player: cold-read players get fewer voluntary check-ins.
+    getPlayerRead?(id: string): { beliefs: { warmth: number }; certainty: number } | undefined;
   };
   world?: {
     getTriggeredEvents?: () => Array<{ title?: string; triggerDay?: number }>;
@@ -142,9 +144,13 @@ export function planInitiatives(
       const seed = `${buddy.id}:${day}:${opts.salt}`;
       // Character Lives nerve gate: temperament decides who actually dares to
       // start a voluntary chat. Duty (promises/events) bypasses it entirely.
+      // Cold-read players are checked on less (their nerve × warmth factor).
       const traits = engine.social.getTraits?.(buddy.id);
       if (traits && (kind === 'checkin' || kind === 'gossip' || kind === 'cafe_invite')) {
-        if (rollSeeded100(`${buddy.id}:${day}:nerve:${opts.salt}`) >= nerveForInitiative(stage, traits)) continue;
+        const read = engine.social.getPlayerRead?.(buddy.id);
+        const warmth = read ? Math.max(0, Math.min(100, read.beliefs.warmth)) : 50;
+        const warmthFactor = read ? 0.6 + 0.4 * (warmth / 100) : 1;
+        if (rollSeeded100(`${buddy.id}:${day}:nerve:${opts.salt}`) >= nerveForInitiative(stage, traits) * warmthFactor) continue;
       }
       let text = kind === 'gossip' && gossipName && gossipStatus
         ? pickGossipLine(arch, seed, gossipName, gossipStatus)
