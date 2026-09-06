@@ -9,7 +9,10 @@ import {
   listSlots,
   deleteSlot,
   mostRecentSlot,
+  checkSaveCompatibility,
+  SAVE_FORMAT_VERSION,
 } from '../../src/persistence/slots';
+import { APP_VERSION } from '../../src/version';
 import { setCurrentPulseSlotId } from '../../src/apps/pulse/persistence';
 
 describe('P9 save slots (Dexie documents + Pulse coherence)', () => {
@@ -54,8 +57,7 @@ describe('P9 save slots (Dexie documents + Pulse coherence)', () => {
     expect(['slot_2', 'autosave']).toContain(recent!.id);
   });
 
-  it('restores the saved Pulse moment into its own slot', async () => {
-    const store: Record<string, string> = {};
+  it('restores the saved Pulse moment into its own slot', async () => {    const store: Record<string, string> = {};
     vi.stubGlobal('window', {
       localStorage: {
         getItem: (key: string) => (key in store ? store[key]! : null),
@@ -74,5 +76,41 @@ describe('P9 save slots (Dexie documents + Pulse coherence)', () => {
     delete store[getPulseSlotStorageKey('slot_1')];
     await restoreSlotPulse('slot_1');
     expect(store[getPulseSlotStorageKey('slot_1')]).toContain('pulse-moment-1');
+  });
+});
+
+describe('P9 save compatibility matrix', () => {
+  it('stamps new saves with the current format + app version', async () => {
+    const sim = new SimulationEngine();
+    await saveSlot(sim, 'slot_2');
+    const record = await db.saves.get('slot_2');
+    expect(record?.version).toBe(SAVE_FORMAT_VERSION);
+    expect(record?.appVersion).toBe(APP_VERSION);
+    expect(checkSaveCompatibility(record!).status).toBe('ok');
+    await db.saves.delete('slot_2');
+  });
+
+  it('accepts older supported formats, refuses newer and legacy', () => {
+    expect(checkSaveCompatibility(undefined).status).toBe('refused');
+    expect(checkSaveCompatibility(null).status).toBe('refused');
+    // v2 document saves share the v3 shape → loadable
+    expect(checkSaveCompatibility({ version: 2, snapshot: {} } as any).status).toBe('ok');
+    // Newer-than-current → honest refusal, never silent corruption
+    const newer = checkSaveCompatibility({ version: SAVE_FORMAT_VERSION + 1, snapshot: {} } as any);
+    expect(newer.status).toBe('refused');
+    // Ancient multi-table rows without a snapshot → legacy refusal
+    expect(checkSaveCompatibility({ version: 1 } as any).status).toBe('legacy');
+    expect(checkSaveCompatibility({ version: 3 } as any).status).toBe('legacy');
+  });
+
+  it('loadSlotSnapshot returns null for incompatible saves', async () => {
+    await db.saves.put({
+      id: 'slot_future', name: 'future', version: SAVE_FORMAT_VERSION + 5,
+      createdAt: 1, updatedAt: 2, day: 9, totalMinutes: 3,
+      clockState: {}, playerState: {}, hardwareState: {}, narrativeFlags: {},
+      snapshot: { time: { day: 9 } },
+    } as any);
+    expect(await loadSlotSnapshot('slot_future')).toBeNull();
+    await db.saves.delete('slot_future');
   });
 });

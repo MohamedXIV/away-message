@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { SAVE_SLOTS, AUTOSAVE_ID, listSlots, deleteSlot, mostRecentSlot, requestBoot, type SlotSummary } from '../persistence/slots';
+import { SAVE_SLOTS, AUTOSAVE_ID, listSlots, deleteSlot, mostRecentSlot, requestBoot, slotCompatibility, type SlotSummary, type SaveCompatibility } from '../persistence/slots';
 import { loadAISettings, saveAISettings } from '../ai/settings';
 import type { AIProviderId } from '../ai/types';
 import { soundManager } from '../audio/SoundManager';
@@ -44,6 +44,7 @@ interface MainMenuProps {
  */
 export const MainMenu: React.FC<MainMenuProps> = ({ onBoot }) => {
   const [slots, setSlots] = useState<SlotSummary[]>([]);
+  const [compat, setCompat] = useState<Record<string, SaveCompatibility>>({});
   const [loaded, setLoaded] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
   const [showKey, setShowKey] = useState(false);
@@ -54,8 +55,17 @@ export const MainMenu: React.FC<MainMenuProps> = ({ onBoot }) => {
 
   useEffect(() => {
     restoreBackupKey();
-    void listSlots().then((rows) => {
+    void listSlots().then(async (rows) => {
       setSlots(rows);
+      const verdicts: Record<string, SaveCompatibility> = {};
+      for (const row of rows) {
+        try {
+          verdicts[row.id] = await slotCompatibility(row.id);
+        } catch {
+          verdicts[row.id] = { status: 'refused', reason: 'Could not read slot.' };
+        }
+      }
+      setCompat(verdicts);
       setLoaded(true);
     }).catch(() => setLoaded(true));
   }, []);
@@ -69,8 +79,14 @@ export const MainMenu: React.FC<MainMenuProps> = ({ onBoot }) => {
   const handleContinue = async () => {
     soundManager.play('click');
     const recent = await mostRecentSlot();
-    if (recent) requestBoot({ kind: 'slot', slotId: recent.id });
-    else requestBoot({ kind: 'new', slotId: 'slot_1' });
+    if (recent) {
+      const verdict = await slotCompatibility(recent.id).catch(() => ({ status: 'refused', reason: '' }) as SaveCompatibility);
+      if (verdict.status === 'ok') {
+        requestBoot({ kind: 'slot', slotId: recent.id });
+        return;
+      }
+    }
+    requestBoot({ kind: 'new', slotId: 'slot_1' });
   };
 
   const handleNew = () => {
@@ -153,22 +169,29 @@ export const MainMenu: React.FC<MainMenuProps> = ({ onBoot }) => {
           <div className="pt-1 space-y-1.5">
             {rows.map((row) => {
               const summary = byId.get(row.id);
+              const verdict = compat[row.id];
+              const loadable = summary?.hasSnapshot && (!verdict || verdict.status === 'ok');
               return (
-                <div key={row.id} className="flex items-center justify-between bg-slate-800/80 border border-slate-700 rounded px-2.5 py-1.5">
-                  <div className="min-w-0">
-                    <div className="text-xs font-bold text-slate-200">{row.label}</div>
-                    <div className="text-[10px] font-mono text-slate-400 truncate">
-                      {summary?.hasSnapshot ? `${summary.name} • ${formatDate(summary.updatedAt)}` : 'empty'}
-                    </div>
+              <div key={row.id} className="flex items-center justify-between bg-slate-800/80 border border-slate-700 rounded px-2.5 py-1.5">
+                <div className="min-w-0">
+                  <div className="text-xs font-bold text-slate-200">{row.label}</div>
+                  <div className="text-[10px] font-mono text-slate-400 truncate">
+                    {summary?.hasSnapshot ? `${summary.name} • ${formatDate(summary.updatedAt)}` : 'empty'}
                   </div>
-                  <div className="flex gap-1.5 shrink-0">
-                    <button
-                      disabled={!summary?.hasSnapshot}
-                      onClick={() => handleLoad(row.id)}
-                      className="px-2.5 py-1 bg-slate-200 hover:bg-white disabled:opacity-40 text-slate-950 text-[11px] font-bold rounded cursor-pointer"
-                    >
-                      Load
-                    </button>
+                  {verdict && verdict.status !== 'ok' && summary?.hasSnapshot && (
+                    <div className="text-[10px] font-bold text-red-400" title={verdict.reason}>
+                      ⚠ {verdict.status === 'legacy' ? 'too old to load' : 'incompatible version'}
+                    </div>
+                  )}
+                </div>
+                <div className="flex gap-1.5 shrink-0">
+                  <button
+                    disabled={!loadable}
+                    onClick={() => handleLoad(row.id)}
+                    className="px-2.5 py-1 bg-slate-200 hover:bg-white disabled:opacity-40 text-slate-950 text-[11px] font-bold rounded cursor-pointer"
+                  >
+                    Load
+                  </button>
                     <button
                       disabled={!summary}
                       onClick={() => void handleDelete(row.id)}

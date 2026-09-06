@@ -2,6 +2,7 @@ import { db } from './db';
 import type { SaveSlotRecord } from './schema';
 import type { SimulationState } from '../engine/types';
 import type { SimulationEngine } from '../engine/SimulationEngine';
+import { APP_VERSION } from '../version';
 import {
   getCurrentPulseSlotId,
   setCurrentPulseSlotId,
@@ -11,6 +12,49 @@ import {
 // P9 save slots: one Dexie document per slot = full engine snapshot +
 // the Pulse UI moment it was saved with. Slots double as Pulse timelines
 // (slot_1..3); autosave rides along without touching Pulse selection.
+//
+// VERSIONING (two independent numbers — do not conflate):
+// - APP_VERSION (package.json SemVer): which game build wrote the save. Diagnostics only.
+// - Save-FORMAT version (record.version): shape of the document itself.
+//   CURRENT = 3, MIN_SUPPORTED = 2 (v2 docs share the v3 shape, snapshot included).
+//   Older multi-table saves (no snapshot) predate this system and are refused
+//   with a clear message. Newer-than-current is ALWAYS refused (silent corruption
+//   is worse than an honest error).
+// - NOTE: schema.ts MIGRATIONS[] governs legacy Dexie TABLE rows, not documents.
+//   Breaking document changes: bump SAVE_FORMAT_VERSION here + add a migration
+//   path in checkSaveCompatibility + one CHANGELOG line. No exceptions.
+
+export const SAVE_FORMAT_VERSION = 3;
+export const SAVE_FORMAT_MIN_SUPPORTED = 2;
+
+export type SaveCompatibility =
+  | { status: 'ok' }
+  | { status: 'legacy'; reason: string }
+  | { status: 'refused'; reason: string };
+
+export function checkSaveCompatibility(record: SaveSlotRecord | undefined | null): SaveCompatibility {
+  if (!record) return { status: 'refused', reason: 'No save data found.' };
+  if (!(record as SaveSlotRecord).snapshot || typeof (record as SaveSlotRecord).snapshot !== 'object') {
+    return {
+      status: 'legacy',
+      reason: 'This save predates the snapshot format and cannot be loaded by this version.',
+    };
+  }
+  const version = (record as SaveSlotRecord).version ?? 0;
+  if (version > SAVE_FORMAT_VERSION) {
+    return {
+      status: 'refused',
+      reason: `Saved by a newer game (format v${version}, this game reads up to v${SAVE_FORMAT_VERSION}). Update the game to load it.`,
+    };
+  }
+  if (version < SAVE_FORMAT_MIN_SUPPORTED) {
+    return {
+      status: 'refused',
+      reason: `Save format v${version} is no longer supported (minimum v${SAVE_FORMAT_MIN_SUPPORTED}).`,
+    };
+  }
+  return { status: 'ok' };
+}
 
 export const SAVE_SLOTS = ['slot_1', 'slot_2', 'slot_3'] as const;
 export const AUTOSAVE_ID = 'autosave';
@@ -75,7 +119,8 @@ export async function saveSlot(
   const record: SaveSlotRecord = {
     id: slotId,
     name: saveName || `Day ${snapshot.time.day} • ${snapshot.time.timeOfDay}`,
-    version: 2,
+    version: SAVE_FORMAT_VERSION,
+    appVersion: APP_VERSION,
     createdAt: existing?.createdAt ?? now,
     updatedAt: now,
     day: snapshot.time.day,
@@ -119,15 +164,26 @@ export async function saveSlot(
   return toSummary(record);
 }
 
-/** Load a slot's engine snapshot (null when missing/legacy). */
+/** Load a slot's engine snapshot (null when missing or incompatible). */
 export async function loadSlotSnapshot(slotId: string): Promise<SimulationState | null> {
   try {
     const record = await db.saves.get(slotId);
-    const snapshot = (record as SaveSlotRecord | undefined)?.snapshot;
-    if (!record || !snapshot || typeof snapshot !== 'object') return null;
+    if (checkSaveCompatibility(record).status !== 'ok') return null;
+    const snapshot = (record as SaveSlotRecord).snapshot;
+    if (!snapshot || typeof snapshot !== 'object') return null;
     return snapshot as SimulationState;
   } catch {
     return null;
+  }
+}
+
+/** Compatibility verdict for UI badges (menu shows refused/legacy explicitly). */
+export async function slotCompatibility(slotId: string): Promise<SaveCompatibility> {
+  try {
+    const record = await db.saves.get(slotId);
+    return checkSaveCompatibility(record);
+  } catch {
+    return { status: 'refused', reason: 'Storage unavailable.' };
   }
 }
 
