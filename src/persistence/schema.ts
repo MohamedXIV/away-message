@@ -9,7 +9,8 @@ import type { SimulationState } from '../engine/types';
 export interface SaveSlotRecord {
   id: string;                    // Primary key: 'slot_1', 'slot_2', 'autosave'
   name: string;                  // User-visible label: "Day 3 - Evening in Room"
-  version: number;               // Schema version (e.g. 1)
+  version: number;               // Save-FORMAT version (see SAVE_FORMAT_VERSION in slots.ts), NOT the game version
+  appVersion?: string;           // Game version that wrote this save (SemVer, for diagnostics)
   createdAt: number;             // Epoch ms
   updatedAt: number;             // Epoch ms
   day: number;                   // Game day (1..14)
@@ -180,6 +181,7 @@ export const SaveSlotSchema = z.object({
   id: z.string(),
   name: z.string(),
   version: z.number().int().min(1),
+  appVersion: z.string().optional(),
   createdAt: z.number(),
   updatedAt: z.number(),
   day: z.number().int().min(1),

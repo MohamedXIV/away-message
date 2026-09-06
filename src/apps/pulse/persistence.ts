@@ -2,6 +2,7 @@ import type { PulseRoomMessage } from './components/PulseRoomWindow';
 import type { PulseActivityEntry } from './types';
 import { PULSE_GROUPS, PULSE_ROOMS } from './data/pulseRooms';
 import { db } from '../../persistence/db';
+import { APP_VERSION } from '../../version';
 
 const STORAGE_KEY = 'away_message_pulse_state_v1';
 const SLOT_STORAGE_KEY = 'pulse_current_slot';
@@ -196,6 +197,8 @@ export interface PulseSharedLink {
 
 export interface PulsePersistedState {
   version: 1;
+  /** Game build that wrote this state (diagnostics; localStorage stays lenient — never refuses). */
+  savedByApp?: string;
   joinedRoomIds: string[];
   roomMessages: Record<string, PulseRoomMessage[]>;
   roomTopics: Record<string, string>;
@@ -396,7 +399,7 @@ export function loadPulseState(slotId?: string): PulsePersistedState {
         if (typeof value === 'number' && Number.isFinite(value)) initiatedToday[buddyId] = Math.max(1, Math.floor(value));
       });
     }
-    return { version: 1, joinedRoomIds, roomMessages, roomTopics, roomReadThrough, activityBuckets, activityFeed, awayHistory, lastSeenTotalMinutes, conversationMemory, conversationSummaries, recentReplies, buddyFacts, npcMood, npcActivity, friendRequestStatus, blockedBuddyIds, groupLabels, groupOrder, sharedLinks, discoveredHosts: mergedDiscoveredHosts, pulseSkin, initiatedToday };
+    return { version: 1, joinedRoomIds, roomMessages, roomTopics, roomReadThrough, activityBuckets, activityFeed, awayHistory, lastSeenTotalMinutes, conversationMemory, conversationSummaries, recentReplies, buddyFacts, npcMood, npcActivity, friendRequestStatus, blockedBuddyIds, groupLabels, groupOrder, sharedLinks, discoveredHosts: mergedDiscoveredHosts, pulseSkin, initiatedToday, savedByApp: typeof (parsed as Record<string, unknown>).savedByApp === 'string' ? (parsed as Record<string, unknown>).savedByApp as string : undefined };
   } catch {
     return fallback;
   }
@@ -410,6 +413,7 @@ export function savePulseState(state: PulsePersistedState, slotId?: string): voi
     const payload = JSON.stringify({
       ...state,
       version: 1,
+      savedByApp: APP_VERSION,
       activityFeed: state.activityFeed.slice(-80),
       awayHistory: Object.fromEntries(Object.entries(state.awayHistory).map(([buddyId, entries]) => [buddyId, entries.slice(-20)])),
       conversationMemory: Object.fromEntries(Object.entries(state.conversationMemory).map(([buddyId, items]) => [buddyId, items.slice(-6)])),

@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { useSimulationStore } from '../../store/useSimulationStore';
-import { SAVE_SLOTS, AUTOSAVE_ID, listSlots, saveSlot, deleteSlot, requestBoot, type SlotSummary } from '../../persistence/slots';
+import { SAVE_SLOTS, AUTOSAVE_ID, listSlots, saveSlot, deleteSlot, requestBoot, slotCompatibility, type SlotSummary } from '../../persistence/slots';
 import { soundManager } from '../../audio/SoundManager';
 
 function formatDate(updatedAt: number): string {
@@ -51,7 +51,12 @@ export const SaveLoadApp: React.FC = () => {
     }
   };
 
-  const handleLoad = (slotId: string) => {
+  const handleLoad = async (slotId: string) => {
+    const verdict = await slotCompatibility(slotId).catch(() => ({ status: 'refused', reason: 'Could not read slot.' }) as const);
+    if (verdict.status !== 'ok') {
+      flash(verdict.status === 'legacy' ? 'That save is too old to load.' : 'That save needs a newer game version.');
+      return;
+    }
     soundManager.play('click');
     requestBoot({ kind: 'slot', slotId });
   };
