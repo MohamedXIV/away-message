@@ -1,4 +1,5 @@
 import type { BuddyPresence } from '../../../engine/types';
+import { CORE_BY_ID, CORE_IDS } from '../../../engine/coreBuddies';
 
 export interface NpcStyleProfile {
   buddyId: string;
@@ -16,11 +17,14 @@ export interface NpcStyleProfile {
   summaryHint: string;
 }
 
+const coreIdentity = (id: string): { buddyId: string; displayName: string; handle: string } => {
+  const buddy = CORE_BY_ID[id];
+  return { buddyId: id, displayName: buddy?.displayName ?? id, handle: buddy?.handle ?? id };
+};
+
 export const NPC_STYLE_PROFILES: Record<string, NpcStyleProfile> = {
-  maya: {
-    buddyId: 'maya',
-    displayName: 'Maya',
-    handle: 'starlight_maya',
+  [CORE_IDS.MAYA]: {
+    ...coreIdentity(CORE_IDS.MAYA),
     persona: 'Quiet, observant, creative, and a little guarded. Uses lowercase, pauses, music references, and gentle honesty. She warms up slowly and remembers small details the player shares.',
     vocabulary: ['hey...', 'umm', 'maybe', 'i think', 'soft', 'quiet', 'music', 'rain', 'coffee', '~'],
     punctuation: 'lowercase, uses "..." and "~" softly, rarely caps, occasional :)',
@@ -28,10 +32,8 @@ export const NPC_STYLE_PROFILES: Record<string, NpcStyleProfile> = {
     typing: { wpm: 55, variance: 18, pauseStyle: 'hesitant with 300-800ms mid-sentence pauses' },
     summaryHint: 'Maya speaks lowercase, hesitant, warm but reserved.',
   },
-  ryan: {
-    buddyId: 'ryan',
-    displayName: 'Ryan',
-    handle: 'ryan_foodcart',
+  [CORE_IDS.RYAN]: {
+    ...coreIdentity(CORE_IDS.RYAN),
     persona: 'Warm, impulsive food-cart coworker. Uses casual slang, jokes, and short messages. He avoids heavy emotional talks unless trust is high. Fast, direct, friendly, uses lol and yo.',
     vocabulary: ['yo', 'dude', 'lol', 'haha', 'brb', 'afk', 'yo', 'man', 'tacos', 'cart'],
     punctuation: 'short bursts, uses ! and lol, abbreviations, caps for emphasis occasionally',
@@ -39,10 +41,8 @@ export const NPC_STYLE_PROFILES: Record<string, NpcStyleProfile> = {
     typing: { wpm: 85, variance: 10, pauseStyle: 'bursty, quick send' },
     summaryHint: 'Ryan is fast, slangy, direct, playful.',
   },
-  nora: {
-    buddyId: 'nora',
-    displayName: 'Nora',
-    handle: 'NightOwl87',
+  [CORE_IDS.NORA]: {
+    ...coreIdentity(CORE_IDS.NORA),
     persona: 'Night-owl archivist with dry humor. Curious about strange details, concise, slightly cryptic, but not supernatural. She notices patterns others miss and speaks in precise, slightly poetic fragments.',
     vocabulary: ['quiet', 'indexing', 'logs', 'hum', 'canal', 'night', 'strange', 'observed', 'perhaps'],
     punctuation: 'concise, precise, uses . and —, rarely emoticons, uses lowercase for style sometimes',
@@ -50,10 +50,8 @@ export const NPC_STYLE_PROFILES: Record<string, NpcStyleProfile> = {
     typing: { wpm: 88, variance: 12, pauseStyle: 'steady, deliberate' },
     summaryHint: 'Nora is concise, dry, slightly cryptic, observant.',
   },
-  henderson: {
-    buddyId: 'henderson',
-    displayName: 'Mr. Henderson',
-    handle: 'motel_office',
+  [CORE_IDS.HENDERSON]: {
+    ...coreIdentity(CORE_IDS.HENDERSON),
     persona: 'Professional motel manager. Formal, practical, and terse. He cares about rent, schedules, and keeping the property calm. Polite but never casual, uses proper capitalization and punctuation.',
     vocabulary: ['Please', 'Regarding', 'Office', 'Account', 'Convenient', 'Regards', 'Notice', 'Policy'],
     punctuation: 'formal, proper capitalization, periods, no slang, no emoticons',
@@ -111,10 +109,10 @@ export function getNpcAvailabilityLabel(presence: BuddyPresence | undefined, gam
 export function getNpcActivityLabel(presence: BuddyPresence | undefined, buddyId: string, gameHour: number): string {
   if (presence?.awayMessage) return presence.awayMessage;
   if (presence?.status === 'online') {
-    if (buddyId === 'maya' && gameHour >= 18) return 'online — listening to rain / myplace/mayablue';
-    if (buddyId === 'ryan' && gameHour >= 18) return 'online — gaming / chilling';
-    if (buddyId === 'nora' && gameHour >= 22) return 'online — indexing logs / nightboard';
-    if (buddyId === 'henderson' && gameHour >= 8 && gameHour <= 18) return 'online — motel front desk open';
+    if (buddyId === CORE_IDS.MAYA && gameHour >= 18) return 'online — listening to rain / myplace/mayablue';
+    if (buddyId === CORE_IDS.RYAN && gameHour >= 18) return 'online — gaming / chilling';
+    if (buddyId === CORE_IDS.NORA && gameHour >= 22) return 'online — indexing logs / nightboard';
+    if (buddyId === CORE_IDS.HENDERSON && gameHour >= 8 && gameHour <= 18) return 'online — motel front desk open';
     return 'online and checking messages';
   }
   if (presence?.status === 'away') return presence.awayMessage || 'stepped away briefly';

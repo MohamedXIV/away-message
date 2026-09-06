@@ -14,6 +14,7 @@ import {
   pickMailWelcome,
   resolveArchetype,
 } from './characterTemplates';
+import { CORE_IDS } from './coreBuddies';
 import type { CharacterArchetype } from './types';
 
 function hashStr(value: string): number {
@@ -299,7 +300,7 @@ export function buildRentMailHistory(flags: Record<string, boolean | number | st
     const day = kind === 'due' ? dueDay : dueDay + 1;
     out.push({
       key: `rentmail_${kind}_${dueDay}`,
-      buddyId: 'henderson',
+      buddyId: CORE_IDS.HENDERSON,
       sender: 'Mr. Henderson',
       senderEmail: 'desk@starlitemotel.local',
       subject: kind === 'due' ? `Room 104 rent due — $${amount.toFixed(2)}` : 'Second notice — Room 104',
@@ -345,11 +346,11 @@ export function buildWeeklyWeatherThread(
   const severe = lead.weather.condition;
   let author = eligible[hashStr(`wx${week}:a`) % eligible.length]!;
   const lover = severe === 'heat'
-    ? eligible.find((b) => b.id === 'ryan')
+    ? eligible.find((b) => b.id === CORE_IDS.RYAN)
     : severe === 'fog'
-      ? eligible.find((b) => b.id === 'nora')
+      ? eligible.find((b) => b.id === CORE_IDS.NORA)
       : (severe === 'rain' || severe === 'drizzle' || severe === 'storm')
-        ? eligible.find((b) => b.id === 'maya')
+        ? eligible.find((b) => b.id === CORE_IDS.MAYA)
         : undefined;
   if (lover) author = lover;
   const key = `npcweather_${week}`;

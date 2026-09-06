@@ -7,6 +7,7 @@ import {
   BeatTriggerEvaluationResult,
 } from './types';
 import { parseNarrativeTag } from './tagParser';
+import { CORE_IDS } from '../engine/coreBuddies';
 
 export class InkAdapter {
   public readonly engine: SimulationEngine;
@@ -264,7 +265,7 @@ export class InkAdapter {
           type: 'NARRATIVE_SCHEDULE_APPOINTMENT',
           appointment: {
             id: tag.appointmentId,
-            characterId: tag.characterId || 'maya',
+            characterId: tag.characterId || CORE_IDS.MAYA,
             locationId: tag.location,
             targetDay: tag.day,
             startMinute: tag.startMinute,

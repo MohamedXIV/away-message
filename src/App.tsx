@@ -1,8 +1,7 @@
 // src/App.tsx
 
 import React, { useEffect, useState } from 'react';
-import { DesktopShell } from './desktop/DesktopShell';
-import { RoomScene } from './world/RoomScene';
+import { DesktopShell } from './desktop/DesktopShell';import { RoomScene } from './world/RoomScene';
 import { CafeScene } from './world/CafeScene';
 import { Day14ResolutionModal } from './world/Day14ResolutionModal';
 import {
@@ -15,6 +14,24 @@ import { useAudioStore } from './store/useAudioStore';
 import { SimulationEngine } from './engine/SimulationEngine';
 import { MainMenu } from './menu/MainMenu';
 import { consumeBootRequest, loadSlotSnapshot, restoreSlotPulse, saveSlot, AUTOSAVE_ID } from './persistence/slots';
+
+// Dev-only content studio (TinyBase Inspector): lazy + query-gated so the
+// editor never enters the production bundle. Open with ?studio in dev.
+const ContentInspectorPane = React.lazy(() =>
+  import('./tools/ContentInspector').then((m) => ({ default: m.ContentInspector }))
+);
+function useContentStudio(): boolean {
+  const [enabled, setEnabled] = useState(false);
+  useEffect(() => {
+    try {
+      const env = (import.meta as unknown as { env: Record<string, string | boolean | undefined> }).env;
+      if (env.DEV && new URLSearchParams(window.location.search).has('studio')) {
+        setEnabled(true);
+      }
+    } catch { /* studio flag is best-effort */ }
+  }, []);
+  return enabled;
+}
 
 export const App: React.FC = () => {
   // Start the continuous simulation clock animation loop
@@ -36,6 +53,7 @@ export const App: React.FC = () => {
   const [phase, setPhase] = useState<'menu' | 'loading' | 'game'>('menu');
   const [bootError, setBootError] = useState<string | null>(null);
   const [savedFlash, setSavedFlash] = useState(false);
+  const contentStudio = useContentStudio();
 
   useEffect(() => {
     const request = consumeBootRequest();
@@ -169,6 +187,13 @@ export const App: React.FC = () => {
             <div className="absolute bottom-10 right-3 z-50 border border-[#38516e] bg-[#e8f5e9] px-3 py-1.5 text-[11px] font-bold text-green-900 shadow">
               ✓ Saved
             </div>
+          )}
+
+          {/* Dev content studio overlay (never in production builds) */}
+          {contentStudio && (
+            <React.Suspense fallback={null}>
+              <ContentInspectorPane />
+            </React.Suspense>
           )}
         </>
       )}

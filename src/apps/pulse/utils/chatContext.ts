@@ -1,5 +1,6 @@
 import { getNpcStyle, getNpcMoodLabel, getNpcAvailabilityLabel, getNpcActivityLabel } from '../data/npcStyles';
 import { CHARACTER_ARCHETYPES } from '../../../engine/characterTemplates';
+import { CORE_BY_ID } from '../../../engine/coreBuddies';
 import type { BuddyCharacter, BuddyPresence, RelationshipDimensions } from '../../../engine/types';
 import { buildBodyHint } from '../../../engine/BodyDirector';
 import { weatherLineForDay } from '../../../engine/WeatherEngine';
@@ -82,13 +83,9 @@ export interface PulseMemorySlices {
 }
 
 export function buddyPersonaLine(buddyId: string, buddy?: BuddyCharacter | null): string {
-  const personas: Record<string, string> = {
-    ryan: 'Warm, impulsive food-cart coworker. Uses casual slang, jokes, and short messages. He avoids heavy emotional talks unless trust is high.',
-    maya: 'Quiet, observant, creative, and a little guarded. Uses lowercase, pauses, music references, and gentle honesty. She warms up slowly.',
-    nora: 'Night-owl archivist with dry humor. Curious about strange details, concise, slightly cryptic, but not supernatural.',
-    henderson: 'Professional motel manager. Formal, practical, and terse. He cares about rent, schedules, and keeping the property calm.',
-  };
-  if (personas[buddyId]) return personas[buddyId]!;
+  // Core voices come from the registry (content-owned, never hand-copied here).
+  const core = CORE_BY_ID[buddyId];
+  if (core) return core.persona;
   const archetype = buddy?.archetype && CHARACTER_ARCHETYPES[buddy.archetype] ? buddy.archetype : undefined;
   if (archetype) {
     const template = CHARACTER_ARCHETYPES[archetype];

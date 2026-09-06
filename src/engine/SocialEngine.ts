@@ -1,6 +1,5 @@
 import {
   AgendaItem,
-  BuddyPresenceStatus,
   RelationshipDimensions,
   BuddyCharacter,
   BuddyLifecycleStatus,
@@ -19,11 +18,11 @@ import {
   PromiseRecord,
   RelationshipStage,
   SocialEngineState,
-  ScheduleBlock,
 } from './types';
 import { EventBus } from './EventBus';
 import { getWeatherForDay, isWetWeather } from './WeatherEngine';
 import { validateCharacterId, isValidSchedule, isCoreBuddyId, traitsForBuddy, clampTraits, clampRelationships, resolveArchetype, rollSeeded100 } from './characterTemplates';
+import { CORE_BUDDIES, CORE_IDS, coreBuddyDef } from './coreBuddies';
 import { validatePersistedBuddy } from './CharacterEngine';
 
 // P3 long-term memory caps (keeps prompt injection bounded and saves small)
@@ -62,6 +61,18 @@ export function npcBondKey(rawFrom: string, rawTo: string): string {
   const to = normalizeBuddyId(rawTo);
   if (!from || !to || from === to) return '';
   return `${from}__${to}`;
+}
+
+// Canonical engine ids are short ('maya'); old saves/UI used handles.
+// Handle aliases derive from the registry; the map stays for legacy keys.
+// Declared before SEED_AFFINITIES: seed keys are computed through
+// affinityKey → normalizeBuddyId at module load (TDZ otherwise).
+export const BUDDY_ID_ALIASES: Record<string, string> = Object.fromEntries(
+  CORE_BUDDIES.map((b) => [b.handle, b.id])
+);
+
+export function normalizeBuddyId(id: string): string {
+  return BUDDY_ID_ALIASES[id] ?? id;
 }
 
 /** Neutral directed bond (strangers who never interacted). Never stored — read default. */
@@ -117,32 +128,28 @@ export const NPC_SOCIAL_ACTION_DELTAS: Record<string, Partial<NpcBondDims>> = {
   cold_shoulder: { annoyance: 5, comfort: -3, suspicion: 3, affection: -1 },
 };
 
-/** Hand-authored starting ties between the core 4 (everyone else starts at 0). */
-export const SEED_AFFINITIES: Record<string, number> = {
-  maya__ryan: 15,
-  henderson__maya: 10,
-  henderson__ryan: 10,
-  maya__nora: 5,
-  henderson__nora: 0,
-  nora__ryan: -5,
-};
+/**
+ * Hand-authored starting ties between the core 4 (everyone else starts at 0).
+ * Anchored on CORE_IDS so a Phase 2 rename re-keys automatically; values are
+ * the authored content. Keys stay alphabetically sorted (see affinityKey).
+ */
+const SEED_PAIRS: Array<[string, string, number]> = [
+  [CORE_IDS.MAYA, CORE_IDS.RYAN, 15],
+  [CORE_IDS.HENDERSON, CORE_IDS.MAYA, 10],
+  [CORE_IDS.HENDERSON, CORE_IDS.RYAN, 10],
+  [CORE_IDS.MAYA, CORE_IDS.NORA, 5],
+  [CORE_IDS.HENDERSON, CORE_IDS.NORA, 0],
+  [CORE_IDS.NORA, CORE_IDS.RYAN, -5],
+];
+
+export const SEED_AFFINITIES: Record<string, number> = Object.fromEntries(
+  SEED_PAIRS.map(([a, b, v]) => [affinityKey(a, b), v])
+);
 
 function hashText(value: string): number {
   let hash = 0;
   for (let index = 0; index < value.length; index += 1) hash = (hash * 31 + value.charCodeAt(index)) >>> 0;
   return hash;
-}
-
-// Canonical engine ids are short ('maya'); old saves/UI used handles. Normalize on load.
-export const BUDDY_ID_ALIASES: Record<string, string> = {
-  starlight_maya: 'maya',
-  ryan_foodcart: 'ryan',
-  NightOwl87: 'nora',
-  motel_office: 'henderson',
-};
-
-export function normalizeBuddyId(id: string): string {
-  return BUDDY_ID_ALIASES[id] ?? id;
 }
 
 export class SocialEngine {
@@ -538,116 +545,14 @@ export class SocialEngine {
     for (const [key, value] of Object.entries(SEED_AFFINITIES)) this.affinities.set(key, value);
   }
 
+  /**
+   * Core roster, sourced from the registry (content/store.json → generated).
+   * Byte-identical to the old hand-written defs — the registry IS those defs.
+   */
   private initializeCharacters(): void {
-    // 1. Ryan (Food Cart Coworker)
-    const ryanSchedule = this.generateStandardSchedule([
-      { start: 0, end: 420, status: 'offline', msg: 'asleep' },
-      { start: 420, end: 540, status: 'offline', msg: 'commute' },
-      { start: 540, end: 960, status: 'offline', msg: 'work @ cart' },
-      { start: 960, end: 1080, status: 'away', msg: 'afk grabbin tacos' },
-      { start: 1080, end: 1320, status: 'online', msg: 'gaming / chilling' },
-      { start: 1320, end: 1440, status: 'offline', msg: 'sleep is for the weak' },
-    ]);
-
-    this.buddies.set('ryan', {
-      id: 'ryan',
-      displayName: 'Ryan',
-      handle: 'ryan_foodcart',
-      schedule: ryanSchedule,
-      initialRelationships: { familiarity: 40, trust: 50, comfort: 50, respect: 40, annoyance: 0, affection: 0, attraction: 0, suspicion: 0, resentment: 0 },
-      traits: traitsForBuddy('ryan', 'coworker'),
-      typingSpeedWpm: 80,
-      archetype: 'coworker',
-      status: 'friend',
-      metVia: 'core',
-      isProcedural: false,
-      createdDay: 1,
-    });
-
-    // 2. Maya (Primary Arc)
-    const mayaSchedule = this.generateStandardSchedule([
-      { start: 0, end: 480, status: 'offline', msg: 'sleeping' },
-      { start: 480, end: 540, status: 'offline', msg: 'morning tea' },
-      { start: 540, end: 1050, status: 'away', msg: 'at the desk... dont look at me' },
-      { start: 1050, end: 1260, status: 'online', msg: 'home! making coffee :)' },
-      { start: 1260, end: 1440, status: 'online', msg: 'listening to the rain ~ myplace/mayablue' },
-    ]);
-
-    this.buddies.set('maya', {
-      id: 'maya',
-      displayName: 'Maya',
-      handle: 'starlight_maya',
-      schedule: mayaSchedule,
-      initialRelationships: { familiarity: 10, trust: 20, comfort: 30, respect: 40, annoyance: 0, affection: 0, attraction: 0, suspicion: 0, resentment: 0 },
-      traits: traitsForBuddy('maya', 'artist'),
-      typingSpeedWpm: 60,
-      archetype: 'artist',
-      status: 'acquaintance',
-      metVia: 'core',
-      isProcedural: false,
-      createdDay: 1,
-    });
-
-    // 3. Nora (NightOwl87)
-    const noraSchedule = this.generateStandardSchedule([
-      { start: 0, end: 300, status: 'online', msg: 'the night is quiet' },
-      { start: 300, end: 360, status: 'away', msg: 'watching dawn' },
-      { start: 360, end: 1140, status: 'offline', msg: 'offline' },
-      { start: 1140, end: 1320, status: 'away', msg: 'indexing old logs' },
-      { start: 1320, end: 1440, status: 'online', msg: 'nightboard / logs' },
-    ]);
-
-    this.buddies.set('nora', {
-      id: 'nora',
-      displayName: 'Nora',
-      handle: 'NightOwl87',
-      schedule: noraSchedule,
-      initialRelationships: { familiarity: 5, trust: 15, comfort: 20, respect: 50, annoyance: 0, affection: 0, attraction: 0, suspicion: 0, resentment: 0 },
-      traits: traitsForBuddy('nora', 'nightowl'),
-      typingSpeedWpm: 90,
-      archetype: 'nightowl',
-      status: 'acquaintance',
-      metVia: 'core',
-      isProcedural: false,
-      createdDay: 1,
-    });
-
-    // 4. Mr. Henderson (Landlord)
-    const hendersonSchedule = this.generateStandardSchedule([
-      { start: 0, end: 480, status: 'offline', msg: 'office closed' },
-      { start: 480, end: 1200, status: 'online', msg: 'motel front desk open' },
-      { start: 1200, end: 1440, status: 'offline', msg: 'office closed' },
-    ]);
-
-    this.buddies.set('henderson', {
-      id: 'henderson',
-      displayName: 'Mr. Henderson',
-      handle: 'motel_office',
-      schedule: hendersonSchedule,
-      initialRelationships: { familiarity: 30, trust: 30, comfort: 20, respect: 40, annoyance: 10, affection: 0, attraction: 0, suspicion: 0, resentment: 0 },
-      traits: traitsForBuddy('henderson', 'regular'),
-      typingSpeedWpm: 40,
-      archetype: 'regular',
-      status: 'acquaintance',
-      metVia: 'core',
-      isProcedural: false,
-      createdDay: 1,
-    });
-  }
-
-  private generateStandardSchedule(
-    blocks: Array<{ start: number; end: number; status: BuddyPresenceStatus; msg: string }>
-  ): Record<number, ScheduleBlock[]> {
-    const sched: Record<number, ScheduleBlock[]> = {};
-    for (let day = 1; day <= 14; day++) {
-      sched[day] = blocks.map(b => ({
-        startMinuteOfDay: b.start,
-        endMinuteOfDay: b.end,
-        status: b.status,
-        awayMessage: b.msg,
-      }));
+    for (const buddy of CORE_BUDDIES) {
+      this.buddies.set(buddy.id, coreBuddyDef(buddy.id));
     }
-    return sched;
   }
 
   /**
@@ -864,8 +769,8 @@ export class SocialEngine {
     else if (roll < 70) mood = 'steady';
     else if (roll < 88) mood = 'tired';
     else mood = 'off';
-    // P6.2 Maya loves the rain: wet days lift her one step (strained-cold is exempt above)
-    if (id === 'maya' && isWetWeather(getWeatherForDay(day).condition)) {
+    // P6.2 rain-lift for the registry's rain lover (wet days lift one step; strained-cold exempt above)
+    if (id === CORE_IDS.MAYA && isWetWeather(getWeatherForDay(day).condition)) {
       if (mood === 'off') mood = 'tired';
       else if (mood === 'tired') mood = 'steady';
       else if (mood === 'steady') mood = 'warm';

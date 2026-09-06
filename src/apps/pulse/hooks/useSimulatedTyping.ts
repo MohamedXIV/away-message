@@ -6,6 +6,7 @@ import { DIALOGUE_SCRIPTS } from '../data/dialogueTrees';
 import { parseNarrativeTag } from '../../../narrative/tagParser';
 import type { GeneratedChatResponse } from '../../../ai/types';
 import { getNpcStyle } from '../data/npcStyles';
+import { CORE_IDS } from '../../../engine/coreBuddies';
 
 export interface TypingState {
   isTyping: boolean;
@@ -83,7 +84,7 @@ export function useSimulatedTyping(_activeConversationBuddyId: string | null) {
             type: 'NARRATIVE_SCHEDULE_APPOINTMENT',
             appointment: {
               id: parsed.appointmentId,
-              characterId: parsed.characterId || 'maya',
+              characterId: parsed.characterId || CORE_IDS.MAYA,
               locationId: parsed.location,
               targetDay: parsed.day,
               startMinute: parsed.startMinute,
@@ -116,16 +117,16 @@ export function useSimulatedTyping(_activeConversationBuddyId: string | null) {
     let accumulatedDelay = 400;
 
     script.messages.forEach((msg, idx) => {
-      // Apply style pause: Maya is hesitant (longer), Ryan is bursty (shorter)
-      const isLongPause = style.buddyId === 'maya' && msg.text.includes('...');
+      // Apply style pause: the registry's hesitant buddy (longer), bursty ones (shorter)
+      const isLongPause = style.buddyId === CORE_IDS.MAYA && msg.text.includes('...');
       const hesitationExtra = isLongPause ? 500 : 0;
       const typingDuration = Math.max(800, Math.min(4200, (msg.text.length / cps) * 1000 + hesitationExtra));
 
       const t1 = setTimeout(() => {
         const indicatorText = (() => {
-          if (style.buddyId === 'maya') return 'maya is typing a message...';
-          if (style.buddyId === 'nora') return 'NightOwl87 is typing...';
-          if (style.buddyId === 'henderson') return `${buddy?.displayName || script.buddyId} is typing...`;
+          if (style.buddyId === CORE_IDS.MAYA) return 'maya is typing a message...';
+          if (style.buddyId === CORE_IDS.NORA) return 'NightOwl87 is typing...';
+          if (style.buddyId === CORE_IDS.HENDERSON) return `${buddy?.displayName || script.buddyId} is typing...`;
           return `${buddy?.displayName || script.buddyId} is typing a message...`;
         })();
         setTypingState((prev) => ({

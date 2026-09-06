@@ -41,6 +41,7 @@ import {
 } from './PlayerActs';
 import { CITY_NODES, isCityNodeId, quoteTravel, walkEnergyCost, rollStreetEncounter, BUS_FARE, type CityNodeId, type TravelMode } from './CityMap';
 import { pulseHasFeature } from './PulseCatalog';
+import { CORE_BY_ID, CORE_IDS } from './coreBuddies';
 
 export class SimulationEngine {
   public readonly clock!: GameClock;
@@ -259,10 +260,12 @@ export class SimulationEngine {
         void this.myplace.maybeUpdateRandomNpcProfile(tickResult.time.day, currentMinutes).then((res) => {
           if (res) {
             const link = `http://myplace.local/${res.username}`;
+            // Keys derive from the registry; copy stays authored per voice.
+            const myplaceOf = (id: string): string => CORE_BY_ID[id]?.myplace ?? id;
             const texts: Record<string, string> = {
-              maya_x: `hey — i changed my MyPlace a bit, new bio and song. what do you think? ${link}`,
-              tacocart_ryan: `yo changed my MyPlace — added some new stuff. check it? ${link} lmk`,
-              nightowl87: `updated my MyPlace — new headline. does it read okay? ${link}`,
+              [myplaceOf(CORE_IDS.MAYA)]: `hey — i changed my MyPlace a bit, new bio and song. what do you think? ${link}`,
+              [myplaceOf(CORE_IDS.RYAN)]: `yo changed my MyPlace — added some new stuff. check it? ${link} lmk`,
+              [myplaceOf(CORE_IDS.NORA)]: `updated my MyPlace — new headline. does it read okay? ${link}`,
             };
             const text = texts[res.username] ?? `updated my MyPlace — ${res.profile.headline} ${link}`;
             try { this.social.sendMessage(res.username, res.username, 'player', text, currentMinutes, false, ['myplace_update']); } catch {}
@@ -311,10 +314,12 @@ export class SimulationEngine {
       void this.myplace.maybeUpdateRandomNpcProfile(jumpResult.newTime.day, currentMinutes).then((res) => {
         if (res) {
           const link = `http://myplace.local/${res.username}`;
+          // Keys derive from the registry; copy stays authored per voice.
+          const myplaceOf = (id: string): string => CORE_BY_ID[id]?.myplace ?? id;
           const texts: Record<string, string> = {
-            maya_x: `hey — i changed my MyPlace a bit, new bio and song. what do you think? ${link}`,
-            tacocart_ryan: `yo changed my MyPlace — added some new stuff. check it? ${link} lmk`,
-            nightowl87: `updated my MyPlace — new headline. does it read okay? ${link}`,
+            [myplaceOf(CORE_IDS.MAYA)]: `hey — i changed my MyPlace a bit, new bio and song. what do you think? ${link}`,
+            [myplaceOf(CORE_IDS.RYAN)]: `yo changed my MyPlace — added some new stuff. check it? ${link} lmk`,
+            [myplaceOf(CORE_IDS.NORA)]: `updated my MyPlace — new headline. does it read okay? ${link}`,
           };
           const text = texts[res.username] ?? `updated my MyPlace — ${res.profile.headline} ${link}`;
           try { this.social.sendMessage(res.username, res.username, 'player', text, currentMinutes, false, ['myplace_update']); } catch {}
@@ -1033,7 +1038,7 @@ export class SimulationEngine {
           this.world.updateAppointment(appt.id, { status: 'happened', isCompleted: true, npcShowed: true, playerShowed: true });
           // P5.2 co-op enrichment: joint work pays more (dims x2 + wage/flavor), cafe stays intimate
           // P6 gig shifts ride the same path (marked by gig_ id prefix, any contact)
-          const isShift = appt.locationId === 'work' && (buddy.id === 'ryan' || buddy.archetype === 'coworker' || appt.id.startsWith('gig_'));
+          const isShift = appt.locationId === 'work' && (buddy.id === CORE_IDS.RYAN || buddy.archetype === 'coworker' || appt.id.startsWith('gig_'));
           const isArchive = appt.locationId === 'archive';
           if (isShift || isArchive) {
             const detail = pickCoopDetail(appt.id, isShift ? 'shift' : 'archive');
@@ -1384,8 +1389,8 @@ export class SimulationEngine {
   // ==========================================
 
   private sendHendersonNote(text: string, tags: string[], currentMinutes: number, event: string, extra?: Record<string, unknown>): void {
-    this.social.sendMessage('henderson', 'henderson', 'player', text, currentMinutes, false, ['rent', ...tags]);
-    this.telemetry.logEvent('economy', event, currentMinutes, { buddyId: 'henderson', ...(extra ?? {}) });
+      this.social.sendMessage(CORE_IDS.HENDERSON, CORE_IDS.HENDERSON, 'player', text, currentMinutes, false, ['rent', ...tags]);
+      this.telemetry.logEvent('economy', event, currentMinutes, { buddyId: CORE_IDS.HENDERSON, ...(extra ?? {}) });
   }
 
   /** Daily rent pass: gentle reminder → stern warning → overdue nudges. Rules only. */
@@ -1475,7 +1480,7 @@ export class SimulationEngine {
 
       // Encounters (deterministic per day; buddies must be present and available)
       if (outingId === 'diner_soup' || outingId === 'diner_platter' || outingId === 'diner_pie') {
-        const maya = this.social.getBuddy('maya');
+        const maya = this.social.getBuddy(CORE_IDS.MAYA);
         if (SimulationEngine.isBuddyAvailable(maya) && maya && mayaDinerEncounter(hour, day)) {
           const buddyId = maya.id;
           this.social.applySocialAction(buddyId, 'remembered_detail');
@@ -1492,7 +1497,7 @@ export class SimulationEngine {
         return { success: true, data: { summary: `Hearty ${spec.label} at the diner. Quiet tables, good coffee.` } };
       }
       if (outingId === 'canal_walk') {
-        const nora = this.social.getBuddy('nora');
+        const nora = this.social.getBuddy(CORE_IDS.NORA);
         const raining = isWetWeather(weather.condition);
         if (SimulationEngine.isBuddyAvailable(nora) && nora && noraCanalEncounter(hour, day, raining)) {
           const buddyId = nora.id;

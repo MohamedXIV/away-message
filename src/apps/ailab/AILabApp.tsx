@@ -15,6 +15,7 @@ import { pickOsTemplate, templateToRelease } from '../../ai/osReleaseTemplates';
 import { generateNewcomer, NEWCOMER_METVIA_ROTATION } from '../../engine/CharacterDirector';
 import { getWeatherForDay } from '../../engine/WeatherEngine';
 import type { BuddyMetVia, CharacterArchetype } from '../../engine/types';
+import { CORE_BUDDIES, CORE_IDS } from '../../engine/coreBuddies';
 
 const TEST_HOST = 'midnight-board.local';
 
@@ -27,7 +28,7 @@ export const AILabApp: React.FC = () => {
   const [results, setResults] = useState<BenchmarkResult[]>([]);
   const [notice, setNotice] = useState('Ready. Benchmark mode bypasses the ten-day cache.');
   const [imagePrompt, setImagePrompt] = useState('Maya at her desk with warm lamp light, small photo');
-  const [imageBuddy, setImageBuddy] = useState('maya');
+  const [imageBuddy, setImageBuddy] = useState(CORE_IDS.MAYA);
   const [imageRunning, setImageRunning] = useState(false);
   const [imageResult, setImageResult] = useState<{ url: string; provider: string; fallback: boolean; error?: string } | null>(null);
 
@@ -417,7 +418,7 @@ export const AILabApp: React.FC = () => {
       setResults([...nextResults]);
 
       const chatResult = await aiService.benchmarkChat({
-        buddyId: 'maya',
+        buddyId: CORE_IDS.MAYA,
         displayName: 'Maya',
         handle: 'starlight_maya',
         persona: 'Quiet, observant, creative, and guarded. Uses lowercase, pauses, music references, and gentle honesty.',
@@ -485,10 +486,9 @@ export const AILabApp: React.FC = () => {
         <div className="mt-2 flex flex-wrap items-center gap-2">
           <label className="font-semibold" htmlFor="image-buddy">Buddy:</label>
           <select id="image-buddy" value={imageBuddy} onChange={(e) => setImageBuddy(e.target.value)} className="border border-gray-500 bg-white px-2 py-1">
-            <option value="maya">Maya — starlight_maya</option>
-            <option value="ryan">Ryan — ryan_foodcart</option>
-            <option value="nora">Nora — NightOwl87</option>
-            <option value="henderson">Mr. Henderson — motel_office</option>
+            {CORE_BUDDIES.map((b) => (
+              <option key={b.id} value={b.id}>{b.displayName} — {b.handle}</option>
+            ))}
           </select>
           <span className={`px-2 py-1 text-[10px] ${hasConfiguredKey('fal', settings) ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}`}>{hasConfiguredKey('fal', settings) ? 'Fal key available' : 'Fal no key — fallback'}</span>
         </div>

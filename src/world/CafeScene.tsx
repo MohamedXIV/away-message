@@ -23,6 +23,7 @@ import { buildConversationSummary } from '../apps/pulse/utils/conversationMemory
 import { useReplySuggestions } from '../apps/pulse/hooks/useReplySuggestions';
 import { ReplyChips } from '../apps/pulse/components/ReplyChips';
 import { toneSuggestion } from '../engine/PlayerActs';
+import { CORE_IDS } from '../engine/coreBuddies';
 
 interface CafeTurn {
   id: number;
@@ -42,7 +43,7 @@ export function toneToExpression(tone: string | undefined, fallback: MayaExpress
   return fallback;
 }
 
-export const CafeScene: React.FC<{ buddyId?: string }> = ({ buddyId = 'maya' }) => {
+export const CafeScene: React.FC<{ buddyId?: string }> = ({ buddyId = CORE_IDS.MAYA }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const rendererRef = useRef<CafeCanvasRenderer | null>(null);
   const historyRef = useRef<HTMLDivElement>(null);
@@ -255,7 +256,7 @@ export const CafeScene: React.FC<{ buddyId?: string }> = ({ buddyId = 'maya' }) 
     // Set world flag & social state
     setWorldFlag('maya_met_in_person', true);
     setWorldFlag('maya_cafe_scheduled', true);
-    try { applySocialAction('maya', 'vulnerable_share'); } catch {}
+    try { applySocialAction(CORE_IDS.MAYA, 'vulnerable_share'); } catch {}
 
     // Return to room
     switchView('room');

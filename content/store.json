@@ -1,0 +1,80 @@
+{
+  "buddies": {
+    "ryan": {
+      "displayName": "Ryan",
+      "handle": "ryan_foodcart",
+      "myplace": "tacocart_ryan",
+      "archetype": "coworker",
+      "status": "friend",
+      "metVia": "core",
+      "color": "#d96c3b",
+      "persona": "Warm, impulsive food-cart coworker. Uses casual slang, jokes, and short messages. He avoids heavy emotional talks unless trust is high.",
+      "typingSpeedWpm": 80
+    },
+    "maya": {
+      "displayName": "Maya",
+      "handle": "starlight_maya",
+      "myplace": "maya_x",
+      "archetype": "artist",
+      "status": "acquaintance",
+      "metVia": "core",
+      "color": "#6a3fa0",
+      "persona": "Quiet, observant, creative, and a little guarded. Uses lowercase, pauses, music references, and gentle honesty. She warms up slowly.",
+      "typingSpeedWpm": 60
+    },
+    "nora": {
+      "displayName": "Nora",
+      "handle": "NightOwl87",
+      "myplace": "nightowl87",
+      "archetype": "nightowl",
+      "status": "acquaintance",
+      "metVia": "core",
+      "color": "#2e7f86",
+      "persona": "Night-owl archivist with dry humor. Curious about strange details, concise, slightly cryptic, but not supernatural.",
+      "typingSpeedWpm": 90
+    },
+    "henderson": {
+      "displayName": "Mr. Henderson",
+      "handle": "motel_office",
+      "myplace": "",
+      "archetype": "regular",
+      "status": "acquaintance",
+      "metVia": "core",
+      "color": "#7a5c3e",
+      "persona": "Professional motel manager. Formal, practical, and terse. He cares about rent, schedules, and keeping the property calm.",
+      "typingSpeedWpm": 40
+    }
+  },
+  "buddyTraits": {
+    "ryan": { "shyness": 25, "warmth": 78, "discipline": 50, "spontaneity": 72, "loyalty": 62 },
+    "maya": { "shyness": 88, "warmth": 62, "discipline": 48, "spontaneity": 45, "loyalty": 85 },
+    "nora": { "shyness": 65, "warmth": 42, "discipline": 72, "spontaneity": 30, "loyalty": 78 },
+    "henderson": { "shyness": 45, "warmth": 50, "discipline": 85, "spontaneity": 25, "loyalty": 72 }
+  },
+  "buddyHearts": {
+    "ryan": { "familiarity": 40, "trust": 50, "comfort": 50, "respect": 40, "annoyance": 0, "affection": 0, "attraction": 0, "suspicion": 0, "resentment": 0 },
+    "maya": { "familiarity": 10, "trust": 20, "comfort": 30, "respect": 40, "annoyance": 0, "affection": 0, "attraction": 0, "suspicion": 0, "resentment": 0 },
+    "nora": { "familiarity": 5, "trust": 15, "comfort": 20, "respect": 50, "annoyance": 0, "affection": 0, "attraction": 0, "suspicion": 0, "resentment": 0 },
+    "henderson": { "familiarity": 30, "trust": 30, "comfort": 20, "respect": 40, "annoyance": 10, "affection": 0, "attraction": 0, "suspicion": 0, "resentment": 0 }
+  },
+  "buddySchedules": {
+    "ryan": {
+      "blocks": "[{\"start\":0,\"end\":420,\"status\":\"offline\",\"msg\":\"asleep\"},{\"start\":420,\"end\":540,\"status\":\"offline\",\"msg\":\"commute\"},{\"start\":540,\"end\":960,\"status\":\"offline\",\"msg\":\"work @ cart\"},{\"start\":960,\"end\":1080,\"status\":\"away\",\"msg\":\"afk grabbin tacos\"},{\"start\":1080,\"end\":1320,\"status\":\"online\",\"msg\":\"gaming / chilling\"},{\"start\":1320,\"end\":1440,\"status\":\"offline\",\"msg\":\"sleep is for the weak\"}]"
+    },
+    "maya": {
+      "blocks": "[{\"start\":0,\"end\":480,\"status\":\"offline\",\"msg\":\"sleeping\"},{\"start\":480,\"end\":540,\"status\":\"offline\",\"msg\":\"morning tea\"},{\"start\":540,\"end\":1050,\"status\":\"away\",\"msg\":\"at the desk... dont look at me\"},{\"start\":1050,\"end\":1260,\"status\":\"online\",\"msg\":\"home! making coffee :)\"},{\"start\":1260,\"end\":1440,\"status\":\"online\",\"msg\":\"listening to the rain ~ myplace/mayablue\"}]"
+    },
+    "nora": {
+      "blocks": "[{\"start\":0,\"end\":300,\"status\":\"online\",\"msg\":\"the night is quiet\"},{\"start\":300,\"end\":360,\"status\":\"away\",\"msg\":\"watching dawn\"},{\"start\":360,\"end\":1140,\"status\":\"offline\",\"msg\":\"offline\"},{\"start\":1140,\"end\":1320,\"status\":\"away\",\"msg\":\"indexing old logs\"},{\"start\":1320,\"end\":1440,\"status\":\"online\",\"msg\":\"nightboard / logs\"}]"
+    },
+    "henderson": {
+      "blocks": "[{\"start\":0,\"end\":480,\"status\":\"offline\",\"msg\":\"office closed\"},{\"start\":480,\"end\":1200,\"status\":\"online\",\"msg\":\"motel front desk open\"},{\"start\":1200,\"end\":1440,\"status\":\"offline\",\"msg\":\"office closed\"}]"
+    }
+  },
+  "pools": {
+    "leave:sleep:direct": { "lines": "[\"alright, im crashing. later!\",\"bed time, dead serious. catch you tomorrow\",\"gotta sleep, early start. gn!\"]", "version": 1 },
+    "leave:sleep:soft": { "lines": "[\"hey... i gotta crash, sorry. talk tomorrow? ~\",\"eyes are closing lol. gn, really\",\"need to sleep... dont stay up too late either\"]", "version": 1 },
+    "leave:work:direct": { "lines": "[\"shift time, gotta run. later!\",\"work calls. back this evening\",\"on the clock now — hmu later\"]", "version": 1 },
+    "leave:work:soft": { "lines": "[\"ahh sorry, shift starts — gotta run. talk later?\",\"boss is glaring lol. brb after work\",\"duty calls... ill ping you when im back\"]", "version": 1 }
+  }
+}

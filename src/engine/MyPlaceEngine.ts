@@ -9,6 +9,7 @@ import {
   type MyPlaceRelease,
 } from './MyPlaceCatalog';
 import { CHARACTER_ARCHETYPES } from './characterTemplates';
+import { CORE_BUDDIES } from './coreBuddies';
 import type { CharacterArchetype } from './types';
 
 export interface MyPlaceProfile {
@@ -39,16 +40,11 @@ export interface MyPlaceEngineState {
 /**
  * P5.4 legacy handle aliases: engine buddy ids/handles predate these profile keys
  * (buddy 'maya' / handle 'starlight_maya' ↔ profile 'maya_x'). Used to resolve
- * which profile page belongs to a buddy.
+ * which profile page belongs to a buddy. Derived from the registry.
  */
-export const CORE_PROFILE_ALIASES: Record<string, string> = {
-  maya: 'maya_x',
-  starlight_maya: 'maya_x',
-  ryan: 'tacocart_ryan',
-  ryan_foodcart: 'tacocart_ryan',
-  nora: 'nightowl87',
-  NightOwl87: 'nightowl87',
-};
+export const CORE_PROFILE_ALIASES: Record<string, string> = Object.fromEntries(
+  CORE_BUDDIES.flatMap((b) => (b.myplace ? [[b.id, b.myplace], [b.handle, b.myplace]] : []))
+);
 
 const DEFAULT_PROFILE: MyPlaceProfile = {
   username: 'wanderer06',

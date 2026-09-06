@@ -15,6 +15,7 @@ import type {
   RelationshipStage,
   ScheduleBlock,
 } from './types';
+import { CORE_BUDDIES, CORE_BY_ID, isCoreBuddyId as registryIsCoreBuddyId } from './coreBuddies';
 
 export interface ScheduleBlockSpec {
   start: number; // minute of day 0..1439
@@ -352,13 +353,10 @@ export function pickTemplateIntroLine(archetype: CharacterArchetype, seed: strin
   return line.replaceAll('{name}', displayName);
 }
 
-/** Legacy core ids → archetype (keeps the original 4 voices byte-identical). */
-export const CORE_ID_TO_ARCHETYPE: Record<string, CharacterArchetype> = {
-  ryan: 'coworker',
-  maya: 'artist',
-  nora: 'nightowl',
-  henderson: 'regular',
-};
+/** Core ids → archetype, derived from the registry (single source of truth). */
+export const CORE_ID_TO_ARCHETYPE: Record<string, CharacterArchetype> = Object.fromEntries(
+  CORE_BUDDIES.map((b) => [b.id, b.archetype])
+);
 
 export function resolveArchetype(buddyId: string, stored?: CharacterArchetype): CharacterArchetype {
   if (stored && CHARACTER_ARCHETYPES[stored]) return stored;
@@ -1077,8 +1075,9 @@ export function validateCharacterId(id: string): { ok: boolean; error?: string }
   return { ok: true };
 }
 
+/** Core guard, delegated to the registry (single source of truth). */
 export function isCoreBuddyId(id: string): boolean {
-  return id === 'ryan' || id === 'maya' || id === 'nora' || id === 'henderson';
+  return registryIsCoreBuddyId(id);
 }
 
 /** Type guard for schedule blocks (used when restoring persisted defs). */
@@ -1132,18 +1131,16 @@ export function clampTraits(traits: Partial<CharacterTraits> | undefined): Chara
 
 /**
  * Hand-authored temperament for the core 4 (code-owned, never persisted).
- * Maya reads shy-guarded, Ryan forward-warm, Nora guarded-loyal, Henderson steady-formal.
+ * Derived from the registry — edit content/store.json, never this map.
  */
-export const CORE_TRAITS: Record<string, CharacterTraits> = {
-  ryan: { shyness: 25, warmth: 78, discipline: 50, spontaneity: 72, loyalty: 62 },
-  maya: { shyness: 88, warmth: 62, discipline: 48, spontaneity: 45, loyalty: 85 },
-  nora: { shyness: 65, warmth: 42, discipline: 72, spontaneity: 30, loyalty: 78 },
-  henderson: { shyness: 45, warmth: 50, discipline: 85, spontaneity: 25, loyalty: 72 },
-};
+export const CORE_TRAITS: Record<string, CharacterTraits> = Object.fromEntries(
+  CORE_BUDDIES.map((b) => [b.id, { ...b.traits }])
+);
 
 /** Traits for a buddy id: core hand-authored wins, everyone else inherits their archetype. */
 export function traitsForBuddy(buddyId: string, archetype: CharacterArchetype): CharacterTraits {
-  if (CORE_TRAITS[buddyId]) return { ...CORE_TRAITS[buddyId]! };
+  const core = CORE_BY_ID[buddyId];
+  if (core) return { ...core.traits };
   return { ...CHARACTER_ARCHETYPES[archetype].defaultTraits };
 }
 
@@ -1264,13 +1261,10 @@ export function pickMediationAskLine(kind: 'introduce' | 'strengthen' | 'ask_abo
 /** MSN-era nudges: shy buddies ping instead of typing (sent with the 'buzz' tag). */
 export const NPC_BUZZ_LINES = ['*nudge*', '*buzzes you*', '*nudge nudge*'];
 
-/** MSN-era signature colors: buddies tint their own names (Pulse 6.x only, gated in UI). */
-export const CORE_SIGNATURE_COLORS: Record<string, string> = {
-  ryan: '#d96c3b',
-  maya: '#6a3fa0',
-  nora: '#2e7f86',
-  henderson: '#7a5c3e',
-};
+/** MSN-era signature colors: derived from the registry (edit content, not this map). */
+export const CORE_SIGNATURE_COLORS: Record<string, string> = Object.fromEntries(
+  CORE_BUDDIES.map((b) => [b.id, b.color])
+);
 
 export const ARCHETYPE_SIGNATURE_COLORS: Record<CharacterArchetype, string> = {
   coworker: '#b3541e',
@@ -1283,7 +1277,8 @@ export const ARCHETYPE_SIGNATURE_COLORS: Record<CharacterArchetype, string> = {
 
 /** Signature chat color for a buddy id (core fixed, procedural by archetype). */
 export function buddySignatureColor(buddyId: string, archetype: CharacterArchetype): string {
-  if (CORE_SIGNATURE_COLORS[buddyId]) return CORE_SIGNATURE_COLORS[buddyId]!;
+  const core = CORE_BY_ID[buddyId];
+  if (core) return core.color;
   return ARCHETYPE_SIGNATURE_COLORS[archetype] ?? '#800080';
 }
 
