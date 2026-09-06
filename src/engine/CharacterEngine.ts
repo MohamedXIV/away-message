@@ -11,13 +11,17 @@ import type {
   BuddyLifecycleStatus,
   BuddyMetVia,
   CharacterArchetype,
+  CharacterTraits,
   RelationshipDimensions,
 } from './types';
 import {
   buildScheduleForArchetype,
   CHARACTER_ARCHETYPES,
   clampRelationships,
+  clampTraits,
   isValidSchedule,
+  resolveArchetype,
+  traitsForBuddy,
   validateCharacterId,
 } from './characterTemplates';
 
@@ -39,6 +43,8 @@ export interface BuildCharacterOptions {
   avatarUrl?: string;
   typingSpeedWpm?: number;
   initialRelationships?: Partial<RelationshipDimensions>;
+  /** Fixed temperament override (manual/AI-lab). Defaults to archetype + stable jitter. */
+  traits?: Partial<CharacterTraits>;
   status?: BuddyLifecycleStatus;
   metVia?: BuddyMetVia;
   createdDay?: number;
@@ -83,6 +89,10 @@ export function buildCharacter(options: BuildCharacterOptions): BuiltCharacter {
     comfort: options.initialRelationships?.comfort ?? base.comfort,
     respect: options.initialRelationships?.respect ?? base.respect,
     annoyance: options.initialRelationships?.annoyance ?? base.annoyance,
+    affection: options.initialRelationships?.affection ?? base.affection,
+    attraction: options.initialRelationships?.attraction ?? base.attraction,
+    suspicion: options.initialRelationships?.suspicion ?? base.suspicion,
+    resentment: options.initialRelationships?.resentment ?? base.resentment,
   });
 
   // Small deterministic jitter (±3) so same-archetype buddies don't feel identical.
@@ -94,6 +104,18 @@ export function buildCharacter(options: BuildCharacterOptions): BuiltCharacter {
     comfort: merged.comfort + (jitter > 0 ? 1 : -1),
   });
 
+  // Fixed temperament: archetype base (or explicit override) + tiny stable
+  // jitter (±5 per dim). Set once here, never mutated afterwards.
+  const traitBase = traitsForBuddy(options.id, archetype);
+  const traitJitter = (dim: string): number => (hashString(`${options.id}:trait:${dim}`) % 11) - 5;
+  const traits = clampTraits({
+    shyness: options.traits?.shyness ?? traitBase.shyness + traitJitter('shyness'),
+    warmth: options.traits?.warmth ?? traitBase.warmth + traitJitter('warmth'),
+    discipline: options.traits?.discipline ?? traitBase.discipline + traitJitter('discipline'),
+    spontaneity: options.traits?.spontaneity ?? traitBase.spontaneity + traitJitter('spontaneity'),
+    loyalty: options.traits?.loyalty ?? traitBase.loyalty + traitJitter('loyalty'),
+  });
+
   const definition: CharacterDefinition = {
     id: options.id,
     displayName: displayName.slice(0, 40),
@@ -101,6 +123,7 @@ export function buildCharacter(options: BuildCharacterOptions): BuiltCharacter {
     avatarUrl: options.avatarUrl,
     schedule: buildScheduleForArchetype(archetype),
     initialRelationships,
+    traits,
     typingSpeedWpm: options.typingSpeedWpm ?? template.typingSpeedWpm,
     archetype,
     status: options.status ?? 'acquaintance',
@@ -127,12 +150,30 @@ export function validatePersistedBuddy(def: unknown): { ok: boolean; error?: str
     return { ok: false, error: 'Persisted buddy has an invalid typingSpeedWpm.' };
   }
   const definition = d as unknown as CharacterDefinition;
+  const persistedId = String(d.id);
+  const storedArchetype = (typeof d.archetype === 'string' && CHARACTER_ARCHETYPES[d.archetype as CharacterArchetype]
+    ? (d.archetype as CharacterArchetype)
+    : resolveArchetype(persistedId, undefined));
+  // v3 saves predate fixed temperament: backfill deterministically with the
+  // exact values a fresh buildCharacter() would roll for this id
+  // (archetype base + stable id jitter), overlaid with any persisted partial.
+  const persistedTraits = (d.traits && typeof d.traits === 'object') ? (d.traits as Partial<CharacterTraits>) : {};
+  const traitBase = traitsForBuddy(persistedId, storedArchetype);
+  const traitJitter = (dim: string): number => (hashString(`${persistedId}:trait:${dim}`) % 11) - 5;
+  const traits = clampTraits({
+    shyness: persistedTraits.shyness ?? traitBase.shyness + traitJitter('shyness'),
+    warmth: persistedTraits.warmth ?? traitBase.warmth + traitJitter('warmth'),
+    discipline: persistedTraits.discipline ?? traitBase.discipline + traitJitter('discipline'),
+    spontaneity: persistedTraits.spontaneity ?? traitBase.spontaneity + traitJitter('spontaneity'),
+    loyalty: persistedTraits.loyalty ?? traitBase.loyalty + traitJitter('loyalty'),
+  });
   return {
     ok: true,
     definition: {
       ...definition,
-      id: String(d.id),
+      id: persistedId,
       initialRelationships: clampRelationships(rel),
+      traits,
       status: (d.status as BuddyLifecycleStatus) ?? 'acquaintance',
       metVia: (d.metVia as BuddyMetVia) ?? 'intro',
       isProcedural: d.isProcedural !== false,

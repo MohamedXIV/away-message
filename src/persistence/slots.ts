@@ -2,6 +2,8 @@ import { db } from './db';
 import type { SaveSlotRecord } from './schema';
 import type { SimulationState } from '../engine/types';
 import type { SimulationEngine } from '../engine/SimulationEngine';
+import { traitsForBuddy, resolveArchetype } from '../engine/characterTemplates';
+import type { CharacterArchetype, CharacterTraits } from '../engine/types';
 import { APP_VERSION } from '../version';
 import {
   getCurrentPulseSlotId,
@@ -16,15 +18,18 @@ import {
 // VERSIONING (two independent numbers — do not conflate):
 // - APP_VERSION (package.json SemVer): which game build wrote the save. Diagnostics only.
 // - Save-FORMAT version (record.version): shape of the document itself.
-//   CURRENT = 3, MIN_SUPPORTED = 2 (v2 docs share the v3 shape, snapshot included).
+//   CURRENT = 4, MIN_SUPPORTED = 2 (v2/v3 docs share the snapshot shape and are
+//   UPGRADED on load by migrateSnapshotToV4 below — deterministic backfills only).
 //   Older multi-table saves (no snapshot) predate this system and are refused
 //   with a clear message. Newer-than-current is ALWAYS refused (silent corruption
 //   is worse than an honest error).
 // - NOTE: schema.ts MIGRATIONS[] governs legacy Dexie TABLE rows, not documents.
 //   Breaking document changes: bump SAVE_FORMAT_VERSION here + add a migration
 //   path in checkSaveCompatibility + one CHANGELOG line. No exceptions.
+// - v4 adds Character Lives: fixed buddy traits, 4 extra relationship dims,
+//   directed NPC↔NPC bonds, per-buddy agenda, player mediations, witness log.
 
-export const SAVE_FORMAT_VERSION = 3;
+export const SAVE_FORMAT_VERSION = 4;
 export const SAVE_FORMAT_MIN_SUPPORTED = 2;
 
 export type SaveCompatibility =
@@ -171,10 +176,87 @@ export async function loadSlotSnapshot(slotId: string): Promise<SimulationState 
     if (checkSaveCompatibility(record).status !== 'ok') return null;
     const snapshot = (record as SaveSlotRecord).snapshot;
     if (!snapshot || typeof snapshot !== 'object') return null;
+    const version = (record as SaveSlotRecord).version ?? SAVE_FORMAT_VERSION;
+    // v4 migration path (see header): pre-v4 snapshots are upgraded
+    // deterministically — never refused, never silently corrupted.
+    if (version < SAVE_FORMAT_VERSION) {
+      return migrateSnapshotToV4(snapshot as SimulationState, version);
+    }
     return snapshot as SimulationState;
   } catch {
     return null;
   }
+}
+
+/**
+ * Upgrade a pre-v4 engine snapshot to the v4 shape (pure — never mutates input).
+ * - v3 and earlier lack: buddy traits, affection/attraction/suspicion/resentment
+ *   dims, npcBonds, agenda, mediations, npcSocialLog.
+ * - Traits for persisted procedural defs are derived exactly as
+ *   buildCharacter()/validatePersistedBuddy would roll them (archetype base +
+ *   stable id jitter); core 4 are code-owned and re-seeded with hand-authored
+ *   traits, so nothing is needed for them here.
+ * - New relationship dims start at 0 (honest neutral); bonds/agenda/mediations
+ *   start empty and fill through play. No randomness, no AI, no wall-clock.
+ */
+export function migrateSnapshotToV4(snapshot: SimulationState, fromVersion: number): SimulationState {
+  void fromVersion;
+  const social = (snapshot as SimulationState).social ?? ({} as SimulationState['social']);
+  const buddies = { ...(social.buddies ?? {}) };
+  for (const [id, def] of Object.entries(buddies)) {
+    const d = def as unknown as Record<string, unknown>;
+    if (d && typeof d === 'object' && !d.traits) {
+      buddies[id] = { ...def, traits: traitsForBuddySnapshot(String(id), d) };
+    }
+  }
+  const relationships: Record<string, SimulationState['social']['relationships'][string]> = {};
+  for (const [id, rel] of Object.entries(social.relationships ?? {})) {
+    const r = (rel ?? {}) as unknown as Record<string, unknown>;
+    const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? Math.max(0, Math.min(100, Math.round(v))) : 0);
+    relationships[id] = {
+      familiarity: num(r.familiarity),
+      trust: num(r.trust),
+      comfort: num(r.comfort),
+      respect: num(r.respect),
+      annoyance: num(r.annoyance),
+      affection: num(r.affection),
+      attraction: num(r.attraction),
+      suspicion: num(r.suspicion),
+      resentment: num(r.resentment),
+    };
+  }
+  return {
+    ...(snapshot as object),
+    social: {
+      ...social,
+      buddies,
+      relationships,
+      npcBonds: { ...(social.npcBonds ?? {}) },
+      agenda: { ...(social.agenda ?? {}) },
+      mediations: Array.isArray(social.mediations) ? [...social.mediations] : [],
+      npcSocialLog: Array.isArray(social.npcSocialLog) ? [...social.npcSocialLog] : [],
+    },
+  } as SimulationState;
+}
+
+/** Archetype-base traits for a persisted def (stable; mirrors CharacterEngine backfill). */
+function traitsForBuddySnapshot(id: string, def: Record<string, unknown>): CharacterTraits {
+  const stored = typeof def.archetype === 'string' ? (def.archetype as CharacterArchetype) : undefined;
+  const base = traitsForBuddy(id, resolveArchetype(id, stored));
+  const jitter = (dim: string): number => {
+    let h = 0;
+    const s = `${id}:trait:${dim}`;
+    for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
+    return (h % 11) - 5;
+  };
+  const clamp = (n: number) => Math.max(0, Math.min(100, Math.round(n)));
+  return {
+    shyness: clamp(base.shyness + jitter('shyness')),
+    warmth: clamp(base.warmth + jitter('warmth')),
+    discipline: clamp(base.discipline + jitter('discipline')),
+    spontaneity: clamp(base.spontaneity + jitter('spontaneity')),
+    loyalty: clamp(base.loyalty + jitter('loyalty')),
+  };
 }
 
 /** Compatibility verdict for UI badges (menu shows refused/legacy explicitly). */

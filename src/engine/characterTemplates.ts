@@ -8,6 +8,7 @@ import type {
   BuddyCharacter,
   BuddyPresenceStatus,
   CharacterArchetype,
+  CharacterTraits,
   DailyMood,
   GlobalEventCategory,
   RelationshipDimensions,
@@ -29,6 +30,8 @@ export interface CharacterArchetypeTemplate {
   dailyBlocks: ScheduleBlockSpec[];
   initialRelationships: RelationshipDimensions;
   typingSpeedWpm: number;
+  /** Fixed temperament for this archetype (procedural buddies inherit + stable jitter). */
+  defaultTraits: CharacterTraits;
   personaHint: string;
   vocabulary: string[];
   quirks: string[];
@@ -69,7 +72,8 @@ export const CHARACTER_ARCHETYPES: Record<CharacterArchetype, CharacterArchetype
       { start: 1080, end: 1320, status: 'online', msg: 'chilling' },
       { start: 1320, end: 1440, status: 'offline', msg: 'crashed' },
     ],
-    initialRelationships: { familiarity: 25, trust: 30, comfort: 35, respect: 35, annoyance: 0 },
+    initialRelationships: { familiarity: 25, trust: 30, comfort: 35, respect: 35, annoyance: 0, affection: 0, attraction: 0, suspicion: 0, resentment: 0 },
+    defaultTraits: { shyness: 25, warmth: 75, discipline: 55, spontaneity: 70, loyalty: 65 },
     typingSpeedWpm: 75,
     personaHint: 'Practical, friendly, a little teasing. Talks about work, food, and gear.',
     vocabulary: ['yo', 'lol', 'dude', 'brutal shift', 'tacos', 'bench test'],
@@ -93,7 +97,8 @@ export const CHARACTER_ARCHETYPES: Record<CharacterArchetype, CharacterArchetype
       { start: 1140, end: 1320, status: 'away', msg: 'indexing logs' },
       { start: 1320, end: 1440, status: 'online', msg: 'night shift' },
     ],
-    initialRelationships: { familiarity: 5, trust: 15, comfort: 20, respect: 50, annoyance: 0 },
+    initialRelationships: { familiarity: 5, trust: 15, comfort: 20, respect: 50, annoyance: 0, affection: 0, attraction: 0, suspicion: 0, resentment: 0 },
+    defaultTraits: { shyness: 60, warmth: 45, discipline: 70, spontaneity: 35, loyalty: 75 },
     typingSpeedWpm: 90,
     personaHint: 'Dry humor, concise, a little cryptic. Curious about strange details.',
     vocabulary: ['logged', 'archive', 'frequency', 'quiet', 'noted'],
@@ -118,7 +123,8 @@ export const CHARACTER_ARCHETYPES: Record<CharacterArchetype, CharacterArchetype
       { start: 1020, end: 1380, status: 'online', msg: 'cramming / chatting' },
       { start: 1380, end: 1440, status: 'offline', msg: 'crashed' },
     ],
-    initialRelationships: { familiarity: 10, trust: 15, comfort: 25, respect: 30, annoyance: 0 },
+    initialRelationships: { familiarity: 10, trust: 15, comfort: 25, respect: 30, annoyance: 0, affection: 0, attraction: 0, suspicion: 0, resentment: 0 },
+    defaultTraits: { shyness: 30, warmth: 80, discipline: 40, spontaneity: 85, loyalty: 55 },
     typingSpeedWpm: 85,
     personaHint: 'Energetic, abbreviation-heavy, asks lots of questions. Big on music and campus gossip.',
     vocabulary: ['omg', 'brb', 'lol', 'quiz', 'cramming', 'u up?'],
@@ -142,7 +148,8 @@ export const CHARACTER_ARCHETYPES: Record<CharacterArchetype, CharacterArchetype
       { start: 960, end: 1200, status: 'online', msg: 'back at the desk' },
       { start: 1200, end: 1440, status: 'offline', msg: 'early night' },
     ],
-    initialRelationships: { familiarity: 8, trust: 10, comfort: 15, respect: 40, annoyance: 0 },
+    initialRelationships: { familiarity: 8, trust: 10, comfort: 15, respect: 40, annoyance: 0, affection: 0, attraction: 0, suspicion: 0, resentment: 0 },
+    defaultTraits: { shyness: 35, warmth: 40, discipline: 85, spontaneity: 45, loyalty: 50 },
     typingSpeedWpm: 70,
     personaHint: 'Terse, numbers-first, always checking prices. Friendly when a deal lands.',
     vocabulary: ['tape', 'spread', 'bid', 'closed at', 'volume'],
@@ -166,7 +173,8 @@ export const CHARACTER_ARCHETYPES: Record<CharacterArchetype, CharacterArchetype
       { start: 1020, end: 1260, status: 'online', msg: 'home, noodling on guitar' },
       { start: 1260, end: 1440, status: 'online', msg: 'late set / listening room' },
     ],
-    initialRelationships: { familiarity: 15, trust: 20, comfort: 25, respect: 35, annoyance: 0 },
+    initialRelationships: { familiarity: 15, trust: 20, comfort: 25, respect: 35, annoyance: 0, affection: 0, attraction: 0, suspicion: 0, resentment: 0 },
+    defaultTraits: { shyness: 70, warmth: 65, discipline: 45, spontaneity: 60, loyalty: 80 },
     typingSpeedWpm: 70,
     personaHint: 'Warm, expressive, talks in images. Shares songs, gigs, and gear talk.',
     vocabulary: ['tone', 'take', 'mix', 'gig', 'strings', '~'],
@@ -190,7 +198,8 @@ export const CHARACTER_ARCHETYPES: Record<CharacterArchetype, CharacterArchetype
       { start: 1140, end: 1350, status: 'online', msg: 'evening check-in' },
       { start: 1350, end: 1440, status: 'offline', msg: 'winding down' },
     ],
-    initialRelationships: { familiarity: 10, trust: 15, comfort: 20, respect: 30, annoyance: 0 },
+    initialRelationships: { familiarity: 10, trust: 15, comfort: 20, respect: 30, annoyance: 0, affection: 0, attraction: 0, suspicion: 0, resentment: 0 },
+    defaultTraits: { shyness: 40, warmth: 55, discipline: 80, spontaneity: 30, loyalty: 70 },
     typingSpeedWpm: 65,
     personaHint: 'Easygoing, balanced, a good listener. Small talk that turns real slowly.',
     vocabulary: ['hey', 'nice', 'how was', 'sounds good'],
@@ -290,6 +299,30 @@ function hashSeed(value: string): number {
   let h = 0;
   for (let i = 0; i < value.length; i++) h = (h * 31 + value.charCodeAt(i)) >>> 0;
   return h;
+}
+
+/**
+ * Avalanche a seed string into a well-spread 32-bit hash. Plain hashSeed
+ * clusters when inputs differ only in a trailing digit (e.g. consecutive
+ * days → consecutive rolls), which would correlate whole systems day to day.
+ * New code must roll/pick through these helpers, never raw hashSeed % N.
+ */
+export function spreadSeed(seed: string): number {
+  let h = hashSeed(seed);
+  h = Math.imul(h ^ (h >>> 16), 2246822519);
+  h = Math.imul(h ^ (h >>> 13), 3266489917);
+  h ^= h >>> 16;
+  return h >>> 0;
+}
+
+/** Deterministic 0..99 roll with good spread across sequential inputs. */
+export function rollSeeded100(seed: string): number {
+  return spreadSeed(seed) % 100;
+}
+
+/** Deterministic pool pick with good spread across sequential inputs. */
+export function pickSeeded<T>(pool: readonly T[], seed: string): T {
+  return pool[spreadSeed(seed) % pool.length]!;
 }
 
 /** Deterministic name pick that skips taken ids (suffixes _2, _3 when pools exhaust). */
@@ -1078,7 +1111,152 @@ export function clampRelationships(rel: RelationshipDimensions): RelationshipDim
     comfort: clamp(rel.comfort),
     respect: clamp(rel.respect),
     annoyance: clamp(rel.annoyance),
+    affection: clamp(rel.affection ?? 0),
+    attraction: clamp(rel.attraction ?? 0),
+    suspicion: clamp(rel.suspicion ?? 0),
+    resentment: clamp(rel.resentment ?? 0),
   };
+}
+
+/** Clamp traits into 0..100 (integers). Missing keys fall back to 50 (neutral). */
+export function clampTraits(traits: Partial<CharacterTraits> | undefined): CharacterTraits {
+  const clamp = (n: unknown) => (typeof n === 'number' && Number.isFinite(n) ? Math.max(0, Math.min(100, Math.round(n))) : 50);
+  return {
+    shyness: clamp(traits?.shyness),
+    warmth: clamp(traits?.warmth),
+    discipline: clamp(traits?.discipline),
+    spontaneity: clamp(traits?.spontaneity),
+    loyalty: clamp(traits?.loyalty),
+  };
+}
+
+/**
+ * Hand-authored temperament for the core 4 (code-owned, never persisted).
+ * Maya reads shy-guarded, Ryan forward-warm, Nora guarded-loyal, Henderson steady-formal.
+ */
+export const CORE_TRAITS: Record<string, CharacterTraits> = {
+  ryan: { shyness: 25, warmth: 78, discipline: 50, spontaneity: 72, loyalty: 62 },
+  maya: { shyness: 88, warmth: 62, discipline: 48, spontaneity: 45, loyalty: 85 },
+  nora: { shyness: 65, warmth: 42, discipline: 72, spontaneity: 30, loyalty: 78 },
+  henderson: { shyness: 45, warmth: 50, discipline: 85, spontaneity: 25, loyalty: 72 },
+};
+
+/** Traits for a buddy id: core hand-authored wins, everyone else inherits their archetype. */
+export function traitsForBuddy(buddyId: string, archetype: CharacterArchetype): CharacterTraits {
+  if (CORE_TRAITS[buddyId]) return { ...CORE_TRAITS[buddyId]! };
+  return { ...CHARACTER_ARCHETYPES[archetype].defaultTraits };
+}
+
+// ==========================================
+// CHARACTER LIVES — leave lines, agenda labels, run-in spots, mediation asks
+// Rules pick the line (seeded); AI only paraphrases inside live chat.
+// ==========================================
+
+/** Classify a schedule block's away text: sleep/work blocks make a buddy busy (polite-leave rules). */
+export function classifyScheduleBlock(awayMessage: string): 'sleep' | 'work' | null {
+  const msg = (awayMessage || '').toLowerCase();
+  if (/closed|sleep|asleep|crashed|\bnap\b|\bbed\b|winding down|zzz/.test(msg)) return 'sleep';
+  if (/work|shift|cart|desk|office|class|librar|rehearsal|dealing|commute|tape|indexing|front desk/.test(msg)) return 'work';
+  return null;
+}
+
+/** Polite goodbye when a sleep/work block starts mid-contact. Shy buddies use SOFT. */
+export const LEAVE_LINES: Record<'sleep' | 'work', { soft: string[]; direct: string[] }> = {
+  sleep: {
+    soft: [
+      'hey... i gotta crash, sorry. talk tomorrow? ~',
+      'eyes are closing lol. gn, really',
+      'need to sleep... dont stay up too late either',
+    ],
+    direct: [
+      'alright, im crashing. later!',
+      'bed time, dead serious. catch you tomorrow',
+      'gotta sleep, early start. gn!',
+    ],
+  },
+  work: {
+    soft: [
+      'ahh sorry, shift starts — gotta run. talk later?',
+      'boss is glaring lol. brb after work',
+      'duty calls... ill ping you when im back',
+    ],
+    direct: [
+      'shift time, gotta run. later!',
+      'work calls. back this evening',
+      'on the clock now — hmu later',
+    ],
+  },
+};
+
+/** Deterministic leave-line pick: shy (>= 70) buddies apologize softly. */
+export function pickLeaveLine(kind: 'sleep' | 'work', shyness: number, seed: string): string {
+  return pickSeeded(LEAVE_LINES[kind][shyness >= 70 ? 'soft' : 'direct'], `${seed}:leave:${kind}`);
+}
+
+/** Agenda filler labels for free windows (weekly planning pass). */
+export const AGENDA_LABELS: Record<'social' | 'errand', string[]> = {
+  social: ['open mic @ the cafe', 'nightboard thread', 'arcade high-score run', 'canal walk with a friend', 'mixtape swap'],
+  errand: ['laundromat run', 'TechMart browse', 'groceries @ corner store', 'rent envelope drop', 'library return'],
+};
+
+/** Where NPC↔NPC run-ins happen (witness labels). */
+export const NPC_RUNIN_SPOTS = ['the cafe', 'the laundromat', 'the canal', 'the arcade', 'NightBoard', 'the motel lobby'];
+
+/** Witness verbs per NPC↔NPC action (log lines + gossip). */
+export const NPC_RUNIN_VERBS: Record<string, string[]> = {
+  warm_chat: ['caught up', 'chatted a while'],
+  shared_activity: ['hung out', 'grabbed a table together'],
+  deep_talk: ['talked for a long while', 'had a real talk'],
+  small_favor: ['sorted something out together', 'helped each other out'],
+  support_crisis: ['talked through a rough patch', 'stuck close together'],
+  flirt: ['laughed a little too long', 'lingered together'],
+  argument: ['argued', 'had words'],
+  cold_shoulder: ['barely spoke', 'kept their distance'],
+};
+
+/** Deterministic run-in spot + witness verb. */
+export function pickRuninSpot(seed: string): string {
+  return pickSeeded(NPC_RUNIN_SPOTS, `${seed}:spot`);
+}
+
+export function pickRuninVerb(action: string, seed: string): string {
+  return pickSeeded(NPC_RUNIN_VERBS[action] ?? NPC_RUNIN_VERBS['warm_chat']!, `${seed}:verb:${action}`);
+}
+
+/** Mediation request openers ({target} filled by the caller with a display name). */
+export const MEDIATION_ASK_LINES: Record<'introduce' | 'strengthen' | 'ask_about', string[]> = {
+  introduce: [
+    'hey... you know {target}, right? could you introduce us? i get shy asking myself',
+    'do you think you could introduce me to {target}? no pressure tho',
+    'ive been wanting to talk to {target}. would you help break the ice?',
+  ],
+  strengthen: [
+    'me and {target} have been a bit off... could you put in a good word for me?',
+    'if you talk to {target}, tell them i mean well? trying to fix things',
+    '{target} has been distant. if you get a chance, tell them i miss hanging out?',
+  ],
+  ask_about: [
+    'what do you think of {target}? curious what they are like',
+    'you know {target} better than me — are they doing okay?',
+    'is {target} around much lately? wondering how they are',
+  ],
+};
+
+/** Deterministic mediation ask-line pick with {target} filled in. */
+export function pickMediationAskLine(kind: 'introduce' | 'strengthen' | 'ask_about', seed: string, targetName: string): string {
+  return pickSeeded(MEDIATION_ASK_LINES[kind], `${seed}:ask:${kind}`).replaceAll('{target}', targetName);
+}
+
+/** Thank-you lines when the player helps with a mediation (rules-picked, capped). */
+export const MEDIATION_THANKS_LINES = [
+  'thank you... really. that means a lot',
+  'you are a good friend for doing that. thanks!',
+  'aww thanks! i owe you one',
+];
+
+/** Deterministic thanks-line pick. */
+export function pickMediationThanks(seed: string): string {
+  return pickSeeded(MEDIATION_THANKS_LINES, `${seed}:thanks`);
 }
 
 export type { BuddyCharacter };

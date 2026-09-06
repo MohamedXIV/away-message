@@ -50,6 +50,11 @@ export interface ChatEngine {
     getOpenPromises(id: string): Array<{ id: string; text: string }>;
     addPromise(id: string, text: string, createdDay: number, dueDay?: number): unknown;
     resolvePromise(id: string, promiseId: string, kept: boolean, day: number): unknown;
+    // Character Lives (optional so older stubs keep compiling; SocialEngine implements all)
+    getTraits?(id: string): { shyness: number; warmth: number; discipline: number; spontaneity: number; loyalty: number };
+    buildBondContext?(id: string): string;
+    buildRomanceContext?(id: string): string;
+    getAgenda?(id: string, day?: number): Array<{ kind: string; label: string; day: number }>;
   };
   dispatchAction(action: { type: string; buddyId?: string; socialAction?: string; [key: string]: any }): unknown;
   handleMeetupChat?(buddyId: string, text: string, day: number): void;
@@ -243,11 +248,22 @@ export function buildDmChatContext(input: DmContextInput): DmChatContext {
   const memoryContext = buildMemoryContext([...existingMemory, `Player said: ${text}`].slice(-6), mergedFacts, updatedSummary, recentRepliesForBuddy);
 
   const personaSuffix = input.personaSuffix ? ` ${input.personaSuffix}` : '';
-  const personaWithStyle = `${style.persona} Vocabulary hints: ${style.vocabulary.join(', ')}. Punctuation: ${style.punctuation}. Quirks: ${style.quirks.join(', ')}. ${buddyPersonaLine(buddyId, buddy)}${personaSuffix}`;
+  // Character Lives: fixed temperament steers phrasing (numbers never quoted — see service prompt).
+  let temperamentLine = '';
+  try {
+    const traits = engine.social.getTraits?.(buddyId);
+    if (traits) {
+      temperamentLine = ` Temperament (fixed 0-100, shape tone, never quote numbers): shy ${traits.shyness}, warm ${traits.warmth}, disciplined ${traits.discipline}, spontaneous ${traits.spontaneity}, loyal ${traits.loyalty}.`;
+    }
+  } catch { /* temperament is best-effort */ }
+  const personaWithStyle = `${style.persona} Vocabulary hints: ${style.vocabulary.join(', ')}. Punctuation: ${style.punctuation}. Quirks: ${style.quirks.join(', ')}. ${buddyPersonaLine(buddyId, buddy)}${temperamentLine}${personaSuffix}`;
   let relationshipStage = 'acquaintance';
   let dailyMood = 'steady';
   let longTermContext = '';
   let affinityContext = '';
+  let bondContext = '';
+  let romanceContext = '';
+  let plansLine = '';
   let photoRecallHint = '';
   let weatherLine = '';
   try {
@@ -258,12 +274,21 @@ export function buildDmChatContext(input: DmContextInput): DmChatContext {
     dailyMood = engine.social.getDailyMood(buddyId, currentDay);
     longTermContext = engine.social.buildLongTermContext(buddyId);
     affinityContext = engine.social.buildAffinityContext(buddyId);
+    // Character Lives: NPC↔NPC ties, romance status, and today's plans (all bounded, rules-built).
+    bondContext = engine.social.buildBondContext?.(buddyId) ?? '';
+    romanceContext = engine.social.buildRomanceContext?.(buddyId) ?? '';
+    try {
+      const agenda = engine.social.getAgenda?.(buddyId, currentDay) ?? [];
+      if (agenda.length > 0) {
+        plansLine = `Plans today: ${agenda.slice(0, 3).map((a) => `${a.label} (${a.kind})`).join('; ')}`;
+      }
+    } catch { /* plans are best-effort */ }
     if (looksLikePhotoQuestion(text) && engine.social.getCoreMemories(buddyId).some((m) => m.kind === 'shared_photo')) {
       photoRecallHint = ' The player is asking about a shared photo — recall it warmly and specifically from the LongTerm memories.';
     }
   } catch { /* prompt enrichment is best-effort */ }
   const sceneSuffix = input.sceneContext ? ` | Scene: ${input.sceneContext}` : '';
-  const relationshipSummary = `${relationship ? JSON.stringify(relationship) : 'new friendship'} | Stage: ${relationshipStage} | DailyMood: ${dailyMood} | Mood: ${mood} | Availability: ${availability} | Activity: ${activity} | ${weatherLine} | ${memoryContext} | ${longTermContext}${affinityContext ? ` | ${affinityContext}` : ''}${photoRecallHint}${bodyHint ? ` | ${bodyHint}` : ''}${sceneSuffix} | Typing: ${style.typing.wpm} wpm, ${style.typing.pauseStyle}`;
+  const relationshipSummary = `${relationship ? JSON.stringify(relationship) : 'new friendship'} | Stage: ${relationshipStage} | DailyMood: ${dailyMood} | Mood: ${mood} | Availability: ${availability} | Activity: ${activity} | ${weatherLine} | ${memoryContext} | ${longTermContext}${affinityContext ? ` | ${affinityContext}` : ''}${bondContext ? ` | ${bondContext}` : ''}${romanceContext ? ` | ${romanceContext}` : ''}${plansLine ? ` | ${plansLine}` : ''}${photoRecallHint}${bodyHint ? ` | ${bodyHint}` : ''}${sceneSuffix} | Typing: ${style.typing.wpm} wpm, ${style.typing.pauseStyle}`;
 
   let worldKnowledge = '';
   let currentGameDay = currentDay;

@@ -296,6 +296,24 @@ export interface RelationshipDimensions {
   comfort: number;      // 0..100
   respect: number;      // 0..100
   annoyance: number;    // 0..100
+  // Character Lives (v4): carried on every bond so crushes, suspicion and
+  // grudges can live between NPCs too. 0 = none, 100 = consuming.
+  affection: number;    // 0..100
+  attraction: number;   // 0..100
+  suspicion: number;    // 0..100
+  resentment: number;   // 0..100
+}
+
+// Character Lives — fixed temperament (Big5-lite). Set once at creation
+// (core 4 hand-authored, procedural from archetype + stable id jitter) and
+// never mutated afterwards, never chosen by AI. Rules read these to weight
+// rolls and pick template lines; AI only paraphrases inside chat.
+export interface CharacterTraits {
+  shyness: number;      // 0..100 — high = terse, guarded, modest; low = forward
+  warmth: number;       // 0..100 — high = seeks contact, forgiving
+  discipline: number;   // 0..100 — high = keeps schedule and promises, leaves on time
+  spontaneity: number;  // 0..100 — high = more NPC-NPC run-ins and dynamic plans
+  loyalty: number;      // 0..100 — high = keeps confidences, resents betrayal harder
 }
 
 export interface ScheduleBlock {
@@ -317,6 +335,9 @@ export interface BuddyCharacter {
   schedule: Record<number, ScheduleBlock[]>; // Keyed by day (1..14 legacy, 1..7 weekly for dynamic)
   initialRelationships: RelationshipDimensions;
   typingSpeedWpm: number;
+  // Character Lives (v4): fixed temperament, set at creation, never mutated.
+  // Required on new defs; v3 saves are backfilled deterministically on load.
+  traits: CharacterTraits;
   // Dynamic-roster metadata (optional so legacy defs keep compiling)
   archetype?: CharacterArchetype;
   status?: BuddyLifecycleStatus;
@@ -360,6 +381,14 @@ export interface SocialEngineState {
   affinities?: Record<string, number>;
   // P4 room-bump daily caps: "a__b_day" keys → used points (persisted, pruned)
   affinityCaps?: Record<string, number>;
+  // Character Lives (v4): directed NPC↔NPC bonds "from__to" (persisted)
+  npcBonds?: Record<string, NpcBondState>;
+  // Character Lives (v4): per-buddy planned blocks keyed by buddy id (persisted, pruned)
+  agenda?: Record<string, AgendaItem[]>;
+  // Character Lives (v4): player mediations between NPCs, capped (persisted)
+  mediations?: MediationRecord[];
+  // Character Lives (v4): witnessable NPC↔NPC moments, capped (persisted)
+  npcSocialLog?: NpcInteractionLog[];
 }
 
 // ==========================================
@@ -388,6 +417,71 @@ export type RelationshipStage = 'stranger' | 'acquaintance' | 'friend' | 'close'
 
 /** Daily mood: deterministic hash per (buddy, day), overridden to 'cold' when strained. */
 export type DailyMood = 'warm' | 'steady' | 'tired' | 'off' | 'cold';
+
+// ==========================================
+// CHARACTER LIVES — NPC inner life (v4 save shape)
+// Rules decide, AI paraphrases. Every roll below is a seeded hash —
+// no Math.random, no model-picked numbers, offline-safe by construction.
+// ==========================================
+
+/** Directed bond between two NPCs (the player is never a party to one). All dims 0..100. */
+export interface NpcBondDims {
+  familiarity: number;
+  trust: number;
+  comfort: number;
+  respect: number;
+  affection: number;
+  attraction: number;
+  annoyance: number;
+  suspicion: number;
+  resentment: number;
+}
+
+/** Cozy, non-explicit romance ladder. 'dating' is informal (no ceremony, no UI meter). */
+export type NpcRomanceStage = 'none' | 'crush' | 'dating';
+
+export interface NpcBondState {
+  dims: NpcBondDims;
+  romance: NpcRomanceStage;
+  romanceSinceDay: number; // day the current stage started (1 when 'none')
+  updatedDay: number;      // last day this bond moved
+}
+
+/** One planned block in a buddy's life (sleep/work/social/errand). */
+export type AgendaKind = 'sleep' | 'work' | 'social' | 'errand';
+
+export interface AgendaItem {
+  id: string;
+  kind: AgendaKind;
+  label: string;       // <= 60 chars, template-pool text (never freeform AI text in saves)
+  day: number;
+  startMinute: number; // minute of day 0..1439
+  endMinute: number;   // minute of day 1..1440
+}
+
+/** Player mediation between two NPCs: asked → player acts → the pair may compare notes. */
+export type MediationKind = 'introduce' | 'strengthen' | 'ask_about';
+export type MediationStatus = 'open' | 'fulfilled' | 'ignored' | 'sabotaged' | 'exposed';
+
+export interface MediationRecord {
+  id: string;
+  requesterId: string; // buddy who asked the player
+  targetId: string;    // buddy they asked about / want to meet / bond with
+  kind: MediationKind;
+  status: MediationStatus;
+  createdDay: number;
+  resolvedDay?: number;
+}
+
+/** Witnessable NPC↔NPC moment (rules-decided, capped, prompt-visible as gossip). */
+export interface NpcInteractionLog {
+  id: string;
+  day: number;
+  firstId: string;
+  secondId: string;
+  location: string; // display label from the template pool
+  line: string;     // witness line (<= 140 chars)
+}
 
 // ==========================================
 // WORLD / SANDBOX DOMAIN (replaces narrative beats)
@@ -558,6 +652,9 @@ export type SimulationAction =
   | { type: 'SOCIAL_SEND_MESSAGE'; buddyId: string; text: string; tags?: string[]; imageUrl?: string; imagePrompt?: string; imageCaption?: string }
   | { type: 'SOCIAL_RECEIVE_MESSAGE'; buddyId: string; text: string; timestampMinute?: number; deliveredAway?: boolean; tags?: string[]; imageUrl?: string; imagePrompt?: string; imageCaption?: string }
   | { type: 'SOCIAL_APPLY_ACTION'; buddyId: string; socialAction: string }
+  // Character Lives (v4): the player's answer to an NPC mediation request.
+  // Rules resolve it; the Pulse UI may dispatch this (chat command or button follow-up).
+  | { type: 'MEDIATION_RESPOND'; mediationId: string; choice: 'help' | 'ignore' | 'badmouth' }
   | { type: 'SOCIAL_ADD_BUDDY'; buddy: BuddyCharacter; introText?: string; silent?: boolean }
   | { type: 'SOCIAL_REMOVE_BUDDY'; buddyId: string }
   | { type: 'WORLD_SET_FLAG'; key: string; value: boolean | number | string }
