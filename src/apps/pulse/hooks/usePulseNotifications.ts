@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useSimulationStore } from '../../../store/useSimulationStore';
 import { useWindowStore } from '../../../store/useWindowStore';
+import { soundManager } from '../../../audio/SoundManager';
 import { PulseNotification } from '../types';
 
 export function usePulseNotifications(activeTabBuddyId: string | null) {
@@ -30,6 +31,11 @@ export function usePulseNotifications(activeTabBuddyId: string | null) {
         if (!seenMessageIds.current.has(msg.id)) {
           seenMessageIds.current.add(msg.id);
 
+          // Incoming NPC buzz: MSN-style nudge (sound + window shake via 'pulse:buzz').
+          if (msg.senderId !== 'player' && (msg.tags ?? []).includes('buzz')) {
+            try { soundManager.play('buzz'); } catch { /* audio is best-effort */ }
+            try { window.dispatchEvent(new CustomEvent('pulse:buzz')); } catch { /* event is best-effort */ }
+          }
           if (msg.senderId !== 'player' && (isPulseInactive || activeTabBuddyId !== buddyId)) {
             const buddy = engine.social.getBuddy(buddyId);
             const newToast: PulseNotification = {

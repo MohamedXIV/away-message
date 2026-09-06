@@ -1247,9 +1247,11 @@ export function pickMediationAskLine(kind: 'introduce' | 'strengthen' | 'ask_abo
   return pickSeeded(MEDIATION_ASK_LINES[kind], `${seed}:ask:${kind}`).replaceAll('{target}', targetName);
 }
 
+/** MSN-era nudges: shy buddies ping instead of typing (sent with the 'buzz' tag). */
+export const NPC_BUZZ_LINES = ['*nudge*', '*buzzes you*', '*nudge nudge*'];
+
 /** Thank-you lines when the player helps with a mediation (rules-picked, capped). */
-export const MEDIATION_THANKS_LINES = [
-  'thank you... really. that means a lot',
+export const MEDIATION_THANKS_LINES = [  'thank you... really. that means a lot',
   'you are a good friend for doing that. thanks!',
   'aww thanks! i owe you one',
 ];

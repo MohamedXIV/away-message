@@ -11,6 +11,7 @@ Game versions use SemVer (`0.x.y` while in demo); save *format* versions are tra
 - Buddies live their own lives: they hang out with each other around town, keep weekly plans, say a quick goodbye when work or sleep calls, and you will hear about it
 - Buddies can ask you to introduce them to someone, put in a good word, or tell them about a friend — help them, ignore them, or talk behind their back, but if the two compare notes they will both know
 - Buddies can quietly crush, start seeing each other, or split up — and they will answer honestly if you ask whether they are with someone
+- Shy buddies rarely message first — and often just buzz you instead of typing
 
 ### Changed
 - Save format v4 (v2/v3 saves upgrade on load; newer-than-current saves are still refused)

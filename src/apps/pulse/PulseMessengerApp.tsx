@@ -442,8 +442,8 @@ export const PulseMessengerApp: React.FC = () => {
         salt: 'login',
       });
       for (const plan of plans) {
-        engine.dispatchAction({ type: 'SOCIAL_RECEIVE_MESSAGE', buddyId: plan.buddyId, text: plan.text, deliveredAway: false, tags: ['initiative', plan.kind] });
-        offlineActivities.push({ id: `initiative_${plan.buddyId}_${initiativeDay}`, buddyId: plan.buddyId, kind: 'message', text: `${plan.displayName} messaged you first.`, minute: totalMinutes, createdAt: Date.now(), isRead: false });
+        engine.dispatchAction({ type: 'SOCIAL_RECEIVE_MESSAGE', buddyId: plan.buddyId, text: plan.text, deliveredAway: false, tags: ['initiative', plan.kind, ...(plan.tags ?? [])] });
+        offlineActivities.push({ id: `initiative_${plan.buddyId}_${initiativeDay}`, buddyId: plan.buddyId, kind: 'message', text: plan.tags?.includes('buzz') ? `${plan.displayName} buzzed you.` : `${plan.displayName} messaged you first.`, minute: totalMinutes, createdAt: Date.now(), isRead: false });
       }
       Object.assign(initiatedToday, updated);
     } catch { /* initiatives never break login */ }
@@ -499,7 +499,7 @@ export const PulseMessengerApp: React.FC = () => {
       });
       if (plans.length === 0) return;
       for (const plan of plans) {
-        engine.dispatchAction({ type: 'SOCIAL_RECEIVE_MESSAGE', buddyId: plan.buddyId, text: plan.text, deliveredAway: false, tags: ['initiative', plan.kind] });
+        engine.dispatchAction({ type: 'SOCIAL_RECEIVE_MESSAGE', buddyId: plan.buddyId, text: plan.text, deliveredAway: false, tags: ['initiative', plan.kind, ...(plan.tags ?? [])] });
       }
       setPulseState((previous) => ({
         ...previous,
@@ -508,7 +508,7 @@ export const PulseMessengerApp: React.FC = () => {
           id: `initiative_${plan.buddyId}_${day}`,
           buddyId: plan.buddyId,
           kind: 'message' as const,
-          text: `${plan.displayName} messaged you first.`,
+          text: plan.tags?.includes('buzz') ? `${plan.displayName} buzzed you.` : `${plan.displayName} messaged you first.`,
           minute: totalMinutes,
           createdAt: Date.now(),
           isRead: false,
@@ -569,6 +569,13 @@ export const PulseMessengerApp: React.FC = () => {
     setBuzzActive(true);
     window.setTimeout(() => setBuzzActive(false), 650);
   };
+
+  // Incoming NPC buzzes shake the window too (MSN-era nudge, see usePulseNotifications).
+  useEffect(() => {
+    const onBuzz = () => handleBuzz();
+    window.addEventListener('pulse:buzz', onBuzz);
+    return () => window.removeEventListener('pulse:buzz', onBuzz);
+  }, []);
 
   const handleAcceptFriendRequest = () => {
     soundManager.play('invite');

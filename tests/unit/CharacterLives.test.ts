@@ -6,6 +6,8 @@ import { EventBus } from '../../src/engine/EventBus';
 import { buildCharacter, validatePersistedBuddy } from '../../src/engine/CharacterEngine';
 import { classifyScheduleBlock, pickLeaveLine, LEAVE_LINES } from '../../src/engine/characterTemplates';
 import { buildDmChatContext } from '../../src/apps/pulse/utils/chatContext';
+import { planInitiatives, nerveForInitiative, buzzChanceFor, type InitiativeEngine } from '../../src/apps/pulse/utils/initiatives';
+import { NPC_BUZZ_LINES } from '../../src/engine/characterTemplates';
 import {
   checkSaveCompatibility,
   loadSlotSnapshot,
@@ -401,5 +403,76 @@ describe('Character Lives chat wiring', () => {
     expect(ctx.persona).toContain('shy 88');
     expect(ctx.relationshipSummary).toContain('Ties:');
     expect(ctx.relationshipSummary).toContain('Romance: single');
+  });
+});
+
+describe('Character Lives initiative nerve (who messages first)', () => {
+  function makeTraitStub(
+    traitsById: Record<string, { shyness: number; warmth: number; spontaneity: number }>,
+    opts?: { promiseHolder?: string }
+  ): InitiativeEngine {
+    const buddies = Object.keys(traitsById).map((id) => ({
+      id, displayName: id, status: 'friend' as const, archetype: 'regular' as const,
+    }));
+    return {
+      social: {
+        getBuddies: () => buddies,
+        getRelationshipStage: () => 'friend' as const,
+        getPresence: () => ({ status: 'online' as const }),
+        getDailyMood: () => 'warm' as const,
+        getOpenPromises: (id: string) => (id === opts?.promiseHolder ? [{ text: 'bring tacos' }] : []),
+        getTraits: (id: string) => traitsById[id],
+      },
+    };
+  }
+
+  it('scores nerve from temperament (shy low, bold high, close braver)', () => {
+    const shy = { shyness: 88, warmth: 62, spontaneity: 45 }; // maya-like
+    const bold = { shyness: 25, warmth: 78, spontaneity: 72 }; // ryan-like
+    expect(nerveForInitiative('friend', shy)).toBeLessThan(nerveForInitiative('friend', bold));
+    expect(nerveForInitiative('close', shy)).toBeGreaterThan(nerveForInitiative('friend', shy));
+    expect(nerveForInitiative('friend', shy)).toBeLessThanOrEqual(10);
+    expect(buzzChanceFor(88)).toBeGreaterThan(0);
+    expect(buzzChanceFor(60)).toBe(0);
+  });
+
+  it('lets bold buddies message first far more often than shy ones', () => {
+    const engine = makeTraitStub({
+      ryan_like: { shyness: 25, warmth: 78, spontaneity: 72 },
+      maya_like: { shyness: 88, warmth: 62, spontaneity: 45 },
+    });
+    const counts: Record<string, number> = { ryan_like: 0, maya_like: 0 };
+    for (let day = 1; day <= 120; day++) {
+      const { plans } = planInitiatives(engine, { day, blockedIds: [], initiatedToday: {}, maxCount: 10, salt: 'login' });
+      for (const p of plans) counts[p.buddyId] = (counts[p.buddyId] ?? 0) + 1;
+    }
+    expect(counts['ryan_like']).toBeGreaterThanOrEqual(8);
+    expect(counts['ryan_like']).toBeGreaterThan((counts['maya_like'] ?? 0) * 2);
+  });
+
+  it('exempts duty: even shy buddies chase open promises', () => {
+    const engine = makeTraitStub(
+      { maya_like: { shyness: 88, warmth: 62, spontaneity: 45 } },
+      { promiseHolder: 'maya_like' }
+    );
+    let reminded = false;
+    for (let day = 1; day <= 60 && !reminded; day++) {
+      const { plans } = planInitiatives(engine, { day, blockedIds: [], initiatedToday: {}, maxCount: 10, salt: 'login' });
+      reminded = plans.some((p) => p.kind === 'promise_reminder');
+    }
+    expect(reminded).toBe(true);
+  });
+
+  it('shy buddies buzz instead of typing (tagged plans from the buzz pool)', () => {
+    const engine = makeTraitStub({
+      shy_one: { shyness: 95, warmth: 100, spontaneity: 100 },
+    });
+    let buzz: { text: string; tags?: string[] } | undefined;
+    for (let day = 1; day <= 60 && !buzz; day++) {
+      const { plans } = planInitiatives(engine, { day, blockedIds: [], initiatedToday: {}, maxCount: 10, salt: 'login' });
+      buzz = plans.find((p) => p.tags?.includes('buzz'));
+    }
+    expect(buzz).toBeDefined();
+    expect(NPC_BUZZ_LINES).toContain(buzz!.text);
   });
 });
