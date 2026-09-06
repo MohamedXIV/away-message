@@ -16,6 +16,9 @@ import { createStore, type TablesSchema } from 'tinybase';
 
 export const CONTENT_SCHEMA = {
   buddies: {
+    // Stable story role (ryan/maya/nora/henderson): NEVER renamed. The code
+    // anchors (CORE_IDS) resolve through it, so identity edits need no code.
+    role: { type: 'string', default: '' },
     displayName: { type: 'string', default: '' },
     handle: { type: 'string', default: '' },
     myplace: { type: 'string', default: '' },
@@ -25,6 +28,8 @@ export const CONTENT_SCHEMA = {
     color: { type: 'string', default: '#800080' },
     persona: { type: 'string', default: '' },
     typingSpeedWpm: { type: 'number', default: 60 },
+    // JSON array of superseded ids/handles (save + alias bridge after a rename).
+    formerIds: { type: 'string', default: '[]' },
   },
   buddyTraits: {
     shyness: { type: 'number', default: 50 },

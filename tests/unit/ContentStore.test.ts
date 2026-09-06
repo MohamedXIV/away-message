@@ -63,3 +63,48 @@ describe('Content store (TinyBase source of truth)', () => {
     expect(Object.keys(tables['buddies'] ?? {}).sort()).toEqual(['henderson', 'maya', 'nora', 'ryan']);
   });
 });
+
+describe('Content store editor renames (no code changes needed)', () => {
+  function renamedTables(): ReturnType<typeof parseContentJson> {
+    const tables = parseContentJson(JSON.stringify({
+      buddies: {
+        rayan: { role: 'ryan', displayName: 'Rayan', handle: 'rayan_cart', myplace: 'rayan_cart', archetype: 'coworker', status: 'friend', metVia: 'core', color: '#d96c3b', persona: 'Warm food-cart coworker.', typingSpeedWpm: 80, formerIds: '["ryan", "ryan_foodcart", "tacocart_ryan"]' },
+      },
+      buddyTraits: { rayan: { shyness: 25, warmth: 78, discipline: 50, spontaneity: 72, loyalty: 62 } },
+      buddyHearts: { rayan: { familiarity: 40, trust: 50, comfort: 50, respect: 40, annoyance: 0, affection: 0, attraction: 0, suspicion: 0, resentment: 0 } },
+      buddySchedules: { rayan: { blocks: '[{"start":0,"end":1440,"status":"online","msg":"hi"}]' } },
+      pools: {},
+    }));
+    return tables;
+  }
+
+  it('validates a full id+handle rename with a save bridge', () => {
+    expect(validateContent(renamedTables())).toEqual([]);
+  });
+
+  it('rejects duplicate roles and formerIds colliding with live ids', () => {
+    const dup = renamedTables();
+    (dup['buddies']!['maya'] as unknown) = { ...(dup['buddies']!['rayan'] as object), role: 'ryan' };
+    (dup['buddyTraits']!['maya'] as unknown) = { ...(dup['buddyTraits']!['rayan'] as object) };
+    (dup['buddyHearts']!['maya'] as unknown) = { ...(dup['buddyHearts']!['rayan'] as object) };
+    (dup['buddySchedules']!['maya'] as unknown) = { ...(dup['buddySchedules']!['rayan'] as object) };
+    expect(validateContent(dup).some((e) => e.includes('duplicate role'))).toBe(true);
+
+    const tables = renamedTables();
+    (tables['buddies']!['rayan']! as Record<string, unknown>)['formerIds'] = '["maya"]';
+    (tables['buddies']!['maya'] as unknown) = { ...((tables['buddies']!['rayan'] as Record<string, unknown>)) };
+    (tables['buddyTraits']!['maya'] as unknown) = { ...(tables['buddyTraits']!['rayan'] as object) };
+    (tables['buddyHearts']!['maya'] as unknown) = { ...(tables['buddyHearts']!['rayan'] as object) };
+    (tables['buddySchedules']!['maya'] as unknown) = { ...(tables['buddySchedules']!['rayan'] as object) };
+    (tables['buddies']!['maya'] as Record<string, unknown>)['role'] = 'maya';
+    (tables['buddies']!['maya'] as Record<string, unknown>)['formerIds'] = '[]';
+    expect(validateContent(tables).some((e) => e.includes('collides'))).toBe(true);
+  });
+
+  it('emits role + formerIds into the generated registry', () => {
+    const source = generateRegistrySource(renamedTables());
+    expect(source).toContain(`role: "ryan"`);
+    expect(source).toContain(`formerIds: ["ryan", "ryan_foodcart", "tacocart_ryan"]`);
+    expect(source).toContain(`id: "rayan"`);
+  });
+});

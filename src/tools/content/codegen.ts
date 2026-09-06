@@ -48,6 +48,38 @@ export function validateContent(tables: ContentTables): string[] {
     }
     const idCheck = validateCharacterId(id);
     if (!idCheck.ok) errors.push(`buddies/${id}: ${idCheck.error}`);
+    const role = (row as Record<string, unknown>)['role'];
+    if (typeof role !== 'string' || !role.trim()) {
+      errors.push(`buddies/${id}.role: must be a non-empty stable role key.`);
+    } else {
+      const clash = Object.entries(buddies).find(
+        ([otherId, other]) => otherId !== id && (other as Record<string, unknown>)?.['role'] === role
+      );
+      if (clash) errors.push(`buddies/${id}.role: duplicate role '${role}' (also on ${clash[0]}).`);
+    }
+    const formerRaw = (row as Record<string, unknown>)['formerIds'];
+    let former: unknown = [];
+    try {
+      former = JSON.parse(String(formerRaw ?? '[]'));
+    } catch {
+      errors.push(`buddies/${id}.formerIds: invalid JSON array.`);
+      former = null;
+    }
+    if (Array.isArray(former)) {
+      const liveIds = new Set(Object.keys(buddies));
+      const liveHandles = new Set(
+        Object.values(buddies).map((r) => String((r as Record<string, unknown>)?.['handle'] ?? ''))
+      );
+      for (const old of former) {
+        if (typeof old !== 'string' || !validateCharacterId(old).ok) {
+          errors.push(`buddies/${id}.formerIds: '${String(old)}' is not a valid id.`);
+        } else if (liveIds.has(old) || liveHandles.has(old)) {
+          errors.push(`buddies/${id}.formerIds: '${old}' collides with a live id/handle.`);
+        }
+      }
+    } else if (former !== null) {
+      errors.push(`buddies/${id}.formerIds: must be a JSON array.`);
+    }
     const str = (k: string, max: number): string | null => {
       const v = (row as Record<string, unknown>)[k];
       if (typeof v !== 'string' || !v.trim() || v.length > max) {
@@ -206,6 +238,7 @@ export function generateRegistrySource(tables: ContentTables): string {
   lines.push('');
   lines.push('export interface GeneratedBuddyDef {');
   lines.push('  id: string;');
+  lines.push('  role: string;');
   lines.push('  displayName: string;');
   lines.push('  handle: string;');
   lines.push('  myplace: string;');
@@ -215,6 +248,7 @@ export function generateRegistrySource(tables: ContentTables): string {
   lines.push('  color: string;');
   lines.push('  persona: string;');
   lines.push('  typingSpeedWpm: number;');
+  lines.push('  formerIds: string[];');
   lines.push('  traits: { shyness: number; warmth: number; discipline: number; spontaneity: number; loyalty: number };');
   lines.push('  hearts: { familiarity: number; trust: number; comfort: number; respect: number; annoyance: number; affection: number; attraction: number; suspicion: number; resentment: number };');
   lines.push('  blocks: GeneratedScheduleBlock[];');
@@ -230,10 +264,17 @@ export function generateRegistrySource(tables: ContentTables): string {
     const blocks = JSON.parse(String((schedules[id] as Record<string, unknown> | undefined)?.['blocks'] ?? '[]')) as Array<Record<string, unknown>>;
     lines.push('  {');
     lines.push(`    id: ${tsString(id)},`);
+    lines.push(`    role: ${tsString(String(row['role'] ?? ''))},`);
     for (const k of ['displayName', 'handle', 'myplace', 'archetype', 'status', 'metVia', 'color', 'persona'] as const) {
       lines.push(`    ${k}: ${tsString(String(row[k] ?? ''))},`);
     }
     lines.push(`    typingSpeedWpm: ${Number(row['typingSpeedWpm'] ?? 60)},`);
+    let formerIds: string[] = [];
+    try {
+      const parsed: unknown = JSON.parse(String(row['formerIds'] ?? '[]'));
+      if (Array.isArray(parsed)) formerIds = parsed.filter((x): x is string => typeof x === 'string');
+    } catch { formerIds = []; }
+    lines.push(`    formerIds: [${formerIds.map((x) => tsString(x)).join(', ')}],`);
     const numList = (keys: string[], src: Record<string, unknown>): string =>
       keys.map((k) => `${k}: ${Number(src[k] ?? 0)}`).join(', ');
     lines.push(`    traits: { ${numList(TRAIT_KEYS, trow)} },`);

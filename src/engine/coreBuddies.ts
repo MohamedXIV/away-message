@@ -25,6 +25,8 @@ export { CONTENT_VERSION };
 
 export interface CoreBuddy {
   id: string;
+  /** Stable story role (never renamed): anchors resolve through it. */
+  role: string;
   displayName: string;
   handle: string;
   myplace: string;
@@ -34,6 +36,8 @@ export interface CoreBuddy {
   color: string;
   persona: string;
   typingSpeedWpm: number;
+  /** Superseded ids/handles (save + alias bridge after a rename). */
+  formerIds: string[];
   traits: CharacterTraits;
   hearts: RelationshipDimensions;
   blocks: Array<{ start: number; end: number; status: BuddyPresenceStatus; msg: string }>;
@@ -47,8 +51,11 @@ function asArchetype(value: string, id: string): CharacterArchetype {
 }
 
 function normalize(def: GeneratedBuddyDef): CoreBuddy {
+  // Defensive: the generated file may lag the schema mid-development (the
+  // pull script itself imports through characterTemplates → here).
   return {
     id: def.id,
+    role: typeof def.role === 'string' && def.role ? def.role : def.id,
     displayName: def.displayName,
     handle: def.handle,
     myplace: def.myplace,
@@ -58,6 +65,7 @@ function normalize(def: GeneratedBuddyDef): CoreBuddy {
     color: def.color,
     persona: def.persona,
     typingSpeedWpm: def.typingSpeedWpm,
+    formerIds: [...(def.formerIds ?? [])],
     traits: { ...def.traits },
     hearts: { ...def.hearts },
     blocks: def.blocks.map((b) => ({ ...b })),
@@ -79,10 +87,11 @@ export function isCoreBuddyId(id: string): boolean {
   return id === CORE_IDS.RYAN || id === CORE_IDS.MAYA || id === CORE_IDS.NORA || id === CORE_IDS.HENDERSON;
 }
 
-// Role anchors: the four story roles, by CURRENT id. Phase 2 renames edit
-// these four lines (+ the content store) and every call site below follows.
-function anchor(id: string): string {
-  return CORE_BY_ID[id]?.id ?? id;
+// Role anchors: resolved through the stable `role` column, so renaming an
+// id/displayName/handle in the content store needs ZERO code changes —
+// anchors, seeds, aliases and rooms all follow automatically.
+function anchor(role: string): string {
+  return CORE_BUDDIES.find((b) => b.role === role)?.id ?? role;
 }
 
 export const CORE_IDS = {

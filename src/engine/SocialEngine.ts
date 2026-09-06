@@ -64,11 +64,12 @@ export function npcBondKey(rawFrom: string, rawTo: string): string {
 }
 
 // Canonical engine ids are short ('maya'); old saves/UI used handles.
-// Handle aliases derive from the registry; the map stays for legacy keys.
+// Handle + former-id aliases derive from the registry: after a rename, old
+// ids keep resolving through `formerIds` (save bridge, no code changes).
 // Declared before SEED_AFFINITIES: seed keys are computed through
 // affinityKey → normalizeBuddyId at module load (TDZ otherwise).
 export const BUDDY_ID_ALIASES: Record<string, string> = Object.fromEntries(
-  CORE_BUDDIES.map((b) => [b.handle, b.id])
+  CORE_BUDDIES.flatMap((b) => [[b.handle, b.id], ...b.formerIds.map((old): [string, string] => [old, b.id])])
 );
 
 export function normalizeBuddyId(id: string): string {

@@ -1,6 +1,6 @@
 // GENERATED — do not edit by hand.
-// Source: content/store.json (content v3ba32359). Regenerate: npm run content:pull.
-export const CONTENT_VERSION = '3ba32359';
+// Source: content/store.json (content vcc0d5e73). Regenerate: npm run content:pull.
+export const CONTENT_VERSION = 'cc0d5e73';
 
 export interface GeneratedScheduleBlock {
   start: number;
@@ -11,6 +11,7 @@ export interface GeneratedScheduleBlock {
 
 export interface GeneratedBuddyDef {
   id: string;
+  role: string;
   displayName: string;
   handle: string;
   myplace: string;
@@ -20,6 +21,7 @@ export interface GeneratedBuddyDef {
   color: string;
   persona: string;
   typingSpeedWpm: number;
+  formerIds: string[];
   traits: { shyness: number; warmth: number; discipline: number; spontaneity: number; loyalty: number };
   hearts: { familiarity: number; trust: number; comfort: number; respect: number; annoyance: number; affection: number; attraction: number; suspicion: number; resentment: number };
   blocks: GeneratedScheduleBlock[];
@@ -28,6 +30,7 @@ export interface GeneratedBuddyDef {
 export const GENERATED_BUDDIES: GeneratedBuddyDef[] = [
   {
     id: "ryan",
+    role: "ryan",
     displayName: "Ryan",
     handle: "ryan_foodcart",
     myplace: "tacocart_ryan",
@@ -37,6 +40,7 @@ export const GENERATED_BUDDIES: GeneratedBuddyDef[] = [
     color: "#d96c3b",
     persona: "Warm, impulsive food-cart coworker. Uses casual slang, jokes, and short messages. He avoids heavy emotional talks unless trust is high.",
     typingSpeedWpm: 80,
+    formerIds: [],
     traits: { shyness: 25, warmth: 78, discipline: 50, spontaneity: 72, loyalty: 62 },
     hearts: { familiarity: 40, trust: 50, comfort: 50, respect: 40, annoyance: 0, affection: 0, attraction: 0, suspicion: 0, resentment: 0 },
     blocks: [
@@ -50,6 +54,7 @@ export const GENERATED_BUDDIES: GeneratedBuddyDef[] = [
   },
   {
     id: "maya",
+    role: "maya",
     displayName: "Maya",
     handle: "starlight_maya",
     myplace: "maya_x",
@@ -59,6 +64,7 @@ export const GENERATED_BUDDIES: GeneratedBuddyDef[] = [
     color: "#6a3fa0",
     persona: "Quiet, observant, creative, and a little guarded. Uses lowercase, pauses, music references, and gentle honesty. She warms up slowly.",
     typingSpeedWpm: 60,
+    formerIds: [],
     traits: { shyness: 88, warmth: 62, discipline: 48, spontaneity: 45, loyalty: 85 },
     hearts: { familiarity: 10, trust: 20, comfort: 30, respect: 40, annoyance: 0, affection: 0, attraction: 0, suspicion: 0, resentment: 0 },
     blocks: [
@@ -71,6 +77,7 @@ export const GENERATED_BUDDIES: GeneratedBuddyDef[] = [
   },
   {
     id: "nora",
+    role: "nora",
     displayName: "Nora",
     handle: "NightOwl87",
     myplace: "nightowl87",
@@ -80,6 +87,7 @@ export const GENERATED_BUDDIES: GeneratedBuddyDef[] = [
     color: "#2e7f86",
     persona: "Night-owl archivist with dry humor. Curious about strange details, concise, slightly cryptic, but not supernatural.",
     typingSpeedWpm: 90,
+    formerIds: [],
     traits: { shyness: 65, warmth: 42, discipline: 72, spontaneity: 30, loyalty: 78 },
     hearts: { familiarity: 5, trust: 15, comfort: 20, respect: 50, annoyance: 0, affection: 0, attraction: 0, suspicion: 0, resentment: 0 },
     blocks: [
@@ -92,6 +100,7 @@ export const GENERATED_BUDDIES: GeneratedBuddyDef[] = [
   },
   {
     id: "henderson",
+    role: "henderson",
     displayName: "Mr. Henderson",
     handle: "motel_office",
     myplace: "",
@@ -101,6 +110,7 @@ export const GENERATED_BUDDIES: GeneratedBuddyDef[] = [
     color: "#7a5c3e",
     persona: "Professional motel manager. Formal, practical, and terse. He cares about rent, schedules, and keeping the property calm.",
     typingSpeedWpm: 40,
+    formerIds: [],
     traits: { shyness: 45, warmth: 50, discipline: 85, spontaneity: 25, loyalty: 72 },
     hearts: { familiarity: 30, trust: 30, comfort: 20, respect: 40, annoyance: 10, affection: 0, attraction: 0, suspicion: 0, resentment: 0 },
     blocks: [

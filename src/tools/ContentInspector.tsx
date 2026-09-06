@@ -12,7 +12,7 @@ import type { Tables } from 'tinybase';
 import { createContentStore } from './content/schema';
 import { GENERATED_BUDDIES, GENERATED_POOLS, CONTENT_VERSION } from '../engine/coreBuddies.generated';
 
-const BUDDY_KEY_ORDER = ['displayName', 'handle', 'myplace', 'archetype', 'status', 'metVia', 'color', 'persona', 'typingSpeedWpm'];
+const BUDDY_KEY_ORDER = ['role', 'displayName', 'handle', 'myplace', 'archetype', 'status', 'metVia', 'color', 'persona', 'typingSpeedWpm', 'formerIds'];
 const TRAIT_KEY_ORDER = ['shyness', 'warmth', 'discipline', 'spontaneity', 'loyalty'];
 const HEART_KEY_ORDER = ['familiarity', 'trust', 'comfort', 'respect', 'annoyance', 'affection', 'attraction', 'suspicion', 'resentment'];
 const TABLE_KEY_ORDERS: Record<string, string[]> = {
