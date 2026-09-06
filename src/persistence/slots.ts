@@ -142,6 +142,7 @@ export async function saveSlot(
       cash: snapshot.player.cash,
       energy: snapshot.player.energy,
       fatigue: snapshot.player.fatigue,
+      socialBattery: snapshot.player.socialBattery ?? 100,
       rentDueDay: snapshot.player.rentDueDay,
       rentAmount: snapshot.player.rentAmount,
       rentPaid: snapshot.player.rentPaid,
@@ -225,8 +226,13 @@ export function migrateSnapshotToV4(snapshot: SimulationState, fromVersion: numb
       resentment: num(r.resentment),
     };
   }
+  const player = ((snapshot as SimulationState).player ?? {}) as unknown as Record<string, unknown>;
+  const battery = typeof player.socialBattery === 'number' && Number.isFinite(player.socialBattery)
+    ? Math.max(0, Math.min(100, Math.round(player.socialBattery)))
+    : 100;
   return {
     ...(snapshot as object),
+    player: { ...player, socialBattery: battery },
     social: {
       ...social,
       buddies,

@@ -297,6 +297,16 @@ export const RoomScene: React.FC = () => {
                 />
               </div>
             </div>
+            {/* Social battery at a glance (introvert meter — talking spends it, solitude repays it) */}
+            <div className="flex items-center gap-1 font-mono text-[11px]" title={`Social battery ${Math.round(player.socialBattery ?? 100)}% — bold talk costs extra`}>
+              <span>💬</span>
+              <div className="w-12 h-2 bg-slate-800 rounded-full border border-slate-700 overflow-hidden">
+                <div
+                  className={`h-full transition-all duration-300 ${(player.socialBattery ?? 100) <= 0 ? 'bg-red-500' : (player.socialBattery ?? 100) < 25 ? 'bg-amber-500' : 'bg-purple-500'}`}
+                  style={{ width: `${Math.min(100, Math.round(player.socialBattery ?? 100))}%` }}
+                />
+              </div>
+            </div>
           </div>
         </div>
 

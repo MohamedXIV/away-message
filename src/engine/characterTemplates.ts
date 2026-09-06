@@ -1250,6 +1250,29 @@ export function pickMediationAskLine(kind: 'introduce' | 'strengthen' | 'ask_abo
 /** MSN-era nudges: shy buddies ping instead of typing (sent with the 'buzz' tag). */
 export const NPC_BUZZ_LINES = ['*nudge*', '*buzzes you*', '*nudge nudge*'];
 
+/** MSN-era signature colors: buddies tint their own names (Pulse 6.x only, gated in UI). */
+export const CORE_SIGNATURE_COLORS: Record<string, string> = {
+  ryan: '#d96c3b',
+  maya: '#6a3fa0',
+  nora: '#2e7f86',
+  henderson: '#7a5c3e',
+};
+
+export const ARCHETYPE_SIGNATURE_COLORS: Record<CharacterArchetype, string> = {
+  coworker: '#b3541e',
+  nightowl: '#3d6e9e',
+  student: '#4e9e4e',
+  trader: '#8e7a2e',
+  artist: '#9e4e8e',
+  regular: '#6e6e6e',
+};
+
+/** Signature chat color for a buddy id (core fixed, procedural by archetype). */
+export function buddySignatureColor(buddyId: string, archetype: CharacterArchetype): string {
+  if (CORE_SIGNATURE_COLORS[buddyId]) return CORE_SIGNATURE_COLORS[buddyId]!;
+  return ARCHETYPE_SIGNATURE_COLORS[archetype] ?? '#800080';
+}
+
 /** Thank-you lines when the player helps with a mediation (rules-picked, capped). */
 export const MEDIATION_THANKS_LINES = [  'thank you... really. that means a lot',
   'you are a good friend for doing that. thanks!',

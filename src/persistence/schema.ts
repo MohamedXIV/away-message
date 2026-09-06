@@ -27,6 +27,7 @@ export interface SaveSlotRecord {
     cash: number;
     energy: number;              // 0..100
     fatigue: number;             // 0..100
+    socialBattery: number;       // 0..100 (v4: introvert meter, old rows backfill full)
     rentDueDay: number;          // Day 7, Day 14
     rentAmount: number;          // $140.00
     rentPaid: boolean;
@@ -198,6 +199,7 @@ export const SaveSlotSchema = z.object({
     cash: z.number(),
     energy: z.number().min(0).max(100),
     fatigue: z.number().min(0).max(100),
+    socialBattery: z.number().min(0).max(100).optional().default(100),
     rentDueDay: z.number().int(),
     rentAmount: z.number(),
     rentPaid: z.boolean(),

@@ -110,10 +110,10 @@ export const STATIC_PULSE_CATALOG: PulseRelease[] = [
     kind: 'major',
     channel: 'stable',
     releaseDay: 13,
-    changelog: ['Display pictures', 'File transfer resume', 'Webcam indicator'],
+    changelog: ['Display pictures', 'Buddy signature colors', 'Animated emoticons +12', 'File transfer resume', 'Webcam indicator'],
     requirements: { minOs: 'Orion_6.0' as OsVersion, minRamMB: 768, minDiskMB: 18 },
     installSizeMB: 18,
-    blurb: 'The 6.0 — your face, 96 pixels at a time.',
+    blurb: 'The 6.0 — your face, 96 pixels at a time, now in your own color.',
   },
   {
     id: 'pulse_6.0.1',
@@ -165,6 +165,21 @@ export function getPulseReleaseById(id: string): PulseRelease | undefined {
 
 export function getPulseReleasesForFamily(family: PulseFamily): PulseRelease[] {
   return getAllPulseReleases().filter((r) => r.family === family);
+}
+
+export type PulseFeature = 'buddy-colors' | 'animated-emoticons';
+
+/**
+ * Feature gate for the Pulse 6 generation (MSN-era colors + motion).
+ * 6.x stable/hotfix (and betas) carry them; 5.x never does — the upgrade
+ * stays meaningful. Unknown ids read as 5.x (offline-safe default).
+ */
+export function pulseHasFeature(releaseId: string | undefined, feature: PulseFeature): boolean {
+  void feature;
+  if (!releaseId) return false;
+  const release = getPulseReleaseById(releaseId);
+  if (!release) return false;
+  return release.family === '6.x';
 }
 
 export function comparePulseVersions(a: string, b: string): number {

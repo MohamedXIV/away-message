@@ -53,6 +53,10 @@ export interface PlayerState {
   pantry: { noodles: number; groceries: number };
   // P7 where the player physically is (map travel, persisted)
   location: import('../CityMap').CityNodeId;
+  // Social battery (visible meter): the introvert protagonist spends it on
+  // every social act and recharges alone. 0 = socially blocked (soft-lock
+  // proof: sleep, solitude and apologies always work). Old saves start full.
+  socialBattery: number;       // 0..100 (100 = fresh, 0 = drained)
 }
 
 export interface WorkShiftResult {

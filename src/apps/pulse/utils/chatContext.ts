@@ -58,6 +58,10 @@ export interface ChatEngine {
   };
   dispatchAction(action: { type: string; buddyId?: string; socialAction?: string; [key: string]: any }): unknown;
   handleMeetupChat?(buddyId: string, text: string, day: number): void;
+  /** Rules-stored reception hint for a bold player line (SimulationEngine implements it). */
+  getReceptionHint?(buddyId: string, day: number): string;
+  /** True when the installed Pulse release is the 6.x generation. */
+  isPulse6?(): boolean;
   world?: {
     getKnowledgeContextForBuddy?(buddyId: string, day: number): string;
     getKnowledgeContext?(day: number): string;
@@ -248,6 +252,13 @@ export function buildDmChatContext(input: DmContextInput): DmChatContext {
   const memoryContext = buildMemoryContext([...existingMemory, `Player said: ${text}`].slice(-6), mergedFacts, updatedSummary, recentRepliesForBuddy);
 
   const personaSuffix = input.personaSuffix ? ` ${input.personaSuffix}` : '';
+  // Pulse 6.x: the buddy knows their client does color + motion — MSN-era peacocking allowed.
+  let pulse6Suffix = '';
+  try {
+    if (engine.isPulse6?.()) {
+      pulse6Suffix = ' You are on Pulse 6.0: you tint your own name your signature color, and you may use animated emoticons like (:lol:) (:love:) (:dance:) sparingly when the feeling is real — classics like :) :( :D still work everywhere.';
+    }
+  } catch { /* flavor is best-effort */ }
   // Character Lives: fixed temperament steers phrasing (numbers never quoted — see service prompt).
   let temperamentLine = '';
   try {
@@ -256,7 +267,7 @@ export function buildDmChatContext(input: DmContextInput): DmChatContext {
       temperamentLine = ` Temperament (fixed 0-100, shape tone, never quote numbers): shy ${traits.shyness}, warm ${traits.warmth}, disciplined ${traits.discipline}, spontaneous ${traits.spontaneity}, loyal ${traits.loyalty}.`;
     }
   } catch { /* temperament is best-effort */ }
-  const personaWithStyle = `${style.persona} Vocabulary hints: ${style.vocabulary.join(', ')}. Punctuation: ${style.punctuation}. Quirks: ${style.quirks.join(', ')}. ${buddyPersonaLine(buddyId, buddy)}${temperamentLine}${personaSuffix}`;
+  const personaWithStyle = `${style.persona} Vocabulary hints: ${style.vocabulary.join(', ')}. Punctuation: ${style.punctuation}. Quirks: ${style.quirks.join(', ')}. ${buddyPersonaLine(buddyId, buddy)}${temperamentLine}${pulse6Suffix}${personaSuffix}`;
   let relationshipStage = 'acquaintance';
   let dailyMood = 'steady';
   let longTermContext = '';
@@ -264,6 +275,7 @@ export function buildDmChatContext(input: DmContextInput): DmChatContext {
   let bondContext = '';
   let romanceContext = '';
   let plansLine = '';
+  let receptionHint = '';
   let photoRecallHint = '';
   let weatherLine = '';
   try {
@@ -277,6 +289,8 @@ export function buildDmChatContext(input: DmContextInput): DmChatContext {
     // Character Lives: NPC↔NPC ties, romance status, and today's plans (all bounded, rules-built).
     bondContext = engine.social.buildBondContext?.(buddyId) ?? '';
     romanceContext = engine.social.buildRomanceContext?.(buddyId) ?? '';
+    // Bold-act reception: the rules judged the player's line at send time.
+    receptionHint = engine.getReceptionHint?.(buddyId, currentDay) ?? '';
     try {
       const agenda = engine.social.getAgenda?.(buddyId, currentDay) ?? [];
       if (agenda.length > 0) {
@@ -288,7 +302,7 @@ export function buildDmChatContext(input: DmContextInput): DmChatContext {
     }
   } catch { /* prompt enrichment is best-effort */ }
   const sceneSuffix = input.sceneContext ? ` | Scene: ${input.sceneContext}` : '';
-  const relationshipSummary = `${relationship ? JSON.stringify(relationship) : 'new friendship'} | Stage: ${relationshipStage} | DailyMood: ${dailyMood} | Mood: ${mood} | Availability: ${availability} | Activity: ${activity} | ${weatherLine} | ${memoryContext} | ${longTermContext}${affinityContext ? ` | ${affinityContext}` : ''}${bondContext ? ` | ${bondContext}` : ''}${romanceContext ? ` | ${romanceContext}` : ''}${plansLine ? ` | ${plansLine}` : ''}${photoRecallHint}${bodyHint ? ` | ${bodyHint}` : ''}${sceneSuffix} | Typing: ${style.typing.wpm} wpm, ${style.typing.pauseStyle}`;
+  const relationshipSummary = `${relationship ? JSON.stringify(relationship) : 'new friendship'} | Stage: ${relationshipStage} | DailyMood: ${dailyMood} | Mood: ${mood} | Availability: ${availability} | Activity: ${activity} | ${weatherLine} | ${memoryContext} | ${longTermContext}${affinityContext ? ` | ${affinityContext}` : ''}${bondContext ? ` | ${bondContext}` : ''}${romanceContext ? ` | ${romanceContext}` : ''}${plansLine ? ` | ${plansLine}` : ''}${receptionHint ? ` | Reception: ${receptionHint}` : ''}${photoRecallHint}${bodyHint ? ` | ${bodyHint}` : ''}${sceneSuffix} | Typing: ${style.typing.wpm} wpm, ${style.typing.pauseStyle}`;
 
   let worldKnowledge = '';
   let currentGameDay = currentDay;

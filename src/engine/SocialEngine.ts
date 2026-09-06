@@ -1392,4 +1392,29 @@ export class SocialEngine {
     }
     return last;
   }
+
+  /** Latest minute the PLAYER wrote anything (any buddy), 0 when never. Solitude accounting. */
+  public getLastPlayerMessageMinute(): number {
+    let last = 0;
+    for (const msgs of this.conversations.values()) {
+      for (const m of msgs) {
+        if (m.senderId === 'player' && typeof m.timestampMinute === 'number' && m.timestampMinute > last) {
+          last = m.timestampMinute;
+        }
+      }
+    }
+    return last;
+  }
+
+  /** True when the player wrote at least one line on the given game day. */
+  public didPlayerWriteOnDay(day: number): boolean {
+    const safeDay = Math.max(1, Math.floor(day) || 1);
+    for (const msgs of this.conversations.values()) {
+      for (const m of msgs) {
+        if (m.senderId !== 'player' || typeof m.timestampMinute !== 'number') continue;
+        if (Math.floor(m.timestampMinute / 1440) + 1 === safeDay) return true;
+      }
+    }
+    return false;
+  }
 }

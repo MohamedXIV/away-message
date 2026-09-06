@@ -251,7 +251,7 @@ export function useSimulatedTyping(_activeConversationBuddyId: string | null) {
             type: 'SOCIAL_SEND_MESSAGE',
             buddyId,
             text: fullText,
-            tags: [choice.socialAction],
+            tags: [choice.socialAction, 'scripted'],
           });
           engine.dispatchAction({
             type: 'SOCIAL_APPLY_ACTION',

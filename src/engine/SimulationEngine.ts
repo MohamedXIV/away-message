@@ -26,7 +26,21 @@ import { parseMeetupProposal, isMeetupCancelText, decideRsvp, decideNpcShow, app
 import { getWeatherForDay, isSevereWeather, isWetWeather, shiftWageBonus } from './WeatherEngine';
 import { OUTINGS, isValidOutingId, isOutingOpen, outingHoursLabel, mayaDinerEncounter, noraCanalEncounter, buildLaundromatRumor, MIN_OUTING_ENERGY, type OutingId } from './OutingDirector';
 import { GIGS, jobRoll, replyDelayMinutes, decideApplication } from './JobDirector';
+import {
+  classifyPlayerTone,
+  receptionForBoldAct,
+  receptionHintFor,
+  isApology,
+  pickInnerVoice,
+  batteryCostForOuting,
+  BATTERY_LUKEWARM_EXTRA,
+  BATTERY_WARM_REFUND,
+  BATTERY_WARM_BONUS,
+  BATTERY_APOLOGY_REWARD,
+  BATTERY_NEW_APPOINTMENT,
+} from './PlayerActs';
 import { CITY_NODES, isCityNodeId, quoteTravel, walkEnergyCost, rollStreetEncounter, BUS_FARE, type CityNodeId, type TravelMode } from './CityMap';
+import { pulseHasFeature } from './PulseCatalog';
 
 export class SimulationEngine {
   public readonly clock!: GameClock;
@@ -129,6 +143,8 @@ export class SimulationEngine {
       this.processRentDaily(newDay);
       // Character Lives daily pass: agenda planning, NPC run-ins, romance, mediation asks (rules only)
       this.processCharacterLivesDaily(newDay);
+      // Social battery: a quiet yesterday repays solitude (rules only)
+      this.processPlayerBatteryDaily(newDay);
     });
 
     this.events.on('economy:cash_changed', ({ newCash }) => {
@@ -762,12 +778,105 @@ export class SimulationEngine {
     }
   }
 
+  // ==========================================
+  // SOCIAL BATTERY — the introvert protagonist's meter (rules-only accounting)
+  // Every player send costs; bold sends cost more and are judged at send time
+  // (stage gate + seeded reception roll). Outcomes land immediately: warmth
+  // refunds, awkwardness stings, rejection drains to zero and demands an
+  // apology before that buddy hears another word. The AI only paraphrases
+  // the stored reception hint — it never prices or judges.
+  // ==========================================
+
+  /**
+   * Gate a player DM (pure rules; called before the message is stored).
+   * { ok:false } carries an inner-voice line for the UI notice.
+   * The 'scripted' tag (authored dialogue choices) bypasses the gate so
+   * pre-battery story beats can never stall on an empty meter.
+   */
+  private gatePlayerMessage(rawBuddyId: string, text: string, tags?: string[]): { ok: boolean; error?: string } {
+    const buddy = this.social.getBuddy(rawBuddyId);
+    if (!buddy) return { ok: true }; // system paths without a buddy stay ungated
+    if ((tags ?? []).includes('scripted')) return { ok: true };
+    const buddyId = buddy.id;
+    const day = this.clock.getTime().day;
+    const apologizeKey = `must_apologize_${buddyId}`;
+    // Owed apology: only an apology gets through (and it heals a little).
+    if (this.world.getFlag(apologizeKey)) {
+      if (!isApology(text)) {
+        return { ok: false, error: pickInnerVoice('must_apologize', `${buddyId}:${day}`) };
+      }
+      this.world.setFlag(apologizeKey, false);
+      this.economy.rechargeSocialBattery(BATTERY_APOLOGY_REWARD);
+      this.social.applySocialAction(buddyId, 'apologize');
+      return { ok: true };
+    }
+    const assessment = classifyPlayerTone(text);
+    if (this.economy.getSocialBattery() < assessment.upfrontCost) {
+      return { ok: false, error: pickInnerVoice('blocked', `${buddyId}:${day}`) };
+    }
+    this.economy.spendSocialBattery(assessment.upfrontCost);
+    if (assessment.boldness > 0) {
+      const rels = this.social.getRelationships(buddyId);
+      const reception = receptionForBoldAct({
+        buddyId,
+        stage: this.social.getRelationshipStage(buddyId),
+        dims: rels ?? {
+          familiarity: 0, trust: 0, comfort: 0, respect: 0, annoyance: 0,
+          affection: 0, attraction: 0, suspicion: 0, resentment: 0,
+        },
+        traits: this.social.getTraits(buddyId),
+        day,
+        seed: `${text.length}:${text.slice(0, 12)}`,
+      }, assessment.boldness);
+      this.world.setFlag(`reception_${buddyId}_${day}`, reception);
+      if (reception === 'warm') {
+        this.economy.rechargeSocialBattery(BATTERY_WARM_REFUND + BATTERY_WARM_BONUS);
+      } else if (reception === 'lukewarm') {
+        // Short of the sting: spendSocialBattery leaves the balance (lenient).
+        this.economy.spendSocialBattery(BATTERY_LUKEWARM_EXTRA);
+      } else {
+        this.economy.drainSocialBattery();
+        this.world.setFlag(apologizeKey, true);
+        this.telemetry.logEvent('social', 'bold_rejected', this.clock.getTotalMinutes(), { buddyId, tone: assessment.tone, reception });
+      }
+    }
+    return { ok: true };
+  }
+
+  /** True when the installed Pulse release is the 6.x generation (colors, motion). */
+  public isPulse6(): boolean {
+    try {
+      return pulseHasFeature(this.pulse.getCurrentPulseId(), 'buddy-colors');
+    } catch { return false; }
+  }
+
+  /** Prompt direction for a bold player line sent today (rules-stored, AI paraphrases). */
+  public getReceptionHint(rawBuddyId: string, day: number): string {    try {
+      const buddy = this.social.getBuddy(rawBuddyId);
+      if (!buddy) return '';
+      const outcome = this.world.getFlag(`reception_${buddy.id}_${Math.max(1, Math.floor(day) || 1)}`);
+      if (outcome !== 'warm' && outcome !== 'lukewarm' && outcome !== 'reject' && outcome !== 'offlimits') return '';
+      return receptionHintFor(outcome, buddy.displayName);
+    } catch { return ''; }
+  }
+
+  /** Daily battery pass: a quiet yesterday (no player messages) repays solitude. */
+  private processPlayerBatteryDaily(newDay: number): void {
+    try {
+      if (this.world.getFlag(`quietrecharge_${newDay}`)) return;
+      if (!this.social.didPlayerWriteOnDay(newDay - 1)) {
+        this.economy.rechargeSocialBattery(10);
+        this.telemetry.logEvent('social', 'battery_solitude', this.clock.getTotalMinutes(), { day: newDay });
+      }
+      this.world.setFlag(`quietrecharge_${newDay}`, true);
+    } catch { /* recharge never breaks the tick */ }
+  }
+
   /**
    * Polite goodbyes: when a sleep/work block is active and the player was in
    * touch recently (<= 90 min), the buddy sends one leave line, once per day.
    * Called after every presence update — never from chat paths.
-   */
-  private sweepBusyLeaveLines(currentMinutes: number): void {
+   */  private sweepBusyLeaveLines(currentMinutes: number): void {
     const day = Math.floor(currentMinutes / 1440) + 1;
     for (const buddy of this.social.getBuddies()) {
       if (!SimulationEngine.isBuddyAvailable(buddy)) continue;
@@ -823,6 +932,8 @@ export class SimulationEngine {
       }
       const proposal = parseMeetupProposal(text);
       if (!proposal) return null;
+      // Drained: no new plans (existing commitments are still honored).
+      if (this.economy.getSocialBattery() <= 0) return null;
       if (open.length > 0) return null; // one open plan per buddy
       const slot = LOCATION_SLOTS[proposal.locationId];
       const targetDay = safeDay + proposal.dayOffset;
@@ -837,6 +948,8 @@ export class SimulationEngine {
         status: 'scheduled',
       });
       this.telemetry.logEvent('social', 'appointment_scheduled', this.clock.getTotalMinutes(), { buddyId, appointmentId: appt.id, location: proposal.locationId, targetDay });
+      // Making plans costs presence too (the introvert pays to commit).
+      this.economy.spendSocialBattery(BATTERY_NEW_APPOINTMENT);
       // Near-term plans (tonight/tomorrow) get an immediate answer; farther plans
       // are answered by the daily pass. Either way the NPC replies exactly once.
       if (targetDay <= safeDay + 1) this.runRsvpPass(safeDay, [appt], targetDay <= safeDay ? 'tonight' : 'tomorrow');
@@ -1316,6 +1429,11 @@ export class SimulationEngine {
       if (spec.cost > 0 && !this.economy.canAfford(spec.cost)) {
         return { success: false, error: `Cannot afford ${spec.label} ($${spec.cost.toFixed(2)}).` };
       }
+      // Social battery: going out costs presence (~1 per 6 minutes out).
+      const outingBattery = batteryCostForOuting(spec.minutes);
+      if (this.economy.getSocialBattery() < outingBattery) {
+        return { success: false, error: pickInnerVoice('outing', `${outingId}:${day}`) };
+      }
       // P6 the city keeps time — closed places fail honestly (UI gates too)
       if (!isOutingOpen(outingId, hour)) {
         return { success: false, error: `${spec.label} is closed now (open ${outingHoursLabel(outingId)}).` };
@@ -1325,6 +1443,7 @@ export class SimulationEngine {
         return { success: false, error: 'Canal storm outside — the walkway is closed. Come back after the front passes.' };
       }
       if (spec.cost > 0) this.economy.spendCash(spec.cost, `City outing (${spec.label})`);
+      this.economy.spendSocialBattery(outingBattery);
       this.advanceGameMinutes(spec.minutes, `City outing: ${spec.label}`);
       if (spec.energyDelta < 0) this.economy.consumeEnergy(-spec.energyDelta);
       else this.economy.restoreEnergy(spec.energyDelta);
@@ -1615,6 +1734,8 @@ export class SimulationEngine {
           hoursSlept,
           wakeDay: jump.newTime.day,
         });
+        // Social battery: a full night restores the introvert (+30, capped).
+        this.economy.rechargeSocialBattery(30);
         this.notifySubscribers();
         return { success: true, data: jump };
       }
@@ -1644,6 +1765,8 @@ export class SimulationEngine {
         this.advanceGameMinutes(dur, `Room interaction: ${action.activity}`);
         if (action.activity === 'tea' || action.activity === 'coffee') {
           this.economy.restoreEnergy(5);
+          // Quiet rituals repay the introvert a little (+3 tea/coffee, +2 window below)
+          this.economy.rechargeSocialBattery(3);
         } else if (action.activity === 'meal' || action.activity === 'groceries') {
           // Energy already handled inside eatMeal; time still passes above
         } else if (action.activity === 'shower') {
@@ -1651,6 +1774,7 @@ export class SimulationEngine {
         } else if (action.activity === 'window') {
           this.telemetry.recordWindowObservation();
           this.world.addWindowObservation(`window_day${this.clock.getTime().day}_${this.clock.getTotalMinutes()}`);
+          this.economy.rechargeSocialBattery(2);
         }
         this.telemetry.logEvent('room', `interact_${action.activity}`, currentMinutes);
         return { success: true };
@@ -1863,20 +1987,28 @@ export class SimulationEngine {
       }
 
       case 'SOCIAL_SEND_MESSAGE': {
-        const msg = this.social.sendMessage(
-          action.buddyId,
-          'player',
-          action.buddyId,
-          action.text,
-          currentMinutes,
-          false,
-          action.tags,
-          (action as any).imageUrl,
-          (action as any).imagePrompt,
-          (action as any).imageCaption
-        );
-        this.notifySubscribers();
-        return { success: true, data: msg };
+        try {
+          // Social battery gate (introvert meter): every send costs, bold sends
+          // cost more, and an empty meter refuses (apologies always pass).
+          const gate = this.gatePlayerMessage(action.buddyId, action.text, action.tags);
+          if (!gate.ok) return { success: false, error: gate.error };
+          const msg = this.social.sendMessage(
+            action.buddyId,
+            'player',
+            action.buddyId,
+            action.text,
+            currentMinutes,
+            false,
+            action.tags,
+            (action as any).imageUrl,
+            (action as any).imagePrompt,
+            (action as any).imageCaption
+          );
+          this.notifySubscribers();
+          return { success: true, data: msg };
+        } catch (err: unknown) {
+          return { success: false, error: (err as Error).message };
+        }
       }
 
       case 'SOCIAL_RECEIVE_MESSAGE': {
@@ -2071,6 +2203,7 @@ export class SimulationEngine {
         cash: state.player.cash,
         energy: state.player.energy,
         fatigue: state.player.fatigue,
+        socialBattery: state.player.socialBattery ?? 100,
         rentDueDay: state.player.rentDueDay,
         rentAmount: state.player.rentAmount,
         rentPaid: state.player.rentPaid,

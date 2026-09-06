@@ -33,6 +33,8 @@ import {
 } from './utils/chatContext';
 import { CHARACTER_ARCHETYPES, pickTemplateOfflineLine, pickRoomExitLine } from '../../engine/characterTemplates';
 import { planInitiatives } from './utils/initiatives';
+import { toneSuggestion } from '../../engine/PlayerActs';
+import type { ReplySuggestionItem } from './hooks/useReplySuggestions';
 import { computeRoomMood, pickDirectTarget, buildRoomContext, roomMoodInstruction, directAddressInstruction, type RoomPair, type DirectTarget } from '../../engine/RoomDirector';
 import type { BuddyCharacter } from '../../engine/types';
 
@@ -665,7 +667,13 @@ export const PulseMessengerApp: React.FC = () => {
       window.setTimeout(() => setInviteNotice(null), 2200);
       return;
     }
-    engine.dispatchAction({ type: 'SOCIAL_SEND_MESSAGE', buddyId, text });
+    // Social battery gate: refused lines surface the inner voice, nothing sends.
+    const sendRes = engine.dispatchAction({ type: 'SOCIAL_SEND_MESSAGE', buddyId, text });
+    if (!sendRes.success) {
+      setInviteNotice(sendRes.error || 'You cannot send that right now.');
+      window.setTimeout(() => setInviteNotice(null), 2600);
+      return;
+    }
 
     // Shared pre-send ledger + DM-grade context (P8/A1 — CafeScene uses the same path)
     runChatLedger(engine, buddyId, text, totalMinutes);
@@ -1159,7 +1167,7 @@ export const PulseMessengerApp: React.FC = () => {
   const activeRoom = activeRoomId ? getPulseRoom(activeRoomId) : undefined;
 
   // AI reply suggestions for the player (P8/B2): same live context as the NPC side.
-  const suggestionFetcher = useCallback(async (bid: string): Promise<string[]> => {
+  const suggestionFetcher = useCallback(async (bid: string): Promise<ReplySuggestionItem[]> => {
     const buddy = engine.social.getBuddy(bid);
     const recent = engine.social.getMessages(bid).slice(-6).map((message) => ({
       sender: message.senderId === 'player' ? 'player' : 'buddy',
@@ -1175,7 +1183,8 @@ export const PulseMessengerApp: React.FC = () => {
       recentMessages: recent,
       memoryHint,
     }, loadAISettings());
-    return result.data.replies;
+    // Rules enrich every suggestion with tone colour + battery price (never the model).
+    return result.data.replies.map((text) => ({ text, ...toneSuggestion(text) }));
   }, [engine, pulseState.buddyFacts]);
 
   if (!session) return <PulseLoginSplash onLogin={setSession} />;

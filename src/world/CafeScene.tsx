@@ -22,6 +22,7 @@ import {
 import { buildConversationSummary } from '../apps/pulse/utils/conversationMemory';
 import { useReplySuggestions } from '../apps/pulse/hooks/useReplySuggestions';
 import { ReplyChips } from '../apps/pulse/components/ReplyChips';
+import { toneSuggestion } from '../engine/PlayerActs';
 
 interface CafeTurn {
   id: number;
@@ -160,7 +161,7 @@ export const CafeScene: React.FC<{ buddyId?: string }> = ({ buddyId = 'maya' }) 
         recentMessages: recent,
         memoryHint,
       }, loadAISettings());
-      return result.data.replies;
+      return result.data.replies.map((text) => ({ text, ...toneSuggestion(text) }));
     });
   }, [latestMayaId, busy, buddyId, engine, refreshSuggestions]);
 
@@ -178,13 +179,18 @@ export const CafeScene: React.FC<{ buddyId?: string }> = ({ buddyId = 'maya' }) 
     const text = input.trim();
     if (!text || busy) return;
     soundManager.play('click');
+    // Social battery gate first: refused lines surface as inner voice, input kept.
+    const sendRes = engine.dispatchAction({ type: 'SOCIAL_SEND_MESSAGE', buddyId, text, tags: ['cafe'] });
+    if (!sendRes.success) {
+      pushTurn('You', `(${sendRes.error ?? '...not now.'})`);
+      return;
+    }
     setInput('');
     setInjectedSuggestion(null);
     pushTurn('You', text);
     setBusy(true);
     try {
       // Same shared path as Pulse DMs: engine history → ledger → context → AI → record.
-      engine.dispatchAction({ type: 'SOCIAL_SEND_MESSAGE', buddyId, text, tags: ['cafe'] });
       runChatLedger(engine, buddyId, text, totalMinutes);
       const slices = readMemorySlices();
       const ctx = buildDmChatContext({
@@ -340,7 +346,7 @@ export const CafeScene: React.FC<{ buddyId?: string }> = ({ buddyId = 'maya' }) 
                 recentMessages: recent,
                 memoryHint: (slices.buddyFacts[buddyId] || []).slice(-1)[0] || '',
               }, loadAISettings());
-              return result.data.replies;
+              return result.data.replies.map((text) => ({ text, ...toneSuggestion(text) }));
             });
           }}
         />
