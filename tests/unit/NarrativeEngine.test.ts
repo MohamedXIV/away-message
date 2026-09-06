@@ -10,7 +10,7 @@ describe('NarrativeEngine & Semantic Tag Subsystem Test Suite', () => {
 
   beforeEach(() => {
     simEngine = new SimulationEngine();
-    narrativeEngine = new NarrativeEngine(undefined, ALL_STORY_KNOTS);
+    narrativeEngine = new NarrativeEngine(ALL_STORY_KNOTS);
   });
 
   describe('1. Semantic Tag Parser', () => {
@@ -250,7 +250,7 @@ describe('NarrativeEngine & Semantic Tag Subsystem Test Suite', () => {
       expect(savedState.visitedKnotIds).toContain('maya_day1_greeting');
       expect(savedState.flags['custom_key']).toBe('persisted_val');
 
-      const freshEngine = new NarrativeEngine(undefined, ALL_STORY_KNOTS);
+      const freshEngine = new NarrativeEngine(ALL_STORY_KNOTS);
       freshEngine.restoreState(savedState);
 
       expect(freshEngine.isBeatCompleted('test_beat_99')).toBe(true);

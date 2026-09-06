@@ -148,7 +148,6 @@ export interface NarrativeEngineState {
   completedBeats: string[];
   visitedKnotIds: string[];
   flags: Record<string, boolean | number | string>;
-  storyStateJson?: string;
 }
 
 export interface BeatTriggerEvaluationResult {
