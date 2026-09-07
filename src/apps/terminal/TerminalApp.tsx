@@ -3,6 +3,7 @@ import { useSimulationStore } from '../../store/useSimulationStore';
 import { useWindowStore } from '../../store/useWindowStore';
 import { getFileInfoFromUrl, formatFileSize } from '../../engine/fileUtils';
 import { soundManager } from '../../audio/SoundManager';
+import { useGameConfigStore } from '../../store/useGameConfigStore';
 
 interface TerminalLine {
   id: string;
@@ -101,10 +102,47 @@ export const TerminalApp: React.FC<{ windowId: string }> = ({ windowId }) => {
           '  IPCONFIG [/all]     Displays all current TCP/IP network configuration values.\n' +
           '  UNZIP <archive>     Extracts files from a compressed ZIP archive.\n' +
           '  DOWNLOAD <url>      Downloads a file from any .local URL (alias: wget, curl).\n' +
-          '  SAVE <path> <text>  Saves text to a file on disk (e.g. save C:/Documents/note.txt \"hi\").\n' +
+          '  SAVE <path> <text>  Saves text to a file on disk (e.g. save C:/Documents/note.txt "hi").\n' +
+          '  CONFIG [get|set]    Inspects or modifies Player and Dev game configuration.\n' +
           '  VER                 Displays the Orion OS version.\n' +
           '  EXIT                Quits the Command Prompt session.'
         );
+        break;
+      }
+
+      case 'config': {
+        const sub = (args[0] || 'get').toLowerCase();
+        const configState = useGameConfigStore.getState();
+        if (sub === 'get') {
+          addLine(
+            '\nGame Configuration:\n' +
+            JSON.stringify({ player: configState.player, dev: configState.dev }, null, 2)
+          );
+        } else if (sub === 'reset') {
+          configState.resetDefaults();
+          addLine('Game configuration reset to defaults.');
+        } else if (sub === 'set') {
+          const key = args[1];
+          const rawVal = args[2];
+          if (!key || rawVal === undefined) {
+            addLine('Usage: config set <player|dev>.<key> <value>', 'error');
+            break;
+          }
+          const val = rawVal === 'true' ? true : rawVal === 'false' ? false : !isNaN(Number(rawVal)) ? Number(rawVal) : rawVal;
+          if (key.startsWith('dev.')) {
+            const devKey = key.slice(4);
+            configState.setDevConfig({ [devKey]: val });
+            addLine(`Updated dev.${devKey} = ${String(val)}`);
+          } else if (key.startsWith('player.')) {
+            const pKey = key.slice(7);
+            configState.setPlayerConfig({ [pKey]: val });
+            addLine(`Updated player.${pKey} = ${String(val)}`);
+          } else {
+            addLine('Config key must start with "player." or "dev."', 'error');
+          }
+        } else {
+          addLine('Usage: config [get | set <key> <val> | reset]', 'error');
+        }
         break;
       }
 
