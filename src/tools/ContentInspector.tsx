@@ -5,17 +5,18 @@
 // npm run content:pull (+ content:check in CI). The game reads only the
 // generated registry, never this store.
 
-import React, { useState } from 'react';
+import React from 'react';
 import { Provider, useCreateStore } from 'tinybase/ui-react';
-import { Inspector } from 'tinybase/ui-react-inspector';
 import type { Tables } from 'tinybase';
+const ContentStudioShell = React.lazy(() =>
+  import('./studio/ContentStudioShell').then((m) => ({ default: m.ContentStudioShell }))
+);
 import { createContentStore } from './content/schema';
 import {
   GENERATED_CHARACTERS,
   GENERATED_ARCHETYPES,
   GENERATED_AFFINITY_SEEDS,
   GENERATED_DIALOGUE_POOLS,
-  CONTENT_VERSION,
 } from '../engine/coreBuddies.generated';
 
 const CHARACTER_KEY_ORDER = ['role', 'displayName', 'archetypeId', 'reach', 'hair', 'eyes', 'chatColor', 'bio', 'typingSpeedWpm', 'languages', 'roles'];
@@ -147,47 +148,17 @@ export function tablesFromGenerated(): Tables {
 }
 
 export const ContentInspector: React.FC = () => {
-  const [notice, setNotice] = useState('');
   const store = useCreateStore(() => {
     const next = createContentStore();
     next.setTables(tablesFromGenerated());
     return next;
   });
 
-  const handleExport = () => {
-    try {
-      const blob = new Blob([exportStoreJson(store.getTables())], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = 'store.json';
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      URL.revokeObjectURL(url);
-      setNotice('Downloaded store.json — save it over content/store.json, then run: npm run content:pull');
-    } catch {
-      setNotice('Export failed in this browser.');
-    }
-  };
-
   return (
-    <div className="absolute inset-0 z-[100] pointer-events-none">
-      <div className="absolute left-2 top-2 pointer-events-auto flex items-center gap-2 rounded border border-purple-500 bg-[#1c1030] px-2 py-1 text-[11px] text-purple-100 shadow-lg">
-        <span className="font-bold">Content studio</span>
-        <span className="opacity-70">v{CONTENT_VERSION}</span>
-        <button
-          type="button"
-          onClick={handleExport}
-          className="rounded bg-purple-600 px-2 py-0.5 font-bold hover:bg-purple-500"
-        >
-          Export store.json
-        </button>
-        {notice && <span className="max-w-[420px] truncate opacity-80" title={notice}>{notice}</span>}
-      </div>
-      <Provider store={store}>
-        <Inspector open position="right" hue={270} />
-      </Provider>
-    </div>
+    <Provider store={store}>
+      <React.Suspense fallback={null}>
+        <ContentStudioShell store={store} />
+      </React.Suspense>
+    </Provider>
   );
 };

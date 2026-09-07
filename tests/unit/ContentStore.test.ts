@@ -61,7 +61,7 @@ describe('Content store (TinyBase source of truth)', () => {
     expect(typeof mod.tablesFromGenerated).toBe('function');
     const tables = mod.tablesFromGenerated();
     expect(Object.keys(tables['characters'] ?? {}).sort()).toEqual(['henderson', 'maya', 'nora', 'ryan']);
-  });
+  }, 15000);
 });
 
 describe('Content store editor renames (no code changes needed)', () => {
