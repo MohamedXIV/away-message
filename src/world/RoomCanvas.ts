@@ -19,6 +19,7 @@ export interface RoomCanvasOptions {
   weather?: WeatherType;
   osVersion?: OsVersion;
   hasActiveDownloads?: boolean;
+  hasComputer?: boolean;
   onHotspotClick?: (id: RoomHotspotId) => void;
   onHotspotHover?: (id: RoomHotspotId | null) => void;
 }
@@ -44,6 +45,7 @@ export class RoomCanvasRenderer {
   public weather: WeatherType = 'clear';
   public osVersion: OsVersion = 'Orion_4.8';
   public hasActiveDownloads = false;
+  public hasComputer = true;
 
   // Interaction
   public hoveredHotspot: RoomHotspotId | null = null;
@@ -70,6 +72,7 @@ export class RoomCanvasRenderer {
     this.weather = options.weather || 'clear';
     this.osVersion = options.osVersion || 'Orion_4.8';
     this.hasActiveDownloads = !!options.hasActiveDownloads;
+    this.hasComputer = options.hasComputer !== undefined ? options.hasComputer : true;
     this.onHotspotClick = options.onHotspotClick;
     this.onHotspotHover = options.onHotspotHover;
 
@@ -85,6 +88,7 @@ export class RoomCanvasRenderer {
     weather?: WeatherType;
     osVersion?: OsVersion;
     hasActiveDownloads?: boolean;
+    hasComputer?: boolean;
   }) {
     this.day = params.day;
     this.hour = params.hour;
@@ -92,6 +96,7 @@ export class RoomCanvasRenderer {
     if (params.weather) this.weather = params.weather;
     if (params.osVersion) this.osVersion = params.osVersion;
     if (params.hasActiveDownloads !== undefined) this.hasActiveDownloads = params.hasActiveDownloads;
+    if (params.hasComputer !== undefined) this.hasComputer = params.hasComputer;
   }
 
   private initParticles() {
@@ -694,78 +699,97 @@ export class RoomCanvasRenderer {
     const deskX = w * 0.12;
     const deskY = h * 0.50;
 
-    // --- CRT Monitor ---
-    const monX = deskX + 22;
-    const monY = deskY - 50;
-    const monW = 54;
-    const monH = 46;
+    if (this.hasComputer) {
+      // --- CRT Monitor ---
+      const monX = deskX + 22;
+      const monY = deskY - 50;
+      const monW = 54;
+      const monH = 46;
 
-    // Beige Monitor Casing
-    ctx.fillStyle = '#d4cebe';
-    ctx.beginPath();
-    ctx.roundRect(monX, monY, monW, monH, 4);
-    ctx.fill();
-    ctx.strokeStyle = '#a8a29e';
-    ctx.stroke();
+      // Beige Monitor Casing
+      ctx.fillStyle = '#d4cebe';
+      ctx.beginPath();
+      ctx.roundRect(monX, monY, monW, monH, 4);
+      ctx.fill();
+      ctx.strokeStyle = '#a8a29e';
+      ctx.stroke();
 
-    // Curved CRT Screen Face
-    const screenX = monX + 4;
-    const screenY = monY + 4;
-    const screenW = monW - 8;
-    const screenH = monH - 12;
+      // Curved CRT Screen Face
+      const screenX = monX + 4;
+      const screenY = monY + 4;
+      const screenW = monW - 8;
+      const screenH = monH - 12;
 
-    // Screen content color — heavy OS: each family has its own tint
-    const isOrion70 = String(this.osVersion).includes('7.0');
-    const isOrion6b = String(this.osVersion).includes('6.');
-    const isOrion50 = String(this.osVersion).includes('5.');
-    let screenColor = '#008080'; // 4.8 teal
-    let taskbarColor = '#c0c0c0';
-    if (isOrion70) { screenColor = '#0f1f4d'; taskbarColor = '#1a2a6a'; } // deep glossy navy
-    else if (isOrion6b) { screenColor = '#1f48ab'; taskbarColor = '#1b5e20'; }
-    else if (isOrion50) { screenColor = '#2a5a8a'; taskbarColor = '#3a6b35'; }
-    ctx.fillStyle = screenColor;
-    ctx.fillRect(screenX, screenY, screenW, screenH);
+      // Screen content color — heavy OS: each family has its own tint
+      const isOrion70 = String(this.osVersion).includes('7.0');
+      const isOrion6b = String(this.osVersion).includes('6.');
+      const isOrion50 = String(this.osVersion).includes('5.');
+      let screenColor = '#008080'; // 4.8 teal
+      let taskbarColor = '#c0c0c0';
+      if (isOrion70) { screenColor = '#0f1f4d'; taskbarColor = '#1a2a6a'; } // deep glossy navy
+      else if (isOrion6b) { screenColor = '#1f48ab'; taskbarColor = '#1b5e20'; }
+      else if (isOrion50) { screenColor = '#2a5a8a'; taskbarColor = '#3a6b35'; }
+      ctx.fillStyle = screenColor;
+      ctx.fillRect(screenX, screenY, screenW, screenH);
 
-    // Miniature Taskbar on CRT
-    ctx.fillStyle = taskbarColor;
-    ctx.fillRect(screenX, screenY + screenH - 4, screenW, 4);
+      // Miniature Taskbar on CRT
+      ctx.fillStyle = taskbarColor;
+      ctx.fillRect(screenX, screenY + screenH - 4, screenW, 4);
 
-    // Glowing Power LED on monitor
-    ctx.fillStyle = '#22c55e';
-    ctx.beginPath();
-    ctx.arc(monX + monW - 8, monY + monH - 4, 1.5, 0, Math.PI * 2);
-    ctx.fill();
+      // Glowing Power LED on monitor
+      ctx.fillStyle = '#22c55e';
+      ctx.beginPath();
+      ctx.arc(monX + monW - 8, monY + monH - 4, 1.5, 0, Math.PI * 2);
+      ctx.fill();
 
-    // --- Tower PC on floor beside desk ---
-    const towerX = deskX + 85;
-    const towerY = deskY + 28;
-    const towerW = 26;
-    const towerH = 55;
+      // --- Tower PC on floor beside desk ---
+      const towerX = deskX + 85;
+      const towerY = deskY + 28;
+      const towerW = 26;
+      const towerH = 55;
 
-    // Tower casing
-    ctx.fillStyle = '#cfc9b8';
-    ctx.fillRect(towerX, towerY, towerW, towerH);
-    ctx.fillStyle = '#9e9885';
-    ctx.fillRect(towerX + 4, towerY + 8, towerW - 8, 8); // 3.5" Floppy slot
-    ctx.fillRect(towerX + 4, towerY + 20, towerW - 8, 10); // CD-ROM drive
+      // Tower casing
+      ctx.fillStyle = '#cfc9b8';
+      ctx.fillRect(towerX, towerY, towerW, towerH);
+      ctx.fillStyle = '#9e9885';
+      ctx.fillRect(towerX + 4, towerY + 8, towerW - 8, 8); // 3.5" Floppy slot
+      ctx.fillRect(towerX + 4, towerY + 20, towerW - 8, 10); // CD-ROM drive
 
-    // Green Power LED
-    ctx.fillStyle = '#22c55e';
-    ctx.beginPath();
-    ctx.arc(towerX + 6, towerY + 38, 1.5, 0, Math.PI * 2);
-    ctx.fill();
+      // Green Power LED
+      ctx.fillStyle = '#22c55e';
+      ctx.beginPath();
+      ctx.arc(towerX + 6, towerY + 38, 1.5, 0, Math.PI * 2);
+      ctx.fill();
 
-    // Blinking Amber HDD LED (blinks rapidly when downloads active)
-    let hddLit = false;
-    if (this.hasActiveDownloads) {
-      hddLit = Math.sin(timeSec * 16) > -0.2;
+      // Blinking Amber HDD LED (blinks rapidly when downloads active)
+      let hddLit = false;
+      if (this.hasActiveDownloads) {
+        hddLit = Math.sin(timeSec * 16) > -0.2;
+      } else {
+        hddLit = Math.sin(timeSec * 2) > 0.8;
+      }
+      ctx.fillStyle = hddLit ? '#f59e0b' : '#78350f';
+      ctx.beginPath();
+      ctx.arc(towerX + 12, towerY + 38, 1.5, 0, Math.PI * 2);
+      ctx.fill();
     } else {
-      hddLit = Math.sin(timeSec * 2) > 0.8;
+      // Empty desk: folded tech store flyer / motel notice
+      const flyerX = deskX + 24;
+      const flyerY = deskY + 6;
+      ctx.fillStyle = '#fef3c7'; // warm pale yellow paper
+      ctx.fillRect(flyerX, flyerY, 52, 34);
+      ctx.strokeStyle = '#d97706';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(flyerX, flyerY, 52, 34);
+
+      ctx.fillStyle = '#92400e';
+      ctx.font = 'bold 7px sans-serif';
+      ctx.fillText('SILICON & SPARES', flyerX + 4, flyerY + 10);
+      ctx.font = '5.5px sans-serif';
+      ctx.fillStyle = '#78350f';
+      ctx.fillText('Used PCs, OS Discs & RAM', flyerX + 4, flyerY + 18);
+      ctx.fillText('Door -> Tech Mart', flyerX + 4, flyerY + 26);
     }
-    ctx.fillStyle = hddLit ? '#f59e0b' : '#78350f';
-    ctx.beginPath();
-    ctx.arc(towerX + 12, towerY + 38, 1.5, 0, Math.PI * 2);
-    ctx.fill();
 
     // --- 14-DAY PROGRESSIVE CLUTTER ON DESK ---
     // Level 1 (Days 1..3): Basic setup
@@ -791,15 +815,20 @@ export class RoomCanvasRenderer {
 
     // Level 3 (Days 8..10): +Stereo PC speakers, spare RAM blister pack
     if (this.day >= 8) {
-      // Desktop Speakers (Left & Right of monitor)
-      ctx.fillStyle = '#d4cebe';
-      ctx.fillRect(monX - 10, monY + 12, 7, 20);
-      ctx.fillRect(monX + monW + 3, monY + 12, 7, 20);
-      ctx.fillStyle = '#374151';
-      ctx.beginPath();
-      ctx.arc(monX - 6.5, monY + 22, 2.5, 0, Math.PI * 2);
-      ctx.arc(monX + monW + 6.5, monY + 22, 2.5, 0, Math.PI * 2);
-      ctx.fill();
+      if (this.hasComputer) {
+        // Desktop Speakers (Left & Right of monitor)
+        const monX = deskX + 22;
+        const monY = deskY - 50;
+        const monW = 54;
+        ctx.fillStyle = '#d4cebe';
+        ctx.fillRect(monX - 10, monY + 12, 7, 20);
+        ctx.fillRect(monX + monW + 3, monY + 12, 7, 20);
+        ctx.fillStyle = '#374151';
+        ctx.beginPath();
+        ctx.arc(monX - 6.5, monY + 22, 2.5, 0, Math.PI * 2);
+        ctx.arc(monX + monW + 6.5, monY + 22, 2.5, 0, Math.PI * 2);
+        ctx.fill();
+      }
 
       // RAM blister pack on desk edge
       ctx.fillStyle = '#0284c7';
@@ -882,16 +911,18 @@ export class RoomCanvasRenderer {
     }
 
     // 4. CRT Phosphor Screen Glow Pulse
-    const deskX = w * 0.12;
-    const deskY = h * 0.50;
-    const crtPulse = Math.sin(timeSec * 4) * 0.05 + 0.15;
-    const crtGlow = ctx.createRadialGradient(deskX + 50, deskY - 20, 10, deskX + 50, deskY + 20, 80);
-    crtGlow.addColorStop(0, `rgba(100, 180, 255, ${crtPulse})`);
-    crtGlow.addColorStop(1, 'rgba(100, 180, 255, 0)');
-    ctx.fillStyle = crtGlow;
-    ctx.beginPath();
-    ctx.arc(deskX + 50, deskY, 80, 0, Math.PI * 2);
-    ctx.fill();
+    if (this.hasComputer) {
+      const deskX = w * 0.12;
+      const deskY = h * 0.50;
+      const crtPulse = Math.sin(timeSec * 4) * 0.05 + 0.15;
+      const crtGlow = ctx.createRadialGradient(deskX + 50, deskY - 20, 10, deskX + 50, deskY + 20, 80);
+      crtGlow.addColorStop(0, `rgba(100, 180, 255, ${crtPulse})`);
+      crtGlow.addColorStop(1, 'rgba(100, 180, 255, 0)');
+      ctx.fillStyle = crtGlow;
+      ctx.beginPath();
+      ctx.arc(deskX + 50, deskY, 80, 0, Math.PI * 2);
+      ctx.fill();
+    }
   }
 
   // ==========================================
@@ -964,15 +995,17 @@ export class RoomCanvasRenderer {
         ctx.fillRect(0, 0, w, h);
 
         // Isolated CRT monitor glow
-        const deskX = w * 0.12;
-        const deskY = h * 0.50;
-        const monGlow = ctx.createRadialGradient(deskX + 45, deskY - 20, 10, deskX + 45, deskY, 140);
-        monGlow.addColorStop(0, 'rgba(80, 160, 255, 0.30)');
-        monGlow.addColorStop(1, 'rgba(80, 160, 255, 0)');
-        ctx.fillStyle = monGlow;
-        ctx.beginPath();
-        ctx.arc(deskX + 45, deskY, 140, 0, Math.PI * 2);
-        ctx.fill();
+        if (this.hasComputer) {
+          const deskX = w * 0.12;
+          const deskY = h * 0.50;
+          const monGlow = ctx.createRadialGradient(deskX + 45, deskY - 20, 10, deskX + 45, deskY, 140);
+          monGlow.addColorStop(0, 'rgba(80, 160, 255, 0.30)');
+          monGlow.addColorStop(1, 'rgba(80, 160, 255, 0)');
+          ctx.fillStyle = monGlow;
+          ctx.beginPath();
+          ctx.arc(deskX + 45, deskY, 140, 0, Math.PI * 2);
+          ctx.fill();
+        }
         break;
       }
     }
@@ -1014,11 +1047,16 @@ export class RoomCanvasRenderer {
         ctx.fill();
         ctx.stroke();
 
+        let badgeLabel = `${hotspot.icon} ${hotspot.label}`;
+        if (hotspot.id === 'pc' && !this.hasComputer) {
+          badgeLabel = '🪵 Empty Desk (Need PC)';
+        }
+
         ctx.fillStyle = '#fef08a';
         ctx.font = 'bold 11px sans-serif';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillText(`${hotspot.icon} ${hotspot.label}`, tooltipX, tooltipY);
+        ctx.fillText(badgeLabel, tooltipX, tooltipY);
         ctx.textAlign = 'left';
         ctx.textBaseline = 'alphabetic';
       }

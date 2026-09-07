@@ -3,6 +3,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useSimulationStore } from '../store/useSimulationStore';
 import { soundManager } from '../audio/SoundManager';
+import { synthAudio } from '../audio/SynthAudio';
 import { RoomCanvasRenderer, getTimeOfDayFromHour } from './RoomCanvas';
 import { RoomHotspotId, RoomActivityOption, WeatherType } from './types';
 import { getWeatherForDay, isWetWeather } from '../engine/WeatherEngine';
@@ -74,6 +75,15 @@ export const RoomScene: React.FC = () => {
     soundManager.play('click');
     switch (id) {
       case 'pc':
+        if (hardware.hasComputer === false) {
+          flashOutingNotice("Empty desk. You don't have a computer yet! Check Silicon & Spares downtown (Door -> Tech Mart).");
+          break;
+        }
+        if (!hardware.isPoweredOn) {
+          synthAudio.playBiosBeep();
+          synthAudio.playStartupChime(hardware.osVersion);
+          useSimulationStore.getState().engine.hardware.setPower(true);
+        }
         switchView('pc');
         break;
       case 'kettle':
@@ -113,6 +123,7 @@ export const RoomScene: React.FC = () => {
       weather,
       osVersion: hardware.osVersion,
       hasActiveDownloads,
+      hasComputer: hardware.hasComputer !== false,
       onHotspotClick: handleHotspotClick,
     });
     rendererRef.current = renderer;
@@ -133,9 +144,10 @@ export const RoomScene: React.FC = () => {
         weather,
         osVersion: hardware.osVersion,
         hasActiveDownloads,
+        hasComputer: hardware.hasComputer !== false,
       });
     }
-  }, [time.day, time.hour, time.minute, weather, hardware.osVersion, hasActiveDownloads]);
+  }, [time.day, time.hour, time.minute, weather, hardware.osVersion, hasActiveDownloads, hardware.hasComputer]);
 
   // Handle Beverage Selection (meal/grocery money is charged by the engine — never double-spend here)
   const handleSelectBeverage = (option: RoomActivityOption) => {
