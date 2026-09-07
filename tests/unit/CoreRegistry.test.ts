@@ -7,7 +7,7 @@ import {
   CORE_IDS,
   coreBuddyDef,
   coreBuddyIds,
-  isCoreBuddyId,
+  isRegistryBuddy,
 } from '../../src/engine/coreBuddies';
 import {
   CORE_ID_TO_ARCHETYPE,
@@ -15,7 +15,6 @@ import {
   CORE_SIGNATURE_COLORS,
   traitsForBuddy,
   buddySignatureColor,
-  isCoreBuddyId as templatesIsCore,
 } from '../../src/engine/characterTemplates';
 import { CORE_PROFILE_ALIASES } from '../../src/engine/MyPlaceEngine';
 import { buddyPersonaLine } from '../../src/apps/pulse/utils/chatContext';
@@ -35,9 +34,8 @@ describe('Core registry (single source of truth)', () => {
       displayName: 'Ryan', handle: 'ryan_foodcart', status: 'friend', typingSpeedWpm: 80,
     });
     expect(CORE_IDS).toEqual({ RYAN: 'ryan', MAYA: 'maya', NORA: 'nora', HENDERSON: 'henderson' });
-    expect(isCoreBuddyId('maya')).toBe(true);
-    expect(isCoreBuddyId('sam_guitar')).toBe(false);
-    expect(templatesIsCore('nora')).toBe(true);
+    expect(isRegistryBuddy('maya')).toBe(true);
+    expect(isRegistryBuddy('sam_guitar')).toBe(false);
   });
 
   it('seeds SocialEngine roster byte-identically (14-day schedules included)', () => {

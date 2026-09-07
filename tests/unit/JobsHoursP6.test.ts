@@ -43,7 +43,7 @@ describe('P6 sleep planner (pure)', () => {
 describe('P6 job board rules (pure)', () => {
   it('lists four gigs with contacts and odds', () => {
     expect(Object.keys(GIGS)).toEqual(['cart_helper', 'diner_dishwasher', 'flyer_run', 'night_stock']);
-    expect(GIGS.cart_helper!.contactBuddyId).toBe('ryan');
+    expect(GIGS.cart_helper!.contactRole).toBe('cart-owner');
     expect(GIGS.night_stock!.minEnergy).toBe(60);
   });
 

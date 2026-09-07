@@ -68,7 +68,7 @@ describe('Content store editor renames (no code changes needed)', () => {
   function renamedTables(): ReturnType<typeof parseContentJson> {
     const tables = parseContentJson(JSON.stringify({
       buddies: {
-        rayan: { role: 'ryan', displayName: 'Rayan', handle: 'rayan_cart', myplace: 'rayan_cart', archetype: 'coworker', status: 'friend', metVia: 'core', color: '#d96c3b', persona: 'Warm food-cart coworker.', typingSpeedWpm: 80, formerIds: '["ryan", "ryan_foodcart", "tacocart_ryan"]' },
+        rayan: { role: 'ryan', displayName: 'Rayan', handle: 'rayan_cart', myplace: 'rayan_cart', archetype: 'coworker', status: 'friend', metVia: 'core', color: '#d96c3b', persona: 'Warm food-cart coworker.', typingSpeedWpm: 80, formerIds: '["ryan", "ryan_foodcart", "tacocart_ryan"]', reach: 'local', hair: 'brown', eyes: 'brown', languages: '[{"lang":"en","level":5}]' },
       },
       buddyTraits: { rayan: { shyness: 25, warmth: 78, discipline: 50, spontaneity: 72, loyalty: 62 } },
       buddyHearts: { rayan: { familiarity: 40, trust: 50, comfort: 50, respect: 40, annoyance: 0, affection: 0, attraction: 0, suspicion: 0, resentment: 0 } },
