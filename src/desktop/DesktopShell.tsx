@@ -3,6 +3,7 @@ import { useSimulationStore } from '../store/useSimulationStore';
 import { useWindowStore } from '../store/useWindowStore';
 import { useDesktopStore } from '../store/useDesktopStore';
 import { soundManager } from '../audio/SoundManager';
+import { synthAudio } from '../audio/SynthAudio';
 import { Taskbar } from './Taskbar';
 import { WindowManager } from './WindowManager';
 import { DialUpModal } from './DialUpModal';
@@ -86,6 +87,9 @@ export const DesktopShell: React.FC = () => {
   const [iconPositions] = useState<Record<string, { x: number; y: number }>>({});
 
   const hardware = useSimulationStore((s) => s.state.hardware);
+  const switchView = useSimulationStore((s) => s.switchView);
+  const hasComputer = Boolean(hardware.hasComputer);
+  const isPoweredOn = Boolean(hardware.isPoweredOn);
 
   // Sync wallpaper when osVersion changes only if not already customized (first load)
   useEffect(() => {
@@ -103,6 +107,55 @@ export const DesktopShell: React.FC = () => {
     return 'orion48';
   };
   const themeAttr = getOsTheme(osVersion);
+
+  if (!hasComputer) {
+    return (
+      <div className="w-full h-full flex flex-col items-center justify-center bg-zinc-950 text-zinc-300 font-mono select-none p-4">
+        <div className="max-w-md w-full p-6 bg-zinc-900 border border-zinc-800 rounded shadow-2xl text-center space-y-4">
+          <div className="text-4xl">🪵</div>
+          <h2 className="text-base font-bold text-amber-400">Empty Desk — No Computer Installed</h2>
+          <p className="text-xs text-zinc-400 leading-relaxed">
+            Your motel desk in Room 104 is completely bare. Head out through the hallway door to downtown Tech Mart and visit Milo's Silicon & Spares to pick up a refurbished PC rig.
+          </p>
+          <button
+            onClick={() => switchView('room')}
+            className="px-5 py-2 bg-amber-600 hover:bg-amber-500 text-black font-bold text-xs rounded transition-colors cursor-pointer"
+          >
+            ← Step Back to Room 104
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!isPoweredOn) {
+    return (
+      <div className="w-full h-full flex flex-col items-center justify-center bg-black text-zinc-400 font-mono select-none p-4">
+        <div className="text-center space-y-4">
+          <div className="w-3 h-3 bg-amber-500 rounded-full mx-auto animate-pulse" title="Monitor Standby" />
+          <div className="text-xs text-zinc-500">Monitor in Standby (No Signal)</div>
+          <div className="flex gap-3 justify-center">
+            <button
+              onClick={() => {
+                synthAudio.playBiosBeep();
+                synthAudio.playStartupChime(osVersion);
+                useSimulationStore.getState().engine.hardware.setPower(true);
+              }}
+              className="px-4 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs border border-zinc-700 rounded transition-colors cursor-pointer"
+            >
+              Power On PC
+            </button>
+            <button
+              onClick={() => switchView('room')}
+              className="px-4 py-1.5 bg-zinc-900 hover:bg-zinc-800 text-zinc-400 text-xs border border-zinc-800 rounded transition-colors cursor-pointer"
+            >
+              Stand Up (Back to Room)
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   // System base icons
   const baseIcons: DesktopIconItem[] = [

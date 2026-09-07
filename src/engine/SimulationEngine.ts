@@ -59,7 +59,7 @@ export class SimulationEngine {
   public readonly telemetry!: TelemetryEngine;
   public readonly world!: WorldEventsEngine;
 
-  private activeView: 'pc' | 'room' | 'cafe' | 'work' | 'city' = 'pc';
+  private activeView: 'pc' | 'room' | 'cafe' | 'work' | 'city' = 'room';
   private subscribers: Set<(state: Readonly<SimulationState>) => void> = new Set();
   private _procGenPending = false;
   private _procGenLastDay = 0;
@@ -125,7 +125,7 @@ export class SimulationEngine {
       this.world.checkAndTriggerEvents(this.clock.getTotalMinutes(), this.clock.getTime().day);
       this.os.syncFromWorldState({ triggeredEvents: this.world.getTriggeredEvents(), pendingEvents: this.world.getPendingEvents() } as any, this.clock.getTime().day);
     } catch {}
-    this.activeView = initialState?.activeView ?? 'pc';
+    this.activeView = initialState?.activeView ?? (this.hardware.getState().hasComputer ? 'pc' : 'room');
 
     this.registerInternalEventHandlers();
   }

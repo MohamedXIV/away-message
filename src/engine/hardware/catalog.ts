@@ -193,7 +193,7 @@ export const HARDWARE_STORE_INVENTORY: HardwareStoreItem[] = [
     id: 'bundle_scrapyard',
     name: 'The Scrap Yard Special (Refurbished)',
     category: 'bundle',
-    price: 45.0,
+    price: 35.0,
     description: 'A dusty beige tower with matching curved 14" CRT. Pre-loaded with Orion OS 4.8. Perfect for getting online and chatting on Pulse on a shoestring budget.',
     specsSummary: 'Cel-366 MHz · 64MB RAM · 2.1GB HDD · 14" Curved CRT · Orion 4.8',
     bundleConfig: {

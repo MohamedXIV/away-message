@@ -15,7 +15,8 @@ describe('SimulationEngine (Authoritative Master Coordinator)', () => {
     expect(state.player.cash).toBe(38.0);
     expect(state.hardware.osVersion).toBe('Orion_4.8');
     expect(state.installedSoftware.length).toBeGreaterThan(0); // Voyager Browser
-    expect(state.activeView).toBe('pc');
+    expect(state.activeView).toBe('room');
+    expect(state.hardware.hasComputer).toBe(false);
   });
 
   it('advances all subsystems simultaneously via advanceGameMinutes', () => {

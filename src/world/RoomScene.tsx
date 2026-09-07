@@ -75,7 +75,7 @@ export const RoomScene: React.FC = () => {
     soundManager.play('click');
     switch (id) {
       case 'pc':
-        if (hardware.hasComputer === false) {
+        if (!hardware.hasComputer) {
           flashOutingNotice("Empty desk. You don't have a computer yet! Check Silicon & Spares downtown (Door -> Tech Mart).");
           break;
         }
@@ -83,6 +83,7 @@ export const RoomScene: React.FC = () => {
           synthAudio.playBiosBeep();
           synthAudio.playStartupChime(hardware.osVersion);
           useSimulationStore.getState().engine.hardware.setPower(true);
+          useSimulationStore.getState().syncStateFromEngine();
         }
         switchView('pc');
         break;
@@ -123,7 +124,7 @@ export const RoomScene: React.FC = () => {
       weather,
       osVersion: hardware.osVersion,
       hasActiveDownloads,
-      hasComputer: hardware.hasComputer !== false,
+      hasComputer: Boolean(hardware.hasComputer),
       onHotspotClick: handleHotspotClick,
     });
     rendererRef.current = renderer;
@@ -144,7 +145,7 @@ export const RoomScene: React.FC = () => {
         weather,
         osVersion: hardware.osVersion,
         hasActiveDownloads,
-        hasComputer: hardware.hasComputer !== false,
+        hasComputer: Boolean(hardware.hasComputer),
       });
     }
   }, [time.day, time.hour, time.minute, weather, hardware.osVersion, hasActiveDownloads, hardware.hasComputer]);

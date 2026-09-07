@@ -66,6 +66,8 @@ export const App: React.FC = () => {
           if (!snapshot) throw new Error(`Save slot '${request.slotId}' is empty or unreadable.`);
           await restoreSlotPulse(request.slotId);
           useSimulationStore.getState().setEngine(new SimulationEngine(snapshot as any));
+        } else if (request.kind === 'new') {
+          useSimulationStore.getState().setEngine(new SimulationEngine());
         }
         setPhase('game');
       } catch (error) {
@@ -112,9 +114,13 @@ export const App: React.FC = () => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'F2' || (e.altKey && e.key.toLowerCase() === 'r')) {
         e.preventDefault();
+        const hardwareState = useSimulationStore.getState().state.hardware;
         if (activeView === 'pc') {
           switchView('room');
         } else if (activeView === 'room') {
+          if (!hardwareState?.hasComputer) {
+            return;
+          }
           switchView('pc');
         }
       }

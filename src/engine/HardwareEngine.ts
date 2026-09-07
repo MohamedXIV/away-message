@@ -15,7 +15,8 @@ export class HardwareEngine {
   constructor(eventBus: EventBus, initialState?: Partial<HardwareState>) {
     this.eventBus = eventBus;
     this.state = {
-      hasComputer: initialState?.hasComputer ?? true,
+      hasComputer: initialState?.hasComputer ?? false,
+      isPoweredOn: initialState?.isPoweredOn ?? false,
       modular: initialState?.modular,
       cpuTier: initialState?.cpuTier ?? 1,
       cpuName: initialState?.cpuName ?? 'Single-Core Orion x86 450MHz',
@@ -42,6 +43,7 @@ export class HardwareEngine {
     this.state = {
       ...legacy,
       hasComputer: true,
+      isPoweredOn: true,
       modular,
       osVersion: os,
     };
@@ -74,11 +76,13 @@ export class HardwareEngine {
   }
 
   public setPower(isPoweredOn: boolean): void {
-    if (!this.state.modular) return;
-    this.state.modular = {
-      ...this.state.modular,
-      isPoweredOn,
-    };
+    if (this.state.modular) {
+      this.state.modular = {
+        ...this.state.modular,
+        isPoweredOn,
+      };
+    }
+    this.state.isPoweredOn = isPoweredOn;
     this.eventBus.emit('hardware:power_changed', { isPoweredOn } as any);
   }
 

@@ -45,7 +45,7 @@ export class RoomCanvasRenderer {
   public weather: WeatherType = 'clear';
   public osVersion: OsVersion = 'Orion_4.8';
   public hasActiveDownloads = false;
-  public hasComputer = true;
+  public hasComputer = false;
 
   // Interaction
   public hoveredHotspot: RoomHotspotId | null = null;
@@ -72,7 +72,7 @@ export class RoomCanvasRenderer {
     this.weather = options.weather || 'clear';
     this.osVersion = options.osVersion || 'Orion_4.8';
     this.hasActiveDownloads = !!options.hasActiveDownloads;
-    this.hasComputer = options.hasComputer !== undefined ? options.hasComputer : true;
+    this.hasComputer = Boolean(options.hasComputer);
     this.onHotspotClick = options.onHotspotClick;
     this.onHotspotHover = options.onHotspotHover;
 
