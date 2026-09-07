@@ -1,54 +1,62 @@
 // src/tools/content/schema.ts
-// Content-store schema (TinyBase) — the offline source of truth for buddy
-// identity + template pools. The game NEVER reads this at runtime; a pull
-// script validates it and generates src/engine/coreBuddies.generated.ts.
+// Content-store schema (TinyBase) — the offline source of truth for character
+// identity, archetypes, routines, art profiles, and dialogue pools. The game
+// NEVER reads this at runtime; a pull script validates it and generates
+// src/engine/coreBuddies.generated.ts.
 //
-// Tables (row ids are meaningful — renames are explicit key changes).
-// ORDER MATTERS in `buddies`: table order is roster order, and seeded rolls
-// depend on roster iteration. Keep the canonical order (or change it loudly).
-// - buddies: one row per buddy id (display/handle/myplace/archetype/status/...)
-// - buddyTraits: fixed temperament per buddy id (Big5-lite, 0..100)
-// - buddyHearts: initial player-relationship dims per buddy id (0..100)
-// - buddySchedules: daily rhythm blocks per buddy id (JSON array string)
-// - pools: template line pools keyed 'kind:sub:sub' (JSON array string + version)
+// Tables:
+// - characters: core identity, capability tags, appearance enums, languages
+// - archetypes: first-class behavior templates, vocabulary, default traits
+// - temperaments: quantitative Big-5-lite traits (0..100)
+// - initialAffinities: starting player-relationship dimensions (0..100)
+// - backstories: pre-game shared history & candidate handles
+// - routines: daily schedule bounds (wake, sleep, shift)
+// - artProfiles: engine-agnostic 2D art specification (Live2D / mesh / icon)
+// - affinitySeeds: NPC↔NPC role affinity seeds (-100..100)
+// - dialoguePools: template lines for offline / reactive chats
 
 import { createStore, type TablesSchema } from 'tinybase';
 
 export const CONTENT_SCHEMA = {
-  buddies: {
+  characters: {
     // Stable story role (ryan/maya/nora/henderson): NEVER renamed. The code
     // anchors (CORE_IDS) resolve through it, so identity edits need no code.
     role: { type: 'string', default: '' },
     displayName: { type: 'string', default: '' },
-    handle: { type: 'string', default: '' },
-    myplace: { type: 'string', default: '' },
-    archetype: { type: 'string', default: 'regular' },
-    status: { type: 'string', default: 'acquaintance' },
-    metVia: { type: 'string', default: 'core' },
-    color: { type: 'string', default: '#800080' },
-    persona: { type: 'string', default: '' },
-    typingSpeedWpm: { type: 'number', default: 60 },
-    // JSON array of superseded ids/handles (save + alias bridge after a rename).
-    formerIds: { type: 'string', default: '[]' },
-    // Capability tags (JSON array): landlord, diner-staff, canal-regular,
-    // rain-lover... The engine queries THESE, never ids. Rename-proof.
+    archetypeId: { type: 'string', default: 'regular' },
+    // Capability tags (JSON array string): landlord, diner-staff, canal-regular,
+    // rain-lover, cart-owner... Engine queries THESE, never ids.
     roles: { type: 'string', default: '[]' },
-    // Physical vs far-away: remote buddies never meet in person (no cafe,
-    // outings, or room presence) — DMs/rooms/mail/MyPlace only, no art.
+    // Reach: 'local' (village resident, physically present, never leaves town permanently)
+    // vs 'remote' (online-only contact, can depart if mistreated).
     reach: { type: 'string', default: 'local' },
     hair: { type: 'string', default: 'brown' },
     eyes: { type: 'string', default: 'brown' },
-    // JSON array ≤3 of {lang, level 1..5}. The AI knows exactly these.
+    chatColor: { type: 'string', default: '#6a3fa0' },
+    bio: { type: 'string', default: '' },
+    typingSpeedWpm: { type: 'number', default: 60 },
+    // JSON array ≤3 of {lang, level 1..5}.
     languages: { type: 'string', default: '[{"lang":"en","level":5}]' },
   },
-  buddyTraits: {
+  archetypes: {
+    label: { type: 'string', default: '' },
+    description: { type: 'string', default: '' },
+    personaHint: { type: 'string', default: '' },
+    // JSON array of strings: e.g. ["yo", "dude", "tacos"]
+    vocabulary: { type: 'string', default: '[]' },
+    // JSON array of strings: e.g. ["Music", "Coffee"]
+    defaultInterests: { type: 'string', default: '[]' },
+    defaultSong: { type: 'string', default: '' },
+    typingSpeedWpm: { type: 'number', default: 70 },
+  },
+  temperaments: {
     shyness: { type: 'number', default: 50 },
     warmth: { type: 'number', default: 50 },
     discipline: { type: 'number', default: 50 },
     spontaneity: { type: 'number', default: 50 },
     loyalty: { type: 'number', default: 50 },
   },
-  buddyHearts: {
+  initialAffinities: {
     familiarity: { type: 'number', default: 0 },
     trust: { type: 'number', default: 0 },
     comfort: { type: 'number', default: 0 },
@@ -59,20 +67,6 @@ export const CONTENT_SCHEMA = {
     suspicion: { type: 'number', default: 0 },
     resentment: { type: 'number', default: 0 },
   },
-  buddySchedules: {
-    blocks: { type: 'string', default: '[]' },
-  },
-  pools: {
-    lines: { type: 'string', default: '[]' },
-    version: { type: 'number', default: 1 },
-  },
-  // Starting NPC↔NPC ties by ROLE pair (row id `${roleA}__${roleB}`, value -100..100).
-  affinitySeeds: {
-    roleA: { type: 'string', default: '' },
-    roleB: { type: 'string', default: '' },
-    value: { type: 'number', default: 0 },
-  },
-  // Pre-game history per buddy id: who they were to the player before day 1.
   backstories: {
     relationship: { type: 'string', default: 'stranger' },
     label: { type: 'string', default: '' },
@@ -81,6 +75,29 @@ export const CONTENT_SCHEMA = {
     // JSON array ≤3 of {handle, status: active|dead|changed, note?}
     candidates: { type: 'string', default: '[]' },
     bioSeed: { type: 'string', default: '' },
+  },
+  routines: {
+    wakeMinute: { type: 'number', default: 420 }, // 07:00
+    sleepMinute: { type: 'number', default: 1380 }, // 23:00
+    workShift: { type: 'string', default: 'day' }, // morning | day | evening | night | flexible
+    preferredHangout: { type: 'string', default: 'cafe' },
+  },
+  artProfiles: {
+    // Engine: 'live2d' | 'mesh' | 'none'
+    engine: { type: 'string', default: 'none' },
+    modelPath: { type: 'string', default: '' },
+    // JSON map of expression name -> model motion/expression id
+    expressions: { type: 'string', default: '{}' },
+    defaultOutfit: { type: 'string', default: 'default' },
+  },
+  affinitySeeds: {
+    roleA: { type: 'string', default: '' },
+    roleB: { type: 'string', default: '' },
+    value: { type: 'number', default: 0 },
+  },
+  dialoguePools: {
+    lines: { type: 'string', default: '[]' },
+    version: { type: 'number', default: 1 },
   },
 } as const satisfies TablesSchema;
 

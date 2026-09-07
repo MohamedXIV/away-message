@@ -47,7 +47,7 @@ if (process.argv.includes('--check')) {
   console.log('content:check ok — generated registry matches content/store.json.');
 } else {
   writeFileSync(outPath, source);
-  const ids = Object.keys(tables['buddies'] ?? {}).length;
-  const pools = Object.keys(tables['pools'] ?? {}).length;
-  console.log(`content:pull ok — ${ids} buddies, ${pools} pools → src/engine/coreBuddies.generated.ts`);
+  const ids = Object.keys(tables['characters'] ?? {}).length;
+  const pools = Object.keys(tables['dialoguePools'] ?? {}).length;
+  console.log(`content:pull ok — ${ids} characters, ${pools} dialogue pools → src/engine/coreBuddies.generated.ts`);
 }

@@ -4,14 +4,29 @@
 // same rules the engine enforces, and emits coreBuddies.generated.ts.
 // The thin Node runner lives in tools/pull-content.ts (fs + argv only).
 
-import { listArchetypes, validateCharacterId } from '../../engine/characterTemplates';
+import type { HairColor, EyeColor } from '../../engine/types';
 
 export type ContentTables = Record<string, Record<string, Record<string, unknown>>>;
 
-const BUDDY_STATUSES = new Set(['stranger', 'acquaintance', 'friend', 'close', 'distant', 'gone', 'blocked']);
-const BUDDY_METVIA = new Set(['nightboard', 'myplace', 'pulse-room', 'work', 'intro', 'core']);
-const BLOCK_STATUSES = new Set(['online', 'away', 'busy', 'offline']);
+export function validateCharacterId(id: string): { ok: boolean; error?: string } {
+  if (!id || typeof id !== 'string') return { ok: false, error: 'Character id must be a non-empty string.' };
+  if (!/^[a-z][a-z0-9_]{1,31}$/.test(id)) {
+    return { ok: false, error: 'Character id must be snake_case: start with a letter, a-z/0-9/_, 2..32 chars.' };
+  }
+  const reserved = ['player', 'system', 'you', 'me', 'unknown'];
+  if (reserved.includes(id)) return { ok: false, error: `Character id '${id}' is reserved.` };
+  return { ok: true };
+}
+
 const REACHES = new Set(['local', 'remote']);
+const HAIR_COLORS = new Set<HairColor>([
+  'black', 'dark_brown', 'brown', 'light_brown', 'blonde', 'auburn', 'red', 'grey', 'dyed_blue', 'dyed_pink', 'dyed_green'
+]);
+const EYE_COLORS = new Set<EyeColor>([
+  'brown', 'dark_brown', 'hazel', 'blue', 'green', 'grey', 'amber'
+]);
+const ART_ENGINES = new Set(['live2d', 'mesh', 'none']);
+const WORK_SHIFTS = new Set(['morning', 'day', 'evening', 'night', 'flexible']);
 const BACKSTORY_RELATIONSHIPS = new Set(['stranger', 'acquaintance', 'friend', 'close', 'estranged']);
 const CANDIDATE_STATUSES = new Set(['active', 'dead', 'changed']);
 const LANGS = new Set(['en', 'es', 'fr', 'de', 'it', 'pt', 'ru', 'ar', 'zh', 'ja']);
@@ -35,213 +50,211 @@ export function parseContentJson(raw: string): ContentTables {
 /** Semantic validation against engine rules. Returns error list (empty = valid). */
 export function validateContent(tables: ContentTables): string[] {
   const errors: string[] = [];
-  const buddies = tables['buddies'] ?? {};
-  const traits = tables['buddyTraits'] ?? {};
-  const hearts = tables['buddyHearts'] ?? {};
-  const schedules = tables['buddySchedules'] ?? {};
-  const pools = tables['pools'] ?? {};
-  const affinitySeeds = tables['affinitySeeds'] ?? {};
+  const characters = tables['characters'] ?? {};
+  const archetypes = tables['archetypes'] ?? {};
+  const temperaments = tables['temperaments'] ?? {};
+  const initialAffinities = tables['initialAffinities'] ?? {};
   const backstories = tables['backstories'] ?? {};
-  const archetypes = new Set(listArchetypes());
+  const routines = tables['routines'] ?? {};
+  const artProfiles = tables['artProfiles'] ?? {};
+  const affinitySeeds = tables['affinitySeeds'] ?? {};
+  const dialoguePools = tables['dialoguePools'] ?? {};
 
-  // All roles declared anywhere (seeds must reference live ones).
+  const num = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
+  const in100 = (v: unknown): boolean => num(v) && (v as number) >= 0 && (v as number) <= 100;
+
+  // 1. Archetypes validation
+  const archetypeIds = new Set(Object.keys(archetypes));
+  if (archetypeIds.size === 0) {
+    errors.push('archetypes: at least one archetype must be defined.');
+  }
+  for (const [archId, row] of Object.entries(archetypes)) {
+    if (!row || typeof row !== 'object') {
+      errors.push(`archetypes/${archId}: must be an object.`);
+      continue;
+    }
+    const label = (row as Record<string, unknown>)['label'];
+    if (typeof label !== 'string' || !label.trim()) errors.push(`archetypes/${archId}.label: required.`);
+    const wpm = (row as Record<string, unknown>)['typingSpeedWpm'];
+    if (!num(wpm) || (wpm as number) < 20 || (wpm as number) > 140) {
+      errors.push(`archetypes/${archId}.typingSpeedWpm: must be 20..140.`);
+    }
+    for (const arrKey of ['vocabulary', 'defaultInterests']) {
+      try {
+        const arr = JSON.parse(String((row as Record<string, unknown>)[arrKey] ?? '[]'));
+        if (!Array.isArray(arr)) errors.push(`archetypes/${archId}.${arrKey}: must be JSON array.`);
+      } catch {
+        errors.push(`archetypes/${archId}.${arrKey}: invalid JSON.`);
+      }
+    }
+  }
+
+  // 2. All roles declared on live characters
   const liveRoles = new Set<string>();
-  for (const row of Object.values(buddies)) {
+  for (const row of Object.values(characters)) {
     try {
       const parsed: unknown = JSON.parse(String((row as Record<string, unknown>)?.['roles'] ?? '[]'));
       if (Array.isArray(parsed)) {
         for (const r of parsed) if (typeof r === 'string') liveRoles.add(r);
       }
-    } catch { /* reported per-buddy below */ }
+    } catch { /* reported per character */ }
   }
 
-  const num = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
-  const in100 = (v: unknown): boolean => num(v) && (v as number) >= 0 && (v as number) <= 100;
-
-  for (const [id, row] of Object.entries(buddies)) {
+  // 3. Characters validation
+  for (const [id, row] of Object.entries(characters)) {
     if (!row || typeof row !== 'object') {
-      errors.push(`buddies/${id}: must be an object.`);
+      errors.push(`characters/${id}: must be an object.`);
       continue;
     }
     const idCheck = validateCharacterId(id);
-    if (!idCheck.ok) errors.push(`buddies/${id}: ${idCheck.error}`);
+    if (!idCheck.ok) errors.push(`characters/${id}: ${idCheck.error}`);
     const role = (row as Record<string, unknown>)['role'];
     if (typeof role !== 'string' || !role.trim()) {
-      errors.push(`buddies/${id}.role: must be a non-empty stable role key.`);
+      errors.push(`characters/${id}.role: must be a non-empty stable role key.`);
     } else {
-      const clash = Object.entries(buddies).find(
+      const clash = Object.entries(characters).find(
         ([otherId, other]) => otherId !== id && (other as Record<string, unknown>)?.['role'] === role
       );
-      if (clash) errors.push(`buddies/${id}.role: duplicate role '${role}' (also on ${clash[0]}).`);
+      if (clash) errors.push(`characters/${id}.role: duplicate role '${role}' (also on ${clash[0]}).`);
     }
-    const formerRaw = (row as Record<string, unknown>)['formerIds'];
-    let former: unknown = [];
-    try {
-      former = JSON.parse(String(formerRaw ?? '[]'));
-    } catch {
-      errors.push(`buddies/${id}.formerIds: invalid JSON array.`);
-      former = null;
-    }
-    if (Array.isArray(former)) {
-      const liveIds = new Set(Object.keys(buddies));
-      const liveHandles = new Set(
-        Object.values(buddies).map((r) => String((r as Record<string, unknown>)?.['handle'] ?? ''))
-      );
-      for (const old of former) {
-        if (typeof old !== 'string' || !validateCharacterId(old).ok) {
-          errors.push(`buddies/${id}.formerIds: '${String(old)}' is not a valid id.`);
-        } else if (liveIds.has(old) || liveHandles.has(old)) {
-          errors.push(`buddies/${id}.formerIds: '${old}' collides with a live id/handle.`);
-        }
-      }
-    } else if (former !== null) {
-      errors.push(`buddies/${id}.formerIds: must be a JSON array.`);
-    }
+
     const str = (k: string, max: number): string | null => {
       const v = (row as Record<string, unknown>)[k];
       if (typeof v !== 'string' || !v.trim() || v.length > max) {
-        errors.push(`buddies/${id}.${k}: must be a non-empty string <= ${max} chars.`);
+        errors.push(`characters/${id}.${k}: must be a non-empty string <= ${max} chars.`);
         return null;
       }
       return v;
     };
     str('displayName', 40);
-    str('handle', 40);
-    const myplace = (row as Record<string, unknown>)['myplace'];
-    if (typeof myplace !== 'string' || myplace.length > 40) errors.push(`buddies/${id}.myplace: must be a string <= 40 chars.`);
-    const arch = (row as Record<string, unknown>)['archetype'];
-    if (typeof arch !== 'string' || !archetypes.has(arch as never)) {
-      errors.push(`buddies/${id}.archetype: unknown archetype '${String(arch)}'.`);
+
+    const archId = (row as Record<string, unknown>)['archetypeId'];
+    if (typeof archId !== 'string' || !archetypeIds.has(archId)) {
+      errors.push(`characters/${id}.archetypeId: unknown archetype '${String(archId)}'.`);
     }
-    if (typeof (row as Record<string, unknown>)['status'] !== 'string' || !BUDDY_STATUSES.has(String((row as Record<string, unknown>)['status']))) {
-      errors.push(`buddies/${id}.status: unknown lifecycle status.`);
+
+    if (typeof (row as Record<string, unknown>)['reach'] !== 'string' || !REACHES.has(String((row as Record<string, unknown>)['reach']))) {
+      errors.push(`characters/${id}.reach: must be local|remote.`);
     }
-    if (typeof (row as Record<string, unknown>)['metVia'] !== 'string' || !BUDDY_METVIA.has(String((row as Record<string, unknown>)['metVia']))) {
-      errors.push(`buddies/${id}.metVia: unknown origin.`);
+
+    const hair = String((row as Record<string, unknown>)['hair'] ?? '');
+    if (!HAIR_COLORS.has(hair as HairColor)) {
+      errors.push(`characters/${id}.hair: unknown hair color '${hair}'.`);
     }
-    if (typeof (row as Record<string, unknown>)['color'] !== 'string' || !/^#[0-9a-fA-F]{6}$/.test(String((row as Record<string, unknown>)['color']))) {
-      errors.push(`buddies/${id}.color: must be #rrggbb.`);
+
+    const eyes = String((row as Record<string, unknown>)['eyes'] ?? '');
+    if (!EYE_COLORS.has(eyes as EyeColor)) {
+      errors.push(`characters/${id}.eyes: unknown eye color '${eyes}'.`);
     }
-    str('persona', 400);
+
+    const chatColor = String((row as Record<string, unknown>)['chatColor'] ?? '');
+    if (!/^#[0-9a-fA-F]{6}$/.test(chatColor)) {
+      errors.push(`characters/${id}.chatColor: must be #rrggbb hex code.`);
+    }
+
+    const bio = (row as Record<string, unknown>)['bio'];
+    if (typeof bio !== 'string' || bio.length > 500) {
+      errors.push(`characters/${id}.bio: must be string <= 500 chars.`);
+    }
+
     const wpm = (row as Record<string, unknown>)['typingSpeedWpm'];
-    if (!num(wpm) || (wpm as number) < 20 || (wpm as number) > 140) errors.push(`buddies/${id}.typingSpeedWpm: must be 20..140.`);
-    // Capability tags (rename-proof engine queries).
+    if (!num(wpm) || (wpm as number) < 20 || (wpm as number) > 140) {
+      errors.push(`characters/${id}.typingSpeedWpm: must be 20..140.`);
+    }
+
+    // Roles capability tags
     let roles: unknown = [];
     try {
       roles = JSON.parse(String((row as Record<string, unknown>)['roles'] ?? '[]'));
     } catch {
-      errors.push(`buddies/${id}.roles: invalid JSON array.`);
+      errors.push(`characters/${id}.roles: invalid JSON array.`);
       roles = null;
     }
     if (Array.isArray(roles)) {
-      if (roles.length > 6) errors.push(`buddies/${id}.roles: max 6 roles.`);
+      if (roles.length > 8) errors.push(`characters/${id}.roles: max 8 roles.`);
       for (const r of roles) {
         if (typeof r !== 'string' || !/^[a-z][a-z0-9_-]{1,23}$/.test(r)) {
-          errors.push(`buddies/${id}.roles: '${String(r)}' must be lowercase tag ≤ 24 chars.`);
+          errors.push(`characters/${id}.roles: '${String(r)}' must be lowercase tag ≤ 24 chars.`);
         }
       }
     } else if (roles !== null) {
-      errors.push(`buddies/${id}.roles: must be a JSON array.`);
+      errors.push(`characters/${id}.roles: must be a JSON array.`);
     }
-    if (typeof (row as Record<string, unknown>)['reach'] !== 'string' || !REACHES.has(String((row as Record<string, unknown>)['reach']))) {
-      errors.push(`buddies/${id}.reach: must be local|remote.`);
-    }
-    for (const k of ['hair', 'eyes'] as const) {
-      const v = (row as Record<string, unknown>)[k];
-      if (typeof v !== 'string' || !v.trim() || v.length > 24) {
-        errors.push(`buddies/${id}.${k}: must be a non-empty string ≤ 24 chars.`);
-      }
-    }
+
+    // Languages
     let languages: unknown = null;
     try {
-      languages = JSON.parse(String((row as Record<string, unknown>)['languages'] ?? ''));
+      languages = JSON.parse(String((row as Record<string, unknown>)['languages'] ?? '[]'));
     } catch {
-      errors.push(`buddies/${id}.languages: invalid JSON array.`);
+      errors.push(`characters/${id}.languages: invalid JSON array.`);
     }
     if (Array.isArray(languages)) {
-      if (languages.length === 0 || languages.length > 3) errors.push(`buddies/${id}.languages: needs 1..3 entries.`);
+      if (languages.length === 0 || languages.length > 3) errors.push(`characters/${id}.languages: needs 1..3 entries.`);
       for (const [i, entry] of languages.entries()) {
         const lang = (entry as Record<string, unknown>)?.['lang'];
         const level = (entry as Record<string, unknown>)?.['level'];
-        if (typeof lang !== 'string' || !LANGS.has(lang)) errors.push(`buddies/${id}.languages[${i}].lang: unknown language.`);
+        if (typeof lang !== 'string' || !LANGS.has(lang)) errors.push(`characters/${id}.languages[${i}].lang: unknown language.`);
         if (!Number.isInteger(level) || (level as number) < 1 || (level as number) > 5) {
-          errors.push(`buddies/${id}.languages[${i}].level: must be int 1..5.`);
+          errors.push(`characters/${id}.languages[${i}].level: must be int 1..5.`);
         }
       }
     } else if (languages !== null) {
-      errors.push(`buddies/${id}.languages: must be a JSON array.`);
+      errors.push(`characters/${id}.languages: must be a JSON array.`);
     }
 
-    const trow = traits[id];
+    // Temperaments row check
+    const trow = temperaments[id];
     if (!trow || typeof trow !== 'object') {
-      errors.push(`buddyTraits/${id}: missing row.`);
+      errors.push(`temperaments/${id}: missing row.`);
     } else {
       for (const k of TRAIT_KEYS) {
-        if (!in100((trow as Record<string, unknown>)[k])) errors.push(`buddyTraits/${id}.${k}: must be 0..100.`);
+        if (!in100((trow as Record<string, unknown>)[k])) errors.push(`temperaments/${id}.${k}: must be 0..100.`);
       }
     }
-    const hrow = hearts[id];
-    if (!hrow || typeof hrow !== 'object') {
-      errors.push(`buddyHearts/${id}: missing row.`);
+
+    // Initial Affinities row check
+    const arow = initialAffinities[id];
+    if (!arow || typeof arow !== 'object') {
+      errors.push(`initialAffinities/${id}: missing row.`);
     } else {
       for (const k of HEART_KEYS) {
-        if (!in100((hrow as Record<string, unknown>)[k])) errors.push(`buddyHearts/${id}.${k}: must be 0..100.`);
+        if (!in100((arow as Record<string, unknown>)[k])) errors.push(`initialAffinities/${id}.${k}: must be 0..100.`);
       }
     }
-    const srow = schedules[id];
-    if (!srow || typeof srow !== 'object' || typeof (srow as Record<string, unknown>)['blocks'] !== 'string') {
-      errors.push(`buddySchedules/${id}: missing blocks JSON.`);
+
+    // Routines row check
+    const rrow = routines[id];
+    if (!rrow || typeof rrow !== 'object') {
+      errors.push(`routines/${id}: missing row.`);
     } else {
-      let blocks: unknown;
-      try {
-        blocks = JSON.parse(String((srow as Record<string, unknown>)['blocks']));
-      } catch {
-        errors.push(`buddySchedules/${id}.blocks: invalid JSON.`);
-        blocks = null;
+      const wake = (rrow as Record<string, unknown>)['wakeMinute'];
+      const sleep = (rrow as Record<string, unknown>)['sleepMinute'];
+      const shift = (rrow as Record<string, unknown>)['workShift'];
+      if (!Number.isInteger(wake) || (wake as number) < 0 || (wake as number) > 1439) {
+        errors.push(`routines/${id}.wakeMinute: must be 0..1439.`);
       }
-      if (Array.isArray(blocks)) {
-        if (blocks.length === 0) errors.push(`buddySchedules/${id}.blocks: needs at least one block.`);
-        for (const [i, b] of blocks.entries()) {
-          const blk = b as Record<string, unknown>;
-          const ok = blk && typeof blk === 'object'
-            && Number.isInteger(blk['start']) && (blk['start'] as number) >= 0 && (blk['start'] as number) <= 1439
-            && Number.isInteger(blk['end']) && (blk['end'] as number) >= 1 && (blk['end'] as number) <= 1440
-            && (blk['end'] as number) > (blk['start'] as number)
-            && BLOCK_STATUSES.has(String(blk['status']))
-            && typeof blk['msg'] === 'string' && (blk['msg'] as string).length > 0;
-          if (!ok) errors.push(`buddySchedules/${id}.blocks[${i}]: bad block (start/end/status/msg).`);
-        }
-      } else if (blocks !== null) {
-        errors.push(`buddySchedules/${id}.blocks: must be a JSON array.`);
+      if (!Number.isInteger(sleep) || (sleep as number) < 0 || (sleep as number) > 1439) {
+        errors.push(`routines/${id}.sleepMinute: must be 0..1439.`);
+      }
+      if (typeof shift !== 'string' || !WORK_SHIFTS.has(shift)) {
+        errors.push(`routines/${id}.workShift: must be morning|day|evening|night|flexible.`);
       }
     }
-  }
-  for (const table of ['buddyTraits', 'buddyHearts', 'buddySchedules'] as const) {
-    for (const id of Object.keys(tables[table] ?? {})) {
-      if (!buddies[id]) errors.push(`${table}/${id}: no matching buddies row.`);
+
+    // Art profile check
+    const artRow = artProfiles[id];
+    if (artRow && typeof artRow === 'object') {
+      const engine = (artRow as Record<string, unknown>)['engine'];
+      if (typeof engine !== 'string' || !ART_ENGINES.has(engine)) {
+        errors.push(`artProfiles/${id}.engine: must be live2d|mesh|none.`);
+      }
     }
   }
-  // Affinity seeds reference live roles only.
-  for (const [key, row] of Object.entries(affinitySeeds)) {
-    if (!row || typeof row !== 'object') {
-      errors.push(`affinitySeeds/${key}: must be an object.`);
-      continue;
-    }
-    const roleA = (row as Record<string, unknown>)['roleA'];
-    const roleB = (row as Record<string, unknown>)['roleB'];
-    const value = (row as Record<string, unknown>)['value'];
-    if (typeof roleA !== 'string' || !roleA) errors.push(`affinitySeeds/${key}.roleA: required.`);
-    else if (!liveRoles.has(roleA)) errors.push(`affinitySeeds/${key}.roleA: unknown role '${roleA}'.`);
-    if (typeof roleB !== 'string' || !roleB) errors.push(`affinitySeeds/${key}.roleB: required.`);
-    else if (!liveRoles.has(roleB)) errors.push(`affinitySeeds/${key}.roleB: unknown role '${roleB}'.`);
-    if (!Number.isInteger(value) || (value as number) < -100 || (value as number) > 100) {
-      errors.push(`affinitySeeds/${key}.value: must be int -100..100.`);
-    }
-  }
-  // Backstories attach to live buddies only.
+
+  // 4. Backstories validation
   for (const [id, row] of Object.entries(backstories)) {
-    if (!buddies[id]) {
-      errors.push(`backstories/${id}: no matching buddies row.`);
+    if (!characters[id]) {
+      errors.push(`backstories/${id}: no matching characters row.`);
       continue;
     }
     if (!row || typeof row !== 'object') {
@@ -283,30 +296,68 @@ export function validateContent(tables: ContentTables): string[] {
     const bio = (row as Record<string, unknown>)['bioSeed'];
     if (typeof bio !== 'string' || bio.length > 200) errors.push(`backstories/${id}.bioSeed: must be ≤ 200 chars.`);
   }
-  for (const [key, row] of Object.entries(pools)) {
+
+  // Orphan checks for relational tables
+  for (const tid of Object.keys(temperaments)) {
+    if (!characters[tid]) errors.push(`temperaments/${tid}: orphan row (no matching character).`);
+  }
+  for (const aid of Object.keys(initialAffinities)) {
+    if (!characters[aid]) errors.push(`initialAffinities/${aid}: orphan row (no matching character).`);
+  }
+  for (const rid of Object.keys(routines)) {
+    if (!characters[rid]) errors.push(`routines/${rid}: orphan row (no matching character).`);
+  }
+  for (const pid of Object.keys(artProfiles)) {
+    if (!characters[pid]) errors.push(`artProfiles/${pid}: orphan row (no matching character).`);
+  }
+  for (const bid of Object.keys(backstories)) {
+    if (!characters[bid]) errors.push(`backstories/${bid}: orphan row (no matching character).`);
+  }
+
+  // 5. Affinity seeds
+  for (const [key, row] of Object.entries(affinitySeeds)) {
     if (!row || typeof row !== 'object') {
-      errors.push(`pools/${key}: must be an object.`);
+      errors.push(`affinitySeeds/${key}: must be an object.`);
+      continue;
+    }
+    const roleA = (row as Record<string, unknown>)['roleA'];
+    const roleB = (row as Record<string, unknown>)['roleB'];
+    const value = (row as Record<string, unknown>)['value'];
+    if (typeof roleA !== 'string' || !roleA) errors.push(`affinitySeeds/${key}.roleA: required.`);
+    else if (!liveRoles.has(roleA)) errors.push(`affinitySeeds/${key}.roleA: unknown role '${roleA}'.`);
+    if (typeof roleB !== 'string' || !roleB) errors.push(`affinitySeeds/${key}.roleB: required.`);
+    else if (!liveRoles.has(roleB)) errors.push(`affinitySeeds/${key}.roleB: unknown role '${roleB}'.`);
+    if (!Number.isInteger(value) || (value as number) < -100 || (value as number) > 100) {
+      errors.push(`affinitySeeds/${key}.value: must be int -100..100.`);
+    }
+  }
+
+  // 6. Dialogue pools
+  for (const [key, row] of Object.entries(dialoguePools)) {
+    if (!row || typeof row !== 'object') {
+      errors.push(`dialoguePools/${key}: must be an object.`);
       continue;
     }
     let lines: unknown = null;
     try {
       lines = JSON.parse(String((row as Record<string, unknown>)['lines'] ?? ''));
     } catch {
-      errors.push(`pools/${key}.lines: invalid JSON.`);
+      errors.push(`dialoguePools/${key}.lines: invalid JSON.`);
     }
     if (Array.isArray(lines)) {
-      if (lines.length === 0 || lines.length > 12) errors.push(`pools/${key}.lines: needs 1..12 lines.`);
+      if (lines.length === 0 || lines.length > 12) errors.push(`dialoguePools/${key}.lines: needs 1..12 lines.`);
       for (const [i, line] of lines.entries()) {
         if (typeof line !== 'string' || !line.trim() || line.length > 300) {
-          errors.push(`pools/${key}.lines[${i}]: must be a non-empty string <= 300 chars.`);
+          errors.push(`dialoguePools/${key}.lines[${i}]: must be a non-empty string <= 300 chars.`);
         }
       }
     } else if (lines !== null) {
-      errors.push(`pools/${key}.lines: must be a JSON array.`);
+      errors.push(`dialoguePools/${key}.lines: must be a JSON array.`);
     }
     const version = (row as Record<string, unknown>)['version'];
-    if (!Number.isInteger(version) || (version as number) < 1) errors.push(`pools/${key}.version: must be an int >= 1.`);
+    if (!Number.isInteger(version) || (version as number) < 1) errors.push(`dialoguePools/${key}.version: must be an int >= 1.`);
   }
+
   return errors;
 }
 
@@ -341,7 +392,7 @@ function tsString(value: string): string {
   return JSON.stringify(value);
 }
 
-/** Emit one buddy's backstory literal (or null when the store has no row). */
+/** Emit one character's backstory literal (or null when the store has no row). */
 function emitBackstory(row: unknown): string {
   if (!row || typeof row !== 'object') return 'null';
   const r = row as Record<string, unknown>;
@@ -364,73 +415,91 @@ function emitBackstory(row: unknown): string {
   return `{ relationship: ${tsString(String(r['relationship'] ?? 'stranger'))}, label: ${tsString(String(r['label'] ?? ''))}, lapseDays: ${Number(r['lapseDays'] ?? 0)}, knowsAccounts: ${r['knowsAccounts'] === true ? 'true' : 'false'}, candidates: [${cand}], bioSeed: ${tsString(String(r['bioSeed'] ?? ''))} }`;
 }
 
-/** Emit the registry TypeScript source (buddies keep store.json order — roster order feeds seeded rolls). */
+/** Emit the registry TypeScript source. */
 export function generateRegistrySource(tables: ContentTables): string {
   const version = contentHash(tables);
-  const buddies = tables['buddies'] ?? {};
-  const traits = tables['buddyTraits'] ?? {};
-  const hearts = tables['buddyHearts'] ?? {};
-  const schedules = tables['buddySchedules'] ?? {};
-  const pools = tables['pools'] ?? {};
-  const affinitySeeds = tables['affinitySeeds'] ?? {};
+  const characters = tables['characters'] ?? {};
+  const archetypes = tables['archetypes'] ?? {};
+  const temperaments = tables['temperaments'] ?? {};
+  const initialAffinities = tables['initialAffinities'] ?? {};
   const backstories = tables['backstories'] ?? {};
+  const routines = tables['routines'] ?? {};
+  const artProfiles = tables['artProfiles'] ?? {};
+  const affinitySeeds = tables['affinitySeeds'] ?? {};
+  const dialoguePools = tables['dialoguePools'] ?? {};
+
   const lines: string[] = [];
   lines.push('// GENERATED — do not edit by hand.');
   lines.push(`// Source: content/store.json (content v${version}). Regenerate: npm run content:pull.`);
   lines.push(`export const CONTENT_VERSION = '${version}';`);
   lines.push('');
-  lines.push('export interface GeneratedScheduleBlock {');
-  lines.push('  start: number;');
-  lines.push('  end: number;');
-  lines.push("  status: 'online' | 'away' | 'busy' | 'offline';");
-  lines.push('  msg: string;');
+
+  // Emit Archetype definitions
+  lines.push('export interface GeneratedArchetypeDef {');
+  lines.push('  id: string;');
+  lines.push('  label: string;');
+  lines.push('  description: string;');
+  lines.push('  personaHint: string;');
+  lines.push('  vocabulary: string[];');
+  lines.push('  defaultInterests: string[];');
+  lines.push('  defaultSong: string;');
+  lines.push('  typingSpeedWpm: number;');
   lines.push('}');
   lines.push('');
-  lines.push('export interface GeneratedBuddyDef {');
+  lines.push('export const GENERATED_ARCHETYPES: GeneratedArchetypeDef[] = [');
+  for (const [archId, row] of Object.entries(archetypes)) {
+    const r = row as Record<string, unknown>;
+    const vocab = JSON.parse(String(r['vocabulary'] ?? '[]')) as string[];
+    const interests = JSON.parse(String(r['defaultInterests'] ?? '[]')) as string[];
+    lines.push('  {');
+    lines.push(`    id: ${tsString(archId)},`);
+    lines.push(`    label: ${tsString(String(r['label'] ?? ''))},`);
+    lines.push(`    description: ${tsString(String(r['description'] ?? ''))},`);
+    lines.push(`    personaHint: ${tsString(String(r['personaHint'] ?? ''))},`);
+    lines.push(`    vocabulary: [${vocab.map((v) => tsString(v)).join(', ')}],`);
+    lines.push(`    defaultInterests: [${interests.map((i) => tsString(i)).join(', ')}],`);
+    lines.push(`    defaultSong: ${tsString(String(r['defaultSong'] ?? ''))},`);
+    lines.push(`    typingSpeedWpm: ${Number(r['typingSpeedWpm'] ?? 70)},`);
+    lines.push('  },');
+  }
+  lines.push('];');
+  lines.push('');
+
+  // Emit Character definitions
+  lines.push('export interface GeneratedCharacterDef {');
   lines.push('  id: string;');
   lines.push('  role: string;');
   lines.push('  displayName: string;');
-  lines.push('  handle: string;');
-  lines.push('  myplace: string;');
-  lines.push('  archetype: string;');
-  lines.push('  status: string;');
-  lines.push('  metVia: string;');
-  lines.push('  color: string;');
-  lines.push('  persona: string;');
-  lines.push('  typingSpeedWpm: number;');
-  lines.push('  formerIds: string[];');
+  lines.push('  archetypeId: string;');
   lines.push('  roles: string[];');
   lines.push("  reach: 'local' | 'remote';");
   lines.push('  hair: string;');
   lines.push('  eyes: string;');
+  lines.push('  chatColor: string;');
+  lines.push('  bio: string;');
+  lines.push('  typingSpeedWpm: number;');
   lines.push('  languages: Array<{ lang: string; level: number }>;');
   lines.push('  backstory: { relationship: string; label: string; lapseDays: number; knowsAccounts: boolean; candidates: Array<{ handle: string; status: string; note?: string }>; bioSeed: string } | null;');
-  lines.push('  traits: { shyness: number; warmth: number; discipline: number; spontaneity: number; loyalty: number };');
-  lines.push('  hearts: { familiarity: number; trust: number; comfort: number; respect: number; annoyance: number; affection: number; attraction: number; suspicion: number; resentment: number };');
-  lines.push('  blocks: GeneratedScheduleBlock[];');
+  lines.push('  temperament: { shyness: number; warmth: number; discipline: number; spontaneity: number; loyalty: number };');
+  lines.push('  initialAffinity: { familiarity: number; trust: number; comfort: number; respect: number; annoyance: number; affection: number; attraction: number; suspicion: number; resentment: number };');
+  lines.push('  routine: { wakeMinute: number; sleepMinute: number; workShift: string; preferredHangout: string };');
+  lines.push('  art: { engine: string; modelPath: string; expressions: Record<string, string>; defaultOutfit: string };');
   lines.push('}');
   lines.push('');
-  lines.push('export const GENERATED_BUDDIES: GeneratedBuddyDef[] = [');
-  // NOTE: insertion order (store.json authorial order), NOT sorted — the
-  // engine iterates the roster in this order and seeded rolls depend on it.
-  for (const id of Object.keys(buddies)) {
-    const row = buddies[id] as Record<string, unknown>;
-    const trow = (traits[id] ?? {}) as Record<string, unknown>;
-    const hrow = (hearts[id] ?? {}) as Record<string, unknown>;
-    const blocks = JSON.parse(String((schedules[id] as Record<string, unknown> | undefined)?.['blocks'] ?? '[]')) as Array<Record<string, unknown>>;
+  lines.push('export const GENERATED_CHARACTERS: GeneratedCharacterDef[] = [');
+
+  for (const id of Object.keys(characters)) {
+    const row = characters[id] as Record<string, unknown>;
+    const trow = (temperaments[id] ?? {}) as Record<string, unknown>;
+    const arow = (initialAffinities[id] ?? {}) as Record<string, unknown>;
+    const rrow = (routines[id] ?? {}) as Record<string, unknown>;
+    const artRow = (artProfiles[id] ?? {}) as Record<string, unknown>;
+
     lines.push('  {');
     lines.push(`    id: ${tsString(id)},`);
     lines.push(`    role: ${tsString(String(row['role'] ?? ''))},`);
-    for (const k of ['displayName', 'handle', 'myplace', 'archetype', 'status', 'metVia', 'color', 'persona'] as const) {
-      lines.push(`    ${k}: ${tsString(String(row[k] ?? ''))},`);
-    }
-    lines.push(`    typingSpeedWpm: ${Number(row['typingSpeedWpm'] ?? 60)},`);
-    let formerIds: string[] = [];
-    try {
-      const parsed: unknown = JSON.parse(String(row['formerIds'] ?? '[]'));
-      if (Array.isArray(parsed)) formerIds = parsed.filter((x): x is string => typeof x === 'string');
-    } catch { formerIds = []; }
-    lines.push(`    formerIds: [${formerIds.map((x) => tsString(x)).join(', ')}],`);
+    lines.push(`    displayName: ${tsString(String(row['displayName'] ?? ''))},`);
+    lines.push(`    archetypeId: ${tsString(String(row['archetypeId'] ?? 'regular'))},`);
     let roles: string[] = [];
     try {
       const parsed: unknown = JSON.parse(String(row['roles'] ?? '[]'));
@@ -440,6 +509,9 @@ export function generateRegistrySource(tables: ContentTables): string {
     lines.push(`    reach: ${tsString(String(row['reach'] ?? 'local'))} as 'local' | 'remote',`);
     lines.push(`    hair: ${tsString(String(row['hair'] ?? 'brown'))},`);
     lines.push(`    eyes: ${tsString(String(row['eyes'] ?? 'brown'))},`);
+    lines.push(`    chatColor: ${tsString(String(row['chatColor'] ?? '#6a3fa0'))},`);
+    lines.push(`    bio: ${tsString(String(row['bio'] ?? ''))},`);
+    lines.push(`    typingSpeedWpm: ${Number(row['typingSpeedWpm'] ?? 60)},`);
     let languages: Array<{ lang: string; level: number }> = [];
     try {
       const parsed: unknown = JSON.parse(String(row['languages'] ?? '[]'));
@@ -453,26 +525,30 @@ export function generateRegistrySource(tables: ContentTables): string {
     lines.push(`    backstory: ${emitBackstory(backstories[id])},`);
     const numList = (keys: string[], src: Record<string, unknown>): string =>
       keys.map((k) => `${k}: ${Number(src[k] ?? 0)}`).join(', ');
-    lines.push(`    traits: { ${numList(TRAIT_KEYS, trow)} },`);
-    lines.push(`    hearts: { ${numList(HEART_KEYS, hrow)} },`);
-    lines.push('    blocks: [');
-    for (const b of blocks) {
-      lines.push(`      { start: ${Number(b['start'])}, end: ${Number(b['end'])}, status: ${tsString(String(b['status']))} as GeneratedScheduleBlock['status'], msg: ${tsString(String(b['msg']))} },`);
-    }
-    lines.push('    ],');
+    lines.push(`    temperament: { ${numList(TRAIT_KEYS, trow)} },`);
+    lines.push(`    initialAffinity: { ${numList(HEART_KEYS, arow)} },`);
+    lines.push(`    routine: { wakeMinute: ${Number(rrow['wakeMinute'] ?? 420)}, sleepMinute: ${Number(rrow['sleepMinute'] ?? 1380)}, workShift: ${tsString(String(rrow['workShift'] ?? 'day'))}, preferredHangout: ${tsString(String(rrow['preferredHangout'] ?? 'cafe'))} },`);
+
+    let expressions: Record<string, string> = {};
+    try {
+      expressions = JSON.parse(String(artRow['expressions'] ?? '{}'));
+    } catch { expressions = {}; }
+    lines.push(`    art: { engine: ${tsString(String(artRow['engine'] ?? 'none'))}, modelPath: ${tsString(String(artRow['modelPath'] ?? ''))}, expressions: ${JSON.stringify(expressions)}, defaultOutfit: ${tsString(String(artRow['defaultOutfit'] ?? 'default'))} },`);
     lines.push('  },');
   }
   lines.push('];');
   lines.push('');
-  lines.push('export interface GeneratedPool {');
+
+  // Emit Dialogue Pools
+  lines.push('export interface GeneratedDialoguePool {');
   lines.push('  key: string;');
   lines.push('  lines: string[];');
   lines.push('  version: number;');
   lines.push('}');
   lines.push('');
-  lines.push('export const GENERATED_POOLS: GeneratedPool[] = [');
-  for (const key of Object.keys(pools).sort()) {
-    const row = pools[key] as Record<string, unknown>;
+  lines.push('export const GENERATED_DIALOGUE_POOLS: GeneratedDialoguePool[] = [');
+  for (const key of Object.keys(dialoguePools).sort()) {
+    const row = dialoguePools[key] as Record<string, unknown>;
     const parsed = JSON.parse(String(row['lines'] ?? '[]')) as string[];
     lines.push('  {');
     lines.push(`    key: ${tsString(key)},`);
@@ -482,6 +558,8 @@ export function generateRegistrySource(tables: ContentTables): string {
   }
   lines.push('];');
   lines.push('');
+
+  // Emit Affinity Seeds
   lines.push('export interface GeneratedAffinitySeed {');
   lines.push('  roleA: string;');
   lines.push('  roleB: string;');
@@ -499,5 +577,6 @@ export function generateRegistrySource(tables: ContentTables): string {
   }
   lines.push('];');
   lines.push('');
+
   return lines.join('\n');
 }

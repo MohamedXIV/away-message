@@ -327,9 +327,26 @@ export interface ScheduleBlock {
   awayMessage: string;
 }
 
-export type CharacterArchetype = 'coworker' | 'nightowl' | 'student' | 'trader' | 'artist' | 'regular';
+export type CharacterArchetype = 'coworker' | 'nightowl' | 'student' | 'trader' | 'artist' | 'regular' | (string & {});
 export type BuddyLifecycleStatus = 'stranger' | 'acquaintance' | 'friend' | 'close' | 'distant' | 'gone' | 'blocked';
 export type BuddyMetVia = 'nightboard' | 'myplace' | 'pulse-room' | 'work' | 'intro' | 'core';
+
+export type HairColor = 'black' | 'dark_brown' | 'brown' | 'light_brown' | 'blonde' | 'auburn' | 'red' | 'grey' | 'dyed_blue' | 'dyed_pink' | 'dyed_green';
+export type EyeColor = 'brown' | 'dark_brown' | 'hazel' | 'blue' | 'green' | 'grey' | 'amber';
+
+export interface CharacterRoutine {
+  wakeMinute: number;
+  sleepMinute: number;
+  workShift: 'morning' | 'day' | 'evening' | 'night' | 'flexible';
+  preferredHangout?: string;
+}
+
+export interface CharacterArtProfile {
+  engine: 'live2d' | 'mesh' | 'none';
+  modelPath: string;
+  expressions: Record<string, string>;
+  defaultOutfit: string;
+}
 
 /** Pre-game history: who this buddy was to the player before day 1. */
 export interface BuddyBackstory {
@@ -362,11 +379,15 @@ export interface BuddyCharacter {
   // so legacy/procedural defs keep compiling; the content store fills them.
   /** Physical vs far-away: remote buddies never meet in person (no art). */
   reach?: 'local' | 'remote';
-  appearance?: { hair: string; eyes: string };
+  appearance?: { hair: HairColor | string; eyes: EyeColor | string };
   languages?: Array<{ lang: string; level: number }>; // 1..5 proficiency
   /** Capability tags: landlord, diner-staff, rain-lover... engine queries these, never ids. */
   roles?: string[];
   backstory?: BuddyBackstory;
+  chatColor?: string;
+  bio?: string;
+  routine?: CharacterRoutine;
+  art?: CharacterArtProfile;
 }
 
 export interface BuddyPresence {
