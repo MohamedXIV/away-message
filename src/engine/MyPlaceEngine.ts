@@ -6,6 +6,8 @@ import {
   getAllMyPlaceReleases,
   getMyPlaceReleaseById,
   registerProceduralMyPlaceRelease,
+  getProceduralMyPlaceReleases,
+  restoreProceduralMyPlaceReleases,
   type MyPlaceRelease,
 } from './MyPlaceCatalog';
 import { CHARACTER_ARCHETYPES } from './characterTemplates';
@@ -125,7 +127,6 @@ export class MyPlaceEngine {
     // Guestbooks start empty — life fills them (no seeded history).
     if (initialState?.proceduralCatalog) {
       try {
-        const { restoreProceduralMyPlaceReleases } = require('./MyPlaceCatalog');
         restoreProceduralMyPlaceReleases(initialState.proceduralCatalog);
       } catch {}
     }
@@ -142,8 +143,7 @@ export class MyPlaceEngine {
   public getState(): MyPlaceEngineState {
     let procedural: MyPlaceRelease[] = [];
     try {
-      const mod = require('./MyPlaceCatalog');
-      procedural = mod.getProceduralMyPlaceReleases();
+      procedural = getProceduralMyPlaceReleases();
     } catch {
       procedural = [];
     }
@@ -177,8 +177,7 @@ export class MyPlaceEngine {
     }
     if (state.proceduralCatalog) {
       try {
-        const mod = require('./MyPlaceCatalog');
-        mod.restoreProceduralMyPlaceReleases(state.proceduralCatalog);
+        restoreProceduralMyPlaceReleases(state.proceduralCatalog);
       } catch {}
     }
   }

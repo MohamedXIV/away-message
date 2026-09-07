@@ -7,6 +7,7 @@ import {
 } from './types';
 import { EventBus } from './EventBus';
 import { isMinOsSatisfied, getReleaseById } from './OsCatalog';
+import { toLegacyHardwareState } from './hardware/HardwareManager';
 
 export class HardwareEngine {
   private state: HardwareState;
@@ -37,7 +38,6 @@ export class HardwareEngine {
   }
 
   public installModularHardware(modular: import('./hardware/types').ModularHardwareState, initialOs?: OsVersion): void {
-    const { toLegacyHardwareState } = require('./hardware/HardwareManager');
     const os = initialOs ?? this.state.osVersion;
     const legacy = toLegacyHardwareState(modular, os);
     this.state = {
@@ -187,7 +187,6 @@ export class HardwareEngine {
       return { success: false, error: `Already running ${targetOs}.` };
     }
     try {
-      const { getReleaseById } = require('./OsCatalog');
       const rel = getReleaseById(targetOs as any);
       if (rel) {
         if (this.state.ramMB < rel.requirements.minRamMB) {

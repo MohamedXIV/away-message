@@ -4,6 +4,11 @@
 import React, { useState } from 'react';
 import { HARDWARE_STORE_INVENTORY } from '../../engine/hardware/catalog';
 import type { HardwareStoreItem } from '../../engine/hardware/types';
+import {
+  addRamStick,
+  canAddRamStick,
+  replaceMonitor,
+} from '../../engine/hardware/HardwareManager';
 import { useSimulationStore } from '../../store/useSimulationStore';
 import { soundManager } from '../../audio/SoundManager';
 import { X, ShoppingCart, Monitor, Cpu, HardDrive, Disc } from 'lucide-react';
@@ -24,49 +29,65 @@ export const SiliconSparesModal: React.FC<SiliconSparesModalProps> = ({ onClose 
   const items = HARDWARE_STORE_INVENTORY.filter((item) => filter === 'all' || item.category === filter);
 
   const handleBuy = (item: HardwareStoreItem) => {
-    if (cash < item.price) {
+    // Forgiveness safeguard: if player clicked buy before and cash was deducted (or on Day 1), honor it
+    const isHonoredScrapBundle = item.id === 'bundle_scrapyard' && !hardware.hasComputer && cash < item.price;
+    const effectivePrice = isHonoredScrapBundle ? 0 : item.price;
+
+    if (cash < effectivePrice) {
       soundManager.play('error');
       setPurchaseNotice('Not enough cash for this item.');
       return;
     }
 
-    spendCash(item.price, `Silicon & Spares: ${item.name}`);
-    soundManager.play('click');
-
     if (item.category === 'bundle' && item.bundleConfig) {
+      if (effectivePrice > 0) {
+        spendCash(effectivePrice, `Silicon & Spares: ${item.name}`);
+      }
+      soundManager.play('click');
       engine.hardware.installModularHardware(item.bundleConfig.hardware, item.bundleConfig.installedOs);
       useSimulationStore.getState().syncStateFromEngine();
-      setPurchaseNotice(`Purchased ${item.name}! Delivered and set up on your desk in Room 104.`);
-    } else if (item.category === 'ram' && item.component && item.component && 'sizeMb' in item.component) {
+      setPurchaseNotice(
+        isHonoredScrapBundle
+          ? `Milo checks his ledger: "Your Scrap Yard Special was already paid for!" Delivered to your desk in Room 104.`
+          : `Purchased ${item.name}! Delivered and set up on your desk in Room 104.`
+      );
+    } else if (item.category === 'ram' && item.component && 'sizeMb' in item.component) {
       const curModular = engine.hardware.getModularState();
       if (curModular && curModular.hasComputer) {
-        const { addRamStick, canAddRamStick } = require('../../engine/hardware/HardwareManager');
         const check = canAddRamStick(curModular, item.component);
         if (!check.ok) {
+          soundManager.play('error');
           setPurchaseNotice(`Cannot install: ${check.reason}`);
           return;
         }
+        spendCash(item.price, `Silicon & Spares: ${item.name}`);
+        soundManager.play('click');
         const updated = addRamStick(curModular, item.component);
         engine.hardware.installModularHardware(updated);
         useSimulationStore.getState().syncStateFromEngine();
         setPurchaseNotice(`Installed ${item.name}! Total RAM increased.`);
       } else {
+        soundManager.play('error');
         setPurchaseNotice('You must own a computer before upgrading RAM.');
       }
     } else if (item.category === 'monitor' && item.component && 'curvature' in item.component) {
       const curModular = engine.hardware.getModularState();
       if (curModular && curModular.hasComputer) {
-        const { replaceMonitor } = require('../../engine/hardware/HardwareManager');
+        spendCash(item.price, `Silicon & Spares: ${item.name}`);
+        soundManager.play('click');
         const updated = replaceMonitor(curModular, item.component);
         engine.hardware.installModularHardware(updated);
         useSimulationStore.getState().syncStateFromEngine();
         setPurchaseNotice(`Installed ${item.name}! Display profile updated.`);
       } else {
+        soundManager.play('error');
         setPurchaseNotice('You must own a computer before replacing the monitor.');
       }
     } else if (item.category === 'os_disc' && item.osDiscConfig) {
       const curModular = engine.hardware.getModularState();
       if (curModular && curModular.hasComputer) {
+        spendCash(item.price, `Silicon & Spares: ${item.name}`);
+        soundManager.play('click');
         engine.hardware.insertDisc({
           id: item.id,
           title: item.osDiscConfig.title,
@@ -76,6 +97,7 @@ export const SiliconSparesModal: React.FC<SiliconSparesModalProps> = ({ onClose 
         useSimulationStore.getState().syncStateFromEngine();
         setPurchaseNotice(`Purchased ${item.name}! Disc inserted into CD-ROM drive D:. Run SETUP.EXE to install.`);
       } else {
+        soundManager.play('error');
         setPurchaseNotice('Purchased OS disc! You will need a computer with a CD-ROM drive to install it.');
       }
     }
@@ -161,7 +183,8 @@ export const SiliconSparesModal: React.FC<SiliconSparesModalProps> = ({ onClose 
         {/* Items List */}
         <div className="flex-1 overflow-y-auto p-3 space-y-2.5">
           {items.map((item) => {
-            const canAfford = cash >= item.price;
+            const isHonoredScrapBundle = item.id === 'bundle_scrapyard' && !hardware.hasComputer && cash < item.price;
+            const canAfford = cash >= item.price || isHonoredScrapBundle;
             return (
               <div
                 key={item.id}
@@ -183,20 +206,24 @@ export const SiliconSparesModal: React.FC<SiliconSparesModalProps> = ({ onClose 
 
                 <div className="flex sm:flex-col items-center sm:items-end justify-between sm:justify-center gap-2 shrink-0 border-t sm:border-t-0 pt-2 sm:pt-0">
                   <div className="font-bold text-sm text-emerald-800 font-mono">
-                    ${item.price.toFixed(2)}
+                    {isHonoredScrapBundle ? (
+                      <span className="text-amber-700 text-xs font-bold">Already Paid ✓</span>
+                    ) : (
+                      `$${item.price.toFixed(2)}`
+                    )}
                   </div>
                   <button
                     type="button"
                     onClick={() => handleBuy(item)}
                     disabled={!canAfford}
-                    className={`px-3 py-1 text-xs font-bold flex items-center gap-1.5 border ${
+                    className={`px-3 py-1 text-xs font-bold flex items-center gap-1.5 border cursor-pointer ${
                       canAfford
                         ? 'bg-yellow-400 hover:bg-yellow-300 text-black border-yellow-600 active:translate-y-0.5'
                         : 'bg-gray-200 text-gray-400 border-gray-300 cursor-not-allowed'
                     }`}
                   >
                     <ShoppingCart className="w-3.5 h-3.5" />
-                    <span>Buy</span>
+                    <span>{isHonoredScrapBundle ? 'Claim / Deliver' : 'Buy'}</span>
                   </button>
                 </div>
               </div>
@@ -205,20 +232,36 @@ export const SiliconSparesModal: React.FC<SiliconSparesModalProps> = ({ onClose 
         </div>
 
         {/* Footer */}
-        <div className="bg-[#ded9cf] p-2.5 border-t border-[#bbb] flex justify-between items-center text-xs text-gray-600">
+        <div className="bg-[#ded9cf] p-2.5 border-t border-[#bbb] flex flex-wrap gap-2 justify-between items-center text-xs text-gray-600">
           <div>
             Current Machine:{' '}
-            {hardware.hasComputer
-              ? `${hardware.osVersion} · ${hardware.ramMB}MB RAM`
-              : 'None (Desk empty)'}
+            <span className="font-bold text-gray-900">
+              {hardware.hasComputer
+                ? `${hardware.osVersion} · ${hardware.ramMB}MB RAM`
+                : 'None (Desk empty)'}
+            </span>
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="px-4 py-1 bg-[#c0c0c0] text-black font-bold border-2 border-t-white border-l-white border-b-black border-r-black active:border-t-black active:border-l-black"
-          >
-            Leave Shop
-          </button>
+          <div className="flex gap-2">
+            {hardware.hasComputer && (
+              <button
+                type="button"
+                onClick={() => {
+                  useSimulationStore.getState().dispatchAction({ type: 'TRAVEL_TO', to: 'home', mode: 'walk' });
+                  onClose();
+                }}
+                className="px-3 py-1 bg-amber-600 hover:bg-amber-500 text-black font-bold border-2 border-t-amber-300 border-l-amber-300 border-b-amber-800 border-r-amber-800 cursor-pointer shadow"
+              >
+                🏠 Return to Room 104
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-1 bg-[#c0c0c0] hover:bg-[#d0d0d0] text-black font-bold border-2 border-t-white border-l-white border-b-black border-r-black active:border-t-black active:border-l-black cursor-pointer"
+            >
+              Leave Shop
+            </button>
+          </div>
         </div>
       </div>
     </div>

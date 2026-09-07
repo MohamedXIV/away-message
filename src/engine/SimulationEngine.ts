@@ -40,7 +40,7 @@ import {
   BATTERY_NEW_APPOINTMENT,
 } from './PlayerActs';
 import { CITY_NODES, isCityNodeId, quoteTravel, walkEnergyCost, rollStreetEncounter, BUS_FARE, type CityNodeId, type TravelMode } from './CityMap';
-import { pulseHasFeature } from './PulseCatalog';
+import { pulseHasFeature, getAllPulseReleases } from './PulseCatalog';
 import { CORE_BY_ID, CORE_IDS, buddyWithRole, isRegistryBuddy } from './coreBuddies';
 
 export class SimulationEngine {
@@ -172,7 +172,6 @@ export class SimulationEngine {
         const version = String(software.version || '');
         // Try to find a PulseRelease matching this version
         try {
-          const { getAllPulseReleases } = require('./PulseCatalog');
           const all = getAllPulseReleases() as Array<{ id: string; version: string }>;
           const match = all.find((r) => r.version === version) || all.find((r) => r.id.includes(version.replace('.', '_')));
           if (match) {
@@ -180,6 +179,23 @@ export class SimulationEngine {
           }
         } catch {}
       }
+    });
+
+    // Invalidate state cache and notify subscribers when hardware or power changes
+    this.events.on('hardware:upgraded' as any, () => {
+      this.notifySubscribers();
+    });
+    this.events.on('hardware:power_changed' as any, () => {
+      this.notifySubscribers();
+    });
+    this.events.on('hardware:disc_inserted' as any, () => {
+      this.notifySubscribers();
+    });
+    this.events.on('hardware:disc_ejected' as any, () => {
+      this.notifySubscribers();
+    });
+    this.events.on('hardware:os_migrated' as any, () => {
+      this.notifySubscribers();
     });
   }
 

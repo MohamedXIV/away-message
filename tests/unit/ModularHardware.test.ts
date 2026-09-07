@@ -14,6 +14,7 @@ import {
 } from '../../src/engine/hardware/catalog';
 import { migrateSnapshotToV5 } from '../../src/persistence/slots';
 import type { SimulationState } from '../../src/engine/types';
+import { SimulationEngine } from '../../src/engine/SimulationEngine';
 
 describe('ModularHardware Architecture', () => {
   it('correctly calculates total RAM across installed sticks', () => {
@@ -132,5 +133,23 @@ describe('ModularHardware Architecture', () => {
     expect(migrated.hardware.modular!.cpu.tier).toBe(2);
     expect(migrated.hardware.modular!.ramSticks[0]!.sizeMb).toBe(1024);
     expect(migrated.hardware.modular!.networkCard!.type).toBe('dsl_1m');
+  });
+
+  it('installs modular hardware bundle and syncs SimulationEngine state', () => {
+    const sim = new SimulationEngine();
+    expect(sim.getState().hardware.hasComputer).toBe(false);
+
+    let notifiedState: SimulationState | null = null;
+    sim.subscribe((s) => {
+      notifiedState = s;
+    });
+
+    const scrap = createScrapYardBundle();
+    sim.hardware.installModularHardware(scrap, 'Orion_4.8');
+
+    expect(sim.getState().hardware.hasComputer).toBe(true);
+    expect(sim.getState().hardware.ramMB).toBe(64);
+    expect(notifiedState).not.toBeNull();
+    expect((notifiedState as unknown as SimulationState).hardware.hasComputer).toBe(true);
   });
 });
