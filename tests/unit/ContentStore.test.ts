@@ -20,7 +20,7 @@ describe('Content store (TinyBase source of truth)', () => {
     expect(() => store.setTables(tables as unknown as Tables)).not.toThrow();
     expect(validateContent(tables)).toEqual([]);
     // Roster order is authorial (seeded rolls depend on iteration order).
-    expect(Object.keys(tables['buddies'] ?? {})).toEqual(['ryan', 'maya', 'nora', 'henderson']);
+    expect(Object.keys(tables['characters'] ?? {})).toEqual(['ryan', 'maya', 'nora', 'henderson']);
   });
 
   it('generates deterministically (same bytes every run)', () => {
@@ -28,23 +28,23 @@ describe('Content store (TinyBase source of truth)', () => {
     const first = generateRegistrySource(tables);
     const second = generateRegistrySource(JSON.parse(JSON.stringify(tables)));
     expect(first).toBe(second);
-    expect(first).toContain('GENERATED_BUDDIES');
-    expect(first).toContain('GENERATED_POOLS');
+    expect(first).toContain('GENERATED_CHARACTERS');
+    expect(first).toContain('GENERATED_DIALOGUE_POOLS');
     expect(contentHash(tables)).toMatch(/^[0-9a-f]{8}$/);
   });
 
-  it('rejects bad rows loudly (ids, archetypes, ranges, orphans, blocks, pools)', () => {
+  it('rejects bad rows loudly (ids, archetypes, ranges, orphans, routines, pools)', () => {
     const tables = parseContentJson(loadStoreJson());
-    (tables['buddies']!['maya']! as Record<string, unknown>)['archetype'] = 'vampire';
-    (tables['buddyTraits']!['maya']! as Record<string, unknown>)['shyness'] = 120;
-    (tables['buddyTraits']!['ghost'] as unknown) = { shyness: 1, warmth: 1, discipline: 1, spontaneity: 1, loyalty: 1 };
-    (tables['buddySchedules']!['ryan']! as Record<string, unknown>)['blocks'] = 'nope';
-    (tables['pools']!['leave:sleep:soft']! as Record<string, unknown>)['lines'] = '[]';
+    (tables['characters']!['maya']! as Record<string, unknown>)['archetypeId'] = 'vampire';
+    (tables['temperaments']!['maya']! as Record<string, unknown>)['shyness'] = 120;
+    (tables['temperaments']!['ghost'] as unknown) = { shyness: 1, warmth: 1, discipline: 1, spontaneity: 1, loyalty: 1 };
+    (tables['routines']!['ryan']! as Record<string, unknown>)['wakeMinute'] = 2000;
+    (tables['dialoguePools']!['leave:sleep:soft']! as Record<string, unknown>)['lines'] = '[]';
     const errors = validateContent(tables);
-    expect(errors.some((e) => e.includes('maya') && e.includes('archetype'))).toBe(true);
+    expect(errors.some((e) => e.includes('maya') && e.includes('archetypeId'))).toBe(true);
     expect(errors.some((e) => e.includes('shyness'))).toBe(true);
     expect(errors.some((e) => e.includes('ghost'))).toBe(true);
-    expect(errors.some((e) => e.includes('blocks'))).toBe(true);
+    expect(errors.some((e) => e.includes('wakeMinute'))).toBe(true);
     expect(errors.some((e) => e.includes('1..12'))).toBe(true);
   });
 
@@ -60,51 +60,41 @@ describe('Content store (TinyBase source of truth)', () => {
     expect(typeof mod.exportStoreJson).toBe('function');
     expect(typeof mod.tablesFromGenerated).toBe('function');
     const tables = mod.tablesFromGenerated();
-    expect(Object.keys(tables['buddies'] ?? {}).sort()).toEqual(['henderson', 'maya', 'nora', 'ryan']);
+    expect(Object.keys(tables['characters'] ?? {}).sort()).toEqual(['henderson', 'maya', 'nora', 'ryan']);
   });
 });
 
 describe('Content store editor renames (no code changes needed)', () => {
   function renamedTables(): ReturnType<typeof parseContentJson> {
-    const tables = parseContentJson(JSON.stringify({
-      buddies: {
-        rayan: { role: 'ryan', displayName: 'Rayan', handle: 'rayan_cart', myplace: 'rayan_cart', archetype: 'coworker', status: 'friend', metVia: 'core', color: '#d96c3b', persona: 'Warm food-cart coworker.', typingSpeedWpm: 80, formerIds: '["ryan", "ryan_foodcart", "tacocart_ryan"]', reach: 'local', hair: 'brown', eyes: 'brown', languages: '[{"lang":"en","level":5}]' },
-      },
-      buddyTraits: { rayan: { shyness: 25, warmth: 78, discipline: 50, spontaneity: 72, loyalty: 62 } },
-      buddyHearts: { rayan: { familiarity: 40, trust: 50, comfort: 50, respect: 40, annoyance: 0, affection: 0, attraction: 0, suspicion: 0, resentment: 0 } },
-      buddySchedules: { rayan: { blocks: '[{"start":0,"end":1440,"status":"online","msg":"hi"}]' } },
-      pools: {},
-    }));
-    return tables;
+    const raw = JSON.parse(loadStoreJson()) as Record<string, Record<string, unknown>>;
+    raw['characters']!['rayan'] = { ...(raw['characters']!['ryan'] as object) };
+    delete raw['characters']!['ryan'];
+    raw['temperaments']!['rayan'] = { ...(raw['temperaments']!['ryan'] as object) };
+    delete raw['temperaments']!['ryan'];
+    raw['initialAffinities']!['rayan'] = { ...(raw['initialAffinities']!['ryan'] as object) };
+    delete raw['initialAffinities']!['ryan'];
+    raw['routines']!['rayan'] = { ...(raw['routines']!['ryan'] as object) };
+    delete raw['routines']!['ryan'];
+    raw['artProfiles']!['rayan'] = { ...(raw['artProfiles']!['ryan'] as object) };
+    delete raw['artProfiles']!['ryan'];
+    raw['backstories']!['rayan'] = { ...(raw['backstories']!['ryan'] as object) };
+    delete raw['backstories']!['ryan'];
+    return parseContentJson(JSON.stringify(raw));
   }
 
-  it('validates a full id+handle rename with a save bridge', () => {
+  it('validates a character id rename when relations are updated', () => {
     expect(validateContent(renamedTables())).toEqual([]);
   });
 
-  it('rejects duplicate roles and formerIds colliding with live ids', () => {
+  it('rejects duplicate roles', () => {
     const dup = renamedTables();
-    (dup['buddies']!['maya'] as unknown) = { ...(dup['buddies']!['rayan'] as object), role: 'ryan' };
-    (dup['buddyTraits']!['maya'] as unknown) = { ...(dup['buddyTraits']!['rayan'] as object) };
-    (dup['buddyHearts']!['maya'] as unknown) = { ...(dup['buddyHearts']!['rayan'] as object) };
-    (dup['buddySchedules']!['maya'] as unknown) = { ...(dup['buddySchedules']!['rayan'] as object) };
+    (dup['characters']!['maya'] as Record<string, unknown>)['role'] = 'ryan';
     expect(validateContent(dup).some((e) => e.includes('duplicate role'))).toBe(true);
-
-    const tables = renamedTables();
-    (tables['buddies']!['rayan']! as Record<string, unknown>)['formerIds'] = '["maya"]';
-    (tables['buddies']!['maya'] as unknown) = { ...((tables['buddies']!['rayan'] as Record<string, unknown>)) };
-    (tables['buddyTraits']!['maya'] as unknown) = { ...(tables['buddyTraits']!['rayan'] as object) };
-    (tables['buddyHearts']!['maya'] as unknown) = { ...(tables['buddyHearts']!['rayan'] as object) };
-    (tables['buddySchedules']!['maya'] as unknown) = { ...(tables['buddySchedules']!['rayan'] as object) };
-    (tables['buddies']!['maya'] as Record<string, unknown>)['role'] = 'maya';
-    (tables['buddies']!['maya'] as Record<string, unknown>)['formerIds'] = '[]';
-    expect(validateContent(tables).some((e) => e.includes('collides'))).toBe(true);
   });
 
-  it('emits role + formerIds into the generated registry', () => {
+  it('emits role into the generated registry', () => {
     const source = generateRegistrySource(renamedTables());
     expect(source).toContain(`role: "ryan"`);
-    expect(source).toContain(`formerIds: ["ryan", "ryan_foodcart", "tacocart_ryan"]`);
     expect(source).toContain(`id: "rayan"`);
   });
 });

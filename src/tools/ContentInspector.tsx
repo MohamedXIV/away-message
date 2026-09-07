@@ -10,17 +10,34 @@ import { Provider, useCreateStore } from 'tinybase/ui-react';
 import { Inspector } from 'tinybase/ui-react-inspector';
 import type { Tables } from 'tinybase';
 import { createContentStore } from './content/schema';
-import { GENERATED_BUDDIES, GENERATED_POOLS, CONTENT_VERSION } from '../engine/coreBuddies.generated';
+import {
+  GENERATED_CHARACTERS,
+  GENERATED_ARCHETYPES,
+  GENERATED_AFFINITY_SEEDS,
+  GENERATED_DIALOGUE_POOLS,
+  CONTENT_VERSION,
+} from '../engine/coreBuddies.generated';
 
-const BUDDY_KEY_ORDER = ['role', 'displayName', 'handle', 'myplace', 'archetype', 'status', 'metVia', 'color', 'persona', 'typingSpeedWpm', 'formerIds'];
-const TRAIT_KEY_ORDER = ['shyness', 'warmth', 'discipline', 'spontaneity', 'loyalty'];
-const HEART_KEY_ORDER = ['familiarity', 'trust', 'comfort', 'respect', 'annoyance', 'affection', 'attraction', 'suspicion', 'resentment'];
+const CHARACTER_KEY_ORDER = ['role', 'displayName', 'archetypeId', 'reach', 'hair', 'eyes', 'chatColor', 'bio', 'typingSpeedWpm', 'languages', 'roles'];
+const ARCHETYPE_KEY_ORDER = ['label', 'description', 'personaHint', 'vocabulary', 'defaultInterests', 'defaultSong', 'typingSpeedWpm'];
+const TEMPERAMENT_KEY_ORDER = ['shyness', 'warmth', 'discipline', 'spontaneity', 'loyalty'];
+const AFFINITY_KEY_ORDER = ['familiarity', 'trust', 'comfort', 'respect', 'annoyance', 'affection', 'attraction', 'suspicion', 'resentment'];
+const ROUTINE_KEY_ORDER = ['wakeMinute', 'sleepMinute', 'workShift', 'preferredHangout'];
+const ART_PROFILE_KEY_ORDER = ['engine', 'modelPath', 'expressions', 'defaultOutfit'];
+const AFFINITY_SEED_KEY_ORDER = ['roleA', 'roleB', 'value'];
+const BACKSTORY_KEY_ORDER = ['relationship', 'label', 'lapseDays', 'knowsAccounts', 'candidates', 'bioSeed'];
+const DIALOGUE_POOL_KEY_ORDER = ['lines', 'version'];
+
 const TABLE_KEY_ORDERS: Record<string, string[]> = {
-  buddies: BUDDY_KEY_ORDER,
-  buddyTraits: TRAIT_KEY_ORDER,
-  buddyHearts: HEART_KEY_ORDER,
-  buddySchedules: ['blocks'],
-  pools: ['lines', 'version'],
+  characters: CHARACTER_KEY_ORDER,
+  archetypes: ARCHETYPE_KEY_ORDER,
+  temperaments: TEMPERAMENT_KEY_ORDER,
+  initialAffinities: AFFINITY_KEY_ORDER,
+  routines: ROUTINE_KEY_ORDER,
+  artProfiles: ART_PROFILE_KEY_ORDER,
+  affinitySeeds: AFFINITY_SEED_KEY_ORDER,
+  backstories: BACKSTORY_KEY_ORDER,
+  dialoguePools: DIALOGUE_POOL_KEY_ORDER,
 };
 
 /** Canonical store.json text from live tables (sorted ids/keys — stable diffs). */
@@ -44,26 +61,89 @@ export function exportStoreJson(tables: Tables): string {
 
 /** Baseline tables from the generated registry (Inspector hydration). */
 export function tablesFromGenerated(): Tables {
-  const buddies: Record<string, Record<string, string | number | boolean>> = {};
-  const traits: Record<string, Record<string, string | number | boolean>> = {};
-  const hearts: Record<string, Record<string, string | number | boolean>> = {};
-  const schedules: Record<string, Record<string, string | number | boolean>> = {};
-  for (const b of GENERATED_BUDDIES) {
-    buddies[b.id] = {
-      displayName: b.displayName, handle: b.handle, myplace: b.myplace, archetype: b.archetype,
-      status: b.status, metVia: b.metVia, color: b.color, persona: b.persona, typingSpeedWpm: b.typingSpeedWpm,
+  const characters: Record<string, Record<string, string | number | boolean>> = {};
+  const temperaments: Record<string, Record<string, number>> = {};
+  const initialAffinities: Record<string, Record<string, number>> = {};
+  const routines: Record<string, Record<string, string | number>> = {};
+  const artProfiles: Record<string, Record<string, string>> = {};
+  const backstories: Record<string, Record<string, string | number | boolean>> = {};
+
+  for (const c of GENERATED_CHARACTERS) {
+    characters[c.id] = {
+      role: c.role,
+      displayName: c.displayName,
+      archetypeId: c.archetypeId,
+      reach: c.reach,
+      hair: c.hair,
+      eyes: c.eyes,
+      chatColor: c.chatColor,
+      bio: c.bio,
+      typingSpeedWpm: c.typingSpeedWpm,
+      languages: JSON.stringify(c.languages),
+      roles: JSON.stringify(c.roles),
     };
-    traits[b.id] = { ...b.traits };
-    hearts[b.id] = { ...b.hearts };
-    schedules[b.id] = {
-      blocks: JSON.stringify(b.blocks.map((blk) => ({ start: blk.start, end: blk.end, status: blk.status, msg: blk.msg }))),
+    temperaments[c.id] = { ...c.temperament };
+    initialAffinities[c.id] = { ...c.initialAffinity };
+    routines[c.id] = { ...c.routine };
+    artProfiles[c.id] = {
+      engine: c.art.engine,
+      modelPath: c.art.modelPath,
+      expressions: JSON.stringify(c.art.expressions),
+      defaultOutfit: c.art.defaultOutfit,
+    };
+    if (c.backstory) {
+      backstories[c.id] = {
+        relationship: c.backstory.relationship,
+        label: c.backstory.label,
+        lapseDays: c.backstory.lapseDays,
+        knowsAccounts: c.backstory.knowsAccounts,
+        candidates: JSON.stringify(c.backstory.candidates),
+        bioSeed: c.backstory.bioSeed,
+      };
+    }
+  }
+
+  const archetypes: Record<string, Record<string, string | number>> = {};
+  for (const a of GENERATED_ARCHETYPES) {
+    archetypes[a.id] = {
+      label: a.label,
+      description: a.description,
+      personaHint: a.personaHint,
+      vocabulary: JSON.stringify(a.vocabulary),
+      defaultInterests: JSON.stringify(a.defaultInterests),
+      defaultSong: a.defaultSong,
+      typingSpeedWpm: a.typingSpeedWpm,
     };
   }
-  const pools: Record<string, Record<string, string | number | boolean>> = {};
-  for (const p of GENERATED_POOLS) {
-    pools[p.key] = { lines: JSON.stringify(p.lines), version: p.version };
+
+  const affinitySeeds: Record<string, Record<string, string | number>> = {};
+  for (const s of GENERATED_AFFINITY_SEEDS) {
+    affinitySeeds[`${s.roleA}__${s.roleB}`] = {
+      roleA: s.roleA,
+      roleB: s.roleB,
+      value: s.value,
+    };
   }
-  return { buddies, buddyTraits: traits, buddyHearts: hearts, buddySchedules: schedules, pools };
+
+  const dialoguePools: Record<string, Record<string, string | number>> = {};
+  for (const p of GENERATED_DIALOGUE_POOLS) {
+    dialoguePools[p.key] = {
+      lines: JSON.stringify(p.lines),
+      version: p.version,
+    };
+  }
+
+  return {
+    characters,
+    archetypes,
+    temperaments,
+    initialAffinities,
+    routines,
+    artProfiles,
+    affinitySeeds,
+    backstories,
+    dialoguePools,
+  };
 }
 
 export const ContentInspector: React.FC = () => {
