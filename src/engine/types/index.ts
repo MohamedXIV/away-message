@@ -331,6 +331,16 @@ export type CharacterArchetype = 'coworker' | 'nightowl' | 'student' | 'trader' 
 export type BuddyLifecycleStatus = 'stranger' | 'acquaintance' | 'friend' | 'close' | 'distant' | 'gone' | 'blocked';
 export type BuddyMetVia = 'nightboard' | 'myplace' | 'pulse-room' | 'work' | 'intro' | 'core';
 
+/** Pre-game history: who this buddy was to the player before day 1. */
+export interface BuddyBackstory {
+  relationship: 'stranger' | 'acquaintance' | 'friend' | 'close' | 'estranged';
+  label: string; // ≤ 60 chars, e.g. 'old friend from the food-cart shifts'
+  lapseDays: number; // days since last contact (0 = in touch)
+  knowsAccounts: boolean; // the player once knew their handles (frictionless re-learn)
+  candidates: Array<{ handle: string; status: 'active' | 'dead' | 'changed'; note?: string }>; // ≤ 3 old handles to try
+  bioSeed: string; // ≤ 200 chars of flavor for generated profiles
+}
+
 export interface BuddyCharacter {
   id: string;
   displayName: string;
@@ -348,6 +358,15 @@ export interface BuddyCharacter {
   metVia?: BuddyMetVia;
   isProcedural?: boolean;
   createdDay?: number;
+  // Free roster (v5): data-owned identity. All optional with engine backfills
+  // so legacy/procedural defs keep compiling; the content store fills them.
+  /** Physical vs far-away: remote buddies never meet in person (no art). */
+  reach?: 'local' | 'remote';
+  appearance?: { hair: string; eyes: string };
+  languages?: Array<{ lang: string; level: number }>; // 1..5 proficiency
+  /** Capability tags: landlord, diner-staff, rain-lover... engine queries these, never ids. */
+  roles?: string[];
+  backstory?: BuddyBackstory;
 }
 
 export interface BuddyPresence {
@@ -395,6 +414,11 @@ export interface SocialEngineState {
   npcSocialLog?: NpcInteractionLog[];
   // Introvert protagonist (v4): each buddy's read of the player, keyed by buddy id (persisted)
   playerReads?: Record<string, PlayerReadState>;
+  // Free roster (v5): pulse handles the player has learned, keyed by buddy id (persisted).
+  // Empty at new game — contacts are earned through meetings, intros, and backstory.
+  knownHandles?: Record<string, string[]>;
+  // Free roster (v5): one-line epitaphs for pruned gone buddies, oldest-first (persisted, capped).
+  epitaphs?: string[];
 }
 
 // ==========================================
@@ -672,6 +696,10 @@ export type SimulationAction =
   // Character Lives (v4): the player's answer to an NPC mediation request.
   // Rules resolve it; the Pulse UI may dispatch this (chat command or button follow-up).
   | { type: 'MEDIATION_RESPOND'; mediationId: string; choice: 'help' | 'ignore' | 'badmouth' }
+  // Free roster (v5): the player types a pulse handle to add (rules check it).
+  | { type: 'ADD_CONTACT'; handle: string }
+  // Free roster (v5): the player browses NightBoard for someone new (rules throttle it).
+  | { type: 'NIGHTBOARD_MEET' }
   | { type: 'SOCIAL_ADD_BUDDY'; buddy: BuddyCharacter; introText?: string; silent?: boolean }
   | { type: 'SOCIAL_REMOVE_BUDDY'; buddyId: string }
   | { type: 'WORLD_SET_FLAG'; key: string; value: boolean | number | string }

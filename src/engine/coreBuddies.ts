@@ -7,10 +7,12 @@
 
 import {
   GENERATED_BUDDIES,
+  GENERATED_AFFINITY_SEEDS,
   CONTENT_VERSION,
   type GeneratedBuddyDef,
 } from './coreBuddies.generated';
 import type {
+  BuddyBackstory,
   BuddyCharacter,
   BuddyLifecycleStatus,
   BuddyMetVia,
@@ -38,6 +40,12 @@ export interface CoreBuddy {
   typingSpeedWpm: number;
   /** Superseded ids/handles (save + alias bridge after a rename). */
   formerIds: string[];
+  /** Capability tags (landlord, diner-staff, rain-lover...). Engine queries these. */
+  roles: string[];
+  reach: 'local' | 'remote';
+  appearance: { hair: string; eyes: string };
+  languages: Array<{ lang: string; level: number }>;
+  backstory: BuddyBackstory | null;
   traits: CharacterTraits;
   hearts: RelationshipDimensions;
   blocks: Array<{ start: number; end: number; status: BuddyPresenceStatus; msg: string }>;
@@ -66,6 +74,24 @@ function normalize(def: GeneratedBuddyDef): CoreBuddy {
     persona: def.persona,
     typingSpeedWpm: def.typingSpeedWpm,
     formerIds: [...(def.formerIds ?? [])],
+    roles: [...(def.roles ?? [])],
+    reach: def.reach === 'remote' ? 'remote' : 'local',
+    appearance: { hair: def.hair?.trim() || 'brown', eyes: def.eyes?.trim() || 'brown' },
+    languages: (def.languages ?? []).map((l) => ({ lang: l.lang, level: Math.max(1, Math.min(5, Math.round(l.level))) })),
+    backstory: def.backstory
+      ? {
+          relationship: def.backstory.relationship as BuddyBackstory['relationship'],
+          label: def.backstory.label,
+          lapseDays: def.backstory.lapseDays,
+          knowsAccounts: def.backstory.knowsAccounts,
+          candidates: def.backstory.candidates.map((c) => ({
+            handle: c.handle,
+            status: c.status as BuddyBackstory['candidates'][number]['status'],
+            ...(c.note !== undefined ? { note: c.note } : {}),
+          })),
+          bioSeed: def.backstory.bioSeed,
+        }
+      : null,
     traits: { ...def.traits },
     hearts: { ...def.hearts },
     blocks: def.blocks.map((b) => ({ ...b })),
@@ -83,8 +109,36 @@ export function coreBuddyIds(): string[] {
   return CORE_BUDDIES.map((b) => b.id);
 }
 
-export function isCoreBuddyId(id: string): boolean {
-  return id === CORE_IDS.RYAN || id === CORE_IDS.MAYA || id === CORE_IDS.NORA || id === CORE_IDS.HENDERSON;
+/** Buddies carrying a capability tag, in roster order (rename-proof queries). */
+export function buddiesWithRole(role: string): CoreBuddy[] {
+  return CORE_BUDDIES.filter((b) => b.roles.includes(role));
+}
+
+/** First roster buddy carrying a capability tag (undefined when nobody does). */
+export function buddyWithRole(role: string): CoreBuddy | undefined {
+  return buddiesWithRole(role)[0];
+}
+
+/**
+ * Starting NPC↔NPC ties, resolved from role pairs to sorted id keys.
+ * Unresolvable pairs (role gone from data) are skipped — data edits must
+ * keep their seeds alive (validated at pull time).
+ */
+export function resolveAffinitySeeds(): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const seed of GENERATED_AFFINITY_SEEDS) {
+    const a = buddyWithRole(seed.roleA);
+    const b = buddyWithRole(seed.roleB);
+    if (!a || !b || a.id === b.id) continue;
+    const key = a.id < b.id ? `${a.id}__${b.id}` : `${b.id}__${a.id}`;
+    out[key] = Math.max(-100, Math.min(100, Math.round(seed.value)));
+  }
+  return out;
+}
+
+/** Registry membership: defs that re-seed from content (never persisted). Not sacredness. */
+export function isRegistryBuddy(id: string): boolean {
+  return id in CORE_BY_ID;
 }
 
 // Role anchors: resolved through the stable `role` column, so renaming an
@@ -134,5 +188,10 @@ export function coreBuddyDef(id: string): BuddyCharacter {
     metVia: buddy.metVia,
     isProcedural: false,
     createdDay: 1,
+    reach: buddy.reach,
+    appearance: { ...buddy.appearance },
+    languages: buddy.languages.map((l) => ({ ...l })),
+    roles: [...buddy.roles],
+    backstory: buddy.backstory ? { ...buddy.backstory, candidates: buddy.backstory.candidates.map((c) => ({ ...c })) } : undefined,
   };
 }

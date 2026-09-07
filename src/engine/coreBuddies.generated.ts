@@ -1,6 +1,6 @@
 // GENERATED — do not edit by hand.
-// Source: content/store.json (content vcc0d5e73). Regenerate: npm run content:pull.
-export const CONTENT_VERSION = 'cc0d5e73';
+// Source: content/store.json (content v11d4f340). Regenerate: npm run content:pull.
+export const CONTENT_VERSION = '11d4f340';
 
 export interface GeneratedScheduleBlock {
   start: number;
@@ -22,6 +22,12 @@ export interface GeneratedBuddyDef {
   persona: string;
   typingSpeedWpm: number;
   formerIds: string[];
+  roles: string[];
+  reach: 'local' | 'remote';
+  hair: string;
+  eyes: string;
+  languages: Array<{ lang: string; level: number }>;
+  backstory: { relationship: string; label: string; lapseDays: number; knowsAccounts: boolean; candidates: Array<{ handle: string; status: string; note?: string }>; bioSeed: string } | null;
   traits: { shyness: number; warmth: number; discipline: number; spontaneity: number; loyalty: number };
   hearts: { familiarity: number; trust: number; comfort: number; respect: number; annoyance: number; affection: number; attraction: number; suspicion: number; resentment: number };
   blocks: GeneratedScheduleBlock[];
@@ -41,6 +47,12 @@ export const GENERATED_BUDDIES: GeneratedBuddyDef[] = [
     persona: "Warm, impulsive food-cart coworker. Uses casual slang, jokes, and short messages. He avoids heavy emotional talks unless trust is high.",
     typingSpeedWpm: 80,
     formerIds: [],
+    roles: ["cart-owner"],
+    reach: "local" as 'local' | 'remote',
+    hair: "black",
+    eyes: "brown",
+    languages: [{ lang: "en", level: 5 }],
+    backstory: { relationship: "friend", label: "You know each other from the food-cart shifts.", lapseDays: 0, knowsAccounts: true, candidates: [], bioSeed: "Grill smoke, test benches, spare RAM sticks." },
     traits: { shyness: 25, warmth: 78, discipline: 50, spontaneity: 72, loyalty: 62 },
     hearts: { familiarity: 40, trust: 50, comfort: 50, respect: 40, annoyance: 0, affection: 0, attraction: 0, suspicion: 0, resentment: 0 },
     blocks: [
@@ -65,6 +77,12 @@ export const GENERATED_BUDDIES: GeneratedBuddyDef[] = [
     persona: "Quiet, observant, creative, and a little guarded. Uses lowercase, pauses, music references, and gentle honesty. She warms up slowly.",
     typingSpeedWpm: 60,
     formerIds: [],
+    roles: ["diner-staff", "rain-lover"],
+    reach: "local" as 'local' | 'remote',
+    hair: "black",
+    eyes: "brown",
+    languages: [{ lang: "en", level: 5 }],
+    backstory: { relationship: "acquaintance", label: "Met around Oakhaven; quiet but familiar.", lapseDays: 0, knowsAccounts: true, candidates: [], bioSeed: "Rain on film, canal static, diner coffee." },
     traits: { shyness: 88, warmth: 62, discipline: 48, spontaneity: 45, loyalty: 85 },
     hearts: { familiarity: 10, trust: 20, comfort: 30, respect: 40, annoyance: 0, affection: 0, attraction: 0, suspicion: 0, resentment: 0 },
     blocks: [
@@ -88,6 +106,12 @@ export const GENERATED_BUDDIES: GeneratedBuddyDef[] = [
     persona: "Night-owl archivist with dry humor. Curious about strange details, concise, slightly cryptic, but not supernatural.",
     typingSpeedWpm: 90,
     formerIds: [],
+    roles: ["canal-regular"],
+    reach: "local" as 'local' | 'remote',
+    hair: "brown",
+    eyes: "grey",
+    languages: [{ lang: "en", level: 5 }],
+    backstory: { relationship: "acquaintance", label: "NightBoard regular you have waved at.", lapseDays: 0, knowsAccounts: true, candidates: [], bioSeed: "Night logs, spectral captures, quiet archives." },
     traits: { shyness: 65, warmth: 42, discipline: 72, spontaneity: 30, loyalty: 78 },
     hearts: { familiarity: 5, trust: 15, comfort: 20, respect: 50, annoyance: 0, affection: 0, attraction: 0, suspicion: 0, resentment: 0 },
     blocks: [
@@ -111,6 +135,12 @@ export const GENERATED_BUDDIES: GeneratedBuddyDef[] = [
     persona: "Professional motel manager. Formal, practical, and terse. He cares about rent, schedules, and keeping the property calm.",
     typingSpeedWpm: 40,
     formerIds: [],
+    roles: ["landlord"],
+    reach: "local" as 'local' | 'remote',
+    hair: "grey",
+    eyes: "blue",
+    languages: [{ lang: "en", level: 5 }],
+    backstory: { relationship: "acquaintance", label: "Your motel landlord.", lapseDays: 0, knowsAccounts: true, candidates: [], bioSeed: "Ledger books, office hours, quiet halls." },
     traits: { shyness: 45, warmth: 50, discipline: 85, spontaneity: 25, loyalty: 72 },
     hearts: { familiarity: 30, trust: 30, comfort: 20, respect: 40, annoyance: 10, affection: 0, attraction: 0, suspicion: 0, resentment: 0 },
     blocks: [
@@ -147,5 +177,44 @@ export const GENERATED_POOLS: GeneratedPool[] = [
     key: "leave:work:soft",
     lines: ["ahh sorry, shift starts — gotta run. talk later?", "boss is glaring lol. brb after work", "duty calls... ill ping you when im back"],
     version: 1,
+  },
+];
+
+export interface GeneratedAffinitySeed {
+  roleA: string;
+  roleB: string;
+  value: number;
+}
+
+export const GENERATED_AFFINITY_SEEDS: GeneratedAffinitySeed[] = [
+  {
+    roleA: "canal-regular",
+    roleB: "cart-owner",
+    value: -5,
+  },
+  {
+    roleA: "canal-regular",
+    roleB: "diner-staff",
+    value: 5,
+  },
+  {
+    roleA: "canal-regular",
+    roleB: "landlord",
+    value: 0,
+  },
+  {
+    roleA: "cart-owner",
+    roleB: "diner-staff",
+    value: 15,
+  },
+  {
+    roleA: "cart-owner",
+    roleB: "landlord",
+    value: 10,
+  },
+  {
+    roleA: "diner-staff",
+    roleB: "landlord",
+    value: 10,
   },
 ];

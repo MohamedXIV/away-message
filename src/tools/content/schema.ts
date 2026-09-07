@@ -30,6 +30,16 @@ export const CONTENT_SCHEMA = {
     typingSpeedWpm: { type: 'number', default: 60 },
     // JSON array of superseded ids/handles (save + alias bridge after a rename).
     formerIds: { type: 'string', default: '[]' },
+    // Capability tags (JSON array): landlord, diner-staff, canal-regular,
+    // rain-lover... The engine queries THESE, never ids. Rename-proof.
+    roles: { type: 'string', default: '[]' },
+    // Physical vs far-away: remote buddies never meet in person (no cafe,
+    // outings, or room presence) — DMs/rooms/mail/MyPlace only, no art.
+    reach: { type: 'string', default: 'local' },
+    hair: { type: 'string', default: 'brown' },
+    eyes: { type: 'string', default: 'brown' },
+    // JSON array ≤3 of {lang, level 1..5}. The AI knows exactly these.
+    languages: { type: 'string', default: '[{"lang":"en","level":5}]' },
   },
   buddyTraits: {
     shyness: { type: 'number', default: 50 },
@@ -55,6 +65,22 @@ export const CONTENT_SCHEMA = {
   pools: {
     lines: { type: 'string', default: '[]' },
     version: { type: 'number', default: 1 },
+  },
+  // Starting NPC↔NPC ties by ROLE pair (row id `${roleA}__${roleB}`, value -100..100).
+  affinitySeeds: {
+    roleA: { type: 'string', default: '' },
+    roleB: { type: 'string', default: '' },
+    value: { type: 'number', default: 0 },
+  },
+  // Pre-game history per buddy id: who they were to the player before day 1.
+  backstories: {
+    relationship: { type: 'string', default: 'stranger' },
+    label: { type: 'string', default: '' },
+    lapseDays: { type: 'number', default: 0 },
+    knowsAccounts: { type: 'boolean', default: false },
+    // JSON array ≤3 of {handle, status: active|dead|changed, note?}
+    candidates: { type: 'string', default: '[]' },
+    bioSeed: { type: 'string', default: '' },
   },
 } as const satisfies TablesSchema;
 
