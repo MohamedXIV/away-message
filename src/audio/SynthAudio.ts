@@ -539,6 +539,237 @@ export class SynthAudio {
       }
     } catch {}
   }
+
+  /** BIOS POST Beep (Hardware motherboard speaker) */
+  public playBiosBeep(): void {
+    const ctx = this.getContext();
+    if (!ctx || this.isMuted) return;
+    try {
+      const t0 = ctx.currentTime;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'square';
+      osc.frequency.setValueAtTime(880, t0); // 880 Hz standard IBM/PC POST beep
+      gain.gain.setValueAtTime(0.15, t0);
+      gain.gain.exponentialRampToValueAtTime(0.001, t0 + 0.12);
+      osc.connect(gain);
+      gain.connect(this.sfxGain!);
+      osc.start(t0);
+      osc.stop(t0 + 0.12);
+    } catch {}
+  }
+
+  /** Optical CD-ROM Drive Spindle Acceleration & Laser Track Seek */
+  public playCdRomSpin(durationMs = 1200): void {
+    const ctx = this.getContext();
+    if (!ctx || this.isMuted) return;
+    try {
+      const t0 = ctx.currentTime;
+      const durSec = durationMs / 1000;
+
+      // Spindle motor whine
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(180, t0);
+      osc.frequency.exponentialRampToValueAtTime(750, t0 + durSec * 0.7);
+      osc.frequency.linearRampToValueAtTime(600, t0 + durSec);
+
+      gain.gain.setValueAtTime(0.01, t0);
+      gain.gain.linearRampToValueAtTime(0.06, t0 + durSec * 0.3);
+      gain.gain.setValueAtTime(0.06, t0 + durSec * 0.8);
+      gain.gain.exponentialRampToValueAtTime(0.001, t0 + durSec);
+
+      osc.connect(gain);
+      gain.connect(this.sfxGain!);
+      osc.start(t0);
+      osc.stop(t0 + durSec);
+
+      // Laser stepping chirp halfway through
+      const laserTime = t0 + durSec * 0.45;
+      const laserOsc = ctx.createOscillator();
+      const laserGain = ctx.createGain();
+      laserOsc.type = 'sawtooth';
+      laserOsc.frequency.setValueAtTime(1200, laserTime);
+      laserOsc.frequency.linearRampToValueAtTime(3200, laserTime + 0.05);
+      laserGain.gain.setValueAtTime(0.05, laserTime);
+      laserGain.gain.exponentialRampToValueAtTime(0.001, laserTime + 0.06);
+      laserOsc.connect(laserGain);
+      laserGain.connect(this.sfxGain!);
+      laserOsc.start(laserTime);
+      laserOsc.stop(laserTime + 0.06);
+    } catch {}
+  }
+
+  /** Sustained Hard Drive Read/Write Activity (Cluster seeks) */
+  public playDriveSeek(durationMs = 800): void {
+    const ctx = this.getContext();
+    if (!ctx || this.isMuted) return;
+    try {
+      const t0 = ctx.currentTime;
+      const bursts = Math.min(16, Math.max(3, Math.floor(durationMs / 60)));
+      for (let i = 0; i < bursts; i++) {
+        const pTime = t0 + (i * (durationMs / bursts) + (Math.random() * 20 - 10)) / 1000;
+        if (pTime < t0) continue;
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'square';
+        osc.frequency.value = 1800 + Math.random() * 1200;
+        gain.gain.setValueAtTime(0.035, pTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, pTime + 0.015);
+        osc.connect(gain);
+        gain.connect(this.sfxGain!);
+        osc.start(pTime);
+        osc.stop(pTime + 0.015);
+      }
+    } catch {}
+  }
+
+  /** Window motion audio per generation */
+  public playWindowSound(action: 'minimize' | 'restore' | 'open' | 'close', osVersion?: string): void {
+    const ctx = this.getContext();
+    if (!ctx || this.isMuted) return;
+    try {
+      const t0 = ctx.currentTime;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+
+      const isOrion48 = !osVersion || osVersion.includes('4.8');
+      const isOrion50 = osVersion?.includes('5.0');
+      const isOrion60 = osVersion?.includes('6.');
+      const isOrion70 = osVersion?.includes('7.');
+
+      if (isOrion48) {
+        // 4.8 Harbor: Snappy 8-bit mechanical sweep
+        osc.type = 'square';
+        const startFreq = action === 'minimize' || action === 'close' ? 900 : 450;
+        const endFreq = action === 'minimize' || action === 'close' ? 300 : 1100;
+        osc.frequency.setValueAtTime(startFreq, t0);
+        osc.frequency.exponentialRampToValueAtTime(endFreq, t0 + 0.04);
+        gain.gain.setValueAtTime(0.07, t0);
+        gain.gain.exponentialRampToValueAtTime(0.001, t0 + 0.04);
+        osc.connect(gain);
+        gain.connect(this.sfxGain!);
+        osc.start(t0);
+        osc.stop(t0 + 0.04);
+      } else if (isOrion50) {
+        // 5.0 Aurora: Gentle melodic whoosh
+        osc.type = 'sine';
+        const startFreq = action === 'minimize' || action === 'close' ? 650 : 350;
+        const endFreq = action === 'minimize' || action === 'close' ? 220 : 800;
+        osc.frequency.setValueAtTime(startFreq, t0);
+        osc.frequency.exponentialRampToValueAtTime(endFreq, t0 + 0.08);
+        gain.gain.setValueAtTime(0.08, t0);
+        gain.gain.exponentialRampToValueAtTime(0.001, t0 + 0.08);
+        osc.connect(gain);
+        gain.connect(this.sfxGain!);
+        osc.start(t0);
+        osc.stop(t0 + 0.08);
+      } else if (isOrion60) {
+        // 6.0 Glassline: Fluid dual-harmonic slide
+        osc.type = 'triangle';
+        const startFreq = action === 'minimize' || action === 'close' ? 880 : 440;
+        const endFreq = action === 'minimize' || action === 'close' ? 330 : 990;
+        osc.frequency.setValueAtTime(startFreq, t0);
+        osc.frequency.exponentialRampToValueAtTime(endFreq, t0 + 0.12);
+        gain.gain.setValueAtTime(0.06, t0);
+        gain.gain.exponentialRampToValueAtTime(0.001, t0 + 0.12);
+        osc.connect(gain);
+        gain.connect(this.sfxGain!);
+        osc.start(t0);
+        osc.stop(t0 + 0.12);
+      } else if (isOrion70) {
+        // 7.0 Lumen: Subtle ambient breath
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(action === 'minimize' ? 420 : 540, t0);
+        osc.frequency.linearRampToValueAtTime(action === 'minimize' ? 280 : 720, t0 + 0.14);
+        gain.gain.setValueAtTime(0.04, t0);
+        gain.gain.exponentialRampToValueAtTime(0.001, t0 + 0.15);
+        osc.connect(gain);
+        gain.connect(this.sfxGain!);
+        osc.start(t0);
+        osc.stop(t0 + 0.15);
+      }
+    } catch {}
+  }
+
+  /** Generation-specific authentic retro startup chimes */
+  public playStartupChime(osVersion: string): void {
+    const ctx = this.getContext();
+    if (!ctx || this.isMuted) return;
+    try {
+      const t0 = ctx.currentTime + 0.05;
+
+      if (osVersion.includes('4.8')) {
+        // Orion 4.8 Harbor: Classic 90s ascending square-wave arpeggio (C4-E4-G4-C5)
+        const notes = [261.63, 329.63, 392.0, 523.25];
+        notes.forEach((freq, idx) => {
+          const noteTime = t0 + idx * 0.1;
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = 'square';
+          osc.frequency.setValueAtTime(freq, noteTime);
+          gain.gain.setValueAtTime(0.09, noteTime);
+          gain.gain.exponentialRampToValueAtTime(0.001, noteTime + (idx === 3 ? 0.6 : 0.14));
+          osc.connect(gain);
+          gain.connect(this.sfxGain!);
+          osc.start(noteTime);
+          osc.stop(noteTime + (idx === 3 ? 0.6 : 0.14));
+        });
+      } else if (osVersion.includes('5.0')) {
+        // Orion 5.0 Aurora: Warm dual-tone melodic bell (D4 -> A4 -> F#5 resonant chime)
+        const chords = [
+          { time: t0, freqs: [293.66, 440.0], dur: 0.35, gain: 0.11 },
+          { time: t0 + 0.28, freqs: [369.99, 739.99], dur: 0.85, gain: 0.14 },
+        ];
+        chords.forEach((chord) => {
+          chord.freqs.forEach((freq) => {
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(freq, chord.time);
+            gain.gain.setValueAtTime(chord.gain, chord.time);
+            gain.gain.exponentialRampToValueAtTime(0.001, chord.time + chord.dur);
+            osc.connect(gain);
+            gain.connect(this.sfxGain!);
+            osc.start(chord.time);
+            osc.stop(chord.time + chord.dur);
+          });
+        });
+      } else if (osVersion.includes('6.')) {
+        // Orion 6.0 Glassline: Lush 4-voice harmonic chord with warmth
+        const freqs = [277.18, 415.3, 659.25, 987.77]; // C#4, G#4, E5, B5
+        freqs.forEach((freq, idx) => {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = 'triangle';
+          osc.frequency.setValueAtTime(freq, t0 + idx * 0.04);
+          gain.gain.setValueAtTime(0.08, t0 + idx * 0.04);
+          gain.gain.exponentialRampToValueAtTime(0.001, t0 + 1.2);
+          osc.connect(gain);
+          gain.connect(this.sfxGain!);
+          osc.start(t0 + idx * 0.04);
+          osc.stop(t0 + 1.2);
+        });
+      } else if (osVersion.includes('7.')) {
+        // Orion 7.0 Lumen: Ethereal mineral crystalline chord
+        const freqs = [369.99, 554.37, 830.61, 1244.5]; // F#4, C#5, G#5, D#6
+        freqs.forEach((freq, idx) => {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(freq, t0 + idx * 0.06);
+          gain.gain.setValueAtTime(0.07, t0 + idx * 0.06);
+          gain.gain.exponentialRampToValueAtTime(0.001, t0 + 1.8);
+          osc.connect(gain);
+          gain.connect(this.sfxGain!);
+          osc.start(t0 + idx * 0.06);
+          osc.stop(t0 + 1.8);
+        });
+      }
+    } catch {}
+  }
 }
 
 export const synthAudio = new SynthAudio();
+
