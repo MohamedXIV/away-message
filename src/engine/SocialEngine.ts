@@ -21,9 +21,9 @@ import {
 } from './types';
 import { EventBus } from './EventBus';
 import { getWeatherForDay, isWetWeather } from './WeatherEngine';
-import { validateCharacterId, isValidSchedule, isCoreBuddyId, traitsForBuddy, clampTraits, clampRelationships, resolveArchetype, rollSeeded100 } from './characterTemplates';
-import { CORE_BUDDIES, CORE_IDS, coreBuddyDef } from './coreBuddies';
-import { validatePersistedBuddy } from './CharacterEngine';
+import { validateCharacterId, isValidSchedule, traitsForBuddy, clampTraits, clampRelationships, resolveArchetype, rollSeeded100 } from './characterTemplates';
+import { CORE_BUDDIES, coreBuddyDef, isRegistryBuddy, resolveAffinitySeeds } from './coreBuddies';
+import { validatePersistedBuddy, sanitizeLanguages } from './CharacterEngine';
 
 // P3 long-term memory caps (keeps prompt injection bounded and saves small)
 export const MAX_CORE_MEMORIES = 8;
@@ -44,6 +44,9 @@ export const ROOM_BUMP_DAILY_CAP = 6;
 export const MAX_AGENDA_PER_BUDDY_DAY = 4;
 export const MAX_MEDIATIONS = 6;
 export const MAX_NPC_SOCIAL_LOG = 20;
+// Free roster — caps for contacts and epitaphs
+export const MAX_KNOWN_HANDLES = 6;
+export const MAX_EPITAPHS = 20;
 
 /** Canonical affinity key: ids sorted alphabetically so (a,b) === (b,a). */
 export function affinityKey(a: string, b: string): string {
@@ -130,22 +133,10 @@ export const NPC_SOCIAL_ACTION_DELTAS: Record<string, Partial<NpcBondDims>> = {
 };
 
 /**
- * Hand-authored starting ties between the core 4 (everyone else starts at 0).
- * Anchored on CORE_IDS so a Phase 2 rename re-keys automatically; values are
- * the authored content. Keys stay alphabetically sorted (see affinityKey).
+ * Hand-authored starting ties between buddies, resolved from role pairs
+ * (content-owned — a rename re-keys automatically, no code changes).
  */
-const SEED_PAIRS: Array<[string, string, number]> = [
-  [CORE_IDS.MAYA, CORE_IDS.RYAN, 15],
-  [CORE_IDS.HENDERSON, CORE_IDS.MAYA, 10],
-  [CORE_IDS.HENDERSON, CORE_IDS.RYAN, 10],
-  [CORE_IDS.MAYA, CORE_IDS.NORA, 5],
-  [CORE_IDS.HENDERSON, CORE_IDS.NORA, 0],
-  [CORE_IDS.NORA, CORE_IDS.RYAN, -5],
-];
-
-export const SEED_AFFINITIES: Record<string, number> = Object.fromEntries(
-  SEED_PAIRS.map(([a, b, v]) => [affinityKey(a, b), v])
-);
+export const SEED_AFFINITIES: Record<string, number> = resolveAffinitySeeds();
 
 function hashText(value: string): number {
   let hash = 0;
@@ -172,6 +163,11 @@ export class SocialEngine {
   private npcSocialLog: NpcInteractionLog[] = [];
   // Introvert protagonist: each buddy's read of the player (beliefs + certainty)
   private playerReads: Map<string, PlayerReadState> = new Map();
+  // Free roster: pulse handles the player has learned, keyed by buddy id.
+  // Empty at new game — contacts are earned, never granted.
+  private knownHandles: Record<string, string[]> = {};
+  // Free roster: one-line epitaphs for pruned gone buddies, oldest-first.
+  private epitaphs: string[] = [];
   private eventBus: EventBus;
 
   constructor(eventBus: EventBus, initialState?: SocialEngineState) {
@@ -212,6 +208,16 @@ export class SocialEngine {
         ...traitsForBuddy(id, def.archetype ?? resolveArchetype(id, undefined)),
         ...((def as Partial<BuddyCharacter>).traits ?? {}),
       }),
+      // Free roster identity backfills (older defs predate these fields).
+      reach: (def as Partial<BuddyCharacter>).reach === 'remote' ? 'remote' : 'local',
+      appearance: {
+        hair: String((def as Partial<BuddyCharacter>).appearance?.hair || 'brown').trim().slice(0, 24) || 'brown',
+        eyes: String((def as Partial<BuddyCharacter>).appearance?.eyes || 'brown').trim().slice(0, 24) || 'brown',
+      },
+      languages: sanitizeLanguages((def as Partial<BuddyCharacter>).languages),
+      roles: Array.isArray((def as Partial<BuddyCharacter>).roles)
+        ? ((def as Partial<BuddyCharacter>).roles as unknown[]).filter((r): r is string => typeof r === 'string' && /^[a-z][a-z0-9_-]{1,23}$/.test(r)).slice(0, 6)
+        : [],
       schedule: Object.fromEntries(
         Object.entries(def.schedule).map(([day, blks]) => [Number(day), blks.map((b) => ({ ...b }))])
       ),
@@ -225,13 +231,16 @@ export class SocialEngine {
   }
 
   /**
-   * Remove a procedural buddy (lifecycle: gone/blocked cleanup).
-   * Core buddies cannot be removed — change their status instead.
+   * Remove a buddy (lifecycle: gone/blocked cleanup). No one is sacred —
+   * anyone can leave; the sharp-event governor (one active sharp at a time)
+   * is what keeps departures rare, not identity.
    */
   public removeBuddy(rawId: string): boolean {
     const id = normalizeBuddyId(rawId);
-    if (isCoreBuddyId(id)) throw new Error(`Core buddy cannot be removed: ${id}`);
     if (!this.buddies.has(id)) return false;
+    if (isRegistryBuddy(id)) {
+      throw new Error(`Core buddy cannot be removed: ${id}`);
+    }
     this.buddies.delete(id);
     this.relationships.delete(id);
     this.presence.delete(id);
@@ -246,6 +255,7 @@ export class SocialEngine {
     this.mediations = this.mediations.filter((m) => m.requesterId !== id && m.targetId !== id);
     this.npcSocialLog = this.npcSocialLog.filter((l) => l.firstId !== id && l.secondId !== id);
     this.playerReads.delete(id);
+    delete this.knownHandles[id];
     // P4: drop every affinity pair and cap entry involving this buddy
     for (const key of Array.from(this.affinities.keys())) {
       const parts = key.split('__');
@@ -296,22 +306,31 @@ export class SocialEngine {
     for (const [id, read] of this.playerReads.entries()) {
       playerReads[id] = { beliefs: { ...read.beliefs }, certainty: read.certainty, updatedDay: read.updatedDay };
     }
+    const knownHandles: Record<string, string[]> = {};
+    for (const [id, handles] of Object.entries(this.knownHandles)) knownHandles[id] = [...handles];
+    const epitaphs = [...this.epitaphs];
 
-    // Persist only procedural buddy defs (core 4 are code-owned and re-seeded).
+    // Persist only non-registry buddy defs (registry defs are code-owned and re-seeded).
     const buddyDefs: Record<string, BuddyCharacter> = {};
     for (const [id, b] of this.buddies.entries()) {
-      if (isCoreBuddyId(id)) continue;
+      if (isRegistryBuddy(id)) continue;
       buddyDefs[id] = {
         ...b,
         initialRelationships: { ...b.initialRelationships },
         traits: { ...b.traits },
+        appearance: { ...(b.appearance ?? { hair: 'brown', eyes: 'brown' }) },
+        languages: (b.languages ?? [{ lang: 'en', level: 5 }]).map((l) => ({ ...l })),
+        roles: [...(b.roles ?? [])],
+        backstory: b.backstory
+          ? { ...b.backstory, candidates: b.backstory.candidates.map((c) => ({ ...c })) }
+          : undefined,
         schedule: Object.fromEntries(
           Object.entries(b.schedule).map(([day, blks]) => [Number(day), blks.map((blk) => ({ ...blk }))])
         ),
       };
     }
 
-    return { relationships: rels, presence: pres, conversations: convs, buddies: buddyDefs, coreMemories: mems, promises: proms, affinities: affs, affinityCaps: caps, npcBonds: bonds, agenda, mediations, npcSocialLog, playerReads };
+    return { relationships: rels, presence: pres, conversations: convs, buddies: buddyDefs, coreMemories: mems, promises: proms, affinities: affs, affinityCaps: caps, npcBonds: bonds, agenda, mediations, npcSocialLog, playerReads, knownHandles, epitaphs };
   }
 
   private static sanitizeMemoryText(text: string, max: number): string {
@@ -323,11 +342,11 @@ export class SocialEngine {
   }
 
   public restoreState(state: SocialEngineState): void {
-    // Re-register persisted procedural defs first so rel/presence/convos land on real buddies.
+    // Re-register persisted non-registry defs first so rel/presence/convos land on real buddies.
     if (state.buddies) {
       for (const [rawId, def] of Object.entries(state.buddies)) {
         const id = normalizeBuddyId(rawId);
-        if (this.buddies.has(id) || isCoreBuddyId(id)) continue;
+        if (this.buddies.has(id) || isRegistryBuddy(id)) continue;
         const res = validatePersistedBuddy({ ...def, id });
         if (!res.ok || !res.definition) continue;
         this.buddies.set(id, res.definition);
@@ -524,6 +543,24 @@ export class SocialEngine {
         });
       }
     }
+    // Known handles (validated ids/handles; absent → strangers on the wire)
+    this.knownHandles = {};
+    if (state.knownHandles) {
+      for (const [rawId, handles] of Object.entries(state.knownHandles)) {
+        const id = normalizeBuddyId(rawId);
+        if (!Array.isArray(handles)) continue;
+        const clean = handles
+          .filter((h): h is string => typeof h === 'string' && !!h.trim())
+          .map((h) => h.trim().slice(0, 40))
+          .filter((h, i, arr) => arr.indexOf(h) === i)
+          .slice(0, MAX_KNOWN_HANDLES);
+        if (clean.length > 0) this.knownHandles[id] = clean;
+      }
+    }
+    // Epitaphs (capped one-liners)
+    this.epitaphs = Array.isArray(state.epitaphs)
+      ? state.epitaphs.filter((l): l is string => typeof l === 'string' && !!l.trim()).map((l) => l.trim().slice(0, 140)).slice(-MAX_EPITAPHS)
+      : [];
 
     // Backfill empty presence/conversations for any buddy missing them (old saves).
     for (const buddy of this.buddies.values()) {
@@ -770,8 +807,8 @@ export class SocialEngine {
     else if (roll < 70) mood = 'steady';
     else if (roll < 88) mood = 'tired';
     else mood = 'off';
-    // P6.2 rain-lift for the registry's rain lover (wet days lift one step; strained-cold exempt above)
-    if (id === CORE_IDS.MAYA && isWetWeather(getWeatherForDay(day).condition)) {
+    // Rain lovers lift one step on wet days (data tag, not an id — strained-cold exempt above)
+    if ((this.buddies.get(id)?.roles ?? []).includes('rain-lover') && isWetWeather(getWeatherForDay(day).condition)) {
       if (mood === 'off') mood = 'tired';
       else if (mood === 'tired') mood = 'steady';
       else if (mood === 'steady') mood = 'warm';
@@ -781,13 +818,13 @@ export class SocialEngine {
 
   /**
    * Move a buddy along the lifecycle (distant/gone for sharp events, back to
-   * acquaintance on return). Core 4 are protected: they can never go distant/gone/blocked.
+   * acquaintance on return). No one is protected — anyone can walk away.
    */
   public setBuddyStatus(rawId: string, status: BuddyLifecycleStatus): BuddyCharacter {
     const id = normalizeBuddyId(rawId);
     const buddy = this.buddies.get(id);
     if (!buddy) throw new Error(`Buddy not found: ${id}`);
-    if (isCoreBuddyId(id) && (status === 'distant' || status === 'gone' || status === 'blocked')) {
+    if (isRegistryBuddy(id) && (status === 'distant' || status === 'gone' || status === 'blocked')) {
       throw new Error(`Core buddy is protected from '${status}': ${id}`);
     }
     buddy.status = status;
@@ -1100,6 +1137,9 @@ export class SocialEngine {
       if (record.kind === 'introduce') {
         this.adjustNpcBond(record.requesterId, record.targetId, { familiarity: 6, comfort: 3 }, safeDay);
         this.adjustNpcBond(record.targetId, record.requesterId, { familiarity: 6, comfort: 3 }, safeDay);
+        // An introduction IS the handle: you learn who you were introduced to.
+        const target = this.buddies.get(record.targetId);
+        if (target) this.learnHandle(record.targetId, target.handle);
       } else {
         this.adjustNpcBond(record.requesterId, record.targetId, { trust: 3, comfort: 2 }, safeDay);
         this.adjustNpcBond(record.targetId, record.requesterId, { trust: 3, comfort: 2 }, safeDay);
@@ -1232,6 +1272,49 @@ export class SocialEngine {
       involvements.push(stage === 'dating' ? `dating ${other.displayName} since day ${since}` : `crush on ${other.displayName}`);
     }
     return involvements.length > 0 ? `Romance: ${involvements.slice(0, 3).join('; ')}` : 'Romance: single';
+  }
+
+  // ---------- Known handles (earned contacts) ----------
+
+  /** Pulse handles the player has learned for a buddy (copies). Empty = stranger on the wire. */
+  public getKnownHandles(rawId: string): string[] {
+    return [...(this.knownHandles[normalizeBuddyId(rawId)] ?? [])];
+  }
+
+  /** True when the player knows at least one handle for the buddy. */
+  public isKnown(rawId: string): boolean {
+    return (this.knownHandles[normalizeBuddyId(rawId)] ?? []).length > 0;
+  }
+
+  /**
+   * Learn a handle for a buddy (meeting, intro, backstory, NightBoard...).
+   * Capped + deduped; false when unknown buddy, blank handle, or capped out.
+   */
+  public learnHandle(rawId: string, rawHandle: string): boolean {
+    const id = normalizeBuddyId(rawId);
+    if (!this.buddies.has(id)) return false;
+    const handle = (rawHandle || '').trim().slice(0, 40);
+    if (!handle) return false;
+    const known = this.knownHandles[id] ?? [];
+    if (known.includes(handle)) return true;
+    if (known.length >= MAX_KNOWN_HANDLES) return false;
+    this.knownHandles[id] = [...known, handle];
+    this.eventBus.emit('social:handle_learned' as any, { buddyId: id, handle });
+    return true;
+  }
+
+  // ---------- Epitaphs (pruned gone buddies) ----------
+
+  /** Fold a one-line epitaph (capped, oldest evicted). */
+  public addEpitaph(line: string): void {
+    const clean = (line || '').trim().replace(/\s+/g, ' ').slice(0, 140);
+    if (!clean) return;
+    this.epitaphs.push(clean);
+    while (this.epitaphs.length > MAX_EPITAPHS) this.epitaphs.shift();
+  }
+
+  public getEpitaphs(): string[] {
+    return [...this.epitaphs];
   }
 
   // ---------- Reads of the player ----------

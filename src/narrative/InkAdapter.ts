@@ -176,8 +176,10 @@ export class InkAdapter {
   }
 
   public executeTags(rawTags: string[]): void {
+    // Roster-first fallback: tags without an explicit buddy resolve to whoever is around.
+    const fallback = this.engine.social.getBuddies()[0]?.id;
     for (const rawTag of rawTags) {
-      const parsed = parseNarrativeTag(rawTag);
+      const parsed = parseNarrativeTag(rawTag, fallback);
       this.dispatchParsedTagAction(parsed);
     }
   }
@@ -265,7 +267,7 @@ export class InkAdapter {
           type: 'NARRATIVE_SCHEDULE_APPOINTMENT',
           appointment: {
             id: tag.appointmentId,
-            characterId: tag.characterId || CORE_IDS.MAYA,
+            characterId: tag.characterId || this.engine.social.getBuddies()[0]?.id || CORE_IDS.MAYA,
             locationId: tag.location,
             targetDay: tag.day,
             startMinute: tag.startMinute,

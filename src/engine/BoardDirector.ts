@@ -30,6 +30,7 @@ export interface BoardBuddy {
   archetype?: CharacterArchetype;
   stage: string;
   status?: string;
+  roles?: string[];
 }
 
 export interface NpcThreadReply {
@@ -289,7 +290,7 @@ export interface RentMailContext {
  * payment: processRentDaily stamps `rentmail_due_{dueDay}` on the reminder
  * and `rentmail_overdue_{dueDay}` on the second notice (values: amount cents).
  */
-export function buildRentMailHistory(flags: Record<string, boolean | number | string>): NpcMail[] {
+export function buildRentMailHistory(flags: Record<string, boolean | number | string>, landlordId?: string): NpcMail[] {
   const out: NpcMail[] = [];
   for (const [key, value] of Object.entries(flags)) {
     const match = key.match(/^rentmail_(due|overdue)_(\d+)$/);
@@ -300,7 +301,7 @@ export function buildRentMailHistory(flags: Record<string, boolean | number | st
     const day = kind === 'due' ? dueDay : dueDay + 1;
     out.push({
       key: `rentmail_${kind}_${dueDay}`,
-      buddyId: CORE_IDS.HENDERSON,
+      buddyId: landlordId ?? CORE_IDS.HENDERSON,
       sender: 'Mr. Henderson',
       senderEmail: 'desk@starlitemotel.local',
       subject: kind === 'due' ? `Room 104 rent due — $${amount.toFixed(2)}` : 'Second notice — Room 104',
@@ -346,11 +347,11 @@ export function buildWeeklyWeatherThread(
   const severe = lead.weather.condition;
   let author = eligible[hashStr(`wx${week}:a`) % eligible.length]!;
   const lover = severe === 'heat'
-    ? eligible.find((b) => b.id === CORE_IDS.RYAN)
+    ? eligible.find((b) => b.archetype === 'coworker')
     : severe === 'fog'
-      ? eligible.find((b) => b.id === CORE_IDS.NORA)
+      ? eligible.find((b) => b.archetype === 'nightowl')
       : (severe === 'rain' || severe === 'drizzle' || severe === 'storm')
-        ? eligible.find((b) => b.id === CORE_IDS.MAYA)
+        ? eligible.find((b) => (b.roles ?? []).includes('rain-lover')) ?? eligible.find((b) => b.archetype === 'artist')
         : undefined;
   if (lover) author = lover;
   const key = `npcweather_${week}`;

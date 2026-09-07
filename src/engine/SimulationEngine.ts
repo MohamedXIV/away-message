@@ -21,7 +21,7 @@ import { MyPlaceEngine, CORE_PROFILE_ALIASES } from './MyPlaceEngine';
 import { validatePersistedBuddy } from './CharacterEngine';
 import { generateNewcomer, shouldAutoDiscover, NEWCOMER_METVIA_ROTATION } from './CharacterDirector';
 import { STRAINED_ANNOYANCE, DISTANT_ANNOYANCE, GONE_ANNOYANCE, traitCompatibility } from './SocialEngine';
-import { pickConfrontLine, pickFarewellLine, pickReturnLine, pickInitiativeText, pickRsvpLine, pickStoodUpLine, pickMeetingApologyLine, pickShiftWrapLine, pickGigWrapLine, pickArchiveWrapLine, pickGuestbookLine, pickGuestbookReplyLine, pickTop8NewsLine, pickOutingMayaLine, pickOutingNoraLine, pickRentReminderLine, pickRentSternLine, pickRentNudgeLine, pickRentThanksLine, pickJobAcceptLine, pickJobRejectLine, pickLeaveLine, pickMediationAskLine, pickMediationThanks, pickRuninSpot, pickRuninVerb, classifyScheduleBlock, AGENDA_LABELS, rollSeeded100, pickSeeded, spreadSeed, resolveArchetype, isCoreBuddyId } from './characterTemplates';
+import { pickConfrontLine, pickFarewellLine, pickReturnLine, pickInitiativeText, pickRsvpLine, pickStoodUpLine, pickMeetingApologyLine, pickShiftWrapLine, pickGigWrapLine, pickArchiveWrapLine, pickGuestbookLine, pickGuestbookReplyLine, pickTop8NewsLine, pickOutingMayaLine, pickOutingNoraLine, pickRentReminderLine, pickRentSternLine, pickRentNudgeLine, pickRentThanksLine, pickJobAcceptLine, pickJobRejectLine, pickLeaveLine, pickMediationAskLine, pickMediationThanks, pickMyplaceUpdateLine, pickContactLine, pickContactBounce, pickBackstoryReintro, pickRuninSpot, pickRuninVerb, classifyScheduleBlock, AGENDA_LABELS, rollSeeded100, pickSeeded, spreadSeed, resolveArchetype } from './characterTemplates';
 import { parseMeetupProposal, isMeetupCancelText, decideRsvp, decideNpcShow, appointmentRoll, locationLabel, LOCATION_SLOTS, pickCoopDetail, SHIFT_WAGE } from './AppointmentDirector';
 import { getWeatherForDay, isSevereWeather, isWetWeather, shiftWageBonus } from './WeatherEngine';
 import { OUTINGS, isValidOutingId, isOutingOpen, outingHoursLabel, mayaDinerEncounter, noraCanalEncounter, buildLaundromatRumor, MIN_OUTING_ENERGY, type OutingId } from './OutingDirector';
@@ -41,7 +41,7 @@ import {
 } from './PlayerActs';
 import { CITY_NODES, isCityNodeId, quoteTravel, walkEnergyCost, rollStreetEncounter, BUS_FARE, type CityNodeId, type TravelMode } from './CityMap';
 import { pulseHasFeature } from './PulseCatalog';
-import { CORE_BY_ID, CORE_IDS } from './coreBuddies';
+import { CORE_BY_ID, CORE_IDS, buddyWithRole, isRegistryBuddy } from './coreBuddies';
 
 export class SimulationEngine {
   public readonly clock!: GameClock;
@@ -260,14 +260,10 @@ export class SimulationEngine {
         void this.myplace.maybeUpdateRandomNpcProfile(tickResult.time.day, currentMinutes).then((res) => {
           if (res) {
             const link = `http://myplace.local/${res.username}`;
-            // Keys derive from the registry; copy stays authored per voice.
-            const myplaceOf = (id: string): string => CORE_BY_ID[id]?.myplace ?? id;
-            const texts: Record<string, string> = {
-              [myplaceOf(CORE_IDS.MAYA)]: `hey — i changed my MyPlace a bit, new bio and song. what do you think? ${link}`,
-              [myplaceOf(CORE_IDS.RYAN)]: `yo changed my MyPlace — added some new stuff. check it? ${link} lmk`,
-              [myplaceOf(CORE_IDS.NORA)]: `updated my MyPlace — new headline. does it read okay? ${link}`,
-            };
-            const text = texts[res.username] ?? `updated my MyPlace — ${res.profile.headline} ${link}`;
+            // Voice follows the announcer's temperament (rename-proof).
+            const announcer = Object.values(CORE_BY_ID).find((b) => b.myplace === res.username);
+            const traits = announcer ? this.social.getTraits(announcer.id) : { shyness: 50, discipline: 50 };
+            const text = pickMyplaceUpdateLine(traits.shyness, traits.discipline, link);
             try { this.social.sendMessage(res.username, res.username, 'player', text, currentMinutes, false, ['myplace_update']); } catch {}
             this.maybeCoCommentProfileUpdate(res.username, tickResult.time.day, currentMinutes);
             try { this.events.emit('social:message_received' as any, { message: { senderId: res.username, text } }); } catch {}
@@ -314,14 +310,10 @@ export class SimulationEngine {
       void this.myplace.maybeUpdateRandomNpcProfile(jumpResult.newTime.day, currentMinutes).then((res) => {
         if (res) {
           const link = `http://myplace.local/${res.username}`;
-          // Keys derive from the registry; copy stays authored per voice.
-          const myplaceOf = (id: string): string => CORE_BY_ID[id]?.myplace ?? id;
-          const texts: Record<string, string> = {
-            [myplaceOf(CORE_IDS.MAYA)]: `hey — i changed my MyPlace a bit, new bio and song. what do you think? ${link}`,
-            [myplaceOf(CORE_IDS.RYAN)]: `yo changed my MyPlace — added some new stuff. check it? ${link} lmk`,
-            [myplaceOf(CORE_IDS.NORA)]: `updated my MyPlace — new headline. does it read okay? ${link}`,
-          };
-          const text = texts[res.username] ?? `updated my MyPlace — ${res.profile.headline} ${link}`;
+          // Voice follows the announcer's temperament (rename-proof).
+          const announcer = Object.values(CORE_BY_ID).find((b) => b.myplace === res.username);
+          const traits = announcer ? this.social.getTraits(announcer.id) : { shyness: 50, discipline: 50 };
+          const text = pickMyplaceUpdateLine(traits.shyness, traits.discipline, link);
           try { this.social.sendMessage(res.username, res.username, 'player', text, currentMinutes, false, ['myplace_update']); } catch {}
         }
       }).catch(() => {});
@@ -424,7 +416,6 @@ export class SimulationEngine {
       const rels = this.social.getRelationships(buddyId);
       if (!rels) return;
       const day = this.clock.getTime().day;
-      const core = isCoreBuddyId(buddyId);
       const strainedKey = `strained_${buddyId}`;
       const sharpKey = `sharp_${buddyId}`;
       const sharpState = this.world.getFlag(sharpKey);
@@ -452,7 +443,9 @@ export class SimulationEngine {
         this.telemetry.logEvent('social', 'relationship_confrontation', currentMinutes, { buddyId, annoyance: rels.annoyance, witnesses: this.shiftWitnessAffinities(buddyId, -4) });
         return;
       }
-      if (core) return; // core buddies stay strained — they never walk away
+
+      // Registry village characters cap at strained — they never walk away
+      if (isRegistryBuddy(buddyId)) return;
 
       if (sharpState === 'confronted' && rels.annoyance >= DISTANT_ANNOYANCE) {
         const active = this.world.getFlag('sharp_active');
@@ -548,6 +541,7 @@ export class SimulationEngine {
     try { this.processNpcRunins(newDay); } catch { /* run-ins never break the tick */ }
     try { this.progressRomance(newDay); } catch { /* romance never breaks the tick */ }
     try { this.maybeRequestMediations(newDay); } catch { /* asks never break the tick */ }
+    try { this.maybeReintroduceBackstories(newDay); } catch { /* re-intros never break the tick */ }
   }
 
   private buddyDisplayName(buddyId: string): string {
@@ -743,6 +737,124 @@ export class SimulationEngine {
         }
       }
     }
+  }
+
+  /**
+   * Backstory re-introductions: people from before day 1 say hello again on
+   * days 1–3 (max 2/day, once each) — and meeting them IS learning them.
+   * Strangers never re-introduce. Empty-start rosters stay silent.
+   */
+  private maybeReintroduceBackstories(day: number): void {
+    if (day < 1 || day > 3) return;
+    const currentMinutes = this.clock.getTotalMinutes();
+    let said = 0;
+    for (const buddy of this.social.getBuddies()) {
+      if (said >= 2) break;
+      if (!SimulationEngine.isBuddyAvailable(buddy)) continue;
+      const story = buddy.backstory;
+      if (!story || story.relationship === 'stranger') continue;
+      if (this.social.isKnown(buddy.id)) continue;
+      if (this.world.getFlag(`reintro_${buddy.id}`)) continue;
+      if (story.relationship !== 'close' && story.relationship !== 'friend'
+        && story.relationship !== 'acquaintance' && story.relationship !== 'estranged') continue;
+      const text = pickBackstoryReintro(story.relationship, `${buddy.id}:${day}`, buddy.displayName);
+      this.social.sendMessage(buddy.id, buddy.id, 'player', text, currentMinutes, false, ['reintro', 'backstory']);
+      this.social.learnHandle(buddy.id, buddy.handle);
+      this.world.setFlag(`reintro_${buddy.id}`, true);
+      this.telemetry.logEvent('social', 'backstory_reintro', currentMinutes, { buddyId: buddy.id });
+      said++;
+    }
+  }
+
+  /**
+   * Add a contact by typed handle (rules only). Resolves roster handles and
+   * active backstory candidates; dead/changed handles bounce with a note and
+   * an immortal memory. Accepted strangers introduce themselves (handle learned
+   * both ways); declined strangers stay strangers. Costs 2 battery.
+   */
+  private addContactByHandle(rawHandle: string, currentMinutes: number): { success: boolean; error?: string; data?: unknown } {
+    const handle = String(rawHandle || '').trim().slice(0, 40);
+    if (!handle) return { success: false, error: 'Type a Pulse ID first.' };
+    const day = this.clock.getTime().day;
+    const lower = handle.toLowerCase();
+    const buddy = this.social.getBuddies().find((b) => b.handle.toLowerCase() === lower);
+    let candidate: { buddyId: string; status: string } | null = null;
+    if (!buddy) {
+      for (const b of this.social.getBuddies()) {
+        const hit = (b.backstory?.candidates ?? []).find((c) => c.handle.toLowerCase() === lower);
+        if (hit) {
+          candidate = { buddyId: b.id, status: hit.status };
+          break;
+        }
+      }
+    }
+    const target = buddy ?? (candidate ? this.social.getBuddy(candidate.buddyId) : undefined);
+    if (!target) return { success: false, error: `No Pulse ID '${handle}' exists. Check the spelling.` };
+    if (this.social.getKnownHandles(target.id).some((h) => h.toLowerCase() === lower)) {
+      return { success: true, data: { buddyId: target.id, already: true } };
+    }
+    if (candidate && candidate.status !== 'active') {
+      const text = pickContactBounce(candidate.status === 'changed' ? 'changed' : 'dead', `${target.id}:${day}`);
+      this.social.addCoreMemory(target.id, {
+        text: `Tried old handle "${handle}" — dead ID (day ${day}).`,
+        kind: 'fact',
+        day,
+      });
+      return { success: false, error: text };
+    }
+    if (this.economy.getSocialBattery() < 2) {
+      return { success: false, error: pickInnerVoice('blocked', `add:${target.id}:${day}`) };
+    }
+    if (this.world.getFlag(`contactadd_${target.id}_${day}`)) {
+      return { success: false, error: 'You already reached out today. Give it a day.' };
+    }
+    this.world.setFlag(`contactadd_${target.id}_${day}`, true);
+    this.economy.spendSocialBattery(2);
+    // Rules decide: close/friend always accept; others roll on warmth vs shyness.
+    const stage = this.social.getRelationshipStage(target.id);
+    const traits = this.social.getTraits(target.id);
+    const roll = rollSeeded100(`contact:${target.id}:${day}:${handle.length}`);
+    const accepted = stage === 'close' || stage === 'friend'
+      || roll < 10 + traits.warmth * 0.3 - traits.shyness * 0.2 + (target.backstory && target.backstory.relationship !== 'stranger' ? 25 : 0);
+    if (!accepted) {
+      this.social.sendMessage(target.id, target.id, 'player', pickContactLine('decline', `${target.id}:${day}`), currentMinutes, false, ['contact', 'declined']);
+      this.telemetry.logEvent('social', 'contact_declined', currentMinutes, { buddyId: target.id });
+      this.notifySubscribers();
+      return { success: true, data: { buddyId: target.id, accepted: false } };
+    }
+    this.social.learnHandle(target.id, target.handle);
+    this.social.sendMessage(target.id, target.id, 'player', pickContactLine('accept', `${target.id}:${day}`), currentMinutes, false, ['contact', 'accepted']);
+    this.telemetry.logEvent('social', 'contact_added', currentMinutes, { buddyId: target.id });
+    this.notifySubscribers();
+    return { success: true, data: { buddyId: target.id, accepted: true } };
+  }
+
+  /**
+   * Player-initiated NightBoard meet (rules-throttled newcomer source for the
+   * unbounded online roster). Costs 6 battery, once per day. The meeting
+   * itself is async (AI-or-template intro) — the dispatch only starts it.
+   */
+  private meetOnNightBoard(currentMinutes: number): { success: boolean; error?: string; data?: unknown } {
+    const day = this.clock.getTime().day;
+    if (this.world.getFlag(`nbmeet_${day}`)) {
+      return { success: false, error: 'You already went looking tonight. Try again tomorrow.' };
+    }
+    if (this.economy.getSocialBattery() < 6) {
+      return { success: false, error: pickInnerVoice('blocked', `nbmeet:${day}`) };
+    }
+    this.economy.spendSocialBattery(6);
+    this.world.setFlag(`nbmeet_${day}`, true);
+    const metVia = NEWCOMER_METVIA_ROTATION[this.social.getBuddies().filter((b) => b.isProcedural).length % NEWCOMER_METVIA_ROTATION.length]!;
+    const existingIds = this.social.getBuddies().map((b) => b.id);
+    void generateNewcomer({ metVia, day, seed: `nbmeet-day-${day}`, useAI: true }, { existingIds })
+      .then((res) => {
+        const added = this.dispatchAction({ type: 'SOCIAL_ADD_BUDDY', buddy: res.definition, introText: res.introText });
+        if (added.success) this.notifySubscribers();
+      })
+      .catch(() => {});
+    this.telemetry.logEvent('social', 'nightboard_meet', currentMinutes, { day });
+    this.notifySubscribers();
+    return { success: true, data: { day } };
   }
 
   /**
@@ -1125,13 +1237,16 @@ export class SimulationEngine {
     } catch { /* co-comments never break the tick */ }
   }
 
-  /** P5.4 stub MyPlace pages for a buddy (handle + id keys so routing works either way). */
-  private ensureMyPlaceStub(buddy: { handle?: string; id: string; displayName: string; archetype?: any }): void {
+  /** P5.4 stub MyPlace pages for a buddy (myplace username when known, else handle/id). */
+  private ensureMyPlaceStub(buddy: { handle?: string; id: string; displayName: string; archetype?: any; backstory?: { label?: string; bioSeed?: string } }): void {
     try {
+      // One page per buddy: prefer the registry myplace username so links stay canonical.
+      const username = CORE_BY_ID[buddy.id]?.myplace || buddy.handle || buddy.id;
       this.myplace.ensureNpcProfile({
-        username: buddy.handle || buddy.id,
+        username,
         displayName: buddy.displayName,
         archetype: buddy.archetype,
+        backstory: buddy.backstory ?? CORE_BY_ID[buddy.id]?.backstory ?? undefined,
       });
       // Also index by raw id so MyPlace routing works with either key
       if (buddy.handle && buddy.handle !== buddy.id) {
@@ -1139,6 +1254,7 @@ export class SimulationEngine {
           username: buddy.id,
           displayName: buddy.displayName,
           archetype: buddy.archetype,
+          backstory: buddy.backstory ?? CORE_BY_ID[buddy.id]?.backstory ?? undefined,
         });
       }
     } catch { /* MyPlace stub is best-effort */ }
@@ -1287,7 +1403,8 @@ export class SimulationEngine {
         const done = this.world.getFlag(`jobapp_${gig.id}_done`);
         if (typeof applied !== 'number' || applied <= 0 || done) continue;
         if (now < applied + replyDelayMinutes(gig.id, applied)) continue;
-        const contact = this.social.getBuddy(gig.contactBuddyId);
+        const holder = buddyWithRole(gig.contactRole);
+        const contact = holder ? this.social.getBuddy(holder.id) : undefined;
         const gone = !contact || contact.status === 'distant' || contact.status === 'gone' || contact.status === 'blocked';
         const stage = contact ? this.social.getRelationshipStage(contact.id) : 'stranger';
         const { accepted, odds } = decideApplication({
@@ -1388,9 +1505,19 @@ export class SimulationEngine {
   // goes to Mailbox via rentmail_* flags; Pulse carries the human voice.
   // ==========================================
 
+  // Rent notes come from whoever holds the landlord role (rename-proof).
+  // No landlord on the roster → the economy still ticks, the DM is skipped.
+  // (Availability is NOT required — rent is owed even to a distant landlord.)
+  private sendRentNote(text: string, tags: string[], currentMinutes: number, event: string, extra?: Record<string, unknown>): void {
+    const holder = buddyWithRole('landlord');
+    const landlord = holder ? this.social.getBuddy(holder.id) : undefined;
+    if (!landlord) return;
+    this.social.sendMessage(landlord.id, landlord.id, 'player', text, currentMinutes, false, ['rent', ...tags]);
+    this.telemetry.logEvent('economy', event, currentMinutes, { buddyId: landlord.id, ...(extra ?? {}) });
+  }
+
   private sendHendersonNote(text: string, tags: string[], currentMinutes: number, event: string, extra?: Record<string, unknown>): void {
-      this.social.sendMessage(CORE_IDS.HENDERSON, CORE_IDS.HENDERSON, 'player', text, currentMinutes, false, ['rent', ...tags]);
-      this.telemetry.logEvent('economy', event, currentMinutes, { buddyId: CORE_IDS.HENDERSON, ...(extra ?? {}) });
+    this.sendRentNote(text, tags, currentMinutes, event, extra);
   }
 
   /** Daily rent pass: gentle reminder → stern warning → overdue nudges. Rules only. */
@@ -1478,37 +1605,48 @@ export class SimulationEngine {
       this.economy.addHunger(spec.hungerDelta);
       this.economy.addHealth(spec.healthDelta);
 
-      // Encounters (deterministic per day; buddies must be present and available)
+      // Encounters (deterministic per day; buddies must be present and available).
+      // Whoever holds the role shows up — voice pool follows temperament, not identity.
       if (outingId === 'diner_soup' || outingId === 'diner_platter' || outingId === 'diner_pie') {
-        const maya = this.social.getBuddy(CORE_IDS.MAYA);
+        const staffer = buddyWithRole('diner-staff');
+        const maya = staffer ? this.social.getBuddy(staffer.id) : undefined;
         if (SimulationEngine.isBuddyAvailable(maya) && maya && mayaDinerEncounter(hour, day)) {
           const buddyId = maya.id;
           this.social.applySocialAction(buddyId, 'remembered_detail');
-          this.social.addCoreMemory(buddyId, { text: `Ran into Maya working the diner, Day ${day}.`, kind: 'shared_moment', day });
+          this.social.addCoreMemory(buddyId, { text: `Ran into ${maya.displayName} working the diner, Day ${day}.`, kind: 'shared_moment', day });
+          // Face to face: you learn their handle on the spot.
+          this.social.learnHandle(buddyId, maya.handle);
           // Showing up in person reads spontaneous.
           this.social.observePlayerTrait(buddyId, { spontaneity: 70 }, day);
-          this.social.sendMessage(buddyId, buddyId, 'player', pickOutingMayaLine(`${outingId}:${day}`), this.clock.getTotalMinutes(), false, ['outing', 'diner']);
+          const shy = this.social.getTraits(buddyId).shyness >= 60;
+          const line = shy ? pickOutingNoraLine(`${outingId}:${day}`) : pickOutingMayaLine(`${outingId}:${day}`);
+          this.social.sendMessage(buddyId, buddyId, 'player', line, this.clock.getTotalMinutes(), false, ['outing', 'diner']);
           this.telemetry.logEvent('social', 'outing_encounter', minutes, { buddyId, outing: outingId });
           this.notifySubscribers();
-          return { success: true, data: { summary: `Hearty ${spec.label} at the diner — and Maya was on shift!`, encounterBuddyId: buddyId } };
+          return { success: true, data: { summary: `Hearty ${spec.label} at the diner — and ${maya.displayName} was on shift!`, encounterBuddyId: buddyId } };
         }
         this.telemetry.logEvent('room', 'outing_diner', minutes, { outing: outingId });
         this.notifySubscribers();
         return { success: true, data: { summary: `Hearty ${spec.label} at the diner. Quiet tables, good coffee.` } };
       }
       if (outingId === 'canal_walk') {
-        const nora = this.social.getBuddy(CORE_IDS.NORA);
+        const regular = buddyWithRole('canal-regular');
+        const walker = regular ? this.social.getBuddy(regular.id) : undefined;
         const raining = isWetWeather(weather.condition);
-        if (SimulationEngine.isBuddyAvailable(nora) && nora && noraCanalEncounter(hour, day, raining)) {
-          const buddyId = nora.id;
+        if (SimulationEngine.isBuddyAvailable(walker) && walker && noraCanalEncounter(hour, day, raining)) {
+          const buddyId = walker.id;
           this.social.applySocialAction(buddyId, 'intellectual_curiosity');
-          this.social.addCoreMemory(buddyId, { text: `Walked the canal with Nora, Day ${day}${raining ? ' in the rain' : ''}.`, kind: 'shared_moment', day });
+          this.social.addCoreMemory(buddyId, { text: `Walked the canal with ${walker.displayName}, Day ${day}${raining ? ' in the rain' : ''}.`, kind: 'shared_moment', day });
+          // Face to face: you learn their handle on the spot.
+          this.social.learnHandle(buddyId, walker.handle);
           // Showing up in person reads spontaneous.
           this.social.observePlayerTrait(buddyId, { spontaneity: 70 }, day);
-          this.social.sendMessage(buddyId, buddyId, 'player', pickOutingNoraLine(`${outingId}:${day}`), this.clock.getTotalMinutes(), false, ['outing', 'canal']);
+          const shy = this.social.getTraits(buddyId).shyness >= 60;
+          const line = shy ? pickOutingNoraLine(`${outingId}:${day}`) : pickOutingMayaLine(`${outingId}:${day}`);
+          this.social.sendMessage(buddyId, buddyId, 'player', line, this.clock.getTotalMinutes(), false, ['outing', 'canal']);
           this.telemetry.logEvent('social', 'outing_encounter', minutes, { buddyId, outing: outingId });
           this.notifySubscribers();
-          return { success: true, data: { summary: `Canal walk${raining ? ' in the rain' : ''} — crossed paths with Nora.`, encounterBuddyId: buddyId } };
+          return { success: true, data: { summary: `Canal walk${raining ? ' in the rain' : ''} — crossed paths with ${walker.displayName}.`, encounterBuddyId: buddyId } };
         }
         this.telemetry.logEvent('room', 'outing_walk', minutes, { outing: outingId });
         this.notifySubscribers();
@@ -2088,6 +2226,22 @@ export class SimulationEngine {
         }
       }
 
+      case 'ADD_CONTACT': {
+        try {
+          return this.addContactByHandle(String((action as { handle?: unknown }).handle ?? ''), currentMinutes);
+        } catch (err: unknown) {
+          return { success: false, error: (err as Error).message };
+        }
+      }
+
+      case 'NIGHTBOARD_MEET': {
+        try {
+          return this.meetOnNightBoard(currentMinutes);
+        } catch (err: unknown) {
+          return { success: false, error: (err as Error).message };
+        }
+      }
+
       case 'SOCIAL_ADD_BUDDY': {
         try {
           const checked = validatePersistedBuddy(action.buddy);
@@ -2100,6 +2254,8 @@ export class SimulationEngine {
             kind: 'first_meeting',
             day: meetDay,
           });
+          // Free roster: meeting someone IS learning their handle (contacts are earned).
+          this.social.learnHandle(registered.id, registered.handle);
           // 'social:buddy_registered' fans out to attitudes + MyPlace stub (see registerInternalEventHandlers)
           if (!action.silent) {
             const text = (action.introText?.trim() || `hey, i'm ${registered.displayName} — nice meeting you!`).slice(0, 500);

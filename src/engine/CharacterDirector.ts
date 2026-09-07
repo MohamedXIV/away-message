@@ -7,6 +7,7 @@ import { buildCharacter, type BuiltCharacter, type CharacterDefinition } from '.
 import {
   CHARACTER_ARCHETYPES,
   listArchetypes,
+  pickTemplateAppearance,
   pickTemplateIntroLine,
   pickTemplateName,
 } from './characterTemplates';
@@ -54,6 +55,21 @@ export function hashSeed(value: string): number {
   let h = 0;
   for (let i = 0; i < value.length; i++) h = (h * 31 + value.charCodeAt(i)) >>> 0;
   return h;
+}
+
+export const ARCHETYPE_ROLE_POOLS: Record<CharacterArchetype, string[]> = {
+  artist: ['tape-trader', 'darkroom-hobbyist', 'indie-musician', 'rain-lover'],
+  coworker: ['shift-worker', 'taco-lover', 'hardware-modder', 'cart-helper'],
+  nightowl: ['board-moderator', 'log-indexer', 'audio-archivist', 'night-shift'],
+  regular: ['cafe-regular', 'canal-walker', 'bookworm', 'vinyl-collector'],
+  student: ['crammer', 'radio-listener', 'zine-maker', 'dorm-sleeper'],
+  trader: ['floppy-swapper', 'benchmarker', 'cable-collector', 'overclocker'],
+};
+
+export function pickArchetypeRoles(archetype: CharacterArchetype, seed: string): string[] {
+  const pool = ARCHETYPE_ROLE_POOLS[archetype] ?? ['regular'];
+  const roll = hashSeed(`role:${seed}`) % pool.length;
+  return [pool[roll]!];
 }
 
 function slugify(value: string): string {
@@ -171,8 +187,11 @@ export async function generateNewcomer(
               interests: { type: 'array', minItems: 3, maxItems: 5, items: { type: 'string', minLength: 2, maxLength: 20 } },
               songTitle: { type: 'string', minLength: 3, maxLength: 50 },
               introText: { type: 'string', minLength: 10, maxLength: 300 },
+              hair: { type: 'string', minLength: 2, maxLength: 24 },
+              eyes: { type: 'string', minLength: 2, maxLength: 24 },
+              languages: { type: 'array', minItems: 1, maxItems: 3, items: { type: 'object', properties: { lang: { type: 'string', enum: ['en', 'es', 'fr', 'de', 'it', 'pt', 'ru', 'ar', 'zh', 'ja'] }, level: { type: 'integer', minimum: 1, maximum: 5 } }, required: ['lang', 'level'] } },
             },
-            required: ['id', 'displayName', 'handle', 'archetype', 'headline', 'bio', 'interests', 'songTitle', 'introText'],
+            required: ['id', 'displayName', 'handle', 'archetype', 'headline', 'bio', 'interests', 'songTitle', 'introText', 'hair', 'eyes', 'languages'],
           } as const;
           const raw = await completeJson({
             providerId,
@@ -195,6 +214,11 @@ export async function generateNewcomer(
             metVia: req.metVia,
             createdDay: req.day,
             status: 'stranger',
+            // Online sources birth remote buddies (no art, no in-person life).
+            reach: req.metVia === 'work' || req.metVia === 'intro' || req.metVia === 'core' ? 'local' : 'remote',
+            appearance: { hair: parsed.hair, eyes: parsed.eyes },
+            languages: parsed.languages.map((l) => ({ lang: l.lang, level: l.level })),
+            roles: pickArchetypeRoles(parsed.archetype, `${seed}:${aiId}`),
           });
           return {
             definition: built.definition,
@@ -235,6 +259,13 @@ function templateResult(
     metVia: req.metVia,
     createdDay: req.day,
     status: 'stranger',
+    // Online sources birth remote buddies (no art, no in-person life).
+    reach: req.metVia === 'work' || req.metVia === 'intro' || req.metVia === 'core' ? 'local' : 'remote',
+    roles: pickArchetypeRoles(archetype, `${seed}:${id}`),
+    ...(() => {
+      const look = pickTemplateAppearance(`${seed}:${id}`);
+      return { appearance: { hair: look.hair, eyes: look.eyes }, languages: look.languages };
+    })(),
   });
   return {
     definition: built.definition,

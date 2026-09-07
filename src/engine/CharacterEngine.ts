@@ -45,6 +45,11 @@ export interface BuildCharacterOptions {
   initialRelationships?: Partial<RelationshipDimensions>;
   /** Fixed temperament override (manual/AI-lab). Defaults to archetype + stable jitter. */
   traits?: Partial<CharacterTraits>;
+  /** Physical vs far-away (online-source newcomers arrive remote). */
+  reach?: 'local' | 'remote';
+  appearance?: { hair?: string; eyes?: string };
+  languages?: Array<{ lang: string; level: number }>;
+  roles?: string[];
   status?: BuddyLifecycleStatus;
   metVia?: BuddyMetVia;
   createdDay?: number;
@@ -130,9 +135,36 @@ export function buildCharacter(options: BuildCharacterOptions): BuiltCharacter {
     metVia: options.metVia ?? 'intro',
     isProcedural: true,
     createdDay: options.createdDay ?? 1,
+    // Free roster identity (validated, capped; remote for online-source newcomers).
+    reach: options.reach === 'remote' ? 'remote' : 'local',
+    appearance: {
+      hair: String(options.appearance?.hair || 'brown').trim().slice(0, 24) || 'brown',
+      eyes: String(options.appearance?.eyes || 'brown').trim().slice(0, 24) || 'brown',
+    },
+    languages: sanitizeLanguages(options.languages),
+    roles: Array.isArray(options.roles)
+      ? options.roles.filter((r): r is string => typeof r === 'string' && /^[a-z][a-z0-9_-]{1,23}$/.test(r)).slice(0, 6)
+      : [],
   };
 
   return { definition, personaHint: options.personaHint ?? template.personaHint };
+}
+
+/** Clamp a language list to ≤3 {lang, level 1..5} (unknown langs dropped). */
+export function sanitizeLanguages(languages: unknown): Array<{ lang: string; level: number }> {
+  if (!Array.isArray(languages)) return [{ lang: 'en', level: 5 }];
+  const clean: Array<{ lang: string; level: number }> = [];
+  for (const entry of languages) {
+    if (!entry || typeof entry !== 'object') continue;
+    const lang = String((entry as { lang?: unknown }).lang ?? '').trim().toLowerCase().slice(0, 12);
+    const level = (entry as { level?: unknown }).level;
+    if (!/^[a-z]{2,12}$/.test(lang)) continue;
+    if (!Number.isInteger(level) || (level as number) < 1 || (level as number) > 5) continue;
+    if (clean.some((l) => l.lang === lang)) continue;
+    clean.push({ lang, level: level as number });
+    if (clean.length >= 3) break;
+  }
+  return clean.length > 0 ? clean : [{ lang: 'en', level: 5 }];
 }
 
 /** Re-validate a persisted buddy definition (e.g. from saves) before registering. */
@@ -157,8 +189,7 @@ export function validatePersistedBuddy(def: unknown): { ok: boolean; error?: str
   // v3 saves predate fixed temperament: backfill deterministically with the
   // exact values a fresh buildCharacter() would roll for this id
   // (archetype base + stable id jitter), overlaid with any persisted partial.
-  const persistedTraits = (d.traits && typeof d.traits === 'object') ? (d.traits as Partial<CharacterTraits>) : {};
-  const traitBase = traitsForBuddy(persistedId, storedArchetype);
+  const persistedTraits = (d.traits && typeof d.traits === 'object') ? (d.traits as Partial<CharacterTraits>) : {};  const traitBase = traitsForBuddy(persistedId, storedArchetype);
   const traitJitter = (dim: string): number => (hashString(`${persistedId}:trait:${dim}`) % 11) - 5;
   const traits = clampTraits({
     shyness: persistedTraits.shyness ?? traitBase.shyness + traitJitter('shyness'),
@@ -178,6 +209,16 @@ export function validatePersistedBuddy(def: unknown): { ok: boolean; error?: str
       metVia: (d.metVia as BuddyMetVia) ?? 'intro',
       isProcedural: d.isProcedural !== false,
       createdDay: typeof d.createdDay === 'number' ? d.createdDay : 1,
+      // Free roster identity backfills (older docs predate these fields).
+      reach: d.reach === 'remote' ? 'remote' : 'local',
+      appearance: {
+        hair: String((d.appearance as { hair?: unknown } | undefined)?.hair || 'brown').trim().slice(0, 24) || 'brown',
+        eyes: String((d.appearance as { eyes?: unknown } | undefined)?.eyes || 'brown').trim().slice(0, 24) || 'brown',
+      },
+      languages: sanitizeLanguages(d.languages),
+      roles: Array.isArray(d.roles)
+        ? (d.roles as unknown[]).filter((r): r is string => typeof r === 'string' && /^[a-z][a-z0-9_-]{1,23}$/.test(r)).slice(0, 6)
+        : [],
     },
   };
 }

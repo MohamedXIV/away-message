@@ -15,7 +15,7 @@ import type {
   RelationshipStage,
   ScheduleBlock,
 } from './types';
-import { CORE_BUDDIES, CORE_BY_ID, isCoreBuddyId as registryIsCoreBuddyId } from './coreBuddies';
+import { CORE_BUDDIES, CORE_BY_ID } from './coreBuddies';
 
 export interface ScheduleBlockSpec {
   start: number; // minute of day 0..1439
@@ -1075,11 +1075,6 @@ export function validateCharacterId(id: string): { ok: boolean; error?: string }
   return { ok: true };
 }
 
-/** Core guard, delegated to the registry (single source of truth). */
-export function isCoreBuddyId(id: string): boolean {
-  return registryIsCoreBuddyId(id);
-}
-
 /** Type guard for schedule blocks (used when restoring persisted defs). */
 export function isValidSchedule(schedule: unknown): schedule is Record<number, ScheduleBlock[]> {
   if (!schedule || typeof schedule !== 'object') return false;
@@ -1261,6 +1256,39 @@ export function pickMediationAskLine(kind: 'introduce' | 'strengthen' | 'ask_abo
 /** MSN-era nudges: shy buddies ping instead of typing (sent with the 'buzz' tag). */
 export const NPC_BUZZ_LINES = ['*nudge*', '*buzzes you*', '*nudge nudge*'];
 
+/** Natural hair colors for generated buddies (the AI is instructed likewise). */
+export const TEMPLATE_HAIR_COLORS = [
+  'black', 'dark brown', 'brown', 'light brown', 'dirty blonde', 'blonde',
+  'red', 'auburn', 'grey', 'white', 'balding', 'bald',
+];
+
+/** Eye colors for generated buddies. */
+export const TEMPLATE_EYE_COLORS = ['brown', 'dark brown', 'hazel', 'green', 'blue', 'grey'];
+
+/** Era-plausible languages with template weights (first = most common). */
+export const TEMPLATE_LANGUAGES = ['en', 'en', 'en', 'es', 'fr', 'de', 'it', 'pt', 'ru', 'ar', 'zh', 'ja'];
+
+/** Deterministic appearance + languages for a template newcomer. */
+export function pickTemplateAppearance(seed: string): { hair: string; eyes: string; languages: Array<{ lang: string; level: number }> } {
+  const hair = pickSeeded(TEMPLATE_HAIR_COLORS, `${seed}:hair`);
+  const eyes = pickSeeded(TEMPLATE_EYE_COLORS, `${seed}:eyes`);
+  const primary = pickSeeded(TEMPLATE_LANGUAGES, `${seed}:lang1`);
+  const languages: Array<{ lang: string; level: number }> = [
+    { lang: primary, level: 3 + (spreadSeed(`${seed}:lvl1`) % 3) },
+  ];
+  if (spreadSeed(`${seed}:lang2?`) % 100 < 30) {
+    const second = pickSeeded(TEMPLATE_LANGUAGES, `${seed}:lang2`);
+    if (second !== primary) languages.push({ lang: second, level: 1 + (spreadSeed(`${seed}:lvl2`) % 3) });
+  }
+  if (spreadSeed(`${seed}:lang3?`) % 100 < 10) {
+    const third = pickSeeded(TEMPLATE_LANGUAGES, `${seed}:lang3`);
+    if (third !== primary && !languages.some((l) => l.lang === third)) {
+      languages.push({ lang: third, level: 1 + (spreadSeed(`${seed}:lvl3`) % 2) });
+    }
+  }
+  return { hair, eyes, languages };
+}
+
 /** MSN-era signature colors: derived from the registry (edit content, not this map). */
 export const CORE_SIGNATURE_COLORS: Record<string, string> = Object.fromEntries(
   CORE_BUDDIES.map((b) => [b.id, b.color])
@@ -1281,9 +1309,9 @@ export function buddySignatureColor(buddyId: string, archetype: CharacterArchety
   if (core) return core.color;
   return ARCHETYPE_SIGNATURE_COLORS[archetype] ?? '#800080';
 }
-
 /** Thank-you lines when the player helps with a mediation (rules-picked, capped). */
-export const MEDIATION_THANKS_LINES = [  'thank you... really. that means a lot',
+export const MEDIATION_THANKS_LINES = [
+  'thank you... really. that means a lot',
   'you are a good friend for doing that. thanks!',
   'aww thanks! i owe you one',
 ];
@@ -1291,6 +1319,82 @@ export const MEDIATION_THANKS_LINES = [  'thank you... really. that means a lot'
 /** Deterministic thanks-line pick. */
 export function pickMediationThanks(seed: string): string {
   return pickSeeded(MEDIATION_THANKS_LINES, `${seed}:thanks`);
+}
+
+/** Friend-request outcomes (rules-picked, capped). */
+export const CONTACT_ACCEPT_LINES = [
+  'oh hey! added ✓ talk soon?',
+  'hey!! of course — added you back.',
+  'sure, added. whats up?',
+];
+
+export const CONTACT_DECLINE_LINES = [
+  'sorry... do i know you? maybe another time.',
+  'hmm, i dont add strangers. no offense?',
+];
+
+export const CONTACT_BOUNCE_LINES: Record<'dead' | 'changed', string[]> = {
+  dead: [
+    'That Pulse ID does not exist. Check the spelling — or they are long gone.',
+    'No such ID. Dead air.',
+  ],
+  changed: [
+    'That ID is dead — they moved handles a while back.',
+    'Nobody home at that ID anymore.',
+  ],
+};
+
+/** Deterministic contact-line picks. */
+export function pickContactLine(kind: 'accept' | 'decline', seed: string): string {
+  return pickSeeded(kind === 'accept' ? CONTACT_ACCEPT_LINES : CONTACT_DECLINE_LINES, `${seed}:contact:${kind}`);
+}
+
+export function pickContactBounce(status: 'dead' | 'changed', seed: string): string {
+  return pickSeeded(CONTACT_BOUNCE_LINES[status], `${seed}:bounce:${status}`);
+}
+
+/**
+ * Backstory re-introductions ({name} filled by the caller): how someone from
+ * before day 1 says hello again. Strangers never re-introduce (never met).
+ */
+export const BACKSTORY_REINTRO_LINES: Record<'close' | 'friend' | 'acquaintance' | 'estranged', string[]> = {
+  close: [
+    'FINALLY. thought you fell off the planet — {name} here!',
+    '{name} here!! took you long enough to sign on. missed you!',
+  ],
+  friend: [
+    'hey!! its been ages — {name} here. you still on pulse?',
+    '{name}! long time. we should catch up properly soon?',
+  ],
+  acquaintance: [
+    'hey, {name} here — not sure you remember me?',
+    'hi... {name}. we met a while back. how have you been?',
+  ],
+  estranged: [
+    '...hi. its {name}. yeah, that {name}.',
+    '{name}. i know. just... hi.',
+  ],
+};
+
+/** Deterministic re-intro pick with {name} filled in. */
+export function pickBackstoryReintro(depth: 'close' | 'friend' | 'acquaintance' | 'estranged', seed: string, displayName: string): string {
+  return pickSeeded(BACKSTORY_REINTRO_LINES[depth], `${seed}:reintro:${depth}`).replaceAll('{name}', displayName);
+}
+
+/**
+ * MyPlace self-announcement voices ({link} filled by the caller).
+ * Picked by temperament: shy → soft, disciplined → formal, else direct.
+ */
+export const MYPLACE_UPDATE_LINES = {
+  soft: 'hey — i changed my MyPlace a bit, new bio and song. what do you think? {link}',
+  formal: 'updated my MyPlace — new headline. does it read okay? {link}',
+  direct: 'yo changed my MyPlace — added some new stuff. check it? {link} lmk',
+} as const;
+
+/** Deterministic MyPlace announcement pick from temperament. */
+export function pickMyplaceUpdateLine(shyness: number, discipline: number, link: string): string {
+  const kind = shyness >= 65 ? 'soft' : discipline >= 75 ? 'formal' : 'direct';
+  return MYPLACE_UPDATE_LINES[kind].replaceAll('{link}', link);
 }
 
 export type { BuddyCharacter };
