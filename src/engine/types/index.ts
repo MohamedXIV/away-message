@@ -77,6 +77,9 @@ export type ConnectionType = 'dialup_56k' | 'dsl_256k' | 'dsl_512k' | 'dsl_1m';
 export type OsVersion = 'Orion_4.8' | 'Orion_5.0' | 'Orion_6.0' | 'Orion_6.1' | 'Orion_7.0-beta' | 'Orion_7.0' | 'Orion_7.0.1' | (string & {});
 
 export interface HardwareState {
+  hasComputer?: boolean;            // false on Day 1 fresh start (empty desk)
+  isPoweredOn?: boolean;            // true when booted, false when shutdown
+  modular?: import('../hardware/types').ModularHardwareState;
   cpuTier: number;                  // 1 (Single-Core 450MHz), 2 (Dual-Core 800MHz)
   cpuName: string;
   ramMB: number;                    // Starting: 512, Upgraded: 1024
@@ -753,6 +756,9 @@ export interface SimulationEventMap {
   'economy:energy_changed': { previousEnergy: number; newEnergy: number; delta: number };
   'hardware:upgraded': { component: string; oldValue: unknown; newValue: unknown };
   'hardware:os_migrated': { from: OsVersion; to: OsVersion };
+  'hardware:disc_inserted': { disc: import('../hardware/types').InsertedDisc };
+  'hardware:disc_ejected': Record<string, never>;
+  'hardware:power_changed': { isPoweredOn: boolean };
   'download:started': { task: DownloadTask };
   'download:paused': { task: DownloadTask };
   'download:resumed': { task: DownloadTask };

@@ -15,6 +15,8 @@ export class HardwareEngine {
   constructor(eventBus: EventBus, initialState?: Partial<HardwareState>) {
     this.eventBus = eventBus;
     this.state = {
+      hasComputer: initialState?.hasComputer ?? true,
+      modular: initialState?.modular,
       cpuTier: initialState?.cpuTier ?? 1,
       cpuName: initialState?.cpuName ?? 'Single-Core Orion x86 450MHz',
       ramMB: initialState?.ramMB ?? 512,
@@ -27,6 +29,57 @@ export class HardwareEngine {
       speakersInstalled: initialState?.speakersInstalled ?? false,
       webcamInstalled: initialState?.webcamInstalled ?? false,
     };
+  }
+
+  public getModularState(): import('./hardware/types').ModularHardwareState | undefined {
+    return this.state.modular;
+  }
+
+  public installModularHardware(modular: import('./hardware/types').ModularHardwareState, initialOs?: OsVersion): void {
+    const { toLegacyHardwareState } = require('./hardware/HardwareManager');
+    const os = initialOs ?? this.state.osVersion;
+    const legacy = toLegacyHardwareState(modular, os);
+    this.state = {
+      ...legacy,
+      hasComputer: true,
+      modular,
+      osVersion: os,
+    };
+    this.eventBus.emit('hardware:upgraded', {
+      component: 'Computer System',
+      oldValue: 'None',
+      newValue: modular.cpu.name,
+    });
+  }
+
+  public insertDisc(disc: import('./hardware/types').InsertedDisc): boolean {
+    if (!this.state.modular) return false;
+    this.state.modular = {
+      ...this.state.modular,
+      insertedDisc: disc,
+    };
+    this.eventBus.emit('hardware:disc_inserted', { disc } as any);
+    return true;
+  }
+
+  public ejectDisc(): import('./hardware/types').InsertedDisc | null {
+    if (!this.state.modular || !this.state.modular.insertedDisc) return null;
+    const disc = this.state.modular.insertedDisc;
+    this.state.modular = {
+      ...this.state.modular,
+      insertedDisc: null,
+    };
+    this.eventBus.emit('hardware:disc_ejected', { disc } as any);
+    return disc;
+  }
+
+  public setPower(isPoweredOn: boolean): void {
+    if (!this.state.modular) return;
+    this.state.modular = {
+      ...this.state.modular,
+      isPoweredOn,
+    };
+    this.eventBus.emit('hardware:power_changed', { isPoweredOn } as any);
   }
 
   public getState(): Readonly<HardwareState> {
