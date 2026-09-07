@@ -202,8 +202,8 @@ export class WorldEventsEngine {
     // Archetype palette keeps the original 4 voices byte-identical
     // (coworker=ryan, artist=maya, nightowl=nora, regular=henderson).
     const archetype = this.archetypeFor(buddyId);
-    const buddyPalette = ARCHETYPE_ATTITUDES[archetype];
-    const entry = buddyPalette[cat] ?? buddyPalette['city_news']!;
+    const buddyPalette = ARCHETYPE_ATTITUDES[archetype] ?? ARCHETYPE_ATTITUDES['regular'];
+    const entry = (buddyPalette[cat] ?? buddyPalette['city_news'])!;
     // Deterministic pick among takes + slight variance by id hash
     const idx = this.hashStr(`${buddyId}:${evt.id}`) % entry.takes.length;
     const take = entry.takes[idx]!;

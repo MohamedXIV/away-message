@@ -89,7 +89,9 @@ export function buddyPersonaLine(buddyId: string, buddy?: BuddyCharacter | null)
   const archetype = buddy?.archetype && CHARACTER_ARCHETYPES[buddy.archetype] ? buddy.archetype : undefined;
   if (archetype) {
     const template = CHARACTER_ARCHETYPES[archetype];
-    return `${template.personaHint} Vocabulary hints: ${template.vocabulary.join(', ')}. Quirks: ${template.quirks.join(', ')}.`;
+    if (template) {
+      return `${template.personaHint} Vocabulary hints: ${template.vocabulary.join(', ')}. Quirks: ${template.quirks.join(', ')}.`;
+    }
   }
   return 'A believable online friend with a distinct but grounded personality.';
 }

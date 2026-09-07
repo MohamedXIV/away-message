@@ -99,7 +99,7 @@ function buildIntroText(displayName: string, archetype: CharacterArchetype, seed
 }
 
 function templateProfilePatch(displayName: string, archetype: CharacterArchetype): NewcomerProfilePatch {
-  const template = CHARACTER_ARCHETYPES[archetype];
+  const template = CHARACTER_ARCHETYPES[archetype] ?? CHARACTER_ARCHETYPES['regular'];
   return {
     headline: `${displayName} • Oakhaven local`,
     bio: template.personaHint,
@@ -169,8 +169,9 @@ export async function generateNewcomer(
             'You invent ONE new friend for a fictional 2005 desktop sandbox game (Oakhaven, dial-up era). ' +
             'Return JSON only, matching the schema exactly. Mundane believable person, no real people, no real brands, ' +
             'handles like 2005 forum names. Keep every field personality-consistent with the archetype.';
+          const hint = CHARACTER_ARCHETYPES[archetype]?.personaHint ?? '';
           const user =
-            `Archetype: ${archetype} (${CHARACTER_ARCHETYPES[archetype].personaHint}) | ` +
+            `Archetype: ${archetype} (${hint}) | ` +
             `Met via: ${METVIA_FLAVOR[req.metVia]} | Current day: ${req.day} | ` +
             `Taken ids/handles (avoid all): ${existing}. ` +
             `introText: their first Pulse message to the player (10-300 chars, era voice, no URL — link appended automatically).`;

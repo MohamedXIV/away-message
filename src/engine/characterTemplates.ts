@@ -216,7 +216,7 @@ export const CHARACTER_ARCHETYPES: Record<CharacterArchetype, CharacterArchetype
 };
 
 export function getArchetypeTemplate(archetype: CharacterArchetype): CharacterArchetypeTemplate {
-  return CHARACTER_ARCHETYPES[archetype];
+  return CHARACTER_ARCHETYPES[archetype]!;
 }
 
 export interface NamePoolEntry {
@@ -333,7 +333,7 @@ export function pickTemplateName(
   takenIds: Set<string> | string[]
 ): NamePoolEntry {
   const taken = takenIds instanceof Set ? takenIds : new Set(takenIds);
-  const pool = ARCHETYPE_NAME_POOLS[archetype];
+  const pool = ARCHETYPE_NAME_POOLS[archetype]!;
   const start = hashSeed(`${seed}:${archetype}`) % pool.length;
   for (let i = 0; i < pool.length; i++) {
     const entry = pool[(start + i) % pool.length]!;
@@ -348,7 +348,7 @@ export function pickTemplateName(
 
 /** Deterministic first-contact line with {name} filled in (no link — director appends it). */
 export function pickTemplateIntroLine(archetype: CharacterArchetype, seed: string, displayName: string): string {
-  const lines = ARCHETYPE_INTRO_LINES[archetype];
+  const lines = ARCHETYPE_INTRO_LINES[archetype]!;
   const line = lines[hashSeed(`${seed}:${archetype}:intro`) % lines.length]!;
   return line.replaceAll('{name}', displayName);
 }
@@ -432,7 +432,7 @@ export const ARCHETYPE_ATTITUDES: Record<CharacterArchetype, Record<GlobalEventC
 
 /** Deterministic offline line for an archetype (stable across reloads). */
 export function pickTemplateOfflineLine(archetype: CharacterArchetype, seedMinute: number): string {
-  const lines = CHARACTER_ARCHETYPES[archetype].offlineLines;
+  const lines = CHARACTER_ARCHETYPES[archetype]?.offlineLines ?? CHARACTER_ARCHETYPES['regular'].offlineLines;
   return lines[Math.abs(seedMinute) % lines.length]!;
 }
 
@@ -631,7 +631,7 @@ export function pickInitiativeText(
   switch (kind) {
     case 'event_share': {
       const title = (opts?.eventTitle || 'the latest news').slice(0, 80);
-      return pickFromPool(ARCHETYPE_EVENT_SHARE_LINES[arch], `${seed}:event`).replaceAll('{event}', title);
+      return pickFromPool(ARCHETYPE_EVENT_SHARE_LINES[arch]!, `${seed}:event`).replaceAll('{event}', title);
     }
     case 'promise_reminder': {
       const promise = (opts?.promiseText || 'that thing you promised').slice(0, 120);
@@ -641,23 +641,23 @@ export function pickInitiativeText(
       return pickFromPool(CAFE_INVITE_LINES, `${seed}:cafe`);
     case 'checkin':
     default:
-      return pickFromPool(ARCHETYPE_INITIATIVE_LINES[arch], `${seed}:checkin`);
+      return pickFromPool(ARCHETYPE_INITIATIVE_LINES[arch]!, `${seed}:checkin`);
   }
 }
 
 export function pickConfrontLine(archetype: CharacterArchetype, seed: string): string {
   const arch = CHARACTER_ARCHETYPES[archetype] ? archetype : 'regular';
-  return pickFromPool(ARCHETYPE_CONFRONT_LINES[arch], `${seed}:confront`);
+  return pickFromPool(ARCHETYPE_CONFRONT_LINES[arch]!, `${seed}:confront`);
 }
 
 export function pickFarewellLine(archetype: CharacterArchetype, seed: string): string {
   const arch = CHARACTER_ARCHETYPES[archetype] ? archetype : 'regular';
-  return pickFromPool(ARCHETYPE_FAREWELL_LINES[arch], `${seed}:farewell`);
+  return pickFromPool(ARCHETYPE_FAREWELL_LINES[arch]!, `${seed}:farewell`);
 }
 
 export function pickReturnLine(archetype: CharacterArchetype, seed: string): string {
   const arch = CHARACTER_ARCHETYPES[archetype] ? archetype : 'regular';
-  return pickFromPool(ARCHETYPE_RETURN_LINES[arch], `${seed}:return`);
+  return pickFromPool(ARCHETYPE_RETURN_LINES[arch]!, `${seed}:return`);
 }
 
 /** C2 gossip line about another buddy's visible absence (name + status filled by caller). */export function pickGossipLine(
@@ -905,7 +905,7 @@ function fillBoard(text: string, replacements: Record<string, string>): string {
 
 export function pickBoardTopic(archetype: CharacterArchetype, week: number, slot: number): { title: string; body: string } {
   const arch = CHARACTER_ARCHETYPES[archetype] ? archetype : 'regular';
-  const pool = BOARD_THREAD_TOPICS[arch];
+  const pool = BOARD_THREAD_TOPICS[arch]!;
   const entry = pool[(week * 2 + slot) % pool.length]!;
   return { title: entry.title, body: entry.body };
 }
@@ -1061,7 +1061,7 @@ export function listArchetypes(): CharacterArchetype[] {
 
 /** Build a weekly schedule for an archetype (days 1..7, rotation handled by SocialEngine lookup). */
 export function buildScheduleForArchetype(archetype: CharacterArchetype): Record<number, ScheduleBlock[]> {
-  return buildWeeklySchedule(CHARACTER_ARCHETYPES[archetype].dailyBlocks);
+  return buildWeeklySchedule(CHARACTER_ARCHETYPES[archetype]?.dailyBlocks ?? CHARACTER_ARCHETYPES['regular'].dailyBlocks);
 }
 
 /** Validate a candidate buddy id (snake_case, engine-canonical). */
@@ -1136,7 +1136,7 @@ export const CORE_TRAITS: Record<string, CharacterTraits> = Object.fromEntries(
 export function traitsForBuddy(buddyId: string, archetype: CharacterArchetype): CharacterTraits {
   const core = CORE_BY_ID[buddyId];
   if (core) return { ...core.traits };
-  return { ...CHARACTER_ARCHETYPES[archetype].defaultTraits };
+  return { ...(CHARACTER_ARCHETYPES[archetype]?.defaultTraits ?? CHARACTER_ARCHETYPES['regular'].defaultTraits) };
 }
 
 /**

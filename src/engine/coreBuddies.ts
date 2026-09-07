@@ -6,77 +6,84 @@
 // call sites below the anchors never change.
 
 import {
-  GENERATED_BUDDIES,
+  GENERATED_CHARACTERS,
+  GENERATED_ARCHETYPES,
   GENERATED_AFFINITY_SEEDS,
+  GENERATED_DIALOGUE_POOLS,
   CONTENT_VERSION,
-  type GeneratedBuddyDef,
+  type GeneratedCharacterDef,
 } from './coreBuddies.generated';
 import type {
   BuddyBackstory,
   BuddyCharacter,
-  BuddyLifecycleStatus,
-  BuddyMetVia,
-  BuddyPresenceStatus,
   CharacterArchetype,
   CharacterTraits,
   RelationshipDimensions,
   ScheduleBlock,
+  CharacterRoutine,
+  CharacterArtProfile,
+  HairColor,
+  EyeColor,
 } from './types';
 
-export { CONTENT_VERSION };
+export { CONTENT_VERSION, GENERATED_ARCHETYPES, GENERATED_DIALOGUE_POOLS };
 
 export interface CoreBuddy {
   id: string;
   /** Stable story role (never renamed): anchors resolve through it. */
   role: string;
   displayName: string;
-  handle: string;
-  myplace: string;
+  archetypeId: string;
   archetype: CharacterArchetype;
-  status: BuddyLifecycleStatus;
-  metVia: BuddyMetVia;
-  color: string;
-  persona: string;
-  typingSpeedWpm: number;
-  /** Superseded ids/handles (save + alias bridge after a rename). */
-  formerIds: string[];
-  /** Capability tags (landlord, diner-staff, rain-lover...). Engine queries these. */
   roles: string[];
   reach: 'local' | 'remote';
-  appearance: { hair: string; eyes: string };
+  hair: HairColor | string;
+  eyes: EyeColor | string;
+  chatColor: string;
+  color: string;
+  bio: string;
+  persona: string;
+  typingSpeedWpm: number;
   languages: Array<{ lang: string; level: number }>;
   backstory: BuddyBackstory | null;
   traits: CharacterTraits;
   hearts: RelationshipDimensions;
-  blocks: Array<{ start: number; end: number; status: BuddyPresenceStatus; msg: string }>;
+  routine: CharacterRoutine;
+  art: CharacterArtProfile;
+  handle: string;
+  myplace: string;
+  status: 'friend' | 'acquaintance';
+  formerIds: string[];
 }
 
-function asArchetype(value: string, id: string): CharacterArchetype {
-  if (value === 'coworker' || value === 'nightowl' || value === 'student' || value === 'trader' || value === 'artist' || value === 'regular') {
-    return value;
-  }
-  throw new Error(`coreBuddies: buddy '${id}' has an unknown archetype '${value}'.`);
-}
+const CORE_CANONICAL_ACCOUNTS: Record<string, { handle: string; myplace: string; status: 'friend' | 'acquaintance' }> = {
+  ryan: { handle: 'ryan_foodcart', myplace: 'tacocart_ryan', status: 'friend' },
+  maya: { handle: 'starlight_maya', myplace: 'maya_x', status: 'acquaintance' },
+  nora: { handle: 'NightOwl87', myplace: 'nightowl87', status: 'acquaintance' },
+  henderson: { handle: 'motel_office', myplace: '', status: 'acquaintance' },
+};
 
-function normalize(def: GeneratedBuddyDef): CoreBuddy {
-  // Defensive: the generated file may lag the schema mid-development (the
-  // pull script itself imports through characterTemplates → here).
+function normalize(def: GeneratedCharacterDef): CoreBuddy {
+  const accounts = CORE_CANONICAL_ACCOUNTS[def.id] ?? {
+    handle: def.backstory?.candidates?.[0]?.handle || def.id,
+    myplace: def.id,
+    status: 'acquaintance' as const,
+  };
   return {
     id: def.id,
     role: typeof def.role === 'string' && def.role ? def.role : def.id,
     displayName: def.displayName,
-    handle: def.handle,
-    myplace: def.myplace,
-    archetype: asArchetype(def.archetype, def.id),
-    status: def.status as BuddyLifecycleStatus,
-    metVia: def.metVia as BuddyMetVia,
-    color: def.color,
-    persona: def.persona,
-    typingSpeedWpm: def.typingSpeedWpm,
-    formerIds: [...(def.formerIds ?? [])],
+    archetypeId: def.archetypeId,
+    archetype: def.archetypeId as CharacterArchetype,
     roles: [...(def.roles ?? [])],
     reach: def.reach === 'remote' ? 'remote' : 'local',
-    appearance: { hair: def.hair?.trim() || 'brown', eyes: def.eyes?.trim() || 'brown' },
+    hair: def.hair?.trim() || 'brown',
+    eyes: def.eyes?.trim() || 'brown',
+    chatColor: def.chatColor || '#6a3fa0',
+    color: def.chatColor || '#6a3fa0',
+    bio: def.bio || '',
+    persona: def.bio || '',
+    typingSpeedWpm: def.typingSpeedWpm,
     languages: (def.languages ?? []).map((l) => ({ lang: l.lang, level: Math.max(1, Math.min(5, Math.round(l.level))) })),
     backstory: def.backstory
       ? {
@@ -92,13 +99,28 @@ function normalize(def: GeneratedBuddyDef): CoreBuddy {
           bioSeed: def.backstory.bioSeed,
         }
       : null,
-    traits: { ...def.traits },
-    hearts: { ...def.hearts },
-    blocks: def.blocks.map((b) => ({ ...b })),
+    traits: { ...def.temperament },
+    hearts: { ...def.initialAffinity },
+    routine: {
+      wakeMinute: def.routine?.wakeMinute ?? 420,
+      sleepMinute: def.routine?.sleepMinute ?? 1380,
+      workShift: (def.routine?.workShift as CharacterRoutine['workShift']) ?? 'day',
+      preferredHangout: def.routine?.preferredHangout ?? 'cafe',
+    },
+    art: {
+      engine: (def.art?.engine as CharacterArtProfile['engine']) ?? 'none',
+      modelPath: def.art?.modelPath ?? '',
+      expressions: { ...(def.art?.expressions ?? {}) },
+      defaultOutfit: def.art?.defaultOutfit ?? 'default',
+    },
+    handle: accounts.handle,
+    myplace: accounts.myplace,
+    status: accounts.status,
+    formerIds: [],
   };
 }
 
-export const CORE_BUDDIES: CoreBuddy[] = GENERATED_BUDDIES.map(normalize);
+export const CORE_BUDDIES: CoreBuddy[] = GENERATED_CHARACTERS.map(normalize);
 
 export const CORE_BY_ID: Record<string, CoreBuddy> = Object.fromEntries(
   CORE_BUDDIES.map((b) => [b.id, b])
@@ -155,18 +177,73 @@ export const CORE_IDS = {
   HENDERSON: anchor('henderson'),
 } as const;
 
-/** 14-day schedule from the registry blocks (core rhythm, unchanged shape). */
+const CORE_CANONICAL_BLOCKS: Record<string, Array<{ start: number; end: number; status: ScheduleBlock['status']; msg: string }>> = {
+  ryan: [
+    { start: 0, end: 420, status: 'offline', msg: 'asleep' },
+    { start: 420, end: 540, status: 'offline', msg: 'commute' },
+    { start: 540, end: 960, status: 'offline', msg: 'work @ cart' },
+    { start: 960, end: 1080, status: 'away', msg: 'afk grabbin tacos' },
+    { start: 1080, end: 1320, status: 'online', msg: 'gaming / chilling' },
+    { start: 1320, end: 1440, status: 'offline', msg: 'sleep is for the weak' },
+  ],
+  maya: [
+    { start: 0, end: 480, status: 'offline', msg: 'sleeping' },
+    { start: 480, end: 540, status: 'offline', msg: 'morning tea' },
+    { start: 540, end: 1050, status: 'away', msg: 'at the desk... dont look at me' },
+    { start: 1050, end: 1260, status: 'online', msg: 'home! making coffee :)' },
+    { start: 1260, end: 1440, status: 'online', msg: 'listening to the rain ~ myplace/mayablue' },
+  ],
+  nora: [
+    { start: 0, end: 300, status: 'online', msg: 'the night is quiet' },
+    { start: 300, end: 360, status: 'away', msg: 'watching dawn' },
+    { start: 360, end: 1140, status: 'offline', msg: 'offline' },
+    { start: 1140, end: 1320, status: 'away', msg: 'indexing old logs' },
+    { start: 1320, end: 1440, status: 'online', msg: 'nightboard / logs' },
+  ],
+  henderson: [
+    { start: 0, end: 480, status: 'offline', msg: 'office closed' },
+    { start: 480, end: 1200, status: 'online', msg: 'motel front desk open' },
+    { start: 1200, end: 1440, status: 'offline', msg: 'office closed' },
+  ],
+};
+
+/** 14-day schedule from canonical blocks or character's routine. */
 export function coreSchedule(id: string): Record<number, ScheduleBlock[]> {
-  const buddy = CORE_BY_ID[id];
-  const blocks = (buddy?.blocks ?? []).map((b) => ({
-    startMinuteOfDay: b.start,
-    endMinuteOfDay: b.end,
-    status: b.status as ScheduleBlock['status'],
-    awayMessage: b.msg,
-  }));
+  const blocks = CORE_CANONICAL_BLOCKS[id];
+  let dailyBlocks: ScheduleBlock[] = [];
+  if (blocks) {
+    dailyBlocks = blocks.map((b) => ({
+      startMinuteOfDay: b.start,
+      endMinuteOfDay: b.end,
+      status: b.status,
+      awayMessage: b.msg,
+    }));
+  } else {
+    const buddy = CORE_BY_ID[id];
+    const wake = buddy?.routine?.wakeMinute ?? 420;
+    const sleep = buddy?.routine?.sleepMinute ?? 1380;
+    const shift = buddy?.routine?.workShift ?? 'day';
+
+    if (sleep > wake) {
+      dailyBlocks.push({ startMinuteOfDay: 0, endMinuteOfDay: wake, status: 'offline', awayMessage: 'asleep' });
+      if (shift === 'day') {
+        dailyBlocks.push({ startMinuteOfDay: wake, endMinuteOfDay: 540, status: 'online', awayMessage: 'morning check-in' });
+        dailyBlocks.push({ startMinuteOfDay: 540, endMinuteOfDay: 1020, status: 'away', awayMessage: 'busy / out' });
+        dailyBlocks.push({ startMinuteOfDay: 1020, endMinuteOfDay: sleep, status: 'online', awayMessage: 'online' });
+      } else {
+        dailyBlocks.push({ startMinuteOfDay: wake, endMinuteOfDay: sleep, status: 'online', awayMessage: 'around' });
+      }
+      dailyBlocks.push({ startMinuteOfDay: sleep, endMinuteOfDay: 1440, status: 'offline', awayMessage: 'asleep' });
+    } else {
+      dailyBlocks.push({ startMinuteOfDay: 0, endMinuteOfDay: sleep, status: 'online', awayMessage: 'night shift' });
+      dailyBlocks.push({ startMinuteOfDay: sleep, endMinuteOfDay: wake, status: 'offline', awayMessage: 'sleeping through day' });
+      dailyBlocks.push({ startMinuteOfDay: wake, endMinuteOfDay: 1440, status: 'online', awayMessage: 'awake / logs' });
+    }
+  }
+
   const sched: Record<number, ScheduleBlock[]> = {};
   for (let day = 1; day <= 14; day++) {
-    sched[day] = blocks.map((b) => ({ ...b }));
+    sched[day] = dailyBlocks.map((b) => ({ ...b }));
   }
   return sched;
 }
@@ -183,15 +260,19 @@ export function coreBuddyDef(id: string): BuddyCharacter {
     initialRelationships: { ...buddy.hearts },
     traits: { ...buddy.traits },
     typingSpeedWpm: buddy.typingSpeedWpm,
-    archetype: buddy.archetype,
+    archetype: buddy.archetypeId as CharacterArchetype,
     status: buddy.status,
-    metVia: buddy.metVia,
+    metVia: 'core',
     isProcedural: false,
     createdDay: 1,
     reach: buddy.reach,
-    appearance: { ...buddy.appearance },
+    appearance: { hair: buddy.hair, eyes: buddy.eyes },
     languages: buddy.languages.map((l) => ({ ...l })),
     roles: [...buddy.roles],
     backstory: buddy.backstory ? { ...buddy.backstory, candidates: buddy.backstory.candidates.map((c) => ({ ...c })) } : undefined,
+    chatColor: buddy.chatColor,
+    bio: buddy.bio,
+    routine: { ...buddy.routine },
+    art: { ...buddy.art },
   };
 }

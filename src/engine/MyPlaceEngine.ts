@@ -73,7 +73,7 @@ export function buildRosterProfile(input: {
   backstory?: { label?: string; bioSeed?: string };
 }): MyPlaceProfile {
   const archetype: CharacterArchetype = input.archetype && CHARACTER_ARCHETYPES[input.archetype] ? input.archetype : 'regular';
-  const template = CHARACTER_ARCHETYPES[archetype];
+  const template = CHARACTER_ARCHETYPES[archetype] ?? CHARACTER_ARCHETYPES['regular'];
   const bioSeed = (input.backstory?.bioSeed || '').trim();
   return {
     username: input.username,
@@ -82,7 +82,7 @@ export function buildRosterProfile(input: {
     bio: bioSeed || template.personaHint,
     interests: [...template.defaultInterests],
     songTitle: template.defaultSong,
-    avatarGlyph: MyPlaceEngine.ARCHETYPE_AVATARS[archetype],
+    avatarGlyph: MyPlaceEngine.ARCHETYPE_AVATARS[archetype] ?? '👤',
     top8: [],
     glitterIntensity: 0,
     visibility: 'public',
@@ -352,7 +352,7 @@ export class MyPlaceEngine {
     } catch {}
     // Fallback: deterministic template mutation from the archetype (rename-proof).
     const arch = current.archetype && CHARACTER_ARCHETYPES[current.archetype] ? current.archetype : 'regular';
-    const template = CHARACTER_ARCHETYPES[arch];
+    const template = CHARACTER_ARCHETYPES[arch] ?? CHARACTER_ARCHETYPES['regular'];
     const patch: Partial<MyPlaceProfile> = {
       headline: `${current.displayName} update // day ${currentDay}`,
       bio: `${template.blurb} — refreshed my headline and song.`,
