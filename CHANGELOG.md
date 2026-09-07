@@ -7,6 +7,9 @@ Game versions use SemVer (`0.x.y` while in demo); save *format* versions are tra
 ## [Unreleased]
 
 ### Added
+- Modular PC Hardware & Silicon & Spares: fresh starts begin on Day 1 with an empty motel desk; visit Milo's Silicon & Spares downtown (Tech Mart) to buy starter towers, RAM sticks, larger hard drives, CRT/LCD monitors, or boxed OS install discs
+- Authentic Retro OS Setup Wizard: insert retail OS CD boxes and launch SETUP.EXE with hardware eligibility checks, simulated optical drive/hard drive chatter, BIOS reboot sequence, and era-specific splash screens
+- Generational OS Atmosphere: Orion 4.8 Harbor, 5.0 Aurora, 6.0 Glassline, and 7.0 Lumen dynamically reshape window frames, period typography (MS Sans Serif, Tahoma, Trebuchet MS, Segoe UI), window movement sound effects, and Web Audio startup chimes without code duplication
 - Buddies feel like themselves now: Maya is shy-guarded, Ryan is forward-warm, and every newcomer gets a fixed temperament that shapes how they talk and act (old saves carry over automatically)
 - Buddies live their own lives: they hang out with each other around town, keep weekly plans, say a quick goodbye when work or sleep calls, and you will hear about it
 - Buddies can ask you to introduce them to someone, put in a good word, or tell them about a friend — help them, ignore them, or talk behind their back, but if the two compare notes they will both know
@@ -18,7 +21,7 @@ Game versions use SemVer (`0.x.y` while in demo); save *format* versions are tra
 - Buddies form their own reads of you: quiet types seem distant until kept promises prove otherwise — and comparing notes aligns their views (cold reads get fewer check-ins, the distrusted get no favors)
 
 ### Changed
-- Save format v4 (v2/v3 saves upgrade on load; newer-than-current saves are still refused)
+- Save format v5 (v2–v4 saves upgrade on load with working computer and modular hardware preserved; newer-than-current saves are still refused)
 
 ## [0.1.0] — Itch demo foundation
 

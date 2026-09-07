@@ -34,6 +34,8 @@ export interface SaveSlotRecord {
     consecutiveLateWarnings: number;
   };
   hardwareState: {
+    hasComputer?: boolean;
+    modular?: unknown;
     cpuTier: number;             // 1 = Base single-core, 2 = Upgraded
     ramMB: number;               // 512, 1024
     hddTotalGB: number;          // 40
@@ -206,6 +208,8 @@ export const SaveSlotSchema = z.object({
     consecutiveLateWarnings: z.number().int(),
   }),
   hardwareState: z.object({
+    hasComputer: z.boolean().optional(),
+    modular: z.record(z.unknown()).optional(),
     cpuTier: z.number().int(),
     ramMB: z.number().int(),
     hddTotalGB: z.number(),

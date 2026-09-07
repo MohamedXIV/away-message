@@ -27,11 +27,12 @@ describe('Character Lives v4 save migration', () => {
   });
 
   it('bumps the format to 4 but keeps v2/v3 snapshots loadable', () => {
-    expect(SAVE_FORMAT_VERSION).toBe(4);
+    expect(SAVE_FORMAT_VERSION).toBeGreaterThanOrEqual(4);
     expect(checkSaveCompatibility({ version: 2, snapshot: {} } as any).status).toBe('ok');
     expect(checkSaveCompatibility({ version: 3, snapshot: {} } as any).status).toBe('ok');
     expect(checkSaveCompatibility({ version: 4, snapshot: {} } as any).status).toBe('ok');
-    expect(checkSaveCompatibility({ version: 5, snapshot: {} } as any).status).toBe('refused');
+    expect(checkSaveCompatibility({ version: 5, snapshot: {} } as any).status).toBe('ok');
+    expect(checkSaveCompatibility({ version: 6, snapshot: {} } as any).status).toBe('refused');
     expect(checkSaveCompatibility({ version: 3 } as any).status).toBe('legacy');
   });
 
@@ -79,7 +80,7 @@ describe('Character Lives v4 save migration', () => {
     const sim = new SimulationEngine();
     await saveSlot(sim, 'slot_1');
     const record = await db.saves.get('slot_1');
-    expect(record?.version).toBe(4);
+    expect(record?.version).toBe(SAVE_FORMAT_VERSION);
     // Rewrite the row as a v3 document (no traits anywhere)
     const snapshot = JSON.parse(JSON.stringify(record!.snapshot)) as any;
     for (const def of Object.values(snapshot.social.buddies ?? {})) delete (def as any).traits;

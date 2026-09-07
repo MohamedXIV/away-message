@@ -18,8 +18,8 @@ import {
 // VERSIONING (two independent numbers — do not conflate):
 // - APP_VERSION (package.json SemVer): which game build wrote the save. Diagnostics only.
 // - Save-FORMAT version (record.version): shape of the document itself.
-//   CURRENT = 4, MIN_SUPPORTED = 2 (v2/v3 docs share the snapshot shape and are
-//   UPGRADED on load by migrateSnapshotToV4 below — deterministic backfills only).
+//   CURRENT = 5, MIN_SUPPORTED = 2 (v2/v3/v4 docs share the snapshot shape and are
+//   UPGRADED on load by migrateSnapshotToV4/V5 below — deterministic backfills only).
 //   Older multi-table saves (no snapshot) predate this system and are refused
 //   with a clear message. Newer-than-current is ALWAYS refused (silent corruption
 //   is worse than an honest error).
@@ -27,9 +27,11 @@ import {
 //   Breaking document changes: bump SAVE_FORMAT_VERSION here + add a migration
 //   path in checkSaveCompatibility + one CHANGELOG line. No exceptions.
 // - v4 adds Character Lives: fixed buddy traits, 4 extra relationship dims,
-//   directed NPC↔NPC bonds, per-buddy agenda, player mediations, witness log.
+//   directed NPC<->NPC bonds, per-buddy agenda, player mediations, witness log.
+// - v5 adds Modular Hardware & Retail OS CDs: hasComputer state, component
+//   swaps (CPU, RAM sticks, HDD, Optical, Sound, Modem, Monitor), and retro OS setup.
 
-export const SAVE_FORMAT_VERSION = 4;
+export const SAVE_FORMAT_VERSION = 5;
 export const SAVE_FORMAT_MIN_SUPPORTED = 2;
 
 export type SaveCompatibility =
@@ -149,6 +151,8 @@ export async function saveSlot(
       consecutiveLateWarnings: 0,
     },
     hardwareState: {
+      hasComputer: snapshot.hardware.hasComputer,
+      modular: snapshot.hardware.modular as unknown as Record<string, unknown>,
       cpuTier: snapshot.hardware.cpuTier,
       ramMB: snapshot.hardware.ramMB,
       hddTotalGB: snapshot.hardware.hddTotalGB,
@@ -178,10 +182,17 @@ export async function loadSlotSnapshot(slotId: string): Promise<SimulationState 
     const snapshot = (record as SaveSlotRecord).snapshot;
     if (!snapshot || typeof snapshot !== 'object') return null;
     const version = (record as SaveSlotRecord).version ?? SAVE_FORMAT_VERSION;
-    // v4 migration path (see header): pre-v4 snapshots are upgraded
+    // Migration path (see header): pre-v5 snapshots are upgraded
     // deterministically — never refused, never silently corrupted.
     if (version < SAVE_FORMAT_VERSION) {
-      return migrateSnapshotToV4(snapshot as SimulationState, version);
+      let upgraded = snapshot as SimulationState;
+      if (version < 4) {
+        upgraded = migrateSnapshotToV4(upgraded, version);
+      }
+      if (version < 5) {
+        upgraded = migrateSnapshotToV5(upgraded, version);
+      }
+      return upgraded;
     }
     return snapshot as SimulationState;
   } catch {
@@ -264,6 +275,106 @@ function traitsForBuddySnapshot(id: string, def: Record<string, unknown>): Chara
     spontaneity: clamp(base.spontaneity + jitter('spontaneity')),
     loyalty: clamp(base.loyalty + jitter('loyalty')),
   };
+}
+
+/**
+ * Upgrade a pre-v5 engine snapshot to the v5 shape (pure — never mutates input).
+ * - v4 and earlier lack: hasComputer flag, modular hardware state.
+ * - For existing saves, the player already had a computer and was using it, so
+ *   hasComputer defaults to true to preserve their existing save playthrough.
+ * - Modular hardware is backfilled using the legacy hardware state (CPU tier, RAM,
+ *   HDD capacity/free, network card) so hardware inspection and OS requirements
+ *   seamlessly function.
+ */
+export function migrateSnapshotToV5(snapshot: SimulationState, fromVersion: number): SimulationState {
+  void fromVersion;
+  const hardware = (snapshot as SimulationState).hardware ?? ({} as SimulationState['hardware']);
+  if (hardware.hasComputer !== undefined && hardware.modular) {
+    return snapshot;
+  }
+
+  const hasComputer = hardware.hasComputer !== undefined ? hardware.hasComputer : true;
+  let modular = hardware.modular;
+
+  if (!modular && hasComputer) {
+    // Construct deterministic modular hardware matching existing save specs
+    const ramMb = typeof hardware.ramMB === 'number' && hardware.ramMB > 0 ? hardware.ramMB : 512;
+    const hddTotal = typeof hardware.hddTotalGB === 'number' && hardware.hddTotalGB > 0 ? hardware.hddTotalGB : 40.0;
+    const hddFree = typeof hardware.hddFreeGB === 'number' && hardware.hddFreeGB >= 0 ? hardware.hddFreeGB : 7.0;
+
+    modular = {
+      hasComputer: true,
+      isPoweredOn: true,
+      motherboard: {
+        id: 'mb_standard_atx',
+        name: 'Standard ATX Slot-1 Board',
+        ramSlots: 2,
+        maxRamMbPerSlot: 512,
+        cpuSocket: 'Slot-1',
+      },
+      cpu: {
+        id: hardware.cpuTier === 2 ? 'cpu_pentium3_800' : 'cpu_celeron_450',
+        name: hardware.cpuName || (hardware.cpuTier === 2 ? 'Orion P-III 800 MHz' : 'Single-Core Orion x86 450MHz'),
+        tier: (hardware.cpuTier === 2 ? 2 : 1) as 1 | 2 | 3,
+        clockMhz: hardware.cpuTier === 2 ? 800 : 450,
+        socket: 'Slot-1',
+        throughputUnits: hardware.cpuTier === 2 ? 2.0 : 1.0,
+      },
+      ramSticks: [
+        {
+          id: `ram_stick_migrated_${ramMb}`,
+          name: `${ramMb}MB SDRAM`,
+          sizeMb: ramMb,
+        },
+      ],
+      storage: {
+        id: 'hdd_migrated',
+        name: `${hddTotal} GB IDE Hard Drive`,
+        capacityBytes: Math.round(hddTotal * 1_000_000_000),
+        freeBytes: Math.round(hddFree * 1_000_000_000),
+        rpm: 5400,
+        throughputUnits: 1.0,
+      },
+      opticalDrive: {
+        id: 'optical_cdrom_24x',
+        name: '24x IDE CD-ROM Drive',
+        type: 'cd_rom',
+        speedMultiplier: 24,
+      },
+      soundCard: {
+        id: 'sound_sb16',
+        name: 'SoundBlaster 16 ISA',
+        tier: 'sb16',
+        richAudio: true,
+        midiSupport: true,
+      },
+      networkCard: {
+        id: 'nic_migrated',
+        name: hardware.connectionType === 'dialup_56k' ? 'V.90 56k Dial-Up Voice/Fax Modem' : 'PCI Fast Ethernet Adapter',
+        type: hardware.connectionType || 'dsl_256k',
+        speedKbps: hardware.connectionSpeedKbps || 256,
+      },
+      monitor: {
+        id: 'mon_standard_15',
+        name: '15" Standard CRT Monitor',
+        type: 'crt_standard_15',
+        curvature: 0.7,
+        scanlineIntensity: 0.5,
+        bloomIntensity: 0.4,
+        flicker: true,
+      },
+      insertedDisc: null,
+    };
+  }
+
+  return {
+    ...(snapshot as object),
+    hardware: {
+      ...hardware,
+      hasComputer,
+      modular,
+    },
+  } as SimulationState;
 }
 
 /** Compatibility verdict for UI badges (menu shows refused/legacy explicitly). */
