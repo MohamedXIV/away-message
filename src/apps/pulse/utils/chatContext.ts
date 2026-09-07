@@ -265,7 +265,20 @@ export function buildDmChatContext(input: DmContextInput): DmChatContext {
       temperamentLine = ` Temperament (fixed 0-100, shape tone, never quote numbers): shy ${traits.shyness}, warm ${traits.warmth}, disciplined ${traits.discipline}, spontaneous ${traits.spontaneity}, loyal ${traits.loyalty}.`;
     }
   } catch { /* temperament is best-effort */ }
-  const personaWithStyle = `${style.persona} Vocabulary hints: ${style.vocabulary.join(', ')}. Punctuation: ${style.punctuation}. Quirks: ${style.quirks.join(', ')}. ${buddyPersonaLine(buddyId, buddy)}${temperamentLine}${pulse6Suffix}${personaSuffix}`;
+  let identityLine = '';
+  if (buddy) {
+    const app = buddy.appearance;
+    const reachText = buddy.reach === 'remote' ? 'Lives online / far away (never meets in person)' : 'Oakhaven local';
+    const langs = (buddy.languages ?? []).map((l) => `${l.lang} (level ${l.level}/5)`).join(', ');
+    const rolesText = (buddy.roles ?? []).length > 0 ? ` Roles: ${(buddy.roles ?? []).join(', ')}.` : '';
+    identityLine = ` Physical: ${app?.hair ?? 'natural'} hair, ${app?.eyes ?? 'honest'} eyes. Reach: ${reachText}.${langs ? ` Languages: ${langs}.` : ''}${rolesText}`;
+  }
+  let backstoryLine = '';
+  if (buddy?.backstory) {
+    const b = buddy.backstory;
+    backstoryLine = ` Pre-game backstory: Was ${b.relationship} to the player before day 1 ("${b.label}"). Last in touch ${b.lapseDays} days ago.`;
+  }
+  const personaWithStyle = `${style.persona} Vocabulary hints: ${style.vocabulary.join(', ')}. Punctuation: ${style.punctuation}. Quirks: ${style.quirks.join(', ')}. ${buddyPersonaLine(buddyId, buddy)}${identityLine}${backstoryLine}${temperamentLine}${pulse6Suffix}${personaSuffix}`;
   let relationshipStage = 'acquaintance';
   let dailyMood = 'steady';
   let longTermContext = '';

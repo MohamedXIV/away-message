@@ -1,6 +1,5 @@
 import type { BuddyPresence } from '../../../engine/types';
 import { CORE_BY_ID, CORE_IDS } from '../../../engine/coreBuddies';
-
 export interface NpcStyleProfile {
   buddyId: string;
   displayName: string;
@@ -106,14 +105,25 @@ export function getNpcAvailabilityLabel(presence: BuddyPresence | undefined, gam
   return 'offline — not expecting a prompt reply';
 }
 
+/** Generic online labels by archetype (no identity baked in). */
+const ARCHETYPE_ONLINE_LABELS: Record<string, string> = {
+  artist: 'online — listening to music',
+  coworker: 'online — chilling after shift',
+  nightowl: 'online — nightboard / logs',
+  regular: 'online — evening check-in',
+  student: 'online — cramming / chatting',
+  trader: 'online — watching the tape',
+};
+
 export function getNpcActivityLabel(presence: BuddyPresence | undefined, buddyId: string, gameHour: number): string {
   if (presence?.awayMessage) return presence.awayMessage;
   if (presence?.status === 'online') {
-    if (buddyId === CORE_IDS.MAYA && gameHour >= 18) return 'online — listening to rain / myplace/mayablue';
-    if (buddyId === CORE_IDS.RYAN && gameHour >= 18) return 'online — gaming / chilling';
-    if (buddyId === CORE_IDS.NORA && gameHour >= 22) return 'online — indexing logs / nightboard';
-    if (buddyId === CORE_IDS.HENDERSON && gameHour >= 8 && gameHour <= 18) return 'online — motel front desk open';
-    return 'online and checking messages';
+    const buddy = CORE_BY_ID[buddyId];
+    if (buddy?.roles?.includes('rain-lover') && gameHour >= 18) {
+      return `online — listening to rain / myplace/${buddy.myplace || buddyId}`;
+    }
+    const archetype = buddy?.archetype;
+    return (archetype && ARCHETYPE_ONLINE_LABELS[archetype]) || 'online and checking messages';
   }
   if (presence?.status === 'away') return presence.awayMessage || 'stepped away briefly';
   return 'offline';

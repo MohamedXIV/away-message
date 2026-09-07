@@ -3,6 +3,7 @@ import { useSimulationStore } from '../../../store/useSimulationStore';
 import { UserProfileHeader } from './UserProfileHeader';
 import { BuddyGroup } from './BuddyGroup';
 import { formatLastSeen } from './BuddyItem';
+import { soundManager } from '../../../audio/SoundManager';
 import { PULSE_GROUPS, PULSE_ROOMS } from '../data/pulseRooms';
 import type { PulseLoginSession } from './PulseLoginSplash';
 import type { PulseActivityEntry } from '../types';
@@ -77,11 +78,34 @@ export const BuddyListWindow: React.FC<BuddyListWindowProps> = ({
 }) => {
   const engine = useSimulationStore((s) => s.engine);
   const presenceMap = useSimulationStore((s) => s.state.social.presence);
-  const buddies = engine.social.getBuddies();
   const [searchFilter, setSearchFilter] = useState('');
   const [contextMenu, setContextMenu] = useState<{ buddyId: string; x: number; y: number } | null>(null);
   const [showInviteSubmenu, setShowInviteSubmenu] = useState(false);
   const [showBlocked, setShowBlocked] = useState(false);
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [targetHandle, setTargetHandle] = useState('');
+  const [addError, setAddError] = useState<string | null>(null);
+  const [addSuccess, setAddSuccess] = useState<string | null>(null);
+  const [showRecall, setShowRecall] = useState(false);
+
+  const buddies = useMemo(() => {
+    return engine.social.getBuddies().filter((b) => engine.social.isKnown(b.id));
+  }, [engine, presenceMap]);
+
+  const candidateSuggestions = useMemo(() => {
+    const list: Array<{ handle: string; note: string; buddyName: string }> = [];
+    for (const b of engine.social.getBuddies()) {
+      if (engine.social.isKnown(b.id)) continue;
+      for (const cand of b.backstory?.candidates ?? []) {
+        list.push({
+          handle: cand.handle,
+          note: cand.note || b.backstory?.label || 'From your past',
+          buddyName: b.displayName,
+        });
+      }
+    }
+    return list;
+  }, [engine, presenceMap]);
 
   const buddiesWithPresence = useMemo(() => buddies
     .filter((buddy) => buddy.displayName.toLowerCase().includes(searchFilter.toLowerCase()) || buddy.handle.toLowerCase().includes(searchFilter.toLowerCase()))
@@ -140,6 +164,28 @@ export const BuddyListWindow: React.FC<BuddyListWindowProps> = ({
     action();
     setContextMenu(null);
     setShowInviteSubmenu(false);
+  };
+
+  const handleAddSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!targetHandle.trim()) return;
+    const res = engine.dispatchAction({ type: 'ADD_CONTACT', handle: targetHandle.trim() });
+    if (!res.success) {
+      setAddError(res.error || 'Failed to add contact.');
+    } else if ((res.data as any)?.already) {
+      setAddError('Already in your contact list.');
+    } else if ((res.data as any)?.accepted === false) {
+      setAddError('User declined your contact request.');
+    } else {
+      setAddSuccess('Contact added successfully!');
+      soundManager.play('im_send');
+      setTimeout(() => {
+        setIsAddModalOpen(false);
+        setAddError(null);
+        setAddSuccess(null);
+        setTargetHandle('');
+      }, 900);
+    }
   };
 
   const isDark = pulseSkin === 'dark';
@@ -241,8 +287,15 @@ export const BuddyListWindow: React.FC<BuddyListWindowProps> = ({
 
       {view === 'contacts' ? (
         <>
-          <div className="border-b border-gray-300 bg-[#ece9d8] p-1.5">
-            <input type="text" value={searchFilter} onChange={(event) => setSearchFilter(event.target.value)} placeholder="Search contacts..." className="w-full rounded border border-gray-400 bg-white px-2 py-1 text-xs outline-none shadow-inner" />
+          <div className="border-b border-gray-300 bg-[#ece9d8] p-1.5 flex items-center gap-1.5">
+            <input type="text" value={searchFilter} onChange={(event) => setSearchFilter(event.target.value)} placeholder="Search contacts..." className="flex-1 rounded border border-gray-400 bg-white px-2 py-1 text-xs outline-none shadow-inner" />
+            <button
+              onClick={() => { setIsAddModalOpen(true); setAddError(null); setAddSuccess(null); }}
+              className="rounded border border-gray-500 bg-gradient-to-b from-[#ffffff] to-[#d8d8d8] px-2.5 py-1 font-bold text-[#1d3d64] hover:from-[#f0f0f0] hover:to-[#c8c8c8] text-[11px] shadow-sm shrink-0"
+              title="Add a buddy by Pulse ID"
+            >
+              + Add
+            </button>
           </div>
           {activityFeed.length > 0 && <div className="mx-1 mt-1 border border-[#b8c3ce] bg-[#f3f6f8] px-2 py-1">
             <div className="mb-1 flex items-center justify-between text-[9px] font-bold uppercase tracking-wide text-[#456990]"><span>Pulse activity</span><span className="font-normal text-gray-500">last {Math.min(activityFeed.length, 5)} • {activityFeed.filter((entry) => !entry.isRead).length} new</span></div>
@@ -259,6 +312,12 @@ export const BuddyListWindow: React.FC<BuddyListWindowProps> = ({
             <span>New friend request</span>
           </button> : <div className="mx-1 mt-1 border border-[#b8c3ce] bg-[#f3f6f8] px-2 py-1 text-[10px] text-gray-600">Friend request {friendRequestStatus}.</div>}
           <div className="flex-1 space-y-1 overflow-y-auto bg-white p-1">
+            {buddies.length === 0 ? (
+              <div className="p-6 text-center text-gray-500 text-[11px] space-y-2">
+                <div className="font-bold text-[#3b1a5e] text-xs">Your Buddy List is empty</div>
+                <p className="text-gray-600">You haven't added any contacts yet. Click <strong>+ Add</strong> above to add an ID, or meet people around town.</p>
+              </div>
+            ) : null}
             {groupedBuddies.map((group, index) => (
               <BuddyGroup
                 key={group.id}
@@ -277,7 +336,7 @@ export const BuddyListWindow: React.FC<BuddyListWindowProps> = ({
                 isLast={index === groupedBuddies.length - 1}
               />
             ))}
-            {groupedBuddies.every((group) => group.buddies.length === 0) && blockedBuddies.length === 0 && <div className="p-4 text-center text-[11px] italic text-gray-500">No contacts match this search.</div>}
+            {buddies.length > 0 && groupedBuddies.every((group) => group.buddies.length === 0) && blockedBuddies.length === 0 && <div className="p-4 text-center text-[11px] italic text-gray-500">No contacts match this search.</div>}
             {blockedBuddies.length > 0 && (
               <div className="mt-2 border-t border-dashed border-gray-300 pt-2">
                 <button onClick={() => setShowBlocked((prev) => !prev)} className="flex w-full items-center gap-1 px-1 py-1 text-left text-[11px] font-bold text-gray-500 hover:bg-gray-100">
@@ -322,6 +381,72 @@ export const BuddyListWindow: React.FC<BuddyListWindowProps> = ({
         <span>{activeCount} contacts active • {blockedBuddies.length > 0 ? `${blockedBuddies.length} blocked` : 'no blocks'}</span>
         <button onClick={onSignOut} className="text-blue-800 hover:underline">Sign out</button>
       </div>
+
+      {isAddModalOpen && (
+        <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => { setIsAddModalOpen(false); setAddError(null); setAddSuccess(null); }}>
+          <div className="w-full max-w-[280px] rounded border-2 border-[#38516e] bg-[#f0eef5] p-3 shadow-[3px_3px_0_rgba(0,0,0,0.4)]" onClick={(e) => e.stopPropagation()}>
+            <div className="mb-2 flex items-center justify-between border-b border-[#b8c3ce] pb-1 font-bold text-[#274e78]">
+              <span>Add a Buddy</span>
+              <button onClick={() => { setIsAddModalOpen(false); setAddError(null); setAddSuccess(null); }} className="text-gray-500 hover:text-black font-bold">✕</button>
+            </div>
+            <form onSubmit={handleAddSubmit} className="space-y-2">
+              <label className="block text-[11px] font-bold text-[#3b1a5e]">Enter Pulse ID:</label>
+              <input
+                value={targetHandle}
+                onChange={(e) => setTargetHandle(e.target.value)}
+                placeholder="e.g. tacocart_ryan"
+                className="w-full rounded border border-gray-400 bg-white px-2 py-1 text-xs outline-none focus:border-[#5b2d8f]"
+                autoFocus
+              />
+              {addError && <div className="text-[10px] text-red-600 font-bold">{addError}</div>}
+              {addSuccess && <div className="text-[10px] text-green-700 font-bold">{addSuccess}</div>}
+
+              {candidateSuggestions.length > 0 && (
+                <div className="mt-2 border-t border-[#d0c8e0] pt-1">
+                  <button
+                    type="button"
+                    onClick={() => setShowRecall((prev) => !prev)}
+                    className="text-[10px] text-[#5b2d8f] underline hover:text-[#3b1a5e]"
+                  >
+                    {showRecall ? 'Hide past suggestions' : '💭 Try to remember past IDs...'}
+                  </button>
+                  {showRecall && (
+                    <div className="mt-1 max-h-24 overflow-y-auto space-y-1 bg-white border border-gray-300 p-1 rounded text-[10px]">
+                      {candidateSuggestions.map((cand, idx) => (
+                        <button
+                          key={idx}
+                          type="button"
+                          onClick={() => setTargetHandle(cand.handle)}
+                          className="block w-full text-left truncate hover:bg-[#e9e3f5] p-0.5 rounded"
+                        >
+                          <span className="font-bold">{cand.handle}</span> <span className="text-gray-500">({cand.note})</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <div className="mt-3 flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => { setIsAddModalOpen(false); setAddError(null); setAddSuccess(null); }}
+                  className="rounded border border-gray-400 bg-[#e0e0e0] px-2 py-1 text-[11px]"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={!targetHandle.trim()}
+                  className="rounded bg-[#5b2d8f] px-3 py-1 font-bold text-white hover:bg-[#4a2378] disabled:opacity-50 text-[11px]"
+                >
+                  Add Buddy
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -57,7 +57,6 @@ function getRoomReply(roomId: string): { senderId: string; text: string } {
   if (roomId === 'night-shift') return { senderId: CORE_IDS.MAYA, text: 'hold on... i have a track for exactly that mood' };
   return { senderId: CORE_IDS.NORA, text: 'hello, new arrival. please observe the room etiquette.' };
 }
-
 export function getRoomResponderId(roomId: string, participantIds: string[], messageCount: number): string {
   if (participantIds.length === 0) return CORE_IDS.NORA;
   const offset = roomId.split('').reduce((sum, character) => sum + character.charCodeAt(0), 0);
@@ -401,8 +400,12 @@ export const PulseMessengerApp: React.FC = () => {
         });
         engine.dispatchAction({ type: 'SOCIAL_RECEIVE_MESSAGE', buddyId: buddy.id, text, timestampMinute, deliveredAway: true, tags: ['offline-message', 'offline'] });
         if (elapsed >= 240) {
-          // Very long absence: second message from the most social buddies with a staggered timestamp.
-          if (buddy.id === CORE_IDS.MAYA || buddy.id === CORE_IDS.RYAN) {
+          // Very long absence: second message from the two warmest buddies, staggered.
+          const warmthRank = [...engine.social.getBuddies()]
+            .filter((b) => !pulseState.blockedBuddyIds.includes(b.id))
+            .sort((a, b) => engine.social.getTraits(b.id).warmth - engine.social.getTraits(a.id).warmth)
+            .findIndex((b) => b.id === buddy.id);
+          if (warmthRank !== -1 && warmthRank < 2) {
             const secondOffset = Math.min(offset + 45, elapsed - 4);
             const secondMinute = Math.min(totalMinutes - 1, pulseState.lastSeenTotalMinutes + secondOffset);
             const secondText = pickOfflineMessage(buddy.id, secondMinute + 999, buddy.archetype, extractLocalLinks(text).length > 0);
@@ -747,7 +750,9 @@ export const PulseMessengerApp: React.FC = () => {
     let finalCandidateTexts = result.data.messages.map((message) => message.text);
     let detectedLinks = finalCandidateTexts.flatMap((candidateText) => extractLocalLinks(candidateText));
     if (detectedLinks.length === 0) {
-      const chance = buddyId === CORE_IDS.NORA ? 14 : buddyId === CORE_IDS.MAYA ? 12 : buddyId === CORE_IDS.RYAN ? 8 : 6;
+      // Warmer buddies share links more often (data-driven, no favorites).
+      const traits = engine.social.getTraits(buddyId);
+      const chance = Math.round(6 + traits.warmth * 0.08);
       const recentHadLink = recentMessagesForSummary.slice(-4).some((message) => extractLocalLinks(message.text).length > 0);
       const roll = hashString(`${buddyId}:${totalMinutes}:${text}:${finalCandidateTexts.join('|')}`) % 100;
       if (!recentHadLink && roll < chance) {
@@ -923,7 +928,8 @@ export const PulseMessengerApp: React.FC = () => {
         // Topical-only .local link injection for room replies (low chance + relevance + cooldown)
         const existingRoomLinks = extractLocalLinks(finalText);
         if (!roomExited && existingRoomLinks.length === 0) {
-          const chance = responderId === CORE_IDS.NORA ? 10 : responderId === CORE_IDS.MAYA ? 8 : 6;
+          const traits = engine.social.getTraits(responderId);
+          const chance = Math.round(5 + traits.warmth * 0.06);
           const roomHadLink = existingMessages.slice(-6).some((message) => extractLocalLinks(message.text).length > 0);
           if (!roomHadLink && hashString(`${room.id}:${responderId}:${finalText}`) % 100 < chance) {
             const picked = pickTopicalBuddyLink(responderId, `${text} ${finalText}`, `${room.id}:${responderId}:${totalMinutes}`);
@@ -1014,7 +1020,8 @@ export const PulseMessengerApp: React.FC = () => {
         worldKnowledge: whisperWorldKnowledge,
         currentDay: currentDay,
       }, loadAISettings());
-      const fallback = { senderId: targetId, text: targetId === CORE_IDS.MAYA ? 'got it... keeping this between us.' : 'yeah, i see it. whisper me if anything changes.' };
+      const shy = engine.social.getTraits(targetId).shyness >= 70;
+      const fallback = { senderId: targetId, text: shy ? 'got it... keeping this between us.' : 'yeah, i see it. whisper me if anything changes.' };
       const replyText = result.meta.fallback ? fallback.text : result.data.messages[0]?.text?.trim();
       // P4 — whispers are 1:1 exchanges, so the model's socialAction counts like a DM
       try {

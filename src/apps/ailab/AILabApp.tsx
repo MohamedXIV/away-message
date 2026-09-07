@@ -28,7 +28,7 @@ export const AILabApp: React.FC = () => {
   const [results, setResults] = useState<BenchmarkResult[]>([]);
   const [notice, setNotice] = useState('Ready. Benchmark mode bypasses the ten-day cache.');
   const [imagePrompt, setImagePrompt] = useState('Maya at her desk with warm lamp light, small photo');
-  const [imageBuddy, setImageBuddy] = useState(CORE_IDS.MAYA);
+  const [imageBuddy, setImageBuddy] = useState(CORE_BUDDIES[0]?.id ?? CORE_IDS.MAYA);
   const [imageRunning, setImageRunning] = useState(false);
   const [imageResult, setImageResult] = useState<{ url: string; provider: string; fallback: boolean; error?: string } | null>(null);
 
@@ -417,11 +417,12 @@ export const AILabApp: React.FC = () => {
       nextResults.push(siteResult);
       setResults([...nextResults]);
 
+      const first = CORE_BUDDIES[0];
       const chatResult = await aiService.benchmarkChat({
-        buddyId: CORE_IDS.MAYA,
-        displayName: 'Maya',
-        handle: 'starlight_maya',
-        persona: 'Quiet, observant, creative, and guarded. Uses lowercase, pauses, music references, and gentle honesty.',
+        buddyId: first?.id ?? CORE_IDS.MAYA,
+        displayName: first?.displayName ?? 'Maya',
+        handle: first?.handle ?? 'starlight_maya',
+        persona: first?.persona ?? 'Quiet, observant, creative.',
         relationshipSummary: 'familiarity 25, trust 35, comfort 40, respect 45, annoyance 2',
         recentMessages: [{ sender: 'buddy', text: 'the rain is loud tonight' }],
         playerMessage: chatPrompt,

@@ -108,6 +108,7 @@ export function useSimulatedTyping(_activeConversationBuddyId: string | null) {
     clearTimeouts();
     const buddy = engine.social.getBuddy(script.buddyId);
     const style = getNpcStyle(script.buddyId);
+    const traits = engine.social.getTraits(script.buddyId);
     // Prefer style profile wpm but respect engine's buddy speed if it exists; apply variance for human feel
     const baseWpm = style.typing.wpm ?? buddy?.typingSpeedWpm ?? 60;
     const varianceFactor = 1 + ((Math.random() * 2 - 1) * (style.typing.variance ?? 10) / 100);
@@ -117,16 +118,16 @@ export function useSimulatedTyping(_activeConversationBuddyId: string | null) {
     let accumulatedDelay = 400;
 
     script.messages.forEach((msg, idx) => {
-      // Apply style pause: the registry's hesitant buddy (longer), bursty ones (shorter)
-      const isLongPause = style.buddyId === CORE_IDS.MAYA && msg.text.includes('...');
+      // Hesitant buddies (high shyness) pause longer on ellipses.
+      const isLongPause = traits.shyness >= 70 && msg.text.includes('...');
       const hesitationExtra = isLongPause ? 500 : 0;
       const typingDuration = Math.max(800, Math.min(4200, (msg.text.length / cps) * 1000 + hesitationExtra));
 
       const t1 = setTimeout(() => {
         const indicatorText = (() => {
-          if (style.buddyId === CORE_IDS.MAYA) return 'maya is typing a message...';
-          if (style.buddyId === CORE_IDS.NORA) return 'NightOwl87 is typing...';
-          if (style.buddyId === CORE_IDS.HENDERSON) return `${buddy?.displayName || script.buddyId} is typing...`;
+          // Shy buddies show their handle (hiding behind it); formal ones use full names.
+          if (traits.shyness >= 70) return `${buddy?.handle || script.buddyId} is typing...`;
+          if (traits.discipline >= 80) return `${buddy?.displayName || script.buddyId} is typing...`;
           return `${buddy?.displayName || script.buddyId} is typing a message...`;
         })();
         setTypingState((prev) => ({

@@ -23,7 +23,7 @@ import { buildConversationSummary } from '../apps/pulse/utils/conversationMemory
 import { useReplySuggestions } from '../apps/pulse/hooks/useReplySuggestions';
 import { ReplyChips } from '../apps/pulse/components/ReplyChips';
 import { toneSuggestion } from '../engine/PlayerActs';
-import { CORE_IDS } from '../engine/coreBuddies';
+import { CORE_BUDDIES } from '../engine/coreBuddies';
 
 interface CafeTurn {
   id: number;
@@ -34,6 +34,23 @@ interface CafeTurn {
 const CAFE_OPENER =
   "Hey! You made it! It's... honestly so strange seeing you outside of that little chat box. But in a really good way. I grabbed the booth by the radiator — sit, sit.";
 
+/** Default meeting buddy: most-familiar available local buddy (remote buddies never meet in person). */
+function defaultCafeBuddyId(engine: { social: { getBuddies(): Array<{ id: string; status?: string; reach?: string }>; getRelationships(id: string): { familiarity: number } | undefined } }): string {
+  const buddies = engine.social.getBuddies();
+  const locals = buddies.filter((b) => (b.reach ?? 'local') === 'local' && b.status !== 'distant' && b.status !== 'gone' && b.status !== 'blocked');
+  const pool = locals.length > 0 ? locals : buddies;
+  let best = pool[0];
+  let bestFam = -1;
+  for (const b of pool) {
+    const fam = engine.social.getRelationships(b.id)?.familiarity ?? 0;
+    if (fam > bestFam) {
+      bestFam = fam;
+      best = b;
+    }
+  }
+  return best?.id ?? CORE_BUDDIES[0]?.id ?? 'maya';
+}
+
 export function toneToExpression(tone: string | undefined, fallback: MayaExpression): MayaExpression {
   const normalized = (tone || '').toLowerCase();
   if (/happy|laugh|excit|playful|joy|grin/.test(normalized)) return 'smile';
@@ -43,13 +60,14 @@ export function toneToExpression(tone: string | undefined, fallback: MayaExpress
   return fallback;
 }
 
-export const CafeScene: React.FC<{ buddyId?: string }> = ({ buddyId = CORE_IDS.MAYA }) => {
+export const CafeScene: React.FC<{ buddyId?: string }> = ({ buddyId: propBuddyId }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const rendererRef = useRef<CafeCanvasRenderer | null>(null);
   const historyRef = useRef<HTMLDivElement>(null);
   const turnId = useRef(0);
 
   const engine = useSimulationStore((s) => s.engine);
+  const buddyId = propBuddyId ?? defaultCafeBuddyId(engine);
   const time = useSimulationStore((s) => s.state.time);
   const totalMinutes = useSimulationStore((s) => s.state.time.totalMinutes);
   const currentDay = useSimulationStore((s) => s.state.time.day);
@@ -60,7 +78,7 @@ export const CafeScene: React.FC<{ buddyId?: string }> = ({ buddyId = CORE_IDS.M
   const applySocialAction = useSimulationStore((s) => s.applySocialAction);
 
   const buddy = engine.social.getBuddy(buddyId);
-  const buddyName = buddy?.displayName || 'Maya';
+  const buddyName = buddy?.displayName || buddyId;
 
   // Dialogue State
   const [turns, setTurns] = useState<CafeTurn[]>([
@@ -256,7 +274,7 @@ export const CafeScene: React.FC<{ buddyId?: string }> = ({ buddyId = CORE_IDS.M
     // Set world flag & social state
     setWorldFlag('maya_met_in_person', true);
     setWorldFlag('maya_cafe_scheduled', true);
-    try { applySocialAction(CORE_IDS.MAYA, 'vulnerable_share'); } catch {}
+    try { applySocialAction(buddyId, 'vulnerable_share'); } catch {}
 
     // Return to room
     switchView('room');

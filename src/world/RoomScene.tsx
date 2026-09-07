@@ -7,6 +7,7 @@ import { RoomCanvasRenderer, getTimeOfDayFromHour } from './RoomCanvas';
 import { RoomHotspotId, RoomActivityOption, WeatherType } from './types';
 import { getWeatherForDay, isWetWeather } from '../engine/WeatherEngine';
 import { CITY_NODES, type CityNodeId, type TravelMode } from '../engine/CityMap';
+import { buddyWithRole } from '../engine/coreBuddies';
 import { CityPlaceView } from './components/CityPlaceView';
 
 function playerLocationLabel(location: CityNodeId): string {
@@ -150,16 +151,20 @@ export const RoomScene: React.FC = () => {
   const jobBoardEntries = (() => {
     try {
       const engine = useSimulationStore.getState().engine;
-      return engine.getJobBoard().map(({ gig, pending }) => ({
-        gigId: gig.id,
-        title: gig.title,
-        blurb: gig.blurb,
-        pay: gig.pay,
-        durationMin: gig.durationMin,
-        minEnergy: gig.minEnergy,
-        contactName: engine.social.getBuddy(gig.contactBuddyId)?.displayName ?? gig.contactBuddyId,
-        pending,
-      }));
+      return engine.getJobBoard().map(({ gig, pending }) => {
+        const holder = buddyWithRole(gig.contactRole);
+        const contact = holder ? engine.social.getBuddy(holder.id) : undefined;
+        return {
+          gigId: gig.id,
+          title: gig.title,
+          blurb: gig.blurb,
+          pay: gig.pay,
+          durationMin: gig.durationMin,
+          minEnergy: gig.minEnergy,
+          contactName: contact?.displayName ?? gig.contactRole,
+          pending,
+        };
+      });
     } catch { return []; }
   })();
 
