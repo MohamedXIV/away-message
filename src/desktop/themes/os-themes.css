@@ -1,0 +1,193 @@
+/* src/desktop/themes/os-themes.css */
+/* Unified generation-specific CSS design tokens and window presentation chrome */
+
+/* ========================================================================= */
+/* 1. Orion OS 4.8 ("Harbor Classic") — Win 98/ME era sharp 3D industrial    */
+/* ========================================================================= */
+[data-os-theme="orion48"] {
+  --os-font-main: "MS Sans Serif", Arial, sans-serif;
+  --os-font-title: "MS Sans Serif", Arial, sans-serif;
+  --os-font-title-weight: 700;
+  --os-font-smoothing: none;
+  
+  --os-window-bg: #d4d0c8;
+  --os-window-text: #000000;
+  --os-window-radius: 0px;
+  --os-window-border: 2px solid;
+  --os-window-border-top: #ffffff;
+  --os-window-border-left: #ffffff;
+  --os-window-border-right: #404040;
+  --os-window-border-bottom: #404040;
+  --os-window-shadow: 3px 4px 16px rgba(0, 0, 0, 0.4);
+
+  --os-titlebar-bg: linear-gradient(90deg, #0a246a 0%, #1b4ea3 55%, #3a74d8 100%);
+  --os-titlebar-bg-inactive: linear-gradient(90deg, #808080 0%, #b5b5b5 100%);
+  --os-titlebar-text: #ffffff;
+  --os-titlebar-text-inactive: #d4d0c8;
+  --os-titlebar-height: 24px;
+
+  --os-btn-bg: #d4d0c8;
+  --os-btn-border-top: #ffffff;
+  --os-btn-border-left: #ffffff;
+  --os-btn-border-right: #404040;
+  --os-btn-border-bottom: #404040;
+  --os-btn-radius: 0px;
+
+  --os-accent: #008080;
+  --os-taskbar-bg: #d4d0c8;
+}
+
+/* ========================================================================= */
+/* 2. Orion OS 5.0 ("Aurora") — Softened corners, Tahoma, warm petrol/sand   */
+/* ========================================================================= */
+[data-os-theme="orion50"] {
+  --os-font-main: Tahoma, Verdana, sans-serif;
+  --os-font-title: Tahoma, Verdana, sans-serif;
+  --os-font-title-weight: 700;
+  --os-font-smoothing: antialiased;
+
+  --os-window-bg: #dedad2;
+  --os-window-text: #1a1a1a;
+  --os-window-radius: 4px;
+  --os-window-border: 1px solid #706e68;
+  --os-window-border-top: #ffffff;
+  --os-window-border-left: #ffffff;
+  --os-window-border-right: #706e68;
+  --os-window-border-bottom: #706e68;
+  --os-window-shadow: 4px 6px 20px rgba(0, 0, 0, 0.38);
+
+  --os-titlebar-bg: linear-gradient(90deg, #234358 0%, #34607a 50%, #4a829e 100%);
+  --os-titlebar-bg-inactive: linear-gradient(90deg, #6b7782 0%, #9aa3ab 100%);
+  --os-titlebar-text: #ffffff;
+  --os-titlebar-text-inactive: #e0e4e8;
+  --os-titlebar-height: 26px;
+
+  --os-btn-bg: #dedad2;
+  --os-btn-border-top: #ffffff;
+  --os-btn-border-left: #ffffff;
+  --os-btn-border-right: #706e68;
+  --os-btn-border-bottom: #706e68;
+  --os-btn-radius: 3px;
+
+  --os-accent: #2e627e;
+  --os-taskbar-bg: #cec9bf;
+}
+
+/* ========================================================================= */
+/* 3. Orion OS 6.0 ("Glassline") — Translucent graphite & teal, Trebuchet MS */
+/* ========================================================================= */
+[data-os-theme="orion60"] {
+  --os-font-main: "Trebuchet MS", Tahoma, sans-serif;
+  --os-font-title: "Trebuchet MS", sans-serif;
+  --os-font-title-weight: 600;
+  --os-font-smoothing: subpixel-antialiased;
+
+  --os-window-bg: #e6e5e0;
+  --os-window-text: #111111;
+  --os-window-radius: 6px;
+  --os-window-border: 1px solid rgba(0, 0, 0, 0.35);
+  --os-window-border-top: rgba(255, 255, 255, 0.8);
+  --os-window-border-left: rgba(255, 255, 255, 0.6);
+  --os-window-border-right: rgba(0, 0, 0, 0.3);
+  --os-window-border-bottom: rgba(0, 0, 0, 0.4);
+  --os-window-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+
+  --os-titlebar-bg: linear-gradient(180deg, #2a4c5a 0%, #1a3440 60%, #122530 100%);
+  --os-titlebar-bg-inactive: linear-gradient(180deg, #5b6469 0%, #3e4549 100%);
+  --os-titlebar-text: #f0f6fa;
+  --os-titlebar-text-inactive: #b0b8be;
+  --os-titlebar-height: 28px;
+
+  --os-btn-bg: linear-gradient(180deg, #ffffff 0%, #d8d8d8 100%);
+  --os-btn-border-top: #ffffff;
+  --os-btn-border-left: #e0e0e0;
+  --os-btn-border-right: #606060;
+  --os-btn-border-bottom: #505050;
+  --os-btn-radius: 4px;
+
+  --os-accent: #1e5a6a;
+  --os-taskbar-bg: rgba(26, 42, 50, 0.95);
+}
+
+/* ========================================================================= */
+/* 4. Orion OS 7.0 ("Lumen Flow") — Dark mineral, modern glow, Segoe UI      */
+/* ========================================================================= */
+[data-os-theme="orion70"] {
+  --os-font-main: "Segoe UI", system-ui, sans-serif;
+  --os-font-title: "Segoe UI", system-ui, sans-serif;
+  --os-font-title-weight: 500;
+  --os-font-smoothing: subpixel-antialiased;
+
+  --os-window-bg: #1c1e24;
+  --os-window-text: #e8eaed;
+  --os-window-radius: 8px;
+  --os-window-border: 1px solid rgba(255, 255, 255, 0.12);
+  --os-window-border-top: rgba(255, 255, 255, 0.22);
+  --os-window-border-left: rgba(255, 255, 255, 0.14);
+  --os-window-border-right: rgba(0, 0, 0, 0.5);
+  --os-window-border-bottom: rgba(0, 0, 0, 0.6);
+  --os-window-shadow: 0 12px 40px rgba(0, 0, 0, 0.6);
+
+  --os-titlebar-bg: linear-gradient(90deg, #15171c 0%, #1f232b 100%);
+  --os-titlebar-bg-inactive: #16181d;
+  --os-titlebar-text: #ffffff;
+  --os-titlebar-text-inactive: #757c88;
+  --os-titlebar-height: 30px;
+
+  --os-btn-bg: rgba(255, 255, 255, 0.08);
+  --os-btn-border-top: transparent;
+  --os-btn-border-left: transparent;
+  --os-btn-border-right: transparent;
+  --os-btn-border-bottom: transparent;
+  --os-btn-radius: 5px;
+
+  --os-accent: #00d2b4;
+  --os-taskbar-bg: #121316;
+}
+
+/* ========================================================================= */
+/* Window & Taskbar Base Components Utilizing Tokens                         */
+/* ========================================================================= */
+.os-themed-window {
+  font-family: var(--os-font-main);
+  background-color: var(--os-window-bg);
+  color: var(--os-window-text);
+  border-radius: var(--os-window-radius);
+  box-shadow: var(--os-window-shadow);
+  border-top: var(--os-window-border-top, 2px solid #fff);
+  border-left: var(--os-window-border-left, 2px solid #fff);
+  border-right: var(--os-window-border-right, 2px solid #404040);
+  border-bottom: var(--os-window-border-bottom, 2px solid #404040);
+  -webkit-font-smoothing: var(--os-font-smoothing);
+}
+
+.os-themed-titlebar {
+  font-family: var(--os-font-title);
+  font-weight: var(--os-font-title-weight);
+  height: var(--os-titlebar-height);
+  background: var(--os-titlebar-bg);
+  color: var(--os-titlebar-text);
+  border-top-left-radius: var(--os-window-radius);
+  border-top-right-radius: var(--os-window-radius);
+}
+
+.os-themed-titlebar[data-inactive="true"] {
+  background: var(--os-titlebar-bg-inactive);
+  color: var(--os-titlebar-text-inactive);
+}
+
+.os-themed-btn {
+  background: var(--os-btn-bg);
+  border-radius: var(--os-btn-radius);
+  border-top: 1px solid var(--os-btn-border-top, #fff);
+  border-left: 1px solid var(--os-btn-border-left, #fff);
+  border-right: 1px solid var(--os-btn-border-right, #404040);
+  border-bottom: 1px solid var(--os-btn-border-bottom, #404040);
+}
+
+.os-themed-btn:active {
+  border-top-color: var(--os-btn-border-right, #404040);
+  border-left-color: var(--os-btn-border-bottom, #404040);
+  border-right-color: var(--os-btn-border-top, #fff);
+  border-bottom-color: var(--os-btn-border-left, #fff);
+}

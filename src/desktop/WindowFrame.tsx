@@ -1,6 +1,8 @@
 import React, { useRef, useCallback, memo } from 'react';
 import { WindowState, useWindowStore } from '../store/useWindowStore';
 import { useHardwareState } from '../store/useSimulationStore';
+import { OsHostProvider } from './host/OsHostContext';
+import { synthAudio } from '../audio/SynthAudio';
 
 export interface WindowFrameProps {
   window: WindowState;
@@ -150,34 +152,43 @@ export const WindowFrame: React.FC<WindowFrameProps> = memo(({ window: winState,
         zIndex: winState.zIndex,
       };
 
+  const getOsTheme = (version: string) => {
+    if (version?.includes('7.')) return 'orion70';
+    if (version?.includes('6.')) return 'orion60';
+    if (version?.includes('5.')) return 'orion50';
+    return 'orion48';
+  };
+  const osTheme = getOsTheme(hardware.osVersion);
+
+  const handleMinimize = () => {
+    minimizeWindow(winState.id);
+    synthAudio.playWindowSound('minimize', hardware.osVersion);
+  };
+
+  const handleToggleMaximize = () => {
+    toggleMaximize(winState.id);
+    synthAudio.playWindowSound(winState.isMaximized ? 'restore' : 'open', hardware.osVersion);
+  };
+
+  const handleClose = () => {
+    closeOrTrayWindow(winState.id);
+    synthAudio.playWindowSound('close', hardware.osVersion);
+  };
+
   return (
     <div
       ref={frameRef}
       style={frameStyle}
+      data-os-theme={osTheme}
       onPointerDown={() => focusWindow(winState.id)}
-      className={`window-frame flex flex-col select-none ${
-        isOrion6
-          ? 'rounded-t-lg bg-[#ece9d8] border border-[#0055ea]/60 shadow-2xl'
-          : 'bg-[#c0c0c0] p-[3px] shadow-orion-window'
-      }`}
+      className="window-frame os-themed-window flex flex-col select-none p-[2px]"
     >
       {/* Titlebar */}
       <div
         onPointerDown={handleTitlePointerDown}
-        onDoubleClick={() => toggleMaximize(winState.id)}
-        className={`flex items-center justify-between px-2 py-1 cursor-default ${
-          isOrion6
-            ? `rounded-t-md text-white font-sans ${
-                isActive
-                  ? 'bg-gradient-to-r from-[#0055ea] via-[#0b60ff] to-[#0040cc] font-semibold'
-                  : 'bg-gradient-to-r from-[#7c97b9] to-[#607797] text-gray-200'
-              }`
-            : `text-xs font-pixel ${
-                isActive
-                  ? 'bg-[#000080] text-white font-bold'
-                  : 'bg-[#808080] text-[#c0c0c0]'
-              }`
-        }`}
+        onDoubleClick={handleToggleMaximize}
+        data-inactive={!isActive}
+        className="os-themed-titlebar flex items-center justify-between px-2 py-0.5 cursor-default select-none"
       >
         {/* App Icon & Title */}
         <div className="flex items-center gap-1.5 overflow-hidden pr-2">
@@ -189,13 +200,9 @@ export const WindowFrame: React.FC<WindowFrameProps> = memo(({ window: winState,
         <div className="flex items-center gap-1 shrink-0" onPointerDown={(e) => e.stopPropagation()}>
           {/* Minimize Button */}
           <button
-            onClick={() => minimizeWindow(winState.id)}
+            onClick={handleMinimize}
             title="Minimize"
-            className={
-              isOrion6
-                ? 'w-5 h-5 rounded bg-[#0055ea] hover:bg-[#2070ff] text-white flex items-center justify-center text-xs font-bold border border-white/40'
-                : 'w-4 h-4 bg-[#c0c0c0] active:shadow-orion-inset shadow-orion-outset text-black flex items-center justify-center text-[10px] font-bold leading-none'
-            }
+            className="os-themed-btn w-5 h-5 flex items-center justify-center text-[10px] font-bold leading-none"
           >
             _
           </button>
@@ -203,27 +210,19 @@ export const WindowFrame: React.FC<WindowFrameProps> = memo(({ window: winState,
           {/* Maximize / Restore Button */}
           {winState.isResizable && (
             <button
-              onClick={() => toggleMaximize(winState.id)}
+              onClick={handleToggleMaximize}
               title={winState.isMaximized ? 'Restore' : 'Maximize'}
-              className={
-                isOrion6
-                  ? 'w-5 h-5 rounded bg-[#0055ea] hover:bg-[#2070ff] text-white flex items-center justify-center text-xs font-bold border border-white/40'
-                  : 'w-4 h-4 bg-[#c0c0c0] active:shadow-orion-inset shadow-orion-outset text-black flex items-center justify-center text-[10px] font-bold leading-none'
-              }
+              className="os-themed-btn w-5 h-5 flex items-center justify-center text-[10px] font-bold leading-none"
             >
               {winState.isMaximized ? '❐' : '□'}
             </button>
           )}
 
-          {/* Close Button (signed-in Pulse minimizes to the tray instead) */}
+          {/* Close Button */}
           <button
-            onClick={() => closeOrTrayWindow(winState.id)}
+            onClick={handleClose}
             title={String(winState.appId).includes('pulse') && (winState.customState as any)?.pulseSignedIn ? 'Minimize to tray' : 'Close'}
-            className={
-              isOrion6
-                ? 'w-5 h-5 rounded bg-[#d32f2f] hover:bg-[#f44336] text-white flex items-center justify-center text-xs font-bold border border-white/40'
-                : 'w-4 h-4 bg-[#c0c0c0] active:shadow-orion-inset shadow-orion-outset text-black flex items-center justify-center text-[10px] font-bold leading-none ml-0.5'
-            }
+            className="os-themed-btn w-5 h-5 flex items-center justify-center text-[10px] font-bold leading-none ml-0.5"
           >
             ✕
           </button>
@@ -231,14 +230,10 @@ export const WindowFrame: React.FC<WindowFrameProps> = memo(({ window: winState,
       </div>
 
       {/* Window Body Container */}
-      <div
-        className={`flex-1 overflow-auto relative ${
-          isOrion6
-            ? 'bg-white rounded-b-md m-1'
-            : 'bg-white shadow-orion-inset m-1'
-        }`}
-      >
-        {children}
+      <div className="flex-1 overflow-auto relative bg-white m-0.5 shadow-inner">
+        <OsHostProvider windowId={winState.id}>
+          {children}
+        </OsHostProvider>
       </div>
 
       {/* Resize Handles (8 directions, active only when not maximized and resizable) */}

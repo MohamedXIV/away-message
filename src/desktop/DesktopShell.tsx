@@ -85,18 +85,24 @@ export const DesktopShell: React.FC = () => {
   const [isDialUpModalOpen, setIsDialUpModalOpen] = useState(false);
   const [iconPositions] = useState<Record<string, { x: number; y: number }>>({});
 
+  const hardware = useSimulationStore((s) => s.state.hardware);
+
   // Sync wallpaper when osVersion changes only if not already customized (first load)
   useEffect(() => {
     const stored = useDesktopStore.getState().wallpaper;
-    // Only auto-switch on OS change if user hasn't customized away from default for that OS
-    // Keep user's choice, but ensure initial load matches OS
     if (!stored) {
       setWallpaper(osVersion === 'Orion_6.0' ? 'bliss_green' : 'classic_teal');
     }
   }, [osVersion, setWallpaper]);
 
-  // Derive theme attribute
-  const themeAttr = osVersion === 'Orion_6.0' ? 'orion60' : 'orion48';
+  // Derive theme attribute across all 4 OS generations
+  const getOsTheme = (v: string) => {
+    if (v?.includes('7.')) return 'orion70';
+    if (v?.includes('6.')) return 'orion60';
+    if (v?.includes('5.')) return 'orion50';
+    return 'orion48';
+  };
+  const themeAttr = getOsTheme(osVersion);
 
   // System base icons
   const baseIcons: DesktopIconItem[] = [
@@ -324,7 +330,7 @@ export const DesktopShell: React.FC = () => {
       <Taskbar onOpenDialUp={() => setIsDialUpModalOpen(true)} />
 
       {/* 7. CRT Overlay Shader */}
-      <CRTOverlay />
+      <CRTOverlay monitor={hardware.modular?.monitor} />
     </div>
   );
 };
