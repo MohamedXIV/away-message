@@ -21,7 +21,8 @@ Game versions use SemVer (`0.x.y` while in demo); save *format* versions are tra
 - Buddies form their own reads of you: quiet types seem distant until kept promises prove otherwise — and comparing notes aligns their views (cold reads get fewer check-ins, the distrusted get no favors)
 
 ### Changed
-- Save format v5 (v2–v4 saves upgrade on load with working computer and modular hardware preserved; newer-than-current saves are still refused)
+- Save format v5 introduced the legacy modular-hardware snapshot used by the first Silicon & Spares implementation.
+- Save format v6 separates owned physical inventory, assembled computer state, display state, and the nullable installed OS. v2–v5 document saves migrate deterministically: existing working PCs preserve equivalent machine/display/OS state, while no-PC saves no longer fabricate Orion 4.8, RAM, disk, or network hardware.
 
 ## [0.1.0] — Itch demo foundation
 
