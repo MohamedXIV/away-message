@@ -15,7 +15,7 @@ jobs:
       - name: Checkout exact Issue 7 repair source
         uses: actions/checkout@v4
         with:
-          ref: 1603f739f345555a80a22bd1a61aa61d27fdaee3
+          ref: 68764341e894f29f7b7db294937fc5310265e4ec
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
@@ -23,5 +23,5 @@ jobs:
           cache: npm
       - name: Install dependencies
         run: npm ci --legacy-peer-deps
-      - name: Atomic store transaction RED
-        run: npx vitest run tests/unit/StorePurchase.test.ts
+      - name: Atomic store transaction GREEN
+        run: npx vitest run tests/unit/StorePurchase.test.ts tests/unit/SaveSlots.test.ts tests/unit/SaveRoundTrip.test.ts
