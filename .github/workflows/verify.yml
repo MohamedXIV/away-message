@@ -6,6 +6,7 @@ on:
     branches:
       - main
       - feat/modular-orion-hardware-os
+      - chore/30-pr-verification-ci
 
 permissions:
   contents: read
