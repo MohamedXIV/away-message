@@ -55,7 +55,8 @@ export type StrictSimulationState = Omit<
 /** Live v6 actions layered over the preserved coordinator action union. */
 export type SimulationAction =
   | CanonicalSimulationAction
-  | { type: 'COMPUTER_SETUP_AT_HOME' };
+  | { type: 'COMPUTER_SETUP_AT_HOME' }
+  | { type: 'COMPUTER_SET_POWER'; poweredOn: boolean };
 
 /** Nullable previous OS is valid for a first installation. */
 export type SimulationEventMap = Omit<CanonicalSimulationEventMap, 'hardware:os_migrated'> & {
