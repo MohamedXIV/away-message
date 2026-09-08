@@ -21,6 +21,7 @@ export const SiliconSparesModal: React.FC<SiliconSparesModalProps> = ({ onClose 
   const cash = useSimulationStore((s) => s.state.player.cash);
   const spendCash = useSimulationStore((s) => s.spendCash);
   const hardware = useSimulationStore((s) => s.state.hardware);
+  const currentOsId = useSimulationStore((s) => s.state.os.currentOsId);
   const engine = useSimulationStore((s) => s.engine);
 
   const [filter, setFilter] = useState<'all' | 'bundle' | 'ram' | 'storage' | 'monitor' | 'os_disc'>('all');
@@ -237,7 +238,7 @@ export const SiliconSparesModal: React.FC<SiliconSparesModalProps> = ({ onClose 
             Current Machine:{' '}
             <span className="font-bold text-gray-900">
               {hardware.hasComputer
-                ? `${hardware.osVersion} · ${hardware.ramMB}MB RAM`
+                ? `${currentOsId ?? 'No OS'} · ${hardware.ramMB}MB RAM`
                 : 'None (Desk empty)'}
             </span>
           </div>
