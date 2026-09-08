@@ -15,7 +15,7 @@ jobs:
       - name: Checkout exact Issue 7 repair source
         uses: actions/checkout@v4
         with:
-          ref: da47364a76de501760f037f7663f23df46968a43
+          ref: b3db28ee661b22930acf89cbafc64620274ef3b3
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
@@ -23,5 +23,5 @@ jobs:
           cache: npm
       - name: Install dependencies
         run: npm ci --legacy-peer-deps
-      - name: Store catalog RED
-        run: npx vitest run tests/unit/StoreCatalog.test.ts
+      - name: Store catalog GREEN
+        run: npx vitest run tests/unit/StoreCatalog.test.ts tests/unit/OsEngineNoOs.test.ts tests/unit/SoftwareRegistry.test.ts
