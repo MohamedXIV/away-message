@@ -15,7 +15,7 @@ jobs:
       - name: Checkout exact Issue 7 repair source
         uses: actions/checkout@v4
         with:
-          ref: 25921000ac012655c33c6f943e559bdf3e1d161e
+          ref: d96c04032b5dd32e866ab0d521517bb9b47ea456
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
@@ -23,5 +23,7 @@ jobs:
           cache: npm
       - name: Install dependencies
         run: npm ci --legacy-peer-deps
-      - name: Silicon Spares boundary RED
-        run: npx vitest run tests/unit/SiliconSparesBoundary.test.ts
+      - name: Silicon Spares boundary GREEN
+        run: npx vitest run tests/unit/SiliconSparesBoundary.test.ts tests/unit/StorePurchase.test.ts
+      - name: Typecheck store boundary
+        run: npx tsc --noEmit
