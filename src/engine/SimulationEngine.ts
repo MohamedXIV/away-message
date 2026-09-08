@@ -7,6 +7,7 @@
 
 import { InventoryEngine } from './InventoryEngine';
 import { HARDWARE_STORE_INVENTORY, PHYSICAL_ITEM_CATALOG } from './hardware/catalog';
+import { resolveRoomComputerAssembly } from './hardware/assembleOwnedComputer';
 import { SimulationEngine as SimulationEngineCore } from './SimulationEngineCore';
 import {
   createEmptyComputerSetup,
@@ -46,8 +47,6 @@ export class SimulationEngine extends SimulationEngineCore {
 
     const coreInitial: Partial<TransportSimulationState> = {
       ...initialState,
-      // HardwareEngine consumes these hidden compatibility roots and derives
-      // the flat projection. They never survive HardwareEngine.getState().
       hardware: {
         ...(initialState?.hardware ?? ({} as CanonicalHardwareState)),
         computer,
@@ -57,12 +56,16 @@ export class SimulationEngine extends SimulationEngineCore {
         currentOsId: null,
         installedPatchIds: [],
       },
-      // No OS means no browser or other ghost preinstalled software.
       installedSoftware,
     };
 
     super(coreInitial);
     this.inventory = new InventoryEngine(initialState?.inventory ?? createEmptyInventoryState());
+  }
+
+  private invalidateV6Cache(): void {
+    this.v6CachedBase = null;
+    this.v6CachedState = null;
   }
 
   public override getState(): Readonly<LiveSimulationState> {
@@ -87,9 +90,6 @@ export class SimulationEngine extends SimulationEngineCore {
   }
 
   public override exportSnapshot(): LiveSimulationState {
-    // Preserve SimulationEngineCore's save guarantee: it explicitly invalidates
-    // its reference cache before exporting, so direct sub-engine mutations made
-    // immediately before save cannot disappear behind a stale aggregate state.
     const base = super.exportSnapshot();
     const snapshot = {
       ...base,
@@ -101,10 +101,7 @@ export class SimulationEngine extends SimulationEngineCore {
       installedSoftware: this.software.getInstalledSoftware(),
     } as LiveSimulationState;
 
-    // super.exportSnapshot() rebuilt the core cache, so the old v6 aggregate is
-    // no longer paired with the live core reference and must not be reused.
-    this.v6CachedBase = null;
-    this.v6CachedState = null;
+    this.invalidateV6Cache();
     return JSON.parse(JSON.stringify(snapshot)) as LiveSimulationState;
   }
 
@@ -160,8 +157,7 @@ export class SimulationEngine extends SimulationEngineCore {
       };
     }
 
-    this.v6CachedBase = null;
-    this.v6CachedState = null;
+    this.invalidateV6Cache();
 
     const debit = super.dispatchAction({
       type: 'PLAYER_SPEND_CASH',
@@ -170,8 +166,7 @@ export class SimulationEngine extends SimulationEngineCore {
     });
     if (!debit.success) {
       this.inventory.loadState(inventoryBefore);
-      this.v6CachedBase = null;
-      this.v6CachedState = null;
+      this.invalidateV6Cache();
       return { success: false, error: debit.error ?? 'Purchase failed.' };
     }
 
@@ -185,9 +180,66 @@ export class SimulationEngine extends SimulationEngineCore {
     };
   }
 
+  public setupComputerAtHome(): ActionResult {
+    const currentComputer = this.hardware.getComputerState();
+    if (currentComputer.assembled) {
+      return { success: false, error: 'A computer is already set up in Room 104.' };
+    }
+
+    const resolved = resolveRoomComputerAssembly(this.inventory.getState().items);
+    if (!resolved.ok) return { success: false, error: resolved.error };
+
+    let preparedInstall;
+    try {
+      preparedInstall = this.inventory.prepareInstallOwnedItems(resolved.assembly.instanceIds);
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Computer setup preparation failed.',
+      };
+    }
+
+    const inventoryBefore = this.inventory.getState();
+    const computerBefore = this.hardware.getComputerState();
+    const displayBefore = this.hardware.getDisplayState();
+
+    try {
+      this.inventory.commitInstallOwnedItems(preparedInstall);
+      this.hardware.loadState({
+        computer: resolved.assembly.computer,
+        display: resolved.assembly.display,
+      });
+      this.invalidateV6Cache();
+
+      const timeResult = super.dispatchAction({
+        type: 'TIME_ADVANCE_MINUTES',
+        minutes: 15,
+        reason: 'Set up computer in Room 104',
+      });
+      if (!timeResult.success) {
+        throw new Error(timeResult.error ?? 'Unable to advance setup time.');
+      }
+    } catch (error) {
+      this.inventory.loadState(inventoryBefore);
+      this.hardware.loadState({ computer: computerBefore, display: displayBefore });
+      this.invalidateV6Cache();
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Computer setup failed.',
+      };
+    }
+
+    this.invalidateV6Cache();
+    return { success: true };
+  }
+
   public override dispatchAction(action: SimulationAction) {
     if (action.type === 'STORE_PURCHASE_ITEM') {
       return this.purchaseStoreItem(action.storeId, action.skuId);
+    }
+
+    if (action.type === 'COMPUTER_SETUP_AT_HOME') {
+      return this.setupComputerAtHome();
     }
 
     if (action.type === 'HARDWARE_UPGRADE_OS' && this.os.getCurrentOsId() === null) {
@@ -197,7 +249,7 @@ export class SimulationEngine extends SimulationEngineCore {
       };
     }
 
-    return super.dispatchAction(action);
+    return super.dispatchAction(action as Parameters<SimulationEngineCore['dispatchAction']>[0]);
   }
 
   public override loadSnapshot(snapshot: TransportSimulationState): void {
@@ -205,13 +257,8 @@ export class SimulationEngine extends SimulationEngineCore {
     const display = snapshot.display ?? createEmptyDisplaySetup();
     this.inventory.loadState(snapshot.inventory ?? createEmptyInventoryState());
 
-    this.v6CachedBase = null;
-    this.v6CachedState = null;
+    this.invalidateV6Cache();
 
-    // The preserved core already restores clock/economy/world/VFS/social state
-    // correctly. Supply canonical computer/display roots through its one
-    // compatibility boundary so HardwareEngine.loadState receives real v6
-    // authority rather than the derived flat projection.
     const compatSnapshot: TransportSimulationState = {
       ...snapshot,
       hardware: {
