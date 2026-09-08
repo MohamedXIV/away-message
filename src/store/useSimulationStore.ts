@@ -20,6 +20,7 @@ import {
   OsVersion,
   FileRecord,
   Appointment,
+  StorePurchaseResultData,
 } from '../engine/types';
 
 // Default singleton engine instance
@@ -55,6 +56,7 @@ export interface SimulationStoreActions {
   interactRoom: (activity: 'tea' | 'coffee' | 'meal' | 'groceries' | 'shower' | 'window') => void;
   cityOuting: (outingId: string) => ActionResult;
   applyGig: (gigId: string) => ActionResult;
+  purchaseStoreItem: (skuId: string) => ActionResult<StorePurchaseResultData>;
 
   // Hardware & OS
   upgradeRam: (ramMB: number, cost: number) => void;
@@ -199,6 +201,14 @@ export const useSimulationStore = create<SimulationStore>()(
 
       applyGig: (gigId) => {
         return get().dispatchAction({ type: 'JOB_APPLY', gigId });
+      },
+
+      purchaseStoreItem: (skuId) => {
+        return get().dispatchAction({
+          type: 'STORE_PURCHASE_ITEM',
+          storeId: 'silicon_spares',
+          skuId,
+        }) as ActionResult<StorePurchaseResultData>;
       },
 
       upgradeRam: (ramMB, cost) => {
