@@ -725,12 +725,19 @@ export interface SimulationState {
   activeView: 'pc' | 'room' | 'cafe' | 'work' | 'city';
 }
 
+export interface StorePurchaseResultData {
+  purchasedItemIds: string[];
+  charged: number;
+  recoveredLegacyPurchase: boolean;
+}
+
 export type SimulationAction =
   | { type: 'TIME_ADVANCE_MINUTES'; minutes: number; reason?: string }
   | { type: 'TIME_SET_PAUSED'; paused: boolean }
   | { type: 'VIEW_SWITCH'; view: 'pc' | 'room' | 'cafe' | 'work' | 'city' }
   | { type: 'PLAYER_EARN_CASH'; amount: number; reason: string }
   | { type: 'PLAYER_SPEND_CASH'; amount: number; reason: string }
+  | { type: 'STORE_PURCHASE_ITEM'; storeId: 'silicon_spares'; skuId: string }
   | { type: 'PLAYER_WORK_SHIFT'; durationMinutes?: number; wage?: number }
   | { type: 'PLAYER_PAY_RENT' }
   | { type: 'PLAYER_PAY_INTERNET' }

@@ -6,6 +6,7 @@
 // canonical roots and narrows the remaining legacy compatibility to one place.
 
 import { InventoryEngine } from './InventoryEngine';
+import { HARDWARE_STORE_INVENTORY, PHYSICAL_ITEM_CATALOG } from './hardware/catalog';
 import { SimulationEngine as SimulationEngineCore } from './SimulationEngineCore';
 import {
   createEmptyComputerSetup,
@@ -13,8 +14,10 @@ import {
   createEmptyInventoryState,
 } from './hardware/state';
 import type {
+  ActionResult,
   HardwareState as CanonicalHardwareState,
   SimulationState as CanonicalSimulationState,
+  StorePurchaseResultData,
 } from './types/index';
 import type {
   SimulationAction,
@@ -105,7 +108,88 @@ export class SimulationEngine extends SimulationEngineCore {
     return JSON.parse(JSON.stringify(snapshot)) as LiveSimulationState;
   }
 
+  public purchaseStoreItem(
+    storeId: 'silicon_spares',
+    skuId: string,
+  ): ActionResult<StorePurchaseResultData> {
+    if (storeId !== 'silicon_spares') {
+      return { success: false, error: 'Unknown store.' };
+    }
+
+    const sku = HARDWARE_STORE_INVENTORY.find((entry) => entry.id === skuId);
+    if (!sku) {
+      return { success: false, error: 'Unknown store item.' };
+    }
+
+    const policy = this.inventory.canPurchaseSku(sku.id, sku.repeatable);
+    if (!policy.ok) {
+      return { success: false, error: policy.error ?? 'Purchase is not allowed.' };
+    }
+
+    const recovered =
+      sku.id === 'bundle_scrapyard' && this.inventory.canClaimLegacyStarterRecovery();
+    const charge = recovered ? 0 : sku.price;
+    if (!this.economy.canAfford(charge)) {
+      return { success: false, error: 'Not enough cash.' };
+    }
+
+    const kinds = Object.fromEntries(
+      Object.entries(PHYSICAL_ITEM_CATALOG).map(([id, definition]) => [id, definition.kind]),
+    ) as Record<string, 'hardware' | 'display' | 'media'>;
+
+    let prepared;
+    try {
+      prepared = this.inventory.preparePurchase(sku.id, sku.contents, kinds, {
+        consumeLegacyStarterRecovery: recovered,
+        location: 'room_package',
+      });
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Purchase preparation failed.',
+      };
+    }
+
+    const inventoryBefore = this.inventory.getState();
+    try {
+      this.inventory.commitPurchase(prepared);
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Purchase commit failed.',
+      };
+    }
+
+    this.v6CachedBase = null;
+    this.v6CachedState = null;
+
+    const debit = super.dispatchAction({
+      type: 'PLAYER_SPEND_CASH',
+      amount: charge,
+      reason: `Silicon & Spares: ${sku.name}`,
+    });
+    if (!debit.success) {
+      this.inventory.loadState(inventoryBefore);
+      this.v6CachedBase = null;
+      this.v6CachedState = null;
+      return { success: false, error: debit.error ?? 'Purchase failed.' };
+    }
+
+    return {
+      success: true,
+      data: {
+        purchasedItemIds: prepared.items.map((item) => item.instanceId),
+        charged: charge,
+        recoveredLegacyPurchase: recovered,
+      },
+    };
+  }
+
   public override dispatchAction(action: SimulationAction) {
+    if (action.type === 'STORE_PURCHASE_ITEM') {
+      return this.purchaseStoreItem(action.storeId, action.skuId);
+    }
+
     if (action.type === 'HARDWARE_UPGRADE_OS' && this.os.getCurrentOsId() === null) {
       return {
         success: false,
