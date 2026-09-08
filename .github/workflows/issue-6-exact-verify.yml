@@ -1,0 +1,73 @@
+name: Issue 6 exact SHA verification
+
+on:
+  push:
+    branches:
+      - sdd/issue-6-verifier
+
+permissions:
+  contents: read
+
+jobs:
+  exact-gates:
+    name: Exact SHA gates
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout exact Issue 6 source
+        uses: actions/checkout@v4
+        with:
+          ref: 090f918a2230eced8ade8a624307869eca6c7cc3
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Typecheck
+        run: npx tsc --noEmit
+      - name: Issue 6 targeted unit tests
+        shell: bash
+        run: |
+          mapfile -t TARGETS < <(find tests/unit -maxdepth 1 -type f -name '*.test.ts' | sort | grep -E '/(Hardware|ModularHardware|OsEngine|SoftwareRegistry|Save|SimulationEngine)')
+          printf 'Targeted tests:\n%s\n' "${TARGETS[@]}"
+          test "${#TARGETS[@]}" -gt 0
+          npx vitest run "${TARGETS[@]}"
+      - name: Production build
+        run: npm run build
+
+  exact-full-suite:
+    name: Exact SHA full suite
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout exact Issue 6 source
+        uses: actions/checkout@v4
+        with:
+          ref: 090f918a2230eced8ade8a624307869eca6c7cc3
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Full test suite
+        run: npm run test
+
+  baseline-full-suite:
+    name: Pre-Issue-6 baseline full suite
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout pre-Issue-6 feature head
+        uses: actions/checkout@v4
+        with:
+          ref: f9d00849b2add10eab10b7310395542b8347c331
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Full test suite baseline
+        run: npm run test
