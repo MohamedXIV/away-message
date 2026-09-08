@@ -38,6 +38,7 @@ export const RoomScene: React.FC = () => {
   const time = useSimulationStore((s) => s.state.time);
   const player = useSimulationStore((s) => s.state.player);
   const hardware = useSimulationStore((s) => s.state.hardware);
+  const osVersion = useSimulationStore((s) => s.state.os.currentOsId);
   const downloads = useSimulationStore((s) => s.state.downloads);
   const world = useSimulationStore((s) => s.state.world);
 
@@ -81,7 +82,7 @@ export const RoomScene: React.FC = () => {
         }
         if (!hardware.isPoweredOn) {
           synthAudio.playBiosBeep();
-          synthAudio.playStartupChime(hardware.osVersion);
+          if (osVersion) synthAudio.playStartupChime(osVersion);
           useSimulationStore.getState().engine.hardware.setPower(true);
           useSimulationStore.getState().syncStateFromEngine();
         }
@@ -122,7 +123,7 @@ export const RoomScene: React.FC = () => {
       hour: time.hour,
       minute: time.minute,
       weather,
-      osVersion: hardware.osVersion,
+      osVersion,
       hasActiveDownloads,
       hasComputer: Boolean(hardware.hasComputer),
       onHotspotClick: handleHotspotClick,
@@ -143,12 +144,12 @@ export const RoomScene: React.FC = () => {
         hour: time.hour,
         minute: time.minute,
         weather,
-        osVersion: hardware.osVersion,
+        osVersion,
         hasActiveDownloads,
         hasComputer: Boolean(hardware.hasComputer),
       });
     }
-  }, [time.day, time.hour, time.minute, weather, hardware.osVersion, hasActiveDownloads, hardware.hasComputer]);
+  }, [time.day, time.hour, time.minute, weather, osVersion, hasActiveDownloads, hardware.hasComputer]);
 
   // Handle Beverage Selection (meal/grocery money is charged by the engine — never double-spend here)
   const handleSelectBeverage = (option: RoomActivityOption) => {
