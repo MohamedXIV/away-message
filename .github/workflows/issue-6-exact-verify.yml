@@ -1,4 +1,4 @@
-name: Issue 6 exact SHA verification
+name: Issue 7 exact SHA verification
 
 on:
   push:
@@ -10,13 +10,13 @@ permissions:
 
 jobs:
   exact-gates:
-    name: Exact SHA gates
+    name: Issue 7 exact SHA gates
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout exact Issue 6 source
+      - name: Checkout exact Issue 7 candidate
         uses: actions/checkout@v4
         with:
-          ref: f5cc2c3cc6e873e424a96e5cef41bd5820e9cfd1
+          ref: 5e51826b0740ec563c9ebe6ef217c947b69f0608
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
@@ -24,26 +24,32 @@ jobs:
           cache: npm
       - name: Install dependencies
         run: npm ci --legacy-peer-deps
+      - name: Focused Issue 7 gate
+        run: >-
+          npx vitest run
+          tests/unit/StoreCatalog.test.ts
+          tests/unit/StorePurchase.test.ts
+          tests/unit/ComputerStateV6.test.ts
+          tests/unit/SaveSlots.test.ts
+          tests/unit/SaveRoundTrip.test.ts
+          tests/unit/OsEngineNoOs.test.ts
+          tests/unit/SoftwareRegistry.test.ts
+          tests/unit/SiliconSparesBoundary.test.ts
+          tests/unit/EcosystemApps.test.ts
+          tests/unit/AdversarialEcosystemM3Stress.test.ts
       - name: Typecheck
         run: npx tsc --noEmit
-      - name: Issue 6 targeted unit tests
-        shell: bash
-        run: |
-          mapfile -t TARGETS < <(find tests/unit -maxdepth 1 -type f -name '*.test.ts' | sort | grep -E '/(Hardware|ModularHardware|OsEngine|SoftwareRegistry|Save|SimulationEngine)')
-          printf 'Targeted tests:\n%s\n' "${TARGETS[@]}"
-          test "${#TARGETS[@]}" -gt 0
-          npx vitest run "${TARGETS[@]}"
       - name: Production build
         run: npm run build
 
   exact-full-suite:
-    name: Exact SHA full suite
+    name: Issue 7 exact SHA full suite
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout exact Issue 6 source
+      - name: Checkout exact Issue 7 candidate
         uses: actions/checkout@v4
         with:
-          ref: f5cc2c3cc6e873e424a96e5cef41bd5820e9cfd1
+          ref: 5e51826b0740ec563c9ebe6ef217c947b69f0608
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
@@ -55,13 +61,13 @@ jobs:
         run: npm run test
 
   baseline-full-suite:
-    name: Pre-Issue-6 baseline full suite
+    name: Pre-Issue-7 baseline full suite
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout pre-Issue-6 feature head
+      - name: Checkout pre-Issue-7 feature head
         uses: actions/checkout@v4
         with:
-          ref: f9d00849b2add10eab10b7310395542b8347c331
+          ref: f5cc2c3cc6e873e424a96e5cef41bd5820e9cfd1
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
