@@ -97,6 +97,7 @@ describe('SimulationEngine at-home computer setup', () => {
 
     const purchased = engine.getState();
     const beforeMinutes = purchased.time.totalMinutes;
+    expect(purchased.player.location).toBe('home');
     expect(purchased.computer.assembled).toBe(false);
     expect(purchased.display.monitor).toBeNull();
     expect(purchased.os.currentOsId).toBeNull();
@@ -125,6 +126,27 @@ describe('SimulationEngine at-home computer setup', () => {
         .filter((item) => item.catalogItemId !== 'media_orion_48_setup')
         .every((item) => item.location === 'installed'),
     ).toBe(true);
+  });
+
+  it('rejects setup while the player is away from Room 104 without consuming time', () => {
+    const engine = new SimulationEngine() as HomeComputerSetupApi;
+    expect(engine.purchaseStoreItem('silicon_spares', 'bundle_scrapyard').success).toBe(true);
+
+    const away = engine.exportSnapshot();
+    engine.loadSnapshot({
+      ...away,
+      player: { ...away.player, location: 'techmart' },
+    });
+    const before = engine.exportSnapshot();
+
+    const result = engine.setupComputerAtHome();
+
+    expect(result.success).toBe(false);
+    const after = engine.exportSnapshot();
+    expect(after.time.totalMinutes).toBe(before.time.totalMinutes);
+    expect(after.computer).toEqual(before.computer);
+    expect(after.display).toEqual(before.display);
+    expect(after.inventory).toEqual(before.inventory);
   });
 
   it('does not consume more time or duplicate parts when setup is repeated', () => {
