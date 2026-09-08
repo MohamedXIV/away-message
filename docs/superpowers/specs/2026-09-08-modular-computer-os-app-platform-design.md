@@ -7,65 +7,63 @@
 
 ## Status
 
-Approved architecture for replacing the current partially coupled modular-PC implementation in PR #4.
+Approved architecture for replacing the partially coupled modular-PC implementation in PR #4.
 
-This specification is intentionally architectural. It defines domain boundaries, lifecycle invariants, migration behavior, and integration contracts. Child issues #6–#14 implement the design in dependency order and carry their own test gates.
+This specification defines the persistent domain boundaries and player lifecycle. Child issues #6–#14 implement it in dependency order.
 
-## Problem
+## Goal
 
-The current branch contains several useful pieces—modular component definitions, retro OS setup presentation, `OsHostContext`, centralized `WindowFrame`, versioned Pulse releases, and monitor-driven CRT rendering—but the underlying lifecycle is inconsistent.
-
-The most important defects are structural:
-
-- buying a hardware bundle can immediately install hardware, power it on, and assign an OS;
-- the hardware bundle itself contains `installedOs`, coupling software to physical hardware;
-- `HardwareEngine` and `OsEngine` both carry OS state;
-- `OsEngine` silently falls back to Orion 4.8, so “no installed OS” cannot be represented truthfully;
-- the monitor is embedded in modular computer state even though it is a separate physical display;
-- no-PC compatibility paths can inherit fake fallback specs such as large RAM/disk/network values;
-- store UI directly spends cash and mutates hardware/media state, so purchase atomicity is not guaranteed;
-- ordinary software can be materialized before an OS exists;
-- app compatibility contains exact-version shortcuts instead of catalog ordering;
-- download simulation and downloader-app identity are conceptually mixed;
-- the current recovery for the broken `$35` purchase can grant a free machine based only on low cash plus no PC;
-- the existing OS setup flow is primarily an upgrade flow and assumes an existing OS.
-
-The redesign must fix these roots rather than continue patching symptoms.
-
-## Design goals
-
-The game must model the player’s first computer as a believable sequence of separately owned physical hardware, installed operating system, and installed applications:
+Model the first computer as a believable sequence:
 
 `no device → buy physical items → own/deliver them → set up hardware at home → POST/BIOS → install OS from owned media → install/version apps independently → apps consume OS host services → replace parts/display independently`
 
-The system must also remain simple enough for gameplay. This is not a full PC-building simulator; PSU, GPU, cables, BIOS configuration minutiae, and other hardware are out of scope unless a current mechanic requires them.
+This is not a full PC-building simulator. PSU/GPU/cables and BIOS minutiae remain out of scope unless a current mechanic needs them.
+
+## Problems being replaced
+
+The current branch has useful presentation and component work, but the lifecycle is structurally inconsistent:
+
+- bundles can immediately install hardware, power it on, and assign an OS;
+- bundle data embeds `installedOs`;
+- `HardwareEngine` and `OsEngine` both carry OS truth;
+- `OsEngine` invents Orion 4.8 when no OS is supplied;
+- monitor state is embedded in the computer;
+- absent hardware can inherit fake fallback RAM/disk/network capability;
+- store React code spends cash and directly mutates hardware/media;
+- ordinary software may exist before an OS exists;
+- app compatibility uses exact-version shortcuts;
+- download simulation and downloader-app identity are mixed;
+- `$35` recovery currently means “no PC + low cash = free claim”;
+- OS setup assumes an upgrade more readily than a true first install.
+
+The redesign fixes these roots instead of adding more compatibility patches.
 
 ## Non-negotiable invariants
 
-1. A fresh game starts with **no assembled computer, no active monitor, no installed OS, and no Pulse install**.
-2. Hardware, display hardware, operating system, applications, and owned inventory are separate persisted domains.
-3. A store purchase creates ownership only. It does not install a component, insert a disc, install an OS/app, or power a machine.
-4. Store purchase is atomic: either cash and ownership both change once, or neither changes.
-5. A bundle is only a store SKU that expands into individually modeled owned items.
-6. The monitor is a separate physical attachment. It is not the OS and not synonymous with the PC chassis.
-7. `OsEngine` is the sole authority for installed/running OS state and supports `currentOsId: OsVersion | null`.
-8. No subsystem may invent Orion 4.8 merely because no OS value was supplied.
-9. Ordinary applications are versioned software independent from Orion. Pulse, FlashFetch, RetroAmp, future messengers, and future utilities follow the same generic installability contract.
-10. OS presentation—window chrome, typography, shell, window transitions, and sound scheme—is OS-owned.
-11. The same app release can run under multiple compatible Orion generations and inherit the active OS presentation without changing the app release.
-12. CRT curvature, scanlines, bloom, flicker, and future LCD behavior come only from the active display profile.
-13. Network/download simulation remains engine-owned deterministic state; browsers and download-manager apps are clients through the OS host contract.
-14. The cheapest intended starter path must be internally compatible with the baseline Orion + baseline Pulse path and must not soft-lock the player.
-15. Save compatibility requirements in `AGENTS.md` are mandatory. The new canonical shape uses save format v6 with deterministic v5 migration.
+1. Fresh game: no assembled PC, no active monitor, no installed OS, no Pulse install.
+2. Inventory, computer setup, display setup, OS, and installed apps are separate persisted domains.
+3. A store purchase creates ownership only.
+4. Purchase is atomic: cash and ownership both change exactly once, or neither changes.
+5. A bundle is a checkout SKU that expands into individually modeled owned items.
+6. Monitor/display is independent from chassis/computer and from OS.
+7. `OsEngine` is the only OS authority and supports `currentOsId: OsVersion | null`.
+8. No subsystem may silently materialize Orion 4.8 for a no-OS machine.
+9. Pulse, FlashFetch, RetroAmp, Voyager, future messengers, and future utilities use a generic versioned app model.
+10. OS owns window chrome, shell, typography, transitions, and OS sound schemes.
+11. Same app release may look/feel different under different compatible Orion releases without changing app version.
+12. CRT/LCD effects derive from the active monitor profile only.
+13. Network/download transfer truth is engine-owned; browsers/download-manager apps are clients through the OS host API.
+14. Starter route must satisfy baseline Orion + baseline Pulse requirements without a soft-lock.
+15. Save compatibility follows `AGENTS.md`; canonical redesign uses save format v6 with deterministic v5 migration.
 
-## Canonical domain model
+## Canonical persisted boundaries
 
-Exact final type names may follow repository conventions, but the persisted boundaries must be equivalent to the following.
+Exact type names may follow repository conventions, but the state must be equivalent to:
 
 ```ts
 interface PlayerInventoryState {
   items: OwnedItem[];
-  legacyRecovery?: LegacyRecoveryState;
+  legacyStarterRecovery?: 'eligible' | 'consumed';
 }
 
 interface OwnedItem {
@@ -95,29 +93,18 @@ interface DisplaySetupState {
 
 interface OsEngineState {
   currentOsId: OsVersion | null;
-  // Existing install/update history fields may remain if useful.
 }
 ```
 
-### Ownership identity
+Owned item instance IDs are required so one RAM stick, monitor, or disc cannot be installed twice.
 
-Physical/media items need stable instance identity so one owned RAM stick cannot be installed twice and one monitor cannot simultaneously remain an uninstalled spare. Store catalog IDs describe products; owned item instance IDs describe the player’s actual copy.
+The old flat `HardwareState` may survive temporarily only as a **derived compatibility view**. It must not persist a second OS truth. No-machine effective capability is zero/unavailable, never 512MB/40GB/DSL fallback hardware.
 
-### Installed hardware
+## Store transaction
 
-Installed parts may be represented directly in `ComputerSetupState` or through stable references to owned item instances, whichever best fits existing code. The crucial invariant is conservation: installation moves/assigns one owned instance rather than cloning a catalog definition.
+Silicon & Spares is for buying, not installing.
 
-### Legacy `HardwareState`
-
-The old flat `HardwareState` may temporarily survive as a derived compatibility view if too many existing systems consume it, but it must not be a second persisted truth. Any compatibility getter derives effective CPU/RAM/storage/network values from canonical computer/display state and derives OS only from `OsEngine` when needed by legacy callers.
-
-No-machine effective values must be explicit zero/unavailable values, never optimistic fallback hardware.
-
-## Store and ownership lifecycle
-
-Silicon & Spares is a shop, not an installation screen.
-
-The UI requests an engine-owned purchase transaction, conceptually:
+Authoritative engine API is equivalent to:
 
 ```ts
 type StorePurchaseResult =
@@ -127,59 +114,62 @@ type StorePurchaseResult =
 purchaseStoreItem(storeId: string, skuId: string): StorePurchaseResult;
 ```
 
-The engine transaction performs these steps in order:
+Transaction order:
 
-1. resolve SKU and availability;
+1. resolve SKU/availability;
 2. validate cash;
-3. expand bundles into concrete owned item instances;
-4. deduct cash once;
-5. publish one coherent resulting simulation state.
+3. expand SKU into owned item instances;
+4. deduct cash exactly once;
+5. publish one coherent state.
 
-If validation fails, no partial ownership or partial charge is allowed.
+On failure, neither cash nor ownership changes.
 
-React code must not combine `spendCash()` with direct `installModularHardware()`, `replacePart()`, `insertDisc()`, or OS mutation.
+React must not combine `spendCash()` with direct hardware/media/OS mutation.
 
-## Starter package
+## Exact starter-path decisions
 
-The `$35` starter SKU remains useful as a convenience package, but internally it contains individually modeled items, approximately:
+The `$35` Scrap Yard Special remains the cheapest first computer and contains separately owned instances for:
 
 - chassis/case;
 - motherboard;
-- CPU;
-- RAM stick(s);
-- HDD;
-- optical drive;
-- sound card;
-- modem/network card;
-- budget 14-inch CRT;
-- complimentary Orion 4.8 setup/recovery CD as a **separate owned media item**.
+- Celeron-class 366 MHz CPU;
+- **64 MB RAM**;
+- 2.1 GB HDD;
+- 24x CD-ROM;
+- SoundBlaster-class sound card;
+- 56k modem/network card;
+- budget 14-inch curved CRT;
+- **complimentary Orion 4.8 setup/recovery CD**, owned media, not preinstalled software.
 
-The complimentary Orion disc solves the first-day cash soft-lock without pretending the OS is preinstalled. The player may insert and install it later at home.
+To keep the authored starter coherent and period-appropriate:
 
-The existing authored requirement numbers must be reconciled with the starter path. The exact final RAM/CPU/disk numbers may change, but a catalog-level regression test must prove the starter machine satisfies baseline Orion and baseline Pulse requirements. The implementation must not bypass requirements merely to make the starter work.
+- Orion 4.8 minimum RAM becomes **64 MB**;
+- Pulse 5.2 minimum RAM becomes **64 MB**;
+- existing disk/install-size rules may remain if the 2.1 GB drive still passes both installs;
+- a catalog regression test must prove the exact starter machine can install Orion 4.8 and then Pulse 5.2.
 
-## Room and machine lifecycle
+Requirements are never bypassed in code to make the starter work.
 
-Room 104 owns installation/setup interactions.
+## Room and setup lifecycle
 
-The room must distinguish four physical states:
+Room 104 owns setup and part installation.
+
+Room presentation distinguishes:
 
 1. empty desk;
-2. owned package/parts waiting to be set up;
+2. owned package waiting for setup;
 3. assembled machine powered off;
 4. assembled machine powered on/display active.
 
-Initial setup is a deliberate action, `Set Up Computer`, which consumes one authored amount of simulation time exactly once. Target duration is 10–15 in-game minutes; implementation chooses one fixed value and tests it.
+`Set Up Computer` consumes **15 in-game minutes exactly once**.
 
-Setup activates/assigns the owned starter parts and monitor but does **not** install an OS and does **not** leave the computer powered on.
+Setup assigns the owned starter parts and monitor to the desk. It does not install an OS and leaves the computer powered off.
 
-Subsequent upgrades are also installed/swapped at home rather than in the store.
+Later part swaps also happen at home, never automatically at purchase time.
 
-## Boot state model
+## Boot-state contract
 
-Machine power state and OS availability are separate.
-
-A powered-on computer should resolve into an explicit boot state, conceptually:
+Power state and OS state are independent.
 
 ```ts
 type PcBootState =
@@ -191,50 +181,46 @@ type PcBootState =
   | 'desktop';
 ```
 
-The resolver considers assembled hardware, power, installed OS, storage, and inserted bootable media.
+Rules:
 
-Important rules:
+- no assembled computer cannot boot;
+- powered off never exposes desktop;
+- powered on + no OS + no bootable media → POST then `no_boot_device`;
+- powered on + compatible inserted bootable OS media → installer path even when OS is null;
+- desktop is available only after a valid installed OS boots.
 
-- no assembled machine cannot boot;
-- powered off does not expose desktop;
-- powered on with no OS and no bootable media shows POST then no-boot-device;
-- powered on with compatible bootable OS media can enter installer flow even when `currentOsId === null`;
-- desktop is available only when a valid installed OS successfully boots.
-
-`activeView = 'pc'` is a UI location, not proof that Orion desktop exists.
+`activeView = 'pc'` is only a UI location; it does not imply a desktop exists.
 
 ## OS lifecycle
 
-OS media are owned items. Purchase, insertion, installation, and upgrade are separate actions.
+OS media are ordinary owned media items. Purchase, insert/eject, install, and upgrade are separate operations.
 
-### Fresh install
+### First install
 
 When `currentOsId === null`:
 
-1. player inserts owned bootable Orion media;
+1. insert owned Orion setup media;
 2. boot resolver enters installer path;
-3. installer validates actual assembled hardware and free storage;
-4. setup presents **Fresh Installation** only;
+3. installer validates real assembled CPU/RAM/storage/media;
+4. setup offers **Fresh Installation**, never “upgrade current installation”;
 5. install consumes authored disk/time;
-6. reboot occurs;
-7. only after successful engine commit is `currentOsId` set;
+6. reboot runs;
+7. successful engine commit sets `currentOsId`;
 8. desktop becomes available.
-
-No-OS machines must not show an “Upgrade Current Installation” option.
 
 ### Upgrade
 
-With an existing compatible OS, the installer may offer an upgrade when catalog rules permit it. Patch/hotfix releases enforce their base OS requirements.
+With a compatible existing OS, upgrade may be offered according to `OsCatalog` rules. Patch/hotfix base requirements remain explicit.
 
-The old combined “pay money and upgrade OS” action is removed. Store purchase belongs to store domain; media insertion belongs to hardware/media domain; OS installation belongs to `OsEngine` and installer domain.
+The old pay-and-upgrade action is removed: store purchase belongs to store domain; insertion belongs to hardware/media domain; OS install belongs to `OsEngine`/installer.
 
 ### Clean install
 
-A clean-install option may only be exposed when it has real tested semantics. If destructive format behavior is not implemented in this epic, hide/disable that option rather than presenting decorative UI that claims to wipe data while preserving everything.
+No decorative fake format option. Until destructive clean-install semantics are implemented and tested, hide/disable clean install. This epic requires fresh install + upgrade, not destructive formatting.
 
-## Application lifecycle
+## Generic app lifecycle
 
-Ordinary applications use a generic release model, conceptually:
+All ordinary apps use a release model equivalent to:
 
 ```ts
 interface AppReleaseDefinition {
@@ -251,98 +237,95 @@ interface AppReleaseDefinition {
     requiredDiskBytes: number;
   };
   features?: string[];
-  installer?: { kind: 'download' | 'disc' | 'bundled' };
+  installer: { kind: 'download' | 'disc' | 'bundled' };
 }
 ```
 
-Installability uses one authoritative compatibility path based on:
+Installability checks one authoritative path using:
 
-- active installed OS from `OsEngine`;
-- `OsCatalog` ordering/capabilities;
-- real assembled RAM/CPU/storage;
-- available disk;
-- owned/downloaded installer source where required.
+- current OS from `OsEngine`;
+- real `OsCatalog` ordering/capabilities;
+- real assembled RAM/CPU/storage/free disk;
+- installer source ownership/availability.
 
-With no OS, ordinary app installation fails without mutating disk or registry.
+No OS means ordinary app install fails without mutation.
 
 ### Pulse
 
-`PulseCatalog` remains useful for authored Pulse release features. It becomes a specialized release catalog layered on top of the generic install infrastructure.
+`PulseCatalog` stays as authored release data layered on the generic install system.
 
-The installed software record is the canonical installed Pulse release/version. `PulseEngine` may own social/runtime state and derive release-specific feature availability from that canonical installed release, but it must not carry a second drifting Pulse-version truth.
+Installed software record is the canonical Pulse release/version. `PulseEngine` may keep social/runtime state and derive release-specific features from the installed release, but it must not carry a second drifting Pulse version.
 
-Changing Pulse version affects Pulse-owned features. Changing Orion affects OS-owned presentation. These are independent axes.
+Pulse update changes Pulse features/version only. Orion change changes OS presentation only.
 
-### OS-bundled/system components
+### Voyager — resolved classification
 
-System utilities intentionally shipped with Orion may be represented as OS components. They must be explicit. Ordinary third-party applications must never appear merely because `SoftwareRegistry` was constructed.
+Voyager is an **ordinary versioned application** in the generic software registry, not an intrinsic OS subsystem.
 
-Voyager needs one authored classification during implementation: either an Orion-bundled browser exposed only after a compatible Orion install, or separately installable software. It must never exist on a fresh machine with no OS.
+Orion install media may include a Voyager release through an explicit `installer.kind = 'bundled'` manifest entry. Therefore:
+
+- Voyager does not exist before an OS is installed;
+- installing an Orion release may explicitly install its bundled Voyager release;
+- Voyager remains an app release with its own version truth and can later be updated independently;
+- future browsers use the same app model.
 
 ## OS host and presentation
 
-The existing `OsHostContext` and centralized `WindowFrame` are core architecture to preserve.
+Preserve and expand:
 
-Applications consume stable OS services through the host boundary rather than importing Orion-generation behavior.
+- `src/desktop/host/OsHostContext.tsx`;
+- centralized `WindowFrame`;
+- `src/desktop/themes/os-themes.css`;
+- OS-level sound hooks.
 
-The host contract should expose at least:
+Apps consume stable host services for:
 
 - window lifecycle/title/minimize/maximize/close;
-- VFS/file operations;
+- VFS;
 - network/download services;
 - audio/UI sounds;
-- active OS/capability information;
+- active OS/capabilities;
 - effective hardware summary;
 - notifications.
 
-App code should not ask “am I Orion 5?” merely to decide frame, titlebar, typeface, taskbar behavior, or window animation.
+Apps do not branch on Orion generation merely for frame/font/taskbar/animation behavior.
 
-### Presentation profile
-
-Each Orion release resolves to one central presentation profile containing at least:
+Each Orion release resolves one central presentation profile containing:
 
 - theme id;
 - primary UI font stack;
 - titlebar font/weight;
-- sizing/density tokens where needed;
-- borders/radius/shadow/chrome tokens;
-- titlebar/button treatment;
+- sizing/density tokens;
+- window border/radius/shadow/chrome;
+- titlebar/buttons;
 - taskbar/start/menu hooks;
-- default wallpaper/shell defaults;
-- open/close/minimize/restore animation profile;
-- startup/shutdown/window sound scheme identifiers;
+- shell wallpaper defaults;
+- open/close/minimize/restore transition profile;
+- startup/shutdown/window sound scheme;
 - optional shell capability flags.
 
-Existing `os-themes.css` remains a styling foundation, but desktop/window components use the central resolver instead of scattered `version.includes('5.')`, `includes('6.')`, or `includes('7.')` routing.
+No proprietary font files are added; safe system/font-stack fallbacks evoke the period.
 
-No proprietary font files are added. Safe system/font-stack fallbacks evoke the period.
+Required proof: Pulse 5.2 stays Pulse 5.2 while Orion 4.8 → 5.0 changes only OS-owned frame/typeface/transitions/sound scheme.
 
-### Required proof
+## Network/download services
 
-Install Pulse 5.2 on Orion 4.8, then change only the OS to Orion 5.0. Pulse remains 5.2 with the same Pulse-owned feature set, while the outer frame, typography, transitions, and OS sound scheme change.
+Use clear separation equivalent to:
 
-## Network and download architecture
+- network service: adapter/connection state/effective bandwidth;
+- download service: authoritative transfer tasks/bytes/allocation/persistence/VFS completion;
+- browser downloader: client policy;
+- FlashFetch/future managers: installed app client policies.
 
-Engine transfer truth is app-neutral.
+Closing/uninstalling a downloader UI does not delete completed files or redefine transfer truth.
 
-Use conceptual separation equivalent to:
+Host network state reflects actual `offline`, connecting/dialing where modeled, or `connected`; it is not hardcoded connected.
 
-- network/connection service: physical adapter + connection status + effective bandwidth;
-- download/transfer service: authoritative queue, bytes, allocation, persistence, VFS completion;
-- browser downloader: one client policy;
-- FlashFetch/future managers: installable app clients with different capabilities.
-
-Client capabilities may include concurrency, resume, or queue behavior, but bytes transferred and bandwidth allocation remain engine-owned.
-
-`OsHostApi.network` or its refined equivalent exposes the service to applications.
-
-Network status must reflect actual state (`offline`, connecting/dialing where modeled, `connected`) rather than always returning `connected`.
-
-Physical network hardware/connection state controls bandwidth. OS theme does not.
+Physical connection/hardware controls bandwidth, not Orion styling.
 
 ## Hardware replacement and display independence
 
-After initial setup, currently modeled parts can be installed/replaced at home through deterministic compatibility rules:
+At-home install/replace operations cover the currently modeled parts:
 
 - motherboard;
 - CPU;
@@ -350,102 +333,92 @@ After initial setup, currently modeled parts can be installed/replaced at home t
 - storage;
 - optical drive;
 - sound card;
-- network card/modem;
-- monitor/display.
+- modem/network card;
+- monitor.
 
-CPU socket compatibility and RAM slot/capacity rules are enforced before mutation.
+CPU socket and RAM slot/capacity rules are validated before mutation.
 
-Unsafe replacement of the primary storage device must not silently destroy the OS/VFS. Until clone/migration semantics are deliberately implemented, blocking a destructive swap with a clear reason is preferable.
+Unsafe primary-storage replacement is blocked with an explicit reason until clone/migration semantics are intentionally designed; this epic does not silently destroy OS/VFS state.
 
-### Display
+Monitor is separate `DisplaySetupState`. `CRTOverlay` reads the active monitor profile directly.
 
-The active monitor lives in separate display state. `CRTOverlay` consumes that active monitor profile directly.
+Required proof:
 
-Replacing a budget CRT with a flatter Trinitron changes curvature/scanlines/bloom/flicker without changing Orion or Pulse versions. Conversely, changing Orion while keeping the same monitor changes OS presentation while display effects remain unchanged.
+- changing budget CRT → flatter Trinitron changes scanline/curvature/bloom/flicker only;
+- Orion and Pulse versions remain unchanged;
+- changing Orion while keeping the same monitor changes OS presentation while display effects stay unchanged.
 
 ## Save format v6
 
-This redesign changes persisted roots and therefore requires `SAVE_FORMAT_VERSION = 6`.
+Set `SAVE_FORMAT_VERSION = 6` and add deterministic v5 → v6 migration.
 
-Migration must be pure and deterministic.
+### v5 working computer
 
-### v5 working-PC save
+If v5 has a real computer, preserve effective CPU/RAM/storage/network/display and preserve effective installed OS. Prefer explicit persisted `os.currentOsId`; fall back to legacy `hardware.osVersion` only for a real existing computer.
 
-Preserve effective existing hardware, display, inserted media where representable, and the effective installed OS. A migrated player with a working v5 computer should remain playable with equivalent capability.
+### v5 no computer
 
-### v5 no-PC save
+No assembled PC, no active monitor, and **no installed OS** after migration. Legacy `hardware.osVersion = Orion_4.8` is ignored when no computer existed because it was an engine fallback, not player ownership.
 
-Migrate to:
+### Exact bounded `$35` broken-purchase recovery
 
-- no assembled computer;
-- no active monitor;
-- no installed OS;
-- no invented Orion 4.8 fallback.
+There is no durable purchase ledger in the affected v5 store path, so migration must not infer payment from arbitrary `cash < 35`.
 
-### Broken `$35` legacy purchase
+A one-time `legacyStarterRecovery = 'eligible'` marker is created **only** when all of these v5 conditions hold:
 
-The current runtime heuristic `no PC && cash < $35 => Already Paid` is removed.
+- save format is exactly 5;
+- game day is exactly 1;
+- cash is exactly `$3.00` (the `$38` starting balance minus the `$35` starter);
+- `hardware.hasComputer !== true`;
+- modular hardware is absent or also reports no computer;
+- no explicit persisted OS state proves a real installed OS.
 
-Recovery, if evidence from the exact v5 shape is sufficient to identify the known broken purchase path, becomes a narrow one-time migration/recovery marker that grants only the missing owned starter items and is consumed once.
+Claiming recovery creates ownership of the exact starter-package items and changes the marker to `consumed`. It does not assemble hardware or install Orion.
 
-If v5 data cannot distinguish that state safely from “player spent money elsewhere”, migration must prefer not granting a free PC and preserve the existing manual compatibility path only long enough to provide an explicit, bounded recovery action. The final #14 gate must document the chosen rule and prove arbitrary low-cash saves do not receive free hardware.
+All other no-PC/low-cash saves receive no free machine. The old runtime `cash < item.price` heuristic is removed.
 
-## Error handling and transaction rules
+This intentionally favors false negatives over broad free-PC grants.
 
-Domain operations return explicit failure reasons and leave state unchanged on failure.
+## Atomic error handling
 
-Important atomic operations include:
+These operations return explicit success/failure and leave state unchanged on failure:
 
 - store purchase;
-- hardware installation/replacement;
-- media insertion/ejection;
+- hardware install/replace;
+- media insert/eject;
 - OS install commit;
 - app install/update/uninstall.
 
-UI timers or animations never commit domain success independently. They reflect engine state transitions.
+React timers/animations reflect engine transitions; they never independently commit success.
 
-Failures such as insufficient cash, incompatible socket, insufficient RAM, insufficient disk, missing/unowned media, no OS, or no network connection must be surfaced through deterministic engine results that React can display.
+Deterministic failure reasons include insufficient cash, incompatible socket/slot, insufficient RAM/disk, missing/unowned media, no OS, and no network.
 
 ## Testing strategy
 
-Implementation follows TDD per child issue:
+Every issue follows:
 
-`failing test → verify RED → minimal implementation → verify GREEN → relevant regression → commit`
+`write failing test → verify RED → minimal implementation → verify GREEN → relevant regression → commit`
 
-### #6 foundation tests
+### #6 foundation
 
 - fresh simulation has no PC/display/OS;
-- no-PC compatibility has zero/unavailable real capability;
-- `OsEngine` persists/restores `null`;
-- v5 working PC migration preserves capability + OS + monitor;
-- v5 no-PC migration does not invent an OS;
-- only one OS authority remains.
+- no-PC capability is zero/unavailable;
+- `OsEngine` persists/restores null;
+- v5 working PC preserves capability + OS + monitor;
+- v5 no-PC does not invent OS;
+- one OS authority remains.
 
-### Store/setup/install/app/display tests
+### #7–#13
 
-Child issues #7–#13 add focused transaction and integration tests for ownership, setup, boot, OS media, app releases, OS presentation, network/download clients, and hardware swaps.
+Add focused tests for atomic purchase/ownership, setup/boot, OS media/install, generic app releases, OS presentation, network/download clients, and part/display swaps.
 
-### Final integration gate
+### #14 final lifecycle
 
-Issue #14 adds a public-API-oriented lifecycle test covering:
+Drive public engine/store APIs through:
 
-`new game → $35 purchase → return home → setup → no-OS boot → insert Orion media → fresh install → desktop → Pulse absent → install Pulse 5.2 → OS change preserves Pulse version but changes OS presentation → monitor change preserves OS/app versions but changes display profile → save/reload equivalence`
+`new game → $35 purchase → return home → 15m setup → no-OS boot → insert Orion media → fresh install → desktop → Pulse absent → install Pulse 5.2 → change Orion while Pulse stays 5.2 → change monitor while Orion/Pulse stay fixed → save/reload equivalence`
 
-It also verifies v5 migration scenarios and searches the final branch for obsolete coupling/shims.
-
-## Verification policy
-
-Every child issue must pass its targeted tests and introduce no new suite failures.
-
-Before PR #4 is made ready, issue #14 runs in this order:
-
-1. `npx tsc --noEmit`
-2. `npm run build`
-3. targeted unit/integration tests for #6–#13
-4. `npm run test`
-5. exact final PR head/status/review inspection
-
-Known baseline failures documented in `AGENTS.md` may be reported if still present; zero new failures are acceptable.
+Also verify the three v5 migration cases: working PC, no PC, and exact bounded `$35` recovery signature.
 
 ## Implementation order
 
@@ -453,26 +426,37 @@ Known baseline failures documented in `AGENTS.md` may be reported if still prese
 #6 canonical state + v6 migration
  └─→ #7 atomic store ownership
       └─→ #8 at-home setup + BIOS/no-OS boot
-           └─→ #9 owned OS media + fresh install/upgrade
+           └─→ #9 OS media + fresh install/upgrade
                 └─→ #10 generic versioned apps
                      └─→ #11 OS host + presentation
                           └─→ #12 neutral network/download service
 
 #6 + #7 + #8 ─→ #13 part swaps + display independence
 
-#6–#13 ─→ #14 end-to-end/release gate
+#6–#13 ─→ #14 integration/release gate
 ```
 
-## Out of scope for this epic
+## Verification policy
 
-- full PSU/GPU/cable simulation;
-- BIOS tuning/minutiae beyond useful POST/boot presentation;
-- elaborate PC assembly minigame;
-- ISP billing/contracts unless already required by game systems;
-- implementing every future Orion/Pulse release feature now;
-- destructive clean-format UI unless real format semantics are implemented;
-- unrelated refactoring outside the hardware/OS/app/desktop lifecycle.
+Before PR #4 can become ready, #14 runs on the exact final head:
 
-## Completion definition
+1. `npx tsc --noEmit`
+2. `npm run build`
+3. targeted unit/integration tests for #6–#13
+4. `npm run test`
+5. exact PR head/status/review inspection
 
-The architecture is complete only when #6–#14 are closed with evidence and PR #4’s exact final head proves the canonical first-PC flow, persistence/migration behavior, OS/app/display independence, and no new regressions.
+Known baseline failures documented in `AGENTS.md` may still be reported; zero new failures are allowed.
+
+## Out of scope
+
+- PSU/GPU/cable simulation;
+- BIOS tuning beyond useful POST/boot presentation;
+- elaborate assembly minigame;
+- ISP contract/billing simulation beyond existing mechanics;
+- destructive clean-format semantics;
+- unrelated refactors.
+
+## Completion
+
+Epic #5 is complete only when #6–#14 close with evidence and PR #4’s exact final head proves the canonical first-PC lifecycle, deterministic v6 migration, OS/app/display independence, and zero new regressions.
