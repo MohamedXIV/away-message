@@ -15,7 +15,7 @@ jobs:
       - name: Checkout exact Issue 8 repair source
         uses: actions/checkout@v4
         with:
-          ref: ed607cbd03500cbef84cd28ec0eeee0e6e76ecdd
+          ref: 3f300d742677fb1ff97ce254d20b2e1451ffde45
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
@@ -23,5 +23,7 @@ jobs:
           cache: npm
       - name: Install dependencies
         run: npm ci --legacy-peer-deps
-      - name: Home setup action RED
-        run: npx vitest run tests/unit/HomeComputerSetup.test.ts
+      - name: Home setup action GREEN
+        run: npx vitest run tests/unit/HomeComputerSetup.test.ts tests/unit/StorePurchase.test.ts tests/unit/SaveRoundTrip.test.ts
+      - name: Typecheck
+        run: npx tsc --noEmit
