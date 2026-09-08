@@ -69,6 +69,33 @@ export class InventoryEngine {
     this.state = cloneState(state);
   }
 
+  public moveOwnedItem(
+    instanceId: string,
+    allowedFrom: readonly OwnedItemLocation[],
+    to: OwnedItemLocation,
+  ): OwnedItem {
+    const matches = this.state.items.filter((item) => item.instanceId === instanceId);
+    if (matches.length !== 1) {
+      throw new Error(`Owned item instance is missing or ambiguous: ${instanceId}.`);
+    }
+
+    const current = matches[0]!;
+    if (!allowedFrom.includes(current.location)) {
+      throw new Error(
+        `Owned item ${instanceId} cannot move from ${current.location} to ${to}.`,
+      );
+    }
+
+    const moved = { ...current, location: to };
+    this.state = {
+      ...this.state,
+      items: this.state.items.map((item) =>
+        item.instanceId === instanceId ? moved : { ...item },
+      ),
+    };
+    return { ...moved };
+  }
+
   public prepareInstallOwnedItems(instanceIds: readonly string[]): PreparedInventoryInstall {
     if (instanceIds.length === 0) {
       throw new Error('Cannot install an empty owned-item selection.');
