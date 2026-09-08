@@ -11,7 +11,8 @@ import type {
   SoundCardComponent,
   NetworkCardComponent,
 } from './types';
-import type { HardwareState, OsVersion } from '../types';
+import type { HardwareState } from '../types';
+import { legacyModularToCanonical, projectEffectiveHardware } from './state';
 
 export function calculateTotalRamMb(state: ModularHardwareState): number {
   if (!state.hasComputer || !state.ramSticks) return 0;
@@ -102,23 +103,10 @@ export function setComputerPower(state: ModularHardwareState, isPoweredOn: boole
   };
 }
 
-/** Converts modular hardware into the legacy flat HardwareState expected by existing subsystems */
-export function toLegacyHardwareState(state: ModularHardwareState, osVersion: OsVersion): HardwareState {
-  const ramMB = calculateTotalRamMb(state);
-  const hddTotalGB = Number((calculateTotalDiskBytes(state) / 1_000_000_000).toFixed(1));
-  const hddFreeGB = Number((calculateFreeDiskBytes(state) / 1_000_000_000).toFixed(1));
-
-  return {
-    cpuTier: state.cpu?.tier ?? 1,
-    cpuName: state.cpu?.name ?? 'Single-Core Orion x86',
-    ramMB: ramMB > 0 ? ramMB : 512,
-    hddTotalGB: hddTotalGB > 0 ? hddTotalGB : 40.0,
-    hddFreeGB: hddFreeGB > 0 ? hddFreeGB : 7.0,
-    connectionType: (state.networkCard?.type as any) ?? 'dsl_256k',
-    connectionSpeedKbps: state.networkCard?.speedKbps ?? 256,
-    osVersion,
-    soundCardInstalled: state.soundCard?.tier !== 'pc_speaker',
-    speakersInstalled: true,
-    webcamInstalled: false,
-  };
+/**
+ * @deprecated v5/catalog adapter only. OS is deliberately ignored: effective
+ * hardware is derived exclusively from physical computer state.
+ */
+export function toLegacyHardwareState(state: ModularHardwareState, _ignoredOsVersion?: unknown): HardwareState {
+  return projectEffectiveHardware(legacyModularToCanonical(state).computer);
 }
