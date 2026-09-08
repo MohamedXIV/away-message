@@ -51,4 +51,15 @@ jobs:
         run: npm run build
 
       - name: Test
-        run: npm run test
+        shell: bash
+        run: |
+          set -o pipefail
+          npm run test 2>&1 | tee vitest.log
+
+      - name: Upload test log
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: vitest-failure-${{ github.sha }}
+          path: vitest.log
+          if-no-files-found: error
