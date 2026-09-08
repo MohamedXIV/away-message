@@ -1,4 +1,4 @@
-name: Issue 6 production repair
+name: Issue 6 contract repair
 
 on:
   push:
@@ -17,77 +17,71 @@ jobs:
         with:
           ref: sdd/issue-6-repair
           fetch-depth: 0
-      - name: Apply production boundary fixes
+      - name: Apply strict v6 test-contract fixes
         shell: bash
         run: |
           python - <<'PY'
           from pathlib import Path
 
-          def rep(path, old, new):
+          def rep(path, old, new, count=1):
               p = Path(path)
               text = p.read_text()
               if old not in text:
-                  raise SystemExit(f'missing expected text in {path}: {old[:120]!r}')
-              p.write_text(text.replace(old, new, 1))
+                  raise SystemExit(f'missing expected text in {path}: {old[:160]!r}')
+              p.write_text(text.replace(old, new, count))
 
-          rep('src/apps/browser/VoyagerBrowserApp.tsx',
-              "    const result = router.resolveRoute(cleanUrl);\n\n    router.simulatePageLoad(\n",
-              "    const result = router.resolveRoute(cleanUrl);\n\n    if (!connectionType) {\n      setIsLoading(false);\n      setLoadProgress(0);\n      setStatusText('Offline — no network adapter is installed.');\n      return;\n    }\n\n    router.simulatePageLoad(\n")
-          rep('src/apps/browser/VoyagerBrowserApp.tsx',
-              "          <span>{connectionType.toUpperCase()}</span>",
-              "          <span>{connectionType ? connectionType.toUpperCase() : 'OFFLINE'}</span>")
+          # Persisted v6 snapshots have required canonical roots.
+          rep('src/persistence/schema.ts',
+              "import type { SimulationState } from '../engine/types';",
+              "import type { StrictSimulationState } from '../engine/types';")
+          rep('src/persistence/schema.ts',
+              "  snapshot?: SimulationState;",
+              "  snapshot?: StrictSimulationState;")
 
-          rep('src/desktop/DesktopShell.tsx',
-              "  const monitor = useSimulationStore((s) => s.state.display.monitor);",
-              "  const monitor = useSimulationStore((s) => s.state.display?.monitor ?? null);")
-          rep('src/desktop/DesktopShell.tsx',
-              "      <CRTOverlay monitor={monitor} />",
-              "      <CRTOverlay monitor={monitor ?? undefined} />")
+          # Integration stress fixture: OS authority belongs to OsEngine, hardware is physical only.
+          rep('tests/integration/AdversarialM1Stress.test.ts',
+              "import { SimulationEngine } from '../../src/engine/SimulationEngine';",
+              "import { SimulationEngine } from '../../src/engine/SimulationEngine';\nimport { OsEngine } from '../../src/engine/OsEngine';\nimport { createPowerWorkstationBundle } from '../../src/engine/hardware/catalog';\nimport type { OsVersion } from '../../src/engine/types';")
+          rep('tests/integration/AdversarialM1Stress.test.ts',
+              "              osVersion: snapshot.hardware.osVersion,",
+              "              osVersion: snapshot.os.currentOsId,")
 
-          rep('src/desktop/SystemTray.tsx',
-              "        title={`${hardware.connectionType.toUpperCase()} (${hardware.connectionSpeedKbps} kbps) - ${",
-              "        title={`${hardware.connectionType ? hardware.connectionType.toUpperCase() : 'OFFLINE'} (${hardware.connectionSpeedKbps} kbps) - ${")
+          old_suite3_setup = """    let eventBus: EventBus;\n    let vfs: FileSystemEngine;\n    let hw: HardwareEngine;\n    let registry: SoftwareRegistry;\n\n    beforeEach(() => {\n      eventBus = new EventBus();\n      vfs = new FileSystemEngine(eventBus);\n      hw = new HardwareEngine(eventBus, {\n        osVersion: 'Orion_4.8',\n        ramMB: 512,\n        cpuTier: 1,\n        hddFreeGB: 7.0,\n      });\n\n      registry = new SoftwareRegistry(eventBus, vfs, {\n        getOsVersion: () => hw.getState().osVersion,\n        getRamMb: () => hw.getState().ramMB,\n        getCpuTier: () => hw.getState().cpuTier,\n      });\n    });"""
+          new_suite3_setup = """    let eventBus: EventBus;\n    let vfs: FileSystemEngine;\n    let hw: HardwareEngine;\n    let os: OsEngine;\n    let registry: SoftwareRegistry;\n\n    beforeEach(() => {\n      eventBus = new EventBus();\n      vfs = new FileSystemEngine(eventBus);\n      hw = new HardwareEngine(eventBus);\n      hw.installModularHardware(createPowerWorkstationBundle());\n      hw.upgradeRam(512);\n      os = new OsEngine(eventBus, { currentOsId: 'Orion_4.8', installedPatchIds: [] });\n\n      registry = new SoftwareRegistry(eventBus, vfs, {\n        getOsVersion: () => os.getCurrentOsId(),\n        getRamMb: () => hw.getState().ramMB,\n        getCpuTier: () => hw.getState().cpuTier,\n      });\n    });"""
+          rep('tests/integration/AdversarialM1Stress.test.ts', old_suite3_setup, new_suite3_setup)
 
-          rep('src/internet/sites/MotelLinkSite.tsx',
-              "              <span className=\"text-emerald-400\">{hardware.connectionType.toUpperCase()}</span>",
-              "              <span className=\"text-emerald-400\">{hardware.connectionType ? hardware.connectionType.toUpperCase() : 'NONE'}</span>")
+          old_upgrade = """    it('blocks OS upgrade to Orion 6.0 until RAM >= 768MB, then permits PhotoBox 3.0 installation', () => {\n      // 1. Attempt OS upgrade on 512MB RAM -> MUST FAIL\n      const osUpgradeFail = hw.upgradeOs('Orion_6.0');\n      expect(osUpgradeFail.success).toBe(false);\n      expect(osUpgradeFail.error).toMatch(/Requires at least 768 MB RAM/i);\n      expect(hw.getState().osVersion).toBe('Orion_4.8');\n\n      // 2. Upgrade RAM to 1024MB\n      const ramUpgrade = hw.upgradeRam(1024);\n      expect(ramUpgrade).toBe(true);\n      expect(hw.getState().ramMB).toBe(1024);\n\n      // 3. Now upgrade OS to Orion 6.0 -> MUST SUCCEED\n      const osUpgradeSuccess = hw.upgradeOs('Orion_6.0');\n      expect(osUpgradeSuccess.success).toBe(true);\n      expect(hw.getState().osVersion).toBe('Orion_6.0');\n\n      // 4. Now attempt PhotoBox 3.0 wizard -> MUST BE FULLY COMPATIBLE\n      const wizard = registry.startInstallerWizard('sw_photobox_30');\n      expect(wizard.compatibilityResult.isCompatible).toBe(true);\n      expect(wizard.compatibilityResult.osCheck.passed).toBe(true);\n      expect(wizard.compatibilityResult.ramCheck.passed).toBe(true);\n\n      registry.advanceInstallerStage(wizard.sessionId, 2);\n      registry.advanceInstallerStage(wizard.sessionId, 3);\n      registry.advanceInstallerStage(wizard.sessionId, 4);\n      const installed = registry.completeInstallation(wizard.sessionId, 120);\n\n      expect(installed.appId).toBe('app.photobox');\n      expect(registry.isInstalled('app.photobox')).toBe(true);\n      expect(vfs.readFile('C:/Desktop/PhotoBox Studio.lnk')).toBeDefined();\n    });"""
+          new_upgrade = """    it('blocks Orion 6.0 in OsEngine until RAM >= 768MB, then permits PhotoBox 3.0 installation', () => {\n      const osUpgradeFail = os.beginInstall('Orion_6.0', hw.getState(), 8, 0);\n      expect(osUpgradeFail.success).toBe(false);\n      expect(osUpgradeFail.error).toMatch(/Requires 768MB RAM/i);\n      expect(os.getCurrentOsId()).toBe('Orion_4.8');\n\n      const ramUpgrade = hw.upgradeRam(1024);\n      expect(ramUpgrade).toBe(true);\n      expect(hw.getState().ramMB).toBe(1024);\n\n      const osUpgradeSuccess = os.beginInstall('Orion_6.0', hw.getState(), 8, 120);\n      expect(osUpgradeSuccess.success).toBe(true);\n      expect(os.getCurrentOsId()).toBe('Orion_6.0');\n\n      const wizard = registry.startInstallerWizard('sw_photobox_30');\n      expect(wizard.compatibilityResult.isCompatible).toBe(true);\n      expect(wizard.compatibilityResult.osCheck.passed).toBe(true);\n      expect(wizard.compatibilityResult.ramCheck.passed).toBe(true);\n\n      registry.advanceInstallerStage(wizard.sessionId, 2);\n      registry.advanceInstallerStage(wizard.sessionId, 3);\n      registry.advanceInstallerStage(wizard.sessionId, 4);\n      const installed = registry.completeInstallation(wizard.sessionId, 120);\n\n      expect(installed.appId).toBe('app.photobox');\n      expect(registry.isInstalled('app.photobox')).toBe(true);\n      expect(vfs.readFile('C:/Desktop/PhotoBox Studio.lnk')).toBeDefined();\n    });"""
+          rep('tests/integration/AdversarialM1Stress.test.ts', old_upgrade, new_upgrade)
 
-          rep('src/world/Day14ResolutionModal.tsx',
-              "  const hardware = simState.hardware;\n  const installedSoftware = simState.installedSoftware;",
-              "  const hardware = simState.hardware;\n  const osVersion = simState.os.currentOsId;\n  const installedSoftware = simState.installedSoftware;")
-          rep('src/world/Day14ResolutionModal.tsx',
-              "  const isOs6 = hardware.osVersion === 'Orion_6.0';",
-              "  const isOs6 = osVersion === 'Orion_6.0';")
-          rep('src/world/Day14ResolutionModal.tsx',
-              "                    {hardware.osVersion === 'Orion_6.0' ? 'Orion OS 6.0 (Upgraded)' : 'Orion OS 4.8'}",
-              "                    {osVersion ? osVersion.replace('_', ' OS ') : 'No OS installed'}")
-          rep('src/world/Day14ResolutionModal.tsx',
-              "                    {hardware.connectionType.replace('_', ' ').toUpperCase()}",
-              "                    {hardware.connectionType ? hardware.connectionType.replace('_', ' ').toUpperCase() : 'NONE'}")
+          rep('tests/integration/AdversarialM1Stress.test.ts',
+              "      hw.upgradeRam(1024);\n      hw.upgradeOs('Orion_6.0');",
+              "      hw.upgradeRam(1024);\n      os.beginInstall('Orion_6.0', hw.getState(), 8, 120);")
 
-          rep('src/narrative/types.ts',
-              "  sim_os_version: OsVersion;\n  sim_ram_mb: number;\n  sim_connection_type: ConnectionType;",
-              "  sim_os_version: OsVersion | null;\n  sim_ram_mb: number;\n  sim_connection_type: ConnectionType | null;")
-          rep('src/narrative/NarrativeEngine.ts',
-              "      sim_os_version: state.hardware.osVersion,\n      sim_ram_mb: state.hardware.ramMB,",
-              "      sim_os_version: state.os.currentOsId,\n      sim_ram_mb: state.hardware.ramMB,")
+          old_suite4_setup = """    let eventBus: EventBus;\n    let vfs: FileSystemEngine;\n    let hw: HardwareEngine;\n    let registry: SoftwareRegistry;\n\n    beforeEach(() => {\n      eventBus = new EventBus();\n      vfs = new FileSystemEngine(eventBus);\n      hw = new HardwareEngine(eventBus, {\n        osVersion: 'Orion_4.8',\n        ramMB: 512,\n        cpuTier: 1,\n        hddFreeGB: 10.0,\n      });\n\n      registry = new SoftwareRegistry(eventBus, vfs, {\n        getOsVersion: () => hw.getState().osVersion,\n        getRamMb: () => hw.getState().ramMB,\n        getCpuTier: () => hw.getState().cpuTier,\n      });\n    });"""
+          new_suite4_setup = """    let eventBus: EventBus;\n    let vfs: FileSystemEngine;\n    let hw: HardwareEngine;\n    let os: OsEngine;\n    let registry: SoftwareRegistry;\n\n    beforeEach(() => {\n      eventBus = new EventBus();\n      vfs = new FileSystemEngine(eventBus);\n      hw = new HardwareEngine(eventBus);\n      hw.installModularHardware(createPowerWorkstationBundle());\n      hw.upgradeRam(512);\n      os = new OsEngine(eventBus, { currentOsId: 'Orion_4.8', installedPatchIds: [] });\n\n      registry = new SoftwareRegistry(eventBus, vfs, {\n        getOsVersion: () => os.getCurrentOsId(),\n        getRamMb: () => hw.getState().ramMB,\n        getCpuTier: () => hw.getState().cpuTier,\n      });\n    });"""
+          rep('tests/integration/AdversarialM1Stress.test.ts', old_suite4_setup, new_suite4_setup)
 
-          rep('src/persistence/migrations/v6ComputerState.ts',
-              "  PlayerInventoryState,\n  SimulationState,\n} from '../../engine/types';",
-              "  PlayerInventoryState,\n  SimulationState,\n  StrictSimulationState,\n} from '../../engine/types';")
-          rep('src/persistence/migrations/v6ComputerState.ts',
-              "): SimulationState {\n  if (fromVersion >= 6) return clone(snapshot);",
-              "): StrictSimulationState {\n  if (fromVersion >= 6) return clone(snapshot) as StrictSimulationState;")
-          rep('src/persistence/migrations/v6ComputerState.ts',
-              "  } as SimulationState;\n}",
-              "  } as StrictSimulationState;\n}")
+          # Rewrite ControlPanel tests around an explicit existing PC/OS fixture.
+          Path('tests/unit/ControlPanelApp.test.ts').write_text("""import { describe, it, expect, beforeEach } from 'vitest';\nimport { SimulationEngine } from '../../src/engine/SimulationEngine';\nimport { createPowerWorkstationBundle } from '../../src/engine/hardware/catalog';\nimport { legacyModularToCanonical } from '../../src/engine/hardware/state';\n\ndescribe('Control Panel, Hardware & Software Management', () => {\n  let engine: SimulationEngine;\n\n  beforeEach(() => {\n    const canonical = legacyModularToCanonical(createPowerWorkstationBundle());\n    engine = new SimulationEngine({\n      computer: canonical.computer,\n      display: canonical.display,\n      os: { currentOsId: 'Orion_4.8', installedPatchIds: [] },\n      installedSoftware: [],\n    } as any);\n    engine.hardware.upgradeRam(512);\n  });\n\n  it('calculates disk storage utilization accurately', () => {\n    const hw = engine.hardware.getState();\n    expect(hw.hddTotalGB).toBeGreaterThan(0);\n    expect(hw.hddFreeGB).toBeGreaterThan(0);\n    expect(hw.hddFreeGB).toBeLessThan(hw.hddTotalGB);\n  });\n\n  it('calculates RAM pressure ratio from installed RAM and the authoritative OS baseline', () => {\n    const osBaseline = engine.os.getRamOverheadMB();\n    const pressure = engine.hardware.calculateRamPressure(128, osBaseline);\n    expect(pressure.totalRamMB).toBe(512);\n    expect(pressure.usedRamMB).toBe(osBaseline + 128);\n    expect(pressure.pressureRatio).toBeCloseTo((osBaseline + 128) / 512, 2);\n    expect(pressure.status).toBe('nominal');\n  });\n\n  it('uninstalls software and removes shortcuts cleanly', () => {\n    engine.dispatchAction({ type: 'SOFTWARE_INSTALL', softwareId: 'sw_pulse_52' });\n    expect(engine.software.isInstalled('app.pulse')).toBe(true);\n    expect(engine.vfs.readFile('C:/Desktop/Pulse Messenger.lnk')).toBeDefined();\n\n    const installedRecord = engine.software.getInstalledSoftware().find((s) => s.appId === 'app.pulse');\n    expect(installedRecord).toBeDefined();\n\n    const uninstallRes = engine.dispatchAction({\n      type: 'SOFTWARE_UNINSTALL',\n      installedId: installedRecord!.id,\n    });\n    expect(uninstallRes.success).toBe(true);\n    expect(engine.software.isInstalled('app.pulse')).toBe(false);\n    expect(engine.vfs.readFile('C:/Desktop/Pulse Messenger.lnk')).toBeUndefined();\n  });\n\n  it('keeps OS upgrades in OsEngine while hardware supplies physical requirements', () => {\n    expect(engine.os.getCurrentOsId()).toBe('Orion_4.8');\n    engine.dispatchAction({ type: 'TIME_ADVANCE_MINUTES', minutes: 7 * 1440, reason: 'to Day 8' });\n    expect(engine.clock.getTime().day).toBe(8);\n\n    engine.dispatchAction({ type: 'HARDWARE_UPGRADE_RAM', ramMB: 1024, cost: 0 });\n    const res = engine.dispatchAction({ type: 'HARDWARE_UPGRADE_OS', targetOs: 'Orion_6.0', cost: 0 });\n\n    expect(res.success).toBe(true);\n    expect(engine.os.getCurrentOsId()).toBe('Orion_6.0');\n    expect('osVersion' in engine.hardware.getState()).toBe(false);\n  });\n});\n""")
+
+          # Fresh terminal/narrative tests now assert the honest empty machine contract.
+          rep('tests/unit/TerminalApp.test.ts',
+              "    expect(hw.connectionType).toBe('dsl_256k');\n    expect(hw.connectionSpeedKbps).toBe(256);\n    expect(hw.osVersion).toBe('Orion_4.8');",
+              "    expect(hw.connectionType).toBeNull();\n    expect(hw.connectionSpeedKbps).toBe(0);\n    expect(engine.os.getCurrentOsId()).toBeNull();")
+          rep('tests/unit/NarrativeEngine.test.ts',
+              "      expect(snapshot.sim_os_version).toBe('Orion_4.8');\n      expect(snapshot.sim_ram_mb).toBe(512);",
+              "      expect(snapshot.sim_os_version).toBeNull();\n      expect(snapshot.sim_ram_mb).toBe(0);")
+          rep('tests/unit/NarrativeEngine.test.ts',
+              "      simEngine.dispatchAction({ type: 'HARDWARE_UPGRADE_RAM', ramMB: 1024, cost: 0 });\n\n      const updatedSnap = narrativeEngine.injectContext(simEngine.getState());\n      expect(updatedSnap.sim_player_cash).toBe(88);\n      expect(updatedSnap.sim_ram_mb).toBe(1024);",
+              "      const hardwareResult = simEngine.dispatchAction({ type: 'HARDWARE_UPGRADE_RAM', ramMB: 1024, cost: 0 });\n\n      const updatedSnap = narrativeEngine.injectContext(simEngine.getState());\n      expect(updatedSnap.sim_player_cash).toBe(88);\n      expect(hardwareResult.success).toBe(false);\n      expect(updatedSnap.sim_ram_mb).toBe(0);")
           PY
-      - name: Commit repair candidate
+      - name: Commit contract repair
         shell: bash
         run: |
           git config user.name "Issue 6 verifier"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add src
+          git add src tests
           git diff --cached --check
-          git commit -m "fix: make v6 nullable state compile-safe"
+          git commit -m "test: align legacy fixtures with v6 ownership contract"
           git push origin HEAD:sdd/issue-6-repair
