@@ -5,7 +5,6 @@
 // rewrite unrelated social/world/economy behavior. This facade owns the v6
 // canonical roots and narrows the remaining legacy compatibility to one place.
 
-import { HardwareEngine } from './HardwareEngine';
 import { InventoryEngine } from './InventoryEngine';
 import { SimulationEngine as SimulationEngineCore } from './SimulationEngineCore';
 import {
@@ -23,17 +22,6 @@ import type {
 } from './types';
 
 export type LiveSimulationState = CanonicalSimulationState;
-
-type LegacyHardwareShadow = {
-  state?: { osVersion?: unknown };
-};
-
-// SimulationEngineCore still contains two writes to the former
-// HardwareEngine.state.osVersion bridge. Keep those writes harmless while the
-// core is preserved: this object is compile/runtime compatibility only and is
-// never read by HardwareEngine projections or persistence.
-const hardwarePrototype = HardwareEngine.prototype as unknown as LegacyHardwareShadow;
-if (!hardwarePrototype.state) hardwarePrototype.state = {};
 
 function hasOwn(value: object | undefined, key: PropertyKey): boolean {
   return Boolean(value && Object.prototype.hasOwnProperty.call(value, key));
