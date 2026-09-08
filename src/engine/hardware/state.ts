@@ -125,14 +125,16 @@ export function legacyModularToCanonical(
 export function legacyFlatHardwareToCanonical(
   hardware: LegacyV5HardwareLike,
 ): { computer: ComputerSetupState; display: DisplaySetupState } {
-  if (hardware.modular) {
-    return legacyModularToCanonical(hardware.modular);
-  }
+  // Explicit v5 no-PC state is authoritative even when a stale modular object
+  // survives from an earlier partial patch.
   if (hardware.hasComputer === false) {
     return {
       computer: createEmptyComputerSetup(),
       display: createEmptyDisplaySetup(),
     };
+  }
+  if (hardware.modular) {
+    return legacyModularToCanonical(hardware.modular);
   }
 
   const ramMb = typeof hardware.ramMB === 'number' && hardware.ramMB > 0 ? hardware.ramMB : 512;
