@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { SimulationEngine } from '../../src/engine/SimulationEngine';
-import * as roomCanvas from '../../src/world/RoomCanvas';
+import { getRoomDeskPresentation } from '../../src/world/RoomComputerPresentation';
 import type { ActionResult } from '../../src/engine/types';
 
 type PcBootState = 'no_computer' | 'awaiting_setup' | 'powered_off' | 'no_boot_device' | 'desktop';
@@ -9,10 +9,6 @@ type ComputerLifecycleApi = SimulationEngine & {
   getPcBootState(): PcBootState;
   setComputerPower(poweredOn: boolean): ActionResult;
 };
-
-const getRoomDeskPresentation = (roomCanvas as unknown as {
-  getRoomDeskPresentation(state: PcBootState): 'empty' | 'package' | 'assembled_off' | 'assembled_on';
-}).getRoomDeskPresentation;
 
 function engineWithLifecycle(): ComputerLifecycleApi {
   return new SimulationEngine() as ComputerLifecycleApi;
