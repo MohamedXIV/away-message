@@ -12,6 +12,7 @@ import {
   createEmptyComputerSetup,
   createEmptyDisplaySetup,
   createEmptyInventoryState,
+  legacyModularToCanonical,
 } from './hardware/state';
 import type {
   ActionResult,
@@ -183,6 +184,97 @@ export class SimulationEngine extends SimulationEngineCore {
         recoveredLegacyPurchase: recovered,
       },
     };
+  }
+
+  public setupComputerAtHome(): ActionResult {
+    const state = this.getState();
+    if (state.player.location !== 'home') {
+      return { success: false, error: 'Computer setup is only available in Room 104.' };
+    }
+    if (state.computer.assembled) {
+      return { success: false, error: 'A computer is already assembled.' };
+    }
+
+    const roomItems = state.inventory.items.filter((item) => item.location === 'room_package');
+    const bundle = HARDWARE_STORE_INVENTORY.find((sku) => {
+      if (sku.category !== 'bundle' || !sku.bundleConfig) return false;
+      return sku.contents.every(({ catalogItemId, quantity }) => {
+        const catalog = PHYSICAL_ITEM_CATALOG[catalogItemId];
+        if (!catalog || catalog.kind === 'media') return true;
+        return roomItems.filter((item) => item.catalogItemId === catalogItemId).length >= quantity;
+      });
+    });
+
+    if (!bundle?.bundleConfig) {
+      return { success: false, error: 'No complete computer package is ready to set up.' };
+    }
+
+    const instanceIds: string[] = [];
+    for (const { catalogItemId, quantity } of bundle.contents) {
+      const catalog = PHYSICAL_ITEM_CATALOG[catalogItemId];
+      if (!catalog || catalog.kind === 'media') continue;
+      const matches = roomItems
+        .filter((item) => item.catalogItemId === catalogItemId)
+        .slice(0, quantity);
+      if (matches.length !== quantity) {
+        return { success: false, error: 'The computer package is incomplete.' };
+      }
+      instanceIds.push(...matches.map((item) => item.instanceId));
+    }
+
+    let prepared;
+    try {
+      prepared = this.inventory.prepareInstallOwnedItems(instanceIds);
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Computer setup preparation failed.',
+      };
+    }
+
+    const canonical = legacyModularToCanonical(bundle.bundleConfig.hardware);
+    const chassisCatalogId = bundle.contents.find(
+      ({ catalogItemId }) => PHYSICAL_ITEM_CATALOG[catalogItemId]?.componentKind === 'chassis',
+    )?.catalogItemId;
+    const chassis = chassisCatalogId
+      ? PHYSICAL_ITEM_CATALOG[chassisCatalogId]?.component
+      : undefined;
+    if (!chassis || !('id' in chassis) || !('name' in chassis)) {
+      return { success: false, error: 'The computer package has no chassis.' };
+    }
+
+    const inventoryBefore = this.inventory.getState();
+    const computerBefore = this.hardware.getComputerState();
+    const displayBefore = this.hardware.getDisplayState();
+    try {
+      this.inventory.commitInstallOwnedItems(prepared);
+      this.hardware.loadState({
+        computer: {
+          ...canonical.computer,
+          chassis: { id: chassis.id, name: chassis.name },
+          assembled: true,
+          poweredOn: false,
+          insertedMediaId: null,
+        },
+        display: canonical.display,
+      });
+    } catch (error) {
+      this.inventory.loadState(inventoryBefore);
+      this.hardware.loadState({ computer: computerBefore, display: displayBefore });
+      this.v6CachedBase = null;
+      this.v6CachedState = null;
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Computer setup failed.',
+      };
+    }
+
+    this.v6CachedBase = null;
+    this.v6CachedState = null;
+    this.advanceGameMinutes(15, 'Set up computer in Room 104');
+    this.v6CachedBase = null;
+    this.v6CachedState = null;
+    return { success: true };
   }
 
   public override dispatchAction(action: SimulationAction) {
