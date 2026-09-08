@@ -16,7 +16,7 @@ jobs:
       - name: Checkout exact Issue 6 source
         uses: actions/checkout@v4
         with:
-          ref: d7f137582730f577fd5b3ea3d95c9cb97975fb1a
+          ref: e77b7ce696eb3ef48dbd6fb85985a648b68435ed
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
@@ -43,7 +43,7 @@ jobs:
       - name: Checkout exact Issue 6 source
         uses: actions/checkout@v4
         with:
-          ref: d7f137582730f577fd5b3ea3d95c9cb97975fb1a
+          ref: e77b7ce696eb3ef48dbd6fb85985a648b68435ed
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
