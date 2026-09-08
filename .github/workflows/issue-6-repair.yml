@@ -1,0 +1,93 @@
+name: Issue 6 production repair
+
+on:
+  push:
+    branches:
+      - sdd/issue-6-verifier
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repair branch
+        uses: actions/checkout@v4
+        with:
+          ref: sdd/issue-6-repair
+          fetch-depth: 0
+      - name: Apply production boundary fixes
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          def rep(path, old, new):
+              p = Path(path)
+              text = p.read_text()
+              if old not in text:
+                  raise SystemExit(f'missing expected text in {path}: {old[:120]!r}')
+              p.write_text(text.replace(old, new, 1))
+
+          rep('src/apps/browser/VoyagerBrowserApp.tsx',
+              "    const result = router.resolveRoute(cleanUrl);\n\n    router.simulatePageLoad(\n",
+              "    const result = router.resolveRoute(cleanUrl);\n\n    if (!connectionType) {\n      setIsLoading(false);\n      setLoadProgress(0);\n      setStatusText('Offline — no network adapter is installed.');\n      return;\n    }\n\n    router.simulatePageLoad(\n")
+          rep('src/apps/browser/VoyagerBrowserApp.tsx',
+              "          <span>{connectionType.toUpperCase()}</span>",
+              "          <span>{connectionType ? connectionType.toUpperCase() : 'OFFLINE'}</span>")
+
+          rep('src/desktop/DesktopShell.tsx',
+              "  const monitor = useSimulationStore((s) => s.state.display.monitor);",
+              "  const monitor = useSimulationStore((s) => s.state.display?.monitor ?? null);")
+          rep('src/desktop/DesktopShell.tsx',
+              "      <CRTOverlay monitor={monitor} />",
+              "      <CRTOverlay monitor={monitor ?? undefined} />")
+
+          rep('src/desktop/SystemTray.tsx',
+              "        title={`${hardware.connectionType.toUpperCase()} (${hardware.connectionSpeedKbps} kbps) - ${",
+              "        title={`${hardware.connectionType ? hardware.connectionType.toUpperCase() : 'OFFLINE'} (${hardware.connectionSpeedKbps} kbps) - ${")
+
+          rep('src/internet/sites/MotelLinkSite.tsx',
+              "              <span className=\"text-emerald-400\">{hardware.connectionType.toUpperCase()}</span>",
+              "              <span className=\"text-emerald-400\">{hardware.connectionType ? hardware.connectionType.toUpperCase() : 'NONE'}</span>")
+
+          rep('src/world/Day14ResolutionModal.tsx',
+              "  const hardware = simState.hardware;\n  const installedSoftware = simState.installedSoftware;",
+              "  const hardware = simState.hardware;\n  const osVersion = simState.os.currentOsId;\n  const installedSoftware = simState.installedSoftware;")
+          rep('src/world/Day14ResolutionModal.tsx',
+              "  const isOs6 = hardware.osVersion === 'Orion_6.0';",
+              "  const isOs6 = osVersion === 'Orion_6.0';")
+          rep('src/world/Day14ResolutionModal.tsx',
+              "                    {hardware.osVersion === 'Orion_6.0' ? 'Orion OS 6.0 (Upgraded)' : 'Orion OS 4.8'}",
+              "                    {osVersion ? osVersion.replace('_', ' OS ') : 'No OS installed'}")
+          rep('src/world/Day14ResolutionModal.tsx',
+              "                    {hardware.connectionType.replace('_', ' ').toUpperCase()}",
+              "                    {hardware.connectionType ? hardware.connectionType.replace('_', ' ').toUpperCase() : 'NONE'}")
+
+          rep('src/narrative/types.ts',
+              "  sim_os_version: OsVersion;\n  sim_ram_mb: number;\n  sim_connection_type: ConnectionType;",
+              "  sim_os_version: OsVersion | null;\n  sim_ram_mb: number;\n  sim_connection_type: ConnectionType | null;")
+          rep('src/narrative/NarrativeEngine.ts',
+              "      sim_os_version: state.hardware.osVersion,\n      sim_ram_mb: state.hardware.ramMB,",
+              "      sim_os_version: state.os.currentOsId,\n      sim_ram_mb: state.hardware.ramMB,")
+
+          rep('src/persistence/migrations/v6ComputerState.ts',
+              "  PlayerInventoryState,\n  SimulationState,\n} from '../../engine/types';",
+              "  PlayerInventoryState,\n  SimulationState,\n  StrictSimulationState,\n} from '../../engine/types';")
+          rep('src/persistence/migrations/v6ComputerState.ts',
+              "): SimulationState {\n  if (fromVersion >= 6) return clone(snapshot);",
+              "): StrictSimulationState {\n  if (fromVersion >= 6) return clone(snapshot) as StrictSimulationState;")
+          rep('src/persistence/migrations/v6ComputerState.ts',
+              "  } as SimulationState;\n}",
+              "  } as StrictSimulationState;\n}")
+          PY
+      - name: Commit repair candidate
+        shell: bash
+        run: |
+          git config user.name "Issue 6 verifier"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src
+          git diff --cached --check
+          git commit -m "fix: make v6 nullable state compile-safe"
+          git push origin HEAD:sdd/issue-6-repair
