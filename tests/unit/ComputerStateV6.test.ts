@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createScrapYardBundle } from '../../src/engine/hardware/catalog';
 import {
+  canonicalToLegacyModular,
   createEmptyComputerSetup,
   createEmptyDisplaySetup,
   createEmptyInventoryState,
@@ -46,6 +47,27 @@ describe('v6 computer state', () => {
     expect(computer.opticalDrives[0]?.id).toBe('optical_cdrom_24x');
     expect(computer).not.toHaveProperty('monitor');
     expect(display.monitor?.id).toBe('mon_beige_curved_14');
+  });
+
+  it('keeps the legacy adapter available when canonical state has inserted media', () => {
+    const legacy = createScrapYardBundle();
+    const { computer, display } = legacyModularToCanonical({
+      ...legacy,
+      insertedDisc: {
+        id: 'disc_orion_48',
+        title: 'Orion OS 4.8 Setup CD',
+        type: 'os_installer',
+        osTarget: 'Orion_4.8',
+      },
+    });
+
+    expect(computer.insertedMediaId).toBe('disc_orion_48');
+    expect(canonicalToLegacyModular(computer, display)).toMatchObject({
+      hasComputer: true,
+      cpu: { id: 'cpu_celeron_366' },
+      monitor: { id: 'mon_beige_curved_14' },
+      insertedDisc: null,
+    });
   });
 
   it('converts flat v5 hardware directly without inventing a migrated OS', () => {
