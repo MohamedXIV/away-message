@@ -1,4 +1,4 @@
-name: Issue 7 TDD gate
+name: Issue 8 TDD gate
 
 on:
   push:
@@ -12,10 +12,10 @@ jobs:
   tdd:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout exact Issue 7 repair source
+      - name: Checkout exact Issue 8 repair source
         uses: actions/checkout@v4
         with:
-          ref: 5e51826b0740ec563c9ebe6ef217c947b69f0608
+          ref: 4d1eb57d8335bf38bd9121586df2b8f84a3fda84
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
@@ -23,7 +23,5 @@ jobs:
           cache: npm
       - name: Install dependencies
         run: npm ci --legacy-peer-deps
-      - name: Store boundary and ecosystem GREEN
-        run: npx vitest run tests/unit/SiliconSparesBoundary.test.ts tests/unit/StorePurchase.test.ts tests/unit/AdversarialEcosystemM3Stress.test.ts tests/unit/EcosystemApps.test.ts
-      - name: Typecheck strict v6 runtime
-        run: npx tsc --noEmit
+      - name: Home setup inventory RED
+        run: npx vitest run tests/unit/HomeComputerSetup.test.ts
