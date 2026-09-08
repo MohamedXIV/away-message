@@ -74,7 +74,8 @@ function renderIconGraphic(type: DesktopIconItem['iconType'], _theme?: string) {
 }
 
 export const DesktopShell: React.FC = () => {
-  const osVersion = useSimulationStore((s) => s.state.hardware.osVersion);
+  const osVersion = useSimulationStore((s) => s.state.os.currentOsId);
+  const monitor = useSimulationStore((s) => s.state.display.monitor);
   const vfsFiles = useSimulationStore((s) => s.state.vfs.files);
   const openWindow = useWindowStore((s) => s.openWindow);
 
@@ -91,19 +92,21 @@ export const DesktopShell: React.FC = () => {
   const hasComputer = Boolean(hardware.hasComputer);
   const isPoweredOn = Boolean(hardware.isPoweredOn);
 
-  // Sync wallpaper when osVersion changes only if not already customized (first load)
+  // Sync wallpaper only when a real installed OS is present.
   useEffect(() => {
+    if (!osVersion) return;
     const stored = useDesktopStore.getState().wallpaper;
     if (!stored) {
       setWallpaper(osVersion === 'Orion_6.0' ? 'bliss_green' : 'classic_teal');
     }
   }, [osVersion, setWallpaper]);
 
-  // Derive theme attribute across all 4 OS generations
-  const getOsTheme = (v: string) => {
-    if (v?.includes('7.')) return 'orion70';
-    if (v?.includes('6.')) return 'orion60';
-    if (v?.includes('5.')) return 'orion50';
+  // OS chrome comes only from the installed OS. Null must never masquerade as Orion 4.8.
+  const getOsTheme = (v: string | null): string | undefined => {
+    if (!v) return undefined;
+    if (v.includes('7.')) return 'orion70';
+    if (v.includes('6.')) return 'orion60';
+    if (v.includes('5.')) return 'orion50';
     return 'orion48';
   };
   const themeAttr = getOsTheme(osVersion);
@@ -138,7 +141,7 @@ export const DesktopShell: React.FC = () => {
             <button
               onClick={() => {
                 synthAudio.playBiosBeep();
-                synthAudio.playStartupChime(osVersion);
+                if (osVersion) synthAudio.playStartupChime(osVersion);
                 useSimulationStore.getState().engine.hardware.setPower(true);
               }}
               className="px-4 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs border border-zinc-700 rounded transition-colors cursor-pointer"
@@ -152,6 +155,27 @@ export const DesktopShell: React.FC = () => {
               Stand Up (Back to Room)
             </button>
           </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!osVersion) {
+    return (
+      <div className="w-full h-full flex flex-col items-center justify-center bg-black text-zinc-300 font-mono select-none p-6">
+        <div className="max-w-lg w-full space-y-3 border border-zinc-700 p-5">
+          <div className="text-sm text-emerald-400">POST complete.</div>
+          <div className="text-base font-bold text-white">No bootable operating system found.</div>
+          <p className="text-xs text-zinc-500">
+            Insert owned setup media to install an operating system. The full BIOS and boot-media flow is handled by the setup lifecycle.
+          </p>
+          <button
+            type="button"
+            onClick={() => switchView('room')}
+            className="px-4 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs border border-zinc-600 cursor-pointer"
+          >
+            Back to Room 104
+          </button>
         </div>
       </div>
     );
@@ -383,7 +407,7 @@ export const DesktopShell: React.FC = () => {
       <Taskbar onOpenDialUp={() => setIsDialUpModalOpen(true)} />
 
       {/* 7. CRT Overlay Shader */}
-      <CRTOverlay monitor={hardware.modular?.monitor} />
+      <CRTOverlay monitor={monitor} />
     </div>
   );
 };
