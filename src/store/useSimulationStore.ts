@@ -57,6 +57,8 @@ export interface SimulationStoreActions {
   cityOuting: (outingId: string) => ActionResult;
   applyGig: (gigId: string) => ActionResult;
   purchaseStoreItem: (skuId: string) => ActionResult<StorePurchaseResultData>;
+  setupComputerAtHome: () => ActionResult;
+  setComputerPower: (poweredOn: boolean) => ActionResult;
 
   // Hardware & OS
   upgradeRam: (ramMB: number, cost: number) => void;
@@ -210,6 +212,14 @@ export const useSimulationStore = create<SimulationStore>()(
           storeId: 'silicon_spares',
           skuId,
         }) as ActionResult<StorePurchaseResultData>;
+      },
+
+      setupComputerAtHome: () => {
+        return get().dispatchAction({ type: 'COMPUTER_SETUP_AT_HOME' });
+      },
+
+      setComputerPower: (poweredOn) => {
+        return get().dispatchAction({ type: 'COMPUTER_SET_POWER', poweredOn });
       },
 
       upgradeRam: (ramMB, cost) => {
