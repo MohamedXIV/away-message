@@ -15,7 +15,7 @@ jobs:
       - name: Checkout exact Issue 7 repair source
         uses: actions/checkout@v4
         with:
-          ref: d96c04032b5dd32e866ab0d521517bb9b47ea456
+          ref: 10838258a12117d211e66fe5e5adcf59ff4d5748
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
@@ -23,14 +23,7 @@ jobs:
           cache: npm
       - name: Install dependencies
         run: npm ci --legacy-peer-deps
-      - name: Inventory type diagnostics
-        shell: bash
-        run: |
-          echo '=== inventory property declarations ==='
-          grep -R -n -E 'inventory\??:' src/engine src/store | head -80 || true
-          echo '=== existing state.inventory access patterns ==='
-          grep -R -n 'state\.inventory' src | head -80 || true
-          echo '=== modal lines ==='
-          nl -ba src/world/modals/SiliconSparesModal.tsx | sed -n '14,28p'
-      - name: Reproduce typecheck
+      - name: Silicon Spares boundary GREEN
+        run: npx vitest run tests/unit/SiliconSparesBoundary.test.ts tests/unit/StorePurchase.test.ts
+      - name: Typecheck store boundary
         run: npx tsc --noEmit
