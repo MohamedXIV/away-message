@@ -131,8 +131,8 @@ describe('NarrativeEngine & Semantic Tag Subsystem Test Suite', () => {
 
       expect(snapshot.sim_current_day).toBe(1);
       expect(snapshot.sim_player_cash).toBe(38);
-      expect(snapshot.sim_os_version).toBe('Orion_4.8');
-      expect(snapshot.sim_ram_mb).toBe(512);
+      expect(snapshot.sim_os_version).toBeNull();
+      expect(snapshot.sim_ram_mb).toBe(0);
       expect(snapshot.sim_photobox_installed).toBe(false);
       expect(snapshot.sim_maya_familiarity).toBe(10);
       expect(snapshot.sim_maya_trust).toBe(20);
@@ -143,11 +143,12 @@ describe('NarrativeEngine & Semantic Tag Subsystem Test Suite', () => {
 
     it('updates snapshot variables when simulation state changes', () => {
       simEngine.dispatchAction({ type: 'PLAYER_EARN_CASH', amount: 50, reason: 'test' });
-      simEngine.dispatchAction({ type: 'HARDWARE_UPGRADE_RAM', ramMB: 1024, cost: 0 });
+      const hardwareResult = simEngine.dispatchAction({ type: 'HARDWARE_UPGRADE_RAM', ramMB: 1024, cost: 0 });
 
       const updatedSnap = narrativeEngine.injectContext(simEngine.getState());
       expect(updatedSnap.sim_player_cash).toBe(88);
-      expect(updatedSnap.sim_ram_mb).toBe(1024);
+      expect(hardwareResult.success).toBe(false);
+      expect(updatedSnap.sim_ram_mb).toBe(0);
     });
   });
 

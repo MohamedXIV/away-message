@@ -4,7 +4,7 @@
 export * from './schemaV5Core';
 
 import { z } from 'zod';
-import type { SimulationState } from '../engine/types';
+import type { StrictSimulationState } from '../engine/types';
 import {
   FullSimulationSnapshotSchema as CoreFullSimulationSnapshotSchema,
   SaveSlotSchema as CoreSaveSlotSchema,
@@ -19,7 +19,7 @@ export type SaveSlotRecord = Omit<CoreSaveSlotRecord, 'hardwareState' | 'snapsho
     connectionType: 'dialup_56k' | 'dsl_256k' | 'dsl_512k' | 'dsl_1m' | null;
     osVersion: string | null;
   };
-  snapshot?: SimulationState;
+  snapshot?: StrictSimulationState;
 };
 
 export type FullSimulationSnapshot = Omit<CoreFullSimulationSnapshot, 'saveSlot'> & {

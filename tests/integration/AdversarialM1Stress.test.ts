@@ -9,6 +9,9 @@ import { FileSystemEngine } from '../../src/engine/FileSystemEngine';
 import { HardwareEngine } from '../../src/engine/HardwareEngine';
 import { SoftwareRegistry } from '../../src/engine/SoftwareRegistry';
 import { SimulationEngine } from '../../src/engine/SimulationEngine';
+import { OsEngine } from '../../src/engine/OsEngine';
+import { createPowerWorkstationBundle } from '../../src/engine/hardware/catalog';
+import type { OsVersion } from '../../src/engine/types';
 
 describe('Adversarial M1 Stress & Gating Suite', () => {
   let saveManager: SaveManager;
@@ -288,7 +291,7 @@ describe('Adversarial M1 Stress & Gating Suite', () => {
               hddFreeGB: snapshot.hardware.hddFreeGB,
               connectionType: snapshot.hardware.connectionType,
               connectionSpeedKbps: snapshot.hardware.connectionSpeedKbps,
-              osVersion: snapshot.hardware.osVersion,
+              osVersion: snapshot.os.currentOsId,
               theme: 'orion_4_8',
               wallpaper: 'default_clouds',
             },
@@ -526,20 +529,19 @@ describe('Adversarial M1 Stress & Gating Suite', () => {
     let eventBus: EventBus;
     let vfs: FileSystemEngine;
     let hw: HardwareEngine;
+    let os: OsEngine;
     let registry: SoftwareRegistry;
 
     beforeEach(() => {
       eventBus = new EventBus();
       vfs = new FileSystemEngine(eventBus);
-      hw = new HardwareEngine(eventBus, {
-        osVersion: 'Orion_4.8',
-        ramMB: 512,
-        cpuTier: 1,
-        hddFreeGB: 7.0,
-      });
+      hw = new HardwareEngine(eventBus);
+      hw.installModularHardware(createPowerWorkstationBundle());
+      hw.upgradeRam(512);
+      os = new OsEngine(eventBus, { currentOsId: 'Orion_4.8', installedPatchIds: [] });
 
       registry = new SoftwareRegistry(eventBus, vfs, {
-        getOsVersion: () => hw.getState().osVersion,
+        getOsVersion: () => os.getCurrentOsId(),
         getRamMb: () => hw.getState().ramMB,
         getCpuTier: () => hw.getState().cpuTier,
       });
@@ -579,24 +581,20 @@ describe('Adversarial M1 Stress & Gating Suite', () => {
       expect(sim.software.isInstalled('app.photobox')).toBe(false);
     });
 
-    it('blocks OS upgrade to Orion 6.0 until RAM >= 768MB, then permits PhotoBox 3.0 installation', () => {
-      // 1. Attempt OS upgrade on 512MB RAM -> MUST FAIL
-      const osUpgradeFail = hw.upgradeOs('Orion_6.0');
+    it('blocks Orion 6.0 in OsEngine until RAM >= 768MB, then permits PhotoBox 3.0 installation', () => {
+      const osUpgradeFail = os.beginInstall('Orion_6.0', hw.getState(), 8, 0);
       expect(osUpgradeFail.success).toBe(false);
-      expect(osUpgradeFail.error).toMatch(/Requires at least 768 MB RAM/i);
-      expect(hw.getState().osVersion).toBe('Orion_4.8');
+      expect(osUpgradeFail.error).toMatch(/Requires 768MB RAM/i);
+      expect(os.getCurrentOsId()).toBe('Orion_4.8');
 
-      // 2. Upgrade RAM to 1024MB
       const ramUpgrade = hw.upgradeRam(1024);
       expect(ramUpgrade).toBe(true);
       expect(hw.getState().ramMB).toBe(1024);
 
-      // 3. Now upgrade OS to Orion 6.0 -> MUST SUCCEED
-      const osUpgradeSuccess = hw.upgradeOs('Orion_6.0');
+      const osUpgradeSuccess = os.beginInstall('Orion_6.0', hw.getState(), 8, 120);
       expect(osUpgradeSuccess.success).toBe(true);
-      expect(hw.getState().osVersion).toBe('Orion_6.0');
+      expect(os.getCurrentOsId()).toBe('Orion_6.0');
 
-      // 4. Now attempt PhotoBox 3.0 wizard -> MUST BE FULLY COMPATIBLE
       const wizard = registry.startInstallerWizard('sw_photobox_30');
       expect(wizard.compatibilityResult.isCompatible).toBe(true);
       expect(wizard.compatibilityResult.osCheck.passed).toBe(true);
@@ -623,7 +621,7 @@ describe('Adversarial M1 Stress & Gating Suite', () => {
         sizeBytes: currentFree - 10_000_000, // Leaves only 10MB free (< 70MB required)
       });
       hw.upgradeRam(1024);
-      hw.upgradeOs('Orion_6.0');
+      os.beginInstall('Orion_6.0', hw.getState(), 8, 120);
 
       const wizard = registry.startInstallerWizard('sw_photobox_30');
       // Even though OS and RAM pass, disk check fails
@@ -640,20 +638,19 @@ describe('Adversarial M1 Stress & Gating Suite', () => {
     let eventBus: EventBus;
     let vfs: FileSystemEngine;
     let hw: HardwareEngine;
+    let os: OsEngine;
     let registry: SoftwareRegistry;
 
     beforeEach(() => {
       eventBus = new EventBus();
       vfs = new FileSystemEngine(eventBus);
-      hw = new HardwareEngine(eventBus, {
-        osVersion: 'Orion_4.8',
-        ramMB: 512,
-        cpuTier: 1,
-        hddFreeGB: 10.0,
-      });
+      hw = new HardwareEngine(eventBus);
+      hw.installModularHardware(createPowerWorkstationBundle());
+      hw.upgradeRam(512);
+      os = new OsEngine(eventBus, { currentOsId: 'Orion_4.8', installedPatchIds: [] });
 
       registry = new SoftwareRegistry(eventBus, vfs, {
-        getOsVersion: () => hw.getState().osVersion,
+        getOsVersion: () => os.getCurrentOsId(),
         getRamMb: () => hw.getState().ramMB,
         getCpuTier: () => hw.getState().cpuTier,
       });
