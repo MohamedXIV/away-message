@@ -7,6 +7,7 @@
 
 import { InventoryEngine } from './InventoryEngine';
 import { HARDWARE_STORE_INVENTORY, PHYSICAL_ITEM_CATALOG } from './hardware/catalog';
+import { getReleaseById } from './OsCatalog';
 import { SimulationEngine as SimulationEngineCore } from './SimulationEngineCore';
 import {
   createEmptyComputerSetup,
@@ -17,6 +18,7 @@ import {
 import type {
   ActionResult,
   HardwareState as CanonicalHardwareState,
+  OsVersion,
   SimulationState as CanonicalSimulationState,
   StorePurchaseResultData,
 } from './types/index';
@@ -32,6 +34,17 @@ export type PcBootState =
   | 'powered_off'
   | 'no_boot_device'
   | 'desktop';
+
+export type OsInstallMode = 'fresh' | 'upgrade' | 'patch';
+
+export interface OsInstallPlan {
+  targetOs: OsVersion;
+  mediaInstanceId: string;
+  mode: OsInstallMode;
+  durationMinutes: number;
+  installSizeBytes: number;
+  preparedAtTotalMinutes: number;
+}
 
 function hasOwn(value: object | undefined, key: PropertyKey): boolean {
   return Boolean(value && Object.prototype.hasOwnProperty.call(value, key));
@@ -132,6 +145,11 @@ export class SimulationEngine extends SimulationEngineCore {
     return JSON.parse(JSON.stringify(snapshot)) as LiveSimulationState;
   }
 
+  private invalidateV6Cache(): void {
+    this.v6CachedBase = null;
+    this.v6CachedState = null;
+  }
+
   public getPcBootState(): PcBootState {
     return resolvePcBootState(this.getState());
   }
@@ -142,9 +160,226 @@ export class SimulationEngine extends SimulationEngineCore {
     }
 
     this.hardware.setPower(poweredOn);
-    this.v6CachedBase = null;
-    this.v6CachedState = null;
+    this.invalidateV6Cache();
     return { success: true };
+  }
+
+  public insertOwnedMediaAtHome(instanceId: string): ActionResult {
+    const state = this.getState();
+    if (state.player.location !== 'home') {
+      return { success: false, error: 'Physical media can only be inserted at the Room 104 computer.' };
+    }
+    if (!state.computer.assembled || state.computer.opticalDrives.length === 0) {
+      return { success: false, error: 'An assembled computer with an optical drive is required.' };
+    }
+    if (state.computer.insertedMediaId) {
+      return { success: false, error: 'Eject the currently inserted disc first.' };
+    }
+
+    const matches = state.inventory.items.filter((item) => item.instanceId === instanceId);
+    if (matches.length !== 1) {
+      return { success: false, error: 'The selected media is not owned.' };
+    }
+    const item = matches[0]!;
+    if (item.kind !== 'media' || (item.location !== 'room_package' && item.location !== 'inventory')) {
+      return { success: false, error: 'The selected item is not available owned media.' };
+    }
+
+    const catalog = PHYSICAL_ITEM_CATALOG[item.catalogItemId];
+    if (!catalog?.media) {
+      return { success: false, error: 'The selected owned item is not valid installer media.' };
+    }
+
+    const inserted = this.hardware.insertDisc({
+      id: item.instanceId,
+      title: catalog.media.title,
+      type: catalog.media.type,
+      osTarget: catalog.media.osTarget,
+    });
+    if (!inserted) {
+      return { success: false, error: 'The optical drive could not accept the disc.' };
+    }
+
+    try {
+      this.inventory.moveOwnedItem(item.instanceId, ['room_package', 'inventory'], 'inserted');
+    } catch (error) {
+      this.hardware.ejectDisc();
+      this.invalidateV6Cache();
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Could not insert owned media.',
+      };
+    }
+
+    this.invalidateV6Cache();
+    return { success: true };
+  }
+
+  public ejectOwnedMediaAtHome(): ActionResult<{ mediaInstanceId: string }> {
+    const state = this.getState();
+    if (state.player.location !== 'home') {
+      return { success: false, error: 'Physical media can only be ejected at the Room 104 computer.' };
+    }
+    const mediaInstanceId = state.computer.insertedMediaId;
+    if (!mediaInstanceId) {
+      return { success: false, error: 'No disc is inserted.' };
+    }
+
+    const item = state.inventory.items.find((entry) => entry.instanceId === mediaInstanceId);
+    if (!item || item.kind !== 'media' || item.location !== 'inserted') {
+      return { success: false, error: 'Inserted-media ownership state is inconsistent.' };
+    }
+
+    this.hardware.ejectDisc();
+    try {
+      this.inventory.moveOwnedItem(mediaInstanceId, ['inserted'], 'inventory');
+    } catch (error) {
+      const catalog = PHYSICAL_ITEM_CATALOG[item.catalogItemId];
+      if (catalog?.media) {
+        this.hardware.insertDisc({
+          id: item.instanceId,
+          title: catalog.media.title,
+          type: catalog.media.type,
+          osTarget: catalog.media.osTarget,
+        });
+      }
+      this.invalidateV6Cache();
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Could not eject owned media.',
+      };
+    }
+
+    this.invalidateV6Cache();
+    return { success: true, data: { mediaInstanceId } };
+  }
+
+  public prepareOsInstallFromInsertedMedia(): ActionResult<OsInstallPlan> {
+    const state = this.getState();
+    if (state.player.location !== 'home') {
+      return { success: false, error: 'OS installation is only available at the Room 104 computer.' };
+    }
+    if (!state.computer.assembled) {
+      return { success: false, error: 'Set up the computer before installing an operating system.' };
+    }
+    if (state.computer.opticalDrives.length === 0) {
+      return { success: false, error: 'No optical drive is installed.' };
+    }
+    if (state.computer.storage.length === 0) {
+      return { success: false, error: 'No storage drive is installed.' };
+    }
+
+    const mediaInstanceId = state.computer.insertedMediaId;
+    if (!mediaInstanceId) {
+      return { success: false, error: 'Insert owned bootable OS media first.' };
+    }
+
+    const ownedMedia = state.inventory.items.find((item) => item.instanceId === mediaInstanceId);
+    if (!ownedMedia || ownedMedia.kind !== 'media' || ownedMedia.location !== 'inserted') {
+      return { success: false, error: 'The inserted boot media is not an owned inserted item.' };
+    }
+
+    const media = PHYSICAL_ITEM_CATALOG[ownedMedia.catalogItemId]?.media;
+    if (!media || media.type !== 'os_installer') {
+      return { success: false, error: 'The inserted disc is not bootable OS installer media.' };
+    }
+
+    const release = getReleaseById(media.osTarget);
+    if (!release) {
+      return { success: false, error: `Unknown OS release on installer media: ${media.osTarget}.` };
+    }
+
+    const hardware = this.hardware.getState();
+    const eligibility = this.os.canInstall(media.osTarget, hardware, state.time.day);
+    if (!eligibility.ok) {
+      return { success: false, error: eligibility.reasons.join(' ') };
+    }
+
+    const primaryStorage = state.computer.storage[0]!;
+    const installSizeBytes = Math.round(release.installSizeGB * 1_000_000_000);
+    if (primaryStorage.freeBytes < installSizeBytes) {
+      return {
+        success: false,
+        error: `Requires ${release.installSizeGB}GB install space on the primary drive.`,
+      };
+    }
+
+    const mode: OsInstallMode =
+      release.kind === 'patch' || release.kind === 'hotfix'
+        ? 'patch'
+        : state.os.currentOsId === null
+          ? 'fresh'
+          : 'upgrade';
+    const ramFactor = hardware.ramMB < 768 ? 1.6 : hardware.ramMB < 1024 ? 1.2 : 1;
+    const durationMinutes = Math.round((18 + release.installSizeGB * 12) * ramFactor);
+
+    return {
+      success: true,
+      data: {
+        targetOs: media.osTarget,
+        mediaInstanceId,
+        mode,
+        durationMinutes,
+        installSizeBytes,
+        preparedAtTotalMinutes: state.time.totalMinutes,
+      },
+    };
+  }
+
+  public commitOsInstall(plan: OsInstallPlan): ActionResult {
+    const fresh = this.prepareOsInstallFromInsertedMedia();
+    if (!fresh.success || !fresh.data) {
+      return { success: false, error: fresh.error ?? 'OS install preflight failed.' };
+    }
+
+    const currentPlan = fresh.data;
+    const unchanged =
+      currentPlan.targetOs === plan.targetOs &&
+      currentPlan.mediaInstanceId === plan.mediaInstanceId &&
+      currentPlan.mode === plan.mode &&
+      currentPlan.durationMinutes === plan.durationMinutes &&
+      currentPlan.installSizeBytes === plan.installSizeBytes &&
+      currentPlan.preparedAtTotalMinutes === plan.preparedAtTotalMinutes;
+    if (!unchanged) {
+      return { success: false, error: 'The prepared OS installation is stale; run setup preflight again.' };
+    }
+
+    const hardwareBefore = this.hardware.getState();
+    const computerBefore = this.hardware.getComputerState();
+    const displayBefore = this.hardware.getDisplayState();
+    const osBefore = this.os.getState();
+
+    if (!this.hardware.allocateDiskSpaceBytes(plan.installSizeBytes)) {
+      return { success: false, error: 'Could not reserve the required OS install space.' };
+    }
+
+    try {
+      const result = this.os.beginInstall(
+        plan.targetOs,
+        hardwareBefore,
+        this.getState().time.day,
+        plan.preparedAtTotalMinutes + plan.durationMinutes,
+      );
+      if (!result.success) {
+        this.hardware.loadState({ computer: computerBefore, display: displayBefore });
+        this.os.loadState(osBefore);
+        this.invalidateV6Cache();
+        return { success: false, error: result.error ?? 'Operating system installation failed.' };
+      }
+
+      this.invalidateV6Cache();
+      this.advanceGameMinutes(plan.durationMinutes, `Install ${plan.targetOs}`);
+      this.invalidateV6Cache();
+      return { success: true };
+    } catch (error) {
+      this.hardware.loadState({ computer: computerBefore, display: displayBefore });
+      this.os.loadState(osBefore);
+      this.invalidateV6Cache();
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Operating system installation failed.',
+      };
+    }
   }
 
   public purchaseStoreItem(
@@ -199,8 +434,7 @@ export class SimulationEngine extends SimulationEngineCore {
       };
     }
 
-    this.v6CachedBase = null;
-    this.v6CachedState = null;
+    this.invalidateV6Cache();
 
     const debit = super.dispatchAction({
       type: 'PLAYER_SPEND_CASH',
@@ -209,8 +443,7 @@ export class SimulationEngine extends SimulationEngineCore {
     });
     if (!debit.success) {
       this.inventory.loadState(inventoryBefore);
-      this.v6CachedBase = null;
-      this.v6CachedState = null;
+      this.invalidateV6Cache();
       return { success: false, error: debit.error ?? 'Purchase failed.' };
     }
 
@@ -299,19 +532,16 @@ export class SimulationEngine extends SimulationEngineCore {
     } catch (error) {
       this.inventory.loadState(inventoryBefore);
       this.hardware.loadState({ computer: computerBefore, display: displayBefore });
-      this.v6CachedBase = null;
-      this.v6CachedState = null;
+      this.invalidateV6Cache();
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Computer setup failed.',
       };
     }
 
-    this.v6CachedBase = null;
-    this.v6CachedState = null;
+    this.invalidateV6Cache();
     this.advanceGameMinutes(15, 'Set up computer in Room 104');
-    this.v6CachedBase = null;
-    this.v6CachedState = null;
+    this.invalidateV6Cache();
     return { success: true };
   }
 
@@ -335,8 +565,7 @@ export class SimulationEngine extends SimulationEngineCore {
     const display = snapshot.display ?? createEmptyDisplaySetup();
     this.inventory.loadState(snapshot.inventory ?? createEmptyInventoryState());
 
-    this.v6CachedBase = null;
-    this.v6CachedState = null;
+    this.invalidateV6Cache();
 
     // The preserved core already restores clock/economy/world/VFS/social state
     // correctly. Supply canonical computer/display roots through its one
