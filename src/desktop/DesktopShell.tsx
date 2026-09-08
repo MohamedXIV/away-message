@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useSimulationStore } from '../store/useSimulationStore';
+import { resolvePcBootState } from '../engine/SimulationEngine';
 import { useWindowStore } from '../store/useWindowStore';
 import { useDesktopStore } from '../store/useDesktopStore';
 import { soundManager } from '../audio/SoundManager';
@@ -74,7 +75,10 @@ function renderIconGraphic(type: DesktopIconItem['iconType'], _theme?: string) {
 }
 
 export const DesktopShell: React.FC = () => {
-  const osVersion = useSimulationStore((s) => s.state.os.currentOsId);
+  const os = useSimulationStore((s) => s.state.os);
+  const osVersion = os.currentOsId;
+  const computer = useSimulationStore((s) => s.state.computer);
+  const inventory = useSimulationStore((s) => s.state.inventory);
   const monitor = useSimulationStore((s) => s.state.display?.monitor ?? null);
   const vfsFiles = useSimulationStore((s) => s.state.vfs.files);
   const openWindow = useWindowStore((s) => s.openWindow);
@@ -87,10 +91,9 @@ export const DesktopShell: React.FC = () => {
   const [isDialUpModalOpen, setIsDialUpModalOpen] = useState(false);
   const [iconPositions] = useState<Record<string, { x: number; y: number }>>({});
 
-  const hardware = useSimulationStore((s) => s.state.hardware);
   const switchView = useSimulationStore((s) => s.switchView);
-  const hasComputer = Boolean(hardware.hasComputer);
-  const isPoweredOn = Boolean(hardware.isPoweredOn);
+  const setComputerPower = useSimulationStore((s) => s.setComputerPower);
+  const bootState = resolvePcBootState({ computer, inventory, os });
 
   // Sync wallpaper only when a real installed OS is present.
   useEffect(() => {
@@ -111,27 +114,32 @@ export const DesktopShell: React.FC = () => {
   };
   const themeAttr = getOsTheme(osVersion);
 
-  if (!hasComputer) {
+  if (bootState === 'no_computer' || bootState === 'awaiting_setup') {
+    const packageWaiting = bootState === 'awaiting_setup';
     return (
       <div className="w-full h-full flex flex-col items-center justify-center bg-zinc-950 text-zinc-300 font-mono select-none p-4">
         <div className="max-w-md w-full p-6 bg-zinc-900 border border-zinc-800 rounded shadow-2xl text-center space-y-4">
-          <div className="text-4xl">🪵</div>
-          <h2 className="text-base font-bold text-amber-400">Empty Desk — No Computer Installed</h2>
+          <div className="text-4xl">{packageWaiting ? '📦' : '🪵'}</div>
+          <h2 className="text-base font-bold text-amber-400">
+            {packageWaiting ? 'Computer Package Waiting in Room 104' : 'Empty Desk — No Computer Installed'}
+          </h2>
           <p className="text-xs text-zinc-400 leading-relaxed">
-            Your motel desk in Room 104 is completely bare. Head out through the hallway door to downtown Tech Mart and visit Milo's Silicon & Spares to pick up a refurbished PC rig.
+            {packageWaiting
+              ? 'The refurbished computer is still boxed and unassembled. Set it up at the desk before trying to power it on.'
+              : "Your motel desk in Room 104 is completely bare. Head out through the hallway door to downtown Tech Mart and visit Milo's Silicon & Spares to pick up a refurbished PC rig."}
           </p>
           <button
             onClick={() => switchView('room')}
             className="px-5 py-2 bg-amber-600 hover:bg-amber-500 text-black font-bold text-xs rounded transition-colors cursor-pointer"
           >
-            ← Step Back to Room 104
+            ← Back to Room 104
           </button>
         </div>
       </div>
     );
   }
 
-  if (!isPoweredOn) {
+  if (bootState === 'powered_off') {
     return (
       <div className="w-full h-full flex flex-col items-center justify-center bg-black text-zinc-400 font-mono select-none p-4">
         <div className="text-center space-y-4">
@@ -141,8 +149,8 @@ export const DesktopShell: React.FC = () => {
             <button
               onClick={() => {
                 synthAudio.playBiosBeep();
-                if (osVersion) synthAudio.playStartupChime(osVersion);
-                useSimulationStore.getState().engine.hardware.setPower(true);
+                const result = setComputerPower(true);
+                if (result.success && osVersion) synthAudio.playStartupChime(osVersion);
               }}
               className="px-4 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs border border-zinc-700 rounded transition-colors cursor-pointer"
             >
@@ -160,14 +168,14 @@ export const DesktopShell: React.FC = () => {
     );
   }
 
-  if (!osVersion) {
+  if (bootState === 'no_boot_device') {
     return (
       <div className="w-full h-full flex flex-col items-center justify-center bg-black text-zinc-300 font-mono select-none p-6">
         <div className="max-w-lg w-full space-y-3 border border-zinc-700 p-5">
           <div className="text-sm text-emerald-400">POST complete.</div>
           <div className="text-base font-bold text-white">No bootable operating system found.</div>
           <p className="text-xs text-zinc-500">
-            Insert owned setup media to install an operating system. The full BIOS and boot-media flow is handled by the setup lifecycle.
+            Insert owned setup media to install an operating system. Boot-media handling and the installer handoff are owned by the setup lifecycle.
           </p>
           <button
             type="button"
