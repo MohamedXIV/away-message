@@ -21,7 +21,7 @@ interface StartMenuProps {
 }
 
 export const StartMenu: React.FC<StartMenuProps> = ({ isOpen, onClose, onOpenDialUp }) => {
-  const osVersion = useSimulationStore((s) => s.state.hardware.osVersion);
+  const osVersion = useSimulationStore((s) => s.state.os.currentOsId);
   const dispatchAction = useSimulationStore((s) => s.dispatchAction);
   const openWindow = useWindowStore((s) => s.openWindow);
   // Pulse never ships with the OS — its menu entry appears only after install.
