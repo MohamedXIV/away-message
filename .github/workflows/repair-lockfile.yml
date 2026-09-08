@@ -1,0 +1,30 @@
+name: Repair lockfile artifact
+
+on:
+  push:
+    branches:
+      - feat/modular-orion-hardware-os
+
+permissions:
+  contents: read
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Regenerate lockfile with TinyBase-compatible Zod
+        run: npm install zod@^4.5.4 --package-lock-only --ignore-scripts
+      - name: Upload generated manifests
+        uses: actions/upload-artifact@v4
+        with:
+          name: repaired-manifests-${{ github.sha }}
+          path: |
+            package.json
+            package-lock.json
+          if-no-files-found: error
