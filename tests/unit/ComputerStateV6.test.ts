@@ -107,4 +107,14 @@ describe('v6 computer state', () => {
     expect(display).toEqual(createEmptyDisplaySetup());
     expect(projectEffectiveHardware(computer).ramMB).toBe(0);
   });
+
+  it('keeps explicit no-PC authoritative over stale modular data', () => {
+    const { computer, display } = legacyFlatHardwareToCanonical({
+      hasComputer: false,
+      modular: createScrapYardBundle(),
+    });
+
+    expect(computer).toEqual(createEmptyComputerSetup());
+    expect(display).toEqual(createEmptyDisplaySetup());
+  });
 });
