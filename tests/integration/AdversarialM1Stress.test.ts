@@ -11,7 +11,6 @@ import { SoftwareRegistry } from '../../src/engine/SoftwareRegistry';
 import { SimulationEngine } from '../../src/engine/SimulationEngine';
 import { OsEngine } from '../../src/engine/OsEngine';
 import { createPowerWorkstationBundle } from '../../src/engine/hardware/catalog';
-import type { OsVersion } from '../../src/engine/types';
 
 describe('Adversarial M1 Stress & Gating Suite', () => {
   let saveManager: SaveManager;

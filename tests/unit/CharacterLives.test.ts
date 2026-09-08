@@ -32,7 +32,8 @@ describe('Character Lives v4 save migration', () => {
     expect(checkSaveCompatibility({ version: 3, snapshot: {} } as any).status).toBe('ok');
     expect(checkSaveCompatibility({ version: 4, snapshot: {} } as any).status).toBe('ok');
     expect(checkSaveCompatibility({ version: 5, snapshot: {} } as any).status).toBe('ok');
-    expect(checkSaveCompatibility({ version: 6, snapshot: {} } as any).status).toBe('refused');
+    expect(checkSaveCompatibility({ version: SAVE_FORMAT_VERSION, snapshot: {} } as any).status).toBe('ok');
+    expect(checkSaveCompatibility({ version: SAVE_FORMAT_VERSION + 1, snapshot: {} } as any).status).toBe('refused');
     expect(checkSaveCompatibility({ version: 3 } as any).status).toBe('legacy');
   });
 

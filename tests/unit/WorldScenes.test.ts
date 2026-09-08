@@ -13,6 +13,16 @@ import {
 } from '../../src/world/data/roomInteractables';
 import { toneToExpression } from '../../src/world/CafeScene';
 import { SimulationEngine } from '../../src/engine/SimulationEngine';
+import { createScrapYardBundle } from '../../src/engine/hardware/catalog';
+import { legacyModularToCanonical } from '../../src/engine/hardware/state';
+
+function makeNetworkedEngine(): SimulationEngine {
+  const canonical = legacyModularToCanonical(createScrapYardBundle());
+  return new SimulationEngine({
+    computer: canonical.computer,
+    display: canonical.display,
+  } as any);
+}
 
 describe('2D World Scenes, Atmosphere, Interactables & App Integration', () => {
   let engine: SimulationEngine;
@@ -221,6 +231,8 @@ describe('2D World Scenes, Atmosphere, Interactables & App Integration', () => {
 
   describe('5. Continuous Download Progression across View Switches & Time Jumps', () => {
     it('advances background downloads authentically when stepping away to room and making tea', () => {
+      engine = makeNetworkedEngine();
+
       // Start download
       engine.dispatchAction({
         type: 'DOWNLOAD_START',

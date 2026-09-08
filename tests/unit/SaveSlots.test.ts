@@ -62,8 +62,8 @@ describe('P9 save slots (Dexie documents + Pulse coherence)', () => {
     expect(record?.hardwareState.hasComputer).toBe(false);
     expect(record?.hardwareState.connectionType).toBeNull();
     expect(record?.hardwareState.osVersion).toBeNull();
-    expect(record?.snapshot?.computer.assembled).toBe(false);
-    expect(record?.snapshot?.os.currentOsId).toBeNull();
+    expect(record?.snapshot?.computer?.assembled).toBe(false);
+    expect(record?.snapshot?.os?.currentOsId).toBeNull();
   });
 
   it('mostRecentSlot prefers the freshest snapshot', async () => {
