@@ -20,15 +20,20 @@ const KNOWN_HOSTS: Record<string, { ip: string; hops: string[] }> = {
   'gateway.local': { ip: '192.168.1.1', hops: ['192.168.1.1 (gateway.local)'] },
 };
 
+function terminalOsVersion(osVersion: string | null): string {
+  return osVersion ? osVersion.replace(/^Orion_/, '') : 'None';
+}
+
 export const TerminalApp: React.FC<{ windowId: string }> = ({ windowId }) => {
   const vfs = useSimulationStore((s) => s.state.vfs);
   const hardware = useSimulationStore((s) => s.state.hardware);
+  const osVersion = useSimulationStore((s) => s.state.os.currentOsId);
   const dispatchAction = useSimulationStore((s) => s.dispatchAction);
   const closeWindow = useWindowStore((s) => s.closeWindow);
 
   const [currentPath, setCurrentPath] = useState<string>('C:');
   const [lines, setLines] = useState<TerminalLine[]>([
-    { id: '1', type: 'system', text: `Orion OS Command Prompt [Version ${hardware.osVersion === 'Orion_4.8' ? '4.80.1998' : '6.00.2001'}]` },
+    { id: '1', type: 'system', text: `Orion OS Command Prompt [Version ${terminalOsVersion(osVersion)}]` },
     { id: '2', type: 'system', text: '(C) Copyright 1985-2000 Orion Systems Corp. All rights reserved.\nType "help" for a list of available commands.\n' },
   ]);
   const [inputVal, setInputVal] = useState<string>('');
@@ -153,7 +158,7 @@ export const TerminalApp: React.FC<{ windowId: string }> = ({ windowId }) => {
       }
 
       case 'ver': {
-        addLine(`Orion OS [Version ${hardware.osVersion === 'Orion_4.8' ? '4.80.1998' : '6.00.2001'}]`);
+        addLine(`Orion OS [Version ${terminalOsVersion(osVersion)}]`);
         break;
       }
 
@@ -163,6 +168,9 @@ export const TerminalApp: React.FC<{ windowId: string }> = ({ windowId }) => {
       }
 
       case 'ipconfig': {
+        const connectionLabel = hardware.connectionType
+          ? hardware.connectionType.toUpperCase()
+          : 'NONE';
         addLine(
           '\nOrion IP Configuration\n\n' +
           'Ethernet adapter Local Area Connection:\n\n' +
@@ -170,8 +178,8 @@ export const TerminalApp: React.FC<{ windowId: string }> = ({ windowId }) => {
           `   IP Address. . . . . . . . . . . . : 192.168.1.104\n` +
           `   Subnet Mask . . . . . . . . . . . : 255.255.255.0\n` +
           `   Default Gateway . . . . . . . . . : 192.168.1.1\n` +
-          `   Connection Type . . . . . . . . . : ${hardware.connectionType.toUpperCase()} (${hardware.connectionSpeedKbps} kbps)\n` +
-          `   Physical Adapter State  . . . . . : CONNECTED`
+          `   Connection Type . . . . . . . . . : ${connectionLabel} (${hardware.connectionSpeedKbps} kbps)\n` +
+          `   Physical Adapter State  . . . . . : ${hardware.connectionType ? 'CONNECTED' : 'DISCONNECTED'}`
         );
         break;
       }
@@ -201,7 +209,6 @@ export const TerminalApp: React.FC<{ windowId: string }> = ({ windowId }) => {
           : `${currentPath === 'C:' ? 'C:' : currentPath}/${target}`;
         resolvedPath = resolvedPath.replace(/\/+/g, '/');
 
-        // Check if directory exists in VFS
         const dirRecord = vfs.files[resolvedPath];
         if (dirRecord && dirRecord.kind === 'directory') {
           setCurrentPath(resolvedPath);
