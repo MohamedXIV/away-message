@@ -11,7 +11,7 @@ interface TaskbarProps {
 }
 
 export const Taskbar: React.FC<TaskbarProps> = ({ onOpenDialUp }) => {
-  const osVersion = useSimulationStore((s) => s.state.hardware.osVersion);
+  const osVersion = useSimulationStore((s) => s.state.os.currentOsId);
   const switchView = useSimulationStore((s) => s.switchView);
   const windows = useWindowStore((s) => s.windows);
   const windowOrder = useWindowStore((s) => s.windowOrder);
