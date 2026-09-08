@@ -12,11 +12,10 @@ import {
   legacyFlatHardwareToCanonical,
   legacyModularToCanonical,
   projectEffectiveHardware,
+  type LegacyV5HardwareLike,
 } from '../../engine/hardware/state';
 
-type LegacyHardware = Record<string, unknown> & {
-  hasComputer?: boolean;
-  isPoweredOn?: boolean;
+type LegacyHardware = LegacyV5HardwareLike & {
   modular?: ModularHardwareState;
   osVersion?: string;
 };
@@ -64,15 +63,9 @@ function ownershipForComputer(
   add('migrated:chassis:0', computer.chassis?.id);
   add('migrated:motherboard:0', computer.motherboard?.id);
   add('migrated:cpu:0', computer.cpu?.id);
-  computer.ramSticks.forEach((stick, index) => {
-    add(`migrated:ram:${index}`, stick.id);
-  });
-  computer.storage.forEach((drive, index) => {
-    add(`migrated:storage:${index}`, drive.id);
-  });
-  computer.opticalDrives.forEach((drive, index) => {
-    add(`migrated:optical:${index}`, drive.id);
-  });
+  computer.ramSticks.forEach((stick, index) => add(`migrated:ram:${index}`, stick.id));
+  computer.storage.forEach((drive, index) => add(`migrated:storage:${index}`, drive.id));
+  computer.opticalDrives.forEach((drive, index) => add(`migrated:optical:${index}`, drive.id));
   add('migrated:sound:0', computer.soundCard?.id);
   add('migrated:network:0', computer.networkCard?.id);
   if (monitorId) add('migrated:monitor:0', monitorId, 'display');
@@ -154,7 +147,7 @@ export function migrateSnapshotToV6(
   if (workingComputer) {
     const canonical = hardware.modular
       ? legacyModularToCanonical(hardware.modular)
-      : legacyFlatHardwareToCanonical(hardware as never);
+      : legacyFlatHardwareToCanonical(hardware);
 
     computer = canonical.computer;
     display = canonical.display;
