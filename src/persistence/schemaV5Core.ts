@@ -209,7 +209,7 @@ export const SaveSlotSchema = z.object({
   }),
   hardwareState: z.object({
     hasComputer: z.boolean().optional(),
-    modular: z.record(z.unknown()).optional(),
+    modular: z.record(z.string(), z.unknown()).optional(),
     cpuTier: z.number().int(),
     ramMB: z.number().int(),
     hddTotalGB: z.number(),
@@ -220,8 +220,8 @@ export const SaveSlotSchema = z.object({
     theme: z.string().min(3),
     wallpaper: z.string(),
   }),
-  narrativeFlags: z.record(z.union([z.boolean(), z.number(), z.string()])),
-  meta: z.record(z.unknown()).optional(),
+  narrativeFlags: z.record(z.string(), z.union([z.boolean(), z.number(), z.string()])),
+  meta: z.record(z.string(), z.unknown()).optional(),
 });
 
 export const FullSimulationSnapshotSchema = z.object({
