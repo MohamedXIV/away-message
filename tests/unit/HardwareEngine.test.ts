@@ -1,8 +1,9 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import { EventBus } from '../../src/engine/EventBus';
 import { HardwareEngine } from '../../src/engine/HardwareEngine';
+import { createScrapYardBundle } from '../../src/engine/hardware/catalog';
 
-describe('HardwareEngine (PC Specifications, Upgrades & OS Compatibility)', () => {
+describe('HardwareEngine (canonical physical computer state)', () => {
   let eventBus: EventBus;
   let hardware: HardwareEngine;
 
@@ -11,97 +12,86 @@ describe('HardwareEngine (PC Specifications, Upgrades & OS Compatibility)', () =
     hardware = new HardwareEngine(eventBus);
   });
 
-  it('initializes with baseline late-90s PC specs', () => {
-    const state = hardware.getState();
-    expect(state.osVersion).toBe('Orion_4.8');
-    expect(state.ramMB).toBe(512);
-    expect(state.cpuTier).toBe(1);
-    expect(state.hddTotalGB).toBe(40.0);
-    expect(state.hddFreeGB).toBe(7.0);
-    expect(state.connectionType).toBe('dsl_256k');
-    expect(state.connectionSpeedKbps).toBe(256);
+  it('starts with no canonical machine and zero effective specs', () => {
+    expect(hardware.getComputerState().assembled).toBe(false);
+    expect(hardware.getDisplayState().monitor).toBeNull();
+    expect(hardware.getState()).toMatchObject({
+      hasComputer: false,
+      isPoweredOn: false,
+      cpuTier: 0,
+      ramMB: 0,
+      hddTotalGB: 0,
+      hddFreeGB: 0,
+      connectionType: null,
+      connectionSpeedKbps: 0,
+      soundCardInstalled: false,
+    });
   });
 
-  it('performs RAM upgrade and emits hardware:upgraded event', () => {
-    let upgradedComponent = '';
-    eventBus.on('hardware:upgraded', ({ component }) => {
-      upgradedComponent = component;
+  it('fails hardware requirements on an empty machine instead of using fake defaults', () => {
+    const result = hardware.checkHardwareRequirements({
+      minRamMB: 64,
+      minCpuTier: 1,
+      requiredDiskBytes: 1,
     });
 
-    const ok = hardware.upgradeRam(1024);
-    expect(ok).toBe(true);
-    expect(hardware.getState().ramMB).toBe(1024);
-    expect(upgradedComponent).toBe('RAM');
-
-    // Cannot downgrade or keep same
-    expect(hardware.upgradeRam(512)).toBe(false);
+    expect(result.compatible).toBe(false);
+    expect(result.reasons.join(' ')).toContain('No computer installed');
   });
 
-  it('performs Internet connection tier upgrade', () => {
-    hardware.upgradeConnection('dsl_512k');
+  it('installs the temporary modular adapter without importing an OS into hardware state', () => {
+    const scrap = createScrapYardBundle();
+    expect(scrap.isPoweredOn).toBe(false);
+
+    hardware.installModularHardware(scrap, 'Orion_6.0');
+
+    expect(hardware.getComputerState().assembled).toBe(true);
+    expect(hardware.getComputerState().poweredOn).toBe(false);
+    expect(hardware.getDisplayState().monitor?.id).toBe('mon_beige_curved_14');
+    expect(hardware.getState().ramMB).toBe(64);
+    expect('osVersion' in hardware.getState()).toBe(false);
+  });
+
+  it('upgrades RAM by mutating canonical RAM sticks', () => {
+    hardware.installModularHardware(createScrapYardBundle());
+
+    expect(hardware.upgradeRam(512)).toBe(true);
+    expect(hardware.getState().ramMB).toBe(512);
+    expect(hardware.getComputerState().ramSticks.reduce((n, stick) => n + stick.sizeMb, 0)).toBe(512);
+    expect(hardware.upgradeRam(256)).toBe(false);
+  });
+
+  it('upgrades the canonical network card', () => {
+    hardware.installModularHardware(createScrapYardBundle());
+
+    expect(hardware.upgradeConnection('dsl_512k')).toBe(true);
     expect(hardware.getState().connectionType).toBe('dsl_512k');
     expect(hardware.getState().connectionSpeedKbps).toBe(512);
-
-    hardware.upgradeConnection('dsl_1m');
-    expect(hardware.getState().connectionType).toBe('dsl_1m');
-    expect(hardware.getState().connectionSpeedKbps).toBe(1024);
   });
 
-  it('enforces RAM and disk space gating on Orion OS 6.0 upgrade', () => {
-    // Attempting OS 6 upgrade with only 512MB RAM fails
-    const failRes = hardware.upgradeOs('Orion_6.0');
-    expect(failRes.success).toBe(false);
-    expect(failRes.error).toContain('768 MB RAM');
-    expect(hardware.getState().osVersion).toBe('Orion_4.8');
+  it('calculates RAM pressure using an explicit OS baseline', () => {
+    hardware.installModularHardware(createScrapYardBundle());
+    hardware.upgradeRam(512);
 
-    // Upgrade RAM to 1024MB
-    hardware.upgradeRam(1024);
+    const nominal = hardware.calculateRamPressure(100, 64);
+    expect(nominal.status).toBe('nominal');
+    expect(nominal.freeRamMB).toBe(348);
 
-    // Now OS 6 upgrade succeeds
-    const successRes = hardware.upgradeOs('Orion_6.0');
-    expect(successRes.success).toBe(true);
-    expect(hardware.getState().osVersion).toBe('Orion_6.0');
+    const elevated = hardware.calculateRamPressure(350, 64);
+    expect(elevated.status).toBe('elevated');
+
+    const critical = hardware.calculateRamPressure(420, 64);
+    expect(critical.status).toBe('critical');
   });
 
-  it('correctly validates software compatibility requirements', () => {
-    // App requiring Orion 4.8 and 512MB RAM (Pulse 5.2)
-    const pulse52Req = {
-      minOs: 'Orion_4.8' as const,
-      minRamMB: 512,
-      minCpuTier: 1,
-      requiredDiskBytes: 35_000_000,
-    };
-    const pulseCheck = hardware.checkRequirements(pulse52Req);
-    expect(pulseCheck.compatible).toBe(true);
+  it('allocates and frees bytes against canonical primary storage', () => {
+    hardware.installModularHardware(createScrapYardBundle());
+    const before = hardware.getComputerState().storage[0]!.freeBytes;
 
-    // App requiring Orion 6.0 and 768MB RAM (PhotoBox 3.0)
-    const photoboxReq = {
-      minOs: 'Orion_6.0' as const,
-      minRamMB: 768,
-      minCpuTier: 1,
-      requiredDiskBytes: 70_000_000,
-    };
-    const photoCheckBefore = hardware.checkRequirements(photoboxReq);
-    expect(photoCheckBefore.compatible).toBe(false);
-    expect(photoCheckBefore.reasons.length).toBeGreaterThan(0);
+    expect(hardware.allocateDiskSpaceBytes(100_000_000)).toBe(true);
+    expect(hardware.getComputerState().storage[0]!.freeBytes).toBe(before - 100_000_000);
 
-    // Upgrade RAM and OS
-    hardware.upgradeRam(1024);
-    hardware.upgradeOs('Orion_6.0');
-    const photoCheckAfter = hardware.checkRequirements(photoboxReq);
-    expect(photoCheckAfter.compatible).toBe(true);
-  });
-
-  it('calculates RAM pressure under varying application loads', () => {
-    // Baseline OS 4.8 takes 64MB
-    const pressureNominal = hardware.calculateRamPressure(100); // Total 164 / 512 = ~32%
-    expect(pressureNominal.status).toBe('nominal');
-    expect(pressureNominal.freeRamMB).toBe(512 - 164);
-
-    const pressureElevated = hardware.calculateRamPressure(350); // Total 414 / 512 = ~80%
-    expect(pressureElevated.status).toBe('elevated');
-
-    const pressureCritical = hardware.calculateRamPressure(420); // Total 484 / 512 = ~94%
-    expect(pressureCritical.status).toBe('critical');
+    hardware.freeDiskSpaceBytes(50_000_000);
+    expect(hardware.getComputerState().storage[0]!.freeBytes).toBe(before - 50_000_000);
   });
 });
