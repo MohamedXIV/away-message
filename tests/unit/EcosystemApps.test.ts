@@ -10,13 +10,16 @@ describe('Ecosystem Applications Logic & Gating Unit Tests', () => {
         hardware: {
           ...prev.state.hardware,
           ramMB: 256,
-          osVersion: 'Orion_4.8',
+        },
+        os: {
+          ...prev.state.os,
+          currentOsId: 'Orion_4.8',
         },
       },
     }));
 
     const state1 = useSimulationStore.getState().state;
-    const isGated1 = state1.hardware.ramMB < 768 || state1.hardware.osVersion !== 'Orion_6.0';
+    const isGated1 = state1.hardware.ramMB < 768 || state1.os.currentOsId !== 'Orion_6.0';
     expect(isGated1).toBe(true);
 
     // Meets RAM but not OS
@@ -26,13 +29,16 @@ describe('Ecosystem Applications Logic & Gating Unit Tests', () => {
         hardware: {
           ...prev.state.hardware,
           ramMB: 1024,
-          osVersion: 'Orion_4.8',
+        },
+        os: {
+          ...prev.state.os,
+          currentOsId: 'Orion_4.8',
         },
       },
     }));
 
     const state2 = useSimulationStore.getState().state;
-    const isGated2 = state2.hardware.ramMB < 768 || state2.hardware.osVersion !== 'Orion_6.0';
+    const isGated2 = state2.hardware.ramMB < 768 || state2.os.currentOsId !== 'Orion_6.0';
     expect(isGated2).toBe(true);
 
     // Meets both requirements
@@ -42,13 +48,16 @@ describe('Ecosystem Applications Logic & Gating Unit Tests', () => {
         hardware: {
           ...prev.state.hardware,
           ramMB: 768,
-          osVersion: 'Orion_6.0',
+        },
+        os: {
+          ...prev.state.os,
+          currentOsId: 'Orion_6.0',
         },
       },
     }));
 
     const state3 = useSimulationStore.getState().state;
-    const isGated3 = state3.hardware.ramMB < 768 || state3.hardware.osVersion !== 'Orion_6.0';
+    const isGated3 = state3.hardware.ramMB < 768 || state3.os.currentOsId !== 'Orion_6.0';
     expect(isGated3).toBe(false);
   });
 

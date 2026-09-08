@@ -64,7 +64,7 @@ export const Day14ResolutionModal: React.FC<Day14ResolutionModalProps> = ({
         rentDueDay: player.rentDueDay,
       },
       computerSpecs: {
-        osVersion: hardware.osVersion,
+        osVersion,
         ramMB: hardware.ramMB,
         connectionType: hardware.connectionType,
         installedAppsCount: installedSoftware.length,
