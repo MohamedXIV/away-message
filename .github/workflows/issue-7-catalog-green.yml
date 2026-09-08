@@ -1,0 +1,111 @@
+name: Issue 7 catalog green slice
+
+on:
+  push:
+    branches:
+      - sdd/issue-6-verifier
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repair branch
+        uses: actions/checkout@v4
+        with:
+          ref: sdd/issue-7-repair
+          fetch-depth: 0
+      - name: Apply minimal catalog implementation
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          def rep(path, old, new, count=1):
+              p = Path(path)
+              text = p.read_text()
+              if old not in text:
+                  raise SystemExit(f'missing expected text in {path}: {old[:180]!r}')
+              p.write_text(text.replace(old, new, count))
+
+          # Types: authored physical definitions + SKU composition. Keep a temporary
+          # bundleConfig compatibility shape until the UI is removed in Task 4, but
+          # it can no longer carry an installed OS value.
+          rep('src/engine/hardware/types.ts',
+              "import type { ConnectionType, OsVersion } from '../types';",
+              "import type { ConnectionType, OsVersion, OwnedItemKind } from '../types';")
+          marker = "export interface HardwareStoreItem {\n"
+          insert = """export type PhysicalCatalogComponentKind =\n  | 'chassis'\n  | 'motherboard'\n  | 'cpu'\n  | 'ram'\n  | 'storage'\n  | 'optical'\n  | 'sound'\n  | 'network'\n  | 'monitor'\n  | 'os_media';\n\nexport interface PhysicalCatalogItem {\n  id: string;\n  kind: OwnedItemKind;\n  componentKind: PhysicalCatalogComponentKind;\n  component?:\n    | ChassisComponent\n    | MotherboardComponent\n    | CpuComponent\n    | RamStickComponent\n    | StorageComponent\n    | OpticalDriveComponent\n    | SoundCardComponent\n    | NetworkCardComponent\n    | MonitorComponent;\n  media?: {\n    type: 'os_installer';\n    title: string;\n    osTarget: OsVersion;\n  };\n}\n\nexport interface StoreSkuContent {\n  catalogItemId: string;\n  quantity: number;\n}\n\nexport interface HardwareStoreItem {\n"""
+          rep('src/engine/hardware/types.ts', marker, insert)
+          rep('src/engine/hardware/types.ts',
+              "  specsSummary: string;\n  component?:",
+              "  specsSummary: string;\n  contents: StoreSkuContent[];\n  repeatable: boolean;\n  component?:")
+          rep('src/engine/hardware/types.ts',
+              "  bundleConfig?: {\n    hardware: ModularHardwareState;\n    installedOs: OsVersion;\n  };",
+              "  /** @deprecated Task-4 UI bridge only; checkout ownership comes from contents. */\n  bundleConfig?: {\n    hardware: ModularHardwareState;\n    installedOs?: never;\n  };")
+
+          # Starter authored free space: preserve 2.1GB capacity, make the clean
+          # 1.8GB free state capable of Orion 4.8 + baseline Pulse.
+          rep('src/engine/hardware/catalog.ts',
+              "      freeBytes: 900_000_000,",
+              "      freeBytes: 1_800_000_000,")
+          rep('src/engine/hardware/catalog.ts',
+              "import type { HardwareStoreItem, ModularHardwareState } from './types';",
+              "import type { HardwareStoreItem, ModularHardwareState, PhysicalCatalogItem, StoreSkuContent } from './types';")
+
+          catalog_marker = "export const HARDWARE_STORE_INVENTORY: HardwareStoreItem[] = [\n"
+          physical_block = """const scrapYardPhysical = createScrapYardBundle();\nconst familyPhysical = createFamilyRefurbBundle();\nconst workstationPhysical = createPowerWorkstationBundle();\n\nexport const PHYSICAL_ITEM_CATALOG: Record<string, PhysicalCatalogItem> = {\n  chassis_scrapyard_beige_atx: {\n    id: 'chassis_scrapyard_beige_atx', kind: 'hardware', componentKind: 'chassis',\n    component: { id: 'chassis_scrapyard_beige_atx', name: 'Dusty Beige ATX Chassis' },\n  },\n  chassis_family_refurb: {\n    id: 'chassis_family_refurb', kind: 'hardware', componentKind: 'chassis',\n    component: { id: 'chassis_family_refurb', name: 'Cream Refurbished ATX Chassis' },\n  },\n  chassis_power_workstation: {\n    id: 'chassis_power_workstation', kind: 'hardware', componentKind: 'chassis',\n    component: { id: 'chassis_power_workstation', name: 'Heavy Silver Workstation Chassis' },\n  },\n  [scrapYardPhysical.motherboard.id]: { id: scrapYardPhysical.motherboard.id, kind: 'hardware', componentKind: 'motherboard', component: { ...scrapYardPhysical.motherboard } },\n  [scrapYardPhysical.cpu.id]: { id: scrapYardPhysical.cpu.id, kind: 'hardware', componentKind: 'cpu', component: { ...scrapYardPhysical.cpu } },\n  [scrapYardPhysical.ramSticks[0]!.id]: { id: scrapYardPhysical.ramSticks[0]!.id, kind: 'hardware', componentKind: 'ram', component: { ...scrapYardPhysical.ramSticks[0]! } },\n  [scrapYardPhysical.storage.id]: { id: scrapYardPhysical.storage.id, kind: 'hardware', componentKind: 'storage', component: { ...scrapYardPhysical.storage } },\n  [scrapYardPhysical.opticalDrive.id]: { id: scrapYardPhysical.opticalDrive.id, kind: 'hardware', componentKind: 'optical', component: { ...scrapYardPhysical.opticalDrive } },\n  [scrapYardPhysical.soundCard.id]: { id: scrapYardPhysical.soundCard.id, kind: 'hardware', componentKind: 'sound', component: { ...scrapYardPhysical.soundCard } },\n  [scrapYardPhysical.networkCard.id]: { id: scrapYardPhysical.networkCard.id, kind: 'hardware', componentKind: 'network', component: { ...scrapYardPhysical.networkCard } },\n  [scrapYardPhysical.monitor.id]: { id: scrapYardPhysical.monitor.id, kind: 'display', componentKind: 'monitor', component: { ...scrapYardPhysical.monitor } },\n\n  [familyPhysical.cpu.id]: { id: familyPhysical.cpu.id, kind: 'hardware', componentKind: 'cpu', component: { ...familyPhysical.cpu } },\n  [familyPhysical.ramSticks[0]!.id]: { id: familyPhysical.ramSticks[0]!.id, kind: 'hardware', componentKind: 'ram', component: { ...familyPhysical.ramSticks[0]! } },\n  [familyPhysical.storage.id]: { id: familyPhysical.storage.id, kind: 'hardware', componentKind: 'storage', component: { ...familyPhysical.storage } },\n  [familyPhysical.opticalDrive.id]: { id: familyPhysical.opticalDrive.id, kind: 'hardware', componentKind: 'optical', component: { ...familyPhysical.opticalDrive } },\n  [familyPhysical.monitor.id]: { id: familyPhysical.monitor.id, kind: 'display', componentKind: 'monitor', component: { ...familyPhysical.monitor } },\n\n  [workstationPhysical.motherboard.id]: { id: workstationPhysical.motherboard.id, kind: 'hardware', componentKind: 'motherboard', component: { ...workstationPhysical.motherboard } },\n  [workstationPhysical.cpu.id]: { id: workstationPhysical.cpu.id, kind: 'hardware', componentKind: 'cpu', component: { ...workstationPhysical.cpu } },\n  [workstationPhysical.ramSticks[0]!.id]: { id: workstationPhysical.ramSticks[0]!.id, kind: 'hardware', componentKind: 'ram', component: { ...workstationPhysical.ramSticks[0]! } },\n  [workstationPhysical.ramSticks[1]!.id]: { id: workstationPhysical.ramSticks[1]!.id, kind: 'hardware', componentKind: 'ram', component: { ...workstationPhysical.ramSticks[1]! } },\n  [workstationPhysical.storage.id]: { id: workstationPhysical.storage.id, kind: 'hardware', componentKind: 'storage', component: { ...workstationPhysical.storage } },\n  [workstationPhysical.opticalDrive.id]: { id: workstationPhysical.opticalDrive.id, kind: 'hardware', componentKind: 'optical', component: { ...workstationPhysical.opticalDrive } },\n  [workstationPhysical.soundCard.id]: { id: workstationPhysical.soundCard.id, kind: 'hardware', componentKind: 'sound', component: { ...workstationPhysical.soundCard } },\n  [workstationPhysical.monitor.id]: { id: workstationPhysical.monitor.id, kind: 'display', componentKind: 'monitor', component: { ...workstationPhysical.monitor } },\n\n  ram_sdram_64: { id: 'ram_sdram_64', kind: 'hardware', componentKind: 'ram', component: { id: 'ram_sdram_64', name: '64MB PC100 SDRAM', sizeMb: 64 } },\n  ram_sdram_128: { id: 'ram_sdram_128', kind: 'hardware', componentKind: 'ram', component: { id: 'ram_sdram_128', name: '128MB PC133 SDRAM', sizeMb: 128 } },\n  hdd_10gb: { id: 'hdd_10gb', kind: 'hardware', componentKind: 'storage', component: { id: 'hdd_10gb', name: '10.2 GB IDE Hard Drive', capacityBytes: 10_200_000_000, freeBytes: 10_200_000_000, rpm: 5400, throughputUnits: 1.2 } },\n\n  media_orion_48_setup: {\n    id: 'media_orion_48_setup', kind: 'media', componentKind: 'os_media',\n    media: { type: 'os_installer', title: 'Orion OS 4.8 Setup CD', osTarget: 'Orion_4.8' as OsVersion },\n  },\n  media_orion_50_setup: {\n    id: 'media_orion_50_setup', kind: 'media', componentKind: 'os_media',\n    media: { type: 'os_installer', title: 'Orion OS 5.0 Aurora Setup CD', osTarget: 'Orion_5.0' as OsVersion },\n  },\n  media_orion_60_setup: {\n    id: 'media_orion_60_setup', kind: 'media', componentKind: 'os_media',\n    media: { type: 'os_installer', title: 'Orion OS 6.0 Glassline Setup Disc', osTarget: 'Orion_6.0' as OsVersion },\n  },\n};\n\nexport function getPhysicalCatalogItem(id: string): PhysicalCatalogItem | undefined {\n  return PHYSICAL_ITEM_CATALOG[id];\n}\n\nfunction skuContents(...catalogItemIds: string[]): StoreSkuContent[] {\n  return catalogItemIds.map((catalogItemId) => ({ catalogItemId, quantity: 1 }));\n}\n\nexport const HARDWARE_STORE_INVENTORY: HardwareStoreItem[] = [\n"""
+          rep('src/engine/hardware/catalog.ts', catalog_marker, physical_block)
+
+          # Bundles: checkout convenience only; finite contents include separate setup media.
+          rep('src/engine/hardware/catalog.ts',
+              "    description: 'A dusty beige tower with matching curved 14\" CRT. Pre-loaded with Orion OS 4.8. Perfect for getting online and chatting on Pulse on a shoestring budget.',\n    specsSummary: 'Cel-366 MHz · 64MB RAM · 2.1GB HDD · 14\" Curved CRT · Orion 4.8',\n    bundleConfig: {\n      hardware: createScrapYardBundle(),\n      installedOs: 'Orion_4.8' as OsVersion,\n    },",
+              "    description: 'A dusty beige tower with matching curved 14\" CRT, plus the original Orion 4.8 setup CD. A complete starter package ready to take back to Room 104.',\n    specsSummary: 'Cel-366 MHz · 64MB RAM · 2.1GB HDD · 14\" Curved CRT · Orion 4.8 Setup CD',\n    repeatable: false,\n    contents: skuContents('chassis_scrapyard_beige_atx', 'mb_standard_atx', 'cpu_celeron_366', 'ram_sdram_64_a', 'hdd_quantum_2gb', 'optical_cdrom_24x', 'sound_sb16', 'modem_v90_56k', 'mon_beige_curved_14', 'media_orion_48_setup'),\n    bundleConfig: { hardware: createScrapYardBundle() },")
+          rep('src/engine/hardware/catalog.ts',
+              "    description: 'Clean cream-white desktop with 15\" standard CRT. Pre-loaded with Orion OS 5.0 Aurora. Balanced daily workhorse with CD-RW drive and 128MB RAM.',\n    specsSummary: 'P-II 500 MHz · 128MB RAM · 6.4GB HDD · 15\" CRT · Orion 5.0',\n    bundleConfig: {\n      hardware: createFamilyRefurbBundle(),\n      installedOs: 'Orion_5.0' as OsVersion,\n    },",
+              "    description: 'Clean cream-white desktop with 15\" standard CRT and Orion 5.0 Aurora setup media. Balanced daily workhorse with CD-RW drive and 128MB RAM.',\n    specsSummary: 'P-II 500 MHz · 128MB RAM · 6.4GB HDD · 15\" CRT · Orion 5.0 Setup CD',\n    repeatable: false,\n    contents: skuContents('chassis_family_refurb', 'mb_standard_atx', 'cpu_pentium2_500', 'ram_sdram_128_a', 'hdd_maxtor_6gb', 'optical_cdrw_32x', 'sound_sb16', 'nic_fast_ethernet', 'mon_standard_15', 'media_orion_50_setup'),\n    bundleConfig: { hardware: createFamilyRefurbBundle() },")
+          rep('src/engine/hardware/catalog.ts',
+              "    description: 'Heavy silver tower with 17\" perfectly flat Trinitron aperture CRT. Pre-loaded with Orion OS 6.0 Glassline. Multitasking beast with SoundBlaster Live! and 256MB RAM.',\n    specsSummary: 'P-III 933 MHz · 256MB RAM · 20GB 7200 RPM HDD · 17\" Trinitron · Orion 6.0',\n    bundleConfig: {\n      hardware: createPowerWorkstationBundle(),\n      installedOs: 'Orion_6.0' as OsVersion,\n    },",
+              "    description: 'Heavy silver tower with 17\" perfectly flat Trinitron aperture CRT and Orion 6.0 Glassline setup media. Multitasking beast with SoundBlaster Live! and 256MB RAM.',\n    specsSummary: 'P-III 933 MHz · 256MB RAM · 20GB 7200 RPM HDD · 17\" Trinitron · Orion 6.0 Setup Disc',\n    repeatable: false,\n    contents: skuContents('chassis_power_workstation', 'mb_pro_atx', 'cpu_pentium3_933', 'ram_sdram_128_1', 'ram_sdram_128_2', 'hdd_barracuda_20gb', 'optical_cdrw_48x', 'sound_sb_live', 'nic_fast_ethernet', 'mon_trinitron_17', 'media_orion_60_setup'),\n    bundleConfig: { hardware: createPowerWorkstationBundle() },")
+
+          # Individual SKUs.
+          for sku_id, price_line, repeatable, content in [
+              ('part_ram_64mb', '    price: 18.0,', True, "ram_sdram_64"),
+              ('part_ram_128mb', '    price: 32.0,', True, "ram_sdram_128"),
+              ('part_hdd_10gb', '    price: 28.0,', True, "hdd_10gb"),
+              ('part_mon_trinitron', '    price: 48.0,', True, "mon_trinitron_17"),
+              ('disc_orion_50', '    price: 29.0,', False, "media_orion_50_setup"),
+              ('disc_orion_60', '    price: 45.0,', False, "media_orion_60_setup"),
+          ]:
+              p = Path('src/engine/hardware/catalog.ts')
+              text = p.read_text()
+              id_pos = text.find(f"    id: '{sku_id}',")
+              if id_pos < 0:
+                  raise SystemExit(f'missing SKU {sku_id}')
+              price_pos = text.find(price_line, id_pos)
+              if price_pos < 0:
+                  raise SystemExit(f'missing price for {sku_id}')
+              insert_pos = price_pos + len(price_line)
+              addition = f"\n    repeatable: {'true' if repeatable else 'false'},\n    contents: skuContents('{content}'),"
+              text = text[:insert_pos] + addition + text[insert_pos:]
+              p.write_text(text)
+
+          # Baseline balance: authored requirements, not bypasses.
+          rep('src/engine/OsCatalog.ts',
+              "    requirements: { minRamMB: 256, minCpuTier: 1, minDiskGB: 1.2 },",
+              "    requirements: { minRamMB: 64, minCpuTier: 1, minDiskGB: 1.2 },")
+          rep('src/engine/PulseCatalog.ts',
+              "    requirements: { minOs: 'Orion_4.8' as OsVersion, minRamMB: 512, minDiskMB: 32 },",
+              "    requirements: { minOs: 'Orion_4.8' as OsVersion, minRamMB: 64, minDiskMB: 32 },")
+          PY
+      - name: Commit green slice
+        shell: bash
+        run: |
+          git config user.name "Issue 7 verifier"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/engine/hardware/types.ts src/engine/hardware/catalog.ts src/engine/OsCatalog.ts src/engine/PulseCatalog.ts
+          git diff --cached --check
+          git commit -m "feat: author physical store sku contents"
+          git push origin HEAD:sdd/issue-7-repair
