@@ -26,9 +26,32 @@ import type {
 } from './types';
 
 export type LiveSimulationState = CanonicalSimulationState;
+export type PcBootState =
+  | 'no_computer'
+  | 'awaiting_setup'
+  | 'powered_off'
+  | 'no_boot_device'
+  | 'desktop';
 
 function hasOwn(value: object | undefined, key: PropertyKey): boolean {
   return Boolean(value && Object.prototype.hasOwnProperty.call(value, key));
+}
+
+export function resolvePcBootState(
+  state: Pick<LiveSimulationState, 'computer' | 'inventory' | 'os'>,
+): PcBootState {
+  if (!state.computer.assembled) {
+    const hasUnassembledComputerItems = state.inventory.items.some(
+      (item) =>
+        item.location === 'room_package' &&
+        (item.kind === 'hardware' || item.kind === 'display'),
+    );
+    return hasUnassembledComputerItems ? 'awaiting_setup' : 'no_computer';
+  }
+
+  if (!state.computer.poweredOn) return 'powered_off';
+  if (!state.os.currentOsId) return 'no_boot_device';
+  return 'desktop';
 }
 
 export class SimulationEngine extends SimulationEngineCore {
@@ -107,6 +130,21 @@ export class SimulationEngine extends SimulationEngineCore {
     this.v6CachedBase = null;
     this.v6CachedState = null;
     return JSON.parse(JSON.stringify(snapshot)) as LiveSimulationState;
+  }
+
+  public getPcBootState(): PcBootState {
+    return resolvePcBootState(this.getState());
+  }
+
+  public setComputerPower(poweredOn: boolean): ActionResult {
+    if (!this.hardware.getComputerState().assembled) {
+      return { success: false, error: 'Set up the computer in Room 104 before powering it on.' };
+    }
+
+    this.hardware.setPower(poweredOn);
+    this.v6CachedBase = null;
+    this.v6CachedState = null;
+    return { success: true };
   }
 
   public purchaseStoreItem(
