@@ -1,6 +1,6 @@
 import React, { useRef, useCallback, memo } from 'react';
 import { WindowState, useWindowStore } from '../store/useWindowStore';
-import { useHardwareState } from '../store/useSimulationStore';
+import { useSimulationStore } from '../store/useSimulationStore';
 import { OsHostProvider } from './host/OsHostContext';
 import { synthAudio } from '../audio/SynthAudio';
 
@@ -13,8 +13,8 @@ export interface WindowFrameProps {
 type ResizeDirection = 'n' | 's' | 'e' | 'w' | 'ne' | 'nw' | 'se' | 'sw';
 
 export const WindowFrame: React.FC<WindowFrameProps> = memo(({ window: winState, isActive, children }) => {
-  const hardware = useHardwareState();
-  const isOrion6 = hardware.osVersion === 'Orion_6.0';
+  const osVersion = useSimulationStore((s) => s.state.os.currentOsId);
+  const isOrion6 = osVersion === 'Orion_6.0';
   const frameRef = useRef<HTMLDivElement>(null);
 
   const focusWindow = useWindowStore((s) => s.focusWindow);
@@ -152,27 +152,28 @@ export const WindowFrame: React.FC<WindowFrameProps> = memo(({ window: winState,
         zIndex: winState.zIndex,
       };
 
-  const getOsTheme = (version: string) => {
-    if (version?.includes('7.')) return 'orion70';
-    if (version?.includes('6.')) return 'orion60';
-    if (version?.includes('5.')) return 'orion50';
+  const getOsTheme = (version: string | null): string | undefined => {
+    if (!version) return undefined;
+    if (version.includes('7.')) return 'orion70';
+    if (version.includes('6.')) return 'orion60';
+    if (version.includes('5.')) return 'orion50';
     return 'orion48';
   };
-  const osTheme = getOsTheme(hardware.osVersion);
+  const osTheme = getOsTheme(osVersion);
 
   const handleMinimize = () => {
     minimizeWindow(winState.id);
-    synthAudio.playWindowSound('minimize', hardware.osVersion);
+    synthAudio.playWindowSound('minimize', osVersion ?? undefined);
   };
 
   const handleToggleMaximize = () => {
     toggleMaximize(winState.id);
-    synthAudio.playWindowSound(winState.isMaximized ? 'restore' : 'open', hardware.osVersion);
+    synthAudio.playWindowSound(winState.isMaximized ? 'restore' : 'open', osVersion ?? undefined);
   };
 
   const handleClose = () => {
     closeOrTrayWindow(winState.id);
-    synthAudio.playWindowSound('close', hardware.osVersion);
+    synthAudio.playWindowSound('close', osVersion ?? undefined);
   };
 
   return (
