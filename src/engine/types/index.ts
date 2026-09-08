@@ -76,21 +76,57 @@ export type ConnectionType = 'dialup_56k' | 'dsl_256k' | 'dsl_512k' | 'dsl_1m';
 // Core OS lineage — now heavy, supports 4.8 / 5.0 / 6.0 / 6.1 / 7.0-beta / 7.0 / 7.0.1 + procedural
 export type OsVersion = 'Orion_4.8' | 'Orion_5.0' | 'Orion_6.0' | 'Orion_6.1' | 'Orion_7.0-beta' | 'Orion_7.0' | 'Orion_7.0.1' | (string & {});
 
+export type OwnedItemKind = 'hardware' | 'display' | 'media';
+export type OwnedItemLocation = 'inventory' | 'room_package' | 'installed' | 'inserted';
+
+export interface OwnedItem {
+  instanceId: string;
+  catalogItemId: string;
+  kind: OwnedItemKind;
+  location: OwnedItemLocation;
+}
+
+export interface LegacyRecoveryState {
+  starterBundlePurchaseLost: boolean;
+  consumed: boolean;
+}
+
+export interface PlayerInventoryState {
+  items: OwnedItem[];
+  legacyRecovery?: LegacyRecoveryState;
+}
+
+export interface ComputerSetupState {
+  assembled: boolean;
+  poweredOn: boolean;
+  chassis: import('../hardware/types').ChassisComponent | null;
+  motherboard: import('../hardware/types').MotherboardComponent | null;
+  cpu: import('../hardware/types').CpuComponent | null;
+  ramSticks: import('../hardware/types').RamStickComponent[];
+  storage: import('../hardware/types').StorageComponent[];
+  opticalDrives: import('../hardware/types').OpticalDriveComponent[];
+  soundCard: import('../hardware/types').SoundCardComponent | null;
+  networkCard: import('../hardware/types').NetworkCardComponent | null;
+  insertedMediaId: string | null;
+}
+
+export interface DisplaySetupState {
+  monitor: import('../hardware/types').MonitorComponent | null;
+}
+
 export interface HardwareState {
-  hasComputer?: boolean;            // false on Day 1 fresh start (empty desk)
-  isPoweredOn?: boolean;            // true when booted, false when shutdown
-  modular?: import('../hardware/types').ModularHardwareState;
-  cpuTier: number;                  // 1 (Single-Core 450MHz), 2 (Dual-Core 800MHz)
+  hasComputer: boolean;
+  isPoweredOn: boolean;
+  cpuTier: number;
   cpuName: string;
-  ramMB: number;                    // Starting: 512, Upgraded: 1024
-  hddTotalGB: number;               // 40 GB
-  hddFreeGB: number;                // Starting: ~7.0 GB free (33 GB OS baseline)
-  connectionType: ConnectionType;   // Starting: 'dsl_256k'
-  connectionSpeedKbps: number;      // 256, 512, 1024
-  osVersion: OsVersion;             // Starting: 'Orion_4.8'
-  soundCardInstalled: boolean;      // true
-  speakersInstalled: boolean;       // false -> true
-  webcamInstalled: boolean;         // false -> true
+  ramMB: number;
+  hddTotalGB: number;
+  hddFreeGB: number;
+  connectionType: ConnectionType | null;
+  connectionSpeedKbps: number;
+  soundCardInstalled: boolean;
+  speakersInstalled: boolean;
+  webcamInstalled: boolean;
 }
 
 export interface RamPressure {
@@ -102,13 +138,13 @@ export interface RamPressure {
 }
 
 export interface OsEngineState {
-  currentOsId: OsVersion;
+  currentOsId: OsVersion | null;
   installedPatchIds: OsVersion[];
   lastBootAtMinute?: number;
   lastInstallAtMinute?: number;
   lastInstallLog?: string[];
   pendingReboot?: boolean;
-  proceduralCatalog?: any[];
+  proceduralCatalog?: unknown[];
 }
 
 export interface PulseEngineState {
@@ -384,7 +420,7 @@ export interface BuddyCharacter {
   reach?: 'local' | 'remote';
   appearance?: { hair: HairColor | string; eyes: EyeColor | string };
   languages?: Array<{ lang: string; level: number }>; // 1..5 proficiency
-  /** Capability tags: landlord, diner-staff, rain-lover... engine queries these, never ids. */
+  /** Capability tags: landlord, diner... engine queries these, never ids. */
   roles?: string[];
   backstory?: BuddyBackstory;
   chatColor?: string;
@@ -667,6 +703,9 @@ export interface SimulationState {
   time: GameTime;
   player: PlayerState;
   hardware: HardwareState;
+  computer: ComputerSetupState;
+  display: DisplaySetupState;
+  inventory: PlayerInventoryState;
   os: OsEngineState;
   pulse: PulseEngineState;
   myplace: MyPlaceEngineState;
@@ -755,7 +794,7 @@ export interface SimulationEventMap {
   'economy:rent_paid': { day: number; amount: number };
   'economy:energy_changed': { previousEnergy: number; newEnergy: number; delta: number };
   'hardware:upgraded': { component: string; oldValue: unknown; newValue: unknown };
-  'hardware:os_migrated': { from: OsVersion; to: OsVersion };
+  'hardware:os_migrated': { from: OsVersion | null; to: OsVersion };
   'hardware:disc_inserted': { disc: import('../hardware/types').InsertedDisc };
   'hardware:disc_ejected': Record<string, never>;
   'hardware:power_changed': { isPoweredOn: boolean };
