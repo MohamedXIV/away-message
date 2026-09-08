@@ -15,7 +15,7 @@ jobs:
       - name: Checkout exact Issue 8 repair source
         uses: actions/checkout@v4
         with:
-          ref: 4b71996ff8499f357f6c32f2cbaed7f652b9a235
+          ref: 68f5cc7cfaab31c82687b4f613e02a430b83b29a
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
@@ -23,5 +23,7 @@ jobs:
           cache: npm
       - name: Install dependencies
         run: npm ci --legacy-peer-deps
-      - name: Power action and desktop boundary RED
-        run: npx vitest run tests/unit/PcPowerAction.test.ts tests/unit/DesktopBootBoundary.test.ts
+      - name: Power action and desktop boundary GREEN
+        run: npx vitest run tests/unit/PcPowerAction.test.ts tests/unit/DesktopBootBoundary.test.ts tests/unit/PcBootState.test.ts tests/unit/HomeComputerSetup.test.ts tests/unit/StorePurchase.test.ts
+      - name: Typecheck
+        run: npx tsc --noEmit
