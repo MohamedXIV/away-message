@@ -1,7 +1,7 @@
 // src/engine/hardware/types.ts
 // Pure data models for modular PC hardware, individual socketed parts, and store bundles.
 
-import type { ConnectionType, OsVersion } from '../types';
+import type { ConnectionType, OsVersion, OwnedItemKind } from '../types';
 
 export interface ChassisComponent {
   id: string;
@@ -94,6 +94,44 @@ export interface ModularHardwareState {
   insertedDisc?: InsertedDisc | null;
 }
 
+export type PhysicalCatalogComponentKind =
+  | 'chassis'
+  | 'motherboard'
+  | 'cpu'
+  | 'ram'
+  | 'storage'
+  | 'optical'
+  | 'sound'
+  | 'network'
+  | 'monitor'
+  | 'os_media';
+
+export interface PhysicalCatalogItem {
+  id: string;
+  kind: OwnedItemKind;
+  componentKind: PhysicalCatalogComponentKind;
+  component?:
+    | ChassisComponent
+    | MotherboardComponent
+    | CpuComponent
+    | RamStickComponent
+    | StorageComponent
+    | OpticalDriveComponent
+    | SoundCardComponent
+    | NetworkCardComponent
+    | MonitorComponent;
+  media?: {
+    type: 'os_installer';
+    title: string;
+    osTarget: OsVersion;
+  };
+}
+
+export interface StoreSkuContent {
+  catalogItemId: string;
+  quantity: number;
+}
+
 export interface HardwareStoreItem {
   id: string;
   name: string;
@@ -101,6 +139,8 @@ export interface HardwareStoreItem {
   price: number;
   description: string;
   specsSummary: string;
+  contents: StoreSkuContent[];
+  repeatable: boolean;
   component?:
     | CpuComponent
     | RamStickComponent
@@ -108,9 +148,10 @@ export interface HardwareStoreItem {
     | OpticalDriveComponent
     | SoundCardComponent
     | MonitorComponent;
+  /** @deprecated Task-4 UI bridge only; checkout ownership comes from contents. */
   bundleConfig?: {
     hardware: ModularHardwareState;
-    installedOs: OsVersion;
+    installedOs?: never;
   };
   osDiscConfig?: {
     osVersion: OsVersion;

@@ -41,7 +41,7 @@ export const STATIC_PULSE_CATALOG: PulseRelease[] = [
     channel: 'stable',
     releaseDay: 1,
     changelog: ['Custom away messages', 'Tabbed chats', 'Sound alerts'],
-    requirements: { minOs: 'Orion_4.8' as OsVersion, minRamMB: 512, minDiskMB: 32 },
+    requirements: { minOs: 'Orion_4.8' as OsVersion, minRamMB: 64, minDiskMB: 32 },
     installSizeMB: 6,
     blurb: 'The definitive classic — your friends are only a click away.',
   },

@@ -52,7 +52,7 @@ export const STATIC_OS_CATALOG: OsRelease[] = [
     channel: 'stable',
     releaseDay: 1,
     changelog: ['Beveled chrome, 64MB baseline, V90 dial-up wizard'],
-    requirements: { minRamMB: 256, minCpuTier: 1, minDiskGB: 1.2 },
+    requirements: { minRamMB: 64, minCpuTier: 1, minDiskGB: 1.2 },
     installSizeGB: 1.2,
     ramOverheadMB: 64,
     bootTimeSeconds: 38,
