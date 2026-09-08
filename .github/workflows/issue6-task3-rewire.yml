@@ -1,0 +1,139 @@
+name: Issue 6 Task 3 Rewire
+
+on:
+  push:
+    branches:
+      - sdd/issue-6-task-3
+
+permissions:
+  contents: write
+
+jobs:
+  rewire:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Apply deterministic Task 3 patch
+        shell: python
+        run: |
+          from pathlib import Path
+
+          path = Path('src/engine/SimulationEngine.ts')
+          text = path.read_text()
+
+          def replace_once(old: str, new: str, label: str) -> None:
+              global text
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'{label}: expected exactly one match, found {count}')
+              text = text.replace(old, new, 1)
+
+          replace_once(
+              "import { HardwareEngine } from './HardwareEngine';\n",
+              "import { HardwareEngine } from './HardwareEngine';\nimport { InventoryEngine } from './InventoryEngine';\n",
+              'InventoryEngine import',
+          )
+
+          replace_once(
+              "  public readonly hardware!: HardwareEngine;\n  public readonly os!: OsEngine;\n",
+              "  public readonly hardware!: HardwareEngine;\n  public readonly inventory!: InventoryEngine;\n  public readonly os!: OsEngine;\n",
+              'inventory property',
+          )
+
+          replace_once(
+              "    this.economy = new EconomyEngine(this.events, initialState?.player);\n    this.hardware = new HardwareEngine(this.events, initialState?.hardware);\n    this.vfs = new FileSystemEngine(this.events, initialState?.vfs);\n",
+              "    this.economy = new EconomyEngine(this.events, initialState?.player);\n    this.hardware = new HardwareEngine(this.events, {\n      computer: initialState?.computer,\n      display: initialState?.display,\n    });\n    this.inventory = new InventoryEngine(initialState?.inventory);\n    this.vfs = new FileSystemEngine(this.events, initialState?.vfs);\n",
+              'canonical hardware constructor',
+          )
+
+          replace_once(
+              "    // OsEngine is core — sync with hardware osVersion\n    const osInitial = (initialState as any)?.os ?? { currentOsId: initialState?.hardware?.osVersion };\n    this.os = new OsEngine(this.events, { currentOsId: osInitial.currentOsId ?? initialState?.hardware?.osVersion, ...(osInitial as object) });\n",
+              "    // OsEngine is the sole installed-OS authority; fresh state is explicitly no OS.\n    this.os = new OsEngine(this.events, initialState?.os);\n",
+              'OsEngine constructor',
+          )
+
+          replace_once(
+              "    // Keep hardware.osVersion in sync with OsEngine (source of truth)\n    (this.hardware as any).state.osVersion = this.os.getCurrentOsId();\n",
+              "",
+              'remove hardware OS shadow sync',
+          )
+
+          replace_once(
+              "        getOsVersion: () => this.os.getCurrentOsId() as any,\n",
+              "        getOsVersion: () => this.os.getCurrentOsId(),\n",
+              'nullable software OS provider',
+          )
+
+          replace_once(
+              "    const myplaceState = this.myplace.getState();\n    // Sync hardware osVersion to OsEngine truth\n    const hwState = this.hardware.getState();\n    if ((hwState as any).osVersion !== osState.currentOsId) {\n      (this.hardware as any).state.osVersion = osState.currentOsId;\n    }\n\n",
+              "    const myplaceState = this.myplace.getState();\n\n",
+              'remove getState OS shadow sync',
+          )
+
+          replace_once(
+              "      player: this.economy.getState(),\n      hardware: this.hardware.getState(),\n      os: osState,\n",
+              "      player: this.economy.getState(),\n      hardware: this.hardware.getState(),\n      computer: this.hardware.getComputerState(),\n      display: this.hardware.getDisplayState(),\n      inventory: this.inventory.getState(),\n      os: osState,\n",
+              'canonical state roots',
+          )
+
+          replace_once(
+              "      case 'HARDWARE_UPGRADE_OS': {\n        if (!this.economy.canAfford(action.cost)) {\n",
+              "      case 'HARDWARE_UPGRADE_OS': {\n        if (this.os.getCurrentOsId() === null) {\n          return {\n            success: false,\n            error: 'No operating system is installed. Boot from setup media to install one.',\n          };\n        }\n        if (!this.economy.canAfford(action.cost)) {\n",
+              'block magic first install',
+          )
+
+          replace_once(
+              "        // Sync hardware osVersion truth\n        (this.hardware as any).state.osVersion = this.os.getCurrentOsId();\n        // OS overhead already modeled via OsEngine.getRamOverheadMB() — HardwareEngine.calculateRamPressure reads it via sync? Keep hardware ramOverhead minimal here\n",
+              "        // OS state was committed only by OsEngine; hardware remains physical-only.\n",
+              'remove post-install hardware OS sync',
+          )
+
+          replace_once(
+              "    this.hardware.loadState(snapshot.hardware);\n    // OsEngine — load from dedicated os field or fallback to hardware osVersion\n    const osSrc = (snapshot as any).os ?? { currentOsId: (snapshot as any).hardware?.osVersion };\n    if (osSrc) {\n      try { this.os.loadState(osSrc); } catch {}\n      // Sync hardware\n      const osId = this.os.getCurrentOsId();\n      (this.hardware as any).state.osVersion = osId;\n    }\n",
+              "    this.hardware.loadState({ computer: snapshot.computer, display: snapshot.display });\n    this.inventory.loadState(snapshot.inventory);\n    // v6 snapshots restore the dedicated nullable OS root directly.\n    try { this.os.loadState(snapshot.os); } catch {}\n",
+              'canonical snapshot restore',
+          )
+
+          path.write_text(text)
+
+          modal = Path('src/world/modals/SiliconSparesModal.tsx')
+          modal_text = modal.read_text()
+          old = "  const hardware = useSimulationStore((s) => s.state.hardware);\n  const engine = useSimulationStore((s) => s.engine);\n"
+          new = "  const hardware = useSimulationStore((s) => s.state.hardware);\n  const currentOsId = useSimulationStore((s) => s.state.os.currentOsId);\n  const engine = useSimulationStore((s) => s.engine);\n"
+          if modal_text.count(old) != 1:
+              raise SystemExit('SiliconSpares state selectors: expected one match')
+          modal_text = modal_text.replace(old, new, 1)
+          old = "              {hardware.hasComputer\n                ? `${hardware.osVersion} · ${hardware.ramMB}MB RAM`\n                : 'None (Desk empty)'}\n"
+          new = "              {hardware.hasComputer\n                ? `${currentOsId ?? 'No OS'} · ${hardware.ramMB}MB RAM`\n                : 'None (Desk empty)'}\n"
+          if modal_text.count(old) != 1:
+              raise SystemExit('SiliconSpares footer: expected one match')
+          modal.write_text(modal_text.replace(old, new, 1))
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run Task 3 targeted tests
+        run: >-
+          npx vitest run
+          tests/unit/OsEngineNoOs.test.ts
+          tests/unit/SimulationEngine.test.ts
+          tests/unit/HardwareEngine.test.ts
+          tests/unit/SoftwareRegistry.test.ts
+
+      - name: Commit reviewed Task 3 patch and remove harness
+        run: |
+          rm .github/workflows/issue6-task3-rewire.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/engine/SimulationEngine.ts src/world/modals/SiliconSparesModal.tsx .github/workflows/issue6-task3-rewire.yml
+          git commit -m "refactor: make OsEngine the sole OS authority"
+          git push origin HEAD:sdd/issue-6-task-3
