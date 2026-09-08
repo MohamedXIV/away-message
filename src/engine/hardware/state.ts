@@ -46,7 +46,7 @@ export function createEmptyComputerSetup(): ComputerSetupState {
 }
 
 export const createEmptyDisplaySetup = (): DisplaySetupState => ({ monitor: null });
-export const createEmptyInventoryState = (): PlayerInventoryState => ({ items: [] });
+export const createEmptyInventoryState = (): PlayerInventoryState => ({ items: [], purchaseCounts: {} });
 
 export function projectEffectiveHardware(computer: ComputerSetupState): HardwareState {
   if (!computer.assembled) {

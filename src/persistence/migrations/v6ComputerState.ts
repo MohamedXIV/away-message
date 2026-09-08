@@ -143,7 +143,7 @@ export function migrateSnapshotToV6(
 
   let computer = createEmptyComputerSetup();
   let display = createEmptyDisplaySetup();
-  const inventory: PlayerInventoryState = { items: [] };
+  const inventory: PlayerInventoryState = { items: [], purchaseCounts: {} };
 
   if (workingComputer) {
     const canonical = hardware.modular

@@ -93,6 +93,7 @@ export interface LegacyRecoveryState {
 
 export interface PlayerInventoryState {
   items: OwnedItem[];
+  purchaseCounts: Record<string, number>;
   legacyRecovery?: LegacyRecoveryState;
 }
 
