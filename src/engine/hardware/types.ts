@@ -3,6 +3,11 @@
 
 import type { ConnectionType, OsVersion } from '../types';
 
+export interface ChassisComponent {
+  id: string;
+  name: string;
+}
+
 export interface MotherboardComponent {
   id: string;
   name: string;
