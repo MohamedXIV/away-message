@@ -15,7 +15,7 @@ interface MessageHistoryViewProps {
 }
 
 export const MessageHistoryView: React.FC<MessageHistoryViewProps> = ({ messages, buddy }) => {
-  const isOrion60 = useSimulationStore((s) => s.state.hardware.osVersion === 'Orion_6.0');
+  const isOrion60 = useSimulationStore((s) => s.state.os.currentOsId === 'Orion_6.0');
   // Pulse 6 generation: buddies tint their own names + animated emoticons move.
   const pulse6 = useSimulationStore((s) => pulseHasFeature(s.state.pulse.currentPulseId, 'buddy-colors'));
   const pulse6Animated = useSimulationStore((s) => pulseHasFeature(s.state.pulse.currentPulseId, 'animated-emoticons'));
