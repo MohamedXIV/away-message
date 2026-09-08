@@ -132,7 +132,7 @@ describe('P9 save compatibility matrix', () => {
 });
 
 describe('v5 -> v6 computer state migration', () => {
-  it('preserves a working modular PC, display, installed OS, and ownership', () => {
+  it('preserves a working modular PC, display, dedicated installed OS, and ownership', () => {
     const modular = createScrapYardBundle();
     const v5 = {
       version: 1,
@@ -149,7 +149,7 @@ describe('v5 -> v6 computer state migration', () => {
         hddFreeGB: 0.9,
         connectionType: 'dialup_56k',
         connectionSpeedKbps: 56,
-        osVersion: 'Orion_5.0',
+        osVersion: 'Orion_4.8',
         soundCardInstalled: true,
         speakersInstalled: false,
         webcamInstalled: false,
@@ -167,6 +167,7 @@ describe('v5 -> v6 computer state migration', () => {
     expect(migrated.computer.cpu?.id).toBe(modular.cpu.id);
     expect(migrated.computer.ramSticks[0]?.sizeMb).toBe(64);
     expect(migrated.display.monitor?.id).toBe(modular.monitor.id);
+    // Dedicated OsEngine state wins over the obsolete hardware shadow value.
     expect(migrated.os.currentOsId).toBe('Orion_5.0');
     expect(migrated.inventory.items.map((item) => item.instanceId)).toContain('migrated:monitor:0');
     expect(migrated.inventory.items.every((item) => item.location === 'installed')).toBe(true);
@@ -174,6 +175,37 @@ describe('v5 -> v6 computer state migration', () => {
     expect(migrated.hardware.ramMB).toBe(64);
     expect('osVersion' in migrated.hardware).toBe(false);
     expect('modular' in migrated.hardware).toBe(false);
+  });
+
+  it('preserves an inserted OS disc as an owned inserted media reference', () => {
+    const modular = createScrapYardBundle();
+    modular.insertedDisc = {
+      id: 'disc_orion_48_recovery',
+      title: 'Orion 4.8 Recovery CD',
+      type: 'os_installer',
+      osTarget: 'Orion_4.8',
+    };
+    const v5 = {
+      time: { day: 3 },
+      player: { cash: 12 },
+      hardware: {
+        hasComputer: true,
+        modular,
+        osVersion: 'Orion_4.8',
+      },
+      os: { currentOsId: 'Orion_4.8', installedPatchIds: [] },
+    } as any;
+
+    const migrated = migrateSnapshotToV6(v5, 5);
+    const media = migrated.inventory.items.find((item) => item.kind === 'media');
+
+    expect(media).toEqual({
+      instanceId: 'migrated:media:inserted',
+      catalogItemId: 'disc_orion_48_recovery',
+      kind: 'media',
+      location: 'inserted',
+    });
+    expect(migrated.computer.insertedMediaId).toBe(media?.instanceId);
   });
 
   it('does not turn stale v5 default hardware/Orion into a ghost computer or OS', () => {
