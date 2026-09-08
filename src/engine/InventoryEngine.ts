@@ -14,6 +14,11 @@ export interface PreparedInventoryPurchase {
   consumeLegacyStarterRecovery: boolean;
 }
 
+export interface PreparedInventoryInstall {
+  instanceIds: string[];
+  sourceItems: OwnedItem[];
+}
+
 function cloneState(state: PlayerInventoryState): PlayerInventoryState {
   const transitional = state as PlayerInventoryState & {
     purchaseCounts?: Record<string, number>;
@@ -62,6 +67,77 @@ export class InventoryEngine {
 
   public loadState(state: PlayerInventoryState): void {
     this.state = cloneState(state);
+  }
+
+  public prepareInstallOwnedItems(instanceIds: readonly string[]): PreparedInventoryInstall {
+    if (instanceIds.length === 0) {
+      throw new Error('Cannot install an empty owned-item selection.');
+    }
+
+    const requestedIds = new Set<string>();
+    const sourceItems: OwnedItem[] = [];
+
+    for (const instanceId of instanceIds) {
+      if (requestedIds.has(instanceId)) {
+        throw new Error(`Duplicate owned item instance requested: ${instanceId}.`);
+      }
+      requestedIds.add(instanceId);
+
+      const matches = this.state.items.filter((item) => item.instanceId === instanceId);
+      if (matches.length !== 1) {
+        throw new Error(`Owned item instance is missing or ambiguous: ${instanceId}.`);
+      }
+
+      const item = matches[0]!;
+      if (item.location !== 'room_package') {
+        throw new Error(`Owned item ${instanceId} is not in the room_package.`);
+      }
+      sourceItems.push({ ...item });
+    }
+
+    return {
+      instanceIds: [...instanceIds],
+      sourceItems,
+    };
+  }
+
+  public commitInstallOwnedItems(prepared: PreparedInventoryInstall): void {
+    if (prepared.instanceIds.length === 0 || prepared.instanceIds.length !== prepared.sourceItems.length) {
+      throw new Error('Invalid prepared owned-item installation.');
+    }
+
+    const requestedIds = new Set<string>();
+    for (let index = 0; index < prepared.instanceIds.length; index += 1) {
+      const instanceId = prepared.instanceIds[index]!;
+      if (requestedIds.has(instanceId)) {
+        throw new Error(`Duplicate owned item instance requested: ${instanceId}.`);
+      }
+      requestedIds.add(instanceId);
+
+      const expected = prepared.sourceItems[index]!;
+      const matches = this.state.items.filter((item) => item.instanceId === instanceId);
+      if (matches.length !== 1) {
+        throw new Error(`Stale owned-item installation for ${instanceId}.`);
+      }
+
+      const current = matches[0]!;
+      if (
+        current.location !== 'room_package' ||
+        expected.instanceId !== current.instanceId ||
+        expected.catalogItemId !== current.catalogItemId ||
+        expected.kind !== current.kind ||
+        expected.location !== 'room_package'
+      ) {
+        throw new Error(`Stale owned-item installation for ${instanceId}; item must remain in room_package.`);
+      }
+    }
+
+    this.state = {
+      ...this.state,
+      items: this.state.items.map((item) =>
+        requestedIds.has(item.instanceId) ? { ...item, location: 'installed' } : { ...item },
+      ),
+    };
   }
 
   public canPurchaseSku(skuId: string, repeatable: boolean): { ok: boolean; error?: string } {
