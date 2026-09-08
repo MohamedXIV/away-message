@@ -77,13 +77,14 @@ describe('Silicon & Spares authored ownership catalog', () => {
     }
   });
 
-  it('does not describe complete PC bundles as preloaded with an operating system', () => {
+  it('describes complete PC bundles as setup-media packages, never preinstalled operating systems', () => {
     const bundles = (storeCatalog.HARDWARE_STORE_INVENTORY as unknown as StoreSku[])
       .filter((entry) => entry.id.startsWith('bundle_'));
 
     for (const bundle of bundles) {
       expect(bundle.description.toLowerCase()).not.toContain('pre-loaded');
-      expect(bundle.specsSummary).not.toMatch(/Orion\s+[4567]/i);
+      expect(bundle.description.toLowerCase()).not.toContain('preinstalled');
+      expect(bundle.specsSummary).toMatch(/Setup (CD|Disc)/i);
     }
   });
 
