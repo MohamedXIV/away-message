@@ -14,6 +14,10 @@ export interface PreparedInventoryPurchase {
   consumeLegacyStarterRecovery: boolean;
 }
 
+export interface PreparedInventoryInstall {
+  instanceIds: string[];
+}
+
 function cloneState(state: PlayerInventoryState): PlayerInventoryState {
   const transitional = state as PlayerInventoryState & {
     purchaseCounts?: Record<string, number>;
@@ -150,6 +154,55 @@ export class InventoryEngine {
               : this.state.legacyRecovery.consumed,
           }
         : undefined,
+    };
+  }
+
+  public prepareInstallOwnedItems(instanceIds: readonly string[]): PreparedInventoryInstall {
+    if (instanceIds.length === 0) throw new Error('No owned items selected for installation.');
+
+    const uniqueIds = new Set(instanceIds);
+    if (uniqueIds.size !== instanceIds.length) {
+      throw new Error('Duplicate owned item instance selected for installation.');
+    }
+
+    const byId = new Map(this.state.items.map((item) => [item.instanceId, item]));
+    for (const instanceId of instanceIds) {
+      const item = byId.get(instanceId);
+      if (!item) throw new Error(`Owned item not found: ${instanceId}.`);
+      if (item.location !== 'room_package') {
+        throw new Error(`Owned item ${instanceId} is not in room_package location.`);
+      }
+    }
+
+    return { instanceIds: [...instanceIds] };
+  }
+
+  public commitInstallOwnedItems(prepared: PreparedInventoryInstall): void {
+    if (prepared.instanceIds.length === 0) {
+      throw new Error('Cannot commit an empty owned-item installation.');
+    }
+
+    const selected = new Set(prepared.instanceIds);
+    if (selected.size !== prepared.instanceIds.length) {
+      throw new Error('Duplicate owned item instance in prepared installation.');
+    }
+
+    const byId = new Map(this.state.items.map((item) => [item.instanceId, item]));
+    for (const instanceId of prepared.instanceIds) {
+      const item = byId.get(instanceId);
+      if (!item) throw new Error(`Stale installation: owned item not found: ${instanceId}.`);
+      if (item.location !== 'room_package') {
+        throw new Error(`Stale installation: owned item ${instanceId} is no longer in room_package location.`);
+      }
+    }
+
+    this.state = {
+      ...this.state,
+      items: this.state.items.map((item) =>
+        selected.has(item.instanceId) ? { ...item, location: 'installed' as const } : { ...item },
+      ),
+      purchaseCounts: { ...this.state.purchaseCounts },
+      legacyRecovery: this.state.legacyRecovery ? { ...this.state.legacyRecovery } : undefined,
     };
   }
 }
