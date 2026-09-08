@@ -3,7 +3,7 @@ import { subscribeWithSelector } from 'zustand/middleware';
 import { useEffect, useRef } from 'react';
 import { SimulationEngine } from '../engine/SimulationEngine';
 import {
-  SimulationState,
+  StrictSimulationState,
   SimulationAction,
   ActionResult,
   GameTime,
@@ -28,7 +28,7 @@ const defaultEngine = new SimulationEngine();
 
 export interface SimulationStoreState {
   engine: SimulationEngine;
-  state: SimulationState;
+  state: StrictSimulationState;
   isPaused: boolean;
   activeView: 'pc' | 'room' | 'cafe' | 'work' | 'city';
 }
@@ -110,7 +110,8 @@ export const useSimulationStore = create<SimulationStore>()(
       if (unsubscribeEngine) {
         unsubscribeEngine();
       }
-      unsubscribeEngine = engineInstance.subscribe((newState) => {
+      unsubscribeEngine = engineInstance.subscribe(() => {
+        const newState = engineInstance.getState();
         set({
           state: newState,
           isPaused: engineInstance.clock.isPaused(),
