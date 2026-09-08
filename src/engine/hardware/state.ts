@@ -251,8 +251,7 @@ export function canonicalToLegacyModular(
     computer.opticalDrives.length === 0 ||
     !computer.soundCard ||
     !computer.networkCard ||
-    !display.monitor ||
-    computer.insertedMediaId
+    !display.monitor
   ) {
     return undefined;
   }
@@ -268,6 +267,7 @@ export function canonicalToLegacyModular(
     soundCard: computer.soundCard,
     networkCard: computer.networkCard,
     monitor: display.monitor,
+    // v6 media metadata lives in inventory; this legacy adapter must not invent it.
     insertedDisc: null,
   };
 }
