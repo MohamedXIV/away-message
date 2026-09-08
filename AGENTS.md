@@ -12,7 +12,11 @@ everything, and live governed sandbox lives. Online AI-heavy, offline-safe via t
 ## Commands (run from repo root)
 - `npm run build` (tsc + vite), `npm run test` (full vitest suite), `npx tsc --noEmit`
 - `npm run build:itch` → `itch/away-message-demo.zip` (index.html at zip root, relative `./` base)
-- Full suite has **3 pre-existing WorldScenes failures** (verified on clean main) — do not "fix" them; only ensure no NEW failures.
+- Full suite currently has exactly **3 pre-existing failures**, all in `tests/unit/WorldScenes.test.ts` under `4. Simulation Engine Room Action Integration`:
+  - `executes tea interaction (advances 6m, restores 5 energy)`
+  - `executes instant noodles meal (advances 15m, restores 15 energy)`
+  - `executes window observation (advances 4m, logs telemetry)`
+- Repository CI uses `scripts/verify-vitest-baseline.mjs` to accept only those exact three identities. Any additional, missing, or unexpectedly fixed baseline failure makes CI fail until this documentation and guard are intentionally updated.
 
 ## Non-negotiable workflow
 1. **One feature = one branch** (`feat/<name>`, `fix/<name>`, `chore/<name>`, `docs/<name>`). `main` stays green/releasable.
@@ -23,6 +27,7 @@ everything, and live governed sandbox lives. Online AI-heavy, offline-safe via t
 
 ## Verification before every push
 `npx tsc --noEmit` clean → `npm run build` succeeds → full `npm run test` with zero new failures.
+For exact repository CI policy, run `node scripts/verify-vitest-baseline.mjs --self-test` then `node scripts/verify-vitest-baseline.mjs`; the latter is green only for the exact documented WorldScenes baseline and rejects any regression outside it.
 Verify fixes by execution (run the code/tests), not by reading. Trust evidence over speculation; state discrepancies plainly.
 
 ## Architecture map (read before touching)
