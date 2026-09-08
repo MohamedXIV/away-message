@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { subscribeWithSelector } from 'zustand/middleware';
 import { useEffect, useRef } from 'react';
-import { SimulationEngine } from '../engine/SimulationEngine';
+import { SimulationEngine, type OsInstallPlan } from '../engine/SimulationEngine';
 import {
   StrictSimulationState,
   SimulationAction,
@@ -61,6 +61,10 @@ export interface SimulationStoreActions {
   // Hardware & OS
   setupComputerAtHome: () => ActionResult;
   setComputerPower: (poweredOn: boolean) => ActionResult;
+  insertOwnedMediaAtHome: (instanceId: string) => ActionResult;
+  ejectOwnedMediaAtHome: () => ActionResult<{ mediaInstanceId: string }>;
+  prepareOsInstallFromInsertedMedia: () => ActionResult<OsInstallPlan>;
+  commitOsInstall: (plan: OsInstallPlan) => ActionResult;
   upgradeRam: (ramMB: number, cost: number) => void;
   upgradeConnection: (connectionType: ConnectionType, cost: number) => void;
   upgradeOs: (targetOs: OsVersion, cost: number) => void;
@@ -222,6 +226,28 @@ export const useSimulationStore = create<SimulationStore>()(
 
       setComputerPower: (poweredOn) => {
         const result = get().engine.setComputerPower(poweredOn);
+        get().syncStateFromEngine();
+        return result;
+      },
+
+      insertOwnedMediaAtHome: (instanceId) => {
+        const result = get().engine.insertOwnedMediaAtHome(instanceId);
+        get().syncStateFromEngine();
+        return result;
+      },
+
+      ejectOwnedMediaAtHome: () => {
+        const result = get().engine.ejectOwnedMediaAtHome();
+        get().syncStateFromEngine();
+        return result;
+      },
+
+      prepareOsInstallFromInsertedMedia: () => {
+        return get().engine.prepareOsInstallFromInsertedMedia();
+      },
+
+      commitOsInstall: (plan) => {
+        const result = get().engine.commitOsInstall(plan);
         get().syncStateFromEngine();
         return result;
       },
