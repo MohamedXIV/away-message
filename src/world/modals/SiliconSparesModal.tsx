@@ -4,11 +4,6 @@
 import React, { useState } from 'react';
 import { HARDWARE_STORE_INVENTORY } from '../../engine/hardware/catalog';
 import type { HardwareStoreItem } from '../../engine/hardware/types';
-import {
-  addRamStick,
-  canAddRamStick,
-  replaceMonitor,
-} from '../../engine/hardware/HardwareManager';
 import { useSimulationStore } from '../../store/useSimulationStore';
 import { soundManager } from '../../audio/SoundManager';
 import { X, ShoppingCart, Monitor, Cpu, HardDrive, Disc } from 'lucide-react';
@@ -19,89 +14,36 @@ export interface SiliconSparesModalProps {
 
 export const SiliconSparesModal: React.FC<SiliconSparesModalProps> = ({ onClose }) => {
   const cash = useSimulationStore((s) => s.state.player.cash);
-  const spendCash = useSimulationStore((s) => s.spendCash);
   const hardware = useSimulationStore((s) => s.state.hardware);
   const currentOsId = useSimulationStore((s) => s.state.os.currentOsId);
-  const engine = useSimulationStore((s) => s.engine);
+  const purchaseCounts = useSimulationStore((s) => s.state.inventory.purchaseCounts);
+  const legacyRecovery = useSimulationStore((s) => s.state.inventory.legacyRecovery);
+  const roomPackageCount = useSimulationStore(
+    (s) => s.state.inventory.items.filter((owned) => owned.location === 'room_package').length,
+  );
+  const purchaseStoreItem = useSimulationStore((s) => s.purchaseStoreItem);
 
   const [filter, setFilter] = useState<'all' | 'bundle' | 'ram' | 'storage' | 'monitor' | 'os_disc'>('all');
   const [purchaseNotice, setPurchaseNotice] = useState<string | null>(null);
 
   const items = HARDWARE_STORE_INVENTORY.filter((item) => filter === 'all' || item.category === filter);
+  const starterRecoveryAvailable =
+    legacyRecovery?.starterBundlePurchaseLost === true && legacyRecovery.consumed === false;
 
   const handleBuy = (item: HardwareStoreItem) => {
-    // Forgiveness safeguard: if player clicked buy before and cash was deducted (or on Day 1), honor it
-    const isHonoredScrapBundle = item.id === 'bundle_scrapyard' && !hardware.hasComputer && cash < item.price;
-    const effectivePrice = isHonoredScrapBundle ? 0 : item.price;
-
-    if (cash < effectivePrice) {
+    const result = purchaseStoreItem(item.id);
+    if (!result.success) {
       soundManager.play('error');
-      setPurchaseNotice('Not enough cash for this item.');
+      setPurchaseNotice(result.error ?? 'Purchase failed.');
       return;
     }
 
-    if (item.category === 'bundle' && item.bundleConfig) {
-      if (effectivePrice > 0) {
-        spendCash(effectivePrice, `Silicon & Spares: ${item.name}`);
-      }
-      soundManager.play('click');
-      engine.hardware.installModularHardware(item.bundleConfig.hardware, item.bundleConfig.installedOs);
-      useSimulationStore.getState().syncStateFromEngine();
-      setPurchaseNotice(
-        isHonoredScrapBundle
-          ? `Milo checks his ledger: "Your Scrap Yard Special was already paid for!" Delivered to your desk in Room 104.`
-          : `Purchased ${item.name}! Delivered and set up on your desk in Room 104.`
-      );
-    } else if (item.category === 'ram' && item.component && 'sizeMb' in item.component) {
-      const curModular = engine.hardware.getModularState();
-      if (curModular && curModular.hasComputer) {
-        const check = canAddRamStick(curModular, item.component);
-        if (!check.ok) {
-          soundManager.play('error');
-          setPurchaseNotice(`Cannot install: ${check.reason}`);
-          return;
-        }
-        spendCash(item.price, `Silicon & Spares: ${item.name}`);
-        soundManager.play('click');
-        const updated = addRamStick(curModular, item.component);
-        engine.hardware.installModularHardware(updated);
-        useSimulationStore.getState().syncStateFromEngine();
-        setPurchaseNotice(`Installed ${item.name}! Total RAM increased.`);
-      } else {
-        soundManager.play('error');
-        setPurchaseNotice('You must own a computer before upgrading RAM.');
-      }
-    } else if (item.category === 'monitor' && item.component && 'curvature' in item.component) {
-      const curModular = engine.hardware.getModularState();
-      if (curModular && curModular.hasComputer) {
-        spendCash(item.price, `Silicon & Spares: ${item.name}`);
-        soundManager.play('click');
-        const updated = replaceMonitor(curModular, item.component);
-        engine.hardware.installModularHardware(updated);
-        useSimulationStore.getState().syncStateFromEngine();
-        setPurchaseNotice(`Installed ${item.name}! Display profile updated.`);
-      } else {
-        soundManager.play('error');
-        setPurchaseNotice('You must own a computer before replacing the monitor.');
-      }
-    } else if (item.category === 'os_disc' && item.osDiscConfig) {
-      const curModular = engine.hardware.getModularState();
-      if (curModular && curModular.hasComputer) {
-        spendCash(item.price, `Silicon & Spares: ${item.name}`);
-        soundManager.play('click');
-        engine.hardware.insertDisc({
-          id: item.id,
-          title: item.osDiscConfig.title,
-          type: 'os_installer',
-          osTarget: item.osDiscConfig.osVersion,
-        });
-        useSimulationStore.getState().syncStateFromEngine();
-        setPurchaseNotice(`Purchased ${item.name}! Disc inserted into CD-ROM drive D:. Run SETUP.EXE to install.`);
-      } else {
-        soundManager.play('error');
-        setPurchaseNotice('Purchased OS disc! You will need a computer with a CD-ROM drive to install it.');
-      }
-    }
+    soundManager.play('click');
+    setPurchaseNotice(
+      result.data?.recoveredLegacyPurchase
+        ? `Milo finds the old receipt. ${item.name} has been restored to your Room 104 package inventory.`
+        : `Purchased ${item.name}! Added to your Room 104 package inventory.`,
+    );
   };
 
   return (
@@ -184,8 +126,10 @@ export const SiliconSparesModal: React.FC<SiliconSparesModalProps> = ({ onClose 
         {/* Items List */}
         <div className="flex-1 overflow-y-auto p-3 space-y-2.5">
           {items.map((item) => {
-            const isHonoredScrapBundle = item.id === 'bundle_scrapyard' && !hardware.hasComputer && cash < item.price;
-            const canAfford = cash >= item.price || isHonoredScrapBundle;
+            const recoveryClaim = item.id === 'bundle_scrapyard' && starterRecoveryAvailable;
+            const purchasedAlready = !item.repeatable && (purchaseCounts[item.id] ?? 0) > 0;
+            const canAfford = !purchasedAlready && (recoveryClaim || cash >= item.price);
+
             return (
               <div
                 key={item.id}
@@ -207,8 +151,8 @@ export const SiliconSparesModal: React.FC<SiliconSparesModalProps> = ({ onClose 
 
                 <div className="flex sm:flex-col items-center sm:items-end justify-between sm:justify-center gap-2 shrink-0 border-t sm:border-t-0 pt-2 sm:pt-0">
                   <div className="font-bold text-sm text-emerald-800 font-mono">
-                    {isHonoredScrapBundle ? (
-                      <span className="text-amber-700 text-xs font-bold">Already Paid ✓</span>
+                    {recoveryClaim ? (
+                      <span className="text-amber-700 text-xs font-bold">Ledger recovery</span>
                     ) : (
                       `$${item.price.toFixed(2)}`
                     )}
@@ -224,7 +168,7 @@ export const SiliconSparesModal: React.FC<SiliconSparesModalProps> = ({ onClose 
                     }`}
                   >
                     <ShoppingCart className="w-3.5 h-3.5" />
-                    <span>{isHonoredScrapBundle ? 'Claim / Deliver' : 'Buy'}</span>
+                    <span>{purchasedAlready ? 'Owned' : recoveryClaim ? 'Recover package' : 'Buy'}</span>
                   </button>
                 </div>
               </div>
@@ -243,7 +187,7 @@ export const SiliconSparesModal: React.FC<SiliconSparesModalProps> = ({ onClose 
             </span>
           </div>
           <div className="flex gap-2">
-            {hardware.hasComputer && (
+            {(hardware.hasComputer || roomPackageCount > 0) && (
               <button
                 type="button"
                 onClick={() => {
