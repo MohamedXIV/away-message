@@ -10,6 +10,7 @@ import type {
   HardwareState as CanonicalHardwareState,
   OsVersion,
   PlayerInventoryState,
+  SimulationAction as CanonicalSimulationAction,
   SimulationEventMap as CanonicalSimulationEventMap,
   SimulationState as CanonicalSimulationState,
 } from './types/index';
@@ -50,6 +51,11 @@ export type StrictSimulationState = Omit<
 > & {
   hardware: CanonicalHardwareState;
 };
+
+/** Live v6 actions layered over the preserved coordinator action union. */
+export type SimulationAction =
+  | CanonicalSimulationAction
+  | { type: 'COMPUTER_SETUP_AT_HOME' };
 
 /** Nullable previous OS is valid for a first installation. */
 export type SimulationEventMap = Omit<CanonicalSimulationEventMap, 'hardware:os_migrated'> & {
