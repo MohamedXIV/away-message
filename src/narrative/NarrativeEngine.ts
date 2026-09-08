@@ -127,7 +127,7 @@ export class NarrativeEngine {
       sim_player_cash: state.player.cash,
       sim_player_energy: state.player.energy,
       sim_player_fatigue: state.player.fatigue,
-      sim_os_version: state.hardware.osVersion,
+      sim_os_version: state.os.currentOsId,
       sim_ram_mb: state.hardware.ramMB,
       sim_connection_type: state.hardware.connectionType,
       sim_photobox_installed: isInstalled('photobox'),

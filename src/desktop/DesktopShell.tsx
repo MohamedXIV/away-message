@@ -75,7 +75,7 @@ function renderIconGraphic(type: DesktopIconItem['iconType'], _theme?: string) {
 
 export const DesktopShell: React.FC = () => {
   const osVersion = useSimulationStore((s) => s.state.os.currentOsId);
-  const monitor = useSimulationStore((s) => s.state.display.monitor);
+  const monitor = useSimulationStore((s) => s.state.display?.monitor ?? null);
   const vfsFiles = useSimulationStore((s) => s.state.vfs.files);
   const openWindow = useWindowStore((s) => s.openWindow);
 
@@ -407,7 +407,7 @@ export const DesktopShell: React.FC = () => {
       <Taskbar onOpenDialUp={() => setIsDialUpModalOpen(true)} />
 
       {/* 7. CRT Overlay Shader */}
-      <CRTOverlay monitor={monitor} />
+      <CRTOverlay monitor={monitor ?? undefined} />
     </div>
   );
 };

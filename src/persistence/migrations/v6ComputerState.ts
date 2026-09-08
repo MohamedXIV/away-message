@@ -4,6 +4,7 @@ import type {
   OwnedItem,
   PlayerInventoryState,
   SimulationState,
+  StrictSimulationState,
 } from '../../engine/types';
 import type { InsertedDisc, ModularHardwareState } from '../../engine/hardware/types';
 import {
@@ -133,8 +134,8 @@ export function isRecoverableBrokenStarterPurchase(
 export function migrateSnapshotToV6(
   snapshot: SimulationState,
   fromVersion: number,
-): SimulationState {
-  if (fromVersion >= 6) return clone(snapshot);
+): StrictSimulationState {
+  if (fromVersion >= 6) return clone(snapshot) as StrictSimulationState;
 
   const source = clone(snapshot) as LegacySnapshot;
   const hardware = getLegacyHardware(source);
@@ -184,5 +185,5 @@ export function migrateSnapshotToV6(
     display,
     inventory,
     os,
-  } as SimulationState;
+  } as StrictSimulationState;
 }
