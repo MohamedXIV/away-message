@@ -211,6 +211,7 @@ export const PHYSICAL_ITEM_CATALOG: Record<string, PhysicalCatalogItem> = {
   [scrapYardPhysical.opticalDrive.id]: { id: scrapYardPhysical.opticalDrive.id, kind: 'hardware', componentKind: 'optical', component: { ...scrapYardPhysical.opticalDrive } },
   [scrapYardPhysical.soundCard.id]: { id: scrapYardPhysical.soundCard.id, kind: 'hardware', componentKind: 'sound', component: { ...scrapYardPhysical.soundCard } },
   [scrapYardPhysical.networkCard.id]: { id: scrapYardPhysical.networkCard.id, kind: 'hardware', componentKind: 'network', component: { ...scrapYardPhysical.networkCard } },
+  [STARTER_ETHERNET.id]: { id: STARTER_ETHERNET.id, kind: 'hardware', componentKind: 'network', component: { ...STARTER_ETHERNET } },
   [scrapYardPhysical.monitor.id]: { id: scrapYardPhysical.monitor.id, kind: 'display', componentKind: 'monitor', component: { ...scrapYardPhysical.monitor } },
 
   [familyPhysical.cpu.id]: { id: familyPhysical.cpu.id, kind: 'hardware', componentKind: 'cpu', component: { ...familyPhysical.cpu } },
