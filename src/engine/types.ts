@@ -13,12 +13,15 @@ import type {
   SimulationEventMap as CanonicalSimulationEventMap,
   SimulationState as CanonicalSimulationState,
 } from './types/index';
+import type { ModularHardwareState } from './hardware/types';
 
 /**
  * Compile-only bridge for code that still carries the former flat hardware bag.
  * Runtime HardwareEngine projections never emit any of these deprecated fields.
  */
 export type HardwareState = CanonicalHardwareState & {
+  /** @deprecated v5 migration/catalog compatibility only. */
+  modular?: ModularHardwareState;
   /** @deprecated compatibility only; OsEngine is the sole OS authority. */
   osVersion?: OsVersion;
   /** @internal bridge used only to seed HardwareEngine from the v6 facade. */
