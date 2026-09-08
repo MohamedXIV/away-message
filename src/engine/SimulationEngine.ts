@@ -233,6 +233,17 @@ export class SimulationEngine extends SimulationEngineCore {
     return { success: true };
   }
 
+  public setComputerPower(poweredOn: boolean): ActionResult {
+    const computer = this.hardware.getComputerState();
+    if (!computer.assembled) {
+      return { success: false, error: 'No assembled computer is available to power on.' };
+    }
+
+    this.hardware.setPower(poweredOn);
+    this.invalidateV6Cache();
+    return { success: true };
+  }
+
   public override dispatchAction(action: SimulationAction) {
     if (action.type === 'STORE_PURCHASE_ITEM') {
       return this.purchaseStoreItem(action.storeId, action.skuId);
@@ -240,6 +251,10 @@ export class SimulationEngine extends SimulationEngineCore {
 
     if (action.type === 'COMPUTER_SETUP_AT_HOME') {
       return this.setupComputerAtHome();
+    }
+
+    if (action.type === 'COMPUTER_SET_POWER') {
+      return this.setComputerPower(action.poweredOn);
     }
 
     if (action.type === 'HARDWARE_UPGRADE_OS' && this.os.getCurrentOsId() === null) {
