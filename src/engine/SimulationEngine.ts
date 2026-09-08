@@ -84,7 +84,25 @@ export class SimulationEngine extends SimulationEngineCore {
   }
 
   public override exportSnapshot(): LiveSimulationState {
-    return JSON.parse(JSON.stringify(this.getState())) as LiveSimulationState;
+    // Preserve SimulationEngineCore's save guarantee: it explicitly invalidates
+    // its reference cache before exporting, so direct sub-engine mutations made
+    // immediately before save cannot disappear behind a stale aggregate state.
+    const base = super.exportSnapshot();
+    const snapshot = {
+      ...base,
+      hardware: this.hardware.getState(),
+      computer: this.hardware.getComputerState(),
+      display: this.hardware.getDisplayState(),
+      inventory: this.inventory.getState(),
+      os: this.os.getState(),
+      installedSoftware: this.software.getInstalledSoftware(),
+    } as LiveSimulationState;
+
+    // super.exportSnapshot() rebuilt the core cache, so the old v6 aggregate is
+    // no longer paired with the live core reference and must not be reused.
+    this.v6CachedBase = null;
+    this.v6CachedState = null;
+    return JSON.parse(JSON.stringify(snapshot)) as LiveSimulationState;
   }
 
   public override dispatchAction(action: SimulationAction) {
