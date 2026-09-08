@@ -37,7 +37,7 @@ export interface OsHostApi {
     playHddChirp: () => void;
   };
   system: {
-    activeOs: OsVersion;
+    activeOs: OsVersion | null;
     hardware: {
       ramMb: number;
       freeDiskGb: number;
@@ -55,7 +55,7 @@ export interface OsHostProviderProps {
 }
 
 export const OsHostProvider: React.FC<OsHostProviderProps> = ({ windowId, children }) => {
-  const osVersion = useSimulationStore((s) => s.state.hardware.osVersion);
+  const osVersion = useSimulationStore((s) => s.state.os.currentOsId);
   const ramMb = useSimulationStore((s) => s.state.hardware.ramMB);
   const hddFreeGB = useSimulationStore((s) => s.state.hardware.hddFreeGB);
   const cpuTier = useSimulationStore((s) => s.state.hardware.cpuTier);
@@ -77,15 +77,15 @@ export const OsHostProvider: React.FC<OsHostProviderProps> = ({ windowId, childr
         id: windowId,
         setTitle: (title: string) => setWindowTitle(windowId, title),
         close: () => {
-          synthAudio.playWindowSound('close', osVersion);
+          synthAudio.playWindowSound('close', osVersion ?? undefined);
           closeWindow(windowId);
         },
         minimize: () => {
-          synthAudio.playWindowSound('minimize', osVersion);
+          synthAudio.playWindowSound('minimize', osVersion ?? undefined);
           minimizeWindow(windowId);
         },
         maximize: () => {
-          synthAudio.playWindowSound('restore', osVersion);
+          synthAudio.playWindowSound('restore', osVersion ?? undefined);
           maximizeWindow(windowId);
         },
       },
