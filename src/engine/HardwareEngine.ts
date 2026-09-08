@@ -45,6 +45,14 @@ export class HardwareEngine {
   private eventBus: EventBus;
 
   /**
+   * @deprecated SimulationEngineCore-only compatibility sink. Two preserved
+   * legacy coordinator writes still assign `state.osVersion`; no v6 reader,
+   * projection, or persistence path consumes it. Per-instance ownership avoids
+   * a shared prototype/global shadow while the coordinator remains preserved.
+   */
+  public readonly state: { osVersion?: unknown } = {};
+
+  /**
    * Temporary metadata cache for legacy insert/eject callers. The canonical
    * computer stores only insertedMediaId; inventory/media ownership moves to
    * the dedicated media flow in #9.
@@ -282,9 +290,30 @@ export class HardwareEngine {
     this.computer = { ...this.computer, storage };
   }
 
-  public loadState(state: { computer: ComputerSetupState; display: DisplaySetupState }): void {
-    this.computer = cloneComputer(state.computer);
-    this.display = cloneDisplay(state.display);
+  public loadState(state: HardwareEngineInitialState): void {
+    const emptyComputer = createEmptyComputerSetup();
+    const computer = state.computer;
+    this.computer = {
+      ...emptyComputer,
+      ...computer,
+      chassis: computer?.chassis ? { ...computer.chassis } : null,
+      motherboard: computer?.motherboard ? { ...computer.motherboard } : null,
+      cpu: computer?.cpu ? { ...computer.cpu } : null,
+      ramSticks: computer?.ramSticks?.map((stick) => ({ ...stick })) ?? [],
+      storage: computer?.storage?.map((drive) => ({ ...drive })) ?? [],
+      opticalDrives: computer?.opticalDrives?.map((drive) => ({ ...drive })) ?? [],
+      soundCard: computer?.soundCard ? { ...computer.soundCard } : null,
+      networkCard: computer?.networkCard ? { ...computer.networkCard } : null,
+      insertedMediaId: computer?.insertedMediaId ?? null,
+    };
+
+    const emptyDisplay = createEmptyDisplaySetup();
+    const display = state.display;
+    this.display = {
+      ...emptyDisplay,
+      ...display,
+      monitor: display?.monitor ? { ...display.monitor } : null,
+    };
     this.legacyInsertedDisc = null;
   }
 }
