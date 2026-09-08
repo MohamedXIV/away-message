@@ -1,0 +1,27 @@
+name: Issue 7 TDD gate
+
+on:
+  push:
+    branches:
+      - sdd/issue-6-verifier
+
+permissions:
+  contents: read
+
+jobs:
+  tdd:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout exact Issue 7 repair source
+        uses: actions/checkout@v4
+        with:
+          ref: da47364a76de501760f037f7663f23df46968a43
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps
+      - name: Store catalog RED
+        run: npx vitest run tests/unit/StoreCatalog.test.ts
