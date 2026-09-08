@@ -2,63 +2,62 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Replace the mixed v5 hardware/OS state with a v6 canonical model where owned inventory, computer setup, display setup, and installed OS are independent, while preserving old saves and keeping existing callers alive through a non-authoritative hardware projection.
+**Goal:** Replace the mixed v5 hardware/OS snapshot with a v6 model where inventory, computer setup, display setup, and installed OS are independent and old saves migrate deterministically.
 
-**Architecture:** `HardwareEngine` will own two separate canonical runtime states—`ComputerSetupState` and `DisplaySetupState`—and derive the legacy-style `HardwareState` projection from them. A small `InventoryEngine` will own `PlayerInventoryState` for later store transactions. `OsEngine` becomes the only OS authority and supports `currentOsId: null`. v5 saves migrate deterministically into the new roots; the old flat `hardware` snapshot is treated only as a compatibility projection and is never a v6 source of truth.
+**Architecture:** `HardwareEngine` owns two canonical runtime values, `ComputerSetupState` and `DisplaySetupState`, and derives the existing `HardwareState` compatibility projection from them. `InventoryEngine` owns physical/media ownership for later #7 transactions. `OsEngine` becomes the sole OS authority and permits `currentOsId: null`. v5 legacy hardware is interpreted only inside the v6 migration; a loaded v6 engine never reconstructs canonical state from its derived `hardware` projection.
 
-**Tech Stack:** TypeScript, React 19/Vite application runtime, Zustand integration, Dexie save slots, Zod schemas, Vitest.
+**Tech Stack:** TypeScript, Vite/React 19 runtime, Zustand, Dexie, Zod, Vitest.
 
 **Spec:** `docs/superpowers/specs/2026-09-08-modular-computer-os-app-platform-design.md`
 
 ## Global Constraints
 
-- Fresh game: no assembled computer, no active monitor, no installed OS, empty physical inventory.
-- `OsEngine.currentOsId` is `OsVersion | null` and is the sole OS truth.
-- Hardware and display are separate canonical states even if one engine coordinates them.
-- `SimulationState.hardware` may remain temporarily for compatibility, but it is a derived read-only projection and is ignored as a v6 restore authority.
-- No fake no-PC values: CPU tier 0, RAM 0, disk 0, connection null/0, sound false.
-- `ModularHardwareState` may remain temporarily as a legacy/catalog adapter until #7, but it is not the canonical persisted runtime model.
-- Save format becomes v6; v5 → v6 migration is pure, deterministic, and preserves working v5 machines.
-- A v5 no-PC save must not materialize Orion 4.8 from the old default fallback.
-- The known broken starter purchase may create only a narrow one-time recovery marker in #6; #7 consumes it into actual ownership.
-- Do not implement store purchase behavior, room setup UX, OS media install flow, generic app installation, download refactors, or part-swapping UX in #6.
-- Follow TDD: write failing test, verify RED, implement minimal behavior, verify GREEN, then commit.
-- Final verification for #6: `npx tsc --noEmit`, targeted tests, `npm run build`, then `npm run test`; zero new failures beyond the documented baseline.
+- Fresh game has no assembled PC, no connected monitor, no installed OS, and an empty physical inventory.
+- `OsEngine.currentOsId: OsVersion | null` is the only installed/running OS truth.
+- No-PC effective specs are CPU tier `0`, RAM `0`, disk `0`, network `null`/`0`, sound `false`.
+- `SimulationState.hardware` remains temporarily only as a derived compatibility projection; v6 restore ignores it as authority.
+- `ModularHardwareState` remains only as a temporary v5/catalog adapter until #7; canonical runtime state does not embed the monitor or OS.
+- Save format becomes `6`; v5 → v6 migration is pure and deterministic.
+- A v5 no-PC save does not acquire Orion 4.8 merely because old code defaulted to it.
+- The known lost-$35 state may receive only a one-time recovery marker in #6. #7 converts that marker into store ownership.
+- #6 does not implement atomic purchasing, Room 104 setup UX, OS-media installation UX, app-version architecture, download services, or part-swap UI.
+- TDD per task: failing test → prove RED → minimal implementation → prove GREEN → commit.
+- Final gate: `npx tsc --noEmit`, targeted tests, `npm run build`, `npm run test`; no new failures beyond the `AGENTS.md` baseline.
 
 ---
 
-## File Structure and Responsibilities
+## File Map
 
 ### Create
 
-- `src/engine/hardware/state.ts` — pure constructors, legacy modular → canonical conversion, and effective hardware projection. No event bus or UI logic.
-- `src/engine/InventoryEngine.ts` — minimal owner for `PlayerInventoryState` (`getState`, `loadState`); #7 will add transactional purchase behavior.
-- `src/persistence/migrations/v6ComputerState.ts` — pure v5 → v6 snapshot migration and narrow broken-starter recovery detection.
-- `tests/unit/ComputerStateV6.test.ts` — canonical empty state, legacy conversion, and no-fake-default regression tests.
-- `tests/unit/OsEngineNoOs.test.ts` — nullable OS authority tests.
+- `src/engine/hardware/state.ts` — empty-state factories, v5 modular adapter conversion, flat-v5 conversion, effective hardware projection.
+- `src/engine/InventoryEngine.ts` — minimal immutable owner of `PlayerInventoryState`.
+- `src/persistence/migrations/v6ComputerState.ts` — pure v5 → v6 migration and lost-starter recovery detection.
+- `tests/unit/ComputerStateV6.test.ts` — empty/projection/adapter tests.
+- `tests/unit/OsEngineNoOs.test.ts` — nullable OS tests.
 
 ### Modify
 
-- `src/engine/types/index.ts` — define canonical v6 state interfaces; make `OsEngineState.currentOsId` nullable; redefine compatibility `HardwareState` without OS/modular authority; extend `SimulationState` with `computer`, `display`, and `inventory`.
-- `src/engine/hardware/types.ts` — add canonical computer/display/ownership-adjacent hardware types while retaining `ModularHardwareState` strictly as the temporary legacy/catalog adapter used by #7.
-- `src/engine/hardware/HardwareManager.ts` — remove OS from compatibility conversion and eliminate optimistic no-PC fallbacks.
-- `src/engine/HardwareEngine.ts` — store canonical computer/display state; derive `HardwareState`; remove OS mutation/branching.
-- `src/engine/OsEngine.ts` — support no installed OS safely in all read APIs and compatibility checks.
-- `src/engine/SimulationEngine.ts` — construct/serialize canonical roots, instantiate `InventoryEngine`, remove hardware↔OS synchronization, keep transitional `HARDWARE_UPGRADE_OS` behavior routed through `OsEngine` only.
-- `src/engine/SoftwareRegistry.ts` — accept nullable OS from its dependency contract so a no-OS simulation compiles and reports incompatibility; full generic app behavior remains #10.
-- `src/world/modals/SiliconSparesModal.tsx` — only compile-safe read changes required by #6, e.g. display current OS from `state.os.currentOsId`; do not implement #7 purchase semantics here.
-- `src/persistence/slots.ts` — bump save format to 6, chain v6 migration, write canonical summary data without using hardware as OS authority.
-- `src/persistence/schema.ts` — allow no OS in slot summary metadata and align types with v6 save records.
-- `tests/unit/ModularHardware.test.ts` — keep low-level modular/catalog tests that remain valid; remove assertions that hardware owns OS or that instant bundle install is the canonical contract.
-- `tests/unit/HardwareEngine.test.ts` — adapt to zero/no-machine effective values and canonical computer/display state.
-- `tests/unit/SaveSlots.test.ts` — add v5 → v6 working-PC/no-PC/recovery migration cases.
-- `tests/unit/SaveRoundTrip.test.ts` — prove canonical v6 roots round-trip.
-- `tests/unit/SimulationEngine.test.ts` — prove fresh simulation exposes no PC/display/OS and no OS shadow copy in hardware.
-- `CHANGELOG.md` — document v6 migration and player-visible lifecycle correction.
+- `src/engine/types/index.ts`
+- `src/engine/hardware/types.ts`
+- `src/engine/hardware/HardwareManager.ts`
+- `src/engine/HardwareEngine.ts`
+- `src/engine/OsEngine.ts`
+- `src/engine/SimulationEngine.ts`
+- `src/engine/SoftwareRegistry.ts`
+- `src/world/modals/SiliconSparesModal.tsx`
+- `src/persistence/slots.ts`
+- `src/persistence/schema.ts`
+- `tests/unit/ModularHardware.test.ts`
+- `tests/unit/HardwareEngine.test.ts`
+- `tests/unit/SimulationEngine.test.ts`
+- `tests/unit/SaveSlots.test.ts`
+- `tests/unit/SaveRoundTrip.test.ts`
+- `CHANGELOG.md`
 
-## Canonical Interfaces
+## Canonical Contracts
 
-Add these interfaces in `src/engine/types/index.ts` or re-export equivalents from `src/engine/hardware/types.ts` without duplicate definitions:
+Define or re-export these exact shapes without duplicate sources of truth:
 
 ```ts
 export type OwnedItemKind = 'hardware' | 'display' | 'media';
@@ -117,11 +116,15 @@ export interface HardwareState {
 export interface OsEngineState {
   currentOsId: OsVersion | null;
   installedPatchIds: OsVersion[];
-  // existing metadata fields remain unchanged
+  lastBootAtMinute?: number;
+  lastInstallAtMinute?: number;
+  lastInstallLog?: string[];
+  pendingReboot?: boolean;
+  proceduralCatalog?: unknown[];
 }
 ```
 
-Add a minimal chassis definition in `src/engine/hardware/types.ts`:
+Add to `src/engine/hardware/types.ts`:
 
 ```ts
 export interface ChassisComponent {
@@ -130,22 +133,19 @@ export interface ChassisComponent {
 }
 ```
 
-`SimulationState` must expose all four distinct views:
+`SimulationState` exposes canonical roots plus the temporary projection:
 
 ```ts
-interface SimulationState {
-  // existing fields...
-  hardware: HardwareState; // derived compatibility projection only
-  computer: ComputerSetupState;
-  display: DisplaySetupState;
-  inventory: PlayerInventoryState;
-  os: OsEngineState;
-}
+hardware: HardwareState; // derived only
+computer: ComputerSetupState;
+display: DisplaySetupState;
+inventory: PlayerInventoryState;
+os: OsEngineState;
 ```
 
 ---
 
-### Task 1: Canonical v6 types and pure state/projection helpers
+### Task 1: Define canonical state and pure conversions
 
 **Files:**
 - Create: `src/engine/hardware/state.ts`
@@ -154,66 +154,52 @@ interface SimulationState {
 - Modify: `src/engine/hardware/types.ts`
 - Modify: `src/engine/hardware/HardwareManager.ts`
 
-**Interfaces:**
-- Produces: `createEmptyComputerSetup(): ComputerSetupState`
-- Produces: `createEmptyDisplaySetup(): DisplaySetupState`
-- Produces: `createEmptyInventoryState(): PlayerInventoryState`
-- Produces: `projectEffectiveHardware(computer: ComputerSetupState): HardwareState`
-- Produces: `legacyModularToCanonical(modular: ModularHardwareState): { computer: ComputerSetupState; display: DisplaySetupState }`
-- Produces: `canonicalToLegacyModular(computer: ComputerSetupState, display: DisplaySetupState): ModularHardwareState | undefined`
-- Consumes: existing modular component definitions and legacy bundle objects.
-
-- [ ] **Step 1: Write RED tests for an empty canonical machine**
-
-Create `tests/unit/ComputerStateV6.test.ts` with tests equivalent to:
+**Produces:**
 
 ```ts
-import { describe, expect, it } from 'vitest';
-import {
-  createEmptyComputerSetup,
-  createEmptyDisplaySetup,
-  projectEffectiveHardware,
-} from '../../src/engine/hardware/state';
+createEmptyComputerSetup(): ComputerSetupState
+createEmptyDisplaySetup(): DisplaySetupState
+createEmptyInventoryState(): PlayerInventoryState
+projectEffectiveHardware(computer: ComputerSetupState): HardwareState
+legacyModularToCanonical(modular: ModularHardwareState): { computer: ComputerSetupState; display: DisplaySetupState }
+legacyFlatHardwareToCanonical(hardware: LegacyV5HardwareLike): { computer: ComputerSetupState; display: DisplaySetupState }
+canonicalToLegacyModular(computer: ComputerSetupState, display: DisplaySetupState): ModularHardwareState | undefined
+```
 
-describe('v6 computer state', () => {
-  it('represents an empty desk without invented hardware', () => {
-    const computer = createEmptyComputerSetup();
-    const display = createEmptyDisplaySetup();
-    const effective = projectEffectiveHardware(computer);
+`LegacyV5HardwareLike` is a local interface in `hardware/state.ts` containing only the old fields required for migration: `hasComputer?`, `isPoweredOn?`, `cpuTier?`, `cpuName?`, `ramMB?`, `hddTotalGB?`, `hddFreeGB?`, `connectionType?`, `connectionSpeedKbps?`, `soundCardInstalled?`, and `modular?`.
 
-    expect(computer.assembled).toBe(false);
-    expect(computer.poweredOn).toBe(false);
-    expect(display.monitor).toBeNull();
-    expect(effective).toMatchObject({
-      hasComputer: false,
-      isPoweredOn: false,
-      cpuTier: 0,
-      ramMB: 0,
-      hddTotalGB: 0,
-      hddFreeGB: 0,
-      connectionType: null,
-      connectionSpeedKbps: 0,
-      soundCardInstalled: false,
-    });
+- [ ] **Step 1: Add failing empty-state tests**
+
+```ts
+it('represents an empty desk without invented specs', () => {
+  const computer = createEmptyComputerSetup();
+  const display = createEmptyDisplaySetup();
+  expect(display.monitor).toBeNull();
+  expect(projectEffectiveHardware(computer)).toMatchObject({
+    hasComputer: false,
+    isPoweredOn: false,
+    cpuTier: 0,
+    ramMB: 0,
+    hddTotalGB: 0,
+    hddFreeGB: 0,
+    connectionType: null,
+    connectionSpeedKbps: 0,
+    soundCardInstalled: false,
   });
 });
 ```
 
-Add a second RED test converting `createScrapYardBundle()` and asserting monitor is returned in `display.monitor`, not in `ComputerSetupState`, while CPU/RAM/storage remain in `computer`.
+Add a second test converting `createScrapYardBundle()` and assert the monitor lands in `display.monitor`, while CPU/RAM/storage land in `computer`.
 
-- [ ] **Step 2: Run the focused test and verify RED**
-
-Run:
+- [ ] **Step 2: Prove RED**
 
 ```bash
 npx vitest run tests/unit/ComputerStateV6.test.ts
 ```
 
-Expected: FAIL because the v6 types/helpers do not exist yet.
+Expected: FAIL because the helpers/types do not exist.
 
-- [ ] **Step 3: Add canonical types and pure constructors**
-
-Implement the interfaces above. In `hardware/state.ts`, use these exact empty defaults:
+- [ ] **Step 3: Implement exact empty factories**
 
 ```ts
 export function createEmptyComputerSetup(): ComputerSetupState {
@@ -232,57 +218,46 @@ export function createEmptyComputerSetup(): ComputerSetupState {
   };
 }
 
-export function createEmptyDisplaySetup(): DisplaySetupState {
-  return { monitor: null };
-}
-
-export function createEmptyInventoryState(): PlayerInventoryState {
-  return { items: [] };
-}
+export const createEmptyDisplaySetup = (): DisplaySetupState => ({ monitor: null });
+export const createEmptyInventoryState = (): PlayerInventoryState => ({ items: [] });
 ```
 
-`projectEffectiveHardware()` must return zero/unavailable values when `computer.assembled === false`; for assembled machines it sums RAM, uses primary storage index `0`, and reads CPU/network/sound from the canonical components. Do not accept an OS parameter.
+`projectEffectiveHardware()` returns the zero/unavailable values above when `assembled === false`; otherwise it sums RAM, uses `storage[0]` as the current primary drive, and reads CPU/network/sound from canonical parts. It never accepts an OS.
 
-- [ ] **Step 4: Implement temporary modular adapters without making them canonical**
+- [ ] **Step 4: Implement v5 modular conversion**
 
-`legacyModularToCanonical()` maps the v5/catalog object to:
+`legacyModularToCanonical()` maps the current required `ModularHardwareState` into a canonical computer plus independent display. Use `chassis_legacy_beige_atx` / `Beige ATX Chassis` as the deterministic chassis backfill. Convert single `storage`/`opticalDrive` fields into one-element arrays. Map legacy inserted disc ID into `computer.insertedMediaId`.
 
-```ts
-{
-  computer: {
-    assembled: modular.hasComputer,
-    poweredOn: modular.isPoweredOn,
-    chassis: modular.hasComputer ? { id: 'chassis_legacy_beige_atx', name: 'Beige ATX Chassis' } : null,
-    motherboard: modular.motherboard ?? null,
-    cpu: modular.cpu ?? null,
-    ramSticks: [...(modular.ramSticks ?? [])],
-    storage: modular.storage ? [modular.storage] : [],
-    opticalDrives: modular.opticalDrive ? [modular.opticalDrive] : [],
-    soundCard: modular.soundCard ?? null,
-    networkCard: modular.networkCard ?? null,
-    insertedMediaId: modular.insertedDisc?.id ?? null,
-  },
-  display: { monitor: modular.monitor ?? null },
-}
+- [ ] **Step 5: Implement flat-v5 conversion without calling `migrateSnapshotToV5`**
+
+`legacyFlatHardwareToCanonical()` must directly reproduce the deterministic v5 preservation values needed for flat saves, avoiding any import from `slots.ts` and therefore avoiding a migration cycle. Use:
+
+```text
+motherboard: mb_standard_atx / Standard ATX Slot-1 Board / 2 slots / 512MB per slot / Slot-1
+CPU: cpu_pentium3_800 at tier 2, otherwise cpu_celeron_450 at tier 1
+RAM: one migrated stick containing the old effective ramMB
+storage: hdd_migrated using old total/free GB, 5400 RPM, throughput 1.0
+optical: optical_cdrom_24x
+sound: sound_sb16 when old soundCardInstalled !== false, otherwise pc-speaker profile
+network: nic_migrated using old connection type/speed
+monitor: mon_standard_15 / 15-inch Standard CRT / curvature .7 / scanlines .5 / bloom .4 / flicker true
 ```
 
-`canonicalToLegacyModular()` exists only for the still-unmigrated store/UI code; it returns `undefined` unless the canonical machine has all required legacy adapter parts and a monitor. It must never contain or accept an OS version.
+This helper is used only by v5 migration.
 
-- [ ] **Step 5: Remove OS/fake fallback behavior from `HardwareManager`**
+- [ ] **Step 6: Remove fake/OS fallback from HardwareManager**
 
-Delete the `osVersion` parameter from `toLegacyHardwareState` or replace that helper with `projectEffectiveHardware`. No helper may return `512MB`, `40GB`, or DSL simply because a machine/part is absent.
+Replace `toLegacyHardwareState(state, osVersion)` usage with `projectEffectiveHardware`. No conversion helper may insert 512MB/40GB/DSL because hardware is absent.
 
-- [ ] **Step 6: Re-run focused tests**
-
-Run:
+- [ ] **Step 7: Prove GREEN**
 
 ```bash
-npx vitest run tests/unit/ComputerStateV6.test.ts tests/unit/ModularHardware.test.ts
+npx vitest run tests/unit/ComputerStateV6.test.ts
 ```
 
-Expected: canonical v6 tests PASS; old modular tests may now fail only where they assert the abandoned OS/monitor-as-canonical contract. Update those assertions in Task 2, not by reintroducing coupling.
+Expected: PASS.
 
-- [ ] **Step 7: Commit Task 1**
+- [ ] **Step 8: Commit**
 
 ```bash
 git add src/engine/types/index.ts src/engine/hardware/types.ts src/engine/hardware/state.ts src/engine/hardware/HardwareManager.ts tests/unit/ComputerStateV6.test.ts
@@ -291,117 +266,87 @@ git commit -m "refactor: define v6 computer and display state"
 
 ---
 
-### Task 2: Make HardwareEngine own canonical computer/display state only
+### Task 2: Refactor HardwareEngine to canonical computer/display state
 
 **Files:**
 - Modify: `src/engine/HardwareEngine.ts`
 - Modify: `tests/unit/HardwareEngine.test.ts`
 - Modify: `tests/unit/ModularHardware.test.ts`
 
-**Interfaces:**
-- Consumes: Task 1 constructors/projections/adapters.
-- Produces: `getComputerState(): Readonly<ComputerSetupState>`
-- Produces: `getDisplayState(): Readonly<DisplaySetupState>`
-- Produces: `getState(): Readonly<HardwareState>` as a derived compatibility projection.
-- Produces: `getModularState(): ModularHardwareState | undefined` as a deprecated adapter only.
-- Produces: `checkHardwareRequirements(req: Pick<SoftwareRequirement, 'minRamMB' | 'minCpuTier' | 'requiredDiskBytes'>): { compatible: boolean; reasons: string[] }`
-- Produces: `calculateRamPressure(runningAppsMemoryMB: number, osBaselineMB: number): RamPressure`
-
-- [ ] **Step 1: Write RED HardwareEngine tests**
-
-Add tests equivalent to:
+**Produces:**
 
 ```ts
-it('starts with no assembled machine and no fake effective specs', () => {
-  const engine = new HardwareEngine(new EventBus());
-  expect(engine.getComputerState().assembled).toBe(false);
-  expect(engine.getDisplayState().monitor).toBeNull();
-  expect(engine.getState()).toMatchObject({
-    hasComputer: false,
-    cpuTier: 0,
-    ramMB: 0,
-    hddTotalGB: 0,
-    connectionType: null,
-    connectionSpeedKbps: 0,
-  });
+getComputerState(): Readonly<ComputerSetupState>
+getDisplayState(): Readonly<DisplaySetupState>
+getState(): Readonly<HardwareState>
+getModularState(): ModularHardwareState | undefined // deprecated #7 adapter only
+checkHardwareRequirements(req: Pick<SoftwareRequirement, 'minRamMB' | 'minCpuTier' | 'requiredDiskBytes'>): { compatible: boolean; reasons: string[] }
+calculateRamPressure(runningAppsMemoryMB: number, osBaselineMB: number): RamPressure
+```
+
+- [ ] **Step 1: Add failing HardwareEngine tests**
+
+```ts
+it('starts with no canonical machine and zero effective specs', () => {
+  const hw = new HardwareEngine(new EventBus());
+  expect(hw.getComputerState().assembled).toBe(false);
+  expect(hw.getDisplayState().monitor).toBeNull();
+  expect(hw.getState().ramMB).toBe(0);
+  expect(hw.getState().connectionType).toBeNull();
 });
 ```
 
-Add a test proving `checkHardwareRequirements` fails on a no-PC machine for RAM/CPU/disk rather than passing through defaults.
+Add a test proving hardware requirements fail on the empty machine.
 
-- [ ] **Step 2: Verify RED**
-
-Run:
+- [ ] **Step 2: Prove RED**
 
 ```bash
 npx vitest run tests/unit/HardwareEngine.test.ts
 ```
 
-Expected: FAIL because HardwareEngine still owns flat defaults and OS state.
+Expected: FAIL because HardwareEngine still owns the flat v5 bag.
 
-- [ ] **Step 3: Replace HardwareEngine private state**
-
-Use:
+- [ ] **Step 3: Replace private state**
 
 ```ts
 private computer: ComputerSetupState;
 private display: DisplaySetupState;
 ```
 
-Constructor inputs are canonical partial states, with Task 1 empty constructors as defaults. `getState()` always calls `projectEffectiveHardware(this.computer)`.
+Constructor accepts `{ computer?: Partial<ComputerSetupState>; display?: Partial<DisplaySetupState> }`; missing values use Task 1 factories. `getState()` always derives via `projectEffectiveHardware(this.computer)`.
 
-Keep `getModularState()` only as a compatibility adapter calling `canonicalToLegacyModular(this.computer, this.display)` so #7 can remove its callers later.
+- [ ] **Step 4: Remove every OS responsibility**
 
-- [ ] **Step 4: Remove OS authority from HardwareEngine**
+Delete HardwareEngine's `osVersion` default/state, OS check in `checkRequirements`, OS lookup inside RAM pressure, and `upgradeOs`. RAM pressure receives `osBaselineMB` explicitly.
 
-Remove:
-- `osVersion` field/default;
-- OS check inside `checkRequirements`;
-- OS family lookups inside RAM pressure;
-- hardware-owned OS mutation in `upgradeOs`.
+- [ ] **Step 5: Preserve the temporary modular adapter, but make it OS-neutral**
 
-For RAM pressure, callers supply `this.os.getRamOverheadMB()` from SimulationEngine/host code.
+`getModularState()` returns `canonicalToLegacyModular(computer, display)`. `installModularHardware(modular, _ignoredLegacyOs?)` may remain only until #7; it maps through `legacyModularToCanonical`, preserves `modular.isPoweredOn`, ignores the OS argument, and emits hardware/display events. A test must prove passing `'Orion_6.0'` cannot create an OS field in HardwareEngine.
 
-For the transitional `HARDWARE_UPGRADE_OS` action, do not keep `HardwareEngine.upgradeOs`; Task 3 routes that action to `OsEngine` so there is one OS writer.
+- [ ] **Step 6: Update modular tests**
 
-- [ ] **Step 5: Keep legacy modular install compile-compatible but OS-neutral**
+Keep RAM/storage/slot/catalog tests. Replace the old OS-bearing legacy conversion assertion with:
 
-Until #7 replaces the store, `installModularHardware(modular, _ignoredLegacyOs?)` may remain as a deprecated adapter. It must:
+```ts
+const canonical = legacyModularToCanonical(createPowerWorkstationBundle());
+const effective = projectEffectiveHardware(canonical.computer);
+expect(effective.ramMB).toBe(256);
+expect('osVersion' in effective).toBe(false);
+```
 
-1. map the legacy modular object through `legacyModularToCanonical`;
-2. set computer/display from that result;
-3. preserve `modular.isPoweredOn` rather than forcing power on;
-4. ignore the legacy OS argument entirely;
-5. emit only hardware/display change events.
+Remove the test that treats instant bundle + OS installation as the canonical lifecycle.
 
-Add a test proving passing `'Orion_6.0'` to this legacy adapter cannot alter any OS state because HardwareEngine has no OS field.
-
-- [ ] **Step 6: Update modular tests to the new boundary**
-
-Keep tests for RAM calculation, storage calculation, slot validation, and authored bundle completeness. Replace the old `toLegacyHardwareState(workstation, 'Orion_6.0')` assertion with `projectEffectiveHardware(legacyModularToCanonical(workstation).computer)` and assert there is no `osVersion` key.
-
-Do not keep the old test asserting “install bundle + initial OS = canonical completed machine.”
-
-- [ ] **Step 7: Verify Task 2**
-
-Run:
+- [ ] **Step 7: Prove GREEN and commit**
 
 ```bash
 npx vitest run tests/unit/ComputerStateV6.test.ts tests/unit/HardwareEngine.test.ts tests/unit/ModularHardware.test.ts
-```
-
-Expected: PASS.
-
-- [ ] **Step 8: Commit Task 2**
-
-```bash
 git add src/engine/HardwareEngine.ts tests/unit/HardwareEngine.test.ts tests/unit/ModularHardware.test.ts
 git commit -m "refactor: make hardware state OS-neutral"
 ```
 
 ---
 
-### Task 3: Nullable OsEngine, InventoryEngine, and SimulationEngine single authority
+### Task 3: Make OsEngine nullable and SimulationEngine the single OS authority
 
 **Files:**
 - Create: `src/engine/InventoryEngine.ts`
@@ -412,95 +357,69 @@ git commit -m "refactor: make hardware state OS-neutral"
 - Modify: `src/world/modals/SiliconSparesModal.tsx`
 - Modify: `tests/unit/SimulationEngine.test.ts`
 
-**Interfaces:**
-- Consumes: canonical computer/display/inventory types from Task 1.
-- Produces: `InventoryEngine.getState(): Readonly<PlayerInventoryState>` and `loadState(state: PlayerInventoryState): void`.
-- Changes: `OsEngine.getCurrentOsId(): OsVersion | null`.
-- Changes: `OsEngine.getCurrentRelease(): OsRelease | null`.
-- Changes: `OsEngine.getTheme(): OsThemeId | null`.
-- Rule: `OsEngine.getRamOverheadMB()` returns `0` when no OS is installed.
-- Rule: `OsEngine.checkCompatibility(...)` returns incompatible with reason `No operating system installed.` when `currentOsId === null`.
-
-- [ ] **Step 1: Write RED tests for nullable OS**
-
-Create `tests/unit/OsEngineNoOs.test.ts`:
+**Produces/changes:**
 
 ```ts
-import { describe, expect, it } from 'vitest';
-import { EventBus } from '../../src/engine/EventBus';
-import { OsEngine } from '../../src/engine/OsEngine';
+InventoryEngine.getState(): Readonly<PlayerInventoryState>
+InventoryEngine.loadState(state: PlayerInventoryState): void
+OsEngine.getCurrentOsId(): OsVersion | null
+OsEngine.getCurrentRelease(): OsRelease | null
+OsEngine.getTheme(): OsThemeId | null
+```
 
-describe('OsEngine no-OS state', () => {
-  it('does not invent Orion 4.8', () => {
-    const os = new OsEngine(new EventBus(), { currentOsId: null });
-    expect(os.getCurrentOsId()).toBeNull();
-    expect(os.getCurrentRelease()).toBeNull();
-    expect(os.getTheme()).toBeNull();
-    expect(os.getRamOverheadMB()).toBe(0);
-  });
+`OsEngine.getRamOverheadMB()` returns `0` when no OS exists. `checkCompatibility()` returns `No operating system installed.` when null.
 
-  it('persists and reloads explicit null', () => {
-    const os = new OsEngine(new EventBus(), { currentOsId: null });
-    const restored = new OsEngine(new EventBus(), os.getState());
-    expect(restored.getState().currentOsId).toBeNull();
-  });
+- [ ] **Step 1: Add failing nullable-OS tests**
+
+```ts
+it('does not invent Orion 4.8', () => {
+  const os = new OsEngine(new EventBus(), { currentOsId: null });
+  expect(os.getCurrentOsId()).toBeNull();
+  expect(os.getCurrentRelease()).toBeNull();
+  expect(os.getTheme()).toBeNull();
+  expect(os.getRamOverheadMB()).toBe(0);
+});
+
+it('round-trips explicit null', () => {
+  const first = new OsEngine(new EventBus(), { currentOsId: null });
+  const second = new OsEngine(new EventBus(), first.getState());
+  expect(second.getCurrentOsId()).toBeNull();
 });
 ```
 
-Add a compatibility test expecting `No operating system installed.`.
-
-- [ ] **Step 2: Write RED SimulationEngine fresh-state test**
-
-In `tests/unit/SimulationEngine.test.ts` add:
+- [ ] **Step 2: Add failing fresh SimulationEngine test**
 
 ```ts
-it('fresh simulation has independent empty computer, display, inventory, and OS roots', () => {
-  const sim = new SimulationEngine();
-  const state = sim.getState();
-
-  expect(state.computer.assembled).toBe(false);
-  expect(state.display.monitor).toBeNull();
-  expect(state.inventory.items).toEqual([]);
-  expect(state.os.currentOsId).toBeNull();
-  expect(state.hardware.hasComputer).toBe(false);
-  expect('osVersion' in state.hardware).toBe(false);
-});
+const sim = new SimulationEngine();
+const state = sim.getState();
+expect(state.computer.assembled).toBe(false);
+expect(state.display.monitor).toBeNull();
+expect(state.inventory.items).toEqual([]);
+expect(state.os.currentOsId).toBeNull();
+expect(state.hardware.hasComputer).toBe(false);
+expect('osVersion' in state.hardware).toBe(false);
 ```
 
-- [ ] **Step 3: Verify RED**
-
-Run:
+- [ ] **Step 3: Prove RED**
 
 ```bash
 npx vitest run tests/unit/OsEngineNoOs.test.ts tests/unit/SimulationEngine.test.ts
 ```
 
-Expected: FAIL on nullable OS/canonical roots.
+- [ ] **Step 4: Implement null-safe OsEngine**
 
-- [ ] **Step 4: Implement nullable OsEngine reads safely**
+Constructor distinguishes absent key from explicit null and defaults fresh engines to null. Do not read `HardwareState.osVersion` inside OsEngine.
 
-Constructor must distinguish `undefined` from explicit `null`:
-
-```ts
-this.currentOsId = initialState && 'currentOsId' in initialState
-  ? (initialState.currentOsId ?? null)
-  : null;
-```
-
-Do not fall back to `initialState.osVersion` inside OsEngine. v5 legacy fallback belongs only in the v6 migration.
-
-Any method needing the active release must branch on null. In particular:
-- `getCurrentRelease()` → `null`;
-- `getInstalledReleases()` → `[]` when no base OS;
-- `getTheme()` → `null`;
-- `getRamOverheadMB()` → `0`;
-- `checkCompatibility()` → explicit no-OS failure;
-- `loadState()` must assign `null` when the key is present;
-- `canInstall()` must not call `.version`/`.family` on a missing current release. With no current OS, skip downgrade/base-family comparisons; media/fresh-install mode remains #9.
+Null behavior:
+- `getCurrentRelease()` → null
+- `getInstalledReleases()` → []
+- `getTheme()` → null
+- `getRamOverheadMB()` → 0
+- `checkCompatibility()` → incompatible with `No operating system installed.`
+- `loadState()` assigns null when the key is present
+- `canInstall()` skips downgrade/current-family comparisons when no current release exists; #9 later adds media/fresh-install mode policy.
 
 - [ ] **Step 5: Add minimal InventoryEngine**
-
-Use immutable outward copies:
 
 ```ts
 export class InventoryEngine {
@@ -508,7 +427,7 @@ export class InventoryEngine {
 
   constructor(initial?: Partial<PlayerInventoryState>) {
     this.state = {
-      items: initial?.items ? initial.items.map((item) => ({ ...item })) : [],
+      items: initial?.items?.map((item) => ({ ...item })) ?? [],
       legacyRecovery: initial?.legacyRecovery ? { ...initial.legacyRecovery } : undefined,
     };
   }
@@ -529,13 +448,11 @@ export class InventoryEngine {
 }
 ```
 
-No add/remove/purchase methods in #6.
+Do not add purchase/add/remove methods yet.
 
-- [ ] **Step 6: Rewire SimulationEngine canonical roots**
+- [ ] **Step 6: Rewire SimulationEngine**
 
-Constructor reads `initialState.computer`, `initialState.display`, `initialState.inventory`, and `initialState.os`. For a fresh game, all use empty/null defaults.
-
-Instantiate:
+Fresh construction:
 
 ```ts
 this.hardware = new HardwareEngine(this.events, {
@@ -546,52 +463,33 @@ this.inventory = new InventoryEngine(initialState?.inventory);
 this.os = new OsEngine(this.events, initialState?.os);
 ```
 
-Remove every mutation that copies `OsEngine.currentOsId` into HardwareEngine.
+Remove both hardware↔OS synchronization blocks. `getState()` returns canonical roots from their owners and derives `hardware` only through HardwareEngine.
 
-`getState()` must return:
+- [ ] **Step 7: Prevent the legacy OS action from becoming a first-install bypass**
 
-```ts
-hardware: this.hardware.getState(),
-computer: this.hardware.getComputerState(),
-display: this.hardware.getDisplayState(),
-inventory: this.inventory.getState(),
-os: this.os.getState(),
-```
+For `HARDWARE_UPGRADE_OS`:
+- if `this.os.getCurrentOsId() === null`, return `{ success: false, error: 'No operating system is installed. Boot from setup media to install one.' }` without charging cash or changing disk;
+- if an OS already exists, temporarily route the existing upgrade behavior through `OsEngine` as the sole writer and hardware only for disk accounting.
 
-Fresh `activeView` remains `room` because `hardware.hasComputer` is false.
+This preserves old upgrade callers until #9 without allowing a magic first installation.
 
-- [ ] **Step 7: Keep transitional OS-upgrade action single-authority**
+- [ ] **Step 8: Make nullable OS compile-safe at the immediate boundary**
 
-Where `SimulationEngine` currently dispatches `HARDWARE_UPGRADE_OS`, route the OS write to `OsEngine` only. If the existing action charges cash, keep that legacy behavior temporarily for compatibility but call `this.os.beginInstall(...)`/the existing OsEngine install path and allocate disk through hardware. #9 removes the combined purchase/install action entirely.
+`SoftwareRegistry` dependency becomes `getOsVersion: () => OsVersion | null`; null produces an OS compatibility failure with current text `None`. Do not generalize app releases here.
 
-No code path may write an OS identifier into HardwareEngine.
+In `SiliconSparesModal`, replace footer `hardware.osVersion` reads with `state.os.currentOsId ?? 'No OS'`. Do not implement #7 purchasing in this task.
 
-- [ ] **Step 8: Make nullable OS dependency compile-safe**
-
-Change `SoftwareRegistry` dependency typing to `getOsVersion: () => OsVersion | null`. When null, its existing compatibility result should report OS check failed with current display text `None`; do not redesign app releases in #6.
-
-In `SiliconSparesModal`, replace footer reads of `hardware.osVersion` with `state.os.currentOsId ?? 'No OS'`. Do not change purchase/install behavior beyond what is required to compile against the new HardwareState.
-
-- [ ] **Step 9: Verify Task 3**
-
-Run:
+- [ ] **Step 9: Prove GREEN and commit**
 
 ```bash
 npx vitest run tests/unit/OsEngineNoOs.test.ts tests/unit/SimulationEngine.test.ts tests/unit/HardwareEngine.test.ts tests/unit/SoftwareRegistry.test.ts
-```
-
-Expected: PASS.
-
-- [ ] **Step 10: Commit Task 3**
-
-```bash
 git add src/engine/InventoryEngine.ts src/engine/OsEngine.ts src/engine/SimulationEngine.ts src/engine/SoftwareRegistry.ts src/world/modals/SiliconSparesModal.tsx tests/unit/OsEngineNoOs.test.ts tests/unit/SimulationEngine.test.ts
 git commit -m "refactor: make OsEngine the sole OS authority"
 ```
 
 ---
 
-### Task 4: Save format v6 migration and bounded broken-purchase recovery marker
+### Task 4: Add deterministic v5 → v6 migration
 
 **Files:**
 - Create: `src/persistence/migrations/v6ComputerState.ts`
@@ -599,175 +497,108 @@ git commit -m "refactor: make OsEngine the sole OS authority"
 - Modify: `src/persistence/schema.ts`
 - Modify: `tests/unit/SaveSlots.test.ts`
 
-**Interfaces:**
-- Produces: `migrateSnapshotToV6(snapshot: SimulationState, fromVersion: number): SimulationState`
-- Produces: `isRecoverableBrokenStarterPurchase(snapshot: SimulationState): boolean`
-- Consumes: Task 1 legacy modular conversion and empty-state helpers.
-
-- [ ] **Step 1: Write RED migration tests for a working v5 PC**
-
-Construct a v5-style snapshot with:
-- `hardware.hasComputer = true`;
-- modular CPU tier 2, 1024MB RAM, DSL 1M, monitor, optional inserted disc;
-- `os.currentOsId = 'Orion_5.0'`.
-
-Assert after `migrateSnapshotToV6`:
+**Produces:**
 
 ```ts
-expect(migrated.computer.assembled).toBe(true);
-expect(migrated.computer.cpu?.tier).toBe(2);
-expect(migrated.computer.ramSticks[0]?.sizeMb).toBe(1024);
-expect(migrated.display.monitor?.id).toBe(originalMonitorId);
-expect(migrated.os.currentOsId).toBe('Orion_5.0');
-expect(migrated.inventory.items.some((i) => i.location === 'installed')).toBe(true);
-expect('osVersion' in migrated.hardware).toBe(false);
+migrateSnapshotToV6(snapshot: SimulationState, fromVersion: number): SimulationState
+isRecoverableBrokenStarterPurchase(snapshot: SimulationState): boolean
 ```
 
-- [ ] **Step 2: Write RED migration test for v5 no-PC ghost Orion**
+- [ ] **Step 1: Add failing working-PC migration test**
 
-Create a v5 snapshot with:
-- `hardware.hasComputer = false`;
-- old flat fake defaults;
-- `os.currentOsId = 'Orion_4.8'` from the legacy fallback;
-- no `lastInstallAtMinute`, no OS patches.
+Use a v5-style snapshot with `hasComputer: true`, modular monitor/CPU/RAM/network, and `os.currentOsId: 'Orion_5.0'`. Assert v6 preserves effective parts, moves monitor to `display.monitor`, keeps Orion 5.0 in `os`, creates installed ownership rows, and produces no `hardware.osVersion`.
 
-Assert v6:
+- [ ] **Step 2: Add failing no-PC ghost-OS test**
 
-```ts
-expect(migrated.computer.assembled).toBe(false);
-expect(migrated.display.monitor).toBeNull();
-expect(migrated.os.currentOsId).toBeNull();
-expect(migrated.hardware.ramMB).toBe(0);
-```
+Use a v5 snapshot with `hasComputer: false`, old flat default specs, `os.currentOsId: 'Orion_4.8'`, no install timestamp, and no patches. Assert v6 gives empty computer/display, null OS, and zero effective RAM/network.
 
-- [ ] **Step 3: Write RED bounded recovery tests**
+- [ ] **Step 3: Add narrow recovery tests**
 
-The helper returns true only when all are true:
-- source is a v5-style no-PC state;
+Recovery is true only when all are true:
+- source version is v5;
 - Day 1;
-- player cash equals `$3.00` exactly after cent rounding;
-- no assembled/modular working computer;
-- no evidence of a real OS install (`lastInstallAtMinute` absent, no installed patches).
+- cash rounded to cents is exactly `$3.00`;
+- no working/modular computer;
+- no `lastInstallAtMinute` and no installed OS patches.
 
-Expected marker:
+Then migration adds only:
 
 ```ts
-inventory.legacyRecovery = {
+legacyRecovery: {
   starterBundlePurchaseLost: true,
   consumed: false,
-};
+}
 ```
 
-Add negative cases for cash `$2`, `$4`, Day 2, and an actually installed OS. Those must not receive the marker.
+Negative tests: `$2`, `$4`, Day 2, working PC, or explicit install evidence → no marker.
 
-- [ ] **Step 4: Verify RED**
-
-Run:
+- [ ] **Step 4: Prove RED**
 
 ```bash
 npx vitest run tests/unit/SaveSlots.test.ts
 ```
 
-Expected: FAIL because v6 migration does not exist.
+- [ ] **Step 5: Implement migration without importing `slots.ts` back into the migration**
 
-- [ ] **Step 5: Implement pure v6 migration**
+Rules:
+1. v5 modular working PC → `legacyModularToCanonical`.
+2. v5 flat-only working PC → `legacyFlatHardwareToCanonical`.
+3. Deterministic installed ownership IDs: `migrated:chassis:0`, `migrated:motherboard:0`, `migrated:cpu:0`, `migrated:ram:N`, `migrated:storage:0`, `migrated:optical:0`, `migrated:sound:0`, `migrated:network:0`, `migrated:monitor:0`.
+4. `catalogItemId` uses each preserved component ID; migrated location is `installed`.
+5. Legacy inserted disc becomes `migrated:media:inserted`, location `inserted`, and `computer.insertedMediaId` references that instance ID.
+6. Working-PC OS priority: real `snapshot.os.currentOsId`, otherwise legacy `hardware.osVersion`.
+7. No-PC migration sets OS null; the old 4.8 fallback is not real install evidence.
+8. Apply the recovery marker only through `isRecoverableBrokenStarterPurchase`.
+9. Recompute derived `hardware` from canonical computer.
+10. Clone nested arrays/objects; never mutate input.
 
-In `v6ComputerState.ts`:
-
-1. If canonical `computer`, `display`, `inventory`, and nullable `os` already exist, clone and return without re-migrating.
-2. For working v5 modular hardware, call `legacyModularToCanonical`.
-3. For working v5 flat-only hardware, first use the deterministic v5 modular backfill behavior already present, then convert to canonical state.
-4. Create deterministic installed ownership rows for migrated components using instance IDs such as:
-   - `migrated:chassis:0`
-   - `migrated:motherboard:0`
-   - `migrated:cpu:0`
-   - `migrated:ram:0`, `migrated:ram:1`
-   - `migrated:storage:0`
-   - `migrated:optical:0`
-   - `migrated:sound:0`
-   - `migrated:network:0`
-   - `migrated:monitor:0`
-5. `catalogItemId` uses the component's existing `id`; location is `installed`.
-6. If a legacy inserted disc exists, create one media ownership row `migrated:media:inserted` with location `inserted` and set `computer.insertedMediaId` to that instance ID.
-7. Working-PC OS preservation priority: `snapshot.os.currentOsId` when non-null; otherwise legacy `hardware.osVersion`.
-8. No-PC migration always sets OS to null regardless of the old fallback value unless there is explicit real-install evidence; this epic's intended v5 no-PC states have no valid installed OS.
-9. Apply the narrow recovery marker only via `isRecoverableBrokenStarterPurchase`.
-10. Recompute `hardware` from `projectEffectiveHardware(computer)`.
-
-Do not mutate the input snapshot or nested arrays/objects.
-
-- [ ] **Step 6: Bump and chain save format v6**
-
-In `slots.ts`:
+- [ ] **Step 6: Bump and chain v6 in slots.ts**
 
 ```ts
 export const SAVE_FORMAT_VERSION = 6;
 ```
 
-Update the header comment to describe v6. In `loadSlotSnapshot`, after v4/v5 migration:
+Migration order remains v4 → v5 → v6. `saveSlot()` derives summary OS only from `snapshot.os.currentOsId`.
 
-```ts
-if (version < 6) {
-  upgraded = migrateSnapshotToV6(upgraded, version);
-}
-```
+- [ ] **Step 7: Make save-summary OS nullable**
 
-`saveSlot()` continues storing the full snapshot, but slot summary `hardwareState.osVersion` must be derived from `snapshot.os.currentOsId`, not `snapshot.hardware`. It may be `null`.
-
-- [ ] **Step 7: Align persistence schema with nullable summary OS**
-
-Change:
+In `schema.ts`:
 
 ```ts
 osVersion: string | null;
 ```
 
-and Zod:
+and:
 
 ```ts
 osVersion: z.string().regex(/^Orion_/).min(3).nullable(),
 ```
 
-Do not add a Dexie `MIGRATIONS[]` entry merely for the snapshot document; `slots.ts` owns document migration as the existing comments state.
+Do not add a Dexie `MIGRATIONS[]` entry for the snapshot document; existing repo policy keeps document migrations in `slots.ts`.
 
-- [ ] **Step 8: Verify migration tests**
-
-Run:
+- [ ] **Step 8: Prove GREEN and commit**
 
 ```bash
 npx vitest run tests/unit/SaveSlots.test.ts tests/unit/ComputerStateV6.test.ts
-```
-
-Expected: PASS.
-
-- [ ] **Step 9: Commit Task 4**
-
-```bash
 git add src/persistence/migrations/v6ComputerState.ts src/persistence/slots.ts src/persistence/schema.ts tests/unit/SaveSlots.test.ts
 git commit -m "feat: migrate save snapshots to v6 computer state"
 ```
 
 ---
 
-### Task 5: v6 round-trip, compatibility regression, changelog, and issue gate
+### Task 5: Round-trip and compile migration fallout without reintroducing shadow state
 
 **Files:**
 - Modify: `tests/unit/SaveRoundTrip.test.ts`
 - Modify: `tests/unit/SimulationEngine.test.ts`
 - Modify: `CHANGELOG.md`
-- Potential compile-only modifications: only files reported by `npx tsc --noEmit` because their types still assume `hardware.osVersion`, `hardware.modular`, non-null `getCurrentOsId()`, or non-null `getCurrentRelease()`. Each such change must consume the new canonical source (`state.os`, `state.computer`, `state.display`) rather than restoring an old shadow field.
+- Modify only if TypeScript identifies a stale consumer: the exact source file containing that error. The permitted source substitutions are fixed below; no compatibility cast may restore removed state.
 
-**Interfaces:**
-- Consumes: all Task 1–4 public contracts.
-- Produces: verified v6 snapshot round-trip and zero second OS authority.
+**Consumes:** Tasks 1–4 public contracts.
 
-- [ ] **Step 1: Add RED v6 save/restore regression**
+- [ ] **Step 1: Add failing round-trip assertions**
 
-In `SaveRoundTrip.test.ts`, construct or obtain a v6 state where:
-- no PC/no display/no OS round-trips exactly; and
-- a migrated working-PC state with monitor + OS round-trips preserving canonical roots.
-
-Assert after restoring through `SimulationEngine`:
+For both an empty v6 state and a migrated working-PC state:
 
 ```ts
 expect(restored.computer).toEqual(saved.computer);
@@ -778,51 +609,42 @@ expect(restored.hardware).toEqual(projectEffectiveHardware(restored.computer));
 expect('osVersion' in restored.hardware).toBe(false);
 ```
 
-- [ ] **Step 2: Verify RED if any restore path still reads legacy hardware as authority**
-
-Run:
+- [ ] **Step 2: Run round-trip tests**
 
 ```bash
 npx vitest run tests/unit/SaveRoundTrip.test.ts tests/unit/SimulationEngine.test.ts
 ```
 
-Expected before final wiring: any stale v5 constructor/restore assumptions fail.
+Fix only restore/export paths that still treat v5 `hardware` as canonical. In v6, constructor restore consumes `computer`, `display`, `inventory`, and `os` directly.
 
-- [ ] **Step 3: Fix restore/export paths only through canonical roots**
-
-Ensure `SimulationEngine` constructor/export does not recreate computer/display/OS from `hardware` when canonical v6 roots are present. Legacy hardware fallback must exist only in `migrateSnapshotToV6`.
-
-- [ ] **Step 4: Run TypeScript and replace stale read sites with canonical sources**
-
-Run:
+- [ ] **Step 3: Run TypeScript and apply only these canonical substitutions**
 
 ```bash
 npx tsc --noEmit
 ```
 
-For each compiler error caused by this issue's deliberate contract changes, apply only these mappings:
+Every stale read caused by #6 must map as follows:
 
 ```text
-hardware.osVersion          → state.os.currentOsId / engine.os.getCurrentOsId()
-hardware.modular.monitor    → state.display.monitor
-hardware.modular            → state.computer + state.display or engine.hardware.getModularState() only for temporary #7 catalog compatibility
-non-null current OS display → currentOsId ?? 'No OS'
-OS RAM overhead in hardware → engine.os.getRamOverheadMB() supplied to hardware calculation
+hardware.osVersion       → state.os.currentOsId or engine.os.getCurrentOsId()
+hardware.modular.monitor → state.display.monitor
+hardware.modular         → state.computer/state.display; getModularState() only for temporary #7 store compatibility
+non-null OS display text → currentOsId ?? 'No OS'
+OS RAM baseline          → engine.os.getRamOverheadMB() passed into HardwareEngine RAM-pressure calculation
 ```
 
-Do not add casts that hide nullability and do not restore `osVersion` to HardwareState.
+If TypeScript reports a file outside the File Map, add that exact file to the Task 5 commit and use only the mapping above. Do not use `as OsVersion` to erase nullability and do not restore `osVersion` or `modular` to `HardwareState`.
 
-Re-run `npx tsc --noEmit` until it passes.
+- [ ] **Step 4: Update CHANGELOG**
 
-- [ ] **Step 5: Update CHANGELOG**
+Document:
+- save format v6;
+- fresh saves can persist no PC/no OS honestly;
+- computer/display/inventory/OS are separated;
+- working v5 saves preserve effective machine/display/OS;
+- no-PC v5 saves no longer invent Orion 4.8.
 
-Add one concise v6 entry explaining:
-- fresh games can persist no PC/no OS correctly;
-- hardware/display/OS/inventory are now separate state;
-- v5 working-PC saves migrate with equivalent effective hardware/display/OS;
-- v5 no-PC saves no longer invent Orion 4.8.
-
-- [ ] **Step 6: Run targeted v6 suite**
+- [ ] **Step 5: Run the targeted #6 suite**
 
 ```bash
 npx vitest run \
@@ -838,73 +660,42 @@ npx vitest run \
 
 Expected: PASS.
 
-- [ ] **Step 7: Run build**
+- [ ] **Step 6: Run project gates**
 
 ```bash
+npx tsc --noEmit
 npm run build
-```
-
-Expected: PASS.
-
-- [ ] **Step 8: Run full test suite**
-
-```bash
 npm run test
 ```
 
-Expected: no new failures relative to `AGENTS.md`. If the documented three `WorldScenes.test.ts` failures remain, record them as baseline rather than attributing them to #6.
+Expected: typecheck/build pass; full tests contain zero new failures relative to the `AGENTS.md` baseline. If the documented three `WorldScenes.test.ts` failures remain, record them exactly as baseline.
 
-- [ ] **Step 9: Commit Task 5**
+- [ ] **Step 7: Commit verified fallout**
+
+First inspect:
 
 ```bash
-git add CHANGELOG.md tests/unit/SaveRoundTrip.test.ts tests/unit/SimulationEngine.test.ts src tests
+git status --short
+```
+
+Then stage only files changed for #6 and commit:
+
+```bash
 git commit -m "test: verify v6 computer state migration"
 ```
 
-Before committing, inspect `git status --short` so this command does not accidentally include unrelated files.
+- [ ] **Step 8: Update and close GitHub #6 only on exact-head evidence**
 
-- [ ] **Step 10: Update GitHub issue #6 with exact verification evidence**
-
-Comment on #6 with:
-- exact final head SHA;
-- targeted test result;
-- `npx tsc --noEmit` result;
-- build result;
-- full-suite result including documented baseline failures only;
-- migration cases proven: working PC, no PC ghost OS, narrow recovery marker;
-- statement that `HardwareState` no longer owns an OS value.
-
-Close #6 only if every acceptance criterion is satisfied on that exact head. Do not start #7 before that gate is green.
+Comment with exact head SHA, targeted result, typecheck, build, full-suite result, working-PC migration result, no-PC ghost-Orion result, recovery-marker result, and confirmation that `HardwareState` has no OS authority. Close #6 only if every acceptance criterion is satisfied. Do not begin #7 before that gate is green.
 
 ---
 
-## Plan Self-Review
+## Self-Review
 
-### Spec coverage
+**Spec coverage:** fresh empty state → Tasks 1–3; independent state roots → Tasks 1–3; sole nullable OS authority → Task 3; no fake hardware → Tasks 1–2; v5 preservation + no-PC behavior + recovery → Task 4; save v6/schema/changelog → Tasks 4–5; exact regression evidence → Task 5.
 
-- Fresh no-PC/no-display/no-OS state: Tasks 1–3.
-- Separate canonical inventory/computer/display/OS roots: Tasks 1–3.
-- OsEngine sole authority and nullable OS: Task 3.
-- No fake hardware defaults: Tasks 1–2.
-- v5 working-PC migration preservation: Task 4.
-- v5 no-PC migration without ghost Orion: Task 4.
-- narrow lost-$35 recovery marker: Task 4.
-- save format v6 + schema + CHANGELOG: Tasks 4–5.
-- compatibility projection is derived, not restored authority: Tasks 2, 4, 5.
-- zero new regressions verification: Task 5.
+**Placeholder scan:** no `TODO`, `TBD`, “implement later”, or unnamed error-handling steps remain.
 
-### Intentional deferrals
+**Type consistency:** every OS API uses `OsVersion | null`; hardware projection contains no OS identifier; monitor authority is `DisplaySetupState`; the temporary `ModularHardwareState` is explicitly an adapter only. v6 migration converts flat v5 hardware directly through `legacyFlatHardwareToCanonical`, so there is no circular migration dependency.
 
-The following are explicitly outside #6 and have dedicated child issues:
-- purchase atomicity and owned bundle expansion → #7;
-- room package/setup/POST → #8;
-- owned OS media and fresh installer UX → #9;
-- generic versioned app lifecycle → #10;
-- OS host presentation → #11;
-- neutral download/network services → #12;
-- interactive part replacement and final display independence UX → #13;
-- full end-to-end release gate → #14.
-
-### Type consistency
-
-The plan uses one nullable OS signature everywhere: `OsVersion | null`. Hardware projections never accept/return an OS identifier. Canonical display state owns the monitor. The temporary `ModularHardwareState` adapter may still contain a monitor for catalog compatibility until #7, but v6 snapshots do not use it as canonical runtime state.
+**Scope boundary:** #7 purchase transactions, #8 setup/POST, #9 OS media/install UX, #10 app architecture, #11 OS presentation, #12 network/download services, #13 part-swap UX, and #14 end-to-end release proof remain separate issues.
