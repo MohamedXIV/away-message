@@ -56,7 +56,12 @@ describe('Control Panel, Hardware & Software Management', () => {
     expect(engine.clock.getTime().day).toBe(8);
 
     engine.dispatchAction({ type: 'HARDWARE_UPGRADE_RAM', ramMB: 1024, cost: 0 });
-    const res = engine.dispatchAction({ type: 'HARDWARE_UPGRADE_OS', targetOs: 'Orion_6.0', cost: 0 });
+    const res = engine.os.beginInstall(
+      'Orion_6.0',
+      engine.hardware.getState(),
+      engine.clock.getTime().day,
+      engine.clock.getTotalMinutes(),
+    );
 
     expect(res.success).toBe(true);
     expect(engine.os.getCurrentOsId()).toBe('Orion_6.0');
