@@ -78,6 +78,7 @@ export interface OsHostApi {
       fileName: string;
       totalBytes: number;
       sourceMaxKbps?: number;
+      fileKind?: 'executable' | 'installer' | 'archive' | 'audio' | 'image' | 'text';
       manager?: DownloadManagerType;
     }) => void;
     cancelDownload: (taskId: string) => void;
@@ -192,6 +193,7 @@ export const OsHostProvider: React.FC<OsHostProviderProps> = ({ windowId, childr
             fileName: params.fileName,
             totalBytes: params.totalBytes,
             sourceMaxKbps: params.sourceMaxKbps ?? networkState.effectiveKbps,
+            fileKind: params.fileKind,
             manager: params.manager,
           });
         },
