@@ -5,11 +5,14 @@ import { useWindowStore } from '../store/useWindowStore';
 import { useDesktopStore } from '../store/useDesktopStore';
 import { soundManager } from '../audio/SoundManager';
 import { synthAudio } from '../audio/SynthAudio';
+import { OsSetupWizard } from '../apps/installer/OsSetupWizard';
 import { Taskbar } from './Taskbar';
 import { WindowManager } from './WindowManager';
 import { DialUpModal } from './DialUpModal';
 import { CRTOverlay } from './CRTOverlay';
 import { getOsPresentationProfile } from './host/OsPresentation';
+import { getBootableOwnedOsMedia } from './BootMedia';
+export { getBootableOwnedOsMedia } from './BootMedia';
 import {
   Monitor,
   Globe,
@@ -74,9 +77,12 @@ export const DesktopShell: React.FC = () => {
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; visible: boolean } | null>(null);
   const [marquee, setMarquee] = useState<{ startX: number; startY: number; currentX: number; currentY: number; active: boolean } | null>(null);
   const [isDialUpModalOpen, setIsDialUpModalOpen] = useState(false);
+  const [bootSetupTarget, setBootSetupTarget] = useState<ReturnType<typeof getBootableOwnedOsMedia>[number]['targetOs'] | null>(null);
+  const [bootSetupError, setBootSetupError] = useState<string | null>(null);
   const [iconPositions] = useState<Record<string, { x: number; y: number }>>({});
   const switchView = useSimulationStore((s) => s.switchView);
   const setComputerPower = useSimulationStore((s) => s.setComputerPower);
+  const insertOwnedMediaAtHome = useSimulationStore((s) => s.insertOwnedMediaAtHome);
   const bootState = resolvePcBootState({ computer, inventory, os });
   const presentation = osVersion ? getOsPresentationProfile(osVersion) : null;
 
@@ -118,14 +124,47 @@ export const DesktopShell: React.FC = () => {
   }
 
   if (bootState === 'no_boot_device') {
+    const bootableMedia = getBootableOwnedOsMedia(inventory.items);
+    const startSetup = (media: (typeof bootableMedia)[number]) => {
+      setBootSetupError(null);
+      if (media.location !== 'inserted') {
+        const inserted = insertOwnedMediaAtHome(media.instanceId);
+        if (!inserted.success) {
+          setBootSetupError(inserted.error ?? 'Could not insert setup media.');
+          return;
+        }
+      }
+      setBootSetupTarget(media.targetOs);
+    };
+
     return (
       <div className="w-full h-full flex flex-col items-center justify-center bg-black text-zinc-300 font-mono select-none p-6">
         <div className="max-w-lg w-full space-y-3 border border-zinc-700 p-5">
           <div className="text-sm text-emerald-400">POST complete.</div>
           <div className="text-base font-bold text-white">No bootable operating system found.</div>
-          <p className="text-xs text-zinc-500">Insert owned setup media to install an operating system. Boot-media handling and the installer handoff are owned by the setup lifecycle.</p>
+          <p className="text-xs text-zinc-500">Insert owned setup media to install an operating system. Setup runs from the exact physical disc you own.</p>
+          {bootableMedia.length > 0 ? (
+            <div className="space-y-2 border-t border-zinc-800 pt-3">
+              <div className="text-[11px] uppercase tracking-wider text-zinc-500">Owned setup media</div>
+              {bootableMedia.map((media) => (
+                <button
+                  key={media.instanceId}
+                  type="button"
+                  onClick={() => startSetup(media)}
+                  className="w-full border border-emerald-900 bg-emerald-950/20 px-3 py-2 text-left text-xs hover:bg-emerald-950/40"
+                >
+                  <span className="block font-bold text-emerald-300">{media.location === 'inserted' ? 'Run setup' : 'Insert & run setup'} — {media.title}</span>
+                  <span className="mt-1 block font-mono text-[10px] text-zinc-600">{media.instanceId}</span>
+                </button>
+              ))}
+            </div>
+          ) : (
+            <p className="text-xs text-amber-500">No owned Orion setup disc is available in Room 104.</p>
+          )}
+          {bootSetupError && <div className="border border-red-900 bg-red-950/30 px-3 py-2 text-xs text-red-300">{bootSetupError}</div>}
           <button type="button" onClick={() => switchView('room')} className="px-4 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs border border-zinc-600 cursor-pointer">Back to Room 104</button>
         </div>
+        {bootSetupTarget && <OsSetupWizard targetOs={bootSetupTarget} onClose={() => setBootSetupTarget(null)} />}
       </div>
     );
   }
