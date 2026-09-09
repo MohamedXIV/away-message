@@ -1,4 +1,4 @@
-import React, { useRef, useCallback, memo } from 'react';
+import React, { useRef, useCallback, useState, memo } from 'react';
 import { WindowState, useWindowStore } from '../store/useWindowStore';
 import { useSimulationStore } from '../store/useSimulationStore';
 import { OsHostProvider } from './host/OsHostContext';
@@ -12,6 +12,7 @@ export interface WindowFrameProps {
 }
 
 type ResizeDirection = 'n' | 's' | 'e' | 'w' | 'ne' | 'nw' | 'se' | 'sw';
+type PendingExitAction = 'close' | 'minimize';
 
 export const WindowFrame: React.FC<WindowFrameProps> = memo(({ window: winState, isActive, children }) => {
   const osVersion = useSimulationStore((s) => s.state.os.currentOsId);
@@ -19,9 +20,13 @@ export const WindowFrame: React.FC<WindowFrameProps> = memo(({ window: winState,
   const reducedMotion =
     typeof globalThis.matchMedia === 'function' &&
     globalThis.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  const windowOpenTransition = osPresentation
+  const [pendingExitAction, setPendingExitAction] = useState<PendingExitAction | null>(null);
+  const defaultWindowOpenTransition = osPresentation
     ? resolveWindowTransition(osPresentation, 'open', reducedMotion)
     : undefined;
+  const windowOpenTransition = pendingExitAction && osPresentation
+    ? resolveWindowTransition(osPresentation, pendingExitAction, reducedMotion)
+    : defaultWindowOpenTransition;
   const frameRef = useRef<HTMLDivElement>(null);
 
   const focusWindow = useWindowStore((s) => s.focusWindow);
@@ -157,9 +162,39 @@ export const WindowFrame: React.FC<WindowFrameProps> = memo(({ window: winState,
         fontSize: osPresentation ? `${osPresentation.baseFontSizePx}px` : undefined,
       };
 
+  const commitExitAction = (action: PendingExitAction) => {
+    if (action === 'minimize') {
+      minimizeWindow(winState.id);
+    } else {
+      closeOrTrayWindow(winState.id);
+    }
+  };
+
+  const beginExitAction = (action: PendingExitAction) => {
+    if (pendingExitAction) return;
+
+    synthAudio.playWindowSound(action, osPresentation?.soundSchemeId);
+    const transition = osPresentation
+      ? resolveWindowTransition(osPresentation, action, reducedMotion)
+      : 'snap';
+
+    if (transition === 'snap') {
+      commitExitAction(action);
+      return;
+    }
+
+    setPendingExitAction(action);
+  };
+
+  const handleLifecycleAnimationEnd = (event: React.AnimationEvent<HTMLDivElement>) => {
+    if (event.target !== event.currentTarget || !pendingExitAction) return;
+    const action = pendingExitAction;
+    setPendingExitAction(null);
+    commitExitAction(action);
+  };
+
   const handleMinimize = () => {
-    minimizeWindow(winState.id);
-    synthAudio.playWindowSound('minimize', osPresentation?.soundSchemeId);
+    beginExitAction('minimize');
   };
 
   const handleToggleMaximize = () => {
@@ -168,8 +203,7 @@ export const WindowFrame: React.FC<WindowFrameProps> = memo(({ window: winState,
   };
 
   const handleClose = () => {
-    closeOrTrayWindow(winState.id);
-    synthAudio.playWindowSound('close', osPresentation?.soundSchemeId);
+    beginExitAction('close');
   };
 
   return (
@@ -179,6 +213,8 @@ export const WindowFrame: React.FC<WindowFrameProps> = memo(({ window: winState,
       data-os-theme={osPresentation?.themeId}
       data-os-window-chrome={osPresentation?.window.chromeId}
       data-os-window-animation={windowOpenTransition}
+      data-os-window-transition-phase={pendingExitAction ? 'exit' : 'enter'}
+      onAnimationEnd={handleLifecycleAnimationEnd}
       onPointerDown={() => focusWindow(winState.id)}
       className="window-frame os-themed-window flex flex-col select-none p-[2px]"
     >
