@@ -47,7 +47,7 @@ export class DownloadManager {
     };
   }
 
-  public restoreState(state: Pick<DownloadManagerState, 'tasks'>): void {
+  public restoreState(state: DownloadManagerState): void {
     this.tasks.clear();
     for (const task of state.tasks) {
       this.tasks.set(task.id, { ...task });
