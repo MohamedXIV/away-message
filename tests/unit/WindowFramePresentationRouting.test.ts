@@ -7,11 +7,21 @@ const windowFrameSource = readFileSync(
   'utf8',
 );
 
-describe('WindowFrame OS presentation routing', () => {
+const desktopShellSource = readFileSync(
+  fileURLToPath(new URL('../../src/desktop/DesktopShell.tsx', import.meta.url)),
+  'utf8',
+);
+
+describe('central desktop OS presentation routing', () => {
   it('does not route Orion generations with per-component version string checks', () => {
-    expect(windowFrameSource).not.toContain("version.includes('5.')");
-    expect(windowFrameSource).not.toContain("version.includes('6.')");
-    expect(windowFrameSource).not.toContain("version.includes('7.')");
-    expect(windowFrameSource).not.toContain("osVersion === 'Orion_6.0'");
+    for (const source of [windowFrameSource, desktopShellSource]) {
+      expect(source).not.toContain("version.includes('5.')");
+      expect(source).not.toContain("version.includes('6.')");
+      expect(source).not.toContain("version.includes('7.')");
+      expect(source).not.toContain("v.includes('5.')");
+      expect(source).not.toContain("v.includes('6.')");
+      expect(source).not.toContain("v.includes('7.')");
+      expect(source).not.toContain("osVersion === 'Orion_6.0'");
+    }
   });
 });
