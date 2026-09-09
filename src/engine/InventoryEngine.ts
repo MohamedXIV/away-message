@@ -74,6 +74,12 @@ function componentKindForSlot(slot: HardwareInstallSlot): string {
   return kind;
 }
 
+function indexedSlotNumber(slot: HardwareInstallSlot, expectedKind: string): number | null {
+  if (!slot.startsWith(`${expectedKind}:`)) return null;
+  const index = Number(slot.slice(expectedKind.length + 1));
+  return Number.isInteger(index) && index >= 0 ? index : null;
+}
+
 export class InventoryEngine {
   private state: PlayerInventoryState;
 
@@ -152,6 +158,47 @@ export class InventoryEngine {
       throw new Error(
         `Owned item ${instanceId} (${catalogItem.componentKind}) is not compatible with ${slot}.`,
       );
+    }
+
+    const installedMotherboards = this.state.items.filter((item) => {
+      const slotted = item as SlottedOwnedItem;
+      return item.location === 'installed' && slotted.installSlot === 'motherboard';
+    });
+    if (installedMotherboards.length > 1) {
+      throw new Error('Installed motherboard is ambiguous.');
+    }
+
+    const installedMotherboard = installedMotherboards[0];
+    const motherboardCatalog = installedMotherboard
+      ? getPhysicalCatalogItem(installedMotherboard.catalogItemId)
+      : undefined;
+    const motherboard = motherboardCatalog?.component as
+      | { cpuSocket?: string; ramSlots?: number; maxRamMbPerSlot?: number }
+      | undefined;
+
+    if (expectedComponentKind === 'cpu' && motherboard) {
+      const cpu = catalogItem.component as { socket?: string };
+      if (!cpu.socket || !motherboard.cpuSocket || cpu.socket !== motherboard.cpuSocket) {
+        throw new Error(
+          `CPU socket ${cpu.socket ?? 'unknown'} is incompatible with motherboard socket ${motherboard.cpuSocket ?? 'unknown'}.`,
+        );
+      }
+    }
+
+    if (expectedComponentKind === 'ram' && motherboard) {
+      const ramSlot = indexedSlotNumber(slot, 'ram');
+      const ram = catalogItem.component as { sizeMb?: number };
+      if (ramSlot === null || motherboard.ramSlots === undefined || ramSlot >= motherboard.ramSlots) {
+        throw new Error(`RAM slot ${ramSlot ?? 'unknown'} is not available on the installed motherboard.`);
+      }
+      if (
+        motherboard.maxRamMbPerSlot !== undefined &&
+        (ram.sizeMb === undefined || ram.sizeMb > motherboard.maxRamMbPerSlot)
+      ) {
+        throw new Error(
+          `RAM stick exceeds the motherboard per-slot limit of ${motherboard.maxRamMbPerSlot} MB.`,
+        );
+      }
     }
 
     const occupied = this.state.items.filter((item) => {
