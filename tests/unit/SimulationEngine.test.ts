@@ -89,7 +89,7 @@ describe('SimulationEngine (Authoritative Master Coordinator)', () => {
     });
 
     expect(result.success).toBe(false);
-    expect(result.error).toBe('No operating system is installed. Boot from setup media to install one.');
+    expect(result.error).toMatch(/legacy os upgrades are retired/i);
     expect(sim.getState().player.cash).toBe(cashBefore);
     expect(sim.hardware.getComputerState().storage[0]!.freeBytes).toBe(diskBefore);
     expect(sim.getState().os.currentOsId).toBeNull();
