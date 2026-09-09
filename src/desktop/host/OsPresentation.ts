@@ -8,6 +8,8 @@ export type WindowTransitionId =
   | 'gloss-zoom'
   | 'fade-collapse';
 
+export type WindowTransitionAction = 'open' | 'close' | 'minimize' | 'restore';
+
 export type OsDefaultWallpaperId = 'classic_teal' | 'bliss_green';
 
 export interface OsPresentationProfile {
@@ -153,4 +155,12 @@ export function getOsPresentationProfile(osId: OsVersion): OsPresentationProfile
 
 export function resolveActiveOsPresentation(osId: OsVersion | null): OsPresentationProfile | null {
   return osId ? getOsPresentationProfile(osId) : null;
+}
+
+export function resolveWindowTransition(
+  profile: OsPresentationProfile,
+  action: WindowTransitionAction,
+  reducedMotion: boolean,
+): WindowTransitionId {
+  return reducedMotion ? 'snap' : profile.window.animation[action];
 }
