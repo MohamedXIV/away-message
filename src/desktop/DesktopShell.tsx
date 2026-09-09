@@ -109,7 +109,7 @@ export const DesktopShell: React.FC = () => {
           <div className="w-3 h-3 bg-amber-500 rounded-full mx-auto animate-pulse" title="Monitor Standby" />
           <div className="text-xs text-zinc-500">Monitor in Standby (No Signal)</div>
           <div className="flex gap-3 justify-center">
-            <button onClick={() => { synthAudio.playBiosBeep(); const result = setComputerPower(true); if (result.success && osVersion) synthAudio.playStartupChime(osVersion); }} className="px-4 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs border border-zinc-700 rounded transition-colors cursor-pointer">Power On PC</button>
+            <button onClick={() => { synthAudio.playBiosBeep(); const result = setComputerPower(true); if (result.success && presentation) synthAudio.playStartupChime(presentation.soundSchemeId); }} className="px-4 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs border border-zinc-700 rounded transition-colors cursor-pointer">Power On PC</button>
             <button onClick={() => switchView('room')} className="px-4 py-1.5 bg-zinc-900 hover:bg-zinc-800 text-zinc-400 text-xs border border-zinc-800 rounded transition-colors cursor-pointer">Stand Up (Back to Room)</button>
           </div>
         </div>
