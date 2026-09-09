@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { SiteRouteProps } from '../types';
 import { useSimulationStore } from '../../store/useSimulationStore';
 import { useWindowStore } from '../../store/useWindowStore';
+import { useOsHost } from '../../desktop/host/OsHostContext';
 import { soundManager } from '../../audio/SoundManager';
 import { getDownloadHubDynamicItems } from '../worldSiteHelpers';
 
@@ -84,8 +85,8 @@ const DOWNLOAD_CATALOG: DownloadItem[] = [
 ];
 
 export const DownloadHubSite: React.FC<SiteRouteProps> = () => {
-  const dispatchAction = useSimulationStore((s) => s.dispatchAction);
-  const downloads = useSimulationStore((s) => s.state.downloads);
+  const { network } = useOsHost();
+  const downloads = network.transfers;
   const world = useSimulationStore((s) => s.state.world);
   const time = useSimulationStore((s) => s.state.time);
   const openWindow = useWindowStore((s) => s.openWindow);
@@ -143,8 +144,7 @@ export const DownloadHubSite: React.FC<SiteRouteProps> = () => {
       openWindow('flashfetch');
       return;
     }
-    dispatchAction({
-      type: 'DOWNLOAD_START',
+    network.startDownload({
       sourceId: item.id,
       url: item.downloadUrl,
       fileName,
