@@ -240,6 +240,34 @@ export class SoftwareRegistry {
     return false;
   }
 
+  private evaluateCompatibility(def: SoftwareDefinition): InstallerSession['compatibilityResult'] {
+    const currentOs = this.hw.getOsVersion();
+    const currentRam = this.hw.getRamMb();
+    const currentCpu = this.hw.getCpuTier();
+    const freeDisk = this.vfs.getFreeDiskBytes();
+
+    const osPassed = currentOs !== null && isMinOsSatisfied(currentOs, def.requirements.minOs);
+    const ramPassed = currentRam >= def.requirements.minRamMB;
+    const cpuPassed = currentCpu >= def.requirements.minCpuTier;
+    const diskPassed = freeDisk >= def.requirements.requiredDiskBytes;
+
+    return {
+      isCompatible: osPassed && ramPassed && cpuPassed && diskPassed,
+      osCheck: {
+        passed: osPassed,
+        required: def.requirements.minOs,
+        current: currentOs ?? 'None',
+      },
+      ramCheck: { passed: ramPassed, required: def.requirements.minRamMB, current: currentRam },
+      cpuCheck: { passed: cpuPassed, required: def.requirements.minCpuTier, current: currentCpu },
+      diskCheck: {
+        passed: diskPassed,
+        required: def.requirements.requiredDiskBytes,
+        available: freeDisk,
+      },
+    };
+  }
+
   public startInstallerWizard(softwareDefId: string): InstallerSession {
     let def = this.catalog.get(softwareDefId);
     if (!def) {
@@ -252,17 +280,7 @@ export class SoftwareRegistry {
     }
     if (!def) throw new Error(`Unknown software definition: ${softwareDefId}`);
 
-    const currentOs = this.hw.getOsVersion();
-    const currentRam = this.hw.getRamMb();
-    const currentCpu = this.hw.getCpuTier();
-    const freeDisk = this.vfs.getFreeDiskBytes();
-
-    const osPassed = currentOs !== null && isMinOsSatisfied(currentOs, def.requirements.minOs);
-    const ramPassed = currentRam >= def.requirements.minRamMB;
-    const cpuPassed = currentCpu >= def.requirements.minCpuTier;
-    const diskPassed = freeDisk >= def.requirements.requiredDiskBytes;
-    const isCompatible = osPassed && ramPassed && cpuPassed && diskPassed;
-
+    const compatibilityResult = this.evaluateCompatibility(def);
     const initialOffers: Record<string, boolean> = {};
     for (const offer of def.bundledOffers ?? []) {
       initialOffers[offer.id] = offer.defaultChecked;
@@ -280,21 +298,7 @@ export class SoftwareRegistry {
         launchOnStartup: false,
         acceptedBundledOffers: initialOffers,
       },
-      compatibilityResult: {
-        isCompatible,
-        osCheck: {
-          passed: osPassed,
-          required: def.requirements.minOs,
-          current: currentOs ?? 'None',
-        },
-        ramCheck: { passed: ramPassed, required: def.requirements.minRamMB, current: currentRam },
-        cpuCheck: { passed: cpuPassed, required: def.requirements.minCpuTier, current: currentCpu },
-        diskCheck: {
-          passed: diskPassed,
-          required: def.requirements.requiredDiskBytes,
-          available: freeDisk,
-        },
-      },
+      compatibilityResult,
       installProgress: 0,
     };
 
@@ -320,7 +324,9 @@ export class SoftwareRegistry {
   public completeInstallation(sessionId: string, currentMinute = 0): InstalledSoftwareRecord {
     const session = this.activeInstallers.get(sessionId);
     if (!session) throw new Error(`Invalid installer session: ${sessionId}`);
-    if (!session.compatibilityResult.isCompatible) {
+
+    const liveCompatibility = this.evaluateCompatibility(session.softwareDef);
+    if (!liveCompatibility.isCompatible) {
       throw new Error('Cannot complete installer: System requirements compatibility check failed.');
     }
 
