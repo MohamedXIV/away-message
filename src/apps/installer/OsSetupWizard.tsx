@@ -9,6 +9,7 @@ import { synthAudio } from '../../audio/SynthAudio';
 import { soundManager } from '../../audio/SoundManager';
 import type { OsInstallPhase } from '../../engine/os/OsInstallerEngine';
 import { getReleaseById } from '../../engine/OsCatalog';
+import { getOsPresentationProfile } from '../../desktop/host/OsPresentation';
 
 export interface OsSetupWizardProps {
   targetOs: OsVersion;
@@ -44,6 +45,7 @@ export const OsSetupWizard: React.FC<OsSetupWizardProps> = ({ targetOs, onClose 
   );
   const commitOsInstall = useSimulationStore((s) => s.commitOsInstall);
   const release = getReleaseById(targetOs);
+  const presentation = getOsPresentationProfile(targetOs);
 
   const [phase, setPhase] = useState<OsInstallPhase>('checking');
   const [plan, setPlan] = useState<OsInstallPlan | null>(null);
@@ -104,7 +106,7 @@ export const OsSetupWizard: React.FC<OsSetupWizardProps> = ({ targetOs, onClose 
 
     setTimeout(() => {
       setPhase('finished');
-      synthAudio.playStartupChime(targetOs);
+      synthAudio.playStartupChime(presentation.soundSchemeId);
     }, 3500);
 
     setTimeout(() => {
