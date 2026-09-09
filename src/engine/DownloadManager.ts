@@ -13,15 +13,9 @@ type ProfiledDownloadTask = DownloadTask & {
   clientProfile?: DownloadClientProfile;
 };
 
-const LEGACY_BROWSER_PROFILE: DownloadClientProfile = {
-  clientId: 'browser',
+const DEFAULT_CLIENT_PROFILE: DownloadClientProfile = {
+  clientId: 'host-default',
   maxConcurrent: 1,
-  supportsResume: true,
-};
-
-const LEGACY_FLASHFETCH_PROFILE: DownloadClientProfile = {
-  clientId: 'flashfetch',
-  maxConcurrent: 4,
   supportsResume: true,
 };
 
@@ -36,8 +30,6 @@ export class DownloadManager {
   private eventBus: EventBus;
   private vfs: FileSystemEngine;
   private getConnectionSpeedKbps: () => number;
-  private maxConcurrentBrowser = 1;
-  private maxConcurrentFlashFetch = 4;
 
   constructor(deps: DownloadManagerDependencies, initialState?: DownloadManagerState) {
     this.eventBus = deps.eventBus;
@@ -49,20 +41,18 @@ export class DownloadManager {
     }
   }
 
-  public getState(): DownloadManagerState {
+  public getState(): Pick<DownloadManagerState, 'tasks'> {
     return {
       tasks: Array.from(this.tasks.values()).map(t => ({ ...t })),
-      // Retained for save compatibility while callers migrate to per-client profiles.
-      maxConcurrentBrowser: this.maxConcurrentBrowser,
-      maxConcurrentFlashFetch: this.maxConcurrentFlashFetch,
     };
   }
 
-  public restoreState(state: DownloadManagerState): void {
+  public restoreState(state: Pick<DownloadManagerState, 'tasks'>): void {
     this.tasks.clear();
     for (const task of state.tasks) {
       this.tasks.set(task.id, { ...task });
     }
+    this.updateQueueSlots();
     this.recalculateBandwidth();
   }
 
@@ -84,7 +74,6 @@ export class DownloadManager {
       throw new Error('No usable network connection is available for this download.');
     }
 
-    // Check available disk space
     if (this.vfs.getFreeDiskBytes() < params.totalBytes) {
       throw new Error(
         `Insufficient disk space on C:. Required: ${params.totalBytes} bytes, Available: ${this.vfs.getFreeDiskBytes()} bytes.`
@@ -92,8 +81,7 @@ export class DownloadManager {
     }
 
     const id = `dl_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
-    const manager = params.manager || 'browser';
-    const clientProfile = params.clientProfile ?? this.legacyProfileForManager(manager);
+    const clientProfile = params.clientProfile ?? this.defaultProfileForRequest(params.manager);
     const currentMinute = params.currentMinute ?? 0;
 
     const task: ProfiledDownloadTask = {
@@ -108,7 +96,9 @@ export class DownloadManager {
       allocatedKbps: 0,
       status: 'queued',
       resumable: clientProfile.supportsResume && (params.resumable ?? true),
-      manager,
+      // `manager` is retained only as legacy task metadata. Scheduling decisions
+      // are made exclusively from the neutral client profile above.
+      manager: params.manager as DownloadManagerType,
       clientProfile: { ...clientProfile },
       startedAtMinute: currentMinute,
       fileKind: params.fileKind ?? 'executable',
@@ -140,7 +130,7 @@ export class DownloadManager {
     if (!task || task.status !== 'paused') return false;
 
     if (!task.resumable) {
-      task.downloadedBytes = 0; // Non-resumable downloads restart
+      task.downloadedBytes = 0;
     }
 
     task.status = 'queued';
@@ -185,7 +175,6 @@ export class DownloadManager {
       const activeTasks = this.getActiveDownloads();
       if (activeTasks.length === 0) break;
 
-      // Find the earliest completion time among active tasks
       let minTimeToCompletion = remainingSeconds;
       for (const task of activeTasks) {
         if (task.allocatedKbps > 0) {
@@ -200,7 +189,6 @@ export class DownloadManager {
 
       const stepSeconds = Math.min(remainingSeconds, Math.max(0.1, minTimeToCompletion));
 
-      // Advance bytes for all active tasks
       for (const task of activeTasks) {
         if (task.allocatedKbps > 0) {
           const bytesTransferred = ((task.allocatedKbps * 1024) / 8) * stepSeconds;
@@ -221,7 +209,6 @@ export class DownloadManager {
     task.allocatedKbps = 0;
     task.completedAtMinute = currentMinute;
 
-    // Create persistent file in VFS
     const filePath = `${task.targetDirectory}/${task.fileName}`;
     try {
       this.vfs.createFile(
@@ -240,7 +227,7 @@ export class DownloadManager {
         currentMinute
       );
     } catch {
-      // File might already exist if re-downloaded
+      // File might already exist if re-downloaded.
     }
 
     this.eventBus.emit('download:completed', { task: { ...task }, filePath });
@@ -266,9 +253,7 @@ export class DownloadManager {
     }
   }
 
-  /**
-   * Water-filling bandwidth allocation algorithm.
-   */
+  /** Water-filling bandwidth allocation algorithm. */
   public recalculateBandwidth(): void {
     const activeTasks = this.getActiveDownloads();
     if (activeTasks.length === 0) return;
@@ -277,7 +262,6 @@ export class DownloadManager {
     let unassigned = [...activeTasks];
     let remainingBandwidth = totalConnectionKbps;
 
-    // Reset allocated
     for (const t of activeTasks) t.allocatedKbps = 0;
 
     while (unassigned.length > 0 && remainingBandwidth > 0) {
@@ -295,16 +279,26 @@ export class DownloadManager {
           task.allocatedKbps = fairShare;
         }
         remainingBandwidth = 0;
-        break;
       }
     }
   }
 
   private profileForTask(task: ProfiledDownloadTask): DownloadClientProfile {
-    return task.clientProfile ?? this.legacyProfileForManager(task.manager);
+    if (task.clientProfile) return task.clientProfile;
+    return {
+      ...DEFAULT_CLIENT_PROFILE,
+      clientId: task.manager || DEFAULT_CLIENT_PROFILE.clientId,
+    };
   }
 
-  private legacyProfileForManager(manager: DownloadManagerType): DownloadClientProfile {
-    return manager === 'flashfetch' ? LEGACY_FLASHFETCH_PROFILE : LEGACY_BROWSER_PROFILE;
+  private defaultProfileForRequest(manager?: DownloadManagerType): DownloadClientProfile {
+    return {
+      ...DEFAULT_CLIENT_PROFILE,
+      clientId: manager || DEFAULT_CLIENT_PROFILE.clientId,
+      // Legacy accelerated callers supplied an explicit manager while ordinary
+      // host/browser transfers did not. Preserve that capability distinction
+      // generically without teaching the scheduler any concrete app identity.
+      maxConcurrent: manager ? 4 : DEFAULT_CLIENT_PROFILE.maxConcurrent,
+    };
   }
 }
