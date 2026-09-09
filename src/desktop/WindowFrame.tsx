@@ -3,7 +3,6 @@ import { WindowState, useWindowStore } from '../store/useWindowStore';
 import { useSimulationStore } from '../store/useSimulationStore';
 import { OsHostProvider } from './host/OsHostContext';
 import { getOsPresentationProfile } from './host/OsPresentation';
-import { legacySynthVersionForSoundScheme } from './host/OsSoundScheme';
 import { synthAudio } from '../audio/SynthAudio';
 
 export interface WindowFrameProps {
@@ -17,9 +16,6 @@ type ResizeDirection = 'n' | 's' | 'e' | 'w' | 'ne' | 'nw' | 'se' | 'sw';
 export const WindowFrame: React.FC<WindowFrameProps> = memo(({ window: winState, isActive, children }) => {
   const osVersion = useSimulationStore((s) => s.state.os.currentOsId);
   const osPresentation = osVersion ? getOsPresentationProfile(osVersion) : null;
-  const windowSoundVersion = osPresentation
-    ? legacySynthVersionForSoundScheme(osPresentation.soundSchemeId)
-    : undefined;
   const frameRef = useRef<HTMLDivElement>(null);
 
   const focusWindow = useWindowStore((s) => s.focusWindow);
@@ -157,17 +153,17 @@ export const WindowFrame: React.FC<WindowFrameProps> = memo(({ window: winState,
 
   const handleMinimize = () => {
     minimizeWindow(winState.id);
-    synthAudio.playWindowSound('minimize', windowSoundVersion);
+    synthAudio.playWindowSound('minimize', osPresentation?.soundSchemeId);
   };
 
   const handleToggleMaximize = () => {
     toggleMaximize(winState.id);
-    synthAudio.playWindowSound(winState.isMaximized ? 'restore' : 'open', windowSoundVersion);
+    synthAudio.playWindowSound(winState.isMaximized ? 'restore' : 'open', osPresentation?.soundSchemeId);
   };
 
   const handleClose = () => {
     closeOrTrayWindow(winState.id);
-    synthAudio.playWindowSound('close', windowSoundVersion);
+    synthAudio.playWindowSound('close', osPresentation?.soundSchemeId);
   };
 
   return (
