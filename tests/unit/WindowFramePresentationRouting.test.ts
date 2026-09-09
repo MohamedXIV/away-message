@@ -45,4 +45,12 @@ describe('central desktop OS presentation routing', () => {
     expect(osThemeCssSource).toContain('[data-os-window-animation="gloss-zoom"]');
     expect(osThemeCssSource).toContain('@media (prefers-reduced-motion: reduce)');
   });
+
+  it('routes close and minimize through OS-owned exit transitions before committing lifecycle state', () => {
+    expect(windowFrameSource).toContain("resolveWindowTransition(osPresentation, 'close', reducedMotion)");
+    expect(windowFrameSource).toContain("resolveWindowTransition(osPresentation, 'minimize', reducedMotion)");
+    expect(windowFrameSource).toContain('data-os-window-transition-phase={pendingExitAction ? \'exit\' : \'enter\'}');
+    expect(windowFrameSource).toContain('onAnimationEnd={handleLifecycleAnimationEnd}');
+    expect(osThemeCssSource).toContain('[data-os-window-transition-phase="exit"]');
+  });
 });
