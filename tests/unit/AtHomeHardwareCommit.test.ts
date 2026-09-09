@@ -178,6 +178,49 @@ describe('at-home hardware authoritative commit', () => {
     expect(after.os).toEqual(before.os);
   });
 
+  it('replaces the exact optical-drive instance while preserving display and OS state', () => {
+    const engine = new SimulationEngine({ player: { cash: 500 } } as any);
+
+    expect(engine.purchaseStoreItem('silicon_spares', 'bundle_scrapyard').success).toBe(true);
+    expect(engine.setupComputerAtHome().success).toBe(true);
+    expect(engine.purchaseStoreItem('silicon_spares', 'bundle_family').success).toBe(true);
+
+    const before = engine.getState();
+    const oldOptical = before.inventory.items.find(
+      (item) => item.catalogItemId === 'optical_cdrom_24x' && item.location === 'installed',
+    ) as SlottedOwnedItem | undefined;
+    const candidate = before.inventory.items.find(
+      (item) => item.catalogItemId === 'optical_cdrw_32x' && item.location === 'room_package',
+    );
+
+    expect(oldOptical).toMatchObject({ installSlot: 'optical:0' });
+    expect(candidate).toBeDefined();
+    expect(before.computer.opticalDrives[0]?.id).toBe('optical_cdrom_24x');
+    expect(before.computer.insertedMediaId).toBeNull();
+
+    const result = (engine as unknown as AtHomeHardwareInstaller).installOwnedHardwareAtHome(
+      candidate!.instanceId,
+      'optical:0',
+    );
+
+    expect(result.success).toBe(true);
+
+    const after = engine.getState();
+    expect(after.inventory.items.find((item) => item.instanceId === candidate!.instanceId)).toMatchObject({
+      catalogItemId: 'optical_cdrw_32x',
+      location: 'installed',
+      installSlot: 'optical:0',
+    });
+    expect(after.inventory.items.find((item) => item.instanceId === oldOptical!.instanceId)).toMatchObject({
+      catalogItemId: 'optical_cdrom_24x',
+      location: 'room_package',
+    });
+    expect(after.computer.opticalDrives[0]?.id).toBe('optical_cdrw_32x');
+    expect(after.computer.insertedMediaId).toBeNull();
+    expect(after.display).toEqual(before.display);
+    expect(after.os).toEqual(before.os);
+  });
+
   it('replaces the exact monitor instance while preserving computer, OS, and software state', () => {
     const engine = new SimulationEngine({ player: { cash: 500 } } as any);
 
