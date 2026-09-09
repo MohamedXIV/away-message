@@ -2,6 +2,7 @@
 // Mirrors OsEngine but for Pulse Messenger — version lineage, requirements, install realism.
 
 import { EventBus } from './EventBus';
+import { isMinOsSatisfied } from './OsCatalog';
 import {
   getAllPulseReleases,
   getPulseReleaseById,
@@ -111,11 +112,7 @@ export class PulseEngine {
     if (target.id === this.currentPulseId) reasons.push(`Already on ${target.displayName}.`);
     if (target.requirements.minRamMB > hw.ramMB) reasons.push(`Requires ${target.requirements.minRamMB}MB RAM (have ${hw.ramMB}MB).`);
     if (target.requirements.minDiskMB > hw.hddFreeGB * 1024) reasons.push(`Requires ${target.requirements.minDiskMB}MB free (have ${(hw.hddFreeGB * 1024).toFixed(0)}MB).`);
-    // OS check via simple string compare — Pulse 6.x requires Orion 6.0+
-    if (target.requirements.minOs === 'Orion_6.0' && currentOs === 'Orion_4.8') {
-      reasons.push(`Requires ${target.requirements.minOs} or later (have ${currentOs}).`);
-    }
-    if (target.requirements.minOs === 'Orion_6.0' && currentOs.toString().includes('5.')) {
+    if (!isMinOsSatisfied(currentOs, target.requirements.minOs)) {
       reasons.push(`Requires ${target.requirements.minOs} or later (have ${currentOs}).`);
     }
     return { ok: reasons.length === 0, reasons, release: target };
