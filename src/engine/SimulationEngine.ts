@@ -247,7 +247,7 @@ export class SimulationEngine extends SimulationEngineCore {
           display: displayBefore,
         });
       } else if (isCpuSlot) {
-        const cpu = component as typeof computerBefore.cpu;
+        const cpu = component as NonNullable<typeof computerBefore.cpu>;
         this.hardware.loadState({
           computer: { ...computerBefore, cpu: { ...cpu } },
           display: displayBefore,
