@@ -2,6 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { useOsHost } from '../../desktop/host/OsHostContext';
 import { DownloadTask } from '../../engine/types';
 
+const FLASHFETCH_CLIENT_PROFILE = {
+  clientId: 'flashfetch',
+  maxConcurrent: 4,
+  supportsResume: true,
+  supportsQueueReordering: true,
+} as const;
+
 export const FlashFetchApp: React.FC = () => {
   const { network } = useOsHost();
   const downloads = network.transfers;
@@ -38,7 +45,7 @@ export const FlashFetchApp: React.FC = () => {
       fileName,
       totalBytes: 1024 * 1024 * 5,
       sourceMaxKbps: 256,
-      manager: 'flashfetch',
+      clientProfile: FLASHFETCH_CLIENT_PROFILE,
     });
     setUrlInput('');
   };
