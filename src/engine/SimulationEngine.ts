@@ -765,5 +765,6 @@ export class SimulationEngine extends SimulationEngineCore {
     };
 
     super.loadSnapshot(compatSnapshot);
+    this.software.loadState(snapshot.installedSoftware ?? []);
   }
 }
