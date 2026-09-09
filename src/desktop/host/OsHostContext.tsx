@@ -11,7 +11,6 @@ import {
   resolveActiveOsPresentation,
   type OsPresentationProfile,
 } from './OsPresentation';
-import { legacySynthVersionForSoundScheme } from './OsSoundScheme';
 
 export interface OsHostApi {
   window: {
@@ -80,24 +79,22 @@ export const OsHostProvider: React.FC<OsHostProviderProps> = ({ windowId, childr
 
   const api: OsHostApi = useMemo(() => {
     const presentation = resolveActiveOsPresentation(osVersion);
-    const windowSoundVersion = presentation
-      ? legacySynthVersionForSoundScheme(presentation.soundSchemeId)
-      : undefined;
+    const soundSchemeId = presentation?.soundSchemeId;
 
     return {
       window: {
         id: windowId,
         setTitle: (title: string) => setWindowTitle(windowId, title),
         close: () => {
-          synthAudio.playWindowSound('close', windowSoundVersion);
+          synthAudio.playWindowSound('close', soundSchemeId);
           closeWindow(windowId);
         },
         minimize: () => {
-          synthAudio.playWindowSound('minimize', windowSoundVersion);
+          synthAudio.playWindowSound('minimize', soundSchemeId);
           minimizeWindow(windowId);
         },
         maximize: () => {
-          synthAudio.playWindowSound('restore', windowSoundVersion);
+          synthAudio.playWindowSound('restore', soundSchemeId);
           maximizeWindow(windowId);
         },
       },
