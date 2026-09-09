@@ -1,7 +1,7 @@
 import { getPhysicalCatalogItem } from './hardware/catalog';
 import type { ActionResult } from './types';
 import { SimulationEngine } from './SimulationEngine';
-import type { HardwareInstallSlot, SlottedOwnedItem } from './InventoryEngine';
+import { InventoryEngine, type HardwareInstallSlot, type SlottedOwnedItem } from './InventoryEngine';
 
 export interface AtHomeInstalledPart {
   instanceId: string;
@@ -68,6 +68,19 @@ function validateCandidate(
   instanceId: string,
   targetSlot: HardwareInstallSlot,
 ): ActionResult {
+  if (targetSlot === 'storage:0') {
+    const inventory = new InventoryEngine(engine.getState().inventory);
+    try {
+      inventory.installOwnedHardware(instanceId, targetSlot);
+      return { success: true };
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'This storage drive cannot be installed.',
+      };
+    }
+  }
+
   const clone = new SimulationEngine();
   clone.loadSnapshot(engine.exportSnapshot() as any);
   return clone.installOwnedHardwareAtHome(instanceId, targetSlot);
