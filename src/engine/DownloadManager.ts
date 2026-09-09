@@ -1,6 +1,7 @@
 import { DownloadTask, DownloadManagerState, DownloadManagerType } from './types';
 import { EventBus } from './EventBus';
 import { FileSystemEngine } from './FileSystemEngine';
+import { legacyDownloadProfile } from './DownloadCompatibility';
 
 export interface DownloadClientProfile {
   clientId: string;
@@ -96,8 +97,7 @@ export class DownloadManager {
       allocatedKbps: 0,
       status: 'queued',
       resumable: clientProfile.supportsResume && (params.resumable ?? true),
-      // `manager` is retained only as legacy task metadata. Scheduling decisions
-      // are made exclusively from the neutral client profile above.
+      // Retained only as legacy task metadata for save compatibility.
       manager: params.manager as DownloadManagerType,
       clientProfile: { ...clientProfile },
       startedAtMinute: currentMinute,
@@ -285,20 +285,11 @@ export class DownloadManager {
 
   private profileForTask(task: ProfiledDownloadTask): DownloadClientProfile {
     if (task.clientProfile) return task.clientProfile;
-    return {
-      ...DEFAULT_CLIENT_PROFILE,
-      clientId: task.manager || DEFAULT_CLIENT_PROFILE.clientId,
-    };
+    if (task.manager) return legacyDownloadProfile(task.manager);
+    return DEFAULT_CLIENT_PROFILE;
   }
 
   private defaultProfileForRequest(manager?: DownloadManagerType): DownloadClientProfile {
-    return {
-      ...DEFAULT_CLIENT_PROFILE,
-      clientId: manager || DEFAULT_CLIENT_PROFILE.clientId,
-      // Legacy accelerated callers supplied an explicit manager while ordinary
-      // host/browser transfers did not. Preserve that capability distinction
-      // generically without teaching the scheduler any concrete app identity.
-      maxConcurrent: manager ? 4 : DEFAULT_CLIENT_PROFILE.maxConcurrent,
-    };
+    return manager ? legacyDownloadProfile(manager) : DEFAULT_CLIENT_PROFILE;
   }
 }
