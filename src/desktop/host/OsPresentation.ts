@@ -8,6 +8,8 @@ export type WindowTransitionId =
   | 'gloss-zoom'
   | 'fade-collapse';
 
+export type OsDefaultWallpaperId = 'classic_teal' | 'bliss_green';
+
 export interface OsPresentationProfile {
   themeId: OsThemeId;
   uiFontStack: string;
@@ -31,7 +33,7 @@ export interface OsPresentationProfile {
     taskbarId: 'classic' | 'aperture' | 'canal' | 'gloss';
     taskbarHeightPx: number;
     startMenuId: 'classic' | 'aperture' | 'canal' | 'gloss';
-    defaultWallpaperId: string;
+    defaultWallpaperId: OsDefaultWallpaperId;
   };
   soundSchemeId: 'orion48' | 'orion50' | 'orion60' | 'orion70';
   capabilities: {
@@ -61,7 +63,7 @@ const PRESENTATION_BY_THEME: Record<OsThemeId, OsPresentationProfile> = {
       taskbarId: 'classic',
       taskbarHeightPx: 28,
       startMenuId: 'classic',
-      defaultWallpaperId: 'orion48-default',
+      defaultWallpaperId: 'classic_teal',
     },
     soundSchemeId: 'orion48',
     capabilities: { glossyChrome: false, animatedWindowTransitions: false },
@@ -86,7 +88,7 @@ const PRESENTATION_BY_THEME: Record<OsThemeId, OsPresentationProfile> = {
       taskbarId: 'aperture',
       taskbarHeightPx: 28,
       startMenuId: 'aperture',
-      defaultWallpaperId: 'orion50-default',
+      defaultWallpaperId: 'classic_teal',
     },
     soundSchemeId: 'orion50',
     capabilities: { glossyChrome: false, animatedWindowTransitions: true },
@@ -111,7 +113,7 @@ const PRESENTATION_BY_THEME: Record<OsThemeId, OsPresentationProfile> = {
       taskbarId: 'canal',
       taskbarHeightPx: 32,
       startMenuId: 'canal',
-      defaultWallpaperId: 'orion60-canal',
+      defaultWallpaperId: 'bliss_green',
     },
     soundSchemeId: 'orion60',
     capabilities: { glossyChrome: false, animatedWindowTransitions: true },
@@ -136,7 +138,7 @@ const PRESENTATION_BY_THEME: Record<OsThemeId, OsPresentationProfile> = {
       taskbarId: 'gloss',
       taskbarHeightPx: 28,
       startMenuId: 'gloss',
-      defaultWallpaperId: 'orion70-gloss',
+      defaultWallpaperId: 'classic_teal',
     },
     soundSchemeId: 'orion70',
     capabilities: { glossyChrome: true, animatedWindowTransitions: true },
