@@ -7,11 +7,23 @@ import type {
 import { EventBus } from './EventBus';
 import { FileSystemEngine } from './FileSystemEngine';
 import { isMinOsSatisfied } from './OsCatalog';
+import { getPulseReleaseById } from './PulseCatalog';
 
 export interface HardwareInfoProvider {
   getOsVersion: () => OsVersion | null;
   getRamMb: () => number;
   getCpuTier: () => number;
+}
+
+function pulseRequirements(releaseId: string): SoftwareDefinition['requirements'] {
+  const release = getPulseReleaseById(releaseId);
+  if (!release) throw new Error(`Unknown Pulse release: ${releaseId}`);
+  return {
+    minOs: release.requirements.minOs,
+    minRamMB: release.requirements.minRamMB,
+    minCpuTier: 1,
+    requiredDiskBytes: release.requirements.minDiskMB * 1_000_000,
+  };
 }
 
 export class SoftwareRegistry {
@@ -49,12 +61,7 @@ export class SoftwareRegistry {
         version: '5.2',
         publisher: 'Pulse Communications Inc.',
         installedBytes: 33_554_432,
-        requirements: {
-          minOs: 'Orion_4.8',
-          minRamMB: 512,
-          minCpuTier: 1,
-          requiredDiskBytes: 35_000_000,
-        },
+        requirements: pulseRequirements('pulse_5.2'),
         hasInstaller: true,
       },
       {
@@ -64,12 +71,7 @@ export class SoftwareRegistry {
         version: '6.0',
         publisher: 'Pulse Communications Inc.',
         installedBytes: 50_331_648,
-        requirements: {
-          minOs: 'Orion_6.0',
-          minRamMB: 768,
-          minCpuTier: 1,
-          requiredDiskBytes: 55_000_000,
-        },
+        requirements: pulseRequirements('pulse_6.0'),
         hasInstaller: true,
       },
       {
