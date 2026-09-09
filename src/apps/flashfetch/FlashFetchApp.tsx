@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { useSimulationStore } from '../../store/useSimulationStore';
+import { useOsHost } from '../../desktop/host/OsHostContext';
 import { DownloadTask } from '../../engine/types';
 
 export const FlashFetchApp: React.FC = () => {
-  const downloads = useSimulationStore((s) => s.state.downloads || []);
-  const dispatchAction = useSimulationStore((s) => s.dispatchAction);
-  const connectionType = useSimulationStore((s) => s.state.hardware.connectionType);
+  const { network } = useOsHost();
+  const downloads = network.transfers;
+  const connectionType = network.status === 'connected' ? `${network.effectiveKbps} Kbps` : network.status;
 
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [urlInput, setUrlInput] = useState('');
@@ -32,8 +32,7 @@ export const FlashFetchApp: React.FC = () => {
     if (!urlInput.trim()) return;
 
     const fileName = urlInput.split('/').pop() || 'download.bin';
-    dispatchAction({
-      type: 'DOWNLOAD_START',
+    network.startDownload({
       sourceId: 'flashfetch',
       url: urlInput.trim(),
       fileName,
@@ -45,10 +44,7 @@ export const FlashFetchApp: React.FC = () => {
   };
 
   const handleCancelDownload = (taskId: string) => {
-    dispatchAction({
-      type: 'DOWNLOAD_CANCEL',
-      taskId,
-    });
+    network.cancelDownload(taskId);
   };
 
   return (
