@@ -54,7 +54,7 @@ describe('Unified FileUtils — Download/Save/Install Pipeline', () => {
   });
 
   it('triggers download via SimulationEngine from any URL', () => {
-    const engine = new SimulationEngine();
+    const engine = makeNetworkedEngine();
     const url = 'http://rain-archive.local/files/test_archive.zip';
     const info = getFileInfoFromUrl(url)!;
     expect(info).not.toBeNull();
@@ -100,7 +100,7 @@ describe('Unified FileUtils — Download/Save/Install Pipeline', () => {
       type: 'VFS_CREATE_FILE',
       file: {
         name: 'Pulse_test.txt',
-        path: 'C:/Documents/Pulse_test.txt',
+        path: `C:/Documents/Pulse_test.txt`,
         parentPath: 'C:/Documents',
         kind: 'text',
         sizeBytes: content.length,
