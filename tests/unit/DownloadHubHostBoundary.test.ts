@@ -18,4 +18,12 @@ describe('DownloadHub OS host boundary', () => {
     expect(hostSource).toContain("fileKind?: 'executable' | 'installer' | 'archive' | 'audio' | 'image' | 'text'");
     expect(hostSource).toContain('fileKind: params.fileKind');
   });
+
+  it('keeps concrete downloader identities out of the OS host transfer contract', () => {
+    expect(hostSource).not.toContain('DownloadManagerType');
+    expect(hostSource).not.toContain('manager?: DownloadManagerType');
+    expect(hostSource).not.toContain('manager: params.manager');
+    expect(hostSource).toContain('clientProfile?: DownloadClientProfile');
+    expect(hostSource).toContain('clientProfile: params.clientProfile');
+  });
 });
