@@ -80,6 +80,39 @@ function indexedSlotNumber(slot: HardwareInstallSlot, expectedKind: string): num
   return Number.isInteger(index) && index >= 0 ? index : null;
 }
 
+function deterministicInstallSlots(items: readonly OwnedItem[]): Map<string, HardwareInstallSlot> {
+  const slots = new Map<string, HardwareInstallSlot>();
+  const indexes = { ram: 0, storage: 0, optical: 0, monitor: 0 };
+  const singletonKinds = new Set(['chassis', 'motherboard', 'cpu', 'sound', 'network']);
+  const occupiedSingletons = new Set<string>();
+
+  for (const item of items) {
+    const catalogItem = getPhysicalCatalogItem(item.catalogItemId);
+    if (!catalogItem || (catalogItem.kind !== 'hardware' && catalogItem.kind !== 'display')) continue;
+    if (catalogItem.kind !== item.kind) {
+      throw new Error(`Owned item ${item.instanceId} kind does not match its physical catalog definition.`);
+    }
+
+    const kind = catalogItem.componentKind;
+    if (kind === 'ram' || kind === 'storage' || kind === 'optical' || kind === 'monitor') {
+      const index = indexes[kind];
+      slots.set(item.instanceId, `${kind}:${index}` as HardwareInstallSlot);
+      indexes[kind] += 1;
+      continue;
+    }
+
+    if (singletonKinds.has(kind)) {
+      if (occupiedSingletons.has(kind)) {
+        throw new Error(`Prepared owned-item installation has multiple ${kind} components.`);
+      }
+      occupiedSingletons.add(kind);
+      slots.set(item.instanceId, kind as HardwareInstallSlot);
+    }
+  }
+
+  return slots;
+}
+
 export class InventoryEngine {
   private state: PlayerInventoryState;
 
@@ -294,11 +327,16 @@ export class InventoryEngine {
       }
     }
 
+    const installSlots = deterministicInstallSlots(prepared.sourceItems);
     this.state = {
       ...this.state,
-      items: this.state.items.map((item) =>
-        requestedIds.has(item.instanceId) ? { ...item, location: 'installed' } : { ...item },
-      ),
+      items: this.state.items.map((item) => {
+        if (!requestedIds.has(item.instanceId)) return { ...item };
+        const installSlot = installSlots.get(item.instanceId);
+        return installSlot
+          ? { ...item, location: 'installed', installSlot }
+          : { ...item, location: 'installed' };
+      }),
     };
   }
 
