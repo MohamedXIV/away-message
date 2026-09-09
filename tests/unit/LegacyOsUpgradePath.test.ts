@@ -1,18 +1,25 @@
 import { describe, expect, it } from 'vitest';
-import { readFileSync } from 'node:fs';
-
-const read = (path: string) => readFileSync(path, 'utf8');
+import { SimulationEngine } from '../../src/engine/SimulationEngine';
 
 describe('legacy OS upgrade path retirement', () => {
-  it('removes the cash-plus-install HARDWARE_UPGRADE_OS action from the simulation core contract', () => {
-    expect(read('src/engine/types/index.ts')).not.toContain('HARDWARE_UPGRADE_OS');
-    expect(read('src/engine/SimulationEngineCore.ts')).not.toContain("case 'HARDWARE_UPGRADE_OS'");
-    expect(read('src/engine/SimulationEngine.ts')).not.toContain("action.type === 'HARDWARE_UPGRADE_OS'");
-  });
+  it('rejects the old cash-plus-install action even when an OS is already installed', () => {
+    const engine = new SimulationEngine({
+      os: {
+        currentOsId: 'Orion_4.8',
+        installedPatchIds: [],
+      },
+    });
+    const before = engine.getState();
 
-  it('does not expose a store action that can buy and install an OS in one call', () => {
-    const storeSource = read('src/store/useSimulationStore.ts');
-    expect(storeSource).not.toMatch(/\bupgradeOs\s*:/);
-    expect(storeSource).not.toContain("type: 'HARDWARE_UPGRADE_OS'");
+    const result = engine.dispatchAction({
+      type: 'HARDWARE_UPGRADE_OS',
+      targetOs: 'Orion_5.0',
+      cost: 29,
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.error).toMatch(/legacy os upgrades are retired/i);
+    expect(engine.getState().player.cash).toBe(before.player.cash);
+    expect(engine.getState().os.currentOsId).toBe('Orion_4.8');
   });
 });
