@@ -2,7 +2,7 @@ import React, { useRef, useCallback, memo } from 'react';
 import { WindowState, useWindowStore } from '../store/useWindowStore';
 import { useSimulationStore } from '../store/useSimulationStore';
 import { OsHostProvider } from './host/OsHostContext';
-import { getOsPresentationProfile } from './host/OsPresentation';
+import { getOsPresentationProfile, resolveWindowTransition } from './host/OsPresentation';
 import { synthAudio } from '../audio/SynthAudio';
 
 export interface WindowFrameProps {
@@ -16,6 +16,12 @@ type ResizeDirection = 'n' | 's' | 'e' | 'w' | 'ne' | 'nw' | 'se' | 'sw';
 export const WindowFrame: React.FC<WindowFrameProps> = memo(({ window: winState, isActive, children }) => {
   const osVersion = useSimulationStore((s) => s.state.os.currentOsId);
   const osPresentation = osVersion ? getOsPresentationProfile(osVersion) : null;
+  const reducedMotion =
+    typeof globalThis.matchMedia === 'function' &&
+    globalThis.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const windowOpenTransition = osPresentation
+    ? resolveWindowTransition(osPresentation, 'open', reducedMotion)
+    : undefined;
   const frameRef = useRef<HTMLDivElement>(null);
 
   const focusWindow = useWindowStore((s) => s.focusWindow);
@@ -172,7 +178,7 @@ export const WindowFrame: React.FC<WindowFrameProps> = memo(({ window: winState,
       style={frameStyle}
       data-os-theme={osPresentation?.themeId}
       data-os-window-chrome={osPresentation?.window.chromeId}
-      data-os-window-animation={osPresentation?.window.animation.open}
+      data-os-window-animation={windowOpenTransition}
       onPointerDown={() => focusWindow(winState.id)}
       className="window-frame os-themed-window flex flex-col select-none p-[2px]"
     >
