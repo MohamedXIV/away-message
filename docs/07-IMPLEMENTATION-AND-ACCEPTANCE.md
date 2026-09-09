@@ -8,6 +8,8 @@ The goal is to reach an end-to-end playable build early, then deepen it.
 
 Do not perfect one application while the rest of the game is missing.
 
+The living-town expansion tracked by #16 and `08-DISTRICTS-TRANSIT-AND-LIVING-TOWN.md` deepens the physical-world milestones without turning Away Message into an open-world traversal game.
+
 ---
 
 ## Milestone 1 — Foundation and authoritative simulation
@@ -193,19 +195,29 @@ Pass:
 
 ---
 
-## Milestone 11 — Physical social world
+## Milestone 11 — Physical social world and town mobility
 
 Build:
-- café
-- bus stop/street
+- café / meaningful public social place
+- at least one living bus stop/street place
 - optional shop
 - travel/time cost
-- Maya appointment
-- physical meeting through Ink
+- significant appointment
+- physical meeting through Ink/social systems
+- first district grouping over canonical places
+- first authored bus line + stops + service/wait/fare truth
+- shared player/NPC travel planner
+- departure → in-transit → arrival continuity for at least one NPC
 
 Pass:
 - online relationship changes after real-world meeting
 - physical world and digital world reference each other
+- district membership does not create a separate simulation/clock/save
+- player can make one local walking trip and one bus trip from authoritative simulation data
+- fare/wait/arrival are not invented by React/Phaser
+- one NPC can travel through the same network without teleporting at a schedule boundary
+
+The evaluation does not require a continuous open-world city. The mature architecture is one simulated town presented through authored places, district navigation, local walking, and bus transit.
 
 ---
 
@@ -235,6 +247,8 @@ Improve:
 - character asset slots
 - OS visual polish
 - website diversity
+- district visual identity
+- living bus-stop/interior presentation where valuable
 
 Do not lock final art direction.
 
@@ -255,6 +269,7 @@ Focus:
 - end-to-end tests
 - evaluation telemetry export
 - documentation of compromises
+- removal of duplicate legacy CityMap/transit authority after migration
 
 The final phase exists to produce a stable game to judge, not a bigger feature list.
 
@@ -280,8 +295,10 @@ The build is complete only when a player can:
 12. experience at least one internet rabbit hole,
 13. meet a significant contact physically,
 14. see the online relationship change afterward,
-15. reach the Day-14 evaluation ending,
-16. reload the save without losing meaningful state.
+15. navigate at least two known town areas/places without requiring open-world traversal,
+16. use a real simulated bus trip with stop/service/wait/fare/arrival truth,
+17. reach the Day-14 evaluation ending,
+18. reload the save without losing meaningful state.
 
 ---
 
@@ -295,7 +312,8 @@ The build is complete only when a player can:
 - [ ] Contact schedules update while Messenger is closed.
 - [ ] Messages can arrive while player is away.
 - [ ] Street/world state changes while player is using PC.
-- [ ] Sleep advances all relevant systems through one path.
+- [ ] Active player/NPC travel can advance while no bus/physical scene is visible.
+- [ ] Sleep and explicit time jumps advance all relevant systems through one path.
 - [ ] Explicit pause is the only normal UI state that stops simulation.
 
 ---
@@ -324,7 +342,7 @@ The build is complete only when a player can:
 ## 4. Critical social progression
 
 - [ ] Ryan has schedule-driven status.
-- [ ] Maya is introduced through authored progression.
+- [ ] Maya is introduced through authored progression for the current evaluation content.
 - [ ] At least four meaningful contacts exist by late game.
 - [ ] Offline/new messages exist.
 - [ ] No visible relationship score.
@@ -333,6 +351,8 @@ The build is complete only when a player can:
 - [ ] At least one conversation occurs while another system is progressing.
 - [ ] Physical meeting is scheduled through game state.
 - [ ] Online behavior changes after meeting.
+- [ ] Normal cross-place NPC schedule movement can use departure/travel/arrival rather than instant location teleport.
+- [ ] A transit co-location fact can prove two actors overlapped at a stop or on a bus without the renderer inventing either actor's presence.
 
 ---
 
@@ -347,6 +367,7 @@ The build is complete only when a player can:
 - [ ] A website/listing can change or disappear over time.
 - [ ] Download links create real download tasks.
 - [ ] Different sites do not all look like one modern design system.
+- [ ] A website/job/email/address can reveal a previously unknown physical place or transit clue without granting unrelated hidden world knowledge.
 
 ---
 
@@ -360,6 +381,16 @@ The build is complete only when a player can:
 - [ ] Rent creates a real decision.
 - [ ] Player cannot buy every upgrade immediately.
 - [ ] Missing one ideal choice does not hard-lock the game.
+- [ ] Physical town uses stable district/place identities rather than a giant continuous open-world level.
+- [ ] Districts are geographic/social groupings over one simulation, not separate clocks/saves/worlds.
+- [ ] Town navigation can scale as Town → District → known Places/Stops while preserving canonical `placeId`.
+- [ ] Nearby authored places can be reached through simulated walking without mandatory WASD traversal.
+- [ ] At least one bus line has first-class stops, service window/headway, segment time, and fare data.
+- [ ] A bus quote can include deterministic walk + wait + ride + transfer/final-walk components where applicable.
+- [ ] Bus fare is charged exactly once when a trip is committed.
+- [ ] Bus presentation can be skipped/compressed without changing authoritative travel duration.
+- [ ] A bus stop is a physical living place rather than only a transport modal.
+- [ ] An active trip survives save/reload without rerouting, recharging, or early teleport.
 
 ---
 
@@ -369,17 +400,17 @@ The build is complete only when a player can:
 - [ ] Critical knots/beats are reachable.
 - [ ] Simulation values gate narrative.
 - [ ] Ink effects are validated semantic actions.
-- [ ] Ink does not own authoritative money/time/PC truth.
+- [ ] Ink does not own authoritative money/time/PC/transit truth.
 - [ ] A secret cannot be revealed before its allowed stage in canonical tests.
 - [ ] Ending reachable from multiple reasonable states.
-- [ ] No runtime LLM call is needed.
+- [ ] No runtime LLM call is required for core play.
 
 ---
 
 ## 8. Persistence
 
 - [ ] IndexedDB save works.
-- [ ] Save contains schema version.
+- [ ] Save contains/obeys current save-format version policy.
 - [ ] Installed software restores.
 - [ ] in-progress downloads restore.
 - [ ] files restore.
@@ -390,6 +421,9 @@ The build is complete only when a player can:
 - [ ] browser changes restore.
 - [ ] narrative state restores.
 - [ ] observation history restores.
+- [ ] discovered/known district/place/stop/line state restores.
+- [ ] active player trip restores with identical itinerary/leg/arrival/fare-paid state.
+- [ ] active NPC trips needed for continuity restore without duplicate arrival consequences.
 - [ ] reset/new game produces canonical starting state.
 
 ---
@@ -420,6 +454,8 @@ Minimum pure-logic tests:
 ### Schedule
 - online/offline at boundaries
 - time jump across status changes
+- departure intent does not teleport a character across town
+- arrival occurs only after authoritative travel duration
 
 ### Economy
 - shift pay
@@ -431,12 +467,28 @@ Minimum pure-logic tests:
 - semantic social action changes dimensions
 - no illegal over/underflow
 
+### Transit
+- valid district/place/stop/line cross-references
+- direct walk route
+- direct one-line bus route
+- one-transfer route
+- wait/ride/walk totals
+- last-service/no-route failure
+- explicit service disruption
+- stable deterministic tie-break
+- fare exactly once per committed itinerary
+- player/NPC callers share route truth
+- save/reload mid-trip
+- large time jump equals incremental trip advancement
+- stop/bus co-location truth
+
 ### Save
 - serialize/load round trip
 
 ### Content
-- Zod validation
+- Zod/semantic validation
 - reference integrity
+- district/place/stop/line generated content integrity
 
 ---
 
@@ -450,6 +502,10 @@ Required:
 - Orion 6 enables PhotoBox
 - appointment event reads relationship/time state
 - narrative effect creates valid domain action
+- Town → District navigation groups canonical places without changing world identity
+- cross-district bus trip charges/advances exactly once and reaches expected place/time
+- NPC appointment travel uses the same network and exposes real lateness if service timing causes it
+- living bus-stop/interior presentation cannot mutate route/fare/arrival truth independently
 
 ---
 
@@ -482,20 +538,33 @@ Required:
 - run previously incompatible PhotoBox
 
 ### Scenario D — Social world
-- progress to Maya
+- progress to a significant contact/meeting
 - accept appointment
-- attend café
+- plan/perform travel through authoritative town routing
+- attend café/meeting place
 - return to PC
 - observe changed follow-up dialogue
 
 ### Scenario E — Persistence
-- mid-download + unread messages + upgraded PC
+- mid-download + unread messages + upgraded PC + active travel/known-town state where applicable
 - reload
 - verify all state
 
 ### Scenario F — Ending
 - progress through canonical run
 - reach Day 14 completion
+
+### Scenario G — District and bus continuity
+- start in one district
+- inspect/select a destination in another known district
+- compare local walking/bus travel choices where available
+- commit bus itinerary
+- reach living stop
+- board or enter bus presentation
+- optionally skip ride presentation
+- verify exact authoritative fare/time/arrival
+- prove one scheduled NPC travels through the same network
+- save/reload during an active trip in the dedicated persistence test path
 
 ---
 
@@ -509,6 +578,9 @@ Required:
 - [ ] No host filesystem/network modification.
 - [ ] No external API is required for core play.
 - [ ] Final art style is not accidentally hardcoded into domain logic.
+- [ ] No bus/transit result is fabricated by presentation code.
+- [ ] No normal NPC cross-place schedule transition depends on renderer visibility or direct teleport once #37 lands.
+- [ ] No second transit catalog remains alongside generated TransitNetwork authority after migration cleanup.
 
 ---
 
@@ -530,6 +602,11 @@ Useful fields:
 - major narrative beats
 - meeting attended/missed
 - ending reached
+- districts visited
+- places discovered/visited
+- walking trips
+- bus trips
+- bus waiting/travel time
 
 No backend is required.
 
@@ -548,8 +625,11 @@ After one or two complete playthroughs, the evaluator should be able to answer:
 7. Does the fake internet invite curiosity?
 8. Does the physical world make the internet feel more real?
 9. Does the internet make the physical world more interesting?
-10. Do I want to know these characters better?
-11. Do I want to continue after Day 14?
+10. Does the town feel larger than the currently rendered place without needing empty open-world traversal?
+11. Do districts, walking, and buses create understandable mental geography and useful time/money/social choices?
+12. Do NPC movements feel believable when their schedules require travel?
+13. Do I want to know these characters better?
+14. Do I want to continue after Day 14?
 
 If several answers are "no", adding more content is not the solution.
 
