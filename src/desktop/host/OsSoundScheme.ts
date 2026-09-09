@@ -80,17 +80,3 @@ export function resolveWindowSoundProfile(
       : profile.openingEndFrequencyHz,
   };
 }
-
-/**
- * Temporary compatibility adapter while SynthAudio's oscillator implementation is
- * migrated away from its legacy version-string signature. OS-facing callers must
- * route through a presentation-owned sound scheme and never inspect Orion versions.
- */
-export function legacySynthVersionForSoundScheme(schemeId: OsSoundSchemeId): string {
-  switch (schemeId) {
-    case 'orion48': return '4.8';
-    case 'orion50': return '5.0';
-    case 'orion60': return '6.0';
-    case 'orion70': return '7.0';
-  }
-}
