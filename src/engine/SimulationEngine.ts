@@ -180,11 +180,19 @@ export class SimulationEngine extends SimulationEngineCore {
     const isCpuSlot = slot === 'cpu';
     const isNetworkSlot = slot === 'network';
     const isSoundSlot = slot === 'sound';
+    const isActiveOpticalSlot = slot === 'optical:0';
     const isActiveMonitorSlot = slot === 'monitor:0';
-    if (!isRamSlot && !isCpuSlot && !isNetworkSlot && !isSoundSlot && !isActiveMonitorSlot) {
+    if (
+      !isRamSlot &&
+      !isCpuSlot &&
+      !isNetworkSlot &&
+      !isSoundSlot &&
+      !isActiveOpticalSlot &&
+      !isActiveMonitorSlot
+    ) {
       return {
         success: false,
-        error: 'This at-home install slice currently supports RAM, CPU, network cards, sound cards, and the active monitor.',
+        error: 'This at-home install slice currently supports RAM, CPU, network cards, sound cards, the active optical drive, and the active monitor.',
       };
     }
 
@@ -240,6 +248,15 @@ export class SimulationEngine extends SimulationEngineCore {
       ) {
         return { success: false, error: 'The selected owned item is not an installable sound card.' };
       }
+    } else if (isActiveOpticalSlot) {
+      if (
+        catalog?.componentKind !== 'optical' ||
+        !component ||
+        !('type' in component) ||
+        !('speedMultiplier' in component)
+      ) {
+        return { success: false, error: 'The selected owned item is not an installable optical drive.' };
+      }
     } else if (
       catalog?.componentKind !== 'monitor' ||
       !component ||
@@ -286,6 +303,14 @@ export class SimulationEngine extends SimulationEngineCore {
         const soundCard = component as NonNullable<typeof computerBefore.soundCard>;
         this.hardware.loadState({
           computer: { ...computerBefore, soundCard: { ...soundCard } },
+          display: displayBefore,
+        });
+      } else if (isActiveOpticalSlot) {
+        const opticalDrive = component as (typeof computerBefore.opticalDrives)[number];
+        const opticalDrives = computerBefore.opticalDrives.map((drive) => ({ ...drive }));
+        opticalDrives[0] = { ...opticalDrive };
+        this.hardware.loadState({
+          computer: { ...computerBefore, opticalDrives },
           display: displayBefore,
         });
       } else {
