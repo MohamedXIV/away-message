@@ -1,6 +1,8 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { SimulationEngine } from '../../src/engine/SimulationEngine';
 import { buildRentMailHistory } from '../../src/engine/BoardDirector';
+import { createScrapYardBundle } from '../../src/engine/hardware/catalog';
+import { legacyModularToCanonical } from '../../src/engine/hardware/state';
 import {
   pickRentReminderLine,
   pickRentSternLine,
@@ -11,6 +13,14 @@ import { DOOR_OPTIONS, BEVERAGE_OPTIONS } from '../../src/world/data/roomInterac
 
 function hendersonMessages(sim: SimulationEngine, tag: string): string[] {
   return sim.social.getMessages('henderson').filter((m) => m.tags?.includes(tag)).map((m) => m.text);
+}
+
+function makeNetworkedEngine(): SimulationEngine {
+  const canonical = legacyModularToCanonical(createScrapYardBundle());
+  return new SimulationEngine({
+    computer: canonical.computer,
+    display: canonical.display,
+  } as any);
 }
 
 describe('P6.4 rent ladder (SimulationEngine)', () => {
@@ -38,6 +48,7 @@ describe('P6.4 rent ladder (SimulationEngine)', () => {
   });
 
   it('pauses new downloads while overdue and resumes on payment', () => {
+    sim = makeNetworkedEngine();
     sim.advanceGameMinutes(7 * 24 * 60, 'to day 8');
     expect(sim.world.getFlag('rent_overdue')).toBe(true);
     const blocked = sim.dispatchAction({
