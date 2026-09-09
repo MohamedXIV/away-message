@@ -103,6 +103,38 @@ describe('DownloadManager (Bandwidth Allocation, Progress & Time Jumps)', () => 
     expect(t2?.allocatedKbps).toBe(128);
   });
 
+  it('accepts an explicit future client profile without an engine special-case branch', () => {
+    const first = downloadManager.startDownload({
+      sourceId: 'future_1',
+      sourceUrl: 'http://downloadhub.local/future-1.zip',
+      fileName: 'future-1.zip',
+      totalBytes: 10_000_000,
+      sourceMaxKbps: 512,
+      clientProfile: {
+        clientId: 'future-client',
+        maxConcurrent: 2,
+        supportsResume: true,
+      },
+    });
+
+    const second = downloadManager.startDownload({
+      sourceId: 'future_2',
+      sourceUrl: 'http://downloadhub.local/future-2.zip',
+      fileName: 'future-2.zip',
+      totalBytes: 10_000_000,
+      sourceMaxKbps: 512,
+      clientProfile: {
+        clientId: 'future-client',
+        maxConcurrent: 2,
+        supportsResume: true,
+      },
+    });
+
+    expect(first.status).toBe('downloading');
+    expect(second.status).toBe('downloading');
+    expect(downloadManager.getActiveDownloads()).toHaveLength(2);
+  });
+
   it('pauses, resumes, and cancels downloads correctly', () => {
     const task = downloadManager.startDownload({
       sourceId: 'dl_pause',
