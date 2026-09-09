@@ -172,9 +172,9 @@ export type PulseFeature = 'buddy-colors' | 'animated-emoticons';
 /**
  * Feature gate for the Pulse 6 generation (MSN-era colors + motion).
  * 6.x stable/hotfix (and betas) carry them; 5.x never does — the upgrade
- * stays meaningful. Unknown ids read as 5.x (offline-safe default).
+ * stays meaningful. Unknown or absent ids read as 5.x (offline-safe default).
  */
-export function pulseHasFeature(releaseId: string | undefined, feature: PulseFeature): boolean {
+export function pulseHasFeature(releaseId: string | null | undefined, feature: PulseFeature): boolean {
   void feature;
   if (!releaseId) return false;
   const release = getPulseReleaseById(releaseId);
