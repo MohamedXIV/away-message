@@ -106,10 +106,12 @@ describe('Issue #14 canonical first-PC lifecycle', () => {
     const orion48Presentation = getOsPresentationProfile('Orion_4.8');
     const orion50Disc = ownedInstance(engine, 'media_orion_50_setup');
     expect(engine.insertOwnedMediaAtHome(orion50Disc).success).toBe(true);
+    const freeBeforeOrion50 = engine.getState().computer.storage[0]!.freeBytes;
     const osUpgrade = engine.prepareOsInstallFromInsertedMedia();
     expect(osUpgrade.success, osUpgrade.error).toBe(true);
-    expect(osUpgrade.data).toMatchObject({ targetOs: 'Orion_5.0', mode: 'upgrade' });
+    expect(osUpgrade.data).toMatchObject({ targetOs: 'Orion_5.0', mode: 'upgrade', installSizeBytes: 200_000_000 });
     expect(engine.commitOsInstall(osUpgrade.data!).success).toBe(true);
+    expect(freeBeforeOrion50 - engine.getState().computer.storage[0]!.freeBytes).toBe(200_000_000);
     expect(engine.getState().os.currentOsId).toBe('Orion_5.0');
     expect(installedPulse52(engine)).toEqual(pulseBeforeOsUpgrade);
     const orion50Presentation = getOsPresentationProfile('Orion_5.0');
