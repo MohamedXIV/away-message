@@ -212,6 +212,11 @@
   transform-origin: top center;
 }
 
+[data-os-window-transition-phase="exit"] {
+  animation-direction: reverse;
+  animation-fill-mode: forwards;
+}
+
 @keyframes os-window-classic-scale {
   from { opacity: 0.65; transform: scale(0.97); }
   to { opacity: 1; transform: scale(1); }
