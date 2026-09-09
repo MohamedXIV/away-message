@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { InventoryEngine } from '../../src/engine/InventoryEngine';
-import type { HardwareInstallSlot, OwnedItem, PlayerInventoryState } from '../../src/engine/types';
+import {
+  InventoryEngine,
+  type HardwareInstallSlot,
+  type SlottedOwnedItem,
+} from '../../src/engine/InventoryEngine';
+import type { OwnedItem, PlayerInventoryState } from '../../src/engine/types';
 
 type ExactHardwareInstallApi = InventoryEngine & {
   installOwnedHardware(instanceId: string, slot: HardwareInstallSlot): { displacedInstanceId: string | null };
@@ -12,12 +16,16 @@ function owned(
   kind: OwnedItem['kind'] = 'hardware',
   location: OwnedItem['location'] = 'room_package',
   installSlot?: HardwareInstallSlot,
-): OwnedItem {
+): SlottedOwnedItem {
   return { instanceId, catalogItemId, kind, location, ...(installSlot ? { installSlot } : {}) };
 }
 
-function inventoryWith(items: OwnedItem[]): ExactHardwareInstallApi {
+function inventoryWith(items: SlottedOwnedItem[]): ExactHardwareInstallApi {
   return new InventoryEngine({ items } as Partial<PlayerInventoryState>) as ExactHardwareInstallApi;
+}
+
+function slottedItems(inventory: InventoryEngine): SlottedOwnedItem[] {
+  return inventory.getState().items as SlottedOwnedItem[];
 }
 
 describe('InventoryEngine exact owned hardware installation', () => {
@@ -29,7 +37,7 @@ describe('InventoryEngine exact owned hardware installation', () => {
 
     expect(inventory.installOwnedHardware('ram-a', 'ram:0')).toEqual({ displacedInstanceId: null });
 
-    expect(inventory.getState().items).toEqual([
+    expect(slottedItems(inventory)).toEqual([
       owned('ram-a', 'ram_sdram_64', 'hardware', 'installed', 'ram:0'),
       owned('ram-b', 'ram_sdram_128'),
     ]);
@@ -43,11 +51,11 @@ describe('InventoryEngine exact owned hardware installation', () => {
 
     expect(inventory.installOwnedHardware('ram-b', 'ram:0')).toEqual({ displacedInstanceId: 'ram-a' });
 
-    expect(inventory.getState().items).toEqual([
+    expect(slottedItems(inventory)).toEqual([
       owned('ram-a', 'ram_sdram_64'),
       owned('ram-b', 'ram_sdram_128', 'hardware', 'installed', 'ram:0'),
     ]);
-    expect(new Set(inventory.getState().items.map((item) => item.instanceId)).size).toBe(2);
+    expect(new Set(slottedItems(inventory).map((item) => item.instanceId)).size).toBe(2);
   });
 
   it('rejects missing, not-at-home, or incompatible instances without mutating inventory', () => {

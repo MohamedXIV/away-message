@@ -5,7 +5,21 @@ import type {
   PlayerInventoryState,
 } from './types';
 import type { StoreSkuContent } from './hardware/types';
+import { getPhysicalCatalogItem } from './hardware/catalog';
 import { createEmptyInventoryState } from './hardware/state';
+
+export type HardwareInstallSlot =
+  | 'chassis'
+  | 'motherboard'
+  | 'cpu'
+  | 'sound'
+  | 'network'
+  | `ram:${number}`
+  | `storage:${number}`
+  | `optical:${number}`
+  | `monitor:${number}`;
+
+export type SlottedOwnedItem = OwnedItem & { installSlot?: HardwareInstallSlot };
 
 export interface PreparedInventoryPurchase {
   skuId: string;
@@ -43,6 +57,21 @@ function assertContents(
       throw new Error(`Unknown physical catalog item: ${content.catalogItemId}.`);
     }
   }
+}
+
+function componentKindForSlot(slot: HardwareInstallSlot): string {
+  if (slot === 'chassis' || slot === 'motherboard' || slot === 'cpu' || slot === 'sound' || slot === 'network') {
+    return slot;
+  }
+
+  const separator = slot.indexOf(':');
+  const kind = slot.slice(0, separator);
+  const rawIndex = slot.slice(separator + 1);
+  const index = Number(rawIndex);
+  if (!Number.isInteger(index) || index < 0) {
+    throw new Error(`Invalid hardware install slot: ${slot}.`);
+  }
+  return kind;
 }
 
 export class InventoryEngine {
@@ -94,6 +123,65 @@ export class InventoryEngine {
       ),
     };
     return { ...moved };
+  }
+
+  public installOwnedHardware(
+    instanceId: string,
+    slot: HardwareInstallSlot,
+  ): { displacedInstanceId: string | null } {
+    const matches = this.state.items.filter((item) => item.instanceId === instanceId);
+    if (matches.length !== 1) {
+      throw new Error(`Owned item instance is missing or ambiguous: ${instanceId}.`);
+    }
+
+    const target = matches[0]!;
+    if (target.location !== 'room_package') {
+      throw new Error(`Owned item ${instanceId} is not in the room_package at home.`);
+    }
+
+    const catalogItem = getPhysicalCatalogItem(target.catalogItemId);
+    if (!catalogItem || (catalogItem.kind !== 'hardware' && catalogItem.kind !== 'display')) {
+      throw new Error(`Owned item ${instanceId} is not installable hardware.`);
+    }
+    if (catalogItem.kind !== target.kind) {
+      throw new Error(`Owned item ${instanceId} kind does not match its physical catalog definition.`);
+    }
+
+    const expectedComponentKind = componentKindForSlot(slot);
+    if (catalogItem.componentKind !== expectedComponentKind) {
+      throw new Error(
+        `Owned item ${instanceId} (${catalogItem.componentKind}) is not compatible with ${slot}.`,
+      );
+    }
+
+    const occupied = this.state.items.filter((item) => {
+      const slotted = item as SlottedOwnedItem;
+      return item.location === 'installed' && slotted.installSlot === slot;
+    });
+    if (occupied.length > 1) {
+      throw new Error(`Installed hardware slot ${slot} is ambiguous.`);
+    }
+
+    const displaced = occupied[0] ?? null;
+    const installedTarget: SlottedOwnedItem = {
+      ...target,
+      location: 'installed',
+      installSlot: slot,
+    };
+
+    this.state = {
+      ...this.state,
+      items: this.state.items.map((item) => {
+        if (item.instanceId === instanceId) return installedTarget;
+        if (displaced && item.instanceId === displaced.instanceId) {
+          const { installSlot: _installSlot, ...rest } = item as SlottedOwnedItem;
+          return { ...rest, location: 'room_package' };
+        }
+        return { ...item };
+      }),
+    };
+
+    return { displacedInstanceId: displaced?.instanceId ?? null };
   }
 
   public prepareInstallOwnedItems(instanceIds: readonly string[]): PreparedInventoryInstall {
