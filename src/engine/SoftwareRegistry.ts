@@ -37,38 +37,7 @@ export class SoftwareRegistry {
       for (const sw of initialInstalled) {
         this.installedSoftware.set(sw.id, { ...sw });
       }
-    } else if (this.hw.getOsVersion() !== null) {
-      // Legacy Orion installs shipped Voyager. A blank disk/no-OS machine ships nothing.
-      this.registerPreinstalled(
-        'app.browser',
-        'Voyager Browser',
-        '1.0',
-        16_777_216,
-        'C:/Program Files/Voyager',
-      );
     }
-  }
-
-  private registerPreinstalled(
-    appId: string,
-    name: string,
-    version: string,
-    bytes: number,
-    path: string,
-  ): void {
-    const id = `sw_pre_${appId}`;
-    this.installedSoftware.set(id, {
-      id,
-      appId,
-      name,
-      version,
-      installedBytes: bytes,
-      installPath: path,
-      installedAtMinute: 0,
-      isPortable: false,
-      isAdware: false,
-      shortcuts: ['C:/Desktop/Voyager Browser.lnk'],
-    });
   }
 
   private registerCatalog(): void {
