@@ -7,6 +7,7 @@ on:
       - main
       - feat/modular-orion-hardware-os
       - chore/30-pr-verification-ci
+      - fix/30-exact-head-checkout
 
 permissions:
   contents: read
@@ -22,8 +23,17 @@ jobs:
     timeout-minutes: 20
 
     steps:
-      - name: Checkout
+      - name: Checkout exact head
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+
+      - name: Assert exact head checkout
+        shell: bash
+        env:
+          EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
 
       - name: Setup Node
         uses: actions/setup-node@v4
