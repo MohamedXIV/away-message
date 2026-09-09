@@ -2,7 +2,12 @@
 // Standard Host API exposed to all applications running on the Orion OS desktop.
 
 import React, { createContext, useContext, useMemo } from 'react';
-import type { ConnectionType, OsVersion } from '../../engine/types';
+import type {
+  ConnectionType,
+  DownloadManagerType,
+  DownloadTask,
+  OsVersion,
+} from '../../engine/types';
 import { useSimulationStore } from '../../store/useSimulationStore';
 import { useWindowStore } from '../../store/useWindowStore';
 import { soundManager } from '../../audio/SoundManager';
@@ -66,13 +71,16 @@ export interface OsHostApi {
   network: {
     status: 'offline' | 'dialing' | 'connected';
     effectiveKbps: number;
+    transfers: DownloadTask[];
     startDownload: (params: {
       sourceId: string;
       url: string;
       fileName: string;
       totalBytes: number;
       sourceMaxKbps?: number;
+      manager?: DownloadManagerType;
     }) => void;
+    cancelDownload: (taskId: string) => void;
   };
   audio: {
     playUiSound: (sound: 'click' | 'alert' | 'error' | 'bell') => void;
@@ -107,6 +115,7 @@ export const OsHostProvider: React.FC<OsHostProviderProps> = ({ windowId, childr
   const cpuTier = useSimulationStore((s) => s.state.hardware.cpuTier);
   const connectionType = useSimulationStore((s) => s.state.hardware.connectionType);
   const connectionSpeedKbps = useSimulationStore((s) => s.state.hardware.connectionSpeedKbps);
+  const downloads = useSimulationStore((s) => s.state.downloads || []);
 
   const closeWindow = useWindowStore((s) => s.closeWindow);
   const minimizeWindow = useWindowStore((s) => s.minimizeWindow);
@@ -116,6 +125,7 @@ export const OsHostProvider: React.FC<OsHostProviderProps> = ({ windowId, childr
   const createFile = useSimulationStore((s) => s.createFile);
   const deleteFile = useSimulationStore((s) => s.deleteFile);
   const startDownloadStore = useSimulationStore((s) => s.startDownload);
+  const cancelDownloadStore = useSimulationStore((s) => s.cancelDownload);
 
   const api: OsHostApi = useMemo(() => {
     const presentation = resolveActiveOsPresentation(osVersion);
@@ -174,6 +184,7 @@ export const OsHostProvider: React.FC<OsHostProviderProps> = ({ windowId, childr
       network: {
         status: networkState.status,
         effectiveKbps: networkState.effectiveKbps,
+        transfers: Array.isArray(downloads) ? downloads : Object.values(downloads || {}),
         startDownload: (params) => {
           startDownloadStore({
             sourceId: params.sourceId,
@@ -181,8 +192,10 @@ export const OsHostProvider: React.FC<OsHostProviderProps> = ({ windowId, childr
             fileName: params.fileName,
             totalBytes: params.totalBytes,
             sourceMaxKbps: params.sourceMaxKbps ?? networkState.effectiveKbps,
+            manager: params.manager,
           });
         },
+        cancelDownload: (taskId) => cancelDownloadStore(taskId),
       },
       audio: {
         playUiSound: (sound) => {
@@ -216,6 +229,7 @@ export const OsHostProvider: React.FC<OsHostProviderProps> = ({ windowId, childr
     cpuTier,
     connectionType,
     connectionSpeedKbps,
+    downloads,
     closeWindow,
     minimizeWindow,
     maximizeWindow,
@@ -223,6 +237,7 @@ export const OsHostProvider: React.FC<OsHostProviderProps> = ({ windowId, childr
     createFile,
     deleteFile,
     startDownloadStore,
+    cancelDownloadStore,
   ]);
 
   return <OsHostContext.Provider value={api}>{children}</OsHostContext.Provider>;
