@@ -320,6 +320,9 @@ export class SoftwareRegistry {
   public completeInstallation(sessionId: string, currentMinute = 0): InstalledSoftwareRecord {
     const session = this.activeInstallers.get(sessionId);
     if (!session) throw new Error(`Invalid installer session: ${sessionId}`);
+    if (!session.compatibilityResult.isCompatible) {
+      throw new Error('Cannot complete installer: System requirements compatibility check failed.');
+    }
 
     const def = session.softwareDef;
     const createdShortcuts: string[] = [];
