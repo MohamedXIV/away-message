@@ -137,6 +137,47 @@ describe('at-home hardware authoritative commit', () => {
     expect(after.os).toEqual(before.os);
   });
 
+  it('replaces the exact sound-card instance while preserving display and OS state', () => {
+    const engine = new SimulationEngine({ player: { cash: 500 } } as any);
+
+    expect(engine.purchaseStoreItem('silicon_spares', 'bundle_scrapyard').success).toBe(true);
+    expect(engine.setupComputerAtHome().success).toBe(true);
+    expect(engine.purchaseStoreItem('silicon_spares', 'bundle_workstation').success).toBe(true);
+
+    const before = engine.getState();
+    const oldSound = before.inventory.items.find(
+      (item) => item.catalogItemId === 'sound_sb16' && item.location === 'installed',
+    ) as SlottedOwnedItem | undefined;
+    const candidate = before.inventory.items.find(
+      (item) => item.catalogItemId === 'sound_sb_live' && item.location === 'room_package',
+    );
+
+    expect(oldSound).toMatchObject({ installSlot: 'sound' });
+    expect(candidate).toBeDefined();
+    expect(before.computer.soundCard?.id).toBe('sound_sb16');
+
+    const result = (engine as unknown as AtHomeHardwareInstaller).installOwnedHardwareAtHome(
+      candidate!.instanceId,
+      'sound',
+    );
+
+    expect(result.success).toBe(true);
+
+    const after = engine.getState();
+    expect(after.inventory.items.find((item) => item.instanceId === candidate!.instanceId)).toMatchObject({
+      catalogItemId: 'sound_sb_live',
+      location: 'installed',
+      installSlot: 'sound',
+    });
+    expect(after.inventory.items.find((item) => item.instanceId === oldSound!.instanceId)).toMatchObject({
+      catalogItemId: 'sound_sb16',
+      location: 'room_package',
+    });
+    expect(after.computer.soundCard?.id).toBe('sound_sb_live');
+    expect(after.display).toEqual(before.display);
+    expect(after.os).toEqual(before.os);
+  });
+
   it('replaces the exact monitor instance while preserving computer, OS, and software state', () => {
     const engine = new SimulationEngine({ player: { cash: 500 } } as any);
 
