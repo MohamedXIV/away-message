@@ -40,6 +40,22 @@ describe('DownloadManager (Bandwidth Allocation, Progress & Time Jumps)', () => 
     expect(active[0]?.allocatedKbps).toBe(256); // Bottlenecked by client 256k
   });
 
+  it('rejects new transfers when there is no usable connection bandwidth', () => {
+    connectionSpeedKbps = 0;
+
+    expect(() =>
+      downloadManager.startDownload({
+        sourceId: 'offline_tool',
+        sourceUrl: 'http://downloadhub.local/offline-tool.zip',
+        fileName: 'offline-tool.zip',
+        totalBytes: 1_000_000,
+        sourceMaxKbps: 256,
+      }),
+    ).toThrow(/network|connection|offline/i);
+
+    expect(downloadManager.getState().tasks).toHaveLength(0);
+  });
+
   it('advances download progress over continuous time and completes file in VFS', () => {
     let completedEventEmitted = false;
     eventBus.on('download:completed', ({ task, filePath }) => {
