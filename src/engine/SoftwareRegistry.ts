@@ -46,9 +46,7 @@ export class SoftwareRegistry {
     this.registerCatalog();
 
     if (initialInstalled) {
-      for (const sw of initialInstalled) {
-        this.installedSoftware.set(sw.id, { ...sw });
-      }
+      this.loadState(initialInstalled);
     }
   }
 
@@ -201,7 +199,23 @@ export class SoftwareRegistry {
   }
 
   public getInstalledSoftware(): InstalledSoftwareRecord[] {
-    return Array.from(this.installedSoftware.values()).map((software) => ({ ...software }));
+    return Array.from(this.installedSoftware.values()).map((software) => ({
+      ...software,
+      shortcuts: [...software.shortcuts],
+      adwarePayload: software.adwarePayload ? { ...software.adwarePayload } : undefined,
+    }));
+  }
+
+  public loadState(installedSoftware: InstalledSoftwareRecord[]): void {
+    this.installedSoftware.clear();
+    this.activeInstallers.clear();
+    for (const software of installedSoftware) {
+      this.installedSoftware.set(software.id, {
+        ...software,
+        shortcuts: [...software.shortcuts],
+        adwarePayload: software.adwarePayload ? { ...software.adwarePayload } : undefined,
+      });
+    }
   }
 
   public isInstalled(appId: string): boolean {
