@@ -45,6 +45,8 @@ React / DOM
   Installers
   File manager UI
   Terminal UI
+  Town/district navigation
+  Human-readable travel choices
   Menus
 
 Phaser
@@ -52,6 +54,8 @@ Phaser
   Window/street
   Café
   Work/physical scenes
+  Bus-stop living views
+  Optional bus-interior presentation
   Layered 2D presentation
   Ambient effects
 
@@ -75,9 +79,17 @@ Pure TypeScript Simulation
   World state
   Appointments
   Bills
+  District/place geography projection
+  TransitNetwork/service state
+  Walking/bus route planning
+  Waits/fares/transfers/arrival timing
+  Active player/NPC travel
+  Physical presence and co-location truth
+  Player town/route knowledge
 
 Persistence
   Versioned save/load
+  Active travel continuity
 ```
 
 ---
@@ -92,85 +104,127 @@ React and Phaser may depend on application/domain interfaces.
 
 Narrative adapter may read/write through a controlled simulation API.
 
+For transit specifically:
+
+> **Presentation can request or display a trip; it cannot invent a trip.**
+
+React/Phaser never independently calculate or mutate fares, service availability, waits, transfers, routes, or arrival time.
+
 ---
 
-## 5. Suggested repository layout
+## 5. One-town architecture
+
+The canonical physical-world model is:
+
+```text
+ONE SimulationEngine / WorldState
+        ↓
+District definitions/grouping
+        ↓
+Canonical Place definitions
+        ↓
+walking links + TransitNetwork
+        ↓
+ActiveTravelState
+        ↓
+current physical Place/View presentation
+```
+
+A `District` is a geographic/social grouping, never:
+
+- a separate simulation;
+- a separate clock;
+- a save partition;
+- a required Phaser scene class;
+- a level with duplicated world state.
+
+The game does not require a continuous open-world town scene. Phaser renders the active authored physical place/view while pure simulation continues to own the rest of town.
+
+See `08-DISTRICTS-TRANSIT-AND-LIVING-TOWN.md` and `docs/superpowers/specs/2026-09-10-districts-and-transit-design.md`.
+
+---
+
+## 6. Content pipeline and generated definitions
+
+Authorable world/transit definitions follow the existing pipeline:
+
+```text
+Content UI Manager
+      ↓
+content/store.json / TinyBase content
+      ↓
+src/tools/content/schema.ts
+      ↓
+src/tools/content/codegen.ts
+      ↓
+content:pull / content:check
+      ↓
+generated typed runtime registries
+```
+
+The generated content should eventually include definitions equivalent to:
+
+- districts;
+- places/spaces/views/anchors;
+- transit stops;
+- place↔stop walking access;
+- bus lines and ordered stops;
+- normal service windows/headways;
+- segment travel times;
+- initial fare/service metadata;
+- physical items/containers/assets/lights/audio as tracked by #17.
+
+Mutable per-save facts such as active trips, delays/closures, stock, item locations, and player knowledge do not belong in content definitions.
+
+Runtime systems consume generated typed registries rather than reading raw content storage directly.
+
+---
+
+## 7. Suggested repository layout
+
+The current repository already uses `src/engine/` for domain truth. Preserve that reality rather than forcing a speculative rename. New transit code should fit cleanly under it.
 
 ```text
 src/
-  app/
-    App.tsx
-    routes/
-    bootstrap/
-
-  simulation/
+  engine/
     SimulationEngine.ts
-    GameClock.ts
-    state/
-    actions/
-    systems/
-      downloads/
-      software/
-      economy/
-      characters/
-      schedules/
-      world/
-      events/
+    CityMap.ts                 # migration/compatibility input, not final bus authority
+    transit/
+      types.ts
+      TransitNetwork.ts
+      TravelPlanner.ts
+      TownKnowledge.ts
+    CharacterEngine.ts
+    CharacterDirector.ts
+    AppointmentDirector.ts
+    WeatherEngine.ts
+    WorldEventsEngine.ts
+    ...
 
-  computer/
-    desktop/
-    windows/
-    apps/
-      browser/
-      messenger/
-      file-manager/
-      installer/
-      terminal/
-      settings/
+  tools/
+    content/
+      schema.ts
+      codegen.ts
 
   world/
     PhaserGame.ts
-    scenes/
-    location-runtime/
-    hotspots/
+    place-runtime/
+    views/
+    focus/
+    anchors/
     ambient/
 
-  narrative/
-    NarrativeRuntime.ts
-    InkAdapter.ts
-    effects/
-    compiled/
-
-  content/
-    characters/
-    software/
-    websites/
-    locations/
-    schedules/
-    events/
-    economy/
+  apps/
+    ... actual software/OS surfaces ...
 
   persistence/
-    db.ts
-    save-schema.ts
-    migrations.ts
+    ... versioned snapshot/save path ...
 
-  ui/
-    hud/
-    notifications/
-    debug/
+content/
+  store.json
 
-  styles/
-    tokens.css
-    os-old.css
-    os-new.css
-    websites/
-
-narrative/
-  main.ink
-  characters/
-  arcs/
-  ambient/
+docs/
+  ...
 
 tests/
   unit/
@@ -182,9 +236,9 @@ Exact names can differ. Preserve the boundaries.
 
 ---
 
-## 6. Simulation engine
+## 8. Simulation engine
 
-Suggested interface:
+Representative interface:
 
 ```ts
 interface SimulationEngine {
@@ -202,17 +256,22 @@ interface SimulationEngine {
 - shower,
 - work,
 - sleep,
-- meetings.
+- meetings,
+- waiting for transit,
+- bus/walking travel,
+- compressed/skipped ride presentation.
 
 Do not manually update each subsystem after time jumps.
 
+A skipped bus presentation must resolve through the same authoritative time/travel path as a shown ride.
+
 ---
 
-## 7. Game state
+## 9. Game state
 
 Use a versioned serializable state.
 
-High-level:
+High-level representative shape:
 
 ```ts
 interface GameState {
@@ -228,16 +287,139 @@ interface GameState {
   contacts: ContactState;
   relationships: RelationshipState;
   world: WorldState;
+  transit: TransitState;
+  townKnowledge: TownKnowledgeState;
   events: EventState;
   narrative: NarrativeState;
 }
 ```
 
+Exact storage may remain nested under existing state objects if cleaner. Avoid duplicate truth merely to match this example.
+
 Avoid storing React component state as authoritative game state.
 
 ---
 
-## 8. Zustand
+## 10. TransitNetwork and TravelPlanner
+
+`TransitNetwork` is an immutable runtime projection of generated definitions plus explicit service-state inputs.
+
+It owns/knows:
+
+- districts/places/stops/lines as definitions;
+- place-to-stop access;
+- ordered stop topology;
+- normal service windows/headways;
+- segment durations;
+- line/stop availability modifiers.
+
+`TravelPlanner` is pure TypeScript and returns deterministic itinerary proposals containing combinations of:
+
+```text
+walk
+wait
+bus
+transfer wait/walk
+bus
+final walk
+```
+
+A quote exposes enough data to present:
+
+- departure/arrival;
+- total time;
+- walking time;
+- waiting time;
+- ride time;
+- fare;
+- lines/stops;
+- transfers.
+
+For the small authored network, use a readable time-dependent earliest-arrival search rather than transit-industry infrastructure.
+
+The first migration preserves the current CityMap `$2` bus tuning as an evaluation default while replacing `bus: true` edge flags with first-class lines/stops.
+
+---
+
+## 11. Active travel state
+
+Planning and travel commitment are separate.
+
+```text
+quote
+  ↓ no mutation
+choose
+  ↓
+commit authoritative plan
+  ↓ fare charged once
+ActiveTravelState
+  ↓
+wait / walk / bus legs
+  ↓
+arrival once
+```
+
+Persist enough committed state to survive save/reload without rerouting or recharging:
+
+- actor;
+- origin/destination;
+- committed itinerary;
+- departure/expected arrival;
+- current leg/progress boundary;
+- fare-paid marker/value;
+- optional appointment/obligation purpose reference.
+
+Large time jumps across travel must produce the same final state as incremental progression.
+
+---
+
+## 12. NPC mobility
+
+Character schedules express intended place/time outcomes; they should not normally set a distant destination instantly at the schedule boundary.
+
+Target conceptual state:
+
+```text
+AtPlace
+  ↓
+AboutToLeave
+  ↓
+InTransit
+  ↓
+Arrived / AtPlace
+```
+
+NPC mobility uses the same TravelPlanner as the player wherever practical. Character preferences may choose among valid plans, but cannot invent routes outside the network.
+
+Appointments/jobs/social systems own the consequences of lateness or arrival. Transit supplies truthful movement and timing only.
+
+Transit state should expose deterministic co-location evidence when actors overlap at the same stop or bus segment. Social/narrative systems decide whether that overlap becomes an event.
+
+---
+
+## 13. Town knowledge
+
+Physical existence and player knowledge are different state.
+
+The town may contain a district/place/stop/line before the player knows it.
+
+A bounded knowledge model may distinguish states such as:
+
+```text
+unknown
+heard/address learned
+mapped
+visited
+familiar
+```
+
+React navigation receives a knowledge-safe projection rather than the complete generated town catalog.
+
+NPC routing is not limited by what the player knows.
+
+---
+
+## 14. Zustand
 
 Use Zustand for:
 - UI/window/view coordination,
@@ -250,9 +432,11 @@ A reasonable pattern:
 - simulation engine owns serializable domain state,
 - Zustand exposes selected state and dispatch helpers to React.
 
+Town/district selection may be transient UI state; discovered places/routes and active travel are domain/save state.
+
 ---
 
-## 9. Zod
+## 15. Zod / semantic validation
 
 Validate:
 - content files,
@@ -260,15 +444,18 @@ Validate:
 - narrative effect tags,
 - software definitions,
 - website definitions,
-- location definitions.
+- district/location definitions,
+- stop/line cross-references,
+- service windows/headways/segment times,
+- place-to-stop access relationships.
 
 Fail loudly in development for invalid content.
 
 ---
 
-## 10. Persistence
+## 16. Persistence
 
-Use IndexedDB through Dexie.
+Use IndexedDB through Dexie/current snapshot save APIs.
 
 Persist:
 - versioned save state,
@@ -278,13 +465,17 @@ Persist:
 - files,
 - browser changes,
 - narrative state,
-- window observations.
+- window observations,
+- discovered/known town content,
+- dynamic transit service state when relevant,
+- active player/NPC trips required for continuity.
 
 Use localStorage only for:
 - volume,
 - UI scale,
 - accessibility settings,
-- developer flags.
+- developer flags,
+- other explicitly presentation-only preferences.
 
 Autosave:
 - sleep,
@@ -292,38 +483,40 @@ Autosave:
 - purchase,
 - install/uninstall,
 - major narrative beat,
-- periodic interval.
+- periodic interval,
+- other existing repository-safe points.
+
+Do not autosave in a way that can double-charge or duplicate transit commitment/arrival effects.
 
 ---
 
-## 11. Save migrations
+## 17. Save migrations
 
-Every save includes:
-- schema version,
-- created timestamp,
-- updated timestamp,
-- optional seed.
+Every save includes or resolves through the repository's save-format/version policy.
 
 Migrations must be explicit.
 
-The evaluation build should include at least a simple migration framework even if only one version exists initially.
+Any breaking persisted district/transit/active-trip change follows the same absolute save-compat rule documented in `AGENTS.md`.
 
 ---
 
-## 12. Determinism
+## 18. Determinism
 
 Use seeded randomness for ambient/systemic content that affects saved outcomes.
 
 Goals:
 - reproducible tests,
 - stable save/load,
+- stable travel routes for the same state,
 - fewer "why did this change after refresh?" bugs.
 
 Purely cosmetic random animation need not be saved.
 
+Bus/service disruptions that affect outcomes are explicit deterministic world/service state, not random renderer effects.
+
 ---
 
-## 13. Fake browser
+## 19. Fake browser
 
 Do not use real iframe navigation.
 
@@ -331,21 +524,20 @@ The browser maps a fictional URL to an internal page component/content record.
 
 Website content can be React components or data-driven renderers.
 
-The browser owns:
-- navigation history,
-- address text,
-- bookmarks,
-- home page.
+The browser owns presentation/navigation history.
 
 The simulation owns:
 - unlocks,
 - dynamic content flags,
 - download tasks,
-- purchases.
+- purchases,
+- town knowledge changes caused by discovering an address/route/place.
+
+This lets the digital world reveal the physical town without giving website components world authority.
 
 ---
 
-## 14. Window manager
+## 20. Window manager
 
 Required:
 - open
@@ -360,25 +552,55 @@ Closing UI does not destroy domain state.
 
 ---
 
-## 15. Phaser integration
+## 21. Phaser integration
 
-Phaser receives:
-- location definition,
+Phaser receives projections such as:
+- current place/space/view definition,
 - current time band,
 - weather,
 - world entities,
-- interaction availability.
+- interaction availability,
+- transit-stop service projection when rendering a stop,
+- active bus-leg presentation context when rendering an optional bus interior,
+- physically present rider/NPC anchors from simulation.
 
-Phaser emits:
+Phaser emits semantic intents such as:
 - hotspot clicked,
 - location action,
-- travel intent.
+- travel request,
+- inspect timetable,
+- board selected committed trip,
+- skip ride presentation.
+
+Phaser does **not**:
+- calculate fare,
+- decide the next bus,
+- invent wait time,
+- reroute an actor,
+- set destination arrival because an animation ended,
+- spawn a persistent known NPC rider without simulation presence.
 
 Do not use Phaser `update()` as the single source of game time.
 
 ---
 
-## 16. Runtime tick
+## 22. Bus-stop and bus-interior presentation
+
+A bus stop uses the generic physical `Place → Space → View → Focus → Anchor` runtime. It is not a bespoke transport UI scene class unless a later proven technical need requires one.
+
+A reusable bus interior is presentation bound to an already active bus leg. It may show:
+
+- route/district exterior window treatment;
+- current weather/time lighting;
+- riders from transit co-location;
+- spatial/semantic audio;
+- contextual physical interactions.
+
+Skipping the scene cannot alter the committed itinerary's duration or fare.
+
+---
+
+## 23. Runtime tick
 
 Use an application-level loop while the game is unpaused.
 
@@ -395,11 +617,12 @@ The exact scheduling mechanism may use `requestAnimationFrame` or a controlled t
 The simulation must tolerate:
 - variable frame rate,
 - tab throttling within reason,
-- explicit time jumps.
+- explicit time jumps,
+- trips crossing multiple leg boundaries in one update.
 
 ---
 
-## 17. Pause
+## 24. Pause
 
 An explicit game pause/settings state may stop simulation.
 
@@ -409,35 +632,42 @@ Opening:
 - terminal,
 does not pause time.
 
+Town/district map presentation also does not become a second clock or silently pause unless the global game pause policy says so.
+
 ---
 
-## 18. No external dependency for core play
+## 25. No external dependency for core play
 
 The evaluation build must remain playable if:
 - public internet is unavailable,
 - external AI service is unavailable,
 - analytics is unavailable.
 
-All game content is local.
+All core game/town/transit content is local.
 
 ---
 
-## 19. Performance
+## 26. Performance
 
-This is a 2D, text-heavy game.
+This is a 2D, text-heavy game with a small authored transit network.
 
 Prioritize:
 - responsive input,
 - fast window operations,
 - no unnecessary re-renders,
 - efficient image loading,
-- lazy loading larger location assets.
+- lazy loading larger location assets,
+- trivially fast deterministic route planning,
+- no duplicated physical-scene runtime after navigation.
 
 Do not prematurely introduce:
 - ECS,
 - microservices,
 - complex DI containers,
 - server database,
-- event-bus maze.
+- event-bus maze,
+- traffic simulation,
+- GTFS tooling,
+- per-meter NPC navigation.
 
 Readable TypeScript wins.
