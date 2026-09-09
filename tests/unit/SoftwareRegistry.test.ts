@@ -78,6 +78,29 @@ describe('SoftwareRegistry (6-Stage Wizard, Requirements Gating & Adware)', () =
     expect(shortcut?.kind).toBe('shortcut');
   });
 
+  it('replaces an older installed release when the same app is upgraded', () => {
+    const pulse52 = registry.startInstallerWizard('sw_pulse_52');
+    registry.completeInstallation(pulse52.sessionId, 10);
+
+    osVersion = 'Orion_6.0';
+    ramMb = 1024;
+    const pulse60 = registry.startInstallerWizard('sw_pulse_60');
+    registry.completeInstallation(pulse60.sessionId, 20);
+
+    const installedPulse = registry
+      .getInstalledSoftware()
+      .filter((software) => software.appId === 'app.pulse');
+
+    expect(installedPulse).toHaveLength(1);
+    expect(installedPulse[0]).toMatchObject({
+      id: 'inst_sw_pulse_60',
+      appId: 'app.pulse',
+      version: '6.0',
+      installedAtMinute: 20,
+    });
+    expect(osVersion).toBe('Orion_6.0');
+  });
+
   it('blocks installation of PhotoBox 3.0 when requirements are unmet', () => {
     const wizard = registry.startInstallerWizard('sw_photobox_30');
     expect(wizard.compatibilityResult.isCompatible).toBe(false);
