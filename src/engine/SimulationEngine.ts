@@ -459,27 +459,41 @@ export class SimulationEngine extends SimulationEngineCore {
       return { success: false, error: `Unknown OS release on installer media: ${media.osTarget}.` };
     }
 
-    const hardware = this.hardware.getState();
-    const eligibility = this.os.canInstall(media.osTarget, hardware, state.time.day);
-    if (!eligibility.ok) {
-      return { success: false, error: eligibility.reasons.join(' ') };
-    }
-
-    const primaryStorage = state.computer.storage[0]!;
-    const installSizeBytes = Math.round(release.installSizeGB * 1_000_000_000);
-    if (primaryStorage.freeBytes < installSizeBytes) {
-      return {
-        success: false,
-        error: `Requires ${release.installSizeGB}GB install space on the primary drive.`,
-      };
-    }
-
     const mode: OsInstallMode =
       release.kind === 'patch' || release.kind === 'hotfix'
         ? 'patch'
         : state.os.currentOsId === null
           ? 'fresh'
           : 'upgrade';
+    const currentRelease = state.os.currentOsId ? getReleaseById(state.os.currentOsId) : undefined;
+    const currentFootprintBytes =
+      mode === 'upgrade' && currentRelease
+        ? Math.round(currentRelease.installSizeGB * 1_000_000_000)
+        : 0;
+    const targetFootprintBytes = Math.round(release.installSizeGB * 1_000_000_000);
+    const installSizeBytes =
+      mode === 'upgrade'
+        ? Math.max(0, targetFootprintBytes - currentFootprintBytes)
+        : targetFootprintBytes;
+
+    const hardware = this.hardware.getState();
+    const eligibilityHardware =
+      mode === 'upgrade' && currentRelease
+        ? { ...hardware, hddFreeGB: hardware.hddFreeGB + currentRelease.installSizeGB }
+        : hardware;
+    const eligibility = this.os.canInstall(media.osTarget, eligibilityHardware, state.time.day);
+    if (!eligibility.ok) {
+      return { success: false, error: eligibility.reasons.join(' ') };
+    }
+
+    const primaryStorage = state.computer.storage[0]!;
+    if (primaryStorage.freeBytes < installSizeBytes) {
+      return {
+        success: false,
+        error: `Requires ${(installSizeBytes / 1_000_000_000).toFixed(1)}GB additional install space on the primary drive.`,
+      };
+    }
+
     const ramFactor = hardware.ramMB < 768 ? 1.6 : hardware.ramMB < 1024 ? 1.2 : 1;
     const durationMinutes = Math.round((18 + release.installSizeGB * 12) * ramFactor);
 
@@ -518,6 +532,11 @@ export class SimulationEngine extends SimulationEngineCore {
     const computerBefore = this.hardware.getComputerState();
     const displayBefore = this.hardware.getDisplayState();
     const osBefore = this.os.getState();
+    const currentRelease = osBefore.currentOsId ? getReleaseById(osBefore.currentOsId) : undefined;
+    const hardwareForInstall =
+      plan.mode === 'upgrade' && currentRelease
+        ? { ...hardwareBefore, hddFreeGB: hardwareBefore.hddFreeGB + currentRelease.installSizeGB }
+        : hardwareBefore;
 
     if (!this.hardware.allocateDiskSpaceBytes(plan.installSizeBytes)) {
       return { success: false, error: 'Could not reserve the required OS install space.' };
@@ -526,7 +545,7 @@ export class SimulationEngine extends SimulationEngineCore {
     try {
       const result = this.os.beginInstall(
         plan.targetOs,
-        hardwareBefore,
+        hardwareForInstall,
         this.getState().time.day,
         plan.preparedAtTotalMinutes + plan.durationMinutes,
       );
@@ -576,7 +595,6 @@ export class SimulationEngine extends SimulationEngineCore {
     if (!this.economy.canAfford(charge)) {
       return { success: false, error: 'Not enough cash.' };
     }
-
     const kinds = Object.fromEntries(
       Object.entries(PHYSICAL_ITEM_CATALOG).map(([id, definition]) => [id, definition.kind]),
     ) as Record<string, 'hardware' | 'display' | 'media'>;
