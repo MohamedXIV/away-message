@@ -22,7 +22,10 @@ describe('SoftwareRegistry install commit revalidation', () => {
     const session = registry.startInstallerWizard('sw_pulse_52');
     expect(session.compatibilityResult.isCompatible).toBe(true);
 
-    hardware.ramMb = 256;
+    // Pulse 5.2's canonical catalog floor is 64MB. Drop below the real
+    // requirement so this still proves commit-time revalidation rather than
+    // encoding the removed stale 512MB duplicate.
+    hardware.ramMb = 32;
 
     expect(() => registry.completeInstallation(session.sessionId, 20)).toThrow(
       /requirements|compatibility/i,
