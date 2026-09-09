@@ -45,6 +45,13 @@ export class PulseEngine {
         restoreProceduralPulseReleases(initialState.proceduralCatalog as unknown as PulseRelease[]);
       } catch {}
     }
+
+    this.eventBus.on('software:uninstalled' as any, ({ software }: any) => {
+      const appId = String(software?.appId ?? '');
+      if (appId === 'app.pulse' || appId === 'app.pulse_messenger') {
+        this.syncInstalledVersion(null);
+      }
+    });
   }
 
   public getCurrentRelease(): PulseRelease {
