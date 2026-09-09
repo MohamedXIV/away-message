@@ -4,10 +4,10 @@ import { getOsPresentationProfile } from '../../src/desktop/host/OsPresentation'
 import type { OsVersion } from '../../src/engine/types';
 
 const CANONICAL_RELEASES: OsVersion[] = [
-  'orion-4.8',
-  'orion-5.0',
-  'orion-6.0',
-  'orion-7.0',
+  'Orion_4.8',
+  'Orion_5.0',
+  'Orion_6.0',
+  'Orion_7.0',
 ];
 
 describe('OS-owned sound scheme routing', () => {
@@ -27,7 +27,7 @@ describe('OS-owned sound scheme routing', () => {
   });
 
   it('keeps close/minimize direction owned by the same scheme profile', () => {
-    const presentation = getOsPresentationProfile('orion-6.0');
+    const presentation = getOsPresentationProfile('Orion_6.0');
     const opening = resolveWindowSoundProfile(presentation.soundSchemeId, 'open');
     const closing = resolveWindowSoundProfile(presentation.soundSchemeId, 'close');
 
