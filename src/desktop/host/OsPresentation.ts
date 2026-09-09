@@ -29,6 +29,7 @@ export interface OsPresentationProfile {
   };
   shell: {
     taskbarId: 'classic' | 'aperture' | 'canal' | 'gloss';
+    taskbarHeightPx: number;
     startMenuId: 'classic' | 'aperture' | 'canal' | 'gloss';
     defaultWallpaperId: string;
   };
@@ -58,6 +59,7 @@ const PRESENTATION_BY_THEME: Record<OsThemeId, OsPresentationProfile> = {
     },
     shell: {
       taskbarId: 'classic',
+      taskbarHeightPx: 28,
       startMenuId: 'classic',
       defaultWallpaperId: 'orion48-default',
     },
@@ -82,6 +84,7 @@ const PRESENTATION_BY_THEME: Record<OsThemeId, OsPresentationProfile> = {
     },
     shell: {
       taskbarId: 'aperture',
+      taskbarHeightPx: 28,
       startMenuId: 'aperture',
       defaultWallpaperId: 'orion50-default',
     },
@@ -106,6 +109,7 @@ const PRESENTATION_BY_THEME: Record<OsThemeId, OsPresentationProfile> = {
     },
     shell: {
       taskbarId: 'canal',
+      taskbarHeightPx: 32,
       startMenuId: 'canal',
       defaultWallpaperId: 'orion60-canal',
     },
@@ -130,6 +134,7 @@ const PRESENTATION_BY_THEME: Record<OsThemeId, OsPresentationProfile> = {
     },
     shell: {
       taskbarId: 'gloss',
+      taskbarHeightPx: 28,
       startMenuId: 'gloss',
       defaultWallpaperId: 'orion70-gloss',
     },
