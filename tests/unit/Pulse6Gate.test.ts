@@ -38,9 +38,10 @@ describe('Pulse 6 generation gate', () => {
     expect(tokenizeEmoticons(':)', false, false).some((t) => t.type === 'emoticon')).toBe(true);
   });
 
-  it(' fresh engine reads Pulse 5.x (no colors, no motion)', () => {
+  it('fresh engine has no installed Pulse release truth', () => {
     const engine = new SimulationEngine();
+    expect(engine.software.isInstalled('app.pulse')).toBe(false);
+    expect(engine.pulse.getCurrentPulseId()).toBeNull();
     expect(engine.isPulse6()).toBe(false);
-    expect(engine.pulse.getCurrentPulseId()).toBe('pulse_5.2');
   });
 });
