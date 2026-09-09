@@ -5,7 +5,7 @@
 // rewrite unrelated social/world/economy behavior. This facade owns the v6
 // canonical roots and narrows the remaining legacy compatibility to one place.
 
-import { InventoryEngine } from './InventoryEngine';
+import { InventoryEngine, type HardwareInstallSlot } from './InventoryEngine';
 import { HARDWARE_STORE_INVENTORY, PHYSICAL_ITEM_CATALOG } from './hardware/catalog';
 import { getReleaseById } from './OsCatalog';
 import { SimulationEngine as SimulationEngineCore } from './SimulationEngineCore';
@@ -160,6 +160,71 @@ export class SimulationEngine extends SimulationEngineCore {
     }
 
     this.hardware.setPower(poweredOn);
+    this.invalidateV6Cache();
+    return { success: true };
+  }
+
+  public installOwnedHardwareAtHome(
+    instanceId: string,
+    slot: HardwareInstallSlot,
+  ): ActionResult {
+    const state = this.getState();
+    if (state.player.location !== 'home') {
+      return { success: false, error: 'Hardware can only be installed at the Room 104 computer.' };
+    }
+    if (!state.computer.assembled) {
+      return { success: false, error: 'Set up the computer before installing replacement hardware.' };
+    }
+    if (!slot.startsWith('ram:')) {
+      return { success: false, error: 'This at-home install slice currently supports RAM slots only.' };
+    }
+
+    const slotIndex = Number(slot.slice('ram:'.length));
+    if (!Number.isInteger(slotIndex) || slotIndex < 0) {
+      return { success: false, error: `Invalid RAM slot: ${slot}.` };
+    }
+    if (slotIndex > state.computer.ramSticks.length) {
+      return { success: false, error: 'RAM slots must be populated without leaving an unsupported gap.' };
+    }
+
+    const matches = state.inventory.items.filter((item) => item.instanceId === instanceId);
+    if (matches.length !== 1) {
+      return { success: false, error: `Owned item instance is missing or ambiguous: ${instanceId}.` };
+    }
+
+    const catalog = PHYSICAL_ITEM_CATALOG[matches[0]!.catalogItemId];
+    const component = catalog?.component;
+    if (catalog?.componentKind !== 'ram' || !component || !('sizeMb' in component)) {
+      return { success: false, error: 'The selected owned item is not installable RAM.' };
+    }
+
+    const inventoryBefore = this.inventory.getState();
+    const computerBefore = this.hardware.getComputerState();
+    const displayBefore = this.hardware.getDisplayState();
+
+    try {
+      this.inventory.installOwnedHardware(instanceId, slot);
+
+      const ramSticks = computerBefore.ramSticks.map((stick) => ({ ...stick }));
+      ramSticks[slotIndex] = {
+        id: component.id,
+        name: component.name,
+        sizeMb: component.sizeMb,
+      };
+      this.hardware.loadState({
+        computer: { ...computerBefore, ramSticks },
+        display: displayBefore,
+      });
+    } catch (error) {
+      this.inventory.loadState(inventoryBefore);
+      this.hardware.loadState({ computer: computerBefore, display: displayBefore });
+      this.invalidateV6Cache();
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Hardware installation failed.',
+      };
+    }
+
     this.invalidateV6Cache();
     return { success: true };
   }
