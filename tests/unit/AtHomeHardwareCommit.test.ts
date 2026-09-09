@@ -50,6 +50,48 @@ describe('at-home hardware authoritative commit', () => {
     expect(after.os).toEqual(before.os);
   });
 
+  it('replaces the exact CPU instance and updates canonical/effective CPU state atomically', () => {
+    const engine = new SimulationEngine({ player: { cash: 500 } } as any);
+
+    expect(engine.purchaseStoreItem('silicon_spares', 'bundle_scrapyard').success).toBe(true);
+    expect(engine.setupComputerAtHome().success).toBe(true);
+    expect(engine.purchaseStoreItem('silicon_spares', 'bundle_family').success).toBe(true);
+
+    const before = engine.getState();
+    const oldCpu = before.inventory.items.find(
+      (item) => item.catalogItemId === 'cpu_celeron_366' && item.location === 'installed',
+    ) as SlottedOwnedItem | undefined;
+    const candidate = before.inventory.items.find(
+      (item) => item.catalogItemId === 'cpu_pentium2_500' && item.location === 'room_package',
+    );
+
+    expect(oldCpu).toMatchObject({ installSlot: 'cpu' });
+    expect(candidate).toBeDefined();
+    expect(before.computer.cpu.id).toBe('cpu_celeron_366');
+
+    const result = (engine as unknown as AtHomeHardwareInstaller).installOwnedHardwareAtHome(
+      candidate!.instanceId,
+      'cpu',
+    );
+
+    expect(result.success).toBe(true);
+
+    const after = engine.getState();
+    expect(after.inventory.items.find((item) => item.instanceId === candidate!.instanceId)).toMatchObject({
+      catalogItemId: 'cpu_pentium2_500',
+      location: 'installed',
+      installSlot: 'cpu',
+    });
+    expect(after.inventory.items.find((item) => item.instanceId === oldCpu!.instanceId)).toMatchObject({
+      catalogItemId: 'cpu_celeron_366',
+      location: 'room_package',
+    });
+    expect(after.computer.cpu.id).toBe('cpu_pentium2_500');
+    expect(after.hardware.cpuTier).toBe(after.computer.cpu.tier);
+    expect(after.display).toEqual(before.display);
+    expect(after.os).toEqual(before.os);
+  });
+
   it('replaces the exact monitor instance while preserving computer, OS, and software state', () => {
     const engine = new SimulationEngine({ player: { cash: 500 } } as any);
 
