@@ -25,8 +25,8 @@ describe('central desktop OS presentation routing', () => {
     }
   });
 
-  it('routes WindowFrame sounds from the resolved OS presentation scheme', () => {
-    expect(windowFrameSource).toContain('osPresentation.soundSchemeId');
+  it('routes WindowFrame sounds from the resolved nullable OS presentation scheme', () => {
+    expect(windowFrameSource).toContain('osPresentation?.soundSchemeId');
     expect(windowFrameSource).not.toMatch(/playWindowSound\([^\n]*osVersion/);
   });
 });
