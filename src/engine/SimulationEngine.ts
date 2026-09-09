@@ -96,6 +96,14 @@ export class SimulationEngine extends SimulationEngineCore {
     };
 
     super(coreInitial);
+
+    if (!initialState || hasOwn(initialState, 'installedSoftware')) {
+      const installedPulse = installedSoftware?.find(
+        (software) => software.appId === 'app.pulse' || software.appId === 'app.pulse_messenger',
+      );
+      this.pulse.syncInstalledVersion(installedPulse?.version ?? null);
+    }
+
     this.inventory = new InventoryEngine(initialState?.inventory ?? createEmptyInventoryState());
   }
 
