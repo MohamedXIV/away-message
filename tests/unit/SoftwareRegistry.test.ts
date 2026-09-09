@@ -26,9 +26,10 @@ describe('SoftwareRegistry (6-Stage Wizard, Requirements Gating & Adware)', () =
     });
   });
 
-  it('includes preinstalled Voyager Browser only when an OS actually exists', () => {
-    expect(registry.isInstalled('app.browser')).toBe(true);
+  it('does not treat Orion-bundled system components as ordinary installed apps', () => {
+    expect(registry.isInstalled('app.browser')).toBe(false);
     expect(registry.isInstalled('app.pulse')).toBe(false);
+    expect(registry.getInstalledSoftware()).toEqual([]);
 
     osVersion = null;
     const noOsRegistry = new SoftwareRegistry(eventBus, vfs, {
