@@ -71,7 +71,7 @@ export const STATIC_OS_CATALOG: OsRelease[] = [
     channel: 'stable',
     releaseDay: 6,
     changelog: ['Cleaner start menu, 96MB baseline, improved IDE driver', 'Early MyPlace tiler support'],
-    requirements: { minRamMB: 512, minCpuTier: 1, minDiskGB: 1.4, requiresFamily: '4.x' },
+    requirements: { minRamMB: 96, minCpuTier: 1, minDiskGB: 1.4, requiresFamily: '4.x' },
     installSizeGB: 1.4,
     ramOverheadMB: 96,
     bootTimeSeconds: 42,
