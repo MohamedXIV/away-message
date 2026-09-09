@@ -2,7 +2,7 @@
 // Standard Host API exposed to all applications running on the Orion OS desktop.
 
 import React, { createContext, useContext, useMemo } from 'react';
-import type { OsVersion } from '../../engine/types';
+import type { ConnectionType, OsVersion } from '../../engine/types';
 import { useSimulationStore } from '../../store/useSimulationStore';
 import { useWindowStore } from '../../store/useWindowStore';
 import { soundManager } from '../../audio/SoundManager';
@@ -11,6 +11,44 @@ import {
   resolveActiveOsPresentation,
   type OsPresentationProfile,
 } from './OsPresentation';
+
+export interface HostNetworkSnapshot {
+  computerAssembled: boolean;
+  computerPoweredOn: boolean;
+  activeOs: OsVersion | null;
+  connectionType: ConnectionType | null;
+  connectionSpeedKbps: number;
+}
+
+export interface HostNetworkState {
+  status: 'offline' | 'dialing' | 'connected';
+  effectiveKbps: number;
+}
+
+/**
+ * Resolve the app-visible network truth from the current physical computer and
+ * OS environment. The simulation does not yet model a dial-session lifecycle,
+ * so current authoritative states are offline or connected; `dialing` remains
+ * part of the host contract for a future explicit connection-state mechanic.
+ */
+export function resolveHostNetworkState(snapshot: HostNetworkSnapshot): HostNetworkState {
+  const usableEnvironment =
+    snapshot.computerAssembled &&
+    snapshot.computerPoweredOn &&
+    snapshot.activeOs !== null &&
+    snapshot.connectionType !== null &&
+    Number.isFinite(snapshot.connectionSpeedKbps) &&
+    snapshot.connectionSpeedKbps > 0;
+
+  if (!usableEnvironment) {
+    return { status: 'offline', effectiveKbps: 0 };
+  }
+
+  return {
+    status: 'connected',
+    effectiveKbps: snapshot.connectionSpeedKbps,
+  };
+}
 
 export interface OsHostApi {
   window: {
@@ -62,6 +100,8 @@ export interface OsHostProviderProps {
 
 export const OsHostProvider: React.FC<OsHostProviderProps> = ({ windowId, children }) => {
   const osVersion = useSimulationStore((s) => s.state.os.currentOsId);
+  const computerAssembled = useSimulationStore((s) => s.state.computer.assembled);
+  const computerPoweredOn = useSimulationStore((s) => s.state.computer.poweredOn);
   const ramMb = useSimulationStore((s) => s.state.hardware.ramMB);
   const hddFreeGB = useSimulationStore((s) => s.state.hardware.hddFreeGB);
   const cpuTier = useSimulationStore((s) => s.state.hardware.cpuTier);
@@ -80,6 +120,13 @@ export const OsHostProvider: React.FC<OsHostProviderProps> = ({ windowId, childr
   const api: OsHostApi = useMemo(() => {
     const presentation = resolveActiveOsPresentation(osVersion);
     const soundSchemeId = presentation?.soundSchemeId;
+    const networkState = resolveHostNetworkState({
+      computerAssembled,
+      computerPoweredOn,
+      activeOs: osVersion,
+      connectionType,
+      connectionSpeedKbps,
+    });
 
     return {
       window: {
@@ -125,15 +172,15 @@ export const OsHostProvider: React.FC<OsHostProviderProps> = ({ windowId, childr
         },
       },
       network: {
-        status: connectionType === 'dialup_56k' ? 'connected' : 'connected',
-        effectiveKbps: connectionSpeedKbps,
+        status: networkState.status,
+        effectiveKbps: networkState.effectiveKbps,
         startDownload: (params) => {
           startDownloadStore({
             sourceId: params.sourceId,
             url: params.url,
             fileName: params.fileName,
             totalBytes: params.totalBytes,
-            sourceMaxKbps: params.sourceMaxKbps ?? connectionSpeedKbps,
+            sourceMaxKbps: params.sourceMaxKbps ?? networkState.effectiveKbps,
           });
         },
       },
@@ -162,6 +209,8 @@ export const OsHostProvider: React.FC<OsHostProviderProps> = ({ windowId, childr
   }, [
     windowId,
     osVersion,
+    computerAssembled,
+    computerPoweredOn,
     ramMb,
     hddFreeGB,
     cpuTier,
