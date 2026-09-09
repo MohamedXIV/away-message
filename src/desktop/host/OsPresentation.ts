@@ -150,3 +150,7 @@ export function getOsPresentationProfile(osId: OsVersion): OsPresentationProfile
   if (!release) throw new Error(`Unknown Orion release: ${osId}`);
   return PRESENTATION_BY_THEME[release.theme];
 }
+
+export function resolveActiveOsPresentation(osId: OsVersion | null): OsPresentationProfile | null {
+  return osId ? getOsPresentationProfile(osId) : null;
+}
