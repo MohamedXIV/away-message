@@ -2,6 +2,29 @@ import { DownloadTask, DownloadManagerState, DownloadManagerType } from './types
 import { EventBus } from './EventBus';
 import { FileSystemEngine } from './FileSystemEngine';
 
+export interface DownloadClientProfile {
+  clientId: string;
+  maxConcurrent: number;
+  supportsResume: boolean;
+  supportsQueueReordering?: boolean;
+}
+
+type ProfiledDownloadTask = DownloadTask & {
+  clientProfile?: DownloadClientProfile;
+};
+
+const LEGACY_BROWSER_PROFILE: DownloadClientProfile = {
+  clientId: 'browser',
+  maxConcurrent: 1,
+  supportsResume: true,
+};
+
+const LEGACY_FLASHFETCH_PROFILE: DownloadClientProfile = {
+  clientId: 'flashfetch',
+  maxConcurrent: 4,
+  supportsResume: true,
+};
+
 export interface DownloadManagerDependencies {
   eventBus: EventBus;
   vfs: FileSystemEngine;
@@ -9,7 +32,7 @@ export interface DownloadManagerDependencies {
 }
 
 export class DownloadManager {
-  private tasks: Map<string, DownloadTask> = new Map();
+  private tasks: Map<string, ProfiledDownloadTask> = new Map();
   private eventBus: EventBus;
   private vfs: FileSystemEngine;
   private getConnectionSpeedKbps: () => number;
@@ -29,6 +52,7 @@ export class DownloadManager {
   public getState(): DownloadManagerState {
     return {
       tasks: Array.from(this.tasks.values()).map(t => ({ ...t })),
+      // Retained for save compatibility while callers migrate to per-client profiles.
       maxConcurrentBrowser: this.maxConcurrentBrowser,
       maxConcurrentFlashFetch: this.maxConcurrentFlashFetch,
     };
@@ -51,6 +75,7 @@ export class DownloadManager {
     fileKind?: 'executable' | 'installer' | 'archive' | 'audio' | 'image' | 'text';
     resumable?: boolean;
     manager?: DownloadManagerType;
+    clientProfile?: DownloadClientProfile;
     currentMinute?: number;
     appAssociation?: string;
   }): DownloadTask {
@@ -63,9 +88,10 @@ export class DownloadManager {
 
     const id = `dl_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
     const manager = params.manager || 'browser';
+    const clientProfile = params.clientProfile ?? this.legacyProfileForManager(manager);
     const currentMinute = params.currentMinute ?? 0;
 
-    const task: DownloadTask = {
+    const task: ProfiledDownloadTask = {
       id,
       sourceId: params.sourceId,
       sourceUrl: params.sourceUrl,
@@ -76,8 +102,9 @@ export class DownloadManager {
       sourceMaxKbps: params.sourceMaxKbps,
       allocatedKbps: 0,
       status: 'queued',
-      resumable: params.resumable ?? true,
+      resumable: clientProfile.supportsResume && (params.resumable ?? true),
       manager,
+      clientProfile: { ...clientProfile },
       startedAtMinute: currentMinute,
       fileKind: params.fileKind ?? 'executable',
       appAssociation: params.appAssociation,
@@ -215,25 +242,21 @@ export class DownloadManager {
   }
 
   public updateQueueSlots(): void {
-    const flashFetchActive = Array.from(this.tasks.values()).filter(
-      t => t.manager === 'flashfetch' && t.status === 'downloading'
-    ).length;
-    const browserActive = Array.from(this.tasks.values()).filter(
-      t => t.manager === 'browser' && t.status === 'downloading'
-    ).length;
-
-    let availableBrowserSlots = this.maxConcurrentBrowser - browserActive;
-    let availableFlashFetchSlots = this.maxConcurrentFlashFetch - flashFetchActive;
+    const activeCounts = new Map<string, number>();
+    for (const task of this.tasks.values()) {
+      if (task.status !== 'downloading') continue;
+      const profile = this.profileForTask(task);
+      activeCounts.set(profile.clientId, (activeCounts.get(profile.clientId) ?? 0) + 1);
+    }
 
     for (const task of this.tasks.values()) {
-      if (task.status === 'queued') {
-        if (task.manager === 'flashfetch' && availableFlashFetchSlots > 0) {
-          task.status = 'downloading';
-          availableFlashFetchSlots--;
-        } else if (task.manager === 'browser' && availableBrowserSlots > 0) {
-          task.status = 'downloading';
-          availableBrowserSlots--;
-        }
+      if (task.status !== 'queued') continue;
+      const profile = this.profileForTask(task);
+      const active = activeCounts.get(profile.clientId) ?? 0;
+      const maxConcurrent = Math.max(1, Math.floor(profile.maxConcurrent));
+      if (active < maxConcurrent) {
+        task.status = 'downloading';
+        activeCounts.set(profile.clientId, active + 1);
       }
     }
   }
@@ -270,5 +293,13 @@ export class DownloadManager {
         break;
       }
     }
+  }
+
+  private profileForTask(task: ProfiledDownloadTask): DownloadClientProfile {
+    return task.clientProfile ?? this.legacyProfileForManager(task.manager);
+  }
+
+  private legacyProfileForManager(manager: DownloadManagerType): DownloadClientProfile {
+    return manager === 'flashfetch' ? LEGACY_FLASHFETCH_PROFILE : LEGACY_BROWSER_PROFILE;
   }
 }
