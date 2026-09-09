@@ -67,7 +67,8 @@ describe('at-home hardware authoritative commit', () => {
 
     expect(oldCpu).toMatchObject({ installSlot: 'cpu' });
     expect(candidate).toBeDefined();
-    expect(before.computer.cpu.id).toBe('cpu_celeron_366');
+    expect(before.computer.cpu).not.toBeNull();
+    expect(before.computer.cpu!.id).toBe('cpu_celeron_366');
 
     const result = (engine as unknown as AtHomeHardwareInstaller).installOwnedHardwareAtHome(
       candidate!.instanceId,
@@ -86,8 +87,9 @@ describe('at-home hardware authoritative commit', () => {
       catalogItemId: 'cpu_celeron_366',
       location: 'room_package',
     });
-    expect(after.computer.cpu.id).toBe('cpu_pentium2_500');
-    expect(after.hardware.cpuTier).toBe(after.computer.cpu.tier);
+    expect(after.computer.cpu).not.toBeNull();
+    expect(after.computer.cpu!.id).toBe('cpu_pentium2_500');
+    expect(after.hardware.cpuTier).toBe(after.computer.cpu!.tier);
     expect(after.display).toEqual(before.display);
     expect(after.os).toEqual(before.os);
   });
