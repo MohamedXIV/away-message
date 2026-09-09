@@ -79,6 +79,11 @@ export class DownloadManager {
     currentMinute?: number;
     appAssociation?: string;
   }): DownloadTask {
+    const connectionSpeedKbps = this.getConnectionSpeedKbps();
+    if (!Number.isFinite(connectionSpeedKbps) || connectionSpeedKbps <= 0) {
+      throw new Error('No usable network connection is available for this download.');
+    }
+
     // Check available disk space
     if (this.vfs.getFreeDiskBytes() < params.totalBytes) {
       throw new Error(
