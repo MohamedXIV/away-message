@@ -9,7 +9,7 @@ type AtHomeHardwareInstaller = {
 
 describe('at-home hardware authoritative commit', () => {
   it('installs one exact owned RAM instance and updates effective machine RAM atomically', () => {
-    const engine = new SimulationEngine();
+    const engine = new SimulationEngine({ player: { cash: 500 } } as any);
 
     expect(engine.purchaseStoreItem('silicon_spares', 'bundle_scrapyard').success).toBe(true);
     expect(engine.setupComputerAtHome().success).toBe(true);
