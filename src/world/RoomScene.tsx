@@ -19,6 +19,7 @@ import { WindowObservationModal } from './modals/WindowObservationModal';
 import { BeverageModal } from './modals/BeverageModal';
 import { DoorActionModal } from './modals/DoorActionModal';
 import { SleepTransitionModal } from './modals/SleepTransitionModal';
+import { HardwareWorkbenchModal } from './modals/HardwareWorkbenchModal';
 import { getContextualWindowThought, getStreetSighting } from './data/windowThoughts';
 import {
   Monitor,
@@ -29,6 +30,7 @@ import {
   Clock,
   BedDouble,
   DoorOpen,
+  Wrench,
 } from 'lucide-react';
 
 export const RoomScene: React.FC = () => {
@@ -37,6 +39,8 @@ export const RoomScene: React.FC = () => {
   const hotspotClickRef = useRef<(id: RoomHotspotId) => void>(() => undefined);
 
   // Simulation Store selectors
+  const engine = useSimulationStore((s) => s.engine);
+  const syncStateFromEngine = useSimulationStore((s) => s.syncStateFromEngine);
   const time = useSimulationStore((s) => s.state.time);
   const player = useSimulationStore((s) => s.state.player);
   const computer = useSimulationStore((s) => s.state.computer);
@@ -59,7 +63,7 @@ export const RoomScene: React.FC = () => {
 
   // Active Modals
   const [activeModal, setActiveModal] = useState<
-    'window' | 'beverage' | 'door' | 'sleep' | null
+    'window' | 'beverage' | 'door' | 'sleep' | 'hardware' | null
   >(null);
 
   // Weather: live engine forecast mapped to the canvas vocabulary (was a hardcoded 3-day hack)
@@ -369,6 +373,19 @@ export const RoomScene: React.FC = () => {
             <DoorOpen className="w-3.5 h-3.5" />
             <span>Leave</span>
           </button>
+          {assembledComputer && (
+            <button
+              onClick={() => {
+                soundManager.play('click');
+                setActiveModal('hardware');
+              }}
+              className="flex items-center gap-1 px-2.5 py-1 bg-stone-800 hover:bg-stone-700 border border-amber-800/70 rounded text-amber-100 text-xs font-bold transition-colors cursor-pointer"
+              title="Inspect and install owned hardware in Room 104"
+            >
+              <Wrench className="w-3.5 h-3.5" />
+              <span>Hardware</span>
+            </button>
+          )}
           <button
             onClick={() => handleHotspotClick('pc')}
             className="flex items-center gap-1.5 px-3 py-1 bg-amber-600 hover:bg-amber-500 text-slate-950 font-bold rounded shadow transition-all cursor-pointer"
@@ -452,6 +469,14 @@ export const RoomScene: React.FC = () => {
           currentHour={time.hour}
           currentMinute={time.minute}
           onConfirmSleep={handleConfirmSleep}
+          onClose={() => setActiveModal(null)}
+        />
+      )}
+
+      {activeModal === 'hardware' && (
+        <HardwareWorkbenchModal
+          engine={engine}
+          onStateChanged={syncStateFromEngine}
           onClose={() => setActiveModal(null)}
         />
       )}

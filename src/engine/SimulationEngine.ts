@@ -5,7 +5,7 @@
 // rewrite unrelated social/world/economy behavior. This facade owns the v6
 // canonical roots and narrows the remaining legacy compatibility to one place.
 
-import { InventoryEngine } from './InventoryEngine';
+import { InventoryEngine, type HardwareInstallSlot } from './InventoryEngine';
 import { HARDWARE_STORE_INVENTORY, PHYSICAL_ITEM_CATALOG } from './hardware/catalog';
 import { getReleaseById } from './OsCatalog';
 import { SimulationEngine as SimulationEngineCore } from './SimulationEngineCore';
@@ -160,6 +160,176 @@ export class SimulationEngine extends SimulationEngineCore {
     }
 
     this.hardware.setPower(poweredOn);
+    this.invalidateV6Cache();
+    return { success: true };
+  }
+
+  public installOwnedHardwareAtHome(
+    instanceId: string,
+    slot: HardwareInstallSlot,
+  ): ActionResult {
+    const state = this.getState();
+    if (state.player.location !== 'home') {
+      return { success: false, error: 'Hardware can only be installed at the Room 104 computer.' };
+    }
+    if (!state.computer.assembled) {
+      return { success: false, error: 'Set up the computer before installing replacement hardware.' };
+    }
+
+    const isRamSlot = slot.startsWith('ram:');
+    const isCpuSlot = slot === 'cpu';
+    const isNetworkSlot = slot === 'network';
+    const isSoundSlot = slot === 'sound';
+    const isActiveOpticalSlot = slot === 'optical:0';
+    const isActiveMonitorSlot = slot === 'monitor:0';
+    if (
+      !isRamSlot &&
+      !isCpuSlot &&
+      !isNetworkSlot &&
+      !isSoundSlot &&
+      !isActiveOpticalSlot &&
+      !isActiveMonitorSlot
+    ) {
+      return {
+        success: false,
+        error: 'This at-home install slice currently supports RAM, CPU, network cards, sound cards, the active optical drive, and the active monitor.',
+      };
+    }
+
+    let ramSlotIndex: number | null = null;
+    if (isRamSlot) {
+      ramSlotIndex = Number(slot.slice('ram:'.length));
+      if (!Number.isInteger(ramSlotIndex) || ramSlotIndex < 0) {
+        return { success: false, error: `Invalid RAM slot: ${slot}.` };
+      }
+      if (ramSlotIndex > state.computer.ramSticks.length) {
+        return { success: false, error: 'RAM slots must be populated without leaving an unsupported gap.' };
+      }
+    }
+
+    const matches = state.inventory.items.filter((item) => item.instanceId === instanceId);
+    if (matches.length !== 1) {
+      return { success: false, error: `Owned item instance is missing or ambiguous: ${instanceId}.` };
+    }
+
+    const catalog = PHYSICAL_ITEM_CATALOG[matches[0]!.catalogItemId];
+    const component = catalog?.component;
+    if (isRamSlot) {
+      if (catalog?.componentKind !== 'ram' || !component || !('sizeMb' in component)) {
+        return { success: false, error: 'The selected owned item is not installable RAM.' };
+      }
+    } else if (isCpuSlot) {
+      if (
+        catalog?.componentKind !== 'cpu' ||
+        !component ||
+        !('tier' in component) ||
+        !('clockMhz' in component) ||
+        !('socket' in component) ||
+        !('throughputUnits' in component)
+      ) {
+        return { success: false, error: 'The selected owned item is not an installable CPU.' };
+      }
+    } else if (isNetworkSlot) {
+      if (
+        catalog?.componentKind !== 'network' ||
+        !component ||
+        !('type' in component) ||
+        !('speedKbps' in component)
+      ) {
+        return { success: false, error: 'The selected owned item is not an installable network card.' };
+      }
+    } else if (isSoundSlot) {
+      if (
+        catalog?.componentKind !== 'sound' ||
+        !component ||
+        !('tier' in component) ||
+        !('richAudio' in component) ||
+        !('midiSupport' in component)
+      ) {
+        return { success: false, error: 'The selected owned item is not an installable sound card.' };
+      }
+    } else if (isActiveOpticalSlot) {
+      if (
+        catalog?.componentKind !== 'optical' ||
+        !component ||
+        !('type' in component) ||
+        !('speedMultiplier' in component)
+      ) {
+        return { success: false, error: 'The selected owned item is not an installable optical drive.' };
+      }
+    } else if (
+      catalog?.componentKind !== 'monitor' ||
+      !component ||
+      !('curvature' in component) ||
+      !('scanlineIntensity' in component) ||
+      !('bloomIntensity' in component) ||
+      !('flicker' in component)
+    ) {
+      return { success: false, error: 'The selected owned item is not an installable monitor.' };
+    }
+
+    const inventoryBefore = this.inventory.getState();
+    const computerBefore = this.hardware.getComputerState();
+    const displayBefore = this.hardware.getDisplayState();
+
+    try {
+      this.inventory.installOwnedHardware(instanceId, slot);
+
+      if (isRamSlot) {
+        const ram = component as { id: string; name: string; sizeMb: number };
+        const ramSticks = computerBefore.ramSticks.map((stick) => ({ ...stick }));
+        ramSticks[ramSlotIndex!] = {
+          id: ram.id,
+          name: ram.name,
+          sizeMb: ram.sizeMb,
+        };
+        this.hardware.loadState({
+          computer: { ...computerBefore, ramSticks },
+          display: displayBefore,
+        });
+      } else if (isCpuSlot) {
+        const cpu = component as NonNullable<typeof computerBefore.cpu>;
+        this.hardware.loadState({
+          computer: { ...computerBefore, cpu: { ...cpu } },
+          display: displayBefore,
+        });
+      } else if (isNetworkSlot) {
+        const networkCard = component as NonNullable<typeof computerBefore.networkCard>;
+        this.hardware.loadState({
+          computer: { ...computerBefore, networkCard: { ...networkCard } },
+          display: displayBefore,
+        });
+      } else if (isSoundSlot) {
+        const soundCard = component as NonNullable<typeof computerBefore.soundCard>;
+        this.hardware.loadState({
+          computer: { ...computerBefore, soundCard: { ...soundCard } },
+          display: displayBefore,
+        });
+      } else if (isActiveOpticalSlot) {
+        const opticalDrive = component as (typeof computerBefore.opticalDrives)[number];
+        const opticalDrives = computerBefore.opticalDrives.map((drive) => ({ ...drive }));
+        opticalDrives[0] = { ...opticalDrive };
+        this.hardware.loadState({
+          computer: { ...computerBefore, opticalDrives },
+          display: displayBefore,
+        });
+      } else {
+        const monitor = component as NonNullable<typeof state.display.monitor>;
+        this.hardware.loadState({
+          computer: computerBefore,
+          display: { monitor: { ...monitor } },
+        });
+      }
+    } catch (error) {
+      this.inventory.loadState(inventoryBefore);
+      this.hardware.loadState({ computer: computerBefore, display: displayBefore });
+      this.invalidateV6Cache();
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Hardware installation failed.',
+      };
+    }
+
     this.invalidateV6Cache();
     return { success: true };
   }
