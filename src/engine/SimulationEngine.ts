@@ -177,9 +177,10 @@ export class SimulationEngine extends SimulationEngineCore {
     }
 
     const isRamSlot = slot.startsWith('ram:');
+    const isCpuSlot = slot === 'cpu';
     const isActiveMonitorSlot = slot === 'monitor:0';
-    if (!isRamSlot && !isActiveMonitorSlot) {
-      return { success: false, error: 'This at-home install slice currently supports RAM and the active monitor.' };
+    if (!isRamSlot && !isCpuSlot && !isActiveMonitorSlot) {
+      return { success: false, error: 'This at-home install slice currently supports RAM, CPU, and the active monitor.' };
     }
 
     let ramSlotIndex: number | null = null;
@@ -203,6 +204,17 @@ export class SimulationEngine extends SimulationEngineCore {
     if (isRamSlot) {
       if (catalog?.componentKind !== 'ram' || !component || !('sizeMb' in component)) {
         return { success: false, error: 'The selected owned item is not installable RAM.' };
+      }
+    } else if (isCpuSlot) {
+      if (
+        catalog?.componentKind !== 'cpu' ||
+        !component ||
+        !('tier' in component) ||
+        !('clockMhz' in component) ||
+        !('socket' in component) ||
+        !('throughputUnits' in component)
+      ) {
+        return { success: false, error: 'The selected owned item is not an installable CPU.' };
       }
     } else if (
       catalog?.componentKind !== 'monitor' ||
@@ -232,6 +244,12 @@ export class SimulationEngine extends SimulationEngineCore {
         };
         this.hardware.loadState({
           computer: { ...computerBefore, ramSticks },
+          display: displayBefore,
+        });
+      } else if (isCpuSlot) {
+        const cpu = component as typeof computerBefore.cpu;
+        this.hardware.loadState({
+          computer: { ...computerBefore, cpu: { ...cpu } },
           display: displayBefore,
         });
       } else {
