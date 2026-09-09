@@ -12,6 +12,11 @@ const desktopShellSource = readFileSync(
   'utf8',
 );
 
+const osThemeCssSource = readFileSync(
+  fileURLToPath(new URL('../../src/desktop/themes/os-themes.css', import.meta.url)),
+  'utf8',
+);
+
 describe('central desktop OS presentation routing', () => {
   it('does not route Orion generations with per-component version string checks', () => {
     for (const source of [windowFrameSource, desktopShellSource]) {
@@ -28,5 +33,16 @@ describe('central desktop OS presentation routing', () => {
   it('routes WindowFrame sounds from the resolved nullable OS presentation scheme', () => {
     expect(windowFrameSource).toContain('osPresentation?.soundSchemeId');
     expect(windowFrameSource).not.toMatch(/playWindowSound\([^\n]*osVersion/);
+  });
+
+  it('routes rendered window animation through the central transition resolver and honors reduced motion', () => {
+    expect(windowFrameSource).toContain('resolveWindowTransition');
+    expect(windowFrameSource).toContain("matchMedia('(prefers-reduced-motion: reduce)')");
+    expect(windowFrameSource).toContain("resolveWindowTransition(osPresentation, 'open', reducedMotion)");
+    expect(windowFrameSource).toContain('data-os-window-animation={windowOpenTransition}');
+    expect(osThemeCssSource).toContain('[data-os-window-animation="classic-scale"]');
+    expect(osThemeCssSource).toContain('[data-os-window-animation="soft-scale"]');
+    expect(osThemeCssSource).toContain('[data-os-window-animation="gloss-zoom"]');
+    expect(osThemeCssSource).toContain('@media (prefers-reduced-motion: reduce)');
   });
 });
