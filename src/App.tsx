@@ -4,6 +4,8 @@ import React, { useEffect, useState } from 'react';
 import { DesktopShell } from './desktop/DesktopShell';import { RoomScene } from './world/RoomScene';
 import { CafeScene } from './world/CafeScene';
 import { Day14ResolutionModal } from './world/Day14ResolutionModal';
+import { resolveActiveOsPresentation } from './desktop/host/OsPresentation';
+import type { OsVersion } from './engine/types';
 import {
   useSimulationTicker,
   useSimulationStore,
@@ -33,13 +35,17 @@ function useContentStudio(): boolean {
   return enabled;
 }
 
+export function resolveAppTheme(osVersion: OsVersion | null): string | null {
+  return resolveActiveOsPresentation(osVersion)?.themeId ?? null;
+}
+
 export const App: React.FC = () => {
   // Start the continuous simulation clock animation loop
   useSimulationTicker({ enabled: true });
 
   const unlockAudio = useAudioStore((s) => s.unlockAudio);
   const osState = useSimulationStore((s) => s.state.os);
-  const osVersion = osState.currentOsId as string;
+  const osVersion = osState.currentOsId;
   const activeView = useActiveView();
   const switchView = useSimulationStore((s) => s.switchView);
   const setWorldFlag = useSimulationStore((s) => s.setWorldFlag);
@@ -154,16 +160,10 @@ export const App: React.FC = () => {
     window.location.reload();
   };
 
-  // Orion OS themes: 4.8→orion48, 5.x→orion50, 6.x→orion60, 7.x→orion70 (AI releases use same mapping)
-  const themeAttr = (() => {
-    if (osVersion.includes('7.0')) return 'orion70';
-    if (osVersion.includes('6.')) return 'orion60';
-    if (osVersion.includes('5.')) return 'orion50';
-    return 'orion48';
-  })();
+  const themeAttr = resolveAppTheme(osVersion);
 
   return (
-    <div data-theme={themeAttr} className="w-full h-full overflow-hidden select-none bg-black">
+    <div data-theme={themeAttr ?? undefined} className="w-full h-full overflow-hidden select-none bg-black">
       {phase === 'menu' && <MainMenu onBoot={() => setPhase('game')} />}
       {phase === 'loading' && (
         <div className="w-full h-full flex flex-col items-center justify-center gap-3 bg-black text-slate-300 font-sans">
