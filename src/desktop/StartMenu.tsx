@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useSimulationStore } from '../store/useSimulationStore';
 import { useWindowStore } from '../store/useWindowStore';
 import { soundManager } from '../audio/SoundManager';
+import { getOsPresentationProfile } from './host/OsPresentation';
 import {
   Folder,
   FileText,
@@ -22,6 +23,9 @@ interface StartMenuProps {
 
 export const StartMenu: React.FC<StartMenuProps> = ({ isOpen, onClose, onOpenDialUp }) => {
   const osVersion = useSimulationStore((s) => s.state.os.currentOsId);
+  const osPresentation = osVersion ? getOsPresentationProfile(osVersion) : null;
+  const startMenuPresentation = osPresentation?.shell.startMenuId ?? 'classic';
+  const isCanalStartMenu = startMenuPresentation === 'canal';
   const dispatchAction = useSimulationStore((s) => s.dispatchAction);
   const openWindow = useWindowStore((s) => s.openWindow);
   // Pulse never ships with the OS — its menu entry appears only after install.
@@ -32,8 +36,6 @@ export const StartMenu: React.FC<StartMenuProps> = ({ isOpen, onClose, onOpenDia
   const [isShutDownDialogOpen, setIsShutDownDialogOpen] = useState(false);
   const [runCommandText, setRunCommandText] = useState('');
   const [runError, setRunError] = useState<string | null>(null);
-
-  const isOrion6 = osVersion === 'Orion_6.0';
 
   if (!isOpen) return null;
 
@@ -76,15 +78,16 @@ export const StartMenu: React.FC<StartMenuProps> = ({ isOpen, onClose, onOpenDia
       {/* 1. Main Start Menu Container */}
       <div
         id="orion-start-menu"
+        data-os-start-menu={startMenuPresentation}
         className={`absolute bottom-8 left-1 z-50 flex shadow-2xl ${
-          isOrion6
+          isCanalStartMenu
             ? 'w-96 rounded-t-lg bg-[#245edb] border-2 border-[#003c74] flex-col overflow-hidden text-black'
             : 'orion-outset bg-[#c0c0c0] min-w-[210px] text-black p-0.5'
         }`}
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Orion 6.0 Top User Header */}
-        {isOrion6 && (
+        {/* Canal-style user header */}
+        {isCanalStartMenu && (
           <div className="flex items-center gap-3 p-3 bg-gradient-to-r from-[#1f48ab] to-[#386cd4] text-white border-b border-[#0c1f4e]">
             <div className="w-10 h-10 rounded-sm border-2 border-white/80 bg-blue-700 flex items-center justify-center shadow">
               <User className="w-6 h-6 text-white" />
@@ -94,11 +97,11 @@ export const StartMenu: React.FC<StartMenuProps> = ({ isOpen, onClose, onOpenDia
         )}
 
         <div className="flex flex-1">
-          {/* Orion 4.8 Vertical Banner */}
-          {!isOrion6 && (
+          {/* Classic-family vertical brand banner */}
+          {!isCanalStartMenu && (
             <div className="w-7 bg-gradient-to-b from-[#000080] via-[#1084d0] to-[#000040] text-white flex items-end justify-center pb-2 font-bold select-none">
               <span className="[writing-mode:vertical-lr] rotate-180 tracking-widest text-[13px] text-gray-200">
-                Orion <b>4.8</b>
+                Orion
               </span>
             </div>
           )}
@@ -233,8 +236,8 @@ export const StartMenu: React.FC<StartMenuProps> = ({ isOpen, onClose, onOpenDia
           </div>
         </div>
 
-        {/* Orion 6.0 Bottom Footer */}
-        {isOrion6 && (
+        {/* Canal-style footer */}
+        {isCanalStartMenu && (
           <div className="flex items-center justify-end gap-2 p-2 bg-gradient-to-r from-[#1f48ab] to-[#245edb] border-t border-[#3c7bf0] text-white text-[11px]">
             <button
               className="flex items-center gap-1 px-2 py-1 rounded bg-[#d32f2f] hover:brightness-110 font-bold shadow"
