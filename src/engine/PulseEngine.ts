@@ -13,7 +13,8 @@ import {
 import type { HardwareState, OsVersion } from './types';
 
 export interface PulseEngineState {
-  currentPulseId: string | null; // null when Pulse is not installed
+  // Empty string is the persisted save-compatible representation of "not installed".
+  currentPulseId: string;
   installedPatchIds: string[];
   lastUpdateAtMinute?: number;
   lastUpdateLog?: string[];
@@ -31,7 +32,7 @@ export class PulseEngine {
 
   constructor(eventBus: EventBus, initialState?: Partial<PulseEngineState>) {
     this.eventBus = eventBus;
-    this.currentPulseId = initialState?.currentPulseId ?? 'pulse_5.2';
+    this.currentPulseId = initialState?.currentPulseId || 'pulse_5.2';
     if (initialState?.installedPatchIds) {
       for (const id of initialState.installedPatchIds) this.installedPatchIds.add(id);
     }
@@ -75,7 +76,7 @@ export class PulseEngine {
       procedural = [];
     }
     return {
-      currentPulseId: this.currentPulseId,
+      currentPulseId: this.currentPulseId ?? '',
       installedPatchIds: Array.from(this.installedPatchIds),
       lastUpdateAtMinute: this.lastUpdateAtMinute,
       lastUpdateLog: [...this.lastUpdateLog],
@@ -86,7 +87,7 @@ export class PulseEngine {
 
   public loadState(state: Partial<PulseEngineState>): void {
     if (Object.prototype.hasOwnProperty.call(state, 'currentPulseId')) {
-      this.currentPulseId = state.currentPulseId ?? null;
+      this.currentPulseId = state.currentPulseId || null;
     }
     if (state.installedPatchIds) {
       this.installedPatchIds.clear();
