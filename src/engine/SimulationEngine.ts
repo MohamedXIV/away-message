@@ -175,16 +175,22 @@ export class SimulationEngine extends SimulationEngineCore {
     if (!state.computer.assembled) {
       return { success: false, error: 'Set up the computer before installing replacement hardware.' };
     }
-    if (!slot.startsWith('ram:')) {
-      return { success: false, error: 'This at-home install slice currently supports RAM slots only.' };
+
+    const isRamSlot = slot.startsWith('ram:');
+    const isActiveMonitorSlot = slot === 'monitor:0';
+    if (!isRamSlot && !isActiveMonitorSlot) {
+      return { success: false, error: 'This at-home install slice currently supports RAM and the active monitor.' };
     }
 
-    const slotIndex = Number(slot.slice('ram:'.length));
-    if (!Number.isInteger(slotIndex) || slotIndex < 0) {
-      return { success: false, error: `Invalid RAM slot: ${slot}.` };
-    }
-    if (slotIndex > state.computer.ramSticks.length) {
-      return { success: false, error: 'RAM slots must be populated without leaving an unsupported gap.' };
+    let ramSlotIndex: number | null = null;
+    if (isRamSlot) {
+      ramSlotIndex = Number(slot.slice('ram:'.length));
+      if (!Number.isInteger(ramSlotIndex) || ramSlotIndex < 0) {
+        return { success: false, error: `Invalid RAM slot: ${slot}.` };
+      }
+      if (ramSlotIndex > state.computer.ramSticks.length) {
+        return { success: false, error: 'RAM slots must be populated without leaving an unsupported gap.' };
+      }
     }
 
     const matches = state.inventory.items.filter((item) => item.instanceId === instanceId);
@@ -194,8 +200,19 @@ export class SimulationEngine extends SimulationEngineCore {
 
     const catalog = PHYSICAL_ITEM_CATALOG[matches[0]!.catalogItemId];
     const component = catalog?.component;
-    if (catalog?.componentKind !== 'ram' || !component || !('sizeMb' in component)) {
-      return { success: false, error: 'The selected owned item is not installable RAM.' };
+    if (isRamSlot) {
+      if (catalog?.componentKind !== 'ram' || !component || !('sizeMb' in component)) {
+        return { success: false, error: 'The selected owned item is not installable RAM.' };
+      }
+    } else if (
+      catalog?.componentKind !== 'monitor' ||
+      !component ||
+      !('curvature' in component) ||
+      !('scanlineIntensity' in component) ||
+      !('bloomIntensity' in component) ||
+      !('flicker' in component)
+    ) {
+      return { success: false, error: 'The selected owned item is not an installable monitor.' };
     }
 
     const inventoryBefore = this.inventory.getState();
@@ -205,16 +222,25 @@ export class SimulationEngine extends SimulationEngineCore {
     try {
       this.inventory.installOwnedHardware(instanceId, slot);
 
-      const ramSticks = computerBefore.ramSticks.map((stick) => ({ ...stick }));
-      ramSticks[slotIndex] = {
-        id: component.id,
-        name: component.name,
-        sizeMb: component.sizeMb,
-      };
-      this.hardware.loadState({
-        computer: { ...computerBefore, ramSticks },
-        display: displayBefore,
-      });
+      if (isRamSlot) {
+        const ram = component as { id: string; name: string; sizeMb: number };
+        const ramSticks = computerBefore.ramSticks.map((stick) => ({ ...stick }));
+        ramSticks[ramSlotIndex!] = {
+          id: ram.id,
+          name: ram.name,
+          sizeMb: ram.sizeMb,
+        };
+        this.hardware.loadState({
+          computer: { ...computerBefore, ramSticks },
+          display: displayBefore,
+        });
+      } else {
+        const monitor = component as NonNullable<typeof state.display.monitor>;
+        this.hardware.loadState({
+          computer: computerBefore,
+          display: { monitor: { ...monitor } },
+        });
+      }
     } catch (error) {
       this.inventory.loadState(inventoryBefore);
       this.hardware.loadState({ computer: computerBefore, display: displayBefore });
