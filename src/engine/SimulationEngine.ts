@@ -179,11 +179,12 @@ export class SimulationEngine extends SimulationEngineCore {
     const isRamSlot = slot.startsWith('ram:');
     const isCpuSlot = slot === 'cpu';
     const isNetworkSlot = slot === 'network';
+    const isSoundSlot = slot === 'sound';
     const isActiveMonitorSlot = slot === 'monitor:0';
-    if (!isRamSlot && !isCpuSlot && !isNetworkSlot && !isActiveMonitorSlot) {
+    if (!isRamSlot && !isCpuSlot && !isNetworkSlot && !isSoundSlot && !isActiveMonitorSlot) {
       return {
         success: false,
-        error: 'This at-home install slice currently supports RAM, CPU, network cards, and the active monitor.',
+        error: 'This at-home install slice currently supports RAM, CPU, network cards, sound cards, and the active monitor.',
       };
     }
 
@@ -229,6 +230,16 @@ export class SimulationEngine extends SimulationEngineCore {
       ) {
         return { success: false, error: 'The selected owned item is not an installable network card.' };
       }
+    } else if (isSoundSlot) {
+      if (
+        catalog?.componentKind !== 'sound' ||
+        !component ||
+        !('tier' in component) ||
+        !('richAudio' in component) ||
+        !('midiSupport' in component)
+      ) {
+        return { success: false, error: 'The selected owned item is not an installable sound card.' };
+      }
     } else if (
       catalog?.componentKind !== 'monitor' ||
       !component ||
@@ -269,6 +280,12 @@ export class SimulationEngine extends SimulationEngineCore {
         const networkCard = component as NonNullable<typeof computerBefore.networkCard>;
         this.hardware.loadState({
           computer: { ...computerBefore, networkCard: { ...networkCard } },
+          display: displayBefore,
+        });
+      } else if (isSoundSlot) {
+        const soundCard = component as NonNullable<typeof computerBefore.soundCard>;
+        this.hardware.loadState({
+          computer: { ...computerBefore, soundCard: { ...soundCard } },
           display: displayBefore,
         });
       } else {
