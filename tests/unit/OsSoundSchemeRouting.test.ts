@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { resolveWindowSoundProfile } from '../../src/audio/SynthAudio';
+import { resolveWindowSoundProfile } from '../../src/desktop/host/OsSoundScheme';
 import { getOsPresentationProfile } from '../../src/desktop/host/OsPresentation';
 import type { OsVersion } from '../../src/engine/types';
 
