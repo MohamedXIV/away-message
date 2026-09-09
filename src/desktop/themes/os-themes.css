@@ -191,3 +191,50 @@
   border-right-color: var(--os-btn-border-top, #fff);
   border-bottom-color: var(--os-btn-border-left, #fff);
 }
+
+[data-os-window-animation="classic-scale"] {
+  animation: os-window-classic-scale 120ms ease-out;
+  transform-origin: center;
+}
+
+[data-os-window-animation="soft-scale"] {
+  animation: os-window-soft-scale 150ms ease-out;
+  transform-origin: center;
+}
+
+[data-os-window-animation="gloss-zoom"] {
+  animation: os-window-gloss-zoom 180ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  transform-origin: center;
+}
+
+[data-os-window-animation="fade-collapse"] {
+  animation: os-window-fade-collapse 120ms ease-out;
+  transform-origin: top center;
+}
+
+@keyframes os-window-classic-scale {
+  from { opacity: 0.65; transform: scale(0.97); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes os-window-soft-scale {
+  from { opacity: 0; transform: scale(0.96); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes os-window-gloss-zoom {
+  from { opacity: 0; transform: scale(0.93); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes os-window-fade-collapse {
+  from { opacity: 0; transform: scaleY(0.92); }
+  to { opacity: 1; transform: scaleY(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .os-themed-window {
+    animation: none !important;
+    transition: none !important;
+  }
+}
