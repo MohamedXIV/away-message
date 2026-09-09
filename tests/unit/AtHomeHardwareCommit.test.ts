@@ -105,4 +105,49 @@ describe('at-home hardware authoritative commit', () => {
     expect(after.os).toEqual(before.os);
     expect(after.installedSoftware).toEqual(before.installedSoftware);
   });
+
+  it('preserves exact RAM and monitor instance-slot assignments across save and reload', () => {
+    const engine = new SimulationEngine({ player: { cash: 500 } } as any);
+
+    expect(engine.purchaseStoreItem('silicon_spares', 'bundle_scrapyard').success).toBe(true);
+    expect(engine.setupComputerAtHome().success).toBe(true);
+    expect(engine.purchaseStoreItem('silicon_spares', 'part_ram_128mb').success).toBe(true);
+    expect(engine.purchaseStoreItem('silicon_spares', 'part_mon_trinitron').success).toBe(true);
+
+    const owned = engine.getState().inventory.items;
+    const ram = owned.find(
+      (item) => item.catalogItemId === 'ram_sdram_128' && item.location === 'room_package',
+    );
+    const monitor = owned.find(
+      (item) => item.catalogItemId === 'mon_trinitron_17' && item.location === 'room_package',
+    );
+    expect(ram).toBeDefined();
+    expect(monitor).toBeDefined();
+
+    const installer = engine as unknown as AtHomeHardwareInstaller;
+    expect(installer.installOwnedHardwareAtHome(ram!.instanceId, 'ram:1').success).toBe(true);
+    expect(installer.installOwnedHardwareAtHome(monitor!.instanceId, 'monitor:0').success).toBe(true);
+
+    const snapshot = engine.exportSnapshot();
+    const restored = new SimulationEngine();
+    restored.loadSnapshot(snapshot as any);
+
+    const after = restored.getState();
+    expect(after.inventory.items.find((item) => item.instanceId === ram!.instanceId)).toMatchObject({
+      catalogItemId: 'ram_sdram_128',
+      location: 'installed',
+      installSlot: 'ram:1',
+    });
+    expect(after.inventory.items.find((item) => item.instanceId === monitor!.instanceId)).toMatchObject({
+      catalogItemId: 'mon_trinitron_17',
+      location: 'installed',
+      installSlot: 'monitor:0',
+    });
+    expect(after.computer.ramSticks.map((stick) => stick.id)).toEqual([
+      'ram_sdram_64_a',
+      'ram_sdram_128',
+    ]);
+    expect(after.hardware.ramMB).toBe(192);
+    expect(after.display.monitor?.id).toBe('mon_trinitron_17');
+  });
 });
