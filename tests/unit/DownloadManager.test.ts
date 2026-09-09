@@ -1,7 +1,10 @@
+import { readFileSync } from 'node:fs';
 import { describe, it, expect, beforeEach } from 'vitest';
 import { EventBus } from '../../src/engine/EventBus';
 import { FileSystemEngine } from '../../src/engine/FileSystemEngine';
 import { DownloadManager } from '../../src/engine/DownloadManager';
+
+const downloadManagerSource = readFileSync('src/engine/DownloadManager.ts', 'utf8');
 
 describe('DownloadManager (Bandwidth Allocation, Progress & Time Jumps)', () => {
   let eventBus: EventBus;
@@ -18,6 +21,13 @@ describe('DownloadManager (Bandwidth Allocation, Progress & Time Jumps)', () => 
       vfs,
       getConnectionSpeedKbps: () => connectionSpeedKbps,
     });
+  });
+
+  it('keeps the core scheduler neutral to concrete app identities', () => {
+    expect(downloadManagerSource).not.toMatch(/LEGACY_BROWSER_PROFILE|LEGACY_FLASHFETCH_PROFILE/);
+    expect(downloadManagerSource).not.toContain("clientId: 'browser'");
+    expect(downloadManagerSource).not.toContain("clientId: 'flashfetch'");
+    expect(downloadManagerSource).not.toContain("manager === 'flashfetch'");
   });
 
   it('starts a download and allocates available bandwidth', () => {
