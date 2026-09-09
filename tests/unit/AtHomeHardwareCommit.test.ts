@@ -94,6 +94,49 @@ describe('at-home hardware authoritative commit', () => {
     expect(after.os).toEqual(before.os);
   });
 
+  it('keeps purchased network hardware in Room 104 until the exact owned instance is installed', () => {
+    const engine = new SimulationEngine({ player: { cash: 500 } } as any);
+
+    expect(engine.purchaseStoreItem('silicon_spares', 'bundle_scrapyard').success).toBe(true);
+    expect(engine.setupComputerAtHome().success).toBe(true);
+    expect(engine.purchaseStoreItem('silicon_spares', 'bundle_family').success).toBe(true);
+
+    const before = engine.getState();
+    const oldNetwork = before.inventory.items.find(
+      (item) => item.catalogItemId === 'modem_v90_56k' && item.location === 'installed',
+    ) as SlottedOwnedItem | undefined;
+    const candidate = before.inventory.items.find(
+      (item) => item.catalogItemId === 'nic_fast_ethernet' && item.location === 'room_package',
+    );
+
+    expect(oldNetwork).toMatchObject({ installSlot: 'network' });
+    expect(candidate).toBeDefined();
+    expect(before.computer.networkCard?.id).toBe('modem_v90_56k');
+    expect(before.hardware.connectionType).toBe('dialup_56k');
+
+    const result = (engine as unknown as AtHomeHardwareInstaller).installOwnedHardwareAtHome(
+      candidate!.instanceId,
+      'network',
+    );
+
+    expect(result.success).toBe(true);
+
+    const after = engine.getState();
+    expect(after.inventory.items.find((item) => item.instanceId === candidate!.instanceId)).toMatchObject({
+      catalogItemId: 'nic_fast_ethernet',
+      location: 'installed',
+      installSlot: 'network',
+    });
+    expect(after.inventory.items.find((item) => item.instanceId === oldNetwork!.instanceId)).toMatchObject({
+      catalogItemId: 'modem_v90_56k',
+      location: 'room_package',
+    });
+    expect(after.computer.networkCard?.id).toBe('nic_fast_ethernet');
+    expect(after.hardware.connectionType).toBe('dsl_256k');
+    expect(after.display).toEqual(before.display);
+    expect(after.os).toEqual(before.os);
+  });
+
   it('replaces the exact monitor instance while preserving computer, OS, and software state', () => {
     const engine = new SimulationEngine({ player: { cash: 500 } } as any);
 
