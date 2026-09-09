@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { useSimulationStore } from '../store/useSimulationStore';
 import { useWindowStore, WindowState } from '../store/useWindowStore';
 import { soundManager } from '../audio/SoundManager';
+import { getOsPresentationProfile } from './host/OsPresentation';
 import { StartMenu } from './StartMenu';
 import { SystemTray } from './SystemTray';
 import { Globe, MessageSquare, LayoutGrid, X, Minus, Square, Home } from 'lucide-react';
@@ -12,6 +13,9 @@ interface TaskbarProps {
 
 export const Taskbar: React.FC<TaskbarProps> = ({ onOpenDialUp }) => {
   const osVersion = useSimulationStore((s) => s.state.os.currentOsId);
+  const osPresentation = osVersion ? getOsPresentationProfile(osVersion) : null;
+  const taskbarPresentation = osPresentation?.shell.taskbarId ?? 'classic';
+  const isCanalTaskbar = taskbarPresentation === 'canal';
   const switchView = useSimulationStore((s) => s.switchView);
   const windows = useWindowStore((s) => s.windows);
   const windowOrder = useWindowStore((s) => s.windowOrder);
@@ -32,7 +36,6 @@ export const Taskbar: React.FC<TaskbarProps> = ({ onOpenDialUp }) => {
   const [tabContextMenu, setTabContextMenu] = useState<{ windowId: string; x: number; y: number } | null>(null);
 
   const startButtonRef = useRef<HTMLButtonElement>(null);
-  const isOrion6 = osVersion === 'Orion_6.0';
 
   // Toggle Start Menu
   const handleStartToggle = () => {
@@ -68,10 +71,12 @@ export const Taskbar: React.FC<TaskbarProps> = ({ onOpenDialUp }) => {
 
       {/* Taskbar Bar */}
       <div
+        data-os-taskbar={taskbarPresentation}
+        style={{ height: `${osPresentation?.shell.taskbarHeightPx ?? 28}px` }}
         className={`fixed bottom-0 left-0 right-0 w-full z-40 flex items-center px-1 select-none ${
-          isOrion6
-            ? 'h-8 bg-gradient-to-b from-[#1f48ab] via-[#245edb] to-[#122868] border-t border-[#3c7bf0]'
-            : 'h-7 bg-[#c0c0c0] border-t border-white shadow-[inset_0_1px_0_#dfdfdf]'
+          isCanalTaskbar
+            ? 'bg-gradient-to-b from-[#1f48ab] via-[#245edb] to-[#122868] border-t border-[#3c7bf0]'
+            : 'bg-[#c0c0c0] border-t border-white shadow-[inset_0_1px_0_#dfdfdf]'
         }`}
       >
         {/* 1. Start Button */}
@@ -79,7 +84,7 @@ export const Taskbar: React.FC<TaskbarProps> = ({ onOpenDialUp }) => {
           ref={startButtonRef}
           onClick={handleStartToggle}
           className={`flex items-center gap-1.5 px-2 py-0.5 font-bold cursor-pointer transition-none ${
-            isOrion6
+            isCanalTaskbar
               ? `h-7 rounded-r-xl rounded-l-md px-3 text-white italic text-[13px] bg-gradient-to-b from-[#388e3c] via-[#2e7d32] to-[#1b5e20] shadow-[inset_0_1px_0_rgba(255,255,255,0.6),0_1px_3px_rgba(0,0,0,0.3)] hover:brightness-110 ${
                   isStartMenuOpen ? 'brightness-90 shadow-inner' : ''
                 }`
@@ -95,11 +100,11 @@ export const Taskbar: React.FC<TaskbarProps> = ({ onOpenDialUp }) => {
             <div className="bg-blue-500 rounded-[0.5px]" />
             <div className="bg-yellow-400 rounded-[0.5px]" />
           </div>
-          <span>{isOrion6 ? 'start' : 'Start'}</span>
+          <span>{isCanalTaskbar ? 'start' : 'Start'}</span>
         </button>
 
         {/* 2. Quick Launch Separator & Icons */}
-        <div className={`mx-1.5 h-4 w-[2px] ${isOrion6 ? 'bg-[#193c94] border-r border-[#3c7bf0]' : 'border-l border-[#808080] border-r border-white'}`} />
+        <div className={`mx-1.5 h-4 w-[2px] ${isCanalTaskbar ? 'bg-[#193c94] border-r border-[#3c7bf0]' : 'border-l border-[#808080] border-r border-white'}`} />
         <div className="flex items-center gap-0.5 mr-1.5">
           <button
             onClick={() => minimizeAll()}
@@ -135,7 +140,7 @@ export const Taskbar: React.FC<TaskbarProps> = ({ onOpenDialUp }) => {
             <Home className="w-3.5 h-3.5 text-emerald-600 drop-shadow-sm" />
           </button>
         </div>
-        <div className={`mr-1.5 h-4 w-[2px] ${isOrion6 ? 'bg-[#193c94] border-r border-[#3c7bf0]' : 'border-l border-[#808080] border-r border-white'}`} />
+        <div className={`mr-1.5 h-4 w-[2px] ${isCanalTaskbar ? 'bg-[#193c94] border-r border-[#3c7bf0]' : 'border-l border-[#808080] border-r border-white'}`} />
 
         {/* 3. Window Tabs */}
         <div className="flex-1 flex items-center gap-1 overflow-x-auto no-scrollbar h-full py-0.5">
@@ -161,7 +166,7 @@ export const Taskbar: React.FC<TaskbarProps> = ({ onOpenDialUp }) => {
                   setTabContextMenu({ windowId: win.id, x: e.clientX, y: e.clientY - 80 });
                 }}
                 className={`flex items-center gap-1.5 px-2 py-0.5 max-w-[160px] min-w-[100px] h-full text-left truncate text-[11px] cursor-pointer transition-none ${
-                  isOrion6
+                  isCanalTaskbar
                     ? `rounded-t-sm ${
                         isActive
                           ? 'bg-gradient-to-b from-[#122a68] to-[#1e4598] text-white shadow-inner border-t border-[#0c1f4e]'
