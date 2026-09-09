@@ -161,6 +161,53 @@ describe('DownloadManager (Bandwidth Allocation, Progress & Time Jumps)', () => 
     expect(downloadManager.getActiveDownloads()).toHaveLength(2);
   });
 
+  it('round-trips active transfer progress and neutral client capabilities across save/reload', () => {
+    const task = downloadManager.startDownload({
+      sourceId: 'future_persisted',
+      sourceUrl: 'http://downloadhub.local/future-persisted.zip',
+      fileName: 'future-persisted.zip',
+      totalBytes: 20_000_000,
+      sourceMaxKbps: 512,
+      clientProfile: {
+        clientId: 'future-client',
+        maxConcurrent: 2,
+        supportsResume: true,
+      },
+    });
+
+    downloadManager.advanceTime(1, 1);
+    const beforeReload = downloadManager.getTask(task.id)!;
+    expect(beforeReload.downloadedBytes).toBeGreaterThan(0);
+    expect(beforeReload.status).toBe('downloading');
+
+    const persisted = downloadManager.getState();
+    const restoredVfs = new FileSystemEngine(eventBus);
+    const restored = new DownloadManager(
+      {
+        eventBus,
+        vfs: restoredVfs,
+        getConnectionSpeedKbps: () => connectionSpeedKbps,
+      },
+      {
+        ...persisted,
+        maxConcurrentBrowser: 1,
+        maxConcurrentFlashFetch: 4,
+      },
+    );
+
+    const afterReload = restored.getTask(task.id)!;
+    expect(afterReload.downloadedBytes).toBe(beforeReload.downloadedBytes);
+    expect(afterReload.status).toBe('downloading');
+    expect((afterReload as any).clientProfile).toMatchObject({
+      clientId: 'future-client',
+      maxConcurrent: 2,
+      supportsResume: true,
+    });
+
+    restored.advanceTime(1, 2);
+    expect(restored.getTask(task.id)!.downloadedBytes).toBeGreaterThan(afterReload.downloadedBytes);
+  });
+
   it('pauses, resumes, and cancels downloads correctly', () => {
     const task = downloadManager.startDownload({
       sourceId: 'dl_pause',
