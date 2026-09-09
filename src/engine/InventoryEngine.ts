@@ -241,6 +241,11 @@ export class InventoryEngine {
     if (occupied.length > 1) {
       throw new Error(`Installed hardware slot ${slot} is ambiguous.`);
     }
+    if (slot === 'storage:0' && occupied.length === 1) {
+      throw new Error(
+        'Primary storage replacement is blocked until OS/VFS preservation or migration is explicitly supported.',
+      );
+    }
 
     const displaced = occupied[0] ?? null;
     const installedTarget: SlottedOwnedItem = {
