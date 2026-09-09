@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { EventBus } from '../../src/engine/EventBus';
 import { FileSystemEngine } from '../../src/engine/FileSystemEngine';
 import { SoftwareRegistry } from '../../src/engine/SoftwareRegistry';
+import { getOsPresentationProfile } from '../../src/desktop/host/OsPresentation';
 import type { OsVersion } from '../../src/engine/types';
 
 describe('SoftwareRegistry (6-Stage Wizard, Requirements Gating & Adware)', () => {
@@ -77,6 +78,24 @@ describe('SoftwareRegistry (6-Stage Wizard, Requirements Gating & Adware)', () =
     const shortcut = vfs.readFile('C:/Desktop/Pulse Messenger.lnk');
     expect(shortcut).toBeDefined();
     expect(shortcut?.kind).toBe('shortcut');
+  });
+
+  it('keeps the same Pulse 5.2 install while Orion changes the host presentation', () => {
+    const wizard = registry.startInstallerWizard('sw_pulse_52');
+    registry.completeInstallation(wizard.sessionId, 10);
+
+    const before = registry.getInstalledSoftware().find((software) => software.appId === 'app.pulse');
+    const orion48Presentation = getOsPresentationProfile('Orion_4.8');
+
+    osVersion = 'Orion_7.0';
+    const after = registry.getInstalledSoftware().find((software) => software.appId === 'app.pulse');
+    const orion70Presentation = getOsPresentationProfile('Orion_7.0');
+
+    expect(before).toMatchObject({ id: 'inst_sw_pulse_52', appId: 'app.pulse', version: '5.2' });
+    expect(after).toEqual(before);
+    expect(orion70Presentation.themeId).not.toBe(orion48Presentation.themeId);
+    expect(orion70Presentation.window.chromeId).not.toBe(orion48Presentation.window.chromeId);
+    expect(orion70Presentation.soundSchemeId).not.toBe(orion48Presentation.soundSchemeId);
   });
 
   it('replaces an older installed release when the same app is upgraded', () => {
