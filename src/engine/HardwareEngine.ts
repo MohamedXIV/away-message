@@ -291,6 +291,18 @@ export class HardwareEngine {
   }
 
   public loadState(state: HardwareEngineInitialState): void {
+    const incomingComputer = state.computer;
+    if (
+      this.computer.insertedMediaId &&
+      incomingComputer?.insertedMediaId === this.computer.insertedMediaId
+    ) {
+      const currentOpticalId = this.computer.opticalDrives[0]?.id ?? null;
+      const incomingOpticalId = incomingComputer.opticalDrives?.[0]?.id ?? null;
+      if (currentOpticalId !== incomingOpticalId) {
+        throw new Error('Eject the currently inserted disc before replacing the active optical drive.');
+      }
+    }
+
     const emptyComputer = createEmptyComputerSetup();
     const computer = state.computer;
     this.computer = {
