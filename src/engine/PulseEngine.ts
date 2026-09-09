@@ -13,7 +13,7 @@ import {
 import type { HardwareState, OsVersion } from './types';
 
 export interface PulseEngineState {
-  currentPulseId: string; // e.g. 'pulse_5.2'
+  currentPulseId: string | null; // null when Pulse is not installed
   installedPatchIds: string[];
   lastUpdateAtMinute?: number;
   lastUpdateLog?: string[];
@@ -23,7 +23,7 @@ export interface PulseEngineState {
 
 export class PulseEngine {
   private eventBus: EventBus;
-  private currentPulseId: string;
+  private currentPulseId: string | null;
   private installedPatchIds: Set<string> = new Set();
   private lastUpdateAtMinute?: number;
   private lastUpdateLog: string[] = [];
@@ -46,11 +46,25 @@ export class PulseEngine {
   }
 
   public getCurrentRelease(): PulseRelease {
-    return getPulseReleaseById(this.currentPulseId) ?? getPulseReleaseById('pulse_5.2')!;
+    return getPulseReleaseById(this.currentPulseId ?? '') ?? getPulseReleaseById('pulse_5.2')!;
   }
 
-  public getCurrentPulseId(): string {
+  public getCurrentPulseId(): string | null {
     return this.currentPulseId;
+  }
+
+  public syncInstalledVersion(version: string | null): void {
+    if (version === null) {
+      this.currentPulseId = null;
+      this.installedPatchIds.clear();
+      return;
+    }
+
+    const release = getAllPulseReleases().find((candidate) => candidate.version === version);
+    if (!release) {
+      throw new Error(`Unknown installed Pulse version: ${version}`);
+    }
+    this.currentPulseId = release.id;
   }
 
   public getState(): PulseEngineState {
@@ -71,7 +85,9 @@ export class PulseEngine {
   }
 
   public loadState(state: Partial<PulseEngineState>): void {
-    if (state.currentPulseId) this.currentPulseId = state.currentPulseId;
+    if (Object.prototype.hasOwnProperty.call(state, 'currentPulseId')) {
+      this.currentPulseId = state.currentPulseId ?? null;
+    }
     if (state.installedPatchIds) {
       this.installedPatchIds.clear();
       for (const id of state.installedPatchIds) this.installedPatchIds.add(id);
@@ -127,7 +143,7 @@ export class PulseEngine {
       const prev = this.currentPulseId;
       this.currentPulseId = target.id;
       this.lastUpdateAtMinute = currentMinute;
-      this.log(`Upgraded ${prev} → ${target.id} (${target.version}).`);
+      this.log(`Upgraded ${prev ?? 'not installed'} → ${target.id} (${target.version}).`);
     }
     this.eventBus.emit('software:installed' as any, { software: { appId: 'app.pulse', version: target.version } });
     return { success: true, release: target };
