@@ -7,6 +7,10 @@ import { useSimulationStore } from '../../store/useSimulationStore';
 import { useWindowStore } from '../../store/useWindowStore';
 import { soundManager } from '../../audio/SoundManager';
 import { synthAudio } from '../../audio/SynthAudio';
+import {
+  resolveActiveOsPresentation,
+  type OsPresentationProfile,
+} from './OsPresentation';
 
 export interface OsHostApi {
   window: {
@@ -38,6 +42,8 @@ export interface OsHostApi {
   };
   system: {
     activeOs: OsVersion | null;
+    presentation: OsPresentationProfile | null;
+    capabilities: OsPresentationProfile['capabilities'] | null;
     hardware: {
       ramMb: number;
       freeDiskGb: number;
@@ -72,6 +78,8 @@ export const OsHostProvider: React.FC<OsHostProviderProps> = ({ windowId, childr
   const startDownloadStore = useSimulationStore((s) => s.startDownload);
 
   const api: OsHostApi = useMemo(() => {
+    const presentation = resolveActiveOsPresentation(osVersion);
+
     return {
       window: {
         id: windowId,
@@ -138,6 +146,8 @@ export const OsHostProvider: React.FC<OsHostProviderProps> = ({ windowId, childr
       },
       system: {
         activeOs: osVersion,
+        presentation,
+        capabilities: presentation?.capabilities ?? null,
         hardware: {
           ramMb,
           freeDiskGb: hddFreeGB,
