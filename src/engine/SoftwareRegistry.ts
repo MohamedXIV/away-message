@@ -325,6 +325,9 @@ export class SoftwareRegistry {
     }
 
     const def = session.softwareDef;
+    const previousReleases = Array.from(this.installedSoftware.values()).filter(
+      (software) => software.appId === def.appId,
+    );
     const createdShortcuts: string[] = [];
 
     if (session.selectedOptions.createDesktopShortcut) {
@@ -370,6 +373,15 @@ export class SoftwareRegistry {
         : undefined,
       shortcuts: createdShortcuts,
     };
+
+    for (const previous of previousReleases) {
+      for (const shortcutPath of previous.shortcuts) {
+        if (!createdShortcuts.includes(shortcutPath)) {
+          this.vfs.deletePermanently(shortcutPath);
+        }
+      }
+      this.installedSoftware.delete(previous.id);
+    }
 
     this.installedSoftware.set(record.id, record);
     this.activeInstallers.delete(sessionId);
