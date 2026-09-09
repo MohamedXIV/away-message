@@ -94,4 +94,17 @@ describe('InventoryEngine exact owned hardware installation', () => {
     expect(() => inventory.installOwnedHardware('ram-b', 'ram:2')).toThrow(/RAM|slot|motherboard/i);
     expect(inventory.getState()).toEqual(before);
   });
+
+  it('blocks replacing an occupied primary storage slot until OS/VFS migration is explicitly supported', () => {
+    const inventory = inventoryWith([
+      owned('disk-primary', 'hdd_quantum_2gb', 'hardware', 'installed', 'storage:0'),
+      owned('disk-upgrade', 'hdd_10gb'),
+    ]);
+    const before = inventory.getState();
+
+    expect(() => inventory.installOwnedHardware('disk-upgrade', 'storage:0')).toThrow(
+      /primary|storage|OS|VFS|migration|preserv/i,
+    );
+    expect(inventory.getState()).toEqual(before);
+  });
 });
