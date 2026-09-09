@@ -3,6 +3,7 @@ import { STATIC_OS_CATALOG } from '../../src/engine/OsCatalog';
 import {
   getOsPresentationProfile,
   resolveActiveOsPresentation,
+  resolveWindowTransition,
 } from '../../src/desktop/host/OsPresentation';
 
 describe('central Orion presentation resolver', () => {
@@ -28,5 +29,14 @@ describe('central Orion presentation resolver', () => {
     expect(resolveActiveOsPresentation('Orion_5.0')?.capabilities).toEqual(
       getOsPresentationProfile('Orion_5.0').capabilities,
     );
+  });
+
+  it('deterministically collapses OS window transitions when reduced motion is requested', () => {
+    const profile = getOsPresentationProfile('Orion_7.0');
+
+    expect(resolveWindowTransition(profile, 'open', false)).toBe('gloss-zoom');
+    expect(resolveWindowTransition(profile, 'minimize', false)).toBe('fade-collapse');
+    expect(resolveWindowTransition(profile, 'open', true)).toBe('snap');
+    expect(resolveWindowTransition(profile, 'minimize', true)).toBe('snap');
   });
 });
