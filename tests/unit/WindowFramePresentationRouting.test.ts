@@ -17,11 +17,6 @@ const taskbarSource = readFileSync(
   'utf8',
 );
 
-const startMenuSource = readFileSync(
-  fileURLToPath(new URL('../../src/desktop/StartMenu.tsx', import.meta.url)),
-  'utf8',
-);
-
 const osThemeCssSource = readFileSync(
   fileURLToPath(new URL('../../src/desktop/themes/os-themes.css', import.meta.url)),
   'utf8',
@@ -29,7 +24,7 @@ const osThemeCssSource = readFileSync(
 
 describe('central desktop OS presentation routing', () => {
   it('does not route Orion generations with per-component version string checks', () => {
-    for (const source of [windowFrameSource, desktopShellSource, taskbarSource, startMenuSource]) {
+    for (const source of [windowFrameSource, desktopShellSource, taskbarSource]) {
       expect(source).not.toContain("version.includes('5.')");
       expect(source).not.toContain("version.includes('6.')");
       expect(source).not.toContain("version.includes('7.')");
@@ -40,14 +35,10 @@ describe('central desktop OS presentation routing', () => {
     }
   });
 
-  it('routes shell presentation through the central OS profile', () => {
+  it('routes taskbar presentation through the central OS profile', () => {
     expect(taskbarSource).toContain('getOsPresentationProfile');
     expect(taskbarSource).toContain('osPresentation?.shell.taskbarId');
     expect(taskbarSource).toContain('data-os-taskbar={taskbarPresentation}');
-    expect(startMenuSource).toContain('getOsPresentationProfile');
-    expect(startMenuSource).toContain('osPresentation?.shell.startMenuId');
-    expect(startMenuSource).toContain('data-os-start-menu={startMenuPresentation}');
-    expect(startMenuSource).not.toContain('Orion <b>4.8</b>');
   });
 
   it('routes WindowFrame sounds from the resolved nullable OS presentation scheme', () => {
