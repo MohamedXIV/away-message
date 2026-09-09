@@ -70,4 +70,28 @@ describe('InventoryEngine exact owned hardware installation', () => {
     expect(() => inventory.installOwnedHardware('disk-a', 'ram:1')).toThrow(/compatible|ram/i);
     expect(inventory.getState()).toEqual(before);
   });
+
+  it('rejects a CPU whose socket does not match the exact installed motherboard atomically', () => {
+    const inventory = inventoryWith([
+      owned('board-a', 'mb_standard_atx', 'hardware', 'installed', 'motherboard'),
+      owned('cpu-old', 'cpu_celeron_366', 'hardware', 'installed', 'cpu'),
+      owned('cpu-new', 'cpu_pentium3_933'),
+    ]);
+    const before = inventory.getState();
+
+    expect(() => inventory.installOwnedHardware('cpu-new', 'cpu')).toThrow(/socket|motherboard|Slot-1/i);
+    expect(inventory.getState()).toEqual(before);
+  });
+
+  it('enforces the installed motherboard RAM slot count before committing an exact instance', () => {
+    const inventory = inventoryWith([
+      owned('board-a', 'mb_standard_atx', 'hardware', 'installed', 'motherboard'),
+      owned('ram-a', 'ram_sdram_64', 'hardware', 'installed', 'ram:0'),
+      owned('ram-b', 'ram_sdram_128'),
+    ]);
+    const before = inventory.getState();
+
+    expect(() => inventory.installOwnedHardware('ram-b', 'ram:2')).toThrow(/RAM|slot|motherboard/i);
+    expect(inventory.getState()).toEqual(before);
+  });
 });
