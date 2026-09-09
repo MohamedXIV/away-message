@@ -4,10 +4,10 @@
 import React, { createContext, useContext, useMemo } from 'react';
 import type {
   ConnectionType,
-  DownloadManagerType,
   DownloadTask,
   OsVersion,
 } from '../../engine/types';
+import type { DownloadClientProfile } from '../../engine/DownloadManager';
 import { useSimulationStore } from '../../store/useSimulationStore';
 import { useWindowStore } from '../../store/useWindowStore';
 import { soundManager } from '../../audio/SoundManager';
@@ -79,7 +79,7 @@ export interface OsHostApi {
       totalBytes: number;
       sourceMaxKbps?: number;
       fileKind?: 'executable' | 'installer' | 'archive' | 'audio' | 'image' | 'text';
-      manager?: DownloadManagerType;
+      clientProfile?: DownloadClientProfile;
     }) => void;
     cancelDownload: (taskId: string) => void;
   };
@@ -108,6 +108,8 @@ export interface OsHostProviderProps {
 }
 
 export const OsHostProvider: React.FC<OsHostProviderProps> = ({ windowId, children }) => {
+  const engine = useSimulationStore((s) => s.engine);
+  const syncStateFromEngine = useSimulationStore((s) => s.syncStateFromEngine);
   const osVersion = useSimulationStore((s) => s.state.os.currentOsId);
   const computerAssembled = useSimulationStore((s) => s.state.computer.assembled);
   const computerPoweredOn = useSimulationStore((s) => s.state.computer.poweredOn);
@@ -125,7 +127,6 @@ export const OsHostProvider: React.FC<OsHostProviderProps> = ({ windowId, childr
 
   const createFile = useSimulationStore((s) => s.createFile);
   const deleteFile = useSimulationStore((s) => s.deleteFile);
-  const startDownloadStore = useSimulationStore((s) => s.startDownload);
   const cancelDownloadStore = useSimulationStore((s) => s.cancelDownload);
 
   const api: OsHostApi = useMemo(() => {
@@ -187,15 +188,22 @@ export const OsHostProvider: React.FC<OsHostProviderProps> = ({ windowId, childr
         effectiveKbps: networkState.effectiveKbps,
         transfers: Array.isArray(downloads) ? downloads : Object.values(downloads || {}),
         startDownload: (params) => {
-          startDownloadStore({
-            sourceId: params.sourceId,
-            url: params.url,
-            fileName: params.fileName,
-            totalBytes: params.totalBytes,
-            sourceMaxKbps: params.sourceMaxKbps ?? networkState.effectiveKbps,
-            fileKind: params.fileKind,
-            manager: params.manager,
-          });
+          if (engine.world.getFlag('rent_overdue')) return;
+          try {
+            engine.downloads.startDownload({
+              sourceId: params.sourceId,
+              sourceUrl: params.url,
+              fileName: params.fileName,
+              totalBytes: params.totalBytes,
+              sourceMaxKbps: params.sourceMaxKbps ?? networkState.effectiveKbps,
+              fileKind: params.fileKind,
+              clientProfile: params.clientProfile,
+              currentMinute: engine.clock.getTotalMinutes(),
+            });
+            syncStateFromEngine();
+          } catch {
+            // Host API mirrors the existing void store action contract; engine validation remains authoritative.
+          }
         },
         cancelDownload: (taskId) => cancelDownloadStore(taskId),
       },
@@ -223,6 +231,8 @@ export const OsHostProvider: React.FC<OsHostProviderProps> = ({ windowId, childr
     };
   }, [
     windowId,
+    engine,
+    syncStateFromEngine,
     osVersion,
     computerAssembled,
     computerPoweredOn,
@@ -238,7 +248,6 @@ export const OsHostProvider: React.FC<OsHostProviderProps> = ({ windowId, childr
     setWindowTitle,
     createFile,
     deleteFile,
-    startDownloadStore,
     cancelDownloadStore,
   ]);
 
