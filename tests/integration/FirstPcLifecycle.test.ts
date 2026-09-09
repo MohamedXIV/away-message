@@ -83,6 +83,11 @@ describe('Issue #14 canonical first-PC lifecycle', () => {
     expect(installedPulse).toMatchObject({ appId: 'app.pulse', version: '5.2' });
     expect(installedPulse52(engine)).toMatchObject({ appId: 'app.pulse', version: '5.2' });
 
+    // Orion 5.0 is authored as a Day 6 release. Advance through the public
+    // simulation-time API rather than bypassing release availability in the test.
+    engine.advanceGameMinutes((6 - engine.getState().time.day) * 24 * 60, '#14 wait for Orion 5.0 release');
+    expect(engine.getState().time.day).toBe(6);
+
     // Earn later-upgrade money through the public economy API; starter price remains independently proven above.
     engine.economy.earnCash(200, '#14 integration fixture earnings');
     expect(engine.ejectOwnedMediaAtHome().success).toBe(true);
@@ -102,7 +107,7 @@ describe('Issue #14 canonical first-PC lifecycle', () => {
     const orion50Disc = ownedInstance(engine, 'media_orion_50_setup');
     expect(engine.insertOwnedMediaAtHome(orion50Disc).success).toBe(true);
     const osUpgrade = engine.prepareOsInstallFromInsertedMedia();
-    expect(osUpgrade.success).toBe(true);
+    expect(osUpgrade.success, osUpgrade.error).toBe(true);
     expect(osUpgrade.data).toMatchObject({ targetOs: 'Orion_5.0', mode: 'upgrade' });
     expect(engine.commitOsInstall(osUpgrade.data!).success).toBe(true);
     expect(engine.getState().os.currentOsId).toBe('Orion_5.0');
