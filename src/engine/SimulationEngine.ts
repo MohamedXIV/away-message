@@ -178,9 +178,13 @@ export class SimulationEngine extends SimulationEngineCore {
 
     const isRamSlot = slot.startsWith('ram:');
     const isCpuSlot = slot === 'cpu';
+    const isNetworkSlot = slot === 'network';
     const isActiveMonitorSlot = slot === 'monitor:0';
-    if (!isRamSlot && !isCpuSlot && !isActiveMonitorSlot) {
-      return { success: false, error: 'This at-home install slice currently supports RAM, CPU, and the active monitor.' };
+    if (!isRamSlot && !isCpuSlot && !isNetworkSlot && !isActiveMonitorSlot) {
+      return {
+        success: false,
+        error: 'This at-home install slice currently supports RAM, CPU, network cards, and the active monitor.',
+      };
     }
 
     let ramSlotIndex: number | null = null;
@@ -216,6 +220,15 @@ export class SimulationEngine extends SimulationEngineCore {
       ) {
         return { success: false, error: 'The selected owned item is not an installable CPU.' };
       }
+    } else if (isNetworkSlot) {
+      if (
+        catalog?.componentKind !== 'network' ||
+        !component ||
+        !('type' in component) ||
+        !('speedKbps' in component)
+      ) {
+        return { success: false, error: 'The selected owned item is not an installable network card.' };
+      }
     } else if (
       catalog?.componentKind !== 'monitor' ||
       !component ||
@@ -250,6 +263,12 @@ export class SimulationEngine extends SimulationEngineCore {
         const cpu = component as NonNullable<typeof computerBefore.cpu>;
         this.hardware.loadState({
           computer: { ...computerBefore, cpu: { ...cpu } },
+          display: displayBefore,
+        });
+      } else if (isNetworkSlot) {
+        const networkCard = component as NonNullable<typeof computerBefore.networkCard>;
+        this.hardware.loadState({
+          computer: { ...computerBefore, networkCard: { ...networkCard } },
           display: displayBefore,
         });
       } else {
