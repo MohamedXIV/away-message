@@ -83,8 +83,6 @@ export class SimulationEngine extends SimulationEngineCore {
 
     const coreInitial: Partial<TransportSimulationState> = {
       ...initialState,
-      // HardwareEngine consumes these hidden compatibility roots and derives
-      // the flat projection. They never survive HardwareEngine.getState().
       hardware: {
         ...(initialState?.hardware ?? ({} as CanonicalHardwareState)),
         computer,
@@ -94,7 +92,6 @@ export class SimulationEngine extends SimulationEngineCore {
         currentOsId: null,
         installedPatchIds: [],
       },
-      // No OS means no browser or other ghost preinstalled software.
       installedSoftware,
     };
 
@@ -124,9 +121,6 @@ export class SimulationEngine extends SimulationEngineCore {
   }
 
   public override exportSnapshot(): LiveSimulationState {
-    // Preserve SimulationEngineCore's save guarantee: it explicitly invalidates
-    // its reference cache before exporting, so direct sub-engine mutations made
-    // immediately before save cannot disappear behind a stale aggregate state.
     const base = super.exportSnapshot();
     const snapshot = {
       ...base,
@@ -138,8 +132,6 @@ export class SimulationEngine extends SimulationEngineCore {
       installedSoftware: this.software.getInstalledSoftware(),
     } as LiveSimulationState;
 
-    // super.exportSnapshot() rebuilt the core cache, so the old v6 aggregate is
-    // no longer paired with the live core reference and must not be reused.
     this.v6CachedBase = null;
     this.v6CachedState = null;
     return JSON.parse(JSON.stringify(snapshot)) as LiveSimulationState;
@@ -550,10 +542,10 @@ export class SimulationEngine extends SimulationEngineCore {
       return this.purchaseStoreItem(action.storeId, action.skuId);
     }
 
-    if (action.type === 'HARDWARE_UPGRADE_OS' && this.os.getCurrentOsId() === null) {
+    if (action.type === 'HARDWARE_UPGRADE_OS') {
       return {
         success: false,
-        error: 'No operating system is installed. Boot from setup media to install one.',
+        error: 'Legacy OS upgrades are retired. Buy, insert, and boot from owned setup media instead.',
       };
     }
 
@@ -567,10 +559,6 @@ export class SimulationEngine extends SimulationEngineCore {
 
     this.invalidateV6Cache();
 
-    // The preserved core already restores clock/economy/world/VFS/social state
-    // correctly. Supply canonical computer/display roots through its one
-    // compatibility boundary so HardwareEngine.loadState receives real v6
-    // authority rather than the derived flat projection.
     const compatSnapshot: TransportSimulationState = {
       ...snapshot,
       hardware: {
