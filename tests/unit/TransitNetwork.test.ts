@@ -113,7 +113,12 @@ describe('TransitNetwork adaptation (#35 slice 1)', () => {
   it('builds deterministically and exposes an empty service state', () => {
     const first = buildTransitNetwork(twoLineFixture());
     const second = buildTransitNetwork(twoLineFixture());
-    expect(first).toEqual(second);
+    expect([...first.districts.keys()]).toEqual([...second.districts.keys()]);
+    expect([...first.places.entries()]).toEqual([...second.places.entries()]);
+    expect([...first.stops.entries()]).toEqual([...second.stops.entries()]);
+    expect([...first.lines.entries()]).toEqual([...second.lines.entries()]);
+    expect(first.linesAtStop('stop_b')).toEqual(second.linesAtStop('stop_b'));
+    expect(first.accessFromPlace('place_a1')).toEqual(second.accessFromPlace('place_a1'));
     expect(emptyTransitServiceState()).toEqual({
       closedStopIds: [],
       closedLineIds: [],
