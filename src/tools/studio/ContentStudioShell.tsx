@@ -11,6 +11,7 @@ import { ArchetypesTab } from './tabs/ArchetypesTab';
 import { DialoguePoolsTab } from './tabs/DialoguePoolsTab';
 import { AffinitySeedsTab } from './tabs/AffinitySeedsTab';
 import { WorldBasicsTab } from './tabs/WorldBasicsTab';
+import { TransitTab } from './tabs/TransitTab';
 import { RawInspectorTab } from './tabs/RawInspectorTab';
 import { ValidationErrorsModal } from './components/ValidationErrorsModal';
 
@@ -69,6 +70,9 @@ export const ContentStudioShell: React.FC<Props> = ({ store }) => {
   const worldCount =
     Object.keys(studio.tables['districts'] ?? {}).length +
     Object.keys(studio.tables['places'] ?? {}).length;
+  const transitCount =
+    Object.keys(studio.tables['transitStops'] ?? {}).length +
+    Object.keys(studio.tables['busLines'] ?? {}).length;
   const errorCount = studio.validationErrors.length;
 
   if (isMinimized) {
@@ -126,6 +130,7 @@ export const ContentStudioShell: React.FC<Props> = ({ store }) => {
             { id: 'dialoguePools', label: 'Dialogue Pools', count: poolCount },
             { id: 'affinitySeeds', label: 'Affinity Seeds', count: seedCount },
             { id: 'world', label: 'World', count: worldCount },
+            { id: 'transit', label: 'Transit', count: transitCount },
             { id: 'raw', label: 'Raw DB' },
           ].map((tab) => {
             const isActive = activeTab === tab.id;
@@ -225,6 +230,7 @@ export const ContentStudioShell: React.FC<Props> = ({ store }) => {
         {activeTab === 'dialoguePools' && <DialoguePoolsTab studio={studio} />}
         {activeTab === 'affinitySeeds' && <AffinitySeedsTab studio={studio} />}
         {activeTab === 'world' && <WorldBasicsTab studio={studio} />}
+        {activeTab === 'transit' && <TransitTab studio={studio} />}
         {activeTab === 'raw' && <RawInspectorTab studio={studio} />}
       </main>
 
