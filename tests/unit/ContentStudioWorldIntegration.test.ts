@@ -267,4 +267,48 @@ describe('Content Studio Living-World Integration & Acceptance (#52)', () => {
     expect(exportedJson).toContain('"views"');
     expect(exportedJson).toContain('"lightProfiles"');
   });
+
+  it('13. deleteRow cleanly removes rows across living-world tables in content store', () => {
+    const store = createContentStore();
+    store.setTables(tablesFromGenerated());
+
+    const tableKeys = [
+      'districts',
+      'places',
+      'transitStops',
+      'busLines',
+      'items',
+      'containers',
+      'spaces',
+      'views',
+      'anchors',
+      'interactions',
+      'assets',
+      'lightProfiles',
+      'audioProfiles',
+      'ambientProfiles',
+    ] as const;
+
+    for (const table of tableKeys) {
+      const testId = `test_del_${table}`;
+      store.setRow(table, testId, { name: `Test ${table}` });
+      expect(store.hasRow(table, testId)).toBe(true);
+
+      store.delRow(table, testId);
+      expect(store.hasRow(table, testId)).toBe(false);
+    }
+  });
+
+  it('14. tag and semantic list editing produces valid JSON conforming to content schema', () => {
+    const store = createContentStore();
+    store.setTables(tablesFromGenerated());
+
+    const tagsArray = ['quiet', 'scenic', 'historic'];
+    store.setCell('districts', 'district_a', 'tags', JSON.stringify(tagsArray));
+    expect(JSON.parse(String(store.getCell('districts', 'district_a', 'tags') ?? '[]'))).toEqual(tagsArray);
+
+    // Validation passes with clean tags
+    const tables = store.getTables() as Record<string, Record<string, Record<string, unknown>>>;
+    expect(validateContent(tables)).toEqual([]);
+  });
 });
