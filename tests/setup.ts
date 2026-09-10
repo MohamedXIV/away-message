@@ -2,6 +2,37 @@ import 'fake-indexeddb/auto';
 import { beforeEach } from 'vitest';
 import { db } from '../src/persistence/db';
 
+// Lightweight 2D canvas context mock for tests running under jsdom
+if (typeof window !== 'undefined' && typeof HTMLCanvasElement !== 'undefined') {
+  const dummyContext = {
+    fillRect: () => {},
+    clearRect: () => {},
+    getImageData: (_x: number, _y: number, w = 1, h = 1) => ({ data: new Uint8ClampedArray(w * h * 4 || 16) }),
+    putImageData: () => {},
+    createImageData: () => ({ data: new Uint8ClampedArray(4) }),
+    setTransform: () => {},
+    drawImage: () => {},
+    save: () => {},
+    fillText: () => {},
+    restore: () => {},
+    beginPath: () => {},
+    moveTo: () => {},
+    lineTo: () => {},
+    closePath: () => {},
+    stroke: () => {},
+    fill: () => {},
+    arc: () => {},
+    measureText: () => ({ width: 0 }),
+    transform: () => {},
+    resetTransform: () => {},
+  };
+
+  HTMLCanvasElement.prototype.getContext = function (type: string) {
+    if (type === '2d') return dummyContext as unknown as CanvasRenderingContext2D;
+    return null;
+  } as any;
+}
+
 beforeEach(async () => {
   // Clear fake-indexeddb tables before every unit/integration test for complete test isolation
   try {

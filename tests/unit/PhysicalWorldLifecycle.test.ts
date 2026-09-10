@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 // tests/unit/PhysicalWorldLifecycle.test.ts
 
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { PhaserWorldRuntime } from '../../src/world/phaser/PhaserWorldRuntime';
 import { createTechnicalFixtureProjection } from '../../src/world/phaser/technicalFixture';
 import type { WorldInteractionIntent } from '../../src/world/phaser/types';
@@ -10,35 +10,6 @@ describe('Phaser Physical World Runtime Lifecycle', () => {
   let container: HTMLDivElement;
 
   beforeEach(() => {
-    // Setup jsdom canvas mock for headless testing
-    const dummyContext = {
-      fillRect: vi.fn(),
-      clearRect: vi.fn(),
-      getImageData: vi.fn(() => ({ data: new Uint8ClampedArray(16) })),
-      putImageData: vi.fn(),
-      createImageData: vi.fn(() => ({ data: new Uint8ClampedArray(4) })),
-      setTransform: vi.fn(),
-      drawImage: vi.fn(),
-      save: vi.fn(),
-      fillText: vi.fn(),
-      restore: vi.fn(),
-      beginPath: vi.fn(),
-      moveTo: vi.fn(),
-      lineTo: vi.fn(),
-      closePath: vi.fn(),
-      stroke: vi.fn(),
-      fill: vi.fn(),
-      arc: vi.fn(),
-      measureText: vi.fn(() => ({ width: 0 })),
-      transform: vi.fn(),
-      resetTransform: vi.fn(),
-    };
-
-    HTMLCanvasElement.prototype.getContext = vi.fn((type: string) => {
-      if (type === '2d') return dummyContext as unknown as CanvasRenderingContext2D;
-      return null;
-    }) as any;
-
     container = document.createElement('div');
     Object.defineProperty(container, 'clientWidth', { value: 1280, configurable: true });
     Object.defineProperty(container, 'clientHeight', { value: 720, configurable: true });
