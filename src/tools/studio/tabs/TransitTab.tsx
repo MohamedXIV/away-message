@@ -8,7 +8,10 @@ import {
   parseNumberList,
   parseStringList,
   resizeSegmentMinutes,
+  reorderBusLineStops,
 } from '../transitAuthoring';
+import { FieldErrorDisplay, RowErrorBanner } from '../components/FieldErrorDisplay';
+
 
 interface Props {
   studio: StudioStoreContext;
@@ -237,51 +240,75 @@ export const TransitTab: React.FC<Props> = ({ studio }) => {
               <h2 className="text-lg font-bold text-white">{String(activeStop['name'] || activeStopId)}</h2>
               <div className="text-xs font-mono text-purple-400">Transit stop: @{activeStopId}</div>
             </div>
+
+            <RowErrorBanner allErrors={studio.validationErrors} table="transitStops" rowId={activeStopId} />
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <label className="text-xs font-bold text-purple-300">
-                Name
-                <input
-                  value={String(activeStop['name'] ?? '')}
-                  onChange={(event) => studio.setCell('transitStops', activeStopId, 'name', event.target.value)}
-                  className="mt-1 w-full rounded bg-[#130d24] border border-purple-800/60 px-3 py-2 text-sm text-white"
-                />
-              </label>
-              <label className="text-xs font-bold text-purple-300">
-                District
-                <select
-                  value={String(activeStop['districtId'] ?? '')}
-                  onChange={(event) => {
-                    studio.setCell('transitStops', activeStopId, 'districtId', event.target.value);
-                    studio.setCell('transitStops', activeStopId, 'placeId', '');
-                  }}
-                  className="mt-1 w-full rounded bg-[#130d24] border border-purple-800/60 px-3 py-2 text-sm text-white"
-                >
-                  {districtIds.map((id) => <option key={id} value={id}>{String(districts[id]?.['name'] || id)}</option>)}
-                </select>
-              </label>
-              <label className="text-xs font-bold text-purple-300">
-                Linked place
-                <select
-                  value={String(activeStop['placeId'] ?? '')}
-                  onChange={(event) => studio.setCell('transitStops', activeStopId, 'placeId', event.target.value)}
-                  className="mt-1 w-full rounded bg-[#130d24] border border-purple-800/60 px-3 py-2 text-sm text-white"
-                >
-                  <option value="">No linked place</option>
-                  {placesForDistrict(String(activeStop['districtId'] ?? '')).map((id) => (
-                    <option key={id} value={id}>{String(places[id]?.['name'] || id)}</option>
-                  ))}
-                </select>
-              </label>
-              {(['mapX', 'mapY'] as const).map((cell) => (
-                <label key={cell} className="text-xs font-bold text-purple-300">
-                  {cell}
+              <div>
+                <label className="text-xs font-bold text-purple-300">
+                  Name
                   <input
-                    type="number"
-                    value={Number(activeStop[cell] ?? 0)}
-                    onChange={(event) => studio.setCell('transitStops', activeStopId, cell, Number(event.target.value))}
+                    value={String(activeStop['name'] ?? '')}
+                    onChange={(event) => studio.setCell('transitStops', activeStopId, 'name', event.target.value)}
                     className="mt-1 w-full rounded bg-[#130d24] border border-purple-800/60 px-3 py-2 text-sm text-white"
                   />
                 </label>
+                <FieldErrorDisplay allErrors={studio.validationErrors} table="transitStops" rowId={activeStopId} field="name" />
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-purple-300">
+                  District
+                  <select
+                    value={String(activeStop['districtId'] ?? '')}
+                    onChange={(event) => {
+                      studio.setCell('transitStops', activeStopId, 'districtId', event.target.value);
+                      studio.setCell('transitStops', activeStopId, 'placeId', '');
+                    }}
+                    className="mt-1 w-full rounded bg-[#130d24] border border-purple-800/60 px-3 py-2 text-sm text-white"
+                  >
+                    {districtIds.map((id) => (
+                      <option key={id} value={id}>
+                        {String(districts[id]?.['name'] || id)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <FieldErrorDisplay allErrors={studio.validationErrors} table="transitStops" rowId={activeStopId} field="districtId" />
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-purple-300">
+                  Linked place
+                  <select
+                    value={String(activeStop['placeId'] ?? '')}
+                    onChange={(event) => studio.setCell('transitStops', activeStopId, 'placeId', event.target.value)}
+                    className="mt-1 w-full rounded bg-[#130d24] border border-purple-800/60 px-3 py-2 text-sm text-white"
+                  >
+                    <option value="">No linked place</option>
+                    {placesForDistrict(String(activeStop['districtId'] ?? '')).map((id) => (
+                      <option key={id} value={id}>
+                        {String(places[id]?.['name'] || id)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <FieldErrorDisplay allErrors={studio.validationErrors} table="transitStops" rowId={activeStopId} field="placeId" />
+              </div>
+
+              {(['mapX', 'mapY'] as const).map((cell) => (
+                <div key={cell}>
+                  <label className="text-xs font-bold text-purple-300">
+                    {cell}
+                    <input
+                      type="number"
+                      value={Number(activeStop[cell] ?? 0)}
+                      onChange={(event) => studio.setCell('transitStops', activeStopId, cell, Number(event.target.value))}
+                      className="mt-1 w-full rounded bg-[#130d24] border border-purple-800/60 px-3 py-2 text-sm text-white"
+                    />
+                  </label>
+                  <FieldErrorDisplay allErrors={studio.validationErrors} table="transitStops" rowId={activeStopId} field={cell} />
+                </div>
               ))}
             </div>
           </div>
@@ -292,49 +319,66 @@ export const TransitTab: React.FC<Props> = ({ studio }) => {
               <div className="text-xs font-mono text-purple-400">Bus line: @{activeLineId}</div>
             </div>
 
+            <RowErrorBanner allErrors={studio.validationErrors} table="busLines" rowId={activeLineId} />
+
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
-              <label className="text-xs font-bold text-purple-300 xl:col-span-2">
-                Name
-                <input
-                  value={String(activeLine['name'] ?? '')}
-                  onChange={(event) => studio.setCell('busLines', activeLineId, 'name', event.target.value)}
-                  className="mt-1 w-full rounded bg-[#130d24] border border-purple-800/60 px-3 py-2 text-sm text-white"
-                />
-              </label>
-              <label className="text-xs font-bold text-purple-300">
-                Headway (minutes)
-                <input
-                  type="number"
-                  min={1}
-                  value={Number(activeLine['headwayMinutes'] ?? 20)}
-                  onChange={(event) => studio.setCell('busLines', activeLineId, 'headwayMinutes', Number(event.target.value))}
-                  className="mt-1 w-full rounded bg-[#130d24] border border-purple-800/60 px-3 py-2 text-sm text-white"
-                />
-              </label>
-              <label className="text-xs font-bold text-purple-300">
-                Fare
-                <input
-                  type="number"
-                  min={0}
-                  step="0.25"
-                  value={Number(activeLine['fare'] ?? 2)}
-                  onChange={(event) => studio.setCell('busLines', activeLineId, 'fare', Number(event.target.value))}
-                  className="mt-1 w-full rounded bg-[#130d24] border border-purple-800/60 px-3 py-2 text-sm text-white"
-                />
-              </label>
-              {(['serviceStartMinute', 'serviceEndMinute'] as const).map((cell) => (
-                <label key={cell} className="text-xs font-bold text-purple-300">
-                  {cell === 'serviceStartMinute' ? 'Service starts' : 'Service ends'}
+              <div className="xl:col-span-2">
+                <label className="text-xs font-bold text-purple-300">
+                  Name
+                  <input
+                    value={String(activeLine['name'] ?? '')}
+                    onChange={(event) => studio.setCell('busLines', activeLineId, 'name', event.target.value)}
+                    className="mt-1 w-full rounded bg-[#130d24] border border-purple-800/60 px-3 py-2 text-sm text-white"
+                  />
+                </label>
+                <FieldErrorDisplay allErrors={studio.validationErrors} table="busLines" rowId={activeLineId} field="name" />
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-purple-300">
+                  Headway (minutes)
+                  <input
+                    type="number"
+                    min={1}
+                    value={Number(activeLine['headwayMinutes'] ?? 20)}
+                    onChange={(event) => studio.setCell('busLines', activeLineId, 'headwayMinutes', Number(event.target.value))}
+                    className="mt-1 w-full rounded bg-[#130d24] border border-purple-800/60 px-3 py-2 text-sm text-white"
+                  />
+                </label>
+                <FieldErrorDisplay allErrors={studio.validationErrors} table="busLines" rowId={activeLineId} field="headwayMinutes" />
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-purple-300">
+                  Fare
                   <input
                     type="number"
                     min={0}
-                    max={1439}
-                    value={Number(activeLine[cell] ?? 0)}
-                    onChange={(event) => studio.setCell('busLines', activeLineId, cell, Number(event.target.value))}
+                    step="0.25"
+                    value={Number(activeLine['fare'] ?? 2)}
+                    onChange={(event) => studio.setCell('busLines', activeLineId, 'fare', Number(event.target.value))}
                     className="mt-1 w-full rounded bg-[#130d24] border border-purple-800/60 px-3 py-2 text-sm text-white"
                   />
-                  <div className="mt-1 text-[10px] text-gray-400">{minuteToTimeStr(Number(activeLine[cell] ?? 0))}</div>
                 </label>
+                <FieldErrorDisplay allErrors={studio.validationErrors} table="busLines" rowId={activeLineId} field="fare" />
+              </div>
+
+              {(['serviceStartMinute', 'serviceEndMinute'] as const).map((cell) => (
+                <div key={cell}>
+                  <label className="text-xs font-bold text-purple-300">
+                    {cell === 'serviceStartMinute' ? 'Service starts' : 'Service ends'}
+                    <input
+                      type="number"
+                      min={0}
+                      max={1439}
+                      value={Number(activeLine[cell] ?? 0)}
+                      onChange={(event) => studio.setCell('busLines', activeLineId, cell, Number(event.target.value))}
+                      className="mt-1 w-full rounded bg-[#130d24] border border-purple-800/60 px-3 py-2 text-sm text-white"
+                    />
+                    <div className="mt-1 text-[10px] text-gray-400 font-mono">{minuteToTimeStr(Number(activeLine[cell] ?? 0))}</div>
+                  </label>
+                  <FieldErrorDisplay allErrors={studio.validationErrors} table="busLines" rowId={activeLineId} field={cell} />
+                </div>
               ))}
             </div>
 
@@ -342,7 +386,9 @@ export const TransitTab: React.FC<Props> = ({ studio }) => {
               <div className="flex items-center justify-between gap-3">
                 <div>
                   <h3 className="text-xs font-bold uppercase tracking-wider text-purple-300">Ordered stop sequence</h3>
-                  <p className="text-[11px] text-gray-400">One segment duration is stored for each adjacent pair.</p>
+                  <p className="text-[11px] text-gray-400">
+                    {activeLineStops.length} stops &middot; {Math.max(0, activeLineStops.length - 1)} segments. Reordering preserves adjacent segment mapping.
+                  </p>
                 </div>
                 <select
                   value=""
@@ -355,72 +401,82 @@ export const TransitTab: React.FC<Props> = ({ studio }) => {
                 >
                   <option value="">+ Add stop</option>
                   {stopIds.filter((id) => !activeLineStops.includes(id)).map((id) => (
-                    <option key={id} value={id}>{String(stops[id]?.['name'] || id)}</option>
+                    <option key={id} value={id}>
+                      {String(stops[id]?.['name'] || id)}
+                    </option>
                   ))}
                 </select>
               </div>
 
-              <div className="space-y-2">
+              <FieldErrorDisplay allErrors={studio.validationErrors} table="busLines" rowId={activeLineId} field="stopIds" />
+              <FieldErrorDisplay allErrors={studio.validationErrors} table="busLines" rowId={activeLineId} field="segmentMinutes" />
+
+              <div className="space-y-1">
                 {activeLineStops.map((stopId, index) => (
-                  <div key={`${stopId}-${index}`} className="flex items-center gap-2 rounded border border-purple-900/60 bg-[#100820] p-2">
-                    <span className="w-6 text-center text-xs font-mono text-purple-400">{index + 1}</span>
-                    <span className="flex-1 text-xs text-white">{String(stops[stopId]?.['name'] || stopId)}</span>
-                    <button
-                      type="button"
-                      disabled={index === 0}
-                      onClick={() => {
-                        const next = [...activeLineStops];
-                        [next[index - 1], next[index]] = [next[index]!, next[index - 1]!];
-                        setLineStops(next);
-                      }}
-                      className="px-2 py-1 text-xs rounded bg-purple-950 disabled:opacity-30"
-                    >
-                      Up
-                    </button>
-                    <button
-                      type="button"
-                      disabled={index === activeLineStops.length - 1}
-                      onClick={() => {
-                        const next = [...activeLineStops];
-                        [next[index], next[index + 1]] = [next[index + 1]!, next[index]!];
-                        setLineStops(next);
-                      }}
-                      className="px-2 py-1 text-xs rounded bg-purple-950 disabled:opacity-30"
-                    >
-                      Down
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setLineStops(activeLineStops.filter((_, stopIndex) => stopIndex !== index))}
-                      className="px-2 py-1 text-xs rounded bg-red-950/60 text-red-300"
-                    >
-                      Remove
-                    </button>
-                  </div>
+                  <React.Fragment key={`${stopId}-${index}`}>
+                    <div className="flex items-center gap-2 rounded border border-purple-900/60 bg-[#100820] p-2">
+                      <span className="w-6 text-center text-xs font-mono text-purple-400 font-bold">{index + 1}</span>
+                      <span className="flex-1 text-xs text-white font-semibold">
+                        {String(stops[stopId]?.['name'] || stopId)}
+                      </span>
+                      <span className="text-[10px] font-mono text-purple-400 mr-2">@{stopId}</span>
+                      <button
+                        type="button"
+                        disabled={index === 0}
+                        onClick={() => {
+                          const result = reorderBusLineStops(activeLineStops, activeSegments, index, index - 1);
+                          studio.setCell('busLines', activeLineId, 'stopIds', JSON.stringify(result.stops));
+                          studio.setCell('busLines', activeLineId, 'segmentMinutes', JSON.stringify(result.segments));
+                        }}
+                        className="px-2 py-1 text-xs rounded bg-purple-950 disabled:opacity-30 hover:bg-purple-900 text-purple-200"
+                      >
+                        ▲ Up
+                      </button>
+                      <button
+                        type="button"
+                        disabled={index === activeLineStops.length - 1}
+                        onClick={() => {
+                          const result = reorderBusLineStops(activeLineStops, activeSegments, index, index + 1);
+                          studio.setCell('busLines', activeLineId, 'stopIds', JSON.stringify(result.stops));
+                          studio.setCell('busLines', activeLineId, 'segmentMinutes', JSON.stringify(result.segments));
+                        }}
+                        className="px-2 py-1 text-xs rounded bg-purple-950 disabled:opacity-30 hover:bg-purple-900 text-purple-200"
+                      >
+                        ▼ Down
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setLineStops(activeLineStops.filter((_, stopIndex) => stopIndex !== index))}
+                        className="px-2 py-1 text-xs rounded bg-red-950/60 hover:bg-red-900/60 text-red-300 font-bold"
+                      >
+                        Remove
+                      </button>
+                    </div>
+
+                    {index < activeLineStops.length - 1 && (
+                      <div className="flex items-center gap-2 pl-8 py-1">
+                        <div className="w-0.5 h-6 bg-purple-600/60 ml-2.5" />
+                        <div className="flex items-center gap-2 rounded bg-[#0b0514] border border-purple-800/40 px-3 py-1 text-xs text-purple-300">
+                          <span className="text-purple-400 font-mono text-[11px]">↓ Segment ride:</span>
+                          <input
+                            aria-label={`Segment duration between stop ${index + 1} and stop ${index + 2}`}
+                            type="number"
+                            min={1}
+                            value={activeSegments[index] ?? 10}
+                            onChange={(event) => {
+                              const next = [...activeSegments];
+                              next[index] = Math.max(1, Number(event.target.value));
+                              studio.setCell('busLines', activeLineId, 'segmentMinutes', JSON.stringify(next));
+                            }}
+                            className="w-16 rounded bg-[#130d24] border border-purple-700/60 px-2 py-0.5 text-xs text-white font-mono text-center"
+                          />
+                          <span className="text-gray-400 font-mono">min</span>
+                        </div>
+                      </div>
+                    )}
+                  </React.Fragment>
                 ))}
               </div>
-
-              {activeSegments.map((minutes, index) => (
-                <label key={index} className="flex items-center gap-3 text-xs text-purple-300">
-                  <span className="flex-1">
-                    {String(stops[activeLineStops[index]!]?.['name'] || activeLineStops[index])}
-                    {' → '}
-                    {String(stops[activeLineStops[index + 1]!]?.['name'] || activeLineStops[index + 1])}
-                  </span>
-                  <input
-                    type="number"
-                    min={1}
-                    value={minutes}
-                    onChange={(event) => {
-                      const next = [...activeSegments];
-                      next[index] = Number(event.target.value);
-                      studio.setCell('busLines', activeLineId, 'segmentMinutes', JSON.stringify(next));
-                    }}
-                    className="w-20 rounded bg-[#0d0718] border border-purple-800/60 px-2 py-1.5 text-xs text-white"
-                  />
-                  <span className="text-gray-500">min</span>
-                </label>
-              ))}
             </div>
           </div>
         ) : (
@@ -434,3 +490,4 @@ export const TransitTab: React.FC<Props> = ({ studio }) => {
     </div>
   );
 };
+

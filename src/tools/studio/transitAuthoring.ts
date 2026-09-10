@@ -73,3 +73,83 @@ export function parseNumberList(value: unknown): number[] {
     return [];
   }
 }
+
+export interface TransitAccessLink {
+  stopId: string;
+  walkMinutes: number;
+}
+
+export function parseTransitAccess(value: unknown): TransitAccessLink[] {
+  if (typeof value !== 'string') return [];
+  try {
+    const parsed = JSON.parse(value);
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .filter((entry): entry is { stopId?: unknown; walkMinutes?: unknown } => Boolean(entry && typeof entry === 'object'))
+      .map((entry) => ({
+        stopId: String(entry.stopId ?? ''),
+        walkMinutes: typeof entry.walkMinutes === 'number' && Number.isFinite(entry.walkMinutes) ? entry.walkMinutes : 5,
+      }))
+      .filter((link) => link.stopId.length > 0);
+  } catch {
+    return [];
+  }
+}
+
+export function serializeTransitAccess(links: readonly TransitAccessLink[]): string {
+  return JSON.stringify(
+    links.map((link) => ({
+      stopId: link.stopId.trim(),
+      walkMinutes: Math.max(1, Math.round(link.walkMinutes || 1)),
+    })),
+  );
+}
+
+export function reorderBusLineStops(
+  currentStops: readonly string[],
+  currentSegments: readonly number[],
+  fromIndex: number,
+  toIndex: number,
+): { stops: string[]; segments: number[] } {
+  if (
+    fromIndex < 0 ||
+    fromIndex >= currentStops.length ||
+    toIndex < 0 ||
+    toIndex >= currentStops.length ||
+    fromIndex === toIndex
+  ) {
+    return {
+      stops: [...currentStops],
+      segments: resizeSegmentMinutes(currentSegments, currentStops.length),
+    };
+  }
+
+  const pairDurations = new Map<string, number>();
+  for (let i = 0; i < currentStops.length - 1; i++) {
+    const key = `${currentStops[i]}__${currentStops[i + 1]}`;
+    if (currentSegments[i] !== undefined) {
+      pairDurations.set(key, currentSegments[i]!);
+      const revKey = `${currentStops[i + 1]}__${currentStops[i]}`;
+      if (!pairDurations.has(revKey)) {
+        pairDurations.set(revKey, currentSegments[i]!);
+      }
+    }
+  }
+
+  const nextStops = [...currentStops];
+  const [moved] = nextStops.splice(fromIndex, 1);
+  nextStops.splice(toIndex, 0, moved!);
+
+  const nextSegments: number[] = [];
+  for (let i = 0; i < nextStops.length - 1; i++) {
+    const key = `${nextStops[i]}__${nextStops[i + 1]}`;
+    const known = pairDurations.get(key);
+    nextSegments.push(known !== undefined ? known : (currentSegments[i] ?? 10));
+  }
+
+  return {
+    stops: nextStops,
+    segments: nextSegments,
+  };
+}
+
