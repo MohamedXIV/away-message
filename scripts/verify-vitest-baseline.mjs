@@ -85,6 +85,7 @@ function runVitest() {
     encoding: 'utf8',
     env: process.env,
     stdio: ['inherit', 'pipe', 'pipe'],
+    shell: process.platform === 'win32',
   });
 
   const output = `${result.stdout ?? ''}${result.stderr ?? ''}`;
