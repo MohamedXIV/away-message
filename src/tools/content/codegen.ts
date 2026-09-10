@@ -18,6 +18,15 @@ export function validateCharacterId(id: string): { ok: boolean; error?: string }
   return { ok: true };
 }
 
+/** Stable world-content ids (districts, places, stops, lines): same shape as character ids. */
+export function validateWorldId(id: string): { ok: boolean; error?: string } {
+  if (!id || typeof id !== 'string') return { ok: false, error: 'World id must be a non-empty string.' };
+  if (!/^[a-z][a-z0-9_]{1,31}$/.test(id)) {
+    return { ok: false, error: 'World id must be snake_case: start with a letter, a-z/0-9/_, 2..32 chars.' };
+  }
+  return { ok: true };
+}
+
 const REACHES = new Set(['local', 'remote']);
 const HAIR_COLORS = new Set<HairColor>([
   'black', 'dark_brown', 'brown', 'light_brown', 'blonde', 'auburn', 'red', 'grey', 'dyed_blue', 'dyed_pink', 'dyed_green'
@@ -358,6 +367,661 @@ export function validateContent(tables: ContentTables): string[] {
     if (!Number.isInteger(version) || (version as number) < 1) errors.push(`dialoguePools/${key}.version: must be an int >= 1.`);
   }
 
+  // 7. World content (districts / places / transit stops / bus lines, #51 slice 1).
+  // Absent tables validate clean so character-only stores (e.g. Studio
+  // hydration from the character registry) keep passing.
+  errors.push(...validateWorldContent(tables));
+
+  // 8. World items/containers (#51 slice 2). Definition-only: no instance
+  // state (location, contents, owner, stock) belongs in these tables.
+  errors.push(...validateWorldItems(tables));
+
+  // 9. World spaces/views (#51 slice 3). Renderer-neutral authored
+  // hierarchy: a view is not a Phaser Scene.
+  errors.push(...validateWorldSpaces(tables));
+
+  // 10. World anchors/interactions (#51 slice 4). Authored placement and
+  // capability bindings only; runtime interaction state stays out.
+  errors.push(...validateWorldAnchors(tables));
+
+  // 11. World assets (#51 slice 5). Renderer-neutral references only;
+  // no renderer implementation lives here.
+  errors.push(...validateWorldAssets(tables));
+
+  // 12. World light/audio/ambient profiles (#51 slice 6). Authored
+  // configuration only; mutable light/weather/event state stays out.
+  errors.push(...validateWorldProfiles(tables));
+
+  return errors;
+}
+
+/**
+ * Semantic validation for the town content tables.
+ * Every error identifies table/id/field so Content Studio (#52) can show
+ * useful per-row feedback. Never repairs: invalid content fails loudly.
+ */
+export function validateWorldContent(tables: ContentTables): string[] {
+  const errors: string[] = [];
+  const districts = tables['districts'] ?? {};
+  const places = tables['places'] ?? {};
+  const transitStops = tables['transitStops'] ?? {};
+  const busLines = tables['busLines'] ?? {};
+
+  const num = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
+  const checkId = (table: string, id: string): boolean => {
+    const idCheck = validateWorldId(id);
+    if (!idCheck.ok) {
+      errors.push(`${table}/${id}: ${idCheck.error}`);
+      return false;
+    }
+    return true;
+  };
+  const checkName = (table: string, id: string, row: Record<string, unknown>): void => {
+    const name = row['name'];
+    if (typeof name !== 'string' || !name.trim() || name.length > 60) {
+      errors.push(`${table}/${id}.name: must be a non-empty string <= 60 chars.`);
+    }
+  };
+  const checkMapPoint = (table: string, id: string, row: Record<string, unknown>): void => {
+    for (const key of ['mapX', 'mapY']) {
+      if (!num(row[key])) errors.push(`${table}/${id}.${key}: must be a finite number.`);
+    }
+  };
+  const parseJsonArray = (table: string, id: string, field: string, raw: unknown): unknown[] | null => {
+    let parsed: unknown = null;
+    try {
+      parsed = JSON.parse(String(raw ?? '[]'));
+    } catch {
+      errors.push(`${table}/${id}.${field}: invalid JSON array.`);
+      return null;
+    }
+    if (!Array.isArray(parsed)) {
+      errors.push(`${table}/${id}.${field}: must be a JSON array.`);
+      return null;
+    }
+    return parsed;
+  };
+
+  // Districts.
+  for (const [id, row] of Object.entries(districts)) {
+    if (!row || typeof row !== 'object') {
+      errors.push(`districts/${id}: must be an object.`);
+      continue;
+    }
+    checkId('districts', id);
+    const r = row as Record<string, unknown>;
+    checkName('districts', id, r);
+    checkMapPoint('districts', id, r);
+    const tags = parseJsonArray('districts', id, 'tags', r['tags']);
+    if (tags) {
+      if (tags.length > 12) errors.push(`districts/${id}.tags: max 12 tags.`);
+      for (const tag of tags) {
+        if (typeof tag !== 'string' || !/^[a-z][a-z0-9_-]{1,23}$/.test(tag)) {
+          errors.push(`districts/${id}.tags: '${String(tag)}' must be a lowercase tag ≤ 24 chars.`);
+        }
+      }
+    }
+  }
+
+  // Transit stops (before places so place access links can resolve them;
+  // existence checks are key-based so order does not matter).
+  for (const [id, row] of Object.entries(transitStops)) {
+    if (!row || typeof row !== 'object') {
+      errors.push(`transitStops/${id}: must be an object.`);
+      continue;
+    }
+    checkId('transitStops', id);
+    const r = row as Record<string, unknown>;
+    checkName('transitStops', id, r);
+    const districtId = r['districtId'];
+    if (typeof districtId !== 'string' || !districts[districtId]) {
+      errors.push(`transitStops/${id}.districtId: unknown district '${String(districtId)}'.`);
+    }
+    const placeId = r['placeId'];
+    if (placeId !== undefined && placeId !== null && placeId !== '') {
+      if (typeof placeId !== 'string' || !places[String(placeId)]) {
+        errors.push(`transitStops/${id}.placeId: unknown place '${String(placeId)}'.`);
+      }
+    }
+    checkMapPoint('transitStops', id, r);
+  }
+
+  // Places.
+  for (const [id, row] of Object.entries(places)) {
+    if (!row || typeof row !== 'object') {
+      errors.push(`places/${id}: must be an object.`);
+      continue;
+    }
+    checkId('places', id);
+    const r = row as Record<string, unknown>;
+    const districtId = r['districtId'];
+    if (typeof districtId !== 'string' || !districts[districtId]) {
+      errors.push(`places/${id}.districtId: unknown district '${String(districtId)}'.`);
+    }
+    checkName('places', id, r);
+    const access = parseJsonArray('places', id, 'transitAccess', r['transitAccess']);
+    if (access) {
+      if (access.length > 8) errors.push(`places/${id}.transitAccess: max 8 access links.`);
+      for (const [i, entry] of access.entries()) {
+        const stopId = (entry as Record<string, unknown>)?.['stopId'];
+        const walkMinutes = (entry as Record<string, unknown>)?.['walkMinutes'];
+        if (typeof stopId !== 'string' || !transitStops[stopId]) {
+          errors.push(`places/${id}.transitAccess[${i}].stopId: unknown transit stop '${String(stopId)}'.`);
+        }
+        if (!num(walkMinutes) || (walkMinutes as number) <= 0) {
+          errors.push(`places/${id}.transitAccess[${i}].walkMinutes: must be a positive number of minutes.`);
+        }
+      }
+    }
+  }
+
+  // Bus lines.
+  for (const [id, row] of Object.entries(busLines)) {
+    if (!row || typeof row !== 'object') {
+      errors.push(`busLines/${id}: must be an object.`);
+      continue;
+    }
+    checkId('busLines', id);
+    const r = row as Record<string, unknown>;
+    checkName('busLines', id, r);
+    const stopIds = parseJsonArray('busLines', id, 'stopIds', r['stopIds']);
+    if (stopIds) {
+      if (stopIds.length < 2) {
+        errors.push(`busLines/${id}.stopIds: a line needs at least 2 stops (found ${stopIds.length}).`);
+      }
+      for (const [i, stopId] of stopIds.entries()) {
+        if (typeof stopId !== 'string' || !transitStops[String(stopId)]) {
+          errors.push(`busLines/${id}.stopIds[${i}]: unknown transit stop '${String(stopId)}'.`);
+        }
+        if (i > 0 && stopId === stopIds[i - 1]) {
+          errors.push(`busLines/${id}.stopIds[${i}]: duplicate adjacent stop '${String(stopId)}'.`);
+        }
+      }
+    }
+    const segments = parseJsonArray('busLines', id, 'segmentMinutes', r['segmentMinutes']);
+    if (stopIds && segments && stopIds.length >= 2 && segments.length !== stopIds.length - 1) {
+      errors.push(
+        `busLines/${id}.segmentMinutes: length ${segments.length} must equal stops - 1 (${stopIds.length - 1}).`
+      );
+    }
+    if (segments) {
+      for (const [i, minutes] of segments.entries()) {
+        if (!num(minutes) || (minutes as number) <= 0) {
+          errors.push(`busLines/${id}.segmentMinutes[${i}]: must be a positive number of minutes.`);
+        }
+      }
+    }
+    const headway = r['headwayMinutes'];
+    if (!num(headway) || (headway as number) <= 0) {
+      errors.push(`busLines/${id}.headwayMinutes: must be a positive number of minutes.`);
+    }
+    const start = r['serviceStartMinute'];
+    const end = r['serviceEndMinute'];
+    const windowOk =
+      Number.isInteger(start) && Number.isInteger(end) &&
+      (start as number) >= 0 && (end as number) <= 1440 && (start as number) < (end as number);
+    if (!windowOk) {
+      errors.push(
+        `busLines/${id}.service: serviceStartMinute/serviceEndMinute must be ints with 0 <= start < end <= 1440 (no cross-midnight).`
+      );
+    }
+    const fare = r['fare'];
+    if (!num(fare) || (fare as number) < 0) {
+      errors.push(`busLines/${id}.fare: must be a non-negative number.`);
+    }
+  }
+
+  return errors;
+}
+
+/**
+ * Semantic validation for the item/container content tables (#51 slice 2).
+ * Every error identifies table/id/field so Content Studio (#52) can show
+ * useful per-row feedback. Never repairs: invalid content fails loudly.
+ * Kinds are an open tag vocabulary (format-checked only) so new kinds can
+ * be authored without gameplay-code edits.
+ */
+export function validateWorldItems(tables: ContentTables): string[] {
+  const errors: string[] = [];
+  const items = tables['items'] ?? {};
+  const containers = tables['containers'] ?? {};
+
+  const num = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
+  const checkTag = (table: string, id: string, field: string, value: unknown): void => {
+    if (typeof value !== 'string' || !/^[a-z][a-z0-9_-]{1,23}$/.test(value)) {
+      errors.push(`${table}/${id}.${field}: '${String(value)}' must be a lowercase tag ≤ 24 chars.`);
+    }
+  };
+  const checkTags = (table: string, id: string, row: Record<string, unknown>): void => {
+    let tags: unknown = null;
+    try {
+      tags = JSON.parse(String(row['tags'] ?? '[]'));
+    } catch {
+      errors.push(`${table}/${id}.tags: invalid JSON array.`);
+      return;
+    }
+    if (!Array.isArray(tags)) {
+      errors.push(`${table}/${id}.tags: must be a JSON array.`);
+      return;
+    }
+    if (tags.length > 12) errors.push(`${table}/${id}.tags: max 12 tags.`);
+    for (const tag of tags) checkTag(table, id, 'tags', tag);
+  };
+  const checkName = (table: string, id: string, row: Record<string, unknown>): void => {
+    const name = row['name'];
+    if (typeof name !== 'string' || !name.trim() || name.length > 60) {
+      errors.push(`${table}/${id}.name: must be a non-empty string <= 60 chars.`);
+    }
+  };
+
+  for (const [id, row] of Object.entries(items)) {
+    if (!row || typeof row !== 'object') {
+      errors.push(`items/${id}: must be an object.`);
+      continue;
+    }
+    const idCheck = validateWorldId(id);
+    if (!idCheck.ok) errors.push(`items/${id}: ${idCheck.error}`);
+    const r = row as Record<string, unknown>;
+    checkName('items', id, r);
+    checkTag('items', id, 'kind', r['kind']);
+    if (typeof r['portable'] !== 'boolean') {
+      errors.push(`items/${id}.portable: must be a boolean.`);
+    }
+    if (!num(r['volume']) || (r['volume'] as number) < 0) {
+      errors.push(`items/${id}.volume: must be a non-negative number of capacity units.`);
+    }
+    checkTags('items', id, r);
+  }
+
+  for (const [id, row] of Object.entries(containers)) {
+    if (!row || typeof row !== 'object') {
+      errors.push(`containers/${id}: must be an object.`);
+      continue;
+    }
+    const idCheck = validateWorldId(id);
+    if (!idCheck.ok) errors.push(`containers/${id}: ${idCheck.error}`);
+    const r = row as Record<string, unknown>;
+    checkName('containers', id, r);
+    if (!num(r['capacity']) || (r['capacity'] as number) <= 0) {
+      errors.push(`containers/${id}.capacity: must be a positive number of capacity units.`);
+    }
+    let kinds: unknown = null;
+    try {
+      kinds = JSON.parse(String(r['allowedItemKinds'] ?? '[]'));
+    } catch {
+      errors.push(`containers/${id}.allowedItemKinds: invalid JSON array.`);
+      kinds = null;
+    }
+    if (Array.isArray(kinds)) {
+      if (kinds.length > 24) errors.push(`containers/${id}.allowedItemKinds: max 24 kinds.`);
+      for (const kind of kinds) checkTag('containers', id, 'allowedItemKinds', kind);
+    } else if (kinds !== null) {
+      errors.push(`containers/${id}.allowedItemKinds: must be a JSON array ([] = unrestricted).`);
+    }
+    checkTags('containers', id, r);
+  }
+
+  return errors;
+}
+
+/**
+ * Semantic validation for the space/view content tables (#51 slice 3).
+ * Every error identifies table/id/field so Content Studio (#52) can show
+ * useful per-row feedback. Never repairs: invalid content fails loudly.
+ */
+export function validateWorldSpaces(tables: ContentTables): string[] {
+  const errors: string[] = [];
+  const places = tables['places'] ?? {};
+  const spaces = tables['spaces'] ?? {};
+  const views = tables['views'] ?? {};
+
+  const checkName = (table: string, id: string, row: Record<string, unknown>): void => {
+    const name = row['name'];
+    if (typeof name !== 'string' || !name.trim() || name.length > 60) {
+      errors.push(`${table}/${id}.name: must be a non-empty string <= 60 chars.`);
+    }
+  };
+  const checkTags = (table: string, id: string, row: Record<string, unknown>): void => {
+    let tags: unknown = null;
+    try {
+      tags = JSON.parse(String(row['tags'] ?? '[]'));
+    } catch {
+      errors.push(`${table}/${id}.tags: invalid JSON array.`);
+      return;
+    }
+    if (!Array.isArray(tags)) {
+      errors.push(`${table}/${id}.tags: must be a JSON array.`);
+      return;
+    }
+    if (tags.length > 12) errors.push(`${table}/${id}.tags: max 12 tags.`);
+    for (const tag of tags) {
+      if (typeof tag !== 'string' || !/^[a-z][a-z0-9_-]{1,23}$/.test(tag)) {
+        errors.push(`${table}/${id}.tags: '${String(tag)}' must be a lowercase tag ≤ 24 chars.`);
+      }
+    }
+  };
+
+  for (const [id, row] of Object.entries(spaces)) {
+    if (!row || typeof row !== 'object') {
+      errors.push(`spaces/${id}: must be an object.`);
+      continue;
+    }
+    const idCheck = validateWorldId(id);
+    if (!idCheck.ok) errors.push(`spaces/${id}: ${idCheck.error}`);
+    const r = row as Record<string, unknown>;
+    const placeId = r['placeId'];
+    if (typeof placeId !== 'string' || !places[placeId]) {
+      errors.push(`spaces/${id}.placeId: unknown place '${String(placeId)}'.`);
+    }
+    checkName('spaces', id, r);
+    checkTags('spaces', id, r);
+  }
+
+  for (const [id, row] of Object.entries(views)) {
+    if (!row || typeof row !== 'object') {
+      errors.push(`views/${id}: must be an object.`);
+      continue;
+    }
+    const idCheck = validateWorldId(id);
+    if (!idCheck.ok) errors.push(`views/${id}: ${idCheck.error}`);
+    const r = row as Record<string, unknown>;
+    const spaceId = r['spaceId'];
+    if (typeof spaceId !== 'string' || !spaces[spaceId]) {
+      errors.push(`views/${id}.spaceId: unknown space '${String(spaceId)}'.`);
+    }
+    checkName('views', id, r);
+    let neighbors: unknown = null;
+    try {
+      neighbors = JSON.parse(String(r['neighbors'] ?? '[]'));
+    } catch {
+      errors.push(`views/${id}.neighbors: invalid JSON array.`);
+      neighbors = null;
+    }
+    if (Array.isArray(neighbors)) {
+      if (neighbors.length > 12) errors.push(`views/${id}.neighbors: max 12 neighbors.`);
+      for (const [i, neighbor] of neighbors.entries()) {
+        if (typeof neighbor !== 'string' || !views[String(neighbor)]) {
+          errors.push(`views/${id}.neighbors[${i}]: unknown view '${String(neighbor)}'.`);
+        } else if (neighbor === id) {
+          errors.push(`views/${id}.neighbors[${i}]: a view cannot neighbor itself.`);
+        }
+      }
+    } else if (neighbors !== null) {
+      errors.push(`views/${id}.neighbors: must be a JSON array of view ids.`);
+    }
+    checkTags('views', id, r);
+  }
+
+  return errors;
+}
+
+/**
+ * Semantic validation for the anchor/interaction content tables (#51 slice 4).
+ * Every error identifies table/id/field so Content Studio (#52) can show
+ * useful per-row feedback. Never repairs: invalid content fails loudly.
+ */
+export function validateWorldAnchors(tables: ContentTables): string[] {
+  const errors: string[] = [];
+  const views = tables['views'] ?? {};
+  const anchors = tables['anchors'] ?? {};
+  const interactions = tables['interactions'] ?? {};
+
+  const num = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
+  const checkName = (table: string, id: string, row: Record<string, unknown>): void => {
+    const name = row['name'];
+    if (typeof name !== 'string' || !name.trim() || name.length > 60) {
+      errors.push(`${table}/${id}.name: must be a non-empty string <= 60 chars.`);
+    }
+  };
+  const checkTags = (table: string, id: string, row: Record<string, unknown>): void => {
+    let tags: unknown = null;
+    try {
+      tags = JSON.parse(String(row['tags'] ?? '[]'));
+    } catch {
+      errors.push(`${table}/${id}.tags: invalid JSON array.`);
+      return;
+    }
+    if (!Array.isArray(tags)) {
+      errors.push(`${table}/${id}.tags: must be a JSON array.`);
+      return;
+    }
+    if (tags.length > 12) errors.push(`${table}/${id}.tags: max 12 tags.`);
+    for (const tag of tags) {
+      if (typeof tag !== 'string' || !/^[a-z][a-z0-9_-]{1,23}$/.test(tag)) {
+        errors.push(`${table}/${id}.tags: '${String(tag)}' must be a lowercase tag ≤ 24 chars.`);
+      }
+    }
+  };
+
+  for (const [id, row] of Object.entries(anchors)) {
+    if (!row || typeof row !== 'object') {
+      errors.push(`anchors/${id}: must be an object.`);
+      continue;
+    }
+    const idCheck = validateWorldId(id);
+    if (!idCheck.ok) errors.push(`anchors/${id}: ${idCheck.error}`);
+    const r = row as Record<string, unknown>;
+    const viewId = r['viewId'];
+    if (typeof viewId !== 'string' || !views[viewId]) {
+      errors.push(`anchors/${id}.viewId: unknown view '${String(viewId)}'.`);
+    }
+    checkName('anchors', id, r);
+    for (const axis of ['x', 'y']) {
+      const v = r[axis];
+      if (!num(v) || (v as number) < 0 || (v as number) > 1) {
+        errors.push(`anchors/${id}.${axis}: must be a number in 0..1 view bounds.`);
+      }
+    }
+    checkTags('anchors', id, r);
+  }
+
+  for (const [id, row] of Object.entries(interactions)) {
+    if (!row || typeof row !== 'object') {
+      errors.push(`interactions/${id}: must be an object.`);
+      continue;
+    }
+    const idCheck = validateWorldId(id);
+    if (!idCheck.ok) errors.push(`interactions/${id}: ${idCheck.error}`);
+    const r = row as Record<string, unknown>;
+    const anchorId = r['anchorId'];
+    if (typeof anchorId !== 'string' || !anchors[anchorId]) {
+      errors.push(`interactions/${id}.anchorId: unknown anchor '${String(anchorId)}'.`);
+    }
+    const capability = r['capability'];
+    if (typeof capability !== 'string' || !/^[a-z][a-z0-9_-]{1,23}$/.test(capability)) {
+      errors.push(`interactions/${id}.capability: must be a lowercase capability tag ≤ 24 chars.`);
+    }
+    checkName('interactions', id, r);
+    checkTags('interactions', id, r);
+  }
+
+  return errors;
+}
+
+/**
+ * Semantic validation for the asset content table (#51 slice 5), plus the
+ * optional assetId references carried by items and views.
+ * A normal-map reference must resolve to a *different* image-kind asset.
+ * Every error identifies table/id/field for Content Studio (#52) feedback.
+ */
+export function validateWorldAssets(tables: ContentTables): string[] {
+  const errors: string[] = [];
+  const assets = tables['assets'] ?? {};
+  const items = tables['items'] ?? {};
+  const views = tables['views'] ?? {};
+
+  const checkName = (table: string, id: string, row: Record<string, unknown>): void => {
+    const name = row['name'];
+    if (typeof name !== 'string' || !name.trim() || name.length > 60) {
+      errors.push(`${table}/${id}.name: must be a non-empty string <= 60 chars.`);
+    }
+  };
+  const checkTags = (table: string, id: string, row: Record<string, unknown>): void => {
+    let tags: unknown = null;
+    try {
+      tags = JSON.parse(String(row['tags'] ?? '[]'));
+    } catch {
+      errors.push(`${table}/${id}.tags: invalid JSON array.`);
+      return;
+    }
+    if (!Array.isArray(tags)) {
+      errors.push(`${table}/${id}.tags: must be a JSON array.`);
+      return;
+    }
+    if (tags.length > 12) errors.push(`${table}/${id}.tags: max 12 tags.`);
+    for (const tag of tags) {
+      if (typeof tag !== 'string' || !/^[a-z][a-z0-9_-]{1,23}$/.test(tag)) {
+        errors.push(`${table}/${id}.tags: '${String(tag)}' must be a lowercase tag ≤ 24 chars.`);
+      }
+    }
+  };
+  const checkAssetId = (table: string, id: string, value: unknown): void => {
+    if (value === undefined || value === null || value === '') return;
+    if (typeof value !== 'string' || !assets[String(value)]) {
+      errors.push(`${table}/${id}.assetId: unknown asset '${String(value)}'.`);
+    }
+  };
+
+  for (const [id, row] of Object.entries(assets)) {
+    if (!row || typeof row !== 'object') {
+      errors.push(`assets/${id}: must be an object.`);
+      continue;
+    }
+    const idCheck = validateWorldId(id);
+    if (!idCheck.ok) errors.push(`assets/${id}: ${idCheck.error}`);
+    const r = row as Record<string, unknown>;
+    checkName('assets', id, r);
+    const kind = r['kind'];
+    if (typeof kind !== 'string' || !/^[a-z][a-z0-9_-]{1,23}$/.test(kind)) {
+      errors.push(`assets/${id}.kind: '${String(kind)}' must be a lowercase tag ≤ 24 chars.`);
+    }
+    const uri = r['uri'];
+    if (typeof uri !== 'string' || !uri.trim() || uri.length > 200) {
+      errors.push(`assets/${id}.uri: must be a non-empty reference <= 200 chars.`);
+    }
+    const normalId = r['normalMapAssetId'];
+    if (normalId !== undefined && normalId !== null && normalId !== '') {
+      if (typeof normalId !== 'string' || !assets[String(normalId)]) {
+        errors.push(`assets/${id}.normalMapAssetId: unknown asset '${String(normalId)}'.`);
+      } else if (normalId === id) {
+        errors.push(`assets/${id}.normalMapAssetId: cannot reference itself.`);
+      } else if ((assets[String(normalId)] as Record<string, unknown>)?.['kind'] !== 'image') {
+        errors.push(`assets/${id}.normalMapAssetId: target '${String(normalId)}' must be an image asset.`);
+      }
+    }
+    checkTags('assets', id, r);
+  }
+
+  for (const [id, row] of Object.entries(items)) {
+    if (!row || typeof row !== 'object') continue;
+    checkAssetId('items', id, (row as Record<string, unknown>)['assetId']);
+  }
+  for (const [id, row] of Object.entries(views)) {
+    if (!row || typeof row !== 'object') continue;
+    checkAssetId('views', id, (row as Record<string, unknown>)['assetId']);
+  }
+
+  return errors;
+}
+
+/**
+ * Semantic validation for the light/audio/ambient profile tables (#51 slice 6).
+ * Every error identifies table/id/field so Content Studio (#52) can show
+ * useful per-row feedback. Never repairs: invalid content fails loudly.
+ */
+export function validateWorldProfiles(tables: ContentTables): string[] {
+  const errors: string[] = [];
+  const assets = tables['assets'] ?? {};
+  const lightProfiles = tables['lightProfiles'] ?? {};
+  const audioProfiles = tables['audioProfiles'] ?? {};
+  const ambientProfiles = tables['ambientProfiles'] ?? {};
+
+  const num = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
+  const checkName = (table: string, id: string, row: Record<string, unknown>): void => {
+    const name = row['name'];
+    if (typeof name !== 'string' || !name.trim() || name.length > 60) {
+      errors.push(`${table}/${id}.name: must be a non-empty string <= 60 chars.`);
+    }
+  };
+  const checkTag = (table: string, id: string, field: string, value: unknown, optional: boolean): void => {
+    if (optional && (value === undefined || value === null || value === '')) return;
+    if (typeof value !== 'string' || !/^[a-z][a-z0-9_-]{1,23}$/.test(value)) {
+      errors.push(`${table}/${id}.${field}: '${String(value)}' must be a lowercase tag ≤ 24 chars.`);
+    }
+  };
+  const checkTags = (table: string, id: string, row: Record<string, unknown>): void => {
+    let tags: unknown = null;
+    try {
+      tags = JSON.parse(String(row['tags'] ?? '[]'));
+    } catch {
+      errors.push(`${table}/${id}.tags: invalid JSON array.`);
+      return;
+    }
+    if (!Array.isArray(tags)) {
+      errors.push(`${table}/${id}.tags: must be a JSON array.`);
+      return;
+    }
+    if (tags.length > 12) errors.push(`${table}/${id}.tags: max 12 tags.`);
+    for (const tag of tags) checkTag(table, id, 'tags', tag, false);
+  };
+
+  for (const [id, row] of Object.entries(lightProfiles)) {
+    if (!row || typeof row !== 'object') {
+      errors.push(`lightProfiles/${id}: must be an object.`);
+      continue;
+    }
+    const idCheck = validateWorldId(id);
+    if (!idCheck.ok) errors.push(`lightProfiles/${id}: ${idCheck.error}`);
+    const r = row as Record<string, unknown>;
+    checkName('lightProfiles', id, r);
+    checkTag('lightProfiles', id, 'timeOfDay', r['timeOfDay'], true);
+    const tint = r['colorTint'];
+    if (tint !== undefined && tint !== null && tint !== '' && (typeof tint !== 'string' || !/^#[0-9a-fA-F]{6}$/.test(tint))) {
+      errors.push(`lightProfiles/${id}.colorTint: must be a #rrggbb hex code or empty.`);
+    }
+    if (!num(r['intensity']) || (r['intensity'] as number) < 0) {
+      errors.push(`lightProfiles/${id}.intensity: must be a non-negative number.`);
+    }
+    checkTags('lightProfiles', id, r);
+  }
+
+  for (const [id, row] of Object.entries(audioProfiles)) {
+    if (!row || typeof row !== 'object') {
+      errors.push(`audioProfiles/${id}: must be an object.`);
+      continue;
+    }
+    const idCheck = validateWorldId(id);
+    if (!idCheck.ok) errors.push(`audioProfiles/${id}: ${idCheck.error}`);
+    const r = row as Record<string, unknown>;
+    checkName('audioProfiles', id, r);
+    checkTag('audioProfiles', id, 'kind', r['kind'], false);
+    const assetId = r['assetId'];
+    if (assetId !== undefined && assetId !== null && assetId !== '' && (typeof assetId !== 'string' || !assets[String(assetId)])) {
+      errors.push(`audioProfiles/${id}.assetId: unknown asset '${String(assetId)}'.`);
+    }
+    if (!num(r['volume']) || (r['volume'] as number) < 0 || (r['volume'] as number) > 1) {
+      errors.push(`audioProfiles/${id}.volume: must be a number in 0..1.`);
+    }
+    checkTags('audioProfiles', id, r);
+  }
+
+  for (const [id, row] of Object.entries(ambientProfiles)) {
+    if (!row || typeof row !== 'object') {
+      errors.push(`ambientProfiles/${id}: must be an object.`);
+      continue;
+    }
+    const idCheck = validateWorldId(id);
+    if (!idCheck.ok) errors.push(`ambientProfiles/${id}: ${idCheck.error}`);
+    const r = row as Record<string, unknown>;
+    checkName('ambientProfiles', id, r);
+    checkTag('ambientProfiles', id, 'weather', r['weather'], true);
+    checkTag('ambientProfiles', id, 'timeOfDay', r['timeOfDay'], true);
+    if (!num(r['density']) || (r['density'] as number) < 0) {
+      errors.push(`ambientProfiles/${id}.density: must be a non-negative number.`);
+    }
+    checkTags('ambientProfiles', id, r);
+  }
+
   return errors;
 }
 
@@ -573,6 +1237,415 @@ export function generateRegistrySource(tables: ContentTables): string {
     lines.push(`    roleA: ${tsString(String(row['roleA'] ?? ''))},`);
     lines.push(`    roleB: ${tsString(String(row['roleB'] ?? ''))},`);
     lines.push(`    value: ${Number(row['value'] ?? 0)},`);
+    lines.push('  },');
+  }
+  lines.push('];');
+  lines.push('');
+
+  return lines.join('\n');
+}
+
+/**
+ * Emit the world registry TypeScript source (#51 slice 1).
+ * Goes to its own generated file (src/engine/worldContent.generated.ts) so
+ * the character registry stays stable; one pull/check contract covers both.
+ * Sorted row order keeps output deterministic regardless of store.json order.
+ */
+export function generateWorldRegistrySource(tables: ContentTables): string {
+  const version = contentHash(tables);
+  const districts = tables['districts'] ?? {};
+  const places = tables['places'] ?? {};
+  const transitStops = tables['transitStops'] ?? {};
+  const busLines = tables['busLines'] ?? {};
+  const items = tables['items'] ?? {};
+  const containers = tables['containers'] ?? {};
+  const spaces = tables['spaces'] ?? {};
+  const views = tables['views'] ?? {};
+  const anchors = tables['anchors'] ?? {};
+  const interactions = tables['interactions'] ?? {};
+  const assets = tables['assets'] ?? {};
+  const lightProfiles = tables['lightProfiles'] ?? {};
+  const audioProfiles = tables['audioProfiles'] ?? {};
+  const ambientProfiles = tables['ambientProfiles'] ?? {};
+
+  const lines: string[] = [];
+  lines.push('// GENERATED — do not edit by hand.');
+  lines.push(`// Source: content/store.json (content v${version}). Regenerate: npm run content:pull.`);
+  lines.push(`export const WORLD_CONTENT_VERSION = '${version}';`);
+  lines.push('');
+  lines.push('export interface GeneratedDistrictDef {');
+  lines.push('  id: string;');
+  lines.push('  name: string;');
+  lines.push('  mapX: number;');
+  lines.push('  mapY: number;');
+  lines.push('  tags: string[];');
+  lines.push('}');
+  lines.push('');
+  lines.push('export interface GeneratedPlaceTransitAccess {');
+  lines.push('  stopId: string;');
+  lines.push('  walkMinutes: number;');
+  lines.push('}');
+  lines.push('');
+  lines.push('export interface GeneratedPlaceDef {');
+  lines.push('  id: string;');
+  lines.push('  districtId: string;');
+  lines.push('  name: string;');
+  lines.push('  transitAccess: GeneratedPlaceTransitAccess[];');
+  lines.push('}');
+  lines.push('');
+  lines.push('export interface GeneratedTransitStopDef {');
+  lines.push('  id: string;');
+  lines.push('  districtId: string;');
+  lines.push('  name: string;');
+  lines.push('  placeId: string | null;');
+  lines.push('  mapX: number;');
+  lines.push('  mapY: number;');
+  lines.push('}');
+  lines.push('');
+  lines.push('export interface GeneratedBusLineDef {');
+  lines.push('  id: string;');
+  lines.push('  name: string;');
+  lines.push('  stopIds: string[];');
+  lines.push('  serviceStartMinute: number;');
+  lines.push('  serviceEndMinute: number;');
+  lines.push('  headwayMinutes: number;');
+  lines.push('  segmentMinutes: number[];');
+  lines.push('  fare: number;');
+  lines.push('}');
+  lines.push('');
+
+  lines.push('export const GENERATED_DISTRICTS: GeneratedDistrictDef[] = [');
+  for (const id of Object.keys(districts).sort()) {
+    const r = districts[id] as Record<string, unknown>;
+    let tags: string[] = [];
+    try {
+      const parsed: unknown = JSON.parse(String(r['tags'] ?? '[]'));
+      if (Array.isArray(parsed)) tags = parsed.filter((x): x is string => typeof x === 'string');
+    } catch { tags = []; }
+    lines.push('  {');
+    lines.push(`    id: ${tsString(id)},`);
+    lines.push(`    name: ${tsString(String(r['name'] ?? ''))},`);
+    lines.push(`    mapX: ${Number(r['mapX'] ?? 0)},`);
+    lines.push(`    mapY: ${Number(r['mapY'] ?? 0)},`);
+    lines.push(`    tags: [${tags.map((t) => tsString(t)).join(', ')}],`);
+    lines.push('  },');
+  }
+  lines.push('];');
+  lines.push('');
+
+  lines.push('export const GENERATED_PLACES: GeneratedPlaceDef[] = [');
+  for (const id of Object.keys(places).sort()) {
+    const r = places[id] as Record<string, unknown>;
+    let access: Array<{ stopId: string; walkMinutes: number }> = [];
+    try {
+      const parsed: unknown = JSON.parse(String(r['transitAccess'] ?? '[]'));
+      if (Array.isArray(parsed)) {
+        access = parsed
+          .filter((e): e is Record<string, unknown> => !!e && typeof e === 'object')
+          .map((e) => ({ stopId: String(e['stopId'] ?? ''), walkMinutes: Number(e['walkMinutes'] ?? 0) }));
+      }
+    } catch { access = []; }
+    lines.push('  {');
+    lines.push(`    id: ${tsString(id)},`);
+    lines.push(`    districtId: ${tsString(String(r['districtId'] ?? ''))},`);
+    lines.push(`    name: ${tsString(String(r['name'] ?? ''))},`);
+    lines.push(`    transitAccess: [${access.map((a) => `{ stopId: ${tsString(a.stopId)}, walkMinutes: ${a.walkMinutes} }`).join(', ')}],`);
+    lines.push('  },');
+  }
+  lines.push('];');
+  lines.push('');
+
+  lines.push('export const GENERATED_TRANSIT_STOPS: GeneratedTransitStopDef[] = [');
+  for (const id of Object.keys(transitStops).sort()) {
+    const r = transitStops[id] as Record<string, unknown>;
+    const placeId = r['placeId'];
+    lines.push('  {');
+    lines.push(`    id: ${tsString(id)},`);
+    lines.push(`    districtId: ${tsString(String(r['districtId'] ?? ''))},`);
+    lines.push(`    name: ${tsString(String(r['name'] ?? ''))},`);
+    lines.push(`    placeId: ${placeId === undefined || placeId === null || placeId === '' ? 'null' : tsString(String(placeId))},`);
+    lines.push(`    mapX: ${Number(r['mapX'] ?? 0)},`);
+    lines.push(`    mapY: ${Number(r['mapY'] ?? 0)},`);
+    lines.push('  },');
+  }
+  lines.push('];');
+  lines.push('');
+
+  lines.push('export const GENERATED_BUS_LINES: GeneratedBusLineDef[] = [');
+  for (const id of Object.keys(busLines).sort()) {
+    const r = busLines[id] as Record<string, unknown>;
+    const strArr = (v: unknown): string[] => {
+      try {
+        const parsed: unknown = JSON.parse(String(v ?? '[]'));
+        return Array.isArray(parsed) ? parsed.filter((x): x is string => typeof x === 'string') : [];
+      } catch { return []; }
+    };
+    const numArr = (v: unknown): number[] => {
+      try {
+        const parsed: unknown = JSON.parse(String(v ?? '[]'));
+        return Array.isArray(parsed) ? parsed.filter((x): x is number => typeof x === 'number') : [];
+      } catch { return []; }
+    };
+    lines.push('  {');
+    lines.push(`    id: ${tsString(id)},`);
+    lines.push(`    name: ${tsString(String(r['name'] ?? ''))},`);
+    lines.push(`    stopIds: [${strArr(r['stopIds']).map((s) => tsString(s)).join(', ')}],`);
+    lines.push(`    serviceStartMinute: ${Number(r['serviceStartMinute'] ?? 0)},`);
+    lines.push(`    serviceEndMinute: ${Number(r['serviceEndMinute'] ?? 0)},`);
+    lines.push(`    headwayMinutes: ${Number(r['headwayMinutes'] ?? 0)},`);
+    lines.push(`    segmentMinutes: [${numArr(r['segmentMinutes']).join(', ')}],`);
+    lines.push(`    fare: ${Number(r['fare'] ?? 0)},`);
+    lines.push('  },');
+  }
+  lines.push('];');
+  lines.push('');
+
+  lines.push('export interface GeneratedItemDef {');
+  lines.push('  id: string;');
+  lines.push('  name: string;');
+  lines.push('  kind: string;');
+  lines.push('  portable: boolean;');
+  lines.push('  volume: number;');
+  lines.push('  assetId: string | null;');
+  lines.push('  tags: string[];');
+  lines.push('}');
+  lines.push('');
+  lines.push('export interface GeneratedContainerDef {');
+  lines.push('  id: string;');
+  lines.push('  name: string;');
+  lines.push('  capacity: number;');
+  lines.push('  allowedItemKinds: string[];');
+  lines.push('  tags: string[];');
+  lines.push('}');
+  lines.push('');
+
+  const strArr = (v: unknown): string[] => {
+    try {
+      const parsed: unknown = JSON.parse(String(v ?? '[]'));
+      return Array.isArray(parsed) ? parsed.filter((x): x is string => typeof x === 'string') : [];
+    } catch { return []; }
+  };
+  const optId = (v: unknown): string =>
+    v === undefined || v === null || v === '' ? 'null' : tsString(String(v));
+
+  lines.push('export const GENERATED_ITEMS: GeneratedItemDef[] = [');
+  for (const id of Object.keys(items).sort()) {
+    const r = items[id] as Record<string, unknown>;
+    lines.push('  {');
+    lines.push(`    id: ${tsString(id)},`);
+    lines.push(`    name: ${tsString(String(r['name'] ?? ''))},`);
+    lines.push(`    kind: ${tsString(String(r['kind'] ?? 'misc'))},`);
+    lines.push(`    portable: ${r['portable'] === true ? 'true' : 'false'},`);
+    lines.push(`    volume: ${Number(r['volume'] ?? 0)},`);
+    lines.push(`    assetId: ${optId(r['assetId'])},`);
+    lines.push(`    tags: [${strArr(r['tags']).map((t) => tsString(t)).join(', ')}],`);
+    lines.push('  },');
+  }
+  lines.push('];');
+  lines.push('');
+
+  lines.push('export const GENERATED_CONTAINERS: GeneratedContainerDef[] = [');
+  for (const id of Object.keys(containers).sort()) {
+    const r = containers[id] as Record<string, unknown>;
+    lines.push('  {');
+    lines.push(`    id: ${tsString(id)},`);
+    lines.push(`    name: ${tsString(String(r['name'] ?? ''))},`);
+    lines.push(`    capacity: ${Number(r['capacity'] ?? 0)},`);
+    lines.push(`    allowedItemKinds: [${strArr(r['allowedItemKinds']).map((k) => tsString(k)).join(', ')}],`);
+    lines.push(`    tags: [${strArr(r['tags']).map((t) => tsString(t)).join(', ')}],`);
+    lines.push('  },');
+  }
+  lines.push('];');
+  lines.push('');
+
+  lines.push('export interface GeneratedSpaceDef {');
+  lines.push('  id: string;');
+  lines.push('  placeId: string;');
+  lines.push('  name: string;');
+  lines.push('  tags: string[];');
+  lines.push('}');
+  lines.push('');
+  lines.push('export interface GeneratedViewDef {');
+  lines.push('  id: string;');
+  lines.push('  spaceId: string;');
+  lines.push('  name: string;');
+  lines.push('  neighbors: string[];');
+  lines.push('  assetId: string | null;');
+  lines.push('  tags: string[];');
+  lines.push('}');
+  lines.push('');
+
+  lines.push('export const GENERATED_SPACES: GeneratedSpaceDef[] = [');
+  for (const id of Object.keys(spaces).sort()) {
+    const r = spaces[id] as Record<string, unknown>;
+    lines.push('  {');
+    lines.push(`    id: ${tsString(id)},`);
+    lines.push(`    placeId: ${tsString(String(r['placeId'] ?? ''))},`);
+    lines.push(`    name: ${tsString(String(r['name'] ?? ''))},`);
+    lines.push(`    tags: [${strArr(r['tags']).map((t) => tsString(t)).join(', ')}],`);
+    lines.push('  },');
+  }
+  lines.push('];');
+  lines.push('');
+
+  lines.push('export const GENERATED_VIEWS: GeneratedViewDef[] = [');
+  for (const id of Object.keys(views).sort()) {
+    const r = views[id] as Record<string, unknown>;
+    lines.push('  {');
+    lines.push(`    id: ${tsString(id)},`);
+    lines.push(`    spaceId: ${tsString(String(r['spaceId'] ?? ''))},`);
+    lines.push(`    name: ${tsString(String(r['name'] ?? ''))},`);
+    lines.push(`    neighbors: [${strArr(r['neighbors']).map((n) => tsString(n)).join(', ')}],`);
+    lines.push(`    assetId: ${optId(r['assetId'])},`);
+    lines.push(`    tags: [${strArr(r['tags']).map((t) => tsString(t)).join(', ')}],`);
+    lines.push('  },');
+  }
+  lines.push('];');
+  lines.push('');
+
+  lines.push('export interface GeneratedAnchorDef {');
+  lines.push('  id: string;');
+  lines.push('  viewId: string;');
+  lines.push('  name: string;');
+  lines.push('  x: number;');
+  lines.push('  y: number;');
+  lines.push('  tags: string[];');
+  lines.push('}');
+  lines.push('');
+  lines.push('export interface GeneratedInteractionDef {');
+  lines.push('  id: string;');
+  lines.push('  anchorId: string;');
+  lines.push('  capability: string;');
+  lines.push('  name: string;');
+  lines.push('  tags: string[];');
+  lines.push('}');
+  lines.push('');
+
+  lines.push('export const GENERATED_ANCHORS: GeneratedAnchorDef[] = [');
+  for (const id of Object.keys(anchors).sort()) {
+    const r = anchors[id] as Record<string, unknown>;
+    lines.push('  {');
+    lines.push(`    id: ${tsString(id)},`);
+    lines.push(`    viewId: ${tsString(String(r['viewId'] ?? ''))},`);
+    lines.push(`    name: ${tsString(String(r['name'] ?? ''))},`);
+    lines.push(`    x: ${Number(r['x'] ?? 0)},`);
+    lines.push(`    y: ${Number(r['y'] ?? 0)},`);
+    lines.push(`    tags: [${strArr(r['tags']).map((t) => tsString(t)).join(', ')}],`);
+    lines.push('  },');
+  }
+  lines.push('];');
+  lines.push('');
+
+  lines.push('export const GENERATED_INTERACTIONS: GeneratedInteractionDef[] = [');
+  for (const id of Object.keys(interactions).sort()) {
+    const r = interactions[id] as Record<string, unknown>;
+    lines.push('  {');
+    lines.push(`    id: ${tsString(id)},`);
+    lines.push(`    anchorId: ${tsString(String(r['anchorId'] ?? ''))},`);
+    lines.push(`    capability: ${tsString(String(r['capability'] ?? ''))},`);
+    lines.push(`    name: ${tsString(String(r['name'] ?? ''))},`);
+    lines.push(`    tags: [${strArr(r['tags']).map((t) => tsString(t)).join(', ')}],`);
+    lines.push('  },');
+  }
+  lines.push('];');
+  lines.push('');
+
+  lines.push('export interface GeneratedAssetDef {');
+  lines.push('  id: string;');
+  lines.push('  name: string;');
+  lines.push('  kind: string;');
+  lines.push('  uri: string;');
+  lines.push('  normalMapAssetId: string | null;');
+  lines.push('  tags: string[];');
+  lines.push('}');
+  lines.push('');
+
+  lines.push('export const GENERATED_ASSETS: GeneratedAssetDef[] = [');
+  for (const id of Object.keys(assets).sort()) {
+    const r = assets[id] as Record<string, unknown>;
+    lines.push('  {');
+    lines.push(`    id: ${tsString(id)},`);
+    lines.push(`    name: ${tsString(String(r['name'] ?? ''))},`);
+    lines.push(`    kind: ${tsString(String(r['kind'] ?? 'image'))},`);
+    lines.push(`    uri: ${tsString(String(r['uri'] ?? ''))},`);
+    lines.push(`    normalMapAssetId: ${optId(r['normalMapAssetId'])},`);
+    lines.push(`    tags: [${strArr(r['tags']).map((t) => tsString(t)).join(', ')}],`);
+    lines.push('  },');
+  }
+  lines.push('];');
+  lines.push('');
+
+  lines.push('export interface GeneratedLightProfileDef {');
+  lines.push('  id: string;');
+  lines.push('  name: string;');
+  lines.push('  timeOfDay: string | null;');
+  lines.push('  colorTint: string | null;');
+  lines.push('  intensity: number;');
+  lines.push('  tags: string[];');
+  lines.push('}');
+  lines.push('');
+  lines.push('export interface GeneratedAudioProfileDef {');
+  lines.push('  id: string;');
+  lines.push('  name: string;');
+  lines.push('  kind: string;');
+  lines.push('  assetId: string | null;');
+  lines.push('  volume: number;');
+  lines.push('  tags: string[];');
+  lines.push('}');
+  lines.push('');
+  lines.push('export interface GeneratedAmbientProfileDef {');
+  lines.push('  id: string;');
+  lines.push('  name: string;');
+  lines.push('  weather: string | null;');
+  lines.push('  timeOfDay: string | null;');
+  lines.push('  density: number;');
+  lines.push('  tags: string[];');
+  lines.push('}');
+  lines.push('');
+
+  const optStr = (v: unknown): string =>
+    v === undefined || v === null || v === '' ? 'null' : tsString(String(v));
+
+  lines.push('export const GENERATED_LIGHT_PROFILES: GeneratedLightProfileDef[] = [');
+  for (const id of Object.keys(lightProfiles).sort()) {
+    const r = lightProfiles[id] as Record<string, unknown>;
+    lines.push('  {');
+    lines.push(`    id: ${tsString(id)},`);
+    lines.push(`    name: ${tsString(String(r['name'] ?? ''))},`);
+    lines.push(`    timeOfDay: ${optStr(r['timeOfDay'])},`);
+    lines.push(`    colorTint: ${optStr(r['colorTint'])},`);
+    lines.push(`    intensity: ${Number(r['intensity'] ?? 0)},`);
+    lines.push(`    tags: [${strArr(r['tags']).map((t) => tsString(t)).join(', ')}],`);
+    lines.push('  },');
+  }
+  lines.push('];');
+  lines.push('');
+
+  lines.push('export const GENERATED_AUDIO_PROFILES: GeneratedAudioProfileDef[] = [');
+  for (const id of Object.keys(audioProfiles).sort()) {
+    const r = audioProfiles[id] as Record<string, unknown>;
+    lines.push('  {');
+    lines.push(`    id: ${tsString(id)},`);
+    lines.push(`    name: ${tsString(String(r['name'] ?? ''))},`);
+    lines.push(`    kind: ${tsString(String(r['kind'] ?? 'ambience'))},`);
+    lines.push(`    assetId: ${optId(r['assetId'])},`);
+    lines.push(`    volume: ${Number(r['volume'] ?? 0)},`);
+    lines.push(`    tags: [${strArr(r['tags']).map((t) => tsString(t)).join(', ')}],`);
+    lines.push('  },');
+  }
+  lines.push('];');
+  lines.push('');
+
+  lines.push('export const GENERATED_AMBIENT_PROFILES: GeneratedAmbientProfileDef[] = [');
+  for (const id of Object.keys(ambientProfiles).sort()) {
+    const r = ambientProfiles[id] as Record<string, unknown>;
+    lines.push('  {');
+    lines.push(`    id: ${tsString(id)},`);
+    lines.push(`    name: ${tsString(String(r['name'] ?? ''))},`);
+    lines.push(`    weather: ${optStr(r['weather'])},`);
+    lines.push(`    timeOfDay: ${optStr(r['timeOfDay'])},`);
+    lines.push(`    density: ${Number(r['density'] ?? 0)},`);
+    lines.push(`    tags: [${strArr(r['tags']).map((t) => tsString(t)).join(', ')}],`);
     lines.push('  },');
   }
   lines.push('];');

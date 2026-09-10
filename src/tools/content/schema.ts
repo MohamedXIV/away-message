@@ -14,6 +14,19 @@
 // - artProfiles: engine-agnostic 2D art specification (Live2D / mesh / icon)
 // - affinitySeeds: NPC↔NPC role affinity seeds (-100..100)
 // - dialoguePools: template lines for offline / reactive chats
+// - items: authored physical-item definitions (not runtime instances)
+// - containers: authored container-capacity/acceptance definitions
+// - districts: geographic/social town groupings (one town, one simulation)
+// - places: canonical destinations, each in exactly one district
+// - spaces: authored sub-areas inside one place (Place → Space → View)
+// - views: renderer-neutral authored viewpoints inside one space
+// - anchors: authored interaction points inside one view (0..1 bounds)
+// - interactions: one capability bound to one anchor
+// - assets: renderer-neutral asset references (diffuse + optional normal map)
+// - lightProfiles/audioProfiles/ambientProfiles: authored environmental
+//   configuration (never mutable light/weather/event state)
+// - transitStops: bus stops, each in one district, optionally at a place
+// - busLines: ordered-stop bus service (window, headway, segments, fare)
 
 import { createStore, type TablesSchema } from 'tinybase';
 
@@ -98,6 +111,128 @@ export const CONTENT_SCHEMA = {
   dialoguePools: {
     lines: { type: 'string', default: '[]' },
     version: { type: 'number', default: 1 },
+  },
+  items: {
+    name: { type: 'string', default: '' },
+    // Semantic physical kind consumed by later inventory/container rules.
+    kind: { type: 'string', default: 'misc' },
+    portable: { type: 'boolean', default: true },
+    // Abstract capacity unit; authored definition only, never a runtime location.
+    volume: { type: 'number', default: 1 },
+    // Optional visual asset for this item; '' = none.
+    assetId: { type: 'string', default: '' },
+    // JSON array of semantic tags, e.g. ["food","fragile"].
+    tags: { type: 'string', default: '[]' },
+  },
+  containers: {
+    name: { type: 'string', default: '' },
+    // Same abstract units as item.volume. Runtime occupancy belongs to #18.
+    capacity: { type: 'number', default: 1 },
+    // JSON array of accepted item.kind values; [] means unrestricted.
+    allowedItemKinds: { type: 'string', default: '[]' },
+    tags: { type: 'string', default: '[]' },
+  },
+  districts: {
+    name: { type: 'string', default: '' },
+    mapX: { type: 'number', default: 0 },
+    mapY: { type: 'number', default: 0 },
+    // JSON array of semantic tags, e.g. ["residential","riverside"].
+    tags: { type: 'string', default: '[]' },
+  },
+  places: {
+    districtId: { type: 'string', default: '' },
+    name: { type: 'string', default: '' },
+    // JSON array of {stopId, walkMinutes} walking-access links to transit stops.
+    transitAccess: { type: 'string', default: '[]' },
+  },
+  spaces: {
+    placeId: { type: 'string', default: '' },
+    name: { type: 'string', default: '' },
+    // JSON array of semantic tags, e.g. ["interior","upstairs"].
+    tags: { type: 'string', default: '[]' },
+  },
+  views: {
+    spaceId: { type: 'string', default: '' },
+    name: { type: 'string', default: '' },
+    // JSON array of neighboring view ids within the same space.
+    neighbors: { type: 'string', default: '[]' },
+    // Optional hero/background asset for this view; '' = none.
+    assetId: { type: 'string', default: '' },
+    tags: { type: 'string', default: '[]' },
+  },
+  anchors: {
+    viewId: { type: 'string', default: '' },
+    name: { type: 'string', default: '' },
+    // Normalized 0..1 placement inside the view (cf. HotspotBounds).
+    x: { type: 'number', default: 0.5 },
+    y: { type: 'number', default: 0.5 },
+    tags: { type: 'string', default: '[]' },
+  },
+  interactions: {
+    anchorId: { type: 'string', default: '' },
+    // Capability this interaction exposes, e.g. "inspect", "talk", "take".
+    capability: { type: 'string', default: '' },
+    name: { type: 'string', default: '' },
+    tags: { type: 'string', default: '[]' },
+  },
+  assets: {
+    name: { type: 'string', default: '' },
+    // Renderer-neutral kind tag: image | model | audio | other.
+    kind: { type: 'string', default: 'image' },
+    // Base/diffuse source reference, e.g. "assets/world/a1.png".
+    uri: { type: 'string', default: '' },
+    // Sibling normal-map asset id; '' = none.
+    normalMapAssetId: { type: 'string', default: '' },
+    tags: { type: 'string', default: '[]' },
+  },
+  lightProfiles: {
+    name: { type: 'string', default: '' },
+    // Optional time-of-day tag this profile applies to; '' = any.
+    timeOfDay: { type: 'string', default: '' },
+    // Optional #rrggbb tint; '' = none.
+    colorTint: { type: 'string', default: '' },
+    intensity: { type: 'number', default: 1 },
+    tags: { type: 'string', default: '[]' },
+  },
+  audioProfiles: {
+    name: { type: 'string', default: '' },
+    // Profile kind tag: ambience | sfx | music | other.
+    kind: { type: 'string', default: 'ambience' },
+    // Optional backing audio asset; '' = none.
+    assetId: { type: 'string', default: '' },
+    // Mix volume 0..1.
+    volume: { type: 'number', default: 0.6 },
+    tags: { type: 'string', default: '[]' },
+  },
+  ambientProfiles: {
+    name: { type: 'string', default: '' },
+    // Optional weather/time tags this profile applies to; '' = any.
+    weather: { type: 'string', default: '' },
+    timeOfDay: { type: 'string', default: '' },
+    // Relative ambient-actor density >= 0.
+    density: { type: 'number', default: 0.5 },
+    tags: { type: 'string', default: '[]' },
+  },
+  transitStops: {
+    districtId: { type: 'string', default: '' },
+    name: { type: 'string', default: '' },
+    // Physical place this stop sits at; '' = no linked place.
+    placeId: { type: 'string', default: '' },
+    mapX: { type: 'number', default: 0 },
+    mapY: { type: 'number', default: 0 },
+  },
+  busLines: {
+    name: { type: 'string', default: '' },
+    // JSON array of transit-stop ids in service order.
+    stopIds: { type: 'string', default: '[]' },
+    // Daily recurring service window, minutes after midnight (no cross-midnight).
+    serviceStartMinute: { type: 'number', default: 360 },
+    serviceEndMinute: { type: 'number', default: 1380 },
+    headwayMinutes: { type: 'number', default: 20 },
+    // JSON array of per-segment ride minutes (length must equal stops - 1).
+    segmentMinutes: { type: 'string', default: '[]' },
+    // Fare per complete planned itinerary using this line.
+    fare: { type: 'number', default: 2 },
   },
 } as const satisfies TablesSchema;
 

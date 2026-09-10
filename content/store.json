@@ -320,5 +320,165 @@
       "lines": "[\"ahh sorry, shift starts — gotta run. talk later?\",\"boss is glaring lol. brb after work\",\"duty calls... ill ping you when im back\"]",
       "version": 1
     }
+  },
+  "districts": {
+    "district_a": {
+      "name": "District A",
+      "mapX": 20,
+      "mapY": 60,
+      "tags": "[\"residential\"]"
+    },
+    "district_b": {
+      "name": "District B",
+      "mapX": 80,
+      "mapY": 40,
+      "tags": "[\"downtown\"]"
+    }
+  },
+  "places": {
+    "place_a1": {
+      "districtId": "district_a",
+      "name": "Place A1",
+      "transitAccess": "[{\"stopId\":\"stop_a\",\"walkMinutes\":4}]"
+    },
+    "place_b1": {
+      "districtId": "district_b",
+      "name": "Place B1",
+      "transitAccess": "[{\"stopId\":\"stop_b\",\"walkMinutes\":5}]"
+    }
+  },
+  "transitStops": {
+    "stop_a": {
+      "districtId": "district_a",
+      "name": "Stop A",
+      "placeId": "place_a1",
+      "mapX": 22,
+      "mapY": 58
+    },
+    "stop_b": {
+      "districtId": "district_b",
+      "name": "Stop B",
+      "placeId": "place_b1",
+      "mapX": 78,
+      "mapY": 42
+    }
+  },
+  "busLines": {
+    "line_ab": {
+      "name": "Line AB",
+      "stopIds": "[\"stop_a\",\"stop_b\"]",
+      "serviceStartMinute": 360,
+      "serviceEndMinute": 1380,
+      "headwayMinutes": 20,
+      "segmentMinutes": "[12]",
+      "fare": 2
+    }
+  },
+  "items": {
+    "item_a": {
+      "name": "Item A",
+      "kind": "food",
+      "portable": true,
+      "volume": 1,
+      "assetId": "asset_a1",
+      "tags": "[\"food\",\"perishable\"]"
+    }
+  },
+  "containers": {
+    "container_a": {
+      "name": "Container A",
+      "capacity": 10,
+      "allowedItemKinds": "[\"food\"]",
+      "tags": "[\"storage\"]"
+    }
+  },
+  "spaces": {
+    "space_a1": {
+      "placeId": "place_a1",
+      "name": "Space A1",
+      "tags": "[\"interior\"]"
+    }
+  },
+  "views": {
+    "view_a1": {
+      "spaceId": "space_a1",
+      "name": "View A1",
+      "neighbors": "[\"view_a2\"]",
+      "assetId": "asset_a1",
+      "tags": "[]"
+    },
+    "view_a2": {
+      "spaceId": "space_a1",
+      "name": "View A2",
+      "neighbors": "[\"view_a1\"]",
+      "tags": "[]"
+    }
+  },
+  "anchors": {
+    "anchor_a1": {
+      "viewId": "view_a1",
+      "name": "Anchor A1",
+      "x": 0.5,
+      "y": 0.5,
+      "tags": "[\"hotspot\"]"
+    }
+  },
+  "interactions": {
+    "interaction_a1": {
+      "anchorId": "anchor_a1",
+      "capability": "inspect",
+      "name": "Interaction A1",
+      "tags": "[]"
+    }
+  },
+  "assets": {
+    "asset_a1": {
+      "name": "Asset A1",
+      "kind": "image",
+      "uri": "assets/world/a1.png",
+      "normalMapAssetId": "asset_a1_n",
+      "tags": "[]"
+    },
+    "asset_a1_n": {
+      "name": "Asset A1 Normal",
+      "kind": "image",
+      "uri": "assets/world/a1_n.png",
+      "normalMapAssetId": "",
+      "tags": "[]"
+    },
+    "asset_a2": {
+      "name": "Asset A2",
+      "kind": "audio",
+      "uri": "assets/world/a2.mp3",
+      "normalMapAssetId": "",
+      "tags": "[]"
+    }
+  },
+  "lightProfiles": {
+    "light_a1": {
+      "name": "Light A1",
+      "timeOfDay": "day",
+      "colorTint": "#fff2d9",
+      "intensity": 1,
+      "tags": "[]"
+    }
+  },
+  "audioProfiles": {
+    "audio_a1": {
+      "name": "Audio A1",
+      "kind": "ambience",
+      "assetId": "asset_a2",
+      "volume": 0.6,
+      "tags": "[]"
+    }
+  },
+  "ambientProfiles": {
+    "ambient_a1": {
+      "name": "Ambient A1",
+      "weather": "clear",
+      "timeOfDay": "evening",
+      "density": 0.5,
+      "tags": "[]"
+    }
   }
 }
