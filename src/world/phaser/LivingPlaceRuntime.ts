@@ -2,6 +2,7 @@ import { createSemanticInteractionIntent, createViewTransitionIntent } from './p
 import type { WorldCameraFocus, WorldInteractionIntent, WorldSceneProjection } from './types';
 
 type RuntimeObjectState = Record<string, unknown>;
+export type TransitPresentationLeg = Record<string, unknown>;
 
 export interface LivingPlaceRuntimeSnapshot {
   projection: WorldSceneProjection;
@@ -32,6 +33,7 @@ function cloneProjection(projection: WorldSceneProjection): WorldSceneProjection
 export class LivingPlaceRuntime {
   private projection: WorldSceneProjection;
   private readonly objectState = new Map<string, RuntimeObjectState>();
+  private transitLeg: TransitPresentationLeg | null = null;
 
   constructor(initialProjection: WorldSceneProjection) {
     this.projection = cloneProjection(initialProjection);
@@ -99,6 +101,14 @@ export class LivingPlaceRuntime {
         assetId: binding.assetByView?.[this.projection.viewId] ?? binding.defaultAssetId,
       }];
     });
+  }
+
+  bindTransitLeg(leg: TransitPresentationLeg | null): void {
+    this.transitLeg = leg ? structuredClone(leg) : null;
+  }
+
+  getTransitLeg(): TransitPresentationLeg | null {
+    return this.transitLeg ? structuredClone(this.transitLeg) : null;
   }
 
   interact(anchorId: string, interactionId: string, payload?: Record<string, unknown>): WorldInteractionIntent {
