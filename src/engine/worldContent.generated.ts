@@ -18,3 +18,4 @@ export const GENERATED_TRANSIT_STOPS: GeneratedTransitStopDefinition[] = [
 
 export const GENERATED_BUS_LINES: GeneratedBusLineDefinition[] = [
 ];
+
