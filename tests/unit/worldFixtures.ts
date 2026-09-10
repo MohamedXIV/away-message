@@ -58,3 +58,31 @@ export function validTownTables(): ContentTables {
 export function cloneTables(tables: ContentTables): ContentTables {
   return JSON.parse(JSON.stringify(tables));
 }
+
+/** Slice-3 composition: space_a1 in place_a1 holding two neighboring views. */
+export function validSpaceTables(): ContentTables {
+  return {
+    ...validTownTables(),
+    spaces: {
+      space_a1: {
+        placeId: 'place_a1',
+        name: 'Space A1',
+        tags: '["interior"]',
+      },
+    },
+    views: {
+      view_a1: {
+        spaceId: 'space_a1',
+        name: 'View A1',
+        neighbors: '["view_a2"]',
+        tags: '[]',
+      },
+      view_a2: {
+        spaceId: 'space_a1',
+        name: 'View A2',
+        neighbors: '["view_a1"]',
+        tags: '[]',
+      },
+    },
+  };
+}

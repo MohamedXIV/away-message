@@ -6,44 +6,7 @@ import {
   generateWorldRegistrySource,
 } from '../../src/tools/content/codegen';
 import type { ContentTables } from '../../src/tools/content/codegen';
-import { validTownTables } from './worldFixtures';
-
-/**
- * #51 Slice 3 — space/view hierarchy (Place → Space → View).
- * Renderer-neutral authored definitions: a view is NOT a Phaser Scene.
- * Composes on the Slice-1 town fixture: space_a1 lives in place_a1 and
- * holds two neighboring views.
- */
-export function validSpaceTables(): ContentTables {
-  return {
-    ...validTownTables(),
-    spaces: {
-      space_a1: {
-        placeId: 'place_a1',
-        name: 'Space A1',
-        tags: '["interior"]',
-      },
-    },
-    views: {
-      view_a1: {
-        spaceId: 'space_a1',
-        name: 'View A1',
-        neighbors: '["view_a2"]',
-        tags: '[]',
-      },
-      view_a2: {
-        spaceId: 'space_a1',
-        name: 'View A2',
-        neighbors: '["view_a1"]',
-        tags: '[]',
-      },
-    },
-  };
-}
-
-function clone(tables: ContentTables): ContentTables {
-  return JSON.parse(JSON.stringify(tables));
-}
+import { validSpaceTables, cloneTables as clone } from './worldFixtures';
 
 describe('World content spaces/views (#51 slice 3)', () => {
   it('accepts the minimal valid space/view fixture', () => {
