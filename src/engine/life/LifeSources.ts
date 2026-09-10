@@ -125,6 +125,7 @@ export function createSimulationLifeSources(sim: SimulationLifeSourceHost): Life
         endMinute: appointment.endMinute,
         ...(appointment.rsvp === undefined ? {} : { rsvp: appointment.rsvp }),
         ...(appointment.status === undefined ? {} : { status: appointment.status }),
+        ...(appointment.origin === undefined ? {} : { origin: { ...appointment.origin } }),
       })),
 
     getTriggeredEvents: () =>

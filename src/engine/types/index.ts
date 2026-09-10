@@ -606,6 +606,8 @@ export interface Appointment {
   playerShowed?: boolean;
   // P6 job-board shifts pay their gig wage instead of the standard side-shift wage
   wageOverride?: number;
+  // P6 job provenance: set when this appointment was created from a job-board gig acceptance
+  origin?: { kind: 'job'; id: string };
 }
 
 /** P5 live-meeting lifecycle: scheduled → confirmed → happened/missed, or cancelled. */

@@ -1440,6 +1440,7 @@ export class SimulationEngine {
             status: 'confirmed',
             rsvp: 'yes',
             wageOverride: gig.pay,
+            origin: { kind: 'job', id: gig.id },
           });
           this.social.sendMessage(contact.id, contact.id, 'player', pickJobAcceptLine(`${gig.id}:${day}`, gig.title, 'tomorrow'), now, false, ['job', 'accepted']);
           this.telemetry.logEvent('economy', 'job_accepted', now, { gigId: gig.id, odds });
