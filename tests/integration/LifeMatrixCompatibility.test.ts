@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { SimulationEngine } from '../../src/engine/SimulationEngine';
 import { buildLifeMatrixSnapshot } from '../../src/engine/life/LifeSnapshot';
 import { createSimulationLifeSources } from '../../src/engine/life/LifeSources';
@@ -129,20 +129,28 @@ describe('Life Matrix compatibility with existing Away authorities', () => {
   });
 
   it('does not change simulation outcomes when snapshots are observed around time advances', () => {
-    const observed = new SimulationEngine();
-    const control = new SimulationEngine();
-    const actorId = observed.social.getBuddies()[0]?.id;
-    expect(actorId).toBeDefined();
-    if (!actorId) throw new Error('Expected an existing Away character.');
+    const now = vi.spyOn(Date, 'now').mockReturnValue(1_789_000_000_000);
+    const random = vi.spyOn(Math, 'random').mockReturnValue(0.3141592653);
 
-    for (const minutes of [30, 90, 240, 1440]) {
-      observed.getLifeSnapshot(actorId);
-      observed.advanceGameMinutes(minutes, 'life compatibility test');
-      observed.getLifeSnapshot(actorId);
+    try {
+      const observed = new SimulationEngine();
+      const control = new SimulationEngine();
+      const actorId = observed.social.getBuddies()[0]?.id;
+      expect(actorId).toBeDefined();
+      if (!actorId) throw new Error('Expected an existing Away character.');
 
-      control.advanceGameMinutes(minutes, 'life compatibility test');
+      for (const minutes of [30, 90, 240, 1440]) {
+        observed.getLifeSnapshot(actorId);
+        observed.advanceGameMinutes(minutes, 'life compatibility test');
+        observed.getLifeSnapshot(actorId);
+
+        control.advanceGameMinutes(minutes, 'life compatibility test');
+      }
+
+      expect(observed.exportSnapshot()).toEqual(control.exportSnapshot());
+    } finally {
+      random.mockRestore();
+      now.mockRestore();
     }
-
-    expect(observed.exportSnapshot()).toEqual(control.exportSnapshot());
   });
 });
