@@ -78,4 +78,46 @@ describe('physical-world persistence', () => {
     expect(simulation.getPhysicalWorldState()).toEqual(before);
     expect(simulation.exportSnapshot().physicalWorld).toEqual(before);
   });
+
+  it('uses generated non-PC definitions through the same facade and preserves the moved instance on reload', () => {
+    const simulation = new SimulationEngine({
+      physicalWorld: {
+        items: {
+          'generic-item-1': {
+            instanceId: 'generic-item-1',
+            definitionId: 'item_a',
+            location: { kind: 'worldAnchor', anchorId: 'anchor_a1' },
+          },
+        },
+        containers: {
+          'player-inventory': {
+            instanceId: 'player-inventory',
+            definitionId: 'player_inventory',
+          },
+          'generic-container-1': {
+            instanceId: 'generic-container-1',
+            definitionId: 'container_a',
+          },
+        },
+      },
+    });
+
+    simulation.transferPhysicalItem('generic-item-1', {
+      kind: 'container',
+      containerInstanceId: 'generic-container-1',
+    });
+
+    const snapshot = simulation.exportSnapshot();
+    expect(snapshot.physicalWorld.items['generic-item-1']?.location).toEqual({
+      kind: 'container',
+      containerInstanceId: 'generic-container-1',
+    });
+
+    const reloaded = new SimulationEngine(snapshot);
+    expect(reloaded.getPhysicalWorldState().items['generic-item-1']?.location).toEqual({
+      kind: 'container',
+      containerInstanceId: 'generic-container-1',
+    });
+    expect(Object.keys(reloaded.getPhysicalWorldState().items)).toEqual(['generic-item-1']);
+  });
 });
