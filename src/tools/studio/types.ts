@@ -3,7 +3,7 @@
 
 import type { HairColor, EyeColor, CharacterRoutine, CharacterArtProfile, BuddyBackstory } from '../../engine/types';
 
-export type StudioTab = 'characters' | 'archetypes' | 'dialoguePools' | 'affinitySeeds' | 'world' | 'raw';
+export type StudioTab = 'characters' | 'archetypes' | 'dialoguePools' | 'affinitySeeds' | 'world' | 'transit' | 'raw';
 
 export const HAIR_COLOR_OPTIONS: HairColor[] = [
   'black', 'dark_brown', 'brown', 'light_brown', 'blonde',
