@@ -522,8 +522,7 @@ export class SimulationEngine extends SimulationEngineCore {
       currentPlan.mediaInstanceId === plan.mediaInstanceId &&
       currentPlan.mode === plan.mode &&
       currentPlan.durationMinutes === plan.durationMinutes &&
-      currentPlan.installSizeBytes === plan.installSizeBytes &&
-      currentPlan.preparedAtTotalMinutes === plan.preparedAtTotalMinutes;
+      currentPlan.installSizeBytes === plan.installSizeBytes;
     if (!unchanged) {
       return { success: false, error: 'The prepared OS installation is stale; run setup preflight again.' };
     }
@@ -547,7 +546,7 @@ export class SimulationEngine extends SimulationEngineCore {
         plan.targetOs,
         hardwareForInstall,
         this.getState().time.day,
-        plan.preparedAtTotalMinutes + plan.durationMinutes,
+        this.getState().time.totalMinutes + plan.durationMinutes,
       );
       if (!result.success) {
         this.hardware.loadState({ computer: computerBefore, display: displayBefore });

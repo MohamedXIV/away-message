@@ -223,6 +223,7 @@ export const RoomScene: React.FC = () => {
         const data = res.data ?? {};
         flashOutingNotice([data.summary, data.encounter].filter(Boolean).join(' — ') || 'You head out.');
         soundManager.play('door_open');
+        setActiveModal(null);
       } else {
         flashOutingNotice(res?.error || 'You decide to stay in.');
       }
