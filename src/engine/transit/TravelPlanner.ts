@@ -11,6 +11,7 @@ import type {
   TransitStopId,
   TravelLeg,
   TravelPlan,
+  TravelPlanFailure,
   TravelPlanResult,
   TravelPolicy,
   TravelRequest,
@@ -92,7 +93,6 @@ function toTravelPlan(
 export function planTravel(network: TransitNetwork, request: TravelRequest): TravelPlanResult {
   const policy: TravelPolicy = request.policy ?? 'fastest';
   const service: TransitServiceState = request.service ?? emptyTransitServiceState();
-  void service;
 
   if (!network.places.has(request.originPlaceId)) return { ok: false, reason: 'unknown_origin' };
   if (!network.places.has(request.destinationPlaceId)) return { ok: false, reason: 'unknown_destination' };
@@ -122,10 +122,99 @@ export function planTravel(network: TransitNetwork, request: TravelRequest): Tra
     return plan ? { ok: true, plan } : { ok: false, reason: 'no_route' };
   }
 
-  // fastest / cheapest / prefer_bus resolve onto bus-capable search in later
-  // slices; walking-only search is the current fallback.
-  const plan = searchEarliestArrival(network, request, true);
-  return plan ? { ok: true, plan } : { ok: false, reason: 'no_route' };
+  const busPlan = searchEarliestArrival(network, request, true);
+
+  if (policy === 'fastest') {
+    return busPlan ? { ok: true, plan: busPlan } : { ok: false, reason: classifyNoPlan(network, request, service) };
+  }
+
+  if (policy === 'cheapest') {
+    // Zero-fare walking wins when it reaches the destination at all.
+    const walkPlan = searchEarliestArrival(network, request, false);
+    if (walkPlan) return { ok: true, plan: walkPlan };
+    return busPlan ? { ok: true, plan: busPlan } : { ok: false, reason: classifyNoPlan(network, request, service) };
+  }
+
+  // prefer_bus: take the bus unless walking arrives at least 15 minutes sooner.
+  const walkPlan = searchEarliestArrival(network, request, false);
+  if (busPlan && walkPlan) {
+    return { ok: true, plan: walkPlan.arriveAtMinute <= busPlan.arriveAtMinute - 15 ? walkPlan : busPlan };
+  }
+  const fallback = busPlan ?? walkPlan;
+  return fallback
+    ? { ok: true, plan: fallback }
+    : { ok: false, reason: classifyNoPlan(network, request, service) };
+}
+
+/**
+ * Failure classification when no plan exists. service_ended applies when bus
+ * travel is allowed and no boarding remains anywhere after departure while
+ * the network runs service at all; stop/line closure reasons land with the
+ * service-modifier slice.
+ */
+function classifyNoPlan(
+  network: TransitNetwork,
+  request: TravelRequest,
+  service: TransitServiceState,
+): TravelPlanFailure {
+  if (network.lines.size > 0 && !anyBoardingAtOrAfter(network, request.departAtMinute, service)) {
+    return 'service_ended';
+  }
+  return 'no_route';
+}
+
+/** True when any line offers any boarding at or after the given minute. */
+function anyBoardingAtOrAfter(
+  network: TransitNetwork,
+  minute: number,
+  service: TransitServiceState,
+): boolean {
+  for (const line of network.lines.values()) {
+    if (service.closedLineIds.includes(line.id)) continue;
+    const delay = service.lineDelayMinutes[line.id] ?? 0;
+    const headway = Math.max(1, line.headwayMinutes * Math.max(1, service.headwayMultiplier[line.id] ?? 1));
+    const cumulated = cumulativeSegments(line.segmentMinutes);
+    const total = cumulated[cumulated.length - 1] ?? 0;
+    for (let base = line.serviceStartMinute; base + total <= line.serviceEndMinute; base += headway) {
+      for (let index = 0; index < line.stopIds.length; index++) {
+        if (service.closedStopIds.includes(line.stopIds[index]!)) continue;
+        if (base + delay + cumulated[index]! >= minute) return true;
+      }
+    }
+  }
+  return false;
+}
+
+/** Cumulative ride minutes from the first stop to each stop index. */
+function cumulativeSegments(segmentMinutes: number[]): number[] {
+  const cumulated: number[] = [0];
+  for (const minutes of segmentMinutes) cumulated.push(cumulated[cumulated.length - 1]! + minutes);
+  return cumulated;
+}
+
+interface Boarding {
+  boardAtMinute: number;
+  baseDeparture: number;
+}
+
+function nextBoarding(
+  line: { serviceStartMinute: number; serviceEndMinute: number; headwayMinutes: number; segmentMinutes: number[] },
+  fromIndex: number,
+  earliestMinute: number,
+  delayMinutes: number,
+  headwayMultiplier: number,
+): Boarding | null {
+  const cumulated = cumulativeSegments(line.segmentMinutes);
+  const total = cumulated[cumulated.length - 1] ?? 0;
+  const headway = Math.max(1, line.headwayMinutes * Math.max(1, headwayMultiplier));
+  const maxIterations = Math.floor((line.serviceEndMinute - line.serviceStartMinute) / headway) + 2;
+  for (let k = 0; k <= maxIterations; k++) {
+    const base = line.serviceStartMinute + k * headway;
+    if (base + total > line.serviceEndMinute) break;
+    const boardAt = base + delayMinutes + cumulated[fromIndex]!;
+    if (boardAt >= earliestMinute) return { boardAtMinute: boardAt, baseDeparture: base };
+  }
+  return null;
 }
 
 /**
@@ -138,8 +227,8 @@ function searchEarliestArrival(
   request: TravelRequest,
   busAllowed: boolean,
 ): TravelPlan | null {
-  void busAllowed;
   const raining = request.raining ?? false;
+  const service: TransitServiceState = request.service ?? emptyTransitServiceState();
   const start: SearchState = {
     node: { kind: 'place', id: request.originPlaceId },
     arrivalMinute: request.departAtMinute,
@@ -161,7 +250,11 @@ function searchEarliestArrival(
     const best = bestRef.current;
     if (best && current.arrivalMinute > best.arrivalMinute) break;
 
-    const key = nodeKey(current.node);
+    // Prune only states that cannot improve a completion: same node with
+    // the same bus/fare history and no earlier arrival. Later arrivals with
+    // identical history are dominated because all edge costs are non-negative.
+    const busLegsSoFar = current.legs.filter((leg) => leg.kind === 'bus').length;
+    const key = `${nodeKey(current.node)}|bus:${busLegsSoFar}|fare:${current.fare}`;
     const seen = bestByNode.get(key);
     if (seen !== undefined && seen <= current.arrivalMinute) continue;
     bestByNode.set(key, current.arrivalMinute);
@@ -190,8 +283,10 @@ function searchEarliestArrival(
         });
       }
     } else {
-      // Stop node: reverse access walks to nearby places. Bus boarding
-      // edges land here in the bus slice.
+      if (busAllowed) {
+        expandBusBoardings(network, service, queue, current);
+      }
+      // Stop node: reverse access walks to nearby places.
       for (const place of network.places.values()) {
         const access = place.transitAccess.find((entry) => entry.stopId === current.node.id);
         if (!access) continue;
@@ -216,4 +311,60 @@ function searchEarliestArrival(
   return bestRef.current
     ? toTravelPlan(request.originPlaceId, request.destinationPlaceId, request.departAtMinute, bestRef.current)
     : null;
+}
+
+/**
+ * Bus boarding edges from a stop state: for every line serving the stop in
+ * the forward direction, board the next valid run and offer alighting at
+ * every downstream open stop. Closed lines/stops contribute no edges.
+ */
+function expandBusBoardings(
+  network: TransitNetwork,
+  service: TransitServiceState,
+  queue: SearchState[],
+  current: SearchState,
+): void {
+  if (current.node.kind !== 'stop') return;
+  const fromStopId = current.node.id;
+  if (service.closedStopIds.includes(fromStopId)) return;
+  for (const { lineId, stopIndex } of network.linesAtStop(fromStopId)) {
+    if (service.closedLineIds.includes(lineId)) continue;
+    const line = network.lines.get(lineId);
+    if (!line || stopIndex >= line.stopIds.length - 1) continue;
+    const delay = service.lineDelayMinutes[lineId] ?? 0;
+    const multiplier = service.headwayMultiplier[lineId] ?? 1;
+    const boarding = nextBoarding(line, stopIndex, current.arrivalMinute, delay, multiplier);
+    if (!boarding) continue;
+    const cumulated = cumulativeSegments(line.segmentMinutes);
+    const wait = boarding.boardAtMinute - current.arrivalMinute;
+    for (let j = stopIndex + 1; j < line.stopIds.length; j++) {
+      const toStopId = line.stopIds[j]!;
+      if (service.closedStopIds.includes(toStopId)) continue;
+      const ride = cumulated[j]! - cumulated[stopIndex]!;
+      const legs: TravelLeg[] = [...current.legs];
+      if (wait > 0) {
+        legs.push({ kind: 'wait', stopId: fromStopId, lineId, minutes: wait, boardAtMinute: boarding.boardAtMinute });
+      }
+      const alightAtMinute = boarding.boardAtMinute + ride;
+      legs.push({
+        kind: 'bus',
+        lineId,
+        fromStopId,
+        toStopId,
+        boardAtMinute: boarding.boardAtMinute,
+        alightAtMinute,
+        minutes: ride,
+      });
+      queue.push({
+        node: { kind: 'stop', id: toStopId },
+        arrivalMinute: alightAtMinute,
+        legs,
+        walkMinutes: current.walkMinutes,
+        waitMinutes: current.waitMinutes + wait,
+        rideMinutes: current.rideMinutes + ride,
+        fare: current.fare,
+        transferCount: current.transferCount,
+      });
+    }
+  }
 }
