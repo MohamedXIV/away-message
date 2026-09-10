@@ -15,8 +15,30 @@ import { validAnchorTables, cloneTables as clone } from './worldFixtures';
  * asset via optional assetId. No Phaser rendering lives here.
  */
 export function validAssetTables(): ContentTables {
+  const base = validAnchorTables();
+  const views = { ...(base['views'] as Record<string, Record<string, unknown>>) };
+  views['view_a1'] = { ...views['view_a1'], assetId: 'asset_a1' };
   return {
-    ...validAnchorTables(),
+    ...base,
+    items: {
+      item_a: {
+        name: 'Item A',
+        kind: 'food',
+        portable: true,
+        volume: 1,
+        assetId: 'asset_a1',
+        tags: '["food","perishable"]',
+      },
+    },
+    containers: {
+      container_a: {
+        name: 'Container A',
+        capacity: 10,
+        allowedItemKinds: '["food"]',
+        tags: '["storage"]',
+      },
+    },
+    views,
     assets: {
       asset_a1: {
         name: 'Asset A1',

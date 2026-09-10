@@ -22,6 +22,7 @@
 // - views: renderer-neutral authored viewpoints inside one space
 // - anchors: authored interaction points inside one view (0..1 bounds)
 // - interactions: one capability bound to one anchor
+// - assets: renderer-neutral asset references (diffuse + optional normal map)
 // - transitStops: bus stops, each in one district, optionally at a place
 // - busLines: ordered-stop bus service (window, headway, segments, fare)
 
@@ -116,6 +117,8 @@ export const CONTENT_SCHEMA = {
     portable: { type: 'boolean', default: true },
     // Abstract capacity unit; authored definition only, never a runtime location.
     volume: { type: 'number', default: 1 },
+    // Optional visual asset for this item; '' = none.
+    assetId: { type: 'string', default: '' },
     // JSON array of semantic tags, e.g. ["food","fragile"].
     tags: { type: 'string', default: '[]' },
   },
@@ -151,6 +154,8 @@ export const CONTENT_SCHEMA = {
     name: { type: 'string', default: '' },
     // JSON array of neighboring view ids within the same space.
     neighbors: { type: 'string', default: '[]' },
+    // Optional hero/background asset for this view; '' = none.
+    assetId: { type: 'string', default: '' },
     tags: { type: 'string', default: '[]' },
   },
   anchors: {
@@ -166,6 +171,16 @@ export const CONTENT_SCHEMA = {
     // Capability this interaction exposes, e.g. "inspect", "talk", "take".
     capability: { type: 'string', default: '' },
     name: { type: 'string', default: '' },
+    tags: { type: 'string', default: '[]' },
+  },
+  assets: {
+    name: { type: 'string', default: '' },
+    // Renderer-neutral kind tag: image | model | audio | other.
+    kind: { type: 'string', default: 'image' },
+    // Base/diffuse source reference, e.g. "assets/world/a1.png".
+    uri: { type: 'string', default: '' },
+    // Sibling normal-map asset id; '' = none.
+    normalMapAssetId: { type: 'string', default: '' },
     tags: { type: 'string', default: '[]' },
   },
   transitStops: {

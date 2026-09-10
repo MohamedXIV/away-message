@@ -384,6 +384,10 @@ export function validateContent(tables: ContentTables): string[] {
   // capability bindings only; runtime interaction state stays out.
   errors.push(...validateWorldAnchors(tables));
 
+  // 11. World assets (#51 slice 5). Renderer-neutral references only;
+  // no renderer implementation lives here.
+  errors.push(...validateWorldAssets(tables));
+
   return errors;
 }
 
@@ -830,6 +834,92 @@ export function validateWorldAnchors(tables: ContentTables): string[] {
   return errors;
 }
 
+/**
+ * Semantic validation for the asset content table (#51 slice 5), plus the
+ * optional assetId references carried by items and views.
+ * A normal-map reference must resolve to a *different* image-kind asset.
+ * Every error identifies table/id/field for Content Studio (#52) feedback.
+ */
+export function validateWorldAssets(tables: ContentTables): string[] {
+  const errors: string[] = [];
+  const assets = tables['assets'] ?? {};
+  const items = tables['items'] ?? {};
+  const views = tables['views'] ?? {};
+
+  const checkName = (table: string, id: string, row: Record<string, unknown>): void => {
+    const name = row['name'];
+    if (typeof name !== 'string' || !name.trim() || name.length > 60) {
+      errors.push(`${table}/${id}.name: must be a non-empty string <= 60 chars.`);
+    }
+  };
+  const checkTags = (table: string, id: string, row: Record<string, unknown>): void => {
+    let tags: unknown = null;
+    try {
+      tags = JSON.parse(String(row['tags'] ?? '[]'));
+    } catch {
+      errors.push(`${table}/${id}.tags: invalid JSON array.`);
+      return;
+    }
+    if (!Array.isArray(tags)) {
+      errors.push(`${table}/${id}.tags: must be a JSON array.`);
+      return;
+    }
+    if (tags.length > 12) errors.push(`${table}/${id}.tags: max 12 tags.`);
+    for (const tag of tags) {
+      if (typeof tag !== 'string' || !/^[a-z][a-z0-9_-]{1,23}$/.test(tag)) {
+        errors.push(`${table}/${id}.tags: '${String(tag)}' must be a lowercase tag ≤ 24 chars.`);
+      }
+    }
+  };
+  const checkAssetId = (table: string, id: string, value: unknown): void => {
+    if (value === undefined || value === null || value === '') return;
+    if (typeof value !== 'string' || !assets[String(value)]) {
+      errors.push(`${table}/${id}.assetId: unknown asset '${String(value)}'.`);
+    }
+  };
+
+  for (const [id, row] of Object.entries(assets)) {
+    if (!row || typeof row !== 'object') {
+      errors.push(`assets/${id}: must be an object.`);
+      continue;
+    }
+    const idCheck = validateWorldId(id);
+    if (!idCheck.ok) errors.push(`assets/${id}: ${idCheck.error}`);
+    const r = row as Record<string, unknown>;
+    checkName('assets', id, r);
+    const kind = r['kind'];
+    if (typeof kind !== 'string' || !/^[a-z][a-z0-9_-]{1,23}$/.test(kind)) {
+      errors.push(`assets/${id}.kind: '${String(kind)}' must be a lowercase tag ≤ 24 chars.`);
+    }
+    const uri = r['uri'];
+    if (typeof uri !== 'string' || !uri.trim() || uri.length > 200) {
+      errors.push(`assets/${id}.uri: must be a non-empty reference <= 200 chars.`);
+    }
+    const normalId = r['normalMapAssetId'];
+    if (normalId !== undefined && normalId !== null && normalId !== '') {
+      if (typeof normalId !== 'string' || !assets[String(normalId)]) {
+        errors.push(`assets/${id}.normalMapAssetId: unknown asset '${String(normalId)}'.`);
+      } else if (normalId === id) {
+        errors.push(`assets/${id}.normalMapAssetId: cannot reference itself.`);
+      } else if ((assets[String(normalId)] as Record<string, unknown>)?.['kind'] !== 'image') {
+        errors.push(`assets/${id}.normalMapAssetId: target '${String(normalId)}' must be an image asset.`);
+      }
+    }
+    checkTags('assets', id, r);
+  }
+
+  for (const [id, row] of Object.entries(items)) {
+    if (!row || typeof row !== 'object') continue;
+    checkAssetId('items', id, (row as Record<string, unknown>)['assetId']);
+  }
+  for (const [id, row] of Object.entries(views)) {
+    if (!row || typeof row !== 'object') continue;
+    checkAssetId('views', id, (row as Record<string, unknown>)['assetId']);
+  }
+
+  return errors;
+}
+
 /** Stable 8-hex digest of canonical tables (the content version stamp). */
 export function contentHash(tables: ContentTables): string {
   const str = JSON.stringify(canonicalize(tables));
@@ -1068,6 +1158,7 @@ export function generateWorldRegistrySource(tables: ContentTables): string {
   const views = tables['views'] ?? {};
   const anchors = tables['anchors'] ?? {};
   const interactions = tables['interactions'] ?? {};
+  const assets = tables['assets'] ?? {};
 
   const lines: string[] = [];
   lines.push('// GENERATED — do not edit by hand.');
@@ -1207,6 +1298,7 @@ export function generateWorldRegistrySource(tables: ContentTables): string {
   lines.push('  kind: string;');
   lines.push('  portable: boolean;');
   lines.push('  volume: number;');
+  lines.push('  assetId: string | null;');
   lines.push('  tags: string[];');
   lines.push('}');
   lines.push('');
@@ -1225,6 +1317,8 @@ export function generateWorldRegistrySource(tables: ContentTables): string {
       return Array.isArray(parsed) ? parsed.filter((x): x is string => typeof x === 'string') : [];
     } catch { return []; }
   };
+  const optId = (v: unknown): string =>
+    v === undefined || v === null || v === '' ? 'null' : tsString(String(v));
 
   lines.push('export const GENERATED_ITEMS: GeneratedItemDef[] = [');
   for (const id of Object.keys(items).sort()) {
@@ -1235,6 +1329,7 @@ export function generateWorldRegistrySource(tables: ContentTables): string {
     lines.push(`    kind: ${tsString(String(r['kind'] ?? 'misc'))},`);
     lines.push(`    portable: ${r['portable'] === true ? 'true' : 'false'},`);
     lines.push(`    volume: ${Number(r['volume'] ?? 0)},`);
+    lines.push(`    assetId: ${optId(r['assetId'])},`);
     lines.push(`    tags: [${strArr(r['tags']).map((t) => tsString(t)).join(', ')}],`);
     lines.push('  },');
   }
@@ -1267,6 +1362,7 @@ export function generateWorldRegistrySource(tables: ContentTables): string {
   lines.push('  spaceId: string;');
   lines.push('  name: string;');
   lines.push('  neighbors: string[];');
+  lines.push('  assetId: string | null;');
   lines.push('  tags: string[];');
   lines.push('}');
   lines.push('');
@@ -1292,6 +1388,7 @@ export function generateWorldRegistrySource(tables: ContentTables): string {
     lines.push(`    spaceId: ${tsString(String(r['spaceId'] ?? ''))},`);
     lines.push(`    name: ${tsString(String(r['name'] ?? ''))},`);
     lines.push(`    neighbors: [${strArr(r['neighbors']).map((n) => tsString(n)).join(', ')}],`);
+    lines.push(`    assetId: ${optId(r['assetId'])},`);
     lines.push(`    tags: [${strArr(r['tags']).map((t) => tsString(t)).join(', ')}],`);
     lines.push('  },');
   }
@@ -1339,6 +1436,31 @@ export function generateWorldRegistrySource(tables: ContentTables): string {
     lines.push(`    anchorId: ${tsString(String(r['anchorId'] ?? ''))},`);
     lines.push(`    capability: ${tsString(String(r['capability'] ?? ''))},`);
     lines.push(`    name: ${tsString(String(r['name'] ?? ''))},`);
+    lines.push(`    tags: [${strArr(r['tags']).map((t) => tsString(t)).join(', ')}],`);
+    lines.push('  },');
+  }
+  lines.push('];');
+  lines.push('');
+
+  lines.push('export interface GeneratedAssetDef {');
+  lines.push('  id: string;');
+  lines.push('  name: string;');
+  lines.push('  kind: string;');
+  lines.push('  uri: string;');
+  lines.push('  normalMapAssetId: string | null;');
+  lines.push('  tags: string[];');
+  lines.push('}');
+  lines.push('');
+
+  lines.push('export const GENERATED_ASSETS: GeneratedAssetDef[] = [');
+  for (const id of Object.keys(assets).sort()) {
+    const r = assets[id] as Record<string, unknown>;
+    lines.push('  {');
+    lines.push(`    id: ${tsString(id)},`);
+    lines.push(`    name: ${tsString(String(r['name'] ?? ''))},`);
+    lines.push(`    kind: ${tsString(String(r['kind'] ?? 'image'))},`);
+    lines.push(`    uri: ${tsString(String(r['uri'] ?? ''))},`);
+    lines.push(`    normalMapAssetId: ${optId(r['normalMapAssetId'])},`);
     lines.push(`    tags: [${strArr(r['tags']).map((t) => tsString(t)).join(', ')}],`);
     lines.push('  },');
   }

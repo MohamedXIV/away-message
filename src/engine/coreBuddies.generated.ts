@@ -1,6 +1,6 @@
 // GENERATED — do not edit by hand.
-// Source: content/store.json (content v3fe049aa). Regenerate: npm run content:pull.
-export const CONTENT_VERSION = '3fe049aa';
+// Source: content/store.json (content vfc94bddf). Regenerate: npm run content:pull.
+export const CONTENT_VERSION = 'fc94bddf';
 
 export interface GeneratedArchetypeDef {
   id: string;

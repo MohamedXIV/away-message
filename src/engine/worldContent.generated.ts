@@ -1,6 +1,6 @@
 // GENERATED — do not edit by hand.
-// Source: content/store.json (content v3fe049aa). Regenerate: npm run content:pull.
-export const WORLD_CONTENT_VERSION = '3fe049aa';
+// Source: content/store.json (content vfc94bddf). Regenerate: npm run content:pull.
+export const WORLD_CONTENT_VERSION = 'fc94bddf';
 
 export interface GeneratedDistrictDef {
   id: string;
@@ -112,6 +112,7 @@ export interface GeneratedItemDef {
   kind: string;
   portable: boolean;
   volume: number;
+  assetId: string | null;
   tags: string[];
 }
 
@@ -130,6 +131,7 @@ export const GENERATED_ITEMS: GeneratedItemDef[] = [
     kind: "food",
     portable: true,
     volume: 1,
+    assetId: "asset_a1",
     tags: ["food", "perishable"],
   },
 ];
@@ -156,6 +158,7 @@ export interface GeneratedViewDef {
   spaceId: string;
   name: string;
   neighbors: string[];
+  assetId: string | null;
   tags: string[];
 }
 
@@ -174,6 +177,7 @@ export const GENERATED_VIEWS: GeneratedViewDef[] = [
     spaceId: "space_a1",
     name: "View A1",
     neighbors: ["view_a2"],
+    assetId: "asset_a1",
     tags: [],
   },
   {
@@ -181,6 +185,7 @@ export const GENERATED_VIEWS: GeneratedViewDef[] = [
     spaceId: "space_a1",
     name: "View A2",
     neighbors: ["view_a1"],
+    assetId: null,
     tags: [],
   },
 ];
@@ -219,6 +224,34 @@ export const GENERATED_INTERACTIONS: GeneratedInteractionDef[] = [
     anchorId: "anchor_a1",
     capability: "inspect",
     name: "Interaction A1",
+    tags: [],
+  },
+];
+
+export interface GeneratedAssetDef {
+  id: string;
+  name: string;
+  kind: string;
+  uri: string;
+  normalMapAssetId: string | null;
+  tags: string[];
+}
+
+export const GENERATED_ASSETS: GeneratedAssetDef[] = [
+  {
+    id: "asset_a1",
+    name: "Asset A1",
+    kind: "image",
+    uri: "assets/world/a1.png",
+    normalMapAssetId: "asset_a1_n",
+    tags: [],
+  },
+  {
+    id: "asset_a1_n",
+    name: "Asset A1 Normal",
+    kind: "image",
+    uri: "assets/world/a1_n.png",
+    normalMapAssetId: null,
     tags: [],
   },
 ];

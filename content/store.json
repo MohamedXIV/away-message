@@ -380,6 +380,7 @@
       "kind": "food",
       "portable": true,
       "volume": 1,
+      "assetId": "asset_a1",
       "tags": "[\"food\",\"perishable\"]"
     }
   },
@@ -403,6 +404,7 @@
       "spaceId": "space_a1",
       "name": "View A1",
       "neighbors": "[\"view_a2\"]",
+      "assetId": "asset_a1",
       "tags": "[]"
     },
     "view_a2": {
@@ -426,6 +428,22 @@
       "anchorId": "anchor_a1",
       "capability": "inspect",
       "name": "Interaction A1",
+      "tags": "[]"
+    }
+  },
+  "assets": {
+    "asset_a1": {
+      "name": "Asset A1",
+      "kind": "image",
+      "uri": "assets/world/a1.png",
+      "normalMapAssetId": "asset_a1_n",
+      "tags": "[]"
+    },
+    "asset_a1_n": {
+      "name": "Asset A1 Normal",
+      "kind": "image",
+      "uri": "assets/world/a1_n.png",
+      "normalMapAssetId": "",
       "tags": "[]"
     }
   }
