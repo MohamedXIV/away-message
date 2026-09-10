@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { CONTENT_SCHEMA } from '../../src/tools/content/schema';
 import { validateContent, type ContentTables } from '../../src/tools/content/codegen';
+import { validateWorldContent } from '../../src/tools/content/world';
 
 function worldFixture(): ContentTables {
   return {
@@ -38,6 +39,10 @@ function worldFixture(): ContentTables {
   };
 }
 
+function validateAll(tables: ContentTables): string[] {
+  return [...validateContent(tables), ...validateWorldContent(tables)];
+}
+
 describe('world content geography contract', () => {
   it('declares TinyBase tables for districts, places, stops, and bus lines', () => {
     const schema = CONTENT_SCHEMA as Record<string, unknown>;
@@ -48,7 +53,7 @@ describe('world content geography contract', () => {
   });
 
   it('accepts a valid two-district route fixture', () => {
-    expect(validateContent(worldFixture())).toEqual([]);
+    expect(validateAll(worldFixture())).toEqual([]);
   });
 
   it('rejects broken geography references and invalid transit timing', () => {
@@ -59,7 +64,7 @@ describe('world content geography contract', () => {
     tables['busLineDefinitions']!['line_1']!['segmentMinutes'] = '[0, 4]';
     tables['busLineDefinitions']!['line_1']!['headwayMinutes'] = 0;
 
-    const errors = validateContent(tables);
+    const errors = validateAll(tables);
     expect(errors.some((error) => error.includes('room_104') && error.includes('missing_district'))).toBe(true);
     expect(errors.some((error) => error.includes('motel_stop') && error.includes('missing_place'))).toBe(true);
     expect(errors.some((error) => error.includes('line_1') && error.includes('missing_stop'))).toBe(true);
