@@ -14,6 +14,8 @@
 // - artProfiles: engine-agnostic 2D art specification (Live2D / mesh / icon)
 // - affinitySeeds: NPC↔NPC role affinity seeds (-100..100)
 // - dialoguePools: template lines for offline / reactive chats
+// - items: authored physical-item definitions (not runtime instances)
+// - containers: authored container-capacity/acceptance definitions
 // - districts: geographic/social town groupings (one town, one simulation)
 // - places: canonical destinations, each in exactly one district
 // - transitStops: bus stops, each in one district, optionally at a place
@@ -102,6 +104,24 @@ export const CONTENT_SCHEMA = {
   dialoguePools: {
     lines: { type: 'string', default: '[]' },
     version: { type: 'number', default: 1 },
+  },
+  items: {
+    name: { type: 'string', default: '' },
+    // Semantic physical kind consumed by later inventory/container rules.
+    kind: { type: 'string', default: 'misc' },
+    portable: { type: 'boolean', default: true },
+    // Abstract capacity unit; authored definition only, never a runtime location.
+    volume: { type: 'number', default: 1 },
+    // JSON array of semantic tags, e.g. ["food","fragile"].
+    tags: { type: 'string', default: '[]' },
+  },
+  containers: {
+    name: { type: 'string', default: '' },
+    // Same abstract units as item.volume. Runtime occupancy belongs to #18.
+    capacity: { type: 'number', default: 1 },
+    // JSON array of accepted item.kind values; [] means unrestricted.
+    allowedItemKinds: { type: 'string', default: '[]' },
+    tags: { type: 'string', default: '[]' },
   },
   districts: {
     name: { type: 'string', default: '' },
