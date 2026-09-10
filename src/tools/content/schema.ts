@@ -20,6 +20,8 @@
 // - places: canonical destinations, each in exactly one district
 // - spaces: authored sub-areas inside one place (Place → Space → View)
 // - views: renderer-neutral authored viewpoints inside one space
+// - anchors: authored interaction points inside one view (0..1 bounds)
+// - interactions: one capability bound to one anchor
 // - transitStops: bus stops, each in one district, optionally at a place
 // - busLines: ordered-stop bus service (window, headway, segments, fare)
 
@@ -149,6 +151,21 @@ export const CONTENT_SCHEMA = {
     name: { type: 'string', default: '' },
     // JSON array of neighboring view ids within the same space.
     neighbors: { type: 'string', default: '[]' },
+    tags: { type: 'string', default: '[]' },
+  },
+  anchors: {
+    viewId: { type: 'string', default: '' },
+    name: { type: 'string', default: '' },
+    // Normalized 0..1 placement inside the view (cf. HotspotBounds).
+    x: { type: 'number', default: 0.5 },
+    y: { type: 'number', default: 0.5 },
+    tags: { type: 'string', default: '[]' },
+  },
+  interactions: {
+    anchorId: { type: 'string', default: '' },
+    // Capability this interaction exposes, e.g. "inspect", "talk", "take".
+    capability: { type: 'string', default: '' },
+    name: { type: 'string', default: '' },
     tags: { type: 'string', default: '[]' },
   },
   transitStops: {

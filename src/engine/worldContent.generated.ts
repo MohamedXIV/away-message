@@ -1,6 +1,6 @@
 // GENERATED — do not edit by hand.
-// Source: content/store.json (content v18a6b04c). Regenerate: npm run content:pull.
-export const WORLD_CONTENT_VERSION = '18a6b04c';
+// Source: content/store.json (content v3fe049aa). Regenerate: npm run content:pull.
+export const WORLD_CONTENT_VERSION = '3fe049aa';
 
 export interface GeneratedDistrictDef {
   id: string;
@@ -181,6 +181,44 @@ export const GENERATED_VIEWS: GeneratedViewDef[] = [
     spaceId: "space_a1",
     name: "View A2",
     neighbors: ["view_a1"],
+    tags: [],
+  },
+];
+
+export interface GeneratedAnchorDef {
+  id: string;
+  viewId: string;
+  name: string;
+  x: number;
+  y: number;
+  tags: string[];
+}
+
+export interface GeneratedInteractionDef {
+  id: string;
+  anchorId: string;
+  capability: string;
+  name: string;
+  tags: string[];
+}
+
+export const GENERATED_ANCHORS: GeneratedAnchorDef[] = [
+  {
+    id: "anchor_a1",
+    viewId: "view_a1",
+    name: "Anchor A1",
+    x: 0.5,
+    y: 0.5,
+    tags: ["hotspot"],
+  },
+];
+
+export const GENERATED_INTERACTIONS: GeneratedInteractionDef[] = [
+  {
+    id: "interaction_a1",
+    anchorId: "anchor_a1",
+    capability: "inspect",
+    name: "Interaction A1",
     tags: [],
   },
 ];

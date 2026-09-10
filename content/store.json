@@ -411,5 +411,22 @@
       "neighbors": "[\"view_a1\"]",
       "tags": "[]"
     }
+  },
+  "anchors": {
+    "anchor_a1": {
+      "viewId": "view_a1",
+      "name": "Anchor A1",
+      "x": 0.5,
+      "y": 0.5,
+      "tags": "[\"hotspot\"]"
+    }
+  },
+  "interactions": {
+    "interaction_a1": {
+      "anchorId": "anchor_a1",
+      "capability": "inspect",
+      "name": "Interaction A1",
+      "tags": "[]"
+    }
   }
 }

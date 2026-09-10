@@ -5,7 +5,6 @@ import {
   validateContent,
   generateWorldRegistrySource,
 } from '../../src/tools/content/codegen';
-import type { ContentTables } from '../../src/tools/content/codegen';
 import { validSpaceTables, cloneTables as clone } from './worldFixtures';
 
 describe('World content spaces/views (#51 slice 3)', () => {

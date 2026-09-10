@@ -380,6 +380,10 @@ export function validateContent(tables: ContentTables): string[] {
   // hierarchy: a view is not a Phaser Scene.
   errors.push(...validateWorldSpaces(tables));
 
+  // 10. World anchors/interactions (#51 slice 4). Authored placement and
+  // capability bindings only; runtime interaction state stays out.
+  errors.push(...validateWorldAnchors(tables));
+
   return errors;
 }
 
@@ -743,6 +747,89 @@ export function validateWorldSpaces(tables: ContentTables): string[] {
   return errors;
 }
 
+/**
+ * Semantic validation for the anchor/interaction content tables (#51 slice 4).
+ * Every error identifies table/id/field so Content Studio (#52) can show
+ * useful per-row feedback. Never repairs: invalid content fails loudly.
+ */
+export function validateWorldAnchors(tables: ContentTables): string[] {
+  const errors: string[] = [];
+  const views = tables['views'] ?? {};
+  const anchors = tables['anchors'] ?? {};
+  const interactions = tables['interactions'] ?? {};
+
+  const num = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
+  const checkName = (table: string, id: string, row: Record<string, unknown>): void => {
+    const name = row['name'];
+    if (typeof name !== 'string' || !name.trim() || name.length > 60) {
+      errors.push(`${table}/${id}.name: must be a non-empty string <= 60 chars.`);
+    }
+  };
+  const checkTags = (table: string, id: string, row: Record<string, unknown>): void => {
+    let tags: unknown = null;
+    try {
+      tags = JSON.parse(String(row['tags'] ?? '[]'));
+    } catch {
+      errors.push(`${table}/${id}.tags: invalid JSON array.`);
+      return;
+    }
+    if (!Array.isArray(tags)) {
+      errors.push(`${table}/${id}.tags: must be a JSON array.`);
+      return;
+    }
+    if (tags.length > 12) errors.push(`${table}/${id}.tags: max 12 tags.`);
+    for (const tag of tags) {
+      if (typeof tag !== 'string' || !/^[a-z][a-z0-9_-]{1,23}$/.test(tag)) {
+        errors.push(`${table}/${id}.tags: '${String(tag)}' must be a lowercase tag ≤ 24 chars.`);
+      }
+    }
+  };
+
+  for (const [id, row] of Object.entries(anchors)) {
+    if (!row || typeof row !== 'object') {
+      errors.push(`anchors/${id}: must be an object.`);
+      continue;
+    }
+    const idCheck = validateWorldId(id);
+    if (!idCheck.ok) errors.push(`anchors/${id}: ${idCheck.error}`);
+    const r = row as Record<string, unknown>;
+    const viewId = r['viewId'];
+    if (typeof viewId !== 'string' || !views[viewId]) {
+      errors.push(`anchors/${id}.viewId: unknown view '${String(viewId)}'.`);
+    }
+    checkName('anchors', id, r);
+    for (const axis of ['x', 'y']) {
+      const v = r[axis];
+      if (!num(v) || (v as number) < 0 || (v as number) > 1) {
+        errors.push(`anchors/${id}.${axis}: must be a number in 0..1 view bounds.`);
+      }
+    }
+    checkTags('anchors', id, r);
+  }
+
+  for (const [id, row] of Object.entries(interactions)) {
+    if (!row || typeof row !== 'object') {
+      errors.push(`interactions/${id}: must be an object.`);
+      continue;
+    }
+    const idCheck = validateWorldId(id);
+    if (!idCheck.ok) errors.push(`interactions/${id}: ${idCheck.error}`);
+    const r = row as Record<string, unknown>;
+    const anchorId = r['anchorId'];
+    if (typeof anchorId !== 'string' || !anchors[anchorId]) {
+      errors.push(`interactions/${id}.anchorId: unknown anchor '${String(anchorId)}'.`);
+    }
+    const capability = r['capability'];
+    if (typeof capability !== 'string' || !/^[a-z][a-z0-9_-]{1,23}$/.test(capability)) {
+      errors.push(`interactions/${id}.capability: must be a lowercase capability tag ≤ 24 chars.`);
+    }
+    checkName('interactions', id, r);
+    checkTags('interactions', id, r);
+  }
+
+  return errors;
+}
+
 /** Stable 8-hex digest of canonical tables (the content version stamp). */
 export function contentHash(tables: ContentTables): string {
   const str = JSON.stringify(canonicalize(tables));
@@ -979,6 +1066,8 @@ export function generateWorldRegistrySource(tables: ContentTables): string {
   const containers = tables['containers'] ?? {};
   const spaces = tables['spaces'] ?? {};
   const views = tables['views'] ?? {};
+  const anchors = tables['anchors'] ?? {};
+  const interactions = tables['interactions'] ?? {};
 
   const lines: string[] = [];
   lines.push('// GENERATED — do not edit by hand.');
@@ -1203,6 +1292,53 @@ export function generateWorldRegistrySource(tables: ContentTables): string {
     lines.push(`    spaceId: ${tsString(String(r['spaceId'] ?? ''))},`);
     lines.push(`    name: ${tsString(String(r['name'] ?? ''))},`);
     lines.push(`    neighbors: [${strArr(r['neighbors']).map((n) => tsString(n)).join(', ')}],`);
+    lines.push(`    tags: [${strArr(r['tags']).map((t) => tsString(t)).join(', ')}],`);
+    lines.push('  },');
+  }
+  lines.push('];');
+  lines.push('');
+
+  lines.push('export interface GeneratedAnchorDef {');
+  lines.push('  id: string;');
+  lines.push('  viewId: string;');
+  lines.push('  name: string;');
+  lines.push('  x: number;');
+  lines.push('  y: number;');
+  lines.push('  tags: string[];');
+  lines.push('}');
+  lines.push('');
+  lines.push('export interface GeneratedInteractionDef {');
+  lines.push('  id: string;');
+  lines.push('  anchorId: string;');
+  lines.push('  capability: string;');
+  lines.push('  name: string;');
+  lines.push('  tags: string[];');
+  lines.push('}');
+  lines.push('');
+
+  lines.push('export const GENERATED_ANCHORS: GeneratedAnchorDef[] = [');
+  for (const id of Object.keys(anchors).sort()) {
+    const r = anchors[id] as Record<string, unknown>;
+    lines.push('  {');
+    lines.push(`    id: ${tsString(id)},`);
+    lines.push(`    viewId: ${tsString(String(r['viewId'] ?? ''))},`);
+    lines.push(`    name: ${tsString(String(r['name'] ?? ''))},`);
+    lines.push(`    x: ${Number(r['x'] ?? 0)},`);
+    lines.push(`    y: ${Number(r['y'] ?? 0)},`);
+    lines.push(`    tags: [${strArr(r['tags']).map((t) => tsString(t)).join(', ')}],`);
+    lines.push('  },');
+  }
+  lines.push('];');
+  lines.push('');
+
+  lines.push('export const GENERATED_INTERACTIONS: GeneratedInteractionDef[] = [');
+  for (const id of Object.keys(interactions).sort()) {
+    const r = interactions[id] as Record<string, unknown>;
+    lines.push('  {');
+    lines.push(`    id: ${tsString(id)},`);
+    lines.push(`    anchorId: ${tsString(String(r['anchorId'] ?? ''))},`);
+    lines.push(`    capability: ${tsString(String(r['capability'] ?? ''))},`);
+    lines.push(`    name: ${tsString(String(r['name'] ?? ''))},`);
     lines.push(`    tags: [${strArr(r['tags']).map((t) => tsString(t)).join(', ')}],`);
     lines.push('  },');
   }
