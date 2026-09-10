@@ -40,7 +40,7 @@ describe('P6 grocery orders (SimulationEngine)', () => {
     expect(sim.getState().player.cash).toBe(238 - 10);
   });
 
-  it('delivery is slow, free of effort, and credits the pantry on arrival', () => {
+  it('delivery is slow, free of effort, and becomes a physical parcel on arrival', () => {
     const res = sim.dispatchAction({ type: 'PLAYER_PLACE_ORDER', items: [{ sku: 'grocery_bag', qty: 2 }], fulfillment: 'delivery' });
     expect(res.success).toBe(true);
     const orderId = (res.data as { orderId: string }).orderId;
@@ -48,10 +48,14 @@ describe('P6 grocery orders (SimulationEngine)', () => {
     expect(order.status).toBe('transit');
     expect(order.readyMinute - order.placedMinute).toBeGreaterThanOrEqual(120);
     expect(order.readyMinute - order.placedMinute).toBeLessThanOrEqual(24 * 60);
-    expect(sim.getState().player.pantry.groceries).toBe(0); // nothing yet
+    expect(sim.getState().player.pantry.groceries).toBe(0);
     sim.advanceGameMinutes(order.readyMinute - order.placedMinute + 1, 'waiting for courier');
     expect(sim.delivery.getState().orders.find((o) => o.id === orderId)!.status).toBe('done');
-    expect(sim.getState().player.pantry.groceries).toBe(2);
+    expect(sim.getState().player.pantry.groceries).toBe(0);
+    expect(sim.getPhysicalWorldState().items[`parcel:${orderId}`]?.location).toEqual({
+      kind: 'worldAnchor',
+      anchorId: 'room104:delivery',
+    });
   });
 
   it('persists orders across save/restore', () => {
