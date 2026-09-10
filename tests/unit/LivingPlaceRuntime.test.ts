@@ -168,8 +168,8 @@ describe('LivingPlaceRuntime', () => {
     const presented = runtime.getTransitLeg();
     expect(presented).toEqual(authoritativeLeg);
 
-    if (presented) presented.remainingMinutes = 1;
+    if (presented) presented['remainingMinutes'] = 1;
     expect(authoritativeLeg.remainingMinutes).toBe(12);
-    expect(runtime.getTransitLeg()?.remainingMinutes).toBe(12);
+    expect(runtime.getTransitLeg()?.['remainingMinutes']).toBe(12);
   });
 });
