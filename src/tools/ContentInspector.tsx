@@ -12,6 +12,7 @@ const ContentStudioShell = React.lazy(() =>
   import('./studio/ContentStudioShell').then((m) => ({ default: m.ContentStudioShell }))
 );
 import { createContentStore } from './content/schema';
+import { worldTablesFromGenerated } from './studio/worldTablesFromGenerated';
 import {
   GENERATED_CHARACTERS,
   GENERATED_ARCHETYPES,
@@ -144,6 +145,7 @@ export function tablesFromGenerated(): Tables {
     affinitySeeds,
     backstories,
     dialoguePools,
+    ...worldTablesFromGenerated(),
   };
 }
 
