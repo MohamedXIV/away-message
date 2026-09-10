@@ -121,7 +121,10 @@ export function createWorldSceneProjection(
 
   const activeView = viewId ? viewsInPlace.find((v) => v.id === viewId) : viewsInPlace[0];
 
-  if (viewId && !activeView) {
+  // Authored places must never borrow a globally matching view from another place.
+  // Keep the legacy empty-projection fallback for wholly unauthored/missing places so
+  // callers can fail soft while content authoring is incomplete.
+  if (place && viewId && !activeView) {
     throw new Error(`View ${viewId} does not belong to place ${placeId}`);
   }
 
