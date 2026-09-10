@@ -3,6 +3,8 @@
 import React, { useEffect, useState } from 'react';
 import { DesktopShell } from './desktop/DesktopShell';import { RoomScene } from './world/RoomScene';
 import { CafeScene } from './world/CafeScene';
+import { PhysicalWorldHost } from './world/phaser/PhysicalWorldHost';
+import { createTechnicalFixtureProjection } from './world/phaser/technicalFixture';
 import { Day14ResolutionModal } from './world/Day14ResolutionModal';
 import { resolveActiveOsPresentation } from './desktop/host/OsPresentation';
 import type { OsVersion } from './engine/types';
@@ -35,6 +37,38 @@ function useContentStudio(): boolean {
   return enabled;
 }
 
+function usePhaserFixtureMode(): [boolean, (active: boolean) => void] {
+  const [enabled, setEnabled] = useState(false);
+  useEffect(() => {
+    try {
+      if (typeof window !== 'undefined') {
+        const params = new URLSearchParams(window.location.search);
+        if (params.get('fixture') === 'world' || params.get('renderer') === 'phaser') {
+          setEnabled(true);
+        }
+      }
+    } catch { /* best-effort */ }
+  }, []);
+
+  const toggle = (active: boolean) => {
+    setEnabled(active);
+    try {
+      if (typeof window !== 'undefined') {
+        const url = new URL(window.location.href);
+        if (active) {
+          url.searchParams.set('fixture', 'world');
+        } else {
+          url.searchParams.delete('fixture');
+          url.searchParams.delete('renderer');
+        }
+        window.history.replaceState({}, '', url.toString());
+      }
+    } catch {}
+  };
+
+  return [enabled, toggle];
+}
+
 export function resolveAppTheme(osVersion: OsVersion | null): string | null {
   return resolveActiveOsPresentation(osVersion)?.themeId ?? null;
 }
@@ -60,6 +94,8 @@ export const App: React.FC = () => {
   const [bootError, setBootError] = useState<string | null>(null);
   const [savedFlash, setSavedFlash] = useState(false);
   const contentStudio = useContentStudio();
+  const [phaserFixtureActive, setPhaserFixtureActive] = usePhaserFixtureMode();
+  const [fixtureProjection, setFixtureProjection] = useState(() => createTechnicalFixtureProjection());
 
   useEffect(() => {
     const request = consumeBootRequest();
@@ -175,10 +211,49 @@ export const App: React.FC = () => {
       {phase === 'game' && (
         <>
           {/* Top-Level View Router */}
-          {activeView === 'pc' && <DesktopShell />}
-          {activeView === 'room' && <RoomScene />}
-          {activeView === 'cafe' && <CafeScene />}
-          {activeView === 'work' && <RoomScene />}
+          {phaserFixtureActive ? (
+            <PhysicalWorldHost
+              projection={fixtureProjection}
+              debug={true}
+              onIntent={(intent) => {
+                if (intent.type === 'VIEW_TRANSITION' && intent.targetViewId) {
+                  setFixtureProjection((prev) => ({
+                    ...prev,
+                    viewId: intent.targetViewId!,
+                    viewName: intent.targetViewId === 'view_a2' ? 'View A2 (Desk Focus)' : 'View A1 (Overview)',
+                  }));
+                }
+              }}
+              overlaySlot={
+                <div className="p-3 flex justify-between items-center pointer-events-auto">
+                  <button
+                    onClick={() => setPhaserFixtureActive(false)}
+                    className="px-3 py-1 bg-slate-900/90 hover:bg-slate-800 text-amber-300 border border-slate-700 text-xs font-mono shadow-md rounded flex items-center gap-1.5 cursor-pointer"
+                  >
+                    ← Return to Room 104 (Canvas2D)
+                  </button>
+                </div>
+              }
+            />
+          ) : (
+            <>
+              {activeView === 'pc' && <DesktopShell />}
+              {activeView === 'room' && <RoomScene />}
+              {activeView === 'cafe' && <CafeScene />}
+              {activeView === 'work' && <RoomScene />}
+
+              {/* Dev toggle for Phaser 4 Physical World Fixture */}
+              {!phaserFixtureActive && (
+                <button
+                  onClick={() => setPhaserFixtureActive(true)}
+                  className="absolute bottom-2 left-2 z-40 px-2 py-1 bg-slate-900/85 hover:bg-slate-800 text-[10px] text-amber-400 border border-slate-700 font-mono shadow rounded cursor-pointer"
+                  title="Open Phaser 4 Physical World Technical Fixture"
+                >
+                  ⚙ Phaser 4 Fixture
+                </button>
+              )}
+            </>
+          )}
 
           {/* Day 14 Evaluation Resolution Modal Overlay */}
           {showDay14Modal && (
