@@ -215,3 +215,93 @@ describe('TravelPlanner single-line bus (#35 slice 3)', () => {
     expect(result.plan.fare).toBe(2);
   });
 });
+
+describe('TravelPlanner transfers and tie-breaks (#35 slice 4)', () => {
+  it('plans a one-transfer itinerary with schedule-derived transfer wait', () => {
+    const network = buildTransitNetwork(twoLineFixture());
+    // Depart 10:00 place_a1 → place_c1: walk 4 (stop_a 604), board line_ab
+    // 620, alight stop_b 632; line_bc headway 30 → board 660 (wait 28),
+    // alight stop_c 669, walk 3 → arrive 672.
+    const result = planTravel(network, {
+      originPlaceId: 'place_a1',
+      destinationPlaceId: 'place_c1',
+      departAtMinute: 600,
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error('Expected a transfer plan.');
+    expect(result.plan.legs).toEqual([
+      { kind: 'walk', fromPlaceId: 'place_a1', toStopId: 'stop_a', minutes: 4 },
+      { kind: 'wait', stopId: 'stop_a', lineId: 'line_ab', minutes: 16, boardAtMinute: 620 },
+      {
+        kind: 'bus',
+        lineId: 'line_ab',
+        fromStopId: 'stop_a',
+        toStopId: 'stop_b',
+        boardAtMinute: 620,
+        alightAtMinute: 632,
+        minutes: 12,
+      },
+      { kind: 'wait', stopId: 'stop_b', lineId: 'line_bc', minutes: 28, boardAtMinute: 660 },
+      {
+        kind: 'bus',
+        lineId: 'line_bc',
+        fromStopId: 'stop_b',
+        toStopId: 'stop_c',
+        boardAtMinute: 660,
+        alightAtMinute: 669,
+        minutes: 9,
+      },
+      { kind: 'walk', fromStopId: 'stop_c', toPlaceId: 'place_c1', minutes: 3 },
+    ]);
+    expect(result.plan.walkMinutes).toBe(7);
+    expect(result.plan.waitMinutes).toBe(44);
+    expect(result.plan.rideMinutes).toBe(21);
+    expect(result.plan.totalMinutes).toBe(72);
+    expect(result.plan.fare).toBe(2);
+    expect(result.plan.transferCount).toBe(1);
+    expect(result.plan.busLineIds).toEqual(['line_ab', 'line_bc']);
+    expect(result.plan.arriveAtMinute).toBe(672);
+  });
+
+  it('breaks equal-arrival ties by lower fare (walk beats bus)', () => {
+    const fixture = twoLineFixture();
+    // place_a3 reachable both ways: walk 4 + 30 = 34, bus 4 + 16 wait +
+    // 12 ride + 2 final walk = 34. Same arrival → fare 0 wins over fare 2.
+    fixture.places.push({
+      id: 'place_a3',
+      districtId: 'district_a',
+      name: 'Place A3',
+      transitAccess: [
+        { stopId: 'stop_a', walkMinutes: 30 },
+        { stopId: 'stop_b', walkMinutes: 2 },
+      ],
+    });
+    const network = buildTransitNetwork(fixture);
+    const result = planTravel(network, {
+      originPlaceId: 'place_a1',
+      destinationPlaceId: 'place_a3',
+      departAtMinute: 600,
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error('Expected a tie-break plan.');
+    expect(result.plan.arriveAtMinute).toBe(634);
+    expect(result.plan.fare).toBe(0);
+    expect(result.plan.busLineIds).toEqual([]);
+    expect(result.plan.legs.every((leg) => leg.kind === 'walk')).toBe(true);
+  });
+
+  it('gives player and NPC callers the same plan for the same inputs', () => {
+    const network = buildTransitNetwork(twoLineFixture());
+    const request = {
+      originPlaceId: 'place_a1',
+      destinationPlaceId: 'place_c1',
+      departAtMinute: 600,
+    } as const;
+    const playerPlan = planTravel(network, { ...request });
+    const npcPlan = planTravel(network, { ...request, policy: 'fastest' });
+    expect(playerPlan).toEqual(npcPlan);
+    expect(JSON.stringify(playerPlan)).toBe(JSON.stringify(npcPlan));
+    // Repeated reads are stable.
+    expect(planTravel(network, { ...request })).toEqual(playerPlan);
+  });
+});
