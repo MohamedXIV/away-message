@@ -157,7 +157,18 @@ function classifyNoPlan(
   request: TravelRequest,
   service: TransitServiceState,
 ): TravelPlanFailure {
-  if (network.lines.size > 0 && !anyBoardingAtOrAfter(network, request.departAtMinute, service)) {
+  const accessBlocked = (placeId: PlaceId): boolean => {
+    const access = network.accessFromPlace(placeId);
+    return access.length > 0 && access.every((entry) => service.closedStopIds.includes(entry.stopId));
+  };
+  if (accessBlocked(request.originPlaceId) || accessBlocked(request.destinationPlaceId)) {
+    return 'stop_closed';
+  }
+  const openLines = [...network.lines.values()].filter((line) => !service.closedLineIds.includes(line.id));
+  if (network.lines.size > 0 && openLines.length === 0) {
+    return 'line_closed';
+  }
+  if (openLines.length > 0 && !anyBoardingAtOrAfter(network, request.departAtMinute, service)) {
     return 'service_ended';
   }
   return 'no_route';
