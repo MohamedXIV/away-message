@@ -115,5 +115,20 @@ export function buildCharacterObligations(
     });
   }
 
+  if (snapshot.goals) {
+    for (const goal of snapshot.goals) {
+      if (goal.status !== 'active') continue;
+      obligations.push({
+        id: `goal:${snapshot.actorId}:${goal.id}`,
+        actorId: snapshot.actorId,
+        sourceKind: 'personal_goal',
+        sourceId: goal.id,
+        priority: goal.priority,
+        flexibility: 'flexible',
+        status: 'pending',
+      });
+    }
+  }
+
   return stableSort(obligations);
 }
