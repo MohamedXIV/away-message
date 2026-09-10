@@ -137,7 +137,7 @@ describe('LivingPlaceRuntime', () => {
 
   it('lets a bus-stop hotspot emit a trip request without owning fare or service truth', () => {
     const stop = projection('view_a');
-    stop.anchors[0].interactions = [
+    stop.anchors[0]!.interactions = [
       { id: 'request_trip', capability: 'request_trip', name: 'Request trip', tags: ['transit'] },
     ];
     const runtime = new LivingPlaceRuntime(stop);
