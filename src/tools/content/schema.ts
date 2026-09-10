@@ -23,6 +23,8 @@
 // - anchors: authored interaction points inside one view (0..1 bounds)
 // - interactions: one capability bound to one anchor
 // - assets: renderer-neutral asset references (diffuse + optional normal map)
+// - lightProfiles/audioProfiles/ambientProfiles: authored environmental
+//   configuration (never mutable light/weather/event state)
 // - transitStops: bus stops, each in one district, optionally at a place
 // - busLines: ordered-stop bus service (window, headway, segments, fare)
 
@@ -181,6 +183,34 @@ export const CONTENT_SCHEMA = {
     uri: { type: 'string', default: '' },
     // Sibling normal-map asset id; '' = none.
     normalMapAssetId: { type: 'string', default: '' },
+    tags: { type: 'string', default: '[]' },
+  },
+  lightProfiles: {
+    name: { type: 'string', default: '' },
+    // Optional time-of-day tag this profile applies to; '' = any.
+    timeOfDay: { type: 'string', default: '' },
+    // Optional #rrggbb tint; '' = none.
+    colorTint: { type: 'string', default: '' },
+    intensity: { type: 'number', default: 1 },
+    tags: { type: 'string', default: '[]' },
+  },
+  audioProfiles: {
+    name: { type: 'string', default: '' },
+    // Profile kind tag: ambience | sfx | music | other.
+    kind: { type: 'string', default: 'ambience' },
+    // Optional backing audio asset; '' = none.
+    assetId: { type: 'string', default: '' },
+    // Mix volume 0..1.
+    volume: { type: 'number', default: 0.6 },
+    tags: { type: 'string', default: '[]' },
+  },
+  ambientProfiles: {
+    name: { type: 'string', default: '' },
+    // Optional weather/time tags this profile applies to; '' = any.
+    weather: { type: 'string', default: '' },
+    timeOfDay: { type: 'string', default: '' },
+    // Relative ambient-actor density >= 0.
+    density: { type: 'number', default: 0.5 },
     tags: { type: 'string', default: '[]' },
   },
   transitStops: {

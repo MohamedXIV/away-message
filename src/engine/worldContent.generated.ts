@@ -1,6 +1,6 @@
 // GENERATED — do not edit by hand.
-// Source: content/store.json (content vfc94bddf). Regenerate: npm run content:pull.
-export const WORLD_CONTENT_VERSION = 'fc94bddf';
+// Source: content/store.json (content v7d8e3ed7). Regenerate: npm run content:pull.
+export const WORLD_CONTENT_VERSION = '7d8e3ed7';
 
 export interface GeneratedDistrictDef {
   id: string;
@@ -252,6 +252,74 @@ export const GENERATED_ASSETS: GeneratedAssetDef[] = [
     kind: "image",
     uri: "assets/world/a1_n.png",
     normalMapAssetId: null,
+    tags: [],
+  },
+  {
+    id: "asset_a2",
+    name: "Asset A2",
+    kind: "audio",
+    uri: "assets/world/a2.mp3",
+    normalMapAssetId: null,
+    tags: [],
+  },
+];
+
+export interface GeneratedLightProfileDef {
+  id: string;
+  name: string;
+  timeOfDay: string | null;
+  colorTint: string | null;
+  intensity: number;
+  tags: string[];
+}
+
+export interface GeneratedAudioProfileDef {
+  id: string;
+  name: string;
+  kind: string;
+  assetId: string | null;
+  volume: number;
+  tags: string[];
+}
+
+export interface GeneratedAmbientProfileDef {
+  id: string;
+  name: string;
+  weather: string | null;
+  timeOfDay: string | null;
+  density: number;
+  tags: string[];
+}
+
+export const GENERATED_LIGHT_PROFILES: GeneratedLightProfileDef[] = [
+  {
+    id: "light_a1",
+    name: "Light A1",
+    timeOfDay: "day",
+    colorTint: "#fff2d9",
+    intensity: 1,
+    tags: [],
+  },
+];
+
+export const GENERATED_AUDIO_PROFILES: GeneratedAudioProfileDef[] = [
+  {
+    id: "audio_a1",
+    name: "Audio A1",
+    kind: "ambience",
+    assetId: "asset_a2",
+    volume: 0.6,
+    tags: [],
+  },
+];
+
+export const GENERATED_AMBIENT_PROFILES: GeneratedAmbientProfileDef[] = [
+  {
+    id: "ambient_a1",
+    name: "Ambient A1",
+    weather: "clear",
+    timeOfDay: "evening",
+    density: 0.5,
     tags: [],
   },
 ];

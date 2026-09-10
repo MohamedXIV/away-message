@@ -445,6 +445,40 @@
       "uri": "assets/world/a1_n.png",
       "normalMapAssetId": "",
       "tags": "[]"
+    },
+    "asset_a2": {
+      "name": "Asset A2",
+      "kind": "audio",
+      "uri": "assets/world/a2.mp3",
+      "normalMapAssetId": "",
+      "tags": "[]"
+    }
+  },
+  "lightProfiles": {
+    "light_a1": {
+      "name": "Light A1",
+      "timeOfDay": "day",
+      "colorTint": "#fff2d9",
+      "intensity": 1,
+      "tags": "[]"
+    }
+  },
+  "audioProfiles": {
+    "audio_a1": {
+      "name": "Audio A1",
+      "kind": "ambience",
+      "assetId": "asset_a2",
+      "volume": 0.6,
+      "tags": "[]"
+    }
+  },
+  "ambientProfiles": {
+    "ambient_a1": {
+      "name": "Ambient A1",
+      "weather": "clear",
+      "timeOfDay": "evening",
+      "density": 0.5,
+      "tags": "[]"
     }
   }
 }

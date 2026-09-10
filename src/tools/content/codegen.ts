@@ -388,6 +388,10 @@ export function validateContent(tables: ContentTables): string[] {
   // no renderer implementation lives here.
   errors.push(...validateWorldAssets(tables));
 
+  // 12. World light/audio/ambient profiles (#51 slice 6). Authored
+  // configuration only; mutable light/weather/event state stays out.
+  errors.push(...validateWorldProfiles(tables));
+
   return errors;
 }
 
@@ -920,6 +924,107 @@ export function validateWorldAssets(tables: ContentTables): string[] {
   return errors;
 }
 
+/**
+ * Semantic validation for the light/audio/ambient profile tables (#51 slice 6).
+ * Every error identifies table/id/field so Content Studio (#52) can show
+ * useful per-row feedback. Never repairs: invalid content fails loudly.
+ */
+export function validateWorldProfiles(tables: ContentTables): string[] {
+  const errors: string[] = [];
+  const assets = tables['assets'] ?? {};
+  const lightProfiles = tables['lightProfiles'] ?? {};
+  const audioProfiles = tables['audioProfiles'] ?? {};
+  const ambientProfiles = tables['ambientProfiles'] ?? {};
+
+  const num = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
+  const checkName = (table: string, id: string, row: Record<string, unknown>): void => {
+    const name = row['name'];
+    if (typeof name !== 'string' || !name.trim() || name.length > 60) {
+      errors.push(`${table}/${id}.name: must be a non-empty string <= 60 chars.`);
+    }
+  };
+  const checkTag = (table: string, id: string, field: string, value: unknown, optional: boolean): void => {
+    if (optional && (value === undefined || value === null || value === '')) return;
+    if (typeof value !== 'string' || !/^[a-z][a-z0-9_-]{1,23}$/.test(value)) {
+      errors.push(`${table}/${id}.${field}: '${String(value)}' must be a lowercase tag ≤ 24 chars.`);
+    }
+  };
+  const checkTags = (table: string, id: string, row: Record<string, unknown>): void => {
+    let tags: unknown = null;
+    try {
+      tags = JSON.parse(String(row['tags'] ?? '[]'));
+    } catch {
+      errors.push(`${table}/${id}.tags: invalid JSON array.`);
+      return;
+    }
+    if (!Array.isArray(tags)) {
+      errors.push(`${table}/${id}.tags: must be a JSON array.`);
+      return;
+    }
+    if (tags.length > 12) errors.push(`${table}/${id}.tags: max 12 tags.`);
+    for (const tag of tags) checkTag(table, id, 'tags', tag, false);
+  };
+
+  for (const [id, row] of Object.entries(lightProfiles)) {
+    if (!row || typeof row !== 'object') {
+      errors.push(`lightProfiles/${id}: must be an object.`);
+      continue;
+    }
+    const idCheck = validateWorldId(id);
+    if (!idCheck.ok) errors.push(`lightProfiles/${id}: ${idCheck.error}`);
+    const r = row as Record<string, unknown>;
+    checkName('lightProfiles', id, r);
+    checkTag('lightProfiles', id, 'timeOfDay', r['timeOfDay'], true);
+    const tint = r['colorTint'];
+    if (tint !== undefined && tint !== null && tint !== '' && (typeof tint !== 'string' || !/^#[0-9a-fA-F]{6}$/.test(tint))) {
+      errors.push(`lightProfiles/${id}.colorTint: must be a #rrggbb hex code or empty.`);
+    }
+    if (!num(r['intensity']) || (r['intensity'] as number) < 0) {
+      errors.push(`lightProfiles/${id}.intensity: must be a non-negative number.`);
+    }
+    checkTags('lightProfiles', id, r);
+  }
+
+  for (const [id, row] of Object.entries(audioProfiles)) {
+    if (!row || typeof row !== 'object') {
+      errors.push(`audioProfiles/${id}: must be an object.`);
+      continue;
+    }
+    const idCheck = validateWorldId(id);
+    if (!idCheck.ok) errors.push(`audioProfiles/${id}: ${idCheck.error}`);
+    const r = row as Record<string, unknown>;
+    checkName('audioProfiles', id, r);
+    checkTag('audioProfiles', id, 'kind', r['kind'], false);
+    const assetId = r['assetId'];
+    if (assetId !== undefined && assetId !== null && assetId !== '' && (typeof assetId !== 'string' || !assets[String(assetId)])) {
+      errors.push(`audioProfiles/${id}.assetId: unknown asset '${String(assetId)}'.`);
+    }
+    if (!num(r['volume']) || (r['volume'] as number) < 0 || (r['volume'] as number) > 1) {
+      errors.push(`audioProfiles/${id}.volume: must be a number in 0..1.`);
+    }
+    checkTags('audioProfiles', id, r);
+  }
+
+  for (const [id, row] of Object.entries(ambientProfiles)) {
+    if (!row || typeof row !== 'object') {
+      errors.push(`ambientProfiles/${id}: must be an object.`);
+      continue;
+    }
+    const idCheck = validateWorldId(id);
+    if (!idCheck.ok) errors.push(`ambientProfiles/${id}: ${idCheck.error}`);
+    const r = row as Record<string, unknown>;
+    checkName('ambientProfiles', id, r);
+    checkTag('ambientProfiles', id, 'weather', r['weather'], true);
+    checkTag('ambientProfiles', id, 'timeOfDay', r['timeOfDay'], true);
+    if (!num(r['density']) || (r['density'] as number) < 0) {
+      errors.push(`ambientProfiles/${id}.density: must be a non-negative number.`);
+    }
+    checkTags('ambientProfiles', id, r);
+  }
+
+  return errors;
+}
+
 /** Stable 8-hex digest of canonical tables (the content version stamp). */
 export function contentHash(tables: ContentTables): string {
   const str = JSON.stringify(canonicalize(tables));
@@ -1159,6 +1264,9 @@ export function generateWorldRegistrySource(tables: ContentTables): string {
   const anchors = tables['anchors'] ?? {};
   const interactions = tables['interactions'] ?? {};
   const assets = tables['assets'] ?? {};
+  const lightProfiles = tables['lightProfiles'] ?? {};
+  const audioProfiles = tables['audioProfiles'] ?? {};
+  const ambientProfiles = tables['ambientProfiles'] ?? {};
 
   const lines: string[] = [];
   lines.push('// GENERATED — do not edit by hand.');
@@ -1461,6 +1569,82 @@ export function generateWorldRegistrySource(tables: ContentTables): string {
     lines.push(`    kind: ${tsString(String(r['kind'] ?? 'image'))},`);
     lines.push(`    uri: ${tsString(String(r['uri'] ?? ''))},`);
     lines.push(`    normalMapAssetId: ${optId(r['normalMapAssetId'])},`);
+    lines.push(`    tags: [${strArr(r['tags']).map((t) => tsString(t)).join(', ')}],`);
+    lines.push('  },');
+  }
+  lines.push('];');
+  lines.push('');
+
+  lines.push('export interface GeneratedLightProfileDef {');
+  lines.push('  id: string;');
+  lines.push('  name: string;');
+  lines.push('  timeOfDay: string | null;');
+  lines.push('  colorTint: string | null;');
+  lines.push('  intensity: number;');
+  lines.push('  tags: string[];');
+  lines.push('}');
+  lines.push('');
+  lines.push('export interface GeneratedAudioProfileDef {');
+  lines.push('  id: string;');
+  lines.push('  name: string;');
+  lines.push('  kind: string;');
+  lines.push('  assetId: string | null;');
+  lines.push('  volume: number;');
+  lines.push('  tags: string[];');
+  lines.push('}');
+  lines.push('');
+  lines.push('export interface GeneratedAmbientProfileDef {');
+  lines.push('  id: string;');
+  lines.push('  name: string;');
+  lines.push('  weather: string | null;');
+  lines.push('  timeOfDay: string | null;');
+  lines.push('  density: number;');
+  lines.push('  tags: string[];');
+  lines.push('}');
+  lines.push('');
+
+  const optStr = (v: unknown): string =>
+    v === undefined || v === null || v === '' ? 'null' : tsString(String(v));
+
+  lines.push('export const GENERATED_LIGHT_PROFILES: GeneratedLightProfileDef[] = [');
+  for (const id of Object.keys(lightProfiles).sort()) {
+    const r = lightProfiles[id] as Record<string, unknown>;
+    lines.push('  {');
+    lines.push(`    id: ${tsString(id)},`);
+    lines.push(`    name: ${tsString(String(r['name'] ?? ''))},`);
+    lines.push(`    timeOfDay: ${optStr(r['timeOfDay'])},`);
+    lines.push(`    colorTint: ${optStr(r['colorTint'])},`);
+    lines.push(`    intensity: ${Number(r['intensity'] ?? 0)},`);
+    lines.push(`    tags: [${strArr(r['tags']).map((t) => tsString(t)).join(', ')}],`);
+    lines.push('  },');
+  }
+  lines.push('];');
+  lines.push('');
+
+  lines.push('export const GENERATED_AUDIO_PROFILES: GeneratedAudioProfileDef[] = [');
+  for (const id of Object.keys(audioProfiles).sort()) {
+    const r = audioProfiles[id] as Record<string, unknown>;
+    lines.push('  {');
+    lines.push(`    id: ${tsString(id)},`);
+    lines.push(`    name: ${tsString(String(r['name'] ?? ''))},`);
+    lines.push(`    kind: ${tsString(String(r['kind'] ?? 'ambience'))},`);
+    lines.push(`    assetId: ${optId(r['assetId'])},`);
+    lines.push(`    volume: ${Number(r['volume'] ?? 0)},`);
+    lines.push(`    tags: [${strArr(r['tags']).map((t) => tsString(t)).join(', ')}],`);
+    lines.push('  },');
+  }
+  lines.push('];');
+  lines.push('');
+
+  lines.push('export const GENERATED_AMBIENT_PROFILES: GeneratedAmbientProfileDef[] = [');
+  for (const id of Object.keys(ambientProfiles).sort()) {
+    const r = ambientProfiles[id] as Record<string, unknown>;
+    lines.push('  {');
+    lines.push(`    id: ${tsString(id)},`);
+    lines.push(`    name: ${tsString(String(r['name'] ?? ''))},`);
+    lines.push(`    weather: ${optStr(r['weather'])},`);
+    lines.push(`    timeOfDay: ${optStr(r['timeOfDay'])},`);
+    lines.push(`    density: ${Number(r['density'] ?? 0)},`);
     lines.push(`    tags: [${strArr(r['tags']).map((t) => tsString(t)).join(', ')}],`);
     lines.push('  },');
   }
