@@ -21,12 +21,18 @@ export interface AwayTintDefinition {
   readonly nodeIds: readonly string[];
 }
 
+export interface AwayParameterPresetDefinition {
+  readonly parameters: Readonly<Record<string, number>>;
+}
+
 export interface AwayRigMetadata {
   readonly namespace: string;
   readonly contractVersion: number;
   readonly morphs: Readonly<Record<string, AwayMorphDefinition>>;
   readonly slots: Readonly<Record<string, AwaySlotDefinition>>;
   readonly tints: Readonly<Record<string, AwayTintDefinition>>;
+  readonly expressions: Readonly<Record<string, AwayParameterPresetDefinition>>;
+  readonly poses: Readonly<Record<string, AwayParameterPresetDefinition>>;
 }
 
 export interface ValidatedAwayRigMetadata extends AwayRigMetadata {
@@ -38,7 +44,26 @@ export interface PuppetInspection {
   readonly morphs: string[];
   readonly slots: string[];
   readonly tints: string[];
+  readonly expressions: string[];
+  readonly poses: string[];
   readonly contractVersion: 1;
+}
+
+function validatePresetMappings(
+  kind: 'expression' | 'pose',
+  presets: Readonly<Record<string, AwayParameterPresetDefinition>>,
+  raw: RawPuppetAdapter,
+): void {
+  for (const [name, preset] of Object.entries(presets)) {
+    for (const [parameterId, value] of Object.entries(preset.parameters)) {
+      if (!raw.hasParameter(parameterId)) {
+        throw new Error(`Mapped parameter ${parameterId} for ${kind} ${name} does not exist`);
+      }
+      if (!Number.isFinite(value)) {
+        throw new Error(`Mapped parameter ${parameterId} for ${kind} ${name} must be finite`);
+      }
+    }
+  }
 }
 
 export function validateAwayRigMetadata(
@@ -81,12 +106,17 @@ export function validateAwayRigMetadata(
     }
   }
 
+  validatePresetMappings('expression', metadata.expressions, raw);
+  validatePresetMappings('pose', metadata.poses, raw);
+
   return {
     namespace: 'away-message/puppet',
     contractVersion: 1,
     morphs: { ...metadata.morphs },
     slots: { ...metadata.slots },
     tints: { ...metadata.tints },
+    expressions: { ...metadata.expressions },
+    poses: { ...metadata.poses },
   };
 }
 
@@ -101,6 +131,8 @@ export class SemanticPuppet {
       morphs: Object.keys(this.metadata.morphs),
       slots: Object.keys(this.metadata.slots),
       tints: Object.keys(this.metadata.tints),
+      expressions: Object.keys(this.metadata.expressions),
+      poses: Object.keys(this.metadata.poses),
       contractVersion: this.metadata.contractVersion,
     };
   }
@@ -134,6 +166,28 @@ export class SemanticPuppet {
 
     for (const nodeId of tint.nodeIds) {
       this.raw.setNodeTint(nodeId, color);
+    }
+  }
+
+  setExpression(name: string): void {
+    const expression = this.metadata.expressions[name];
+    if (!expression) {
+      throw new Error(`Unknown expression: ${name}`);
+    }
+
+    for (const [parameterId, value] of Object.entries(expression.parameters)) {
+      this.raw.setParameter(parameterId, value);
+    }
+  }
+
+  setPose(name: string): void {
+    const pose = this.metadata.poses[name];
+    if (!pose) {
+      throw new Error(`Unknown pose: ${name}`);
+    }
+
+    for (const [parameterId, value] of Object.entries(pose.parameters)) {
+      this.raw.setParameter(parameterId, value);
     }
   }
 }
