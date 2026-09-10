@@ -127,4 +127,22 @@ describe('Life Matrix compatibility with existing Away authorities', () => {
     expect(life?.atMinute).toBe(sim.clock.getTotalMinutes());
     expect(sim.exportSnapshot()).toEqual(before);
   });
+
+  it('does not change simulation outcomes when snapshots are observed around time advances', () => {
+    const observed = new SimulationEngine();
+    const control = new SimulationEngine();
+    const actorId = observed.social.getBuddies()[0]?.id;
+    expect(actorId).toBeDefined();
+    if (!actorId) throw new Error('Expected an existing Away character.');
+
+    for (const minutes of [30, 90, 240, 1440]) {
+      observed.getLifeSnapshot(actorId);
+      observed.advanceGameMinutes(minutes, 'life compatibility test');
+      observed.getLifeSnapshot(actorId);
+
+      control.advanceGameMinutes(minutes, 'life compatibility test');
+    }
+
+    expect(observed.exportSnapshot()).toEqual(control.exportSnapshot());
+  });
 });
