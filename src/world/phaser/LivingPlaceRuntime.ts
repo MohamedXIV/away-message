@@ -8,6 +8,23 @@ export interface LivingPlaceRuntimeSnapshot {
   objectState: Record<string, RuntimeObjectState>;
 }
 
+export interface DynamicObjectBinding {
+  instanceId: string;
+  definitionId: string;
+  anchorId: string;
+  defaultAssetId: string | null;
+  assetByView?: Record<string, string | null>;
+}
+
+export interface VisibleDynamicObject {
+  instanceId: string;
+  definitionId: string;
+  anchorId: string;
+  x: number;
+  y: number;
+  assetId: string | null;
+}
+
 function cloneProjection(projection: WorldSceneProjection): WorldSceneProjection {
   return structuredClone(projection);
 }
@@ -64,6 +81,24 @@ export class LivingPlaceRuntime {
   getObjectState(instanceId: string): RuntimeObjectState | undefined {
     const state = this.objectState.get(instanceId);
     return state ? structuredClone(state) : undefined;
+  }
+
+  resolveVisibleObjects(bindings: readonly DynamicObjectBinding[]): VisibleDynamicObject[] {
+    const visibleAnchors = new Map(this.projection.anchors.map((anchor) => [anchor.id, anchor]));
+
+    return bindings.flatMap((binding) => {
+      const anchor = visibleAnchors.get(binding.anchorId);
+      if (!anchor) return [];
+
+      return [{
+        instanceId: binding.instanceId,
+        definitionId: binding.definitionId,
+        anchorId: binding.anchorId,
+        x: anchor.x,
+        y: anchor.y,
+        assetId: binding.assetByView?.[this.projection.viewId] ?? binding.defaultAssetId,
+      }];
+    });
   }
 
   interact(anchorId: string, interactionId: string, payload?: Record<string, unknown>): WorldInteractionIntent {
