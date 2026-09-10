@@ -8,6 +8,7 @@ import {
   serializeSemanticList,
 } from '../physicalDefinitionAuthoring';
 import { FieldErrorDisplay, RowErrorBanner } from '../components/FieldErrorDisplay';
+import { TagListEditor } from '../components/TagListEditor';
 
 interface Props {
   studio: StudioStoreContext;
@@ -54,12 +55,6 @@ export const PhysicalDefinitionsTab: React.FC<Props> = ({ studio }) => {
     setError('');
   };
 
-  const semanticListValue = (cell: 'tags' | 'allowedItemKinds') =>
-    parseSemanticList(String(activeRow?.[cell] ?? '[]')).join(', ');
-
-  const setSemanticList = (cell: 'tags' | 'allowedItemKinds', value: string) => {
-    studio.setCell(section, activeId, cell, serializeSemanticList(value.split(',')));
-  };
 
   const toggleContainerAllowedKind = (kind: string) => {
     const current = parseSemanticList(String(activeRow?.['allowedItemKinds'] ?? '[]'));
@@ -141,14 +136,26 @@ export const PhysicalDefinitionsTab: React.FC<Props> = ({ studio }) => {
       <section className="flex-1 overflow-y-auto p-6">
         {activeRow ? (
           <div className="max-w-3xl space-y-5">
-            <div>
-              <h2 className="text-lg font-bold text-white">{String(activeRow['name'] || activeId)}</h2>
-              <div className="text-xs font-mono text-purple-400">
-                {section === 'items' ? 'Item' : 'Container'} ID: @{activeId}
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-lg font-bold text-white">{String(activeRow['name'] || activeId)}</h2>
+                <div className="text-xs font-mono text-purple-400">
+                  {section === 'items' ? 'Item' : 'Container'} ID: @{activeId}
+                </div>
+                <div className="mt-1 text-[11px] text-gray-500">
+                  Authored definition only — runtime location/occupancy belongs to the physical-world system.
+                </div>
               </div>
-              <div className="mt-1 text-[11px] text-gray-500">
-                Authored definition only — runtime location/occupancy belongs to the physical-world system.
-              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  studio.deleteRow(section, activeId);
+                  setSelectedId('');
+                }}
+                className="rounded bg-red-950/60 hover:bg-red-900/60 border border-red-800/60 px-3 py-1 text-xs font-bold text-red-300"
+              >
+                Delete {section === 'items' ? 'Item' : 'Container'}
+              </button>
             </div>
 
             <RowErrorBanner allErrors={studio.validationErrors} table={section} rowId={activeId} />
@@ -244,14 +251,15 @@ export const PhysicalDefinitionsTab: React.FC<Props> = ({ studio }) => {
                   </div>
 
                   <div className="md:col-span-2 space-y-2">
-                    <label className="text-xs font-bold text-purple-300">
-                      Allowed item kinds (comma separated; empty = unrestricted)
-                      <input
-                        value={semanticListValue('allowedItemKinds')}
-                        onChange={(event) => setSemanticList('allowedItemKinds', event.target.value)}
-                        className="mt-1 w-full rounded bg-[#130d24] border border-purple-800/60 px-3 py-2 text-sm text-white font-mono"
-                      />
-                    </label>
+                    <TagListEditor
+                      label="Allowed item kinds (empty = unrestricted)"
+                      tagsJson={activeRow['allowedItemKinds']}
+                      onChange={(nextJson) => studio.setCell('containers', activeId, 'allowedItemKinds', nextJson)}
+                      placeholder="e.g. food, book, tools..."
+                      fieldErrorDisplay={
+                        <FieldErrorDisplay allErrors={studio.validationErrors} table="containers" rowId={activeId} field="allowedItemKinds" />
+                      }
+                    />
 
                     {knownItemKinds.length > 0 && (
                       <div className="flex flex-wrap items-center gap-1.5 pt-1">
@@ -276,21 +284,20 @@ export const PhysicalDefinitionsTab: React.FC<Props> = ({ studio }) => {
                         })}
                       </div>
                     )}
-                    <FieldErrorDisplay allErrors={studio.validationErrors} table="containers" rowId={activeId} field="allowedItemKinds" />
                   </div>
                 </>
               )}
 
               <div className="md:col-span-2">
-                <label className="text-xs font-bold text-purple-300">
-                  Tags (comma separated)
-                  <input
-                    value={semanticListValue('tags')}
-                    onChange={(event) => setSemanticList('tags', event.target.value)}
-                    className="mt-1 w-full rounded bg-[#130d24] border border-purple-800/60 px-3 py-2 text-sm text-white font-mono"
-                  />
-                </label>
-                <FieldErrorDisplay allErrors={studio.validationErrors} table={section} rowId={activeId} field="tags" />
+                <TagListEditor
+                  label="Tags"
+                  tagsJson={activeRow['tags']}
+                  onChange={(nextJson) => studio.setCell(section, activeId, 'tags', nextJson)}
+                  placeholder="e.g. storage, food, fragile..."
+                  fieldErrorDisplay={
+                    <FieldErrorDisplay allErrors={studio.validationErrors} table={section} rowId={activeId} field="tags" />
+                  }
+                />
               </div>
             </div>
           </div>

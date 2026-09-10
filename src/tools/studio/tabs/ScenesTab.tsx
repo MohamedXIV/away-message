@@ -9,6 +9,7 @@ import {
 } from '../sceneAuthoring';
 import { parseSemanticList, serializeSemanticList } from '../physicalDefinitionAuthoring';
 import { FieldErrorDisplay, RowErrorBanner } from '../components/FieldErrorDisplay';
+import { TagListEditor } from '../components/TagListEditor';
 
 interface Props {
   studio: StudioStoreContext;
@@ -107,12 +108,6 @@ export const ScenesTab: React.FC<Props> = ({ studio }) => {
     }
   };
 
-  const semanticListValue = (cell: string) =>
-    parseSemanticList(String(activeRow?.[cell] ?? '[]')).join(', ');
-
-  const setSemanticList = (cell: string, value: string) => {
-    studio.setCell(section, activeId, cell, serializeSemanticList(value.split(',')));
-  };
 
   const toggleViewNeighbor = (neighborId: string) => {
     const currentNeighbors = parseSemanticList(String(activeRow?.['neighbors'] ?? '[]'));
@@ -289,11 +284,23 @@ export const ScenesTab: React.FC<Props> = ({ studio }) => {
       <section className="flex-1 overflow-y-auto p-6">
         {activeRow ? (
           <div className="max-w-3xl space-y-5">
-            <div>
-              <h2 className="text-lg font-bold text-white">{String(activeRow['name'] || activeId)}</h2>
-              <div className="text-xs font-mono text-purple-400">
-                {section.slice(0, -1)} ID: @{activeId}
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-lg font-bold text-white">{String(activeRow['name'] || activeId)}</h2>
+                <div className="text-xs font-mono text-purple-400">
+                  {section.slice(0, -1)} ID: @{activeId}
+                </div>
               </div>
+              <button
+                type="button"
+                onClick={() => {
+                  studio.deleteRow(section, activeId);
+                  setSelectedId('');
+                }}
+                className="rounded bg-red-950/60 hover:bg-red-900/60 border border-red-800/60 px-3 py-1 text-xs font-bold text-red-300 capitalize"
+              >
+                Delete {section.slice(0, -1)}
+              </button>
             </div>
 
             <RowErrorBanner allErrors={studio.validationErrors} table={section} rowId={activeId} />
@@ -496,15 +503,15 @@ export const ScenesTab: React.FC<Props> = ({ studio }) => {
               )}
 
               <div className="md:col-span-2">
-                <label className="text-xs font-bold text-purple-300">
-                  Tags (comma separated)
-                  <input
-                    value={semanticListValue('tags')}
-                    onChange={(e) => setSemanticList('tags', e.target.value)}
-                    className="mt-1 w-full rounded bg-[#130d24] border border-purple-800/60 px-3 py-2 text-sm text-white font-mono"
-                  />
-                </label>
-                <FieldErrorDisplay allErrors={studio.validationErrors} table={section} rowId={activeId} field="tags" />
+                <TagListEditor
+                  label="Tags"
+                  tagsJson={activeRow['tags']}
+                  onChange={(nextJson) => studio.setCell(section, activeId, 'tags', nextJson)}
+                  placeholder="e.g. interior, cozy, seating..."
+                  fieldErrorDisplay={
+                    <FieldErrorDisplay allErrors={studio.validationErrors} table={section} rowId={activeId} field="tags" />
+                  }
+                />
               </div>
             </div>
           </div>

@@ -2,8 +2,8 @@ import React, { useMemo, useState } from 'react';
 import type { StudioStoreContext } from '../hooks/useStudioStore';
 import { normalizeWorldContentId } from '../worldAuthoring';
 import { buildAssetRow } from '../assetAuthoring';
-import { parseSemanticList, serializeSemanticList } from '../physicalDefinitionAuthoring';
 import { FieldErrorDisplay, RowErrorBanner } from '../components/FieldErrorDisplay';
+import { TagListEditor } from '../components/TagListEditor';
 
 interface Props {
   studio: StudioStoreContext;
@@ -69,12 +69,6 @@ export const AssetsTab: React.FC<Props> = ({ studio }) => {
     }
   };
 
-  const semanticListValue = (cell: string) =>
-    parseSemanticList(String(activeAsset?.[cell] ?? '[]')).join(', ');
-
-  const setSemanticList = (cell: string, value: string) => {
-    studio.setCell('assets', activeId, cell, serializeSemanticList(value.split(',')));
-  };
 
   return (
     <div className="flex h-full overflow-hidden bg-[#0d0718]">
@@ -185,9 +179,21 @@ export const AssetsTab: React.FC<Props> = ({ studio }) => {
       <section className="flex-1 overflow-y-auto p-6">
         {activeAsset ? (
           <div className="max-w-3xl space-y-5">
-            <div>
-              <h2 className="text-lg font-bold text-white">{String(activeAsset['name'] || activeId)}</h2>
-              <div className="text-xs font-mono text-purple-400">Asset ID: @{activeId}</div>
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-lg font-bold text-white">{String(activeAsset['name'] || activeId)}</h2>
+                <div className="text-xs font-mono text-purple-400">Asset ID: @{activeId}</div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  studio.deleteRow('assets', activeId);
+                  setSelectedId('');
+                }}
+                className="rounded bg-red-950/60 hover:bg-red-900/60 border border-red-800/60 px-3 py-1 text-xs font-bold text-red-300"
+              >
+                Delete Asset
+              </button>
             </div>
 
             <RowErrorBanner allErrors={studio.validationErrors} table="assets" rowId={activeId} />
@@ -256,15 +262,15 @@ export const AssetsTab: React.FC<Props> = ({ studio }) => {
               </div>
 
               <div className="md:col-span-2">
-                <label className="text-xs font-bold text-purple-300">
-                  Tags (comma separated)
-                  <input
-                    value={semanticListValue('tags')}
-                    onChange={(e) => setSemanticList('tags', e.target.value)}
-                    className="mt-1 w-full rounded bg-[#130d24] border border-purple-800/60 px-3 py-2 text-sm text-white font-mono"
-                  />
-                </label>
-                <FieldErrorDisplay allErrors={studio.validationErrors} table="assets" rowId={activeId} field="tags" />
+                <TagListEditor
+                  label="Tags"
+                  tagsJson={activeAsset['tags']}
+                  onChange={(nextJson) => studio.setCell('assets', activeId, 'tags', nextJson)}
+                  placeholder="e.g. background, prop, night..."
+                  fieldErrorDisplay={
+                    <FieldErrorDisplay allErrors={studio.validationErrors} table="assets" rowId={activeId} field="tags" />
+                  }
+                />
               </div>
             </div>
           </div>

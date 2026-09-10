@@ -3,6 +3,7 @@ import type { StudioStoreContext } from '../hooks/useStudioStore';
 import { buildDistrictRow, buildPlaceRow, normalizeWorldContentId } from '../worldAuthoring';
 import { parseTransitAccess, serializeTransitAccess } from '../transitAuthoring';
 import { FieldErrorDisplay, RowErrorBanner } from '../components/FieldErrorDisplay';
+import { TagListEditor } from '../components/TagListEditor';
 
 interface Props {
   studio: StudioStoreContext;
@@ -83,7 +84,7 @@ export const WorldBasicsTab: React.FC<Props> = ({ studio }) => {
   const handleAddTransitAccess = () => {
     const stopId = draftAccessStopId || stopIds[0] || '';
     if (!stopId) return;
-    const next = [...activeTransitAccess, { stopId, walkMinutes: Math.max(1, draftAccessWalkMinutes) }];
+    const next = [...activeTransitAccess, { stopId, walkMinutes: draftAccessWalkMinutes }];
     studio.setCell('places', activePlaceId, 'transitAccess', serializeTransitAccess(next));
     setDraftAccessStopId('');
   };
@@ -91,7 +92,7 @@ export const WorldBasicsTab: React.FC<Props> = ({ studio }) => {
   const handleUpdateWalkMinutes = (index: number, minutes: number) => {
     const next = [...activeTransitAccess];
     if (!next[index]) return;
-    next[index] = { ...next[index]!, walkMinutes: Math.max(1, minutes) };
+    next[index] = { ...next[index]!, walkMinutes: minutes };
     studio.setCell('places', activePlaceId, 'transitAccess', serializeTransitAccess(next));
   };
 
@@ -199,9 +200,21 @@ export const WorldBasicsTab: React.FC<Props> = ({ studio }) => {
       <section className="flex-1 overflow-y-auto p-6">
         {section === 'districts' && activeDistrict ? (
           <div className="max-w-3xl space-y-5">
-            <div>
-              <h2 className="text-lg font-bold text-white">{String(activeDistrict['name'] || activeDistrictId)}</h2>
-              <div className="text-xs font-mono text-purple-400">District ID: @{activeDistrictId}</div>
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-lg font-bold text-white">{String(activeDistrict['name'] || activeDistrictId)}</h2>
+                <div className="text-xs font-mono text-purple-400">District ID: @{activeDistrictId}</div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  studio.deleteRow('districts', activeDistrictId);
+                  setSelectedDistrictId('');
+                }}
+                className="rounded bg-red-950/60 hover:bg-red-900/60 border border-red-800/60 px-3 py-1 text-xs font-bold text-red-300"
+              >
+                Delete District
+              </button>
             </div>
 
             <RowErrorBanner allErrors={studio.validationErrors} table="districts" rowId={activeDistrictId} />
@@ -235,23 +248,35 @@ export const WorldBasicsTab: React.FC<Props> = ({ studio }) => {
               ))}
 
               <div className="md:col-span-2">
-                <label className="text-xs font-bold text-purple-300">
-                  Tags (JSON)
-                  <input
-                    value={String(activeDistrict['tags'] ?? '[]')}
-                    onChange={(event) => studio.setCell('districts', activeDistrictId, 'tags', event.target.value)}
-                    className="mt-1 w-full rounded bg-[#130d24] border border-purple-800/60 px-3 py-2 font-mono text-xs text-white"
-                  />
-                </label>
-                <FieldErrorDisplay allErrors={studio.validationErrors} table="districts" rowId={activeDistrictId} field="tags" />
+                <TagListEditor
+                  label="District Tags"
+                  tagsJson={activeDistrict['tags']}
+                  onChange={(nextJson) => studio.setCell('districts', activeDistrictId, 'tags', nextJson)}
+                  placeholder="e.g. residential, commercial, historic..."
+                  fieldErrorDisplay={
+                    <FieldErrorDisplay allErrors={studio.validationErrors} table="districts" rowId={activeDistrictId} field="tags" />
+                  }
+                />
               </div>
             </div>
           </div>
         ) : section === 'places' && activePlace ? (
           <div className="max-w-3xl space-y-5">
-            <div>
-              <h2 className="text-lg font-bold text-white">{String(activePlace['name'] || activePlaceId)}</h2>
-              <div className="text-xs font-mono text-purple-400">Place ID: @{activePlaceId}</div>
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-lg font-bold text-white">{String(activePlace['name'] || activePlaceId)}</h2>
+                <div className="text-xs font-mono text-purple-400">Place ID: @{activePlaceId}</div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  studio.deleteRow('places', activePlaceId);
+                  setSelectedPlaceId('');
+                }}
+                className="rounded bg-red-950/60 hover:bg-red-900/60 border border-red-800/60 px-3 py-1 text-xs font-bold text-red-300"
+              >
+                Delete Place
+              </button>
             </div>
 
             <RowErrorBanner allErrors={studio.validationErrors} table="places" rowId={activePlaceId} />
@@ -282,6 +307,11 @@ export const WorldBasicsTab: React.FC<Props> = ({ studio }) => {
                         {String(districts[id]?.['name'] || id)}
                       </option>
                     ))}
+                    {Boolean(activePlace['districtId']) && !districtIds.includes(String(activePlace['districtId'])) && (
+                      <option value={String(activePlace['districtId'])}>
+                        ⚠ Unknown district: @{String(activePlace['districtId'])}
+                      </option>
+                    )}
                   </select>
                 </label>
                 <FieldErrorDisplay allErrors={studio.validationErrors} table="places" rowId={activePlaceId} field="districtId" />
@@ -305,34 +335,39 @@ export const WorldBasicsTab: React.FC<Props> = ({ studio }) => {
                 {activeTransitAccess.length > 0 ? (
                   <div className="space-y-2">
                     {activeTransitAccess.map((link, idx) => (
-                      <div
-                        key={`${link.stopId}-${idx}`}
-                        className="flex items-center gap-3 rounded border border-purple-900/40 bg-[#100820] p-2"
-                      >
-                        <div className="flex-1 text-xs text-white">
-                          <span className="font-semibold text-purple-200">
-                            {String(transitStops[link.stopId]?.['name'] || link.stopId)}
-                          </span>
-                          <span className="ml-2 font-mono text-[10px] text-purple-400">@{link.stopId}</span>
+                      <div key={`${link.stopId}-${idx}`} className="space-y-1">
+                        <div className="flex items-center gap-3 rounded border border-purple-900/40 bg-[#100820] p-2">
+                          <div className="flex-1 text-xs text-white">
+                            <span className="font-semibold text-purple-200">
+                              {String(transitStops[link.stopId]?.['name'] || link.stopId)}
+                            </span>
+                            <span className="ml-2 font-mono text-[10px] text-purple-400">@{link.stopId}</span>
+                          </div>
+                          <div className="flex items-center gap-1.5 text-xs text-purple-300">
+                            <input
+                              aria-label={`Walk minutes for ${link.stopId}`}
+                              type="number"
+                              value={link.walkMinutes}
+                              onChange={(e) => handleUpdateWalkMinutes(idx, Number(e.target.value))}
+                              className="w-16 rounded bg-[#0d0718] border border-purple-800/60 px-2 py-1 text-xs text-white font-mono"
+                            />
+                            <span className="text-gray-400">min walk</span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveTransitAccess(idx)}
+                            className="rounded bg-red-950/60 hover:bg-red-900/60 px-2 py-1 text-[11px] font-bold text-red-300"
+                          >
+                            Remove
+                          </button>
                         </div>
-                        <div className="flex items-center gap-1.5 text-xs text-purple-300">
-                          <input
-                            aria-label={`Walk minutes for ${link.stopId}`}
-                            type="number"
-                            min={1}
-                            value={link.walkMinutes}
-                            onChange={(e) => handleUpdateWalkMinutes(idx, Number(e.target.value))}
-                            className="w-16 rounded bg-[#0d0718] border border-purple-800/60 px-2 py-1 text-xs text-white font-mono"
-                          />
-                          <span className="text-gray-400">min walk</span>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => handleRemoveTransitAccess(idx)}
-                          className="rounded bg-red-950/60 hover:bg-red-900/60 px-2 py-1 text-[11px] font-bold text-red-300"
-                        >
-                          Remove
-                        </button>
+                        <FieldErrorDisplay
+                          allErrors={studio.validationErrors}
+                          table="places"
+                          rowId={activePlaceId}
+                          field="transitAccess"
+                          index={idx}
+                        />
                       </div>
                     ))}
                   </div>
