@@ -5,37 +5,7 @@ import {
   validateContent,
   generateWorldRegistrySource,
 } from '../../src/tools/content/codegen';
-import type { ContentTables } from '../../src/tools/content/codegen';
-import { validSpaceTables, cloneTables as clone } from './worldFixtures';
-
-/**
- * #51 Slice 4 — anchors + interactions.
- * Anchors pin authored interaction points inside a view (normalized 0..1
- * bounds, cf. HotspotBounds precedent). Interactions bind one capability
- * to one anchor. Runtime interaction state stays out of content.
- */
-export function validAnchorTables(): ContentTables {
-  return {
-    ...validSpaceTables(),
-    anchors: {
-      anchor_a1: {
-        viewId: 'view_a1',
-        name: 'Anchor A1',
-        x: 0.5,
-        y: 0.5,
-        tags: '["hotspot"]',
-      },
-    },
-    interactions: {
-      interaction_a1: {
-        anchorId: 'anchor_a1',
-        capability: 'inspect',
-        name: 'Interaction A1',
-        tags: '[]',
-      },
-    },
-  };
-}
+import { validAnchorTables, cloneTables as clone } from './worldFixtures';
 
 describe('World content anchors/interactions (#51 slice 4)', () => {
   it('accepts the minimal valid anchor/interaction fixture', () => {

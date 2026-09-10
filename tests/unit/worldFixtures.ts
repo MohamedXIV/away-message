@@ -59,6 +59,30 @@ export function cloneTables(tables: ContentTables): ContentTables {
   return JSON.parse(JSON.stringify(tables));
 }
 
+/** Slice-4 composition: anchor_a1 in view_a1 with one inspect interaction. */
+export function validAnchorTables(): ContentTables {
+  return {
+    ...validSpaceTables(),
+    anchors: {
+      anchor_a1: {
+        viewId: 'view_a1',
+        name: 'Anchor A1',
+        x: 0.5,
+        y: 0.5,
+        tags: '["hotspot"]',
+      },
+    },
+    interactions: {
+      interaction_a1: {
+        anchorId: 'anchor_a1',
+        capability: 'inspect',
+        name: 'Interaction A1',
+        tags: '[]',
+      },
+    },
+  };
+}
+
 /** Slice-3 composition: space_a1 in place_a1 holding two neighboring views. */
 export function validSpaceTables(): ContentTables {
   return {
