@@ -362,7 +362,9 @@ function expandBusBoardings(
         walkMinutes: current.walkMinutes,
         waitMinutes: current.waitMinutes + wait,
         rideMinutes: current.rideMinutes + ride,
-        fare: current.fare,
+        // Flat itinerary fare applies from the first boarding so fare
+        // tie-breaks compare correctly during the search.
+        fare: BUS_ITINERARY_FARE,
         transferCount: current.transferCount,
       });
     }
