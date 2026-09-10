@@ -12,6 +12,7 @@ const ContentStudioShell = React.lazy(() =>
   import('./studio/ContentStudioShell').then((m) => ({ default: m.ContentStudioShell }))
 );
 import { createContentStore } from './content/schema';
+import { worldTablesFromGenerated } from './studio/worldTablesFromGenerated';
 import {
   GENERATED_CHARACTERS,
   GENERATED_ARCHETYPES,
@@ -28,6 +29,20 @@ const ART_PROFILE_KEY_ORDER = ['engine', 'modelPath', 'expressions', 'defaultOut
 const AFFINITY_SEED_KEY_ORDER = ['roleA', 'roleB', 'value'];
 const BACKSTORY_KEY_ORDER = ['relationship', 'label', 'lapseDays', 'knowsAccounts', 'candidates', 'bioSeed'];
 const DIALOGUE_POOL_KEY_ORDER = ['lines', 'version'];
+const DISTRICT_KEY_ORDER = ['name', 'mapX', 'mapY', 'tags'];
+const PLACE_KEY_ORDER = ['districtId', 'name', 'transitAccess'];
+const TRANSIT_STOP_KEY_ORDER = ['districtId', 'name', 'placeId', 'mapX', 'mapY'];
+const BUS_LINE_KEY_ORDER = ['name', 'stopIds', 'serviceStartMinute', 'serviceEndMinute', 'headwayMinutes', 'segmentMinutes', 'fare'];
+const ITEM_KEY_ORDER = ['name', 'kind', 'portable', 'volume', 'assetId', 'tags'];
+const CONTAINER_KEY_ORDER = ['name', 'capacity', 'allowedItemKinds', 'tags'];
+const SPACE_KEY_ORDER = ['placeId', 'name', 'tags'];
+const VIEW_KEY_ORDER = ['spaceId', 'name', 'neighbors', 'assetId', 'tags'];
+const ANCHOR_KEY_ORDER = ['viewId', 'name', 'x', 'y', 'tags'];
+const INTERACTION_KEY_ORDER = ['anchorId', 'capability', 'name', 'tags'];
+const ASSET_KEY_ORDER = ['name', 'kind', 'uri', 'normalMapAssetId', 'tags'];
+const LIGHT_PROFILE_KEY_ORDER = ['name', 'timeOfDay', 'colorTint', 'intensity', 'tags'];
+const AUDIO_PROFILE_KEY_ORDER = ['name', 'kind', 'assetId', 'volume', 'tags'];
+const AMBIENT_PROFILE_KEY_ORDER = ['name', 'weather', 'timeOfDay', 'density', 'tags'];
 
 const TABLE_KEY_ORDERS: Record<string, string[]> = {
   characters: CHARACTER_KEY_ORDER,
@@ -39,7 +54,22 @@ const TABLE_KEY_ORDERS: Record<string, string[]> = {
   affinitySeeds: AFFINITY_SEED_KEY_ORDER,
   backstories: BACKSTORY_KEY_ORDER,
   dialoguePools: DIALOGUE_POOL_KEY_ORDER,
+  districts: DISTRICT_KEY_ORDER,
+  places: PLACE_KEY_ORDER,
+  transitStops: TRANSIT_STOP_KEY_ORDER,
+  busLines: BUS_LINE_KEY_ORDER,
+  items: ITEM_KEY_ORDER,
+  containers: CONTAINER_KEY_ORDER,
+  spaces: SPACE_KEY_ORDER,
+  views: VIEW_KEY_ORDER,
+  anchors: ANCHOR_KEY_ORDER,
+  interactions: INTERACTION_KEY_ORDER,
+  assets: ASSET_KEY_ORDER,
+  lightProfiles: LIGHT_PROFILE_KEY_ORDER,
+  audioProfiles: AUDIO_PROFILE_KEY_ORDER,
+  ambientProfiles: AMBIENT_PROFILE_KEY_ORDER,
 };
+
 
 /** Canonical store.json text from live tables (sorted ids/keys — stable diffs). */
 export function exportStoreJson(tables: Tables): string {
@@ -144,6 +174,7 @@ export function tablesFromGenerated(): Tables {
     affinitySeeds,
     backstories,
     dialoguePools,
+    ...worldTablesFromGenerated(),
   };
 }
 
