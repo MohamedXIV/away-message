@@ -14,6 +14,10 @@
 // - artProfiles: engine-agnostic 2D art specification (Live2D / mesh / icon)
 // - affinitySeeds: NPC↔NPC role affinity seeds (-100..100)
 // - dialoguePools: template lines for offline / reactive chats
+// - districts: geographic/social town groupings (one town, one simulation)
+// - places: canonical destinations, each in exactly one district
+// - transitStops: bus stops, each in one district, optionally at a place
+// - busLines: ordered-stop bus service (window, headway, segments, fare)
 
 import { createStore, type TablesSchema } from 'tinybase';
 
@@ -98,6 +102,40 @@ export const CONTENT_SCHEMA = {
   dialoguePools: {
     lines: { type: 'string', default: '[]' },
     version: { type: 'number', default: 1 },
+  },
+  districts: {
+    name: { type: 'string', default: '' },
+    mapX: { type: 'number', default: 0 },
+    mapY: { type: 'number', default: 0 },
+    // JSON array of semantic tags, e.g. ["residential","riverside"].
+    tags: { type: 'string', default: '[]' },
+  },
+  places: {
+    districtId: { type: 'string', default: '' },
+    name: { type: 'string', default: '' },
+    // JSON array of {stopId, walkMinutes} walking-access links to transit stops.
+    transitAccess: { type: 'string', default: '[]' },
+  },
+  transitStops: {
+    districtId: { type: 'string', default: '' },
+    name: { type: 'string', default: '' },
+    // Physical place this stop sits at; '' = no linked place.
+    placeId: { type: 'string', default: '' },
+    mapX: { type: 'number', default: 0 },
+    mapY: { type: 'number', default: 0 },
+  },
+  busLines: {
+    name: { type: 'string', default: '' },
+    // JSON array of transit-stop ids in service order.
+    stopIds: { type: 'string', default: '[]' },
+    // Daily recurring service window, minutes after midnight (no cross-midnight).
+    serviceStartMinute: { type: 'number', default: 360 },
+    serviceEndMinute: { type: 'number', default: 1380 },
+    headwayMinutes: { type: 'number', default: 20 },
+    // JSON array of per-segment ride minutes (length must equal stops - 1).
+    segmentMinutes: { type: 'string', default: '[]' },
+    // Fare per complete planned itinerary using this line.
+    fare: { type: 'number', default: 2 },
   },
 } as const satisfies TablesSchema;
 

@@ -18,6 +18,15 @@ export function validateCharacterId(id: string): { ok: boolean; error?: string }
   return { ok: true };
 }
 
+/** Stable world-content ids (districts, places, stops, lines): same shape as character ids. */
+export function validateWorldId(id: string): { ok: boolean; error?: string } {
+  if (!id || typeof id !== 'string') return { ok: false, error: 'World id must be a non-empty string.' };
+  if (!/^[a-z][a-z0-9_]{1,31}$/.test(id)) {
+    return { ok: false, error: 'World id must be snake_case: start with a letter, a-z/0-9/_, 2..32 chars.' };
+  }
+  return { ok: true };
+}
+
 const REACHES = new Set(['local', 'remote']);
 const HAIR_COLORS = new Set<HairColor>([
   'black', 'dark_brown', 'brown', 'light_brown', 'blonde', 'auburn', 'red', 'grey', 'dyed_blue', 'dyed_pink', 'dyed_green'
@@ -358,6 +367,190 @@ export function validateContent(tables: ContentTables): string[] {
     if (!Number.isInteger(version) || (version as number) < 1) errors.push(`dialoguePools/${key}.version: must be an int >= 1.`);
   }
 
+  // 7. World content (districts / places / transit stops / bus lines, #51 slice 1).
+  // Absent tables validate clean so character-only stores (e.g. Studio
+  // hydration from the character registry) keep passing.
+  errors.push(...validateWorldContent(tables));
+
+  return errors;
+}
+
+/**
+ * Semantic validation for the town content tables.
+ * Every error identifies table/id/field so Content Studio (#52) can show
+ * useful per-row feedback. Never repairs: invalid content fails loudly.
+ */
+export function validateWorldContent(tables: ContentTables): string[] {
+  const errors: string[] = [];
+  const districts = tables['districts'] ?? {};
+  const places = tables['places'] ?? {};
+  const transitStops = tables['transitStops'] ?? {};
+  const busLines = tables['busLines'] ?? {};
+
+  const num = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
+  const checkId = (table: string, id: string): boolean => {
+    const idCheck = validateWorldId(id);
+    if (!idCheck.ok) {
+      errors.push(`${table}/${id}: ${idCheck.error}`);
+      return false;
+    }
+    return true;
+  };
+  const checkName = (table: string, id: string, row: Record<string, unknown>): void => {
+    const name = row['name'];
+    if (typeof name !== 'string' || !name.trim() || name.length > 60) {
+      errors.push(`${table}/${id}.name: must be a non-empty string <= 60 chars.`);
+    }
+  };
+  const checkMapPoint = (table: string, id: string, row: Record<string, unknown>): void => {
+    for (const key of ['mapX', 'mapY']) {
+      if (!num(row[key])) errors.push(`${table}/${id}.${key}: must be a finite number.`);
+    }
+  };
+  const parseJsonArray = (table: string, id: string, field: string, raw: unknown): unknown[] | null => {
+    let parsed: unknown = null;
+    try {
+      parsed = JSON.parse(String(raw ?? '[]'));
+    } catch {
+      errors.push(`${table}/${id}.${field}: invalid JSON array.`);
+      return null;
+    }
+    if (!Array.isArray(parsed)) {
+      errors.push(`${table}/${id}.${field}: must be a JSON array.`);
+      return null;
+    }
+    return parsed;
+  };
+
+  // Districts.
+  for (const [id, row] of Object.entries(districts)) {
+    if (!row || typeof row !== 'object') {
+      errors.push(`districts/${id}: must be an object.`);
+      continue;
+    }
+    checkId('districts', id);
+    const r = row as Record<string, unknown>;
+    checkName('districts', id, r);
+    checkMapPoint('districts', id, r);
+    const tags = parseJsonArray('districts', id, 'tags', r['tags']);
+    if (tags) {
+      if (tags.length > 12) errors.push(`districts/${id}.tags: max 12 tags.`);
+      for (const tag of tags) {
+        if (typeof tag !== 'string' || !/^[a-z][a-z0-9_-]{1,23}$/.test(tag)) {
+          errors.push(`districts/${id}.tags: '${String(tag)}' must be a lowercase tag ≤ 24 chars.`);
+        }
+      }
+    }
+  }
+
+  // Transit stops (before places so place access links can resolve them;
+  // existence checks are key-based so order does not matter).
+  for (const [id, row] of Object.entries(transitStops)) {
+    if (!row || typeof row !== 'object') {
+      errors.push(`transitStops/${id}: must be an object.`);
+      continue;
+    }
+    checkId('transitStops', id);
+    const r = row as Record<string, unknown>;
+    checkName('transitStops', id, r);
+    const districtId = r['districtId'];
+    if (typeof districtId !== 'string' || !districts[districtId]) {
+      errors.push(`transitStops/${id}.districtId: unknown district '${String(districtId)}'.`);
+    }
+    const placeId = r['placeId'];
+    if (placeId !== undefined && placeId !== null && placeId !== '') {
+      if (typeof placeId !== 'string' || !places[String(placeId)]) {
+        errors.push(`transitStops/${id}.placeId: unknown place '${String(placeId)}'.`);
+      }
+    }
+    checkMapPoint('transitStops', id, r);
+  }
+
+  // Places.
+  for (const [id, row] of Object.entries(places)) {
+    if (!row || typeof row !== 'object') {
+      errors.push(`places/${id}: must be an object.`);
+      continue;
+    }
+    checkId('places', id);
+    const r = row as Record<string, unknown>;
+    const districtId = r['districtId'];
+    if (typeof districtId !== 'string' || !districts[districtId]) {
+      errors.push(`places/${id}.districtId: unknown district '${String(districtId)}'.`);
+    }
+    checkName('places', id, r);
+    const access = parseJsonArray('places', id, 'transitAccess', r['transitAccess']);
+    if (access) {
+      if (access.length > 8) errors.push(`places/${id}.transitAccess: max 8 access links.`);
+      for (const [i, entry] of access.entries()) {
+        const stopId = (entry as Record<string, unknown>)?.['stopId'];
+        const walkMinutes = (entry as Record<string, unknown>)?.['walkMinutes'];
+        if (typeof stopId !== 'string' || !transitStops[stopId]) {
+          errors.push(`places/${id}.transitAccess[${i}].stopId: unknown transit stop '${String(stopId)}'.`);
+        }
+        if (!num(walkMinutes) || (walkMinutes as number) <= 0) {
+          errors.push(`places/${id}.transitAccess[${i}].walkMinutes: must be a positive number of minutes.`);
+        }
+      }
+    }
+  }
+
+  // Bus lines.
+  for (const [id, row] of Object.entries(busLines)) {
+    if (!row || typeof row !== 'object') {
+      errors.push(`busLines/${id}: must be an object.`);
+      continue;
+    }
+    checkId('busLines', id);
+    const r = row as Record<string, unknown>;
+    checkName('busLines', id, r);
+    const stopIds = parseJsonArray('busLines', id, 'stopIds', r['stopIds']);
+    if (stopIds) {
+      if (stopIds.length < 2) {
+        errors.push(`busLines/${id}.stopIds: a line needs at least 2 stops (found ${stopIds.length}).`);
+      }
+      for (const [i, stopId] of stopIds.entries()) {
+        if (typeof stopId !== 'string' || !transitStops[String(stopId)]) {
+          errors.push(`busLines/${id}.stopIds[${i}]: unknown transit stop '${String(stopId)}'.`);
+        }
+        if (i > 0 && stopId === stopIds[i - 1]) {
+          errors.push(`busLines/${id}.stopIds[${i}]: duplicate adjacent stop '${String(stopId)}'.`);
+        }
+      }
+    }
+    const segments = parseJsonArray('busLines', id, 'segmentMinutes', r['segmentMinutes']);
+    if (stopIds && segments && stopIds.length >= 2 && segments.length !== stopIds.length - 1) {
+      errors.push(
+        `busLines/${id}.segmentMinutes: length ${segments.length} must equal stops - 1 (${stopIds.length - 1}).`
+      );
+    }
+    if (segments) {
+      for (const [i, minutes] of segments.entries()) {
+        if (!num(minutes) || (minutes as number) <= 0) {
+          errors.push(`busLines/${id}.segmentMinutes[${i}]: must be a positive number of minutes.`);
+        }
+      }
+    }
+    const headway = r['headwayMinutes'];
+    if (!num(headway) || (headway as number) <= 0) {
+      errors.push(`busLines/${id}.headwayMinutes: must be a positive number of minutes.`);
+    }
+    const start = r['serviceStartMinute'];
+    const end = r['serviceEndMinute'];
+    const windowOk =
+      Number.isInteger(start) && Number.isInteger(end) &&
+      (start as number) >= 0 && (end as number) <= 1440 && (start as number) < (end as number);
+    if (!windowOk) {
+      errors.push(
+        `busLines/${id}.service: serviceStartMinute/serviceEndMinute must be ints with 0 <= start < end <= 1440 (no cross-midnight).`
+      );
+    }
+    const fare = r['fare'];
+    if (!num(fare) || (fare as number) < 0) {
+      errors.push(`busLines/${id}.fare: must be a non-negative number.`);
+    }
+  }
+
   return errors;
 }
 
@@ -573,6 +766,154 @@ export function generateRegistrySource(tables: ContentTables): string {
     lines.push(`    roleA: ${tsString(String(row['roleA'] ?? ''))},`);
     lines.push(`    roleB: ${tsString(String(row['roleB'] ?? ''))},`);
     lines.push(`    value: ${Number(row['value'] ?? 0)},`);
+    lines.push('  },');
+  }
+  lines.push('];');
+  lines.push('');
+
+  return lines.join('\n');
+}
+
+/**
+ * Emit the world registry TypeScript source (#51 slice 1).
+ * Goes to its own generated file (src/engine/worldContent.generated.ts) so
+ * the character registry stays stable; one pull/check contract covers both.
+ * Sorted row order keeps output deterministic regardless of store.json order.
+ */
+export function generateWorldRegistrySource(tables: ContentTables): string {
+  const version = contentHash(tables);
+  const districts = tables['districts'] ?? {};
+  const places = tables['places'] ?? {};
+  const transitStops = tables['transitStops'] ?? {};
+  const busLines = tables['busLines'] ?? {};
+
+  const lines: string[] = [];
+  lines.push('// GENERATED — do not edit by hand.');
+  lines.push(`// Source: content/store.json (content v${version}). Regenerate: npm run content:pull.`);
+  lines.push(`export const WORLD_CONTENT_VERSION = '${version}';`);
+  lines.push('');
+  lines.push('export interface GeneratedDistrictDef {');
+  lines.push('  id: string;');
+  lines.push('  name: string;');
+  lines.push('  mapX: number;');
+  lines.push('  mapY: number;');
+  lines.push('  tags: string[];');
+  lines.push('}');
+  lines.push('');
+  lines.push('export interface GeneratedPlaceTransitAccess {');
+  lines.push('  stopId: string;');
+  lines.push('  walkMinutes: number;');
+  lines.push('}');
+  lines.push('');
+  lines.push('export interface GeneratedPlaceDef {');
+  lines.push('  id: string;');
+  lines.push('  districtId: string;');
+  lines.push('  name: string;');
+  lines.push('  transitAccess: GeneratedPlaceTransitAccess[];');
+  lines.push('}');
+  lines.push('');
+  lines.push('export interface GeneratedTransitStopDef {');
+  lines.push('  id: string;');
+  lines.push('  districtId: string;');
+  lines.push('  name: string;');
+  lines.push('  placeId: string | null;');
+  lines.push('  mapX: number;');
+  lines.push('  mapY: number;');
+  lines.push('}');
+  lines.push('');
+  lines.push('export interface GeneratedBusLineDef {');
+  lines.push('  id: string;');
+  lines.push('  name: string;');
+  lines.push('  stopIds: string[];');
+  lines.push('  serviceStartMinute: number;');
+  lines.push('  serviceEndMinute: number;');
+  lines.push('  headwayMinutes: number;');
+  lines.push('  segmentMinutes: number[];');
+  lines.push('  fare: number;');
+  lines.push('}');
+  lines.push('');
+
+  lines.push('export const GENERATED_DISTRICTS: GeneratedDistrictDef[] = [');
+  for (const id of Object.keys(districts).sort()) {
+    const r = districts[id] as Record<string, unknown>;
+    let tags: string[] = [];
+    try {
+      const parsed: unknown = JSON.parse(String(r['tags'] ?? '[]'));
+      if (Array.isArray(parsed)) tags = parsed.filter((x): x is string => typeof x === 'string');
+    } catch { tags = []; }
+    lines.push('  {');
+    lines.push(`    id: ${tsString(id)},`);
+    lines.push(`    name: ${tsString(String(r['name'] ?? ''))},`);
+    lines.push(`    mapX: ${Number(r['mapX'] ?? 0)},`);
+    lines.push(`    mapY: ${Number(r['mapY'] ?? 0)},`);
+    lines.push(`    tags: [${tags.map((t) => tsString(t)).join(', ')}],`);
+    lines.push('  },');
+  }
+  lines.push('];');
+  lines.push('');
+
+  lines.push('export const GENERATED_PLACES: GeneratedPlaceDef[] = [');
+  for (const id of Object.keys(places).sort()) {
+    const r = places[id] as Record<string, unknown>;
+    let access: Array<{ stopId: string; walkMinutes: number }> = [];
+    try {
+      const parsed: unknown = JSON.parse(String(r['transitAccess'] ?? '[]'));
+      if (Array.isArray(parsed)) {
+        access = parsed
+          .filter((e): e is Record<string, unknown> => !!e && typeof e === 'object')
+          .map((e) => ({ stopId: String(e['stopId'] ?? ''), walkMinutes: Number(e['walkMinutes'] ?? 0) }));
+      }
+    } catch { access = []; }
+    lines.push('  {');
+    lines.push(`    id: ${tsString(id)},`);
+    lines.push(`    districtId: ${tsString(String(r['districtId'] ?? ''))},`);
+    lines.push(`    name: ${tsString(String(r['name'] ?? ''))},`);
+    lines.push(`    transitAccess: [${access.map((a) => `{ stopId: ${tsString(a.stopId)}, walkMinutes: ${a.walkMinutes} }`).join(', ')}],`);
+    lines.push('  },');
+  }
+  lines.push('];');
+  lines.push('');
+
+  lines.push('export const GENERATED_TRANSIT_STOPS: GeneratedTransitStopDef[] = [');
+  for (const id of Object.keys(transitStops).sort()) {
+    const r = transitStops[id] as Record<string, unknown>;
+    const placeId = r['placeId'];
+    lines.push('  {');
+    lines.push(`    id: ${tsString(id)},`);
+    lines.push(`    districtId: ${tsString(String(r['districtId'] ?? ''))},`);
+    lines.push(`    name: ${tsString(String(r['name'] ?? ''))},`);
+    lines.push(`    placeId: ${placeId === undefined || placeId === null || placeId === '' ? 'null' : tsString(String(placeId))},`);
+    lines.push(`    mapX: ${Number(r['mapX'] ?? 0)},`);
+    lines.push(`    mapY: ${Number(r['mapY'] ?? 0)},`);
+    lines.push('  },');
+  }
+  lines.push('];');
+  lines.push('');
+
+  lines.push('export const GENERATED_BUS_LINES: GeneratedBusLineDef[] = [');
+  for (const id of Object.keys(busLines).sort()) {
+    const r = busLines[id] as Record<string, unknown>;
+    const strArr = (v: unknown): string[] => {
+      try {
+        const parsed: unknown = JSON.parse(String(v ?? '[]'));
+        return Array.isArray(parsed) ? parsed.filter((x): x is string => typeof x === 'string') : [];
+      } catch { return []; }
+    };
+    const numArr = (v: unknown): number[] => {
+      try {
+        const parsed: unknown = JSON.parse(String(v ?? '[]'));
+        return Array.isArray(parsed) ? parsed.filter((x): x is number => typeof x === 'number') : [];
+      } catch { return []; }
+    };
+    lines.push('  {');
+    lines.push(`    id: ${tsString(id)},`);
+    lines.push(`    name: ${tsString(String(r['name'] ?? ''))},`);
+    lines.push(`    stopIds: [${strArr(r['stopIds']).map((s) => tsString(s)).join(', ')}],`);
+    lines.push(`    serviceStartMinute: ${Number(r['serviceStartMinute'] ?? 0)},`);
+    lines.push(`    serviceEndMinute: ${Number(r['serviceEndMinute'] ?? 0)},`);
+    lines.push(`    headwayMinutes: ${Number(r['headwayMinutes'] ?? 0)},`);
+    lines.push(`    segmentMinutes: [${numArr(r['segmentMinutes']).join(', ')}],`);
+    lines.push(`    fare: ${Number(r['fare'] ?? 0)},`);
     lines.push('  },');
   }
   lines.push('];');

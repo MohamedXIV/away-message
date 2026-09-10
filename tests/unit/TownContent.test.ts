@@ -3,7 +3,7 @@ import { CONTENT_SCHEMA } from '../../src/tools/content/schema';
 import {
   parseContentJson,
   validateContent,
-  generateRegistrySource,
+  generateWorldRegistrySource,
 } from '../../src/tools/content/codegen';
 import type { ContentTables } from '../../src/tools/content/codegen';
 
@@ -16,6 +16,19 @@ import type { ContentTables } from '../../src/tools/content/codegen';
  */
 export function validTownTables(): ContentTables {
   return {
+    // Minimal character-domain scaffold: validateContent requires at least
+    // one archetype, and the live store always carries both domains.
+    archetypes: {
+      regular: {
+        label: 'Regular',
+        description: 'Town fixture scaffold.',
+        personaHint: 'Steady.',
+        vocabulary: '[]',
+        defaultInterests: '[]',
+        defaultSong: '',
+        typingSpeedWpm: 70,
+      },
+    },
     districts: {
       district_a: { name: 'District A', mapX: 20, mapY: 60, tags: '["residential"]' },
       district_b: { name: 'District B', mapX: 80, mapY: 40, tags: '["downtown"]' },
@@ -180,8 +193,8 @@ describe('Town content schema (#51 slice 1)', () => {
 
 describe('Town content codegen (#51 slice 1)', () => {
   it('emits typed world registries deterministically', () => {
-    const first = generateRegistrySource(validTownTables());
-    const second = generateRegistrySource(clone(validTownTables()));
+    const first = generateWorldRegistrySource(validTownTables());
+    const second = generateWorldRegistrySource(clone(validTownTables()));
     expect(first).toBe(second);
     for (const token of [
       'GENERATED_DISTRICTS',
