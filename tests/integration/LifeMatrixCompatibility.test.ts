@@ -113,4 +113,18 @@ describe('Life Matrix compatibility with existing Away authorities', () => {
 
     expect(sim.exportSnapshot()).toEqual(before);
   });
+
+  it('exposes a read-only life snapshot at the authoritative clock minute', () => {
+    const sim = new SimulationEngine();
+    const buddy = sim.social.getBuddies()[0];
+    expect(buddy).toBeDefined();
+    if (!buddy) throw new Error('Expected an existing Away character.');
+
+    const before = sim.exportSnapshot();
+    const life = sim.getLifeSnapshot(buddy.id);
+
+    expect(life?.actorId).toBe(buddy.id);
+    expect(life?.atMinute).toBe(sim.clock.getTotalMinutes());
+    expect(sim.exportSnapshot()).toEqual(before);
+  });
 });
