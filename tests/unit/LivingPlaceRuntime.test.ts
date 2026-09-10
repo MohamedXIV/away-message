@@ -85,4 +85,53 @@ describe('LivingPlaceRuntime', () => {
     });
     expect(runtime.getSnapshot()).toEqual(before);
   });
+
+  it('projects only dynamic instances whose authored anchors are visible in the active view', () => {
+    const runtime = new LivingPlaceRuntime(projection('view_a', ['view_b']));
+
+    const visible = runtime.resolveVisibleObjects([
+      {
+        instanceId: 'item:lamp:1',
+        definitionId: 'lamp',
+        anchorId: 'anchor_visible',
+        defaultAssetId: 'lamp_default',
+        assetByView: { view_a: 'lamp_front', view_b: 'lamp_side' },
+      },
+      {
+        instanceId: 'item:book:1',
+        definitionId: 'book',
+        anchorId: 'anchor_other_view',
+        defaultAssetId: 'book_default',
+      },
+    ]);
+
+    expect(visible).toEqual([
+      {
+        instanceId: 'item:lamp:1',
+        definitionId: 'lamp',
+        anchorId: 'anchor_visible',
+        x: 0.4,
+        y: 0.6,
+        assetId: 'lamp_front',
+      },
+    ]);
+  });
+
+  it('resolves per-view art without changing dynamic object identity or state', () => {
+    const runtime = new LivingPlaceRuntime(projection('view_a', ['view_b']));
+    runtime.setObjectState('item:lamp:1', { switchedOn: true });
+    const binding = {
+      instanceId: 'item:lamp:1',
+      definitionId: 'lamp',
+      anchorId: 'anchor_visible',
+      defaultAssetId: 'lamp_default',
+      assetByView: { view_a: 'lamp_front', view_b: 'lamp_side' },
+    };
+
+    expect(runtime.resolveVisibleObjects([binding])[0]?.assetId).toBe('lamp_front');
+    runtime.applyProjection(projection('view_b', ['view_a']));
+    expect(runtime.resolveVisibleObjects([binding])[0]?.assetId).toBe('lamp_side');
+    expect(runtime.resolveVisibleObjects([binding])[0]?.instanceId).toBe('item:lamp:1');
+    expect(runtime.getObjectState('item:lamp:1')).toEqual({ switchedOn: true });
+  });
 });
