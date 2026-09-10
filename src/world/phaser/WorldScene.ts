@@ -7,7 +7,7 @@ import type {
   WorldCameraFocus,
   WorldFixtureCapabilityReport,
 } from './types';
-import { ensureFixtureTextures } from './technicalFixture';
+import { ensureFixtureTextures, createTechnicalFixtureProjection } from './technicalFixture';
 
 export interface WorldSceneInitData {
   projection: WorldSceneProjection;
@@ -17,7 +17,7 @@ export interface WorldSceneInitData {
 export class WorldScene extends Phaser.Scene {
   public static readonly SCENE_KEY = 'WorldScene';
 
-  public projection!: WorldSceneProjection;
+  public projection: WorldSceneProjection = createTechnicalFixtureProjection();
   private onIntent?: (intent: WorldInteractionIntent) => void;
 
   // Visual Display Layers
@@ -55,9 +55,13 @@ export class WorldScene extends Phaser.Scene {
     super({ key: WorldScene.SCENE_KEY });
   }
 
-  public init(data: WorldSceneInitData): void {
-    this.projection = data.projection;
-    this.onIntent = data.onIntent;
+  public init(data?: Partial<WorldSceneInitData>): void {
+    if (data?.projection) {
+      this.projection = data.projection;
+    }
+    if (data?.onIntent) {
+      this.onIntent = data.onIntent;
+    }
   }
 
   public create(): void {

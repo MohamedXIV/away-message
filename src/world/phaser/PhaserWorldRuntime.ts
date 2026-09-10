@@ -42,6 +42,9 @@ export class PhaserWorldRuntime {
       onIntent: (intent) => this.onIntent?.(intent),
     };
 
+    const sceneInstance = new WorldScene();
+    sceneInstance.init(sceneData);
+
     const config: Phaser.Types.Core.GameConfig = {
       type: this.renderType ?? Phaser.AUTO,
       parent: this.parent,
@@ -58,19 +61,17 @@ export class PhaserWorldRuntime {
         antialias: true,
         roundPixels: true,
       },
-      scene: [WorldScene],
+      scene: [sceneInstance],
     };
 
     this.game = new Phaser.Game(config);
 
-    // Boot hook: pass initial scene data when game boots
+    // Boot hook: ensure scene data is synchronized when game boots
     this.game.events.once(Phaser.Core.Events.READY, () => {
       if (this.isDestroyed || !this.game) return;
       const activeScene = this.game.scene.getScene(WorldScene.SCENE_KEY) as WorldScene | null;
       if (activeScene) {
         activeScene.init(sceneData);
-      } else {
-        this.game.scene.start(WorldScene.SCENE_KEY, sceneData);
       }
     });
   }

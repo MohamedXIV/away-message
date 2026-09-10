@@ -312,11 +312,9 @@ export function ensureFixtureTextures(scene: Phaser.Scene): void {
       const normalCanvas = createFixtureAssetA1NormalMapCanvas();
       if (normalCanvas) {
         textures.addCanvas('asset_a1_n', normalCanvas);
-        const texWithSource = tex as unknown as { dataSource?: unknown[]; addDataSource?: (src: unknown) => void };
-        if (typeof texWithSource.addDataSource === 'function') {
-          texWithSource.addDataSource(normalCanvas);
-        } else if (Array.isArray(texWithSource.dataSource)) {
-          texWithSource.dataSource.push(normalCanvas);
+        const texAny = tex as unknown as { setDataSource?: (src: unknown) => void };
+        if (typeof texAny?.setDataSource === 'function') {
+          texAny.setDataSource(normalCanvas);
         }
       }
     }
