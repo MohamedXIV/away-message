@@ -16,8 +16,6 @@ import {
   WorldState,
   NarrativeState,
   TelemetryStats,
-  ConnectionType,
-  OsVersion,
   FileRecord,
   Appointment,
   StorePurchaseResultData,
@@ -65,9 +63,6 @@ export interface SimulationStoreActions {
   ejectOwnedMediaAtHome: () => ActionResult<{ mediaInstanceId: string }>;
   prepareOsInstallFromInsertedMedia: () => ActionResult<OsInstallPlan>;
   commitOsInstall: (plan: OsInstallPlan) => ActionResult;
-  upgradeRam: (ramMB: number, cost: number) => void;
-  upgradeConnection: (connectionType: ConnectionType, cost: number) => void;
-  upgradeOs: (targetOs: OsVersion, cost: number) => void;
 
   // Downloads
   startDownload: (params: {
@@ -250,18 +245,6 @@ export const useSimulationStore = create<SimulationStore>()(
         const result = get().engine.commitOsInstall(plan);
         get().syncStateFromEngine();
         return result;
-      },
-
-      upgradeRam: (ramMB, cost) => {
-        get().dispatchAction({ type: 'HARDWARE_UPGRADE_RAM', ramMB, cost });
-      },
-
-      upgradeConnection: (connectionType, cost) => {
-        get().dispatchAction({ type: 'HARDWARE_UPGRADE_CONNECTION', connectionType, cost });
-      },
-
-      upgradeOs: (targetOs, cost) => {
-        get().dispatchAction({ type: 'HARDWARE_UPGRADE_OS', targetOs, cost });
       },
 
       startDownload: (params) => {

@@ -32,4 +32,19 @@ describe('Silicon & Spares transaction boundary', () => {
     expect(source).toContain("type: 'STORE_PURCHASE_ITEM'");
     expect(source).toContain("storeId: 'silicon_spares'");
   });
+
+  it('does not expose legacy hardware or OS upgrade bypasses through the UI store', () => {
+    const source = readFileSync(STORE_PATH, 'utf8');
+
+    for (const forbidden of [
+      'upgradeRam:',
+      'upgradeConnection:',
+      'upgradeOs:',
+      "type: 'HARDWARE_UPGRADE_RAM'",
+      "type: 'HARDWARE_UPGRADE_CONNECTION'",
+      "type: 'HARDWARE_UPGRADE_OS'",
+    ]) {
+      expect(source, `UI store must not expose legacy bypass ${forbidden}`).not.toContain(forbidden);
+    }
+  });
 });
