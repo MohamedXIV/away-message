@@ -45,4 +45,37 @@ describe('physical-world persistence', () => {
     });
     expect(reloaded.inventory.items).toHaveLength(1);
   });
+
+  it('owns authoritative physical transfers through the SimulationEngine facade and persists the exact result', () => {
+    const simulation = new SimulationEngine({ inventory: legacyInventory });
+
+    simulation.transferPhysicalItem('media-save-1', {
+      kind: 'worldAnchor',
+      anchorId: 'room104:desk',
+    });
+
+    expect(simulation.getPhysicalWorldState().items['media-save-1']?.location).toEqual({
+      kind: 'worldAnchor',
+      anchorId: 'room104:desk',
+    });
+    expect(simulation.exportSnapshot().physicalWorld.items['media-save-1']?.location).toEqual({
+      kind: 'worldAnchor',
+      anchorId: 'room104:desk',
+    });
+  });
+
+  it('rejects invalid facade transfers atomically without mutating canonical physical state', () => {
+    const simulation = new SimulationEngine({ inventory: legacyInventory });
+    const before = simulation.getPhysicalWorldState();
+
+    expect(() =>
+      simulation.transferPhysicalItem('media-save-1', {
+        kind: 'container',
+        containerInstanceId: 'missing-container',
+      }),
+    ).toThrow(/container/i);
+
+    expect(simulation.getPhysicalWorldState()).toEqual(before);
+    expect(simulation.exportSnapshot().physicalWorld).toEqual(before);
+  });
 });
