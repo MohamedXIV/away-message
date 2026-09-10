@@ -12,6 +12,10 @@ import { DialoguePoolsTab } from './tabs/DialoguePoolsTab';
 import { AffinitySeedsTab } from './tabs/AffinitySeedsTab';
 import { WorldBasicsTab } from './tabs/WorldBasicsTab';
 import { TransitTab } from './tabs/TransitTab';
+import { PhysicalDefinitionsTab } from './tabs/PhysicalDefinitionsTab';
+import { ScenesTab } from './tabs/ScenesTab';
+import { AssetsTab } from './tabs/AssetsTab';
+import { ProfilesTab } from './tabs/ProfilesTab';
 import { RawInspectorTab } from './tabs/RawInspectorTab';
 import { ValidationErrorsModal } from './components/ValidationErrorsModal';
 
@@ -73,6 +77,19 @@ export const ContentStudioShell: React.FC<Props> = ({ store }) => {
   const transitCount =
     Object.keys(studio.tables['transitStops'] ?? {}).length +
     Object.keys(studio.tables['busLines'] ?? {}).length;
+  const physicalCount =
+    Object.keys(studio.tables['items'] ?? {}).length +
+    Object.keys(studio.tables['containers'] ?? {}).length;
+  const sceneCount =
+    Object.keys(studio.tables['spaces'] ?? {}).length +
+    Object.keys(studio.tables['views'] ?? {}).length +
+    Object.keys(studio.tables['anchors'] ?? {}).length +
+    Object.keys(studio.tables['interactions'] ?? {}).length;
+  const assetCount = Object.keys(studio.tables['assets'] ?? {}).length;
+  const profileCount =
+    Object.keys(studio.tables['lightProfiles'] ?? {}).length +
+    Object.keys(studio.tables['audioProfiles'] ?? {}).length +
+    Object.keys(studio.tables['ambientProfiles'] ?? {}).length;
   const errorCount = studio.validationErrors.length;
 
   if (isMinimized) {
@@ -123,14 +140,18 @@ export const ContentStudioShell: React.FC<Props> = ({ store }) => {
           <span className="text-[10px] font-mono text-purple-400">v{CONTENT_VERSION}</span>
         </div>
 
-        <nav className="flex items-center gap-1 bg-[#100720] p-1 rounded-lg border border-purple-900/60">
+        <nav className="flex items-center gap-1 bg-[#100720] p-1 rounded-lg border border-purple-900/60 overflow-x-auto max-w-[65vw]">
           {[
             { id: 'characters', label: 'Characters', count: charCount },
             { id: 'archetypes', label: 'Archetypes', count: archCount },
-            { id: 'dialoguePools', label: 'Dialogue Pools', count: poolCount },
-            { id: 'affinitySeeds', label: 'Affinity Seeds', count: seedCount },
             { id: 'world', label: 'World', count: worldCount },
             { id: 'transit', label: 'Transit', count: transitCount },
+            { id: 'physical', label: 'Physical', count: physicalCount },
+            { id: 'scenes', label: 'Scenes', count: sceneCount },
+            { id: 'assets', label: 'Assets', count: assetCount },
+            { id: 'profiles', label: 'Profiles', count: profileCount },
+            { id: 'dialoguePools', label: 'Dialogue Pools', count: poolCount },
+            { id: 'affinitySeeds', label: 'Affinity Seeds', count: seedCount },
             { id: 'raw', label: 'Raw DB' },
           ].map((tab) => {
             const isActive = activeTab === tab.id;
@@ -139,7 +160,7 @@ export const ContentStudioShell: React.FC<Props> = ({ store }) => {
                 key={tab.id}
                 type="button"
                 onClick={() => setActiveTab(tab.id as StudioTab)}
-                className={`px-3 py-1 rounded text-xs font-bold transition-all flex items-center gap-1.5 ${
+                className={`px-2.5 py-1 rounded text-xs font-bold transition-all flex items-center gap-1.5 whitespace-nowrap shrink-0 ${
                   isActive
                     ? 'bg-purple-700 text-white shadow'
                     : 'text-gray-400 hover:text-purple-200 hover:bg-purple-950/40'
@@ -160,7 +181,7 @@ export const ContentStudioShell: React.FC<Props> = ({ store }) => {
           })}
         </nav>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 shrink-0">
           {errorCount === 0 ? (
             <div className="flex items-center gap-1 text-[11px] font-semibold text-emerald-400 bg-emerald-950/40 border border-emerald-800/40 px-2 py-0.5 rounded">
               <span>&check;</span>
@@ -231,8 +252,13 @@ export const ContentStudioShell: React.FC<Props> = ({ store }) => {
         {activeTab === 'affinitySeeds' && <AffinitySeedsTab studio={studio} />}
         {activeTab === 'world' && <WorldBasicsTab studio={studio} />}
         {activeTab === 'transit' && <TransitTab studio={studio} />}
+        {activeTab === 'physical' && <PhysicalDefinitionsTab studio={studio} />}
+        {activeTab === 'scenes' && <ScenesTab studio={studio} />}
+        {activeTab === 'assets' && <AssetsTab studio={studio} />}
+        {activeTab === 'profiles' && <ProfilesTab studio={studio} />}
         {activeTab === 'raw' && <RawInspectorTab studio={studio} />}
       </main>
+
 
       <ValidationErrorsModal
         isOpen={showValidationModal}
