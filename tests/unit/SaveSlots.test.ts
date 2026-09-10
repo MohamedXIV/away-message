@@ -1,17 +1,22 @@
 // @vitest-environment jsdom
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { SimulationEngine } from '../../src/engine/SimulationEngine';
+import { createScrapYardBundle } from '../../src/engine/hardware/catalog';
 import { db } from '../../src/persistence/db';
 import {
-  saveSlot,
-  loadSlotSnapshot,
-  restoreSlotPulse,
-  listSlots,
-  deleteSlot,
-  mostRecentSlot,
-  checkSaveCompatibility,
   SAVE_FORMAT_VERSION,
+  checkSaveCompatibility,
+  deleteSlot,
+  listSlots,
+  loadSlotSnapshot,
+  mostRecentSlot,
+  restoreSlotPulse,
+  saveSlot,
 } from '../../src/persistence/slots';
+import {
+  isRecoverableBrokenStarterPurchase,
+  migrateSnapshotToV6,
+} from '../../src/persistence/migrations/v6ComputerState';
 import { APP_VERSION } from '../../src/version';
 import { setCurrentPulseSlotId } from '../../src/apps/pulse/persistence';
 
@@ -48,6 +53,19 @@ describe('P9 save slots (Dexie documents + Pulse coherence)', () => {
     expect(await loadSlotSnapshot('slot_1')).toBeNull();
   });
 
+  it('persists an honest fresh no-PC/no-OS summary', async () => {
+    const sim = new SimulationEngine();
+    await saveSlot(sim, 'slot_empty');
+    const record = await db.saves.get('slot_empty');
+
+    expect(record?.version).toBe(6);
+    expect(record?.hardwareState.hasComputer).toBe(false);
+    expect(record?.hardwareState.connectionType).toBeNull();
+    expect(record?.hardwareState.osVersion).toBeNull();
+    expect(record?.snapshot?.computer?.assembled).toBe(false);
+    expect(record?.snapshot?.os?.currentOsId).toBeNull();
+  });
+
   it('mostRecentSlot prefers the freshest snapshot', async () => {
     const sim = new SimulationEngine();
     await saveSlot(sim, 'slot_2');
@@ -57,7 +75,8 @@ describe('P9 save slots (Dexie documents + Pulse coherence)', () => {
     expect(['slot_2', 'autosave']).toContain(recent!.id);
   });
 
-  it('restores the saved Pulse moment into its own slot', async () => {    const store: Record<string, string> = {};
+  it('restores the saved Pulse moment into its own slot', async () => {
+    const store: Record<string, string> = {};
     vi.stubGlobal('window', {
       localStorage: {
         getItem: (key: string) => (key in store ? store[key]! : null),
@@ -72,7 +91,6 @@ describe('P9 save slots (Dexie documents + Pulse coherence)', () => {
     const sim = new SimulationEngine();
     await saveSlot(sim, 'slot_1');
 
-    // Wipe and restore — the moment comes back into its own slot key
     delete store[getPulseSlotStorageKey('slot_1')];
     await restoreSlotPulse('slot_1');
     expect(store[getPulseSlotStorageKey('slot_1')]).toContain('pulse-moment-1');
@@ -84,6 +102,7 @@ describe('P9 save compatibility matrix', () => {
     const sim = new SimulationEngine();
     await saveSlot(sim, 'slot_2');
     const record = await db.saves.get('slot_2');
+    expect(SAVE_FORMAT_VERSION).toBe(6);
     expect(record?.version).toBe(SAVE_FORMAT_VERSION);
     expect(record?.appVersion).toBe(APP_VERSION);
     expect(checkSaveCompatibility(record!).status).toBe('ok');
@@ -93,12 +112,9 @@ describe('P9 save compatibility matrix', () => {
   it('accepts older supported formats, refuses newer and legacy', () => {
     expect(checkSaveCompatibility(undefined).status).toBe('refused');
     expect(checkSaveCompatibility(null).status).toBe('refused');
-    // v2 document saves share the v3 shape → loadable
     expect(checkSaveCompatibility({ version: 2, snapshot: {} } as any).status).toBe('ok');
-    // Newer-than-current → honest refusal, never silent corruption
     const newer = checkSaveCompatibility({ version: SAVE_FORMAT_VERSION + 1, snapshot: {} } as any);
     expect(newer.status).toBe('refused');
-    // Ancient multi-table rows without a snapshot → legacy refusal
     expect(checkSaveCompatibility({ version: 1 } as any).status).toBe('legacy');
     expect(checkSaveCompatibility({ version: 3 } as any).status).toBe('legacy');
   });
@@ -112,5 +128,144 @@ describe('P9 save compatibility matrix', () => {
     } as any);
     expect(await loadSlotSnapshot('slot_future')).toBeNull();
     await db.saves.delete('slot_future');
+  });
+});
+
+describe('v5 -> v6 computer state migration', () => {
+  it('preserves a working modular PC, display, dedicated installed OS, and ownership', () => {
+    const modular = createScrapYardBundle();
+    const v5 = {
+      version: 1,
+      time: { day: 4, totalMinutes: 5000 },
+      player: { cash: 20 },
+      hardware: {
+        hasComputer: true,
+        isPoweredOn: false,
+        modular,
+        cpuTier: 1,
+        cpuName: modular.cpu.name,
+        ramMB: 64,
+        hddTotalGB: 2.1,
+        hddFreeGB: 0.9,
+        connectionType: 'dialup_56k',
+        connectionSpeedKbps: 56,
+        osVersion: 'Orion_4.8',
+        soundCardInstalled: true,
+        speakersInstalled: false,
+        webcamInstalled: false,
+      },
+      os: {
+        currentOsId: 'Orion_5.0',
+        installedPatchIds: [],
+        lastInstallAtMinute: 3200,
+      },
+    } as any;
+
+    const migrated = migrateSnapshotToV6(v5, 5);
+
+    expect(migrated.computer.assembled).toBe(true);
+    expect(migrated.computer.cpu?.id).toBe(modular.cpu.id);
+    expect(migrated.computer.ramSticks[0]?.sizeMb).toBe(64);
+    expect(migrated.display.monitor?.id).toBe(modular.monitor.id);
+    // Dedicated OsEngine state wins over the obsolete hardware shadow value.
+    expect(migrated.os.currentOsId).toBe('Orion_5.0');
+    expect(migrated.inventory.items.map((item) => item.instanceId)).toContain('migrated:monitor:0');
+    expect(migrated.inventory.items.every((item) => item.location === 'installed')).toBe(true);
+    expect(migrated.hardware.hasComputer).toBe(true);
+    expect(migrated.hardware.ramMB).toBe(64);
+    expect('osVersion' in migrated.hardware).toBe(false);
+    expect('modular' in migrated.hardware).toBe(false);
+  });
+
+  it('preserves an inserted OS disc as an owned inserted media reference', () => {
+    const modular = createScrapYardBundle();
+    modular.insertedDisc = {
+      id: 'disc_orion_48_recovery',
+      title: 'Orion 4.8 Recovery CD',
+      type: 'os_installer',
+      osTarget: 'Orion_4.8',
+    };
+    const v5 = {
+      time: { day: 3 },
+      player: { cash: 12 },
+      hardware: {
+        hasComputer: true,
+        modular,
+        osVersion: 'Orion_4.8',
+      },
+      os: { currentOsId: 'Orion_4.8', installedPatchIds: [] },
+    } as any;
+
+    const migrated = migrateSnapshotToV6(v5, 5);
+    const media = migrated.inventory.items.find((item) => item.kind === 'media');
+
+    expect(media).toEqual({
+      instanceId: 'migrated:media:inserted',
+      catalogItemId: 'disc_orion_48_recovery',
+      kind: 'media',
+      location: 'inserted',
+    });
+    expect(migrated.computer.insertedMediaId).toBe(media?.instanceId);
+  });
+
+  it('does not turn stale v5 default hardware/Orion into a ghost computer or OS', () => {
+    const v5 = {
+      version: 1,
+      time: { day: 1, totalMinutes: 480 },
+      player: { cash: 38 },
+      hardware: {
+        hasComputer: false,
+        isPoweredOn: false,
+        cpuTier: 1,
+        cpuName: 'Single-Core Orion x86 450MHz',
+        ramMB: 512,
+        hddTotalGB: 40,
+        hddFreeGB: 7,
+        connectionType: 'dsl_256k',
+        connectionSpeedKbps: 256,
+        osVersion: 'Orion_4.8',
+        soundCardInstalled: true,
+        speakersInstalled: false,
+        webcamInstalled: false,
+      },
+      os: { currentOsId: 'Orion_4.8', installedPatchIds: [] },
+    } as any;
+
+    const migrated = migrateSnapshotToV6(v5, 5);
+
+    expect(migrated.computer.assembled).toBe(false);
+    expect(migrated.display.monitor).toBeNull();
+    expect(migrated.inventory.items).toEqual([]);
+    expect(migrated.os.currentOsId).toBeNull();
+    expect(migrated.hardware.ramMB).toBe(0);
+    expect(migrated.hardware.connectionType).toBeNull();
+  });
+
+  it('adds only the narrow one-time marker for the known lost $35 starter purchase', () => {
+    const broken = {
+      time: { day: 1 },
+      player: { cash: 3 },
+      hardware: { hasComputer: false },
+      os: { currentOsId: 'Orion_4.8', installedPatchIds: [] },
+    } as any;
+
+    expect(isRecoverableBrokenStarterPurchase(broken, 5)).toBe(true);
+    const migrated = migrateSnapshotToV6(broken, 5);
+    expect(migrated.inventory.items).toEqual([]);
+    expect(migrated.inventory.legacyRecovery).toEqual({
+      starterBundlePurchaseLost: true,
+      consumed: false,
+    });
+  });
+
+  it.each([
+    ['cash $2', { time: { day: 1 }, player: { cash: 2 }, hardware: { hasComputer: false }, os: { currentOsId: 'Orion_4.8', installedPatchIds: [] } }],
+    ['cash $4', { time: { day: 1 }, player: { cash: 4 }, hardware: { hasComputer: false }, os: { currentOsId: 'Orion_4.8', installedPatchIds: [] } }],
+    ['day 2', { time: { day: 2 }, player: { cash: 3 }, hardware: { hasComputer: false }, os: { currentOsId: 'Orion_4.8', installedPatchIds: [] } }],
+    ['working PC', { time: { day: 1 }, player: { cash: 3 }, hardware: { hasComputer: true }, os: { currentOsId: 'Orion_4.8', installedPatchIds: [] } }],
+    ['install timestamp', { time: { day: 1 }, player: { cash: 3 }, hardware: { hasComputer: false }, os: { currentOsId: 'Orion_4.8', installedPatchIds: [], lastInstallAtMinute: 500 } }],
+    ['patch evidence', { time: { day: 1 }, player: { cash: 3 }, hardware: { hasComputer: false }, os: { currentOsId: 'Orion_4.8', installedPatchIds: ['Orion_4.8.1'] } }],
+  ])('does not grant the recovery marker for %s', (_label, snapshot) => {
+    expect(isRecoverableBrokenStarterPurchase(snapshot as any, 5)).toBe(false);
   });
 });

@@ -4,7 +4,7 @@ import { useSimulationStore } from '../../store/useSimulationStore';
 import { soundManager } from '../../audio/SoundManager';
 
 export const OrionSoftSite: React.FC<SiteRouteProps> = () => {
-  const currentOs = useSimulationStore((s) => s.state.hardware.osVersion);
+  const currentOs = useSimulationStore((s) => s.state.os.currentOsId);
   const dispatchAction = useSimulationStore((s) => s.dispatchAction);
 
   const handleUpgradeTo60 = () => {
@@ -34,7 +34,7 @@ export const OrionSoftSite: React.FC<SiteRouteProps> = () => {
         </div>
 
         <span className="text-xs bg-blue-50 text-blue-900 font-mono font-bold px-2 py-1 rounded border border-blue-200">
-          Current OS: {currentOs}
+          Current OS: {currentOs ?? 'No OS'}
         </span>
       </div>
 

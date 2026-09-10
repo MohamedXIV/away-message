@@ -1,4 +1,6 @@
-import { Story } from 'inkjs';
+// NOTE: ink sources + inkjs are gone (chore/remove-dead-ink). Dialogue lives in
+// TS StoryKnots (data/allKnots) executed through this engine + InkAdapter
+// (the adapter name is legacy — it never touches ink, only knots and tags).
 import { SimulationState } from '../engine/types';
 import {
   StoryKnot,
@@ -9,9 +11,9 @@ import {
   ParsedNarrativeTag,
 } from './types';
 import { parseAllNarrativeTags } from './tagParser';
+import { CORE_IDS } from '../engine/coreBuddies';
 
 export class NarrativeEngine {
-  private story: Story | null = null;
   private knots: Map<string, StoryKnot> = new Map();
   private visitedKnotIds: Set<string> = new Set();
   private completedBeats: Set<string> = new Set();
@@ -21,12 +23,9 @@ export class NarrativeEngine {
   private boundFunctions: Map<string, (...args: any[]) => any> = new Map();
   private contextSnapshot: NarrativeContextSnapshot | null = null;
 
-  constructor(inkJson?: any, knots?: StoryKnot[]) {
+  constructor(knots?: StoryKnot[]) {
     if (knots && knots.length > 0) {
       this.registerKnots(knots);
-    }
-    if (inkJson) {
-      this.loadInkJson(inkJson);
     }
     this.setupDefaultExternalFunctions();
   }
@@ -47,18 +46,6 @@ export class NarrativeEngine {
 
   public getAllKnots(): StoryKnot[] {
     return Array.from(this.knots.values());
-  }
-
-  public loadInkJson(inkJson: any): void {
-    try {
-      this.story = new Story(inkJson);
-      this.bindStoryExternalFunctions();
-      if (this.contextSnapshot) {
-        this.injectSnapshotIntoStory(this.contextSnapshot);
-      }
-    } catch (err) {
-      console.warn('Could not initialize inkjs.Story from JSON:', err);
-    }
   }
 
   private setupDefaultExternalFunctions(): void {
@@ -102,24 +89,6 @@ export class NarrativeEngine {
 
   public bindExternalFunction(name: string, func: (...args: any[]) => any): void {
     this.boundFunctions.set(name, func);
-    if (this.story) {
-      try {
-        this.story.BindExternalFunction(name, func);
-      } catch {
-        // May already be bound
-      }
-    }
-  }
-
-  private bindStoryExternalFunctions(): void {
-    if (!this.story) return;
-    for (const [name, func] of this.boundFunctions.entries()) {
-      try {
-        this.story.BindExternalFunction(name, func);
-      } catch {
-        // Ignore if already bound
-      }
-    }
   }
 
   /**
@@ -158,7 +127,7 @@ export class NarrativeEngine {
       sim_player_cash: state.player.cash,
       sim_player_energy: state.player.energy,
       sim_player_fatigue: state.player.fatigue,
-      sim_os_version: state.hardware.osVersion,
+      sim_os_version: state.os.currentOsId,
       sim_ram_mb: state.hardware.ramMB,
       sim_connection_type: state.hardware.connectionType,
       sim_photobox_installed: isInstalled('photobox'),
@@ -174,90 +143,32 @@ export class NarrativeEngine {
       sim_buddies_comfort,
       sim_buddies_respect,
       sim_buddies_annoyance,
-      sim_maya_familiarity: sim_buddies_familiarity['maya'] ?? 10,
-      sim_maya_trust: sim_buddies_trust['maya'] ?? 20,
-      sim_maya_comfort: sim_buddies_comfort['maya'] ?? 30,
-      sim_maya_respect: sim_buddies_respect['maya'] ?? 40,
-      sim_maya_annoyance: sim_buddies_annoyance['maya'] ?? 0,
-      sim_ryan_familiarity: sim_buddies_familiarity['ryan'] ?? 40,
-      sim_ryan_trust: sim_buddies_trust['ryan'] ?? 50,
-      sim_ryan_comfort: sim_buddies_comfort['ryan'] ?? 50,
-      sim_ryan_respect: sim_buddies_respect['ryan'] ?? 40,
-      sim_ryan_annoyance: sim_buddies_annoyance['ryan'] ?? 0,
-      sim_nora_familiarity: sim_buddies_familiarity['nora'] ?? 5,
-      sim_nora_trust: sim_buddies_trust['nora'] ?? 15,
-      sim_nora_comfort: sim_buddies_comfort['nora'] ?? 20,
-      sim_nora_respect: sim_buddies_respect['nora'] ?? 50,
-      sim_nora_annoyance: sim_buddies_annoyance['nora'] ?? 0,
-      sim_henderson_familiarity: sim_buddies_familiarity['henderson'] ?? 30,
-      sim_henderson_trust: sim_buddies_trust['henderson'] ?? 30,
-      sim_henderson_comfort: sim_buddies_comfort['henderson'] ?? 20,
-      sim_henderson_respect: sim_buddies_respect['henderson'] ?? 40,
-      sim_henderson_annoyance: sim_buddies_annoyance['henderson'] ?? 10,
+      sim_maya_familiarity: sim_buddies_familiarity[CORE_IDS.MAYA] ?? 10,
+      sim_maya_trust: sim_buddies_trust[CORE_IDS.MAYA] ?? 20,
+      sim_maya_comfort: sim_buddies_comfort[CORE_IDS.MAYA] ?? 30,
+      sim_maya_respect: sim_buddies_respect[CORE_IDS.MAYA] ?? 40,
+      sim_maya_annoyance: sim_buddies_annoyance[CORE_IDS.MAYA] ?? 0,
+      sim_ryan_familiarity: sim_buddies_familiarity[CORE_IDS.RYAN] ?? 40,
+      sim_ryan_trust: sim_buddies_trust[CORE_IDS.RYAN] ?? 50,
+      sim_ryan_comfort: sim_buddies_comfort[CORE_IDS.RYAN] ?? 50,
+      sim_ryan_respect: sim_buddies_respect[CORE_IDS.RYAN] ?? 40,
+      sim_ryan_annoyance: sim_buddies_annoyance[CORE_IDS.RYAN] ?? 0,
+      sim_nora_familiarity: sim_buddies_familiarity[CORE_IDS.NORA] ?? 5,
+      sim_nora_trust: sim_buddies_trust[CORE_IDS.NORA] ?? 15,
+      sim_nora_comfort: sim_buddies_comfort[CORE_IDS.NORA] ?? 20,
+      sim_nora_respect: sim_buddies_respect[CORE_IDS.NORA] ?? 50,
+      sim_nora_annoyance: sim_buddies_annoyance[CORE_IDS.NORA] ?? 0,
+      sim_henderson_familiarity: sim_buddies_familiarity[CORE_IDS.HENDERSON] ?? 30,
+      sim_henderson_trust: sim_buddies_trust[CORE_IDS.HENDERSON] ?? 30,
+      sim_henderson_comfort: sim_buddies_comfort[CORE_IDS.HENDERSON] ?? 20,
+      sim_henderson_respect: sim_buddies_respect[CORE_IDS.HENDERSON] ?? 40,
+      sim_henderson_annoyance: sim_buddies_annoyance[CORE_IDS.HENDERSON] ?? 10,
       flags,
       completedBeats: Array.from(new Set([...(state.narrative?.completedBeats ?? state.world?.triggeredEvents?.map((e: any) => e.id) ?? []), ...this.completedBeats])),
     };
 
     this.contextSnapshot = snapshot;
-    this.injectSnapshotIntoStory(snapshot);
     return snapshot;
-  }
-
-  private injectSnapshotIntoStory(snapshot: NarrativeContextSnapshot): void {
-    if (!this.story) return;
-
-    try {
-      const vars = this.story.variablesState;
-      if (!vars) return;
-
-      const keys: Array<keyof NarrativeContextSnapshot> = [
-        'sim_current_day',
-        'sim_current_time_minute',
-        'sim_time_of_day',
-        'sim_player_cash',
-        'sim_player_energy',
-        'sim_player_fatigue',
-        'sim_os_version',
-        'sim_ram_mb',
-        'sim_connection_type',
-        'sim_photobox_installed',
-        'sim_weatherbuddy_installed',
-        'sim_safesweep_installed',
-        'sim_flashfetch_installed',
-        'sim_zipmate_installed',
-        'sim_retroamp_installed',
-        'sim_rent_paid',
-        'sim_internet_paid',
-        'sim_maya_familiarity',
-        'sim_maya_trust',
-        'sim_maya_comfort',
-        'sim_maya_respect',
-        'sim_maya_annoyance',
-        'sim_ryan_familiarity',
-        'sim_ryan_trust',
-        'sim_ryan_comfort',
-        'sim_ryan_respect',
-        'sim_ryan_annoyance',
-        'sim_nora_familiarity',
-        'sim_nora_trust',
-        'sim_nora_comfort',
-        'sim_nora_respect',
-        'sim_nora_annoyance',
-        'sim_henderson_familiarity',
-        'sim_henderson_trust',
-        'sim_henderson_comfort',
-        'sim_henderson_respect',
-        'sim_henderson_annoyance',
-      ];
-
-      for (const k of keys) {
-        if (k in vars) {
-          vars[k as string] = snapshot[k];
-        }
-      }
-    } catch {
-      // Ink variable injection may skip undefined story variables
-    }
   }
 
   public evaluateCondition(cond: NarrativeCondition, snapshot?: NarrativeContextSnapshot): boolean {
@@ -493,21 +404,11 @@ export class NarrativeEngine {
     const flagsObj: Record<string, boolean | number | string> = {};
     for (const [k, v] of this.flags.entries()) flagsObj[k] = v;
 
-    let storyStateJson: string | undefined;
-    if (this.story) {
-      try {
-        storyStateJson = this.story.state.ToJson();
-      } catch {
-        // Serialization fallback
-      }
-    }
-
     return {
       activeBeatId: this.activeBeatId,
       completedBeats: Array.from(this.completedBeats),
       visitedKnotIds: Array.from(this.visitedKnotIds),
       flags: flagsObj,
-      storyStateJson,
     };
   }
 
@@ -519,14 +420,6 @@ export class NarrativeEngine {
     if (state.flags) {
       for (const [k, v] of Object.entries(state.flags)) {
         this.flags.set(k, v);
-      }
-    }
-
-    if (state.storyStateJson && this.story) {
-      try {
-        this.story.state.LoadJson(state.storyStateJson);
-      } catch (err) {
-        console.warn('Failed to restore story state JSON:', err);
       }
     }
   }

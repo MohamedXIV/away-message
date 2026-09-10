@@ -70,8 +70,8 @@ describe('Terminal CLI Execution & VFS Integration', () => {
 
   it('verifies IP configuration details from hardware state', () => {
     const hw = engine.hardware.getState();
-    expect(hw.connectionType).toBe('dsl_256k');
-    expect(hw.connectionSpeedKbps).toBe(256);
-    expect(hw.osVersion).toBe('Orion_4.8');
+    expect(hw.connectionType).toBeNull();
+    expect(hw.connectionSpeedKbps).toBe(0);
+    expect(engine.os.getCurrentOsId()).toBeNull();
   });
 });

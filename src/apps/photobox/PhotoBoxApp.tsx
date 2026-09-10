@@ -22,7 +22,8 @@ const DEFAULT_FILTER: ImageFilterState = {
 
 export const PhotoBoxApp: React.FC = () => {
   const hardware = useSimulationStore((s) => s.state.hardware);
-  const isOrion60 = hardware.osVersion === 'Orion_6.0';
+  const currentOsId = useSimulationStore((s) => s.state.os.currentOsId);
+  const isOrion60 = currentOsId === 'Orion_6.0';
   const hasSufficientRam = hardware.ramMB >= 768;
   const isGatingPassed = isOrion60 && hasSufficientRam;
 
@@ -53,7 +54,7 @@ export const PhotoBoxApp: React.FC = () => {
             <div className="flex justify-between">
               <span className="text-gray-600">Operating System:</span>
               <span className={isOrion60 ? 'text-green-700 font-bold' : 'text-red-600 font-bold'}>
-                {hardware.osVersion} {isOrion60 ? '✓' : '(Requires Orion 6.0)'}
+                {currentOsId ?? 'No OS'} {isOrion60 ? '✓' : '(Requires Orion 6.0)'}
               </span>
             </div>
             <div className="flex justify-between">

@@ -1,7 +1,10 @@
+import { readFileSync } from 'node:fs';
 import { describe, it, expect, beforeEach } from 'vitest';
 import { EventBus } from '../../src/engine/EventBus';
 import { FileSystemEngine } from '../../src/engine/FileSystemEngine';
 import { DownloadManager } from '../../src/engine/DownloadManager';
+
+const downloadManagerSource = readFileSync('src/engine/DownloadManager.ts', 'utf8');
 
 describe('DownloadManager (Bandwidth Allocation, Progress & Time Jumps)', () => {
   let eventBus: EventBus;
@@ -18,6 +21,13 @@ describe('DownloadManager (Bandwidth Allocation, Progress & Time Jumps)', () => 
       vfs,
       getConnectionSpeedKbps: () => connectionSpeedKbps,
     });
+  });
+
+  it('keeps the core scheduler neutral to concrete app identities', () => {
+    expect(downloadManagerSource).not.toMatch(/LEGACY_BROWSER_PROFILE|LEGACY_FLASHFETCH_PROFILE/);
+    expect(downloadManagerSource).not.toContain("clientId: 'browser'");
+    expect(downloadManagerSource).not.toContain("clientId: 'flashfetch'");
+    expect(downloadManagerSource).not.toContain("manager === 'flashfetch'");
   });
 
   it('starts a download and allocates available bandwidth', () => {
@@ -38,6 +48,22 @@ describe('DownloadManager (Bandwidth Allocation, Progress & Time Jumps)', () => 
     const active = downloadManager.getActiveDownloads();
     expect(active.length).toBe(1);
     expect(active[0]?.allocatedKbps).toBe(256); // Bottlenecked by client 256k
+  });
+
+  it('rejects new transfers when there is no usable connection bandwidth', () => {
+    connectionSpeedKbps = 0;
+
+    expect(() =>
+      downloadManager.startDownload({
+        sourceId: 'offline_tool',
+        sourceUrl: 'http://downloadhub.local/offline-tool.zip',
+        fileName: 'offline-tool.zip',
+        totalBytes: 1_000_000,
+        sourceMaxKbps: 256,
+      }),
+    ).toThrow(/network|connection|offline/i);
+
+    expect(downloadManager.getState().tasks).toHaveLength(0);
   });
 
   it('advances download progress over continuous time and completes file in VFS', () => {
@@ -101,6 +127,85 @@ describe('DownloadManager (Bandwidth Allocation, Progress & Time Jumps)', () => 
     const t2 = downloadManager.getTask(task2.id);
     expect(t1?.allocatedKbps).toBe(128);
     expect(t2?.allocatedKbps).toBe(128);
+  });
+
+  it('accepts an explicit future client profile without an engine special-case branch', () => {
+    const first = downloadManager.startDownload({
+      sourceId: 'future_1',
+      sourceUrl: 'http://downloadhub.local/future-1.zip',
+      fileName: 'future-1.zip',
+      totalBytes: 10_000_000,
+      sourceMaxKbps: 512,
+      clientProfile: {
+        clientId: 'future-client',
+        maxConcurrent: 2,
+        supportsResume: true,
+      },
+    });
+
+    const second = downloadManager.startDownload({
+      sourceId: 'future_2',
+      sourceUrl: 'http://downloadhub.local/future-2.zip',
+      fileName: 'future-2.zip',
+      totalBytes: 10_000_000,
+      sourceMaxKbps: 512,
+      clientProfile: {
+        clientId: 'future-client',
+        maxConcurrent: 2,
+        supportsResume: true,
+      },
+    });
+
+    expect(first.status).toBe('downloading');
+    expect(second.status).toBe('downloading');
+    expect(downloadManager.getActiveDownloads()).toHaveLength(2);
+  });
+
+  it('round-trips active transfer progress and neutral client capabilities across save/reload', () => {
+    const task = downloadManager.startDownload({
+      sourceId: 'future_persisted',
+      sourceUrl: 'http://downloadhub.local/future-persisted.zip',
+      fileName: 'future-persisted.zip',
+      totalBytes: 20_000_000,
+      sourceMaxKbps: 512,
+      clientProfile: {
+        clientId: 'future-client',
+        maxConcurrent: 2,
+        supportsResume: true,
+      },
+    });
+
+    downloadManager.advanceTime(1, 1);
+    const beforeReload = downloadManager.getTask(task.id)!;
+    expect(beforeReload.downloadedBytes).toBeGreaterThan(0);
+    expect(beforeReload.status).toBe('downloading');
+
+    const persisted = downloadManager.getState();
+    const restoredVfs = new FileSystemEngine(eventBus);
+    const restored = new DownloadManager(
+      {
+        eventBus,
+        vfs: restoredVfs,
+        getConnectionSpeedKbps: () => connectionSpeedKbps,
+      },
+      {
+        ...persisted,
+        maxConcurrentBrowser: 1,
+        maxConcurrentFlashFetch: 4,
+      },
+    );
+
+    const afterReload = restored.getTask(task.id)!;
+    expect(afterReload.downloadedBytes).toBe(beforeReload.downloadedBytes);
+    expect(afterReload.status).toBe('downloading');
+    expect((afterReload as any).clientProfile).toMatchObject({
+      clientId: 'future-client',
+      maxConcurrent: 2,
+      supportsResume: true,
+    });
+
+    restored.advanceTime(1, 2);
+    expect(restored.getTask(task.id)!.downloadedBytes).toBeGreaterThan(afterReload.downloadedBytes);
   });
 
   it('pauses, resumes, and cancels downloads correctly', () => {

@@ -30,6 +30,10 @@ export class EconomyEngine {
       },
       // P7 physical location (old saves wake up at home)
       location: isCityNodeId(initialState?.location) ? initialState.location : 'home',
+      // Social battery (old saves start fresh — the meter postdates them)
+      socialBattery: typeof initialState?.socialBattery === 'number' && Number.isFinite(initialState.socialBattery)
+        ? Math.max(0, Math.min(100, Math.round(initialState.socialBattery)))
+        : 100,
     };
   }
 
@@ -43,6 +47,33 @@ export class EconomyEngine {
 
   public canAfford(amount: number): boolean {
     return this.state.cash >= amount;
+  }
+
+  // Social battery (introvert protagonist): social acts spend it, solitude
+  // and sleep repay it. Rules-only accounting — callers decide the prices.
+
+  public getSocialBattery(): number {
+    return this.state.socialBattery;
+  }
+
+  /** Spend battery. Returns false (no write) when the balance can't cover it. */
+  public spendSocialBattery(amount: number): boolean {
+    const cost = Math.max(0, Math.round(amount));
+    if (cost <= 0) return true;
+    if (this.state.socialBattery < cost) return false;
+    this.state.socialBattery -= cost;
+    return true;
+  }
+
+  /** Drain to zero (bold move rejected — the night is over). */
+  public drainSocialBattery(): void {
+    this.state.socialBattery = 0;
+  }
+
+  /** Repay battery (sleep, solitude, kindness received). Clamped 0..100. */
+  public rechargeSocialBattery(amount: number): void {
+    if (!Number.isFinite(amount) || amount <= 0) return;
+    this.state.socialBattery = Math.max(0, Math.min(100, Math.round(this.state.socialBattery + amount)));
   }
 
   public earnCash(amount: number, reason: string): void {

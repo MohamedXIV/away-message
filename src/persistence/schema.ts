@@ -1,274 +1,41 @@
+// v6 persistence schema facade.
+// Historical table schemas and Dexie MIGRATIONS remain unchanged in schemaV5Core.ts.
+
+export * from './schemaV5Core';
+
 import { z } from 'zod';
-import type Dexie from 'dexie';
 import type { SimulationState } from '../engine/types';
+import {
+  FullSimulationSnapshotSchema as CoreFullSimulationSnapshotSchema,
+  SaveSlotSchema as CoreSaveSlotSchema,
+} from './schemaV5Core';
+import type {
+  FullSimulationSnapshot as CoreFullSimulationSnapshot,
+  SaveSlotRecord as CoreSaveSlotRecord,
+} from './schemaV5Core';
 
-// ==========================================
-// 1. Database Table Entity Interfaces
-// ==========================================
-
-export interface SaveSlotRecord {
-  id: string;                    // Primary key: 'slot_1', 'slot_2', 'autosave'
-  name: string;                  // User-visible label: "Day 3 - Evening in Room"
-  version: number;               // Save-FORMAT version (see SAVE_FORMAT_VERSION in slots.ts), NOT the game version
-  appVersion?: string;           // Game version that wrote this save (SemVer, for diagnostics)
-  createdAt: number;             // Epoch ms
-  updatedAt: number;             // Epoch ms
-  day: number;                   // Game day (1..14)
-  totalMinutes: number;          // Monotonic elapsed game minutes
-  clockState: {
-    day: number;
-    hour: number;
-    minute: number;
-    totalMinutes: number;
-    timeOfDay: 'morning' | 'day' | 'evening' | 'night' | 'late_night';
-    isPaused: boolean;
+export type SaveSlotRecord = Omit<CoreSaveSlotRecord, 'hardwareState' | 'snapshot'> & {
+  hardwareState: Omit<CoreSaveSlotRecord['hardwareState'], 'connectionType' | 'osVersion'> & {
+    connectionType: 'dialup_56k' | 'dsl_256k' | 'dsl_512k' | 'dsl_1m' | null;
+    osVersion: string | null;
   };
-  playerState: {
-    cash: number;
-    energy: number;              // 0..100
-    fatigue: number;             // 0..100
-    rentDueDay: number;          // Day 7, Day 14
-    rentAmount: number;          // $140.00
-    rentPaid: boolean;
-    consecutiveLateWarnings: number;
-  };
-  hardwareState: {
-    cpuTier: number;             // 1 = Base single-core, 2 = Upgraded
-    ramMB: number;               // 512, 1024
-    hddTotalGB: number;          // 40
-    hddFreeGB: number;           // Calculated or stored
-    connectionType: 'dialup_56k' | 'dsl_256k' | 'dsl_512k' | 'dsl_1m';
-    connectionSpeedKbps: number; // 256, 512, 1024
-    osVersion: string; // heavy OS: 4.8/5.0/6.0/6.1/7.0-beta/7.0 + procedural
-    theme: string; // orion_4_8 / orion_5_0 / orion_6_0 / orion_7_0
-    wallpaper: string;
-  };
-  narrativeFlags: Record<string, boolean | number | string>;
-  meta?: Record<string, unknown>;
-  /**
-   * P9 document snapshot: the full live SimulationState (complete by
-   * construction — getState() already carries affinities, promises, pantry,
-   * location, deliveries, wage overrides...). Stored unindexed, so no Dexie
-   * migration is needed. Absent on legacy multi-table saves.
-   */
+  // Historical v2-v5 documents legitimately lack v6 canonical roots until
+  // slots.ts migrates them. Keep the transport transitional here; v6 writers
+  // themselves export the strict canonical snapshot.
   snapshot?: SimulationState;
-}
+};
 
-export interface VfsFileRecord {
-  id: string;                    // Primary key
-  name: string;                  // e.g. "PulseSetup.exe"
-  path: string;                  // e.g. "C:/Downloads/PulseSetup.exe"
-  parentPath: string;            // e.g. "C:/Downloads"
-  kind: 'text' | 'executable' | 'installer' | 'archive' | 'audio' | 'image' | 'shortcut' | 'system' | 'directory';
-  sizeBytes: number;
-  content?: string;              // Text contents or data
-  appAssociation?: string;       // e.g. "photobox", "notepad", "retroamp"
-  isReadOnly?: boolean;
-  metadata?: Record<string, unknown>;
-  createdAt: number;
-  modifiedAt: number;
-}
-
-export interface DownloadTaskRecord {
-  id: string;                    // Primary key: "dl_pulse_52"
-  sourceId: string;              // "downloadhub"
-  url: string;                   // "http://downloadhub.local/files/pulse52.exe"
-  fileName: string;              // "PulseSetup.exe"
-  destinationPath: string;       // "C:/Downloads/PulseSetup.exe"
-  totalBytes: number;            // e.g. 8388608 (8 MB)
-  downloadedBytes: number;
-  sourceMaxKbps: number;         // Server rate cap (e.g. 512)
-  status: 'queued' | 'downloading' | 'paused' | 'complete' | 'failed' | 'cancelled';
-  resumable: boolean;
-  startedAt: number;
-  completedAt?: number;
-  error?: string;
-}
-
-export interface InstalledSoftwareRecord {
-  appId: string;                 // Primary key: "pulse_messenger", "photobox"
-  version: string;               // "5.2", "6.0", "3.0"
-  installPath: string;           // "C:/Program Files/Pulse Messenger"
-  occupiedSizeBytes: number;
-  isPortable: boolean;           // True for ZipMate portable (no Add/Remove entry)
-  bundledComponents: string[];   // e.g. ["searchmate_toolbar", "searchmate_homepage"]
-  registeredInAddRemove: boolean;
-  desktopShortcut: boolean;
-  startMenuEntry: boolean;
-  installedAt: number;
-  modifiedSettings?: Record<string, unknown>;
-}
-
-export interface MessageRecord {
-  id: string;                    // Primary key
-  buddyId: string;               // "ryan_foodcart", "starlight_maya", "NightOwl87", "motel_office"
-  sender: 'player' | 'buddy' | 'system';
-  text: string;
-  timestamp: number;             // Game monotonic minute or epoch ms
-  day: number;
-  isRead: boolean;
-  choiceId?: string;
-  narrativeKnot?: string;
-}
-
-export interface RelationshipRecord {
-  buddyId: string;               // Primary key
-  familiarity: number;           // 0..100
-  trust: number;                 // 0..100
-  comfort: number;               // 0..100
-  respect: number;               // 0..100
-  annoyance: number;             // 0..100
-  lastInteractionDay: number;
-  unlockedNotes: string[];
-  statusOverride?: string;
-  flags: Record<string, boolean | number | string>;
-}
-
-export interface NarrativeStateRecord {
-  key: string;                   // Primary key: "ink_story_state", "scheduled_appointments"
-  value: unknown;
-  updatedAt: number;
-}
-
-export interface TelemetryLogRecord {
-  id?: number;                   // Auto-increment primary key
-  timestamp: number;
-  gameDay: number;
-  gameMinutes: number;
-  eventType: string;             // "work_shift_completed", "software_installed", "os_upgraded"
-  payload: Record<string, unknown>;
-}
-
-export interface AICacheRecord {
-  key: string;                   // Deterministic cache key
-  kind: 'site' | 'chat';
-  providerId: string;
-  model: string;
-  payload: unknown;
-  createdAt: number;
-  expiresAt: number;
-}
-
-export interface PulseStateRecord {
-  saveSlotId: string;            // Primary key: save slot id (e.g. 'slot_1', 'autosave')
-  state: unknown;                // PulsePersistedState JSON — stored as opaque to avoid circular imports
-  updatedAt: number;
-}
-
-// ==========================================
-// 2. Full Simulation Snapshot Interface
-// ==========================================
-
-export interface FullSimulationSnapshot {
+export type FullSimulationSnapshot = Omit<CoreFullSimulationSnapshot, 'saveSlot'> & {
   saveSlot: SaveSlotRecord;
-  vfsFiles: VfsFileRecord[];
-  downloads: DownloadTaskRecord[];
-  installedSoftware: InstalledSoftwareRecord[];
-  messages: MessageRecord[];
-  relationships: RelationshipRecord[];
-  narrativeState: NarrativeStateRecord[];
-  worldState?: NarrativeStateRecord[];
-  osState?: NarrativeStateRecord[]; // heavy OS: currentOsId + patches + procedural catalog
-  telemetryLogs: TelemetryLogRecord[];
-  pulseState?: unknown;
-}
+};
 
-// ==========================================
-// 3. Zod Schemas for Runtime Validation
-// ==========================================
-
-export const SaveSlotSchema = z.object({
-  id: z.string(),
-  name: z.string(),
-  version: z.number().int().min(1),
-  appVersion: z.string().optional(),
-  createdAt: z.number(),
-  updatedAt: z.number(),
-  day: z.number().int().min(1),
-  totalMinutes: z.number().int().min(0),
-  clockState: z.object({
-    day: z.number().int(),
-    hour: z.number().int().min(0).max(23),
-    minute: z.number().int().min(0).max(59),
-    totalMinutes: z.number().int(),
-    timeOfDay: z.enum(['morning', 'day', 'evening', 'night', 'late_night']),
-    isPaused: z.boolean(),
+export const SaveSlotSchema = CoreSaveSlotSchema.extend({
+  hardwareState: CoreSaveSlotSchema.shape.hardwareState.extend({
+    connectionType: z.enum(['dialup_56k', 'dsl_256k', 'dsl_512k', 'dsl_1m']).nullable(),
+    osVersion: z.string().regex(/^Orion_/).min(3).nullable(),
   }),
-  playerState: z.object({
-    cash: z.number(),
-    energy: z.number().min(0).max(100),
-    fatigue: z.number().min(0).max(100),
-    rentDueDay: z.number().int(),
-    rentAmount: z.number(),
-    rentPaid: z.boolean(),
-    consecutiveLateWarnings: z.number().int(),
-  }),
-  hardwareState: z.object({
-    cpuTier: z.number().int(),
-    ramMB: z.number().int(),
-    hddTotalGB: z.number(),
-    hddFreeGB: z.number(),
-    connectionType: z.enum(['dialup_56k', 'dsl_256k', 'dsl_512k', 'dsl_1m']),
-    connectionSpeedKbps: z.number(),
-    osVersion: z.string().regex(/^Orion_/).min(3),
-    theme: z.string().min(3),
-    wallpaper: z.string(),
-  }),
-  narrativeFlags: z.record(z.union([z.boolean(), z.number(), z.string()])),
-  meta: z.record(z.unknown()).optional(),
 });
 
-export const FullSimulationSnapshotSchema = z.object({
+export const FullSimulationSnapshotSchema = CoreFullSimulationSnapshotSchema.extend({
   saveSlot: SaveSlotSchema,
-  vfsFiles: z.array(z.any()),
-  downloads: z.array(z.any()),
-  installedSoftware: z.array(z.any()),
-  messages: z.array(z.any()),
-  relationships: z.array(z.any()),
-  narrativeState: z.array(z.any()),
-  worldState: z.array(z.any()).optional(),
-  osState: z.array(z.any()).optional(),
-  telemetryLogs: z.array(z.any()),
-  pulseState: z.any().optional(),
 });
-
-// ==========================================
-// 4. Migration Engine Framework
-// ==========================================
-
-export interface SchemaMigration {
-  fromVersion: number;
-  toVersion: number;
-  migrate: (db: Dexie) => Promise<void>;
-}
-
-export const MIGRATIONS: SchemaMigration[] = [
-  {
-    fromVersion: 1,
-    toVersion: 2,
-    migrate: async (database: Dexie) => {
-      const saves = database.table<SaveSlotRecord>('saves');
-      await saves.toCollection().modify((save) => {
-        if (save.version === 1) {
-          save.version = 2;
-        }
-      });
-    },
-  },
-  {
-    // P0.1: canonical buddy ids (maya/ryan/nora/henderson). Old saves used handles
-    // (starlight_maya/ryan_foodcart/NightOwl87/motel_office). Rows are normalized
-    // lazily at restore (SocialEngine.normalizeBuddyId + WorldEvents buddyKnowledge),
-    // this migration only bumps the save version marker.
-    fromVersion: 2,
-    toVersion: 3,
-    migrate: async (database: Dexie) => {
-      const saves = database.table<SaveSlotRecord>('saves');
-      await saves.toCollection().modify((save) => {
-        if (save.version === 2) {
-          save.version = 3;
-        }
-      });
-    },
-  },
-];

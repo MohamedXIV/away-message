@@ -1,9 +1,9 @@
 import { create } from 'zustand';
 import { subscribeWithSelector } from 'zustand/middleware';
 import { useEffect, useRef } from 'react';
-import { SimulationEngine } from '../engine/SimulationEngine';
+import { SimulationEngine, type OsInstallPlan } from '../engine/SimulationEngine';
 import {
-  SimulationState,
+  StrictSimulationState,
   SimulationAction,
   ActionResult,
   GameTime,
@@ -16,10 +16,9 @@ import {
   WorldState,
   NarrativeState,
   TelemetryStats,
-  ConnectionType,
-  OsVersion,
   FileRecord,
   Appointment,
+  StorePurchaseResultData,
 } from '../engine/types';
 
 // Default singleton engine instance
@@ -27,7 +26,7 @@ const defaultEngine = new SimulationEngine();
 
 export interface SimulationStoreState {
   engine: SimulationEngine;
-  state: SimulationState;
+  state: StrictSimulationState;
   isPaused: boolean;
   activeView: 'pc' | 'room' | 'cafe' | 'work' | 'city';
 }
@@ -55,11 +54,15 @@ export interface SimulationStoreActions {
   interactRoom: (activity: 'tea' | 'coffee' | 'meal' | 'groceries' | 'shower' | 'window') => void;
   cityOuting: (outingId: string) => ActionResult;
   applyGig: (gigId: string) => ActionResult;
+  purchaseStoreItem: (skuId: string) => ActionResult<StorePurchaseResultData>;
 
   // Hardware & OS
-  upgradeRam: (ramMB: number, cost: number) => void;
-  upgradeConnection: (connectionType: ConnectionType, cost: number) => void;
-  upgradeOs: (targetOs: OsVersion, cost: number) => void;
+  setupComputerAtHome: () => ActionResult;
+  setComputerPower: (poweredOn: boolean) => ActionResult;
+  insertOwnedMediaAtHome: (instanceId: string) => ActionResult;
+  ejectOwnedMediaAtHome: () => ActionResult<{ mediaInstanceId: string }>;
+  prepareOsInstallFromInsertedMedia: () => ActionResult<OsInstallPlan>;
+  commitOsInstall: (plan: OsInstallPlan) => ActionResult;
 
   // Downloads
   startDownload: (params: {
@@ -108,7 +111,8 @@ export const useSimulationStore = create<SimulationStore>()(
       if (unsubscribeEngine) {
         unsubscribeEngine();
       }
-      unsubscribeEngine = engineInstance.subscribe((newState) => {
+      unsubscribeEngine = engineInstance.subscribe(() => {
+        const newState = engineInstance.getState();
         set({
           state: newState,
           isPaused: engineInstance.clock.isPaused(),
@@ -201,16 +205,46 @@ export const useSimulationStore = create<SimulationStore>()(
         return get().dispatchAction({ type: 'JOB_APPLY', gigId });
       },
 
-      upgradeRam: (ramMB, cost) => {
-        get().dispatchAction({ type: 'HARDWARE_UPGRADE_RAM', ramMB, cost });
+      purchaseStoreItem: (skuId) => {
+        return get().dispatchAction({
+          type: 'STORE_PURCHASE_ITEM',
+          storeId: 'silicon_spares',
+          skuId,
+        }) as ActionResult<StorePurchaseResultData>;
       },
 
-      upgradeConnection: (connectionType, cost) => {
-        get().dispatchAction({ type: 'HARDWARE_UPGRADE_CONNECTION', connectionType, cost });
+      setupComputerAtHome: () => {
+        const result = get().engine.setupComputerAtHome();
+        get().syncStateFromEngine();
+        return result;
       },
 
-      upgradeOs: (targetOs, cost) => {
-        get().dispatchAction({ type: 'HARDWARE_UPGRADE_OS', targetOs, cost });
+      setComputerPower: (poweredOn) => {
+        const result = get().engine.setComputerPower(poweredOn);
+        get().syncStateFromEngine();
+        return result;
+      },
+
+      insertOwnedMediaAtHome: (instanceId) => {
+        const result = get().engine.insertOwnedMediaAtHome(instanceId);
+        get().syncStateFromEngine();
+        return result;
+      },
+
+      ejectOwnedMediaAtHome: () => {
+        const result = get().engine.ejectOwnedMediaAtHome();
+        get().syncStateFromEngine();
+        return result;
+      },
+
+      prepareOsInstallFromInsertedMedia: () => {
+        return get().engine.prepareOsInstallFromInsertedMedia();
+      },
+
+      commitOsInstall: (plan) => {
+        const result = get().engine.commitOsInstall(plan);
+        get().syncStateFromEngine();
+        return result;
       },
 
       startDownload: (params) => {

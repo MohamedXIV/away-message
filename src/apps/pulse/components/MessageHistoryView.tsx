@@ -4,6 +4,8 @@ import { formatSimulationMinutes } from '../utils/timeFormat';
 import { useSimulationStore } from '../../../store/useSimulationStore';
 import { useWindowStore } from '../../../store/useWindowStore';
 import { renderWithLinksAndEmoticons } from '../utils/linkDetector';
+import { pulseHasFeature } from '../../../engine/PulseCatalog';
+import { buddySignatureColor, resolveArchetype } from '../../../engine/characterTemplates';
 import { getFileInfoFromUrl } from '../../../engine/fileUtils';
 import { soundManager } from '../../../audio/SoundManager';
 
@@ -13,7 +15,10 @@ interface MessageHistoryViewProps {
 }
 
 export const MessageHistoryView: React.FC<MessageHistoryViewProps> = ({ messages, buddy }) => {
-  const isOrion60 = useSimulationStore((s) => s.state.hardware.osVersion === 'Orion_6.0');
+  const isOrion60 = useSimulationStore((s) => s.state.os.currentOsId === 'Orion_6.0');
+  // Pulse 6 generation: buddies tint their own names + animated emoticons move.
+  const pulse6 = useSimulationStore((s) => pulseHasFeature(s.state.pulse.currentPulseId, 'buddy-colors'));
+  const pulse6Animated = useSimulationStore((s) => pulseHasFeature(s.state.pulse.currentPulseId, 'animated-emoticons'));
   const openWindow = useWindowStore((s) => s.openWindow);
   const dispatchAction = useSimulationStore((s) => s.dispatchAction);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -90,7 +95,10 @@ export const MessageHistoryView: React.FC<MessageHistoryViewProps> = ({ messages
         messages.map((msg) => {
           const isPlayer = msg.senderId === 'player';
           const senderName = isPlayer ? 'wanderer06' : buddy.displayName;
-          const senderColor = isPlayer ? '#000080' : '#800080';
+          // Buddies color their own names — but only on Pulse 6.x (their upgrade, their paint).
+          const senderColor = isPlayer
+            ? '#000080'
+            : pulse6 ? buddySignatureColor(buddy.id, resolveArchetype(buddy.id, buddy.archetype)) : '#800080';
           const isOffline = Boolean(msg.deliveredAway || msg.tags?.includes('offline-message') || msg.tags?.includes('offline'));
           const isUnread = !msg.isRead && !isPlayer;
 
@@ -108,7 +116,7 @@ export const MessageHistoryView: React.FC<MessageHistoryViewProps> = ({ messages
                 {senderName}:
               </span>
               <span className="text-gray-900">
-                {renderWithLinksAndEmoticons(msg.text, isOrion60, handleOpenLink, handleDownloadLink)}
+                {renderWithLinksAndEmoticons(msg.text, isOrion60, handleOpenLink, handleDownloadLink, pulse6Animated)}
               </span>
               {msg.imageUrl && (
                 <div className="mt-1.5 ml-6 max-w-[320px]">

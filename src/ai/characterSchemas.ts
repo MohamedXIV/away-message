@@ -16,6 +16,13 @@ export const NewcomerAiSchema = z.object({
   interests: z.array(boundedText(2, 20)).min(3).max(5),
   songTitle: boundedText(3, 50),
   introText: boundedText(10, 300),
+  // Fixed appearance (natural hair, honest eyes) + languages with proficiency.
+  hair: boundedText(2, 24),
+  eyes: boundedText(2, 24),
+  languages: z.array(z.object({
+    lang: z.enum(['en', 'es', 'fr', 'de', 'it', 'pt', 'ru', 'ar', 'zh', 'ja']),
+    level: z.number().int().min(1).max(5),
+  })).min(1).max(3),
 }).strict();
 
 export type NewcomerAi = z.infer<typeof NewcomerAiSchema>;

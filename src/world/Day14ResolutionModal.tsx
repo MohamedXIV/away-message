@@ -29,6 +29,7 @@ export const Day14ResolutionModal: React.FC<Day14ResolutionModalProps> = ({
   const time = simState.time;
   const player = simState.player;
   const hardware = simState.hardware;
+  const osVersion = simState.os.currentOsId;
   const installedSoftware = simState.installedSoftware;
   const social = simState.social;
   const world = simState.world;
@@ -44,7 +45,7 @@ export const Day14ResolutionModal: React.FC<Day14ResolutionModalProps> = ({
   const ryanRel = (social.relationships as any)?.ryan ?? (social.relationships as any)?.ryan_foodcart;
   const noraRel = (social.relationships as any)?.nora ?? (social.relationships as any)?.NightOwl87;
 
-  const isOs6 = hardware.osVersion === 'Orion_6.0';
+  const isOs6 = osVersion === 'Orion_6.0';
   const hasMaxRam = hardware.ramMB >= 1024;
   const hasFastNet = hardware.connectionType === 'dsl_1m' || hardware.connectionType === 'dsl_512k';
 
@@ -63,7 +64,7 @@ export const Day14ResolutionModal: React.FC<Day14ResolutionModalProps> = ({
         rentDueDay: player.rentDueDay,
       },
       computerSpecs: {
-        osVersion: hardware.osVersion,
+        osVersion,
         ramMB: hardware.ramMB,
         connectionType: hardware.connectionType,
         installedAppsCount: installedSoftware.length,
@@ -142,7 +143,7 @@ export const Day14ResolutionModal: React.FC<Day14ResolutionModalProps> = ({
                 <div className="flex justify-between py-1 border-b border-slate-700/60">
                   <span className="text-slate-400">Operating System:</span>
                   <span className={`font-bold ${isOs6 ? 'text-amber-400' : 'text-slate-200'}`}>
-                    {hardware.osVersion === 'Orion_6.0' ? 'Orion OS 6.0 (Upgraded)' : 'Orion OS 4.8'}
+                    {osVersion ? osVersion.replace('_', ' OS ') : 'No OS installed'}
                   </span>
                 </div>
                 <div className="flex justify-between py-1 border-b border-slate-700/60">
@@ -154,7 +155,7 @@ export const Day14ResolutionModal: React.FC<Day14ResolutionModalProps> = ({
                 <div className="flex justify-between py-1 border-b border-slate-700/60">
                   <span className="text-slate-400">Internet Tier:</span>
                   <span className={`font-bold ${hasFastNet ? 'text-cyan-400' : 'text-slate-200'}`}>
-                    {hardware.connectionType.replace('_', ' ').toUpperCase()}
+                    {hardware.connectionType ? hardware.connectionType.replace('_', ' ').toUpperCase() : 'NONE'}
                   </span>
                 </div>
                 <div className="flex justify-between py-1">

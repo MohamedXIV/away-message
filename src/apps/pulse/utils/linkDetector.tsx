@@ -149,12 +149,13 @@ export function renderWithLinksAndEmoticons(
   text: string,
   isOrion60: boolean,
   onOpenLink: (url: string) => void,
-  onDownload?: (url: string) => void
+  onDownload?: (url: string) => void,
+  isPulse6: boolean = false
 ): React.ReactNode {
   const linkParts = renderMessageWithLinks(text, onOpenLink, isOrion60, onDownload);
   return linkParts.map((part, index) => {
     if (typeof part === 'string') {
-      return <React.Fragment key={`text-${index}`}>{renderEmoticonNodes(part, isOrion60)}</React.Fragment>;
+      return <React.Fragment key={`text-${index}`}>{renderEmoticonNodes(part, isOrion60, isPulse6)}</React.Fragment>;
     }
     return <React.Fragment key={`linkwrap-${index}`}>{part}</React.Fragment>;
   });

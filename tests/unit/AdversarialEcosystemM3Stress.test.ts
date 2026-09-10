@@ -154,11 +154,12 @@ describe('Adversarial M3 Stress & Quality Suite: Pulse Messenger & Ecosystem App
         useSimulationStore.setState((prev) => ({
           state: {
             ...prev.state,
-            hardware: { ...prev.state.hardware, ramMB: ram, osVersion: 'Orion_4.8' },
+            hardware: { ...prev.state.hardware, ramMB: ram },
+            os: { ...prev.state.os, currentOsId: 'Orion_4.8' },
           },
         }));
-        const hw = useSimulationStore.getState().state.hardware;
-        const passes = hw.osVersion === 'Orion_6.0' && hw.ramMB >= 768;
+        const state = useSimulationStore.getState().state;
+        const passes = state.os.currentOsId === 'Orion_6.0' && state.hardware.ramMB >= 768;
         expect(passes).toBe(false);
       }
     });
@@ -169,11 +170,12 @@ describe('Adversarial M3 Stress & Quality Suite: Pulse Messenger & Ecosystem App
         useSimulationStore.setState((prev) => ({
           state: {
             ...prev.state,
-            hardware: { ...prev.state.hardware, ramMB: ram, osVersion: 'Orion_6.0' },
+            hardware: { ...prev.state.hardware, ramMB: ram },
+            os: { ...prev.state.os, currentOsId: 'Orion_6.0' },
           },
         }));
-        const hw = useSimulationStore.getState().state.hardware;
-        const passes = hw.osVersion === 'Orion_6.0' && hw.ramMB >= 768;
+        const state = useSimulationStore.getState().state;
+        const passes = state.os.currentOsId === 'Orion_6.0' && state.hardware.ramMB >= 768;
         expect(passes).toBe(false);
       }
     });
@@ -184,11 +186,12 @@ describe('Adversarial M3 Stress & Quality Suite: Pulse Messenger & Ecosystem App
         useSimulationStore.setState((prev) => ({
           state: {
             ...prev.state,
-            hardware: { ...prev.state.hardware, ramMB: ram, osVersion: 'Orion_6.0' },
+            hardware: { ...prev.state.hardware, ramMB: ram },
+            os: { ...prev.state.os, currentOsId: 'Orion_6.0' },
           },
         }));
-        const hw = useSimulationStore.getState().state.hardware;
-        const passes = hw.osVersion === 'Orion_6.0' && hw.ramMB >= 768;
+        const state = useSimulationStore.getState().state;
+        const passes = state.os.currentOsId === 'Orion_6.0' && state.hardware.ramMB >= 768;
         expect(passes).toBe(true);
       }
     });

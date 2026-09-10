@@ -5,6 +5,9 @@ export interface EmoticonDefinition {
   glyph: string;
   label: string;
   isOrion60Only?: boolean;
+  /** Pulse 6.0 animated pack (gated on installed Pulse release, not the OS). */
+  isPulse6Only?: boolean;
+  animated?: boolean;
 }
 
 export interface EmoticonToken {
@@ -12,6 +15,7 @@ export interface EmoticonToken {
   content: string;
   glyph?: string;
   label?: string;
+  animated?: boolean;
 }
 
 export const EMOTICON_LIST: EmoticonDefinition[] = [
@@ -20,6 +24,16 @@ export const EMOTICON_LIST: EmoticonDefinition[] = [
   { code: '(:fire:)', glyph: '🔥', label: 'Fire', isOrion60Only: true },
   { code: '(:zap:)', glyph: '⚡', label: 'Lightning', isOrion60Only: true },
   { code: '(:camera:)', glyph: '📷', label: '35mm Camera', isOrion60Only: true },
+
+  // Pulse 6.0 animated pack (MSN-era motion emoticons)
+  { code: '(:lol:)', glyph: '🤣', label: 'ROFL', isPulse6Only: true, animated: true },
+  { code: '(:love:)', glyph: '😍', label: 'In Love', isPulse6Only: true, animated: true },
+  { code: '(:dance:)', glyph: '💃', label: 'Dance', isPulse6Only: true, animated: true },
+  { code: '(:party:)', glyph: '🥳', label: 'Party', isPulse6Only: true, animated: true },
+  { code: '(:cry:)', glyph: '😭', label: 'Sob', isPulse6Only: true, animated: true },
+  { code: '(:cool:)', glyph: '😎', label: 'Cool', isPulse6Only: true, animated: true },
+  { code: '(:hug:)', glyph: '🤗', label: 'Hug', isPulse6Only: true, animated: true },
+  { code: '(:wave:)', glyph: '👋', label: 'Wave', isPulse6Only: true, animated: true },
 
   // Classic MSN/AIM Emoticons
   { code: ':-)', glyph: '😊', label: 'Smile' },
@@ -52,7 +66,7 @@ export const EMOTICON_LIST: EmoticonDefinition[] = [
   { code: '(N)', glyph: '👎', label: 'Thumbs Down' },
 ];
 
-export function tokenizeEmoticons(text: string, isOrion60: boolean = false): EmoticonToken[] {
+export function tokenizeEmoticons(text: string, isOrion60: boolean = false, isPulse6: boolean = false): EmoticonToken[] {
   if (!text) return [];
 
   // Sort all definitions by code length descending
@@ -70,12 +84,13 @@ export function tokenizeEmoticons(text: string, isOrion60: boolean = false): Emo
   return parts.filter(Boolean).map((part) => {
     const match = sorted.find((e) => e.code === part);
     if (match) {
-      if (!match.isOrion60Only || isOrion60) {
+      if ((!match.isOrion60Only || isOrion60) && (!match.isPulse6Only || isPulse6)) {
         return {
           type: 'emoticon',
           content: match.code,
           glyph: match.glyph,
           label: match.label,
+          animated: match.animated,
         };
       }
       return {
@@ -93,18 +108,18 @@ export function tokenizeEmoticons(text: string, isOrion60: boolean = false): Emo
 /**
  * Tokenizes text and parses emoticons into stylized React glyph spans.
  */
-export function parseEmoticons(text: string, isOrion60: boolean = false): EmoticonToken[] {
-  return tokenizeEmoticons(text, isOrion60);
+export function parseEmoticons(text: string, isOrion60: boolean = false, isPulse6: boolean = false): EmoticonToken[] {
+  return tokenizeEmoticons(text, isOrion60, isPulse6);
 }
 
-export function renderEmoticonNodes(text: string, isOrion60: boolean = false): React.ReactNode {
-  const tokens = tokenizeEmoticons(text, isOrion60);
+export function renderEmoticonNodes(text: string, isOrion60: boolean = false, isPulse6: boolean = false): React.ReactNode {
+  const tokens = tokenizeEmoticons(text, isOrion60, isPulse6);
   return tokens.map((token, index) => {
     if (token.type === 'emoticon' && token.glyph) {
       return (
         <span
           key={index}
-          className="inline-block transform hover:scale-125 transition-transform select-none mx-0.5"
+          className={`inline-block transform hover:scale-125 transition-transform select-none mx-0.5${token.animated ? ' animate-bounce' : ''}`}
           title={`${token.label} (${token.content})`}
         >
           {token.glyph}

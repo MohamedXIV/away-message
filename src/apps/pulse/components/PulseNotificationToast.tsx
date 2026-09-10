@@ -14,7 +14,7 @@ export const PulseNotificationToast: React.FC<PulseNotificationToastProps> = ({
   onDismiss,
   onOpenChat,
 }) => {
-  const isOrion60 = useSimulationStore((s) => s.state.hardware.osVersion === 'Orion_6.0');
+  const isOrion60 = useSimulationStore((s) => s.state.os.currentOsId === 'Orion_6.0');
   const restoreWindow = useWindowStore((s) => s.restoreWindow);
   const focusWindow = useWindowStore((s) => s.focusWindow);
 

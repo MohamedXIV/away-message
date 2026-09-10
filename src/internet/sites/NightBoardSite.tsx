@@ -118,6 +118,7 @@ export const NightBoardSite: React.FC<SiteRouteProps> = (props) => {
         archetype: b.archetype,
         stage: engine.social.getRelationshipStage(b.id),
         status: b.status,
+        roles: b.roles ?? [],
       }));
       const aff = (a: string, b: string): number => {
         try { return engine.social.getAffinity(a, b); } catch { return 0; }

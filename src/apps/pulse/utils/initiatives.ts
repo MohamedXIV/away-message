@@ -3,6 +3,9 @@ import {
   pickInitiativeText,
   pickGossipLine,
   resolveArchetype,
+  NPC_BUZZ_LINES,
+  rollSeeded100,
+  pickSeeded,
   type InitiativeKind,
 } from '../../../engine/characterTemplates';
 import type {
@@ -26,6 +29,11 @@ export interface InitiativeEngine {
     getPresence(id: string): { status: BuddyPresenceStatus } | undefined;
     getDailyMood(id: string, day: number): DailyMood;
     getOpenPromises(id: string): Array<{ text: string }>;
+    // Character Lives: fixed temperament for the nerve gate + shy buzz.
+    // Absent on legacy stubs → the gate is skipped (legacy behavior preserved).
+    getTraits?(id: string): { shyness: number; warmth: number; spontaneity: number } | undefined;
+    // A buddy's read of the player: cold-read players get fewer voluntary check-ins.
+    getPlayerRead?(id: string): { beliefs: { warmth: number }; certainty: number } | undefined;
   };
   world?: {
     getTriggeredEvents?: () => Array<{ title?: string; triggerDay?: number }>;
@@ -37,6 +45,30 @@ export interface InitiativePlan {
   displayName: string;
   text: string;
   kind: InitiativeKind;
+  /** Extra message tags (e.g. 'buzz' for shy nudges). */
+  tags?: string[];
+}
+
+/**
+ * Nerve to start a *voluntary* chat (checkin/gossip/cafe_invite), 5..95.
+ * Warmth and spontaneity push up, shyness drags down, close bonds add courage.
+ * Duty kinds (promise_reminder/event_share) never consult nerve — even shy
+ * buddies chase what they owe you.
+ */
+export function nerveForInitiative(
+  stage: RelationshipStage,
+  traits: { shyness: number; warmth: number; spontaneity: number }
+): number {
+  const raw = (stage === 'close' ? 25 : 10)
+    + traits.warmth * 0.35
+    + traits.spontaneity * 0.25
+    - traits.shyness * 0.5;
+  return Math.max(5, Math.min(95, Math.round(raw)));
+}
+
+/** Buzz chance (%) for a voluntary checkin: only shy (70+) buddies buzz. */
+export function buzzChanceFor(shyness: number): number {
+  return shyness >= 70 ? (shyness - 65) * 3 : 0;
 }
 
 const KIND_PRIORITY: Record<InitiativeKind, number> = {
@@ -110,10 +142,26 @@ export function planInitiatives(
       }
       const arch = resolveArchetype(buddy.id, buddy.archetype);
       const seed = `${buddy.id}:${day}:${opts.salt}`;
-      const text = kind === 'gossip' && gossipName && gossipStatus
+      // Character Lives nerve gate: temperament decides who actually dares to
+      // start a voluntary chat. Duty (promises/events) bypasses it entirely.
+      // Cold-read players are checked on less (their nerve × warmth factor).
+      const traits = engine.social.getTraits?.(buddy.id);
+      if (traits && (kind === 'checkin' || kind === 'gossip' || kind === 'cafe_invite')) {
+        const read = engine.social.getPlayerRead?.(buddy.id);
+        const warmth = read ? Math.max(0, Math.min(100, read.beliefs.warmth)) : 50;
+        const warmthFactor = read ? 0.6 + 0.4 * (warmth / 100) : 1;
+        if (rollSeeded100(`${buddy.id}:${day}:nerve:${opts.salt}`) >= nerveForInitiative(stage, traits) * warmthFactor) continue;
+      }
+      let text = kind === 'gossip' && gossipName && gossipStatus
         ? pickGossipLine(arch, seed, gossipName, gossipStatus)
         : pickInitiativeText(arch, kind, seed, { eventTitle, promiseText: open[0]?.text });
-      candidates.push({ buddyId: buddy.id, displayName: buddy.displayName, text, kind, stage });
+      // Shy buddies often buzz instead of typing (MSN-era nudge, 'buzz' tag).
+      let tags: string[] | undefined;
+      if (traits && kind === 'checkin' && rollSeeded100(`${buddy.id}:${day}:buzz:${opts.salt}`) < buzzChanceFor(traits.shyness)) {
+        text = pickSeeded(NPC_BUZZ_LINES, `${buddy.id}:${day}:buzzline:${opts.salt}`);
+        tags = ['buzz'];
+      }
+      candidates.push({ buddyId: buddy.id, displayName: buddy.displayName, text, kind, stage, ...(tags ? { tags } : {}) });
     }
   } catch { /* planner never throws — callers treat empty as no initiatives */ }
   candidates.sort((a, b) => {
@@ -123,7 +171,7 @@ export function planInitiatives(
     if (b.stage === 'close' && a.stage !== 'close') return 1;
     return a.buddyId < b.buddyId ? -1 : 1;
   });
-  const plans = candidates.slice(0, Math.max(0, opts.maxCount)).map(({ buddyId, displayName, text, kind }) => ({ buddyId, displayName, text, kind }));
+  const plans = candidates.slice(0, Math.max(0, opts.maxCount)).map(({ buddyId, displayName, text, kind, tags }) => ({ buddyId, displayName, text, kind, ...(tags ? { tags } : {}) }));
   for (const plan of plans) done[plan.buddyId] = day;
   return { plans, initiatedToday: done };
 }

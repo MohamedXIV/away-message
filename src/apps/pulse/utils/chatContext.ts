@@ -1,5 +1,6 @@
 import { getNpcStyle, getNpcMoodLabel, getNpcAvailabilityLabel, getNpcActivityLabel } from '../data/npcStyles';
 import { CHARACTER_ARCHETYPES } from '../../../engine/characterTemplates';
+import { CORE_BY_ID } from '../../../engine/coreBuddies';
 import type { BuddyCharacter, BuddyPresence, RelationshipDimensions } from '../../../engine/types';
 import { buildBodyHint } from '../../../engine/BodyDirector';
 import { weatherLineForDay } from '../../../engine/WeatherEngine';
@@ -50,9 +51,19 @@ export interface ChatEngine {
     getOpenPromises(id: string): Array<{ id: string; text: string }>;
     addPromise(id: string, text: string, createdDay: number, dueDay?: number): unknown;
     resolvePromise(id: string, promiseId: string, kept: boolean, day: number): unknown;
+    // Character Lives (optional so older stubs keep compiling; SocialEngine implements all)
+    getTraits?(id: string): { shyness: number; warmth: number; discipline: number; spontaneity: number; loyalty: number };
+    buildBondContext?(id: string): string;
+    buildRomanceContext?(id: string): string;
+    getAgenda?(id: string, day?: number): Array<{ kind: string; label: string; day: number }>;
+    buildPlayerReadContext?(id: string): string;
   };
   dispatchAction(action: { type: string; buddyId?: string; socialAction?: string; [key: string]: any }): unknown;
   handleMeetupChat?(buddyId: string, text: string, day: number): void;
+  /** Rules-stored reception hint for a bold player line (SimulationEngine implements it). */
+  getReceptionHint?(buddyId: string, day: number): string;
+  /** True when the installed Pulse release is the 6.x generation. */
+  isPulse6?(): boolean;
   world?: {
     getKnowledgeContextForBuddy?(buddyId: string, day: number): string;
     getKnowledgeContext?(day: number): string;
@@ -72,17 +83,15 @@ export interface PulseMemorySlices {
 }
 
 export function buddyPersonaLine(buddyId: string, buddy?: BuddyCharacter | null): string {
-  const personas: Record<string, string> = {
-    ryan: 'Warm, impulsive food-cart coworker. Uses casual slang, jokes, and short messages. He avoids heavy emotional talks unless trust is high.',
-    maya: 'Quiet, observant, creative, and a little guarded. Uses lowercase, pauses, music references, and gentle honesty. She warms up slowly.',
-    nora: 'Night-owl archivist with dry humor. Curious about strange details, concise, slightly cryptic, but not supernatural.',
-    henderson: 'Professional motel manager. Formal, practical, and terse. He cares about rent, schedules, and keeping the property calm.',
-  };
-  if (personas[buddyId]) return personas[buddyId]!;
+  // Core voices come from the registry (content-owned, never hand-copied here).
+  const core = CORE_BY_ID[buddyId];
+  if (core) return core.persona;
   const archetype = buddy?.archetype && CHARACTER_ARCHETYPES[buddy.archetype] ? buddy.archetype : undefined;
   if (archetype) {
     const template = CHARACTER_ARCHETYPES[archetype];
-    return `${template.personaHint} Vocabulary hints: ${template.vocabulary.join(', ')}. Quirks: ${template.quirks.join(', ')}.`;
+    if (template) {
+      return `${template.personaHint} Vocabulary hints: ${template.vocabulary.join(', ')}. Quirks: ${template.quirks.join(', ')}.`;
+    }
   }
   return 'A believable online friend with a distinct but grounded personality.';
 }
@@ -243,11 +252,44 @@ export function buildDmChatContext(input: DmContextInput): DmChatContext {
   const memoryContext = buildMemoryContext([...existingMemory, `Player said: ${text}`].slice(-6), mergedFacts, updatedSummary, recentRepliesForBuddy);
 
   const personaSuffix = input.personaSuffix ? ` ${input.personaSuffix}` : '';
-  const personaWithStyle = `${style.persona} Vocabulary hints: ${style.vocabulary.join(', ')}. Punctuation: ${style.punctuation}. Quirks: ${style.quirks.join(', ')}. ${buddyPersonaLine(buddyId, buddy)}${personaSuffix}`;
+  // Pulse 6.x: the buddy knows their client does color + motion — MSN-era peacocking allowed.
+  let pulse6Suffix = '';
+  try {
+    if (engine.isPulse6?.()) {
+      pulse6Suffix = ' You are on Pulse 6.0: you tint your own name your signature color, and you may use animated emoticons like (:lol:) (:love:) (:dance:) sparingly when the feeling is real — classics like :) :( :D still work everywhere.';
+    }
+  } catch { /* flavor is best-effort */ }
+  // Character Lives: fixed temperament steers phrasing (numbers never quoted — see service prompt).
+  let temperamentLine = '';
+  try {
+    const traits = engine.social.getTraits?.(buddyId);
+    if (traits) {
+      temperamentLine = ` Temperament (fixed 0-100, shape tone, never quote numbers): shy ${traits.shyness}, warm ${traits.warmth}, disciplined ${traits.discipline}, spontaneous ${traits.spontaneity}, loyal ${traits.loyalty}.`;
+    }
+  } catch { /* temperament is best-effort */ }
+  let identityLine = '';
+  if (buddy) {
+    const app = buddy.appearance;
+    const reachText = buddy.reach === 'remote' ? 'Lives online / far away (never meets in person)' : 'Oakhaven local';
+    const langs = (buddy.languages ?? []).map((l) => `${l.lang} (level ${l.level}/5)`).join(', ');
+    const rolesText = (buddy.roles ?? []).length > 0 ? ` Roles: ${(buddy.roles ?? []).join(', ')}.` : '';
+    identityLine = ` Physical: ${app?.hair ?? 'natural'} hair, ${app?.eyes ?? 'honest'} eyes. Reach: ${reachText}.${langs ? ` Languages: ${langs}.` : ''}${rolesText}`;
+  }
+  let backstoryLine = '';
+  if (buddy?.backstory) {
+    const b = buddy.backstory;
+    backstoryLine = ` Pre-game backstory: Was ${b.relationship} to the player before day 1 ("${b.label}"). Last in touch ${b.lapseDays} days ago.`;
+  }
+  const personaWithStyle = `${style.persona} Vocabulary hints: ${style.vocabulary.join(', ')}. Punctuation: ${style.punctuation}. Quirks: ${style.quirks.join(', ')}. ${buddyPersonaLine(buddyId, buddy)}${identityLine}${backstoryLine}${temperamentLine}${pulse6Suffix}${personaSuffix}`;
   let relationshipStage = 'acquaintance';
   let dailyMood = 'steady';
   let longTermContext = '';
   let affinityContext = '';
+  let bondContext = '';
+  let romanceContext = '';
+  let plansLine = '';
+  let receptionHint = '';
+  let playerReadLine = '';
   let photoRecallHint = '';
   let weatherLine = '';
   try {
@@ -258,12 +300,25 @@ export function buildDmChatContext(input: DmContextInput): DmChatContext {
     dailyMood = engine.social.getDailyMood(buddyId, currentDay);
     longTermContext = engine.social.buildLongTermContext(buddyId);
     affinityContext = engine.social.buildAffinityContext(buddyId);
+    // Character Lives: NPC↔NPC ties, romance status, and today's plans (all bounded, rules-built).
+    bondContext = engine.social.buildBondContext?.(buddyId) ?? '';
+    romanceContext = engine.social.buildRomanceContext?.(buddyId) ?? '';
+    // Bold-act reception: the rules judged the player's line at send time.
+    receptionHint = engine.getReceptionHint?.(buddyId, currentDay) ?? '';
+    // Their read of the player (qualitative, rules-built — never numbers).
+    playerReadLine = engine.social.buildPlayerReadContext?.(buddyId) ?? '';
+    try {
+      const agenda = engine.social.getAgenda?.(buddyId, currentDay) ?? [];
+      if (agenda.length > 0) {
+        plansLine = `Plans today: ${agenda.slice(0, 3).map((a) => `${a.label} (${a.kind})`).join('; ')}`;
+      }
+    } catch { /* plans are best-effort */ }
     if (looksLikePhotoQuestion(text) && engine.social.getCoreMemories(buddyId).some((m) => m.kind === 'shared_photo')) {
       photoRecallHint = ' The player is asking about a shared photo — recall it warmly and specifically from the LongTerm memories.';
     }
   } catch { /* prompt enrichment is best-effort */ }
   const sceneSuffix = input.sceneContext ? ` | Scene: ${input.sceneContext}` : '';
-  const relationshipSummary = `${relationship ? JSON.stringify(relationship) : 'new friendship'} | Stage: ${relationshipStage} | DailyMood: ${dailyMood} | Mood: ${mood} | Availability: ${availability} | Activity: ${activity} | ${weatherLine} | ${memoryContext} | ${longTermContext}${affinityContext ? ` | ${affinityContext}` : ''}${photoRecallHint}${bodyHint ? ` | ${bodyHint}` : ''}${sceneSuffix} | Typing: ${style.typing.wpm} wpm, ${style.typing.pauseStyle}`;
+  const relationshipSummary = `${relationship ? JSON.stringify(relationship) : 'new friendship'} | Stage: ${relationshipStage} | DailyMood: ${dailyMood} | Mood: ${mood} | Availability: ${availability} | Activity: ${activity} | ${weatherLine} | ${memoryContext} | ${longTermContext}${affinityContext ? ` | ${affinityContext}` : ''}${bondContext ? ` | ${bondContext}` : ''}${romanceContext ? ` | ${romanceContext}` : ''}${plansLine ? ` | ${plansLine}` : ''}${receptionHint ? ` | Reception: ${receptionHint}` : ''}${playerReadLine ? ` | ${playerReadLine}` : ''}${photoRecallHint}${bodyHint ? ` | ${bodyHint}` : ''}${sceneSuffix} | Typing: ${style.typing.wpm} wpm, ${style.typing.pauseStyle}`;
 
   let worldKnowledge = '';
   let currentGameDay = currentDay;

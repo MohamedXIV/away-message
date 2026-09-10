@@ -1,5 +1,6 @@
 @import './desktop/themes/orion48.css';
 @import './desktop/themes/orion60.css';
+@import './desktop/themes/os-themes.css';
 
 @tailwind base;
 @tailwind components;

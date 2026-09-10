@@ -2,6 +2,8 @@
 // Canonical fictional world bible — fed to every procedural AI prompt as initial info.
 // Keep small, factual, and era-locked (1998-2006, no modern tech).
 
+import { CORE_IDS } from '../engine/coreBuddies';
+
 export const WORLD_LORE = {
   era: '1998-2006, dial-up to early broadband, beige boxes, CRTs',
   city: {
@@ -41,10 +43,10 @@ export const WORLD_LORE = {
     ],
   },
   characters: {
-    ryan: 'food-cart coworker, practical, teasing, teaches Pulse/software',
-    maya: 'starlight_maya — quiet, lowercase, music, guarded then warm',
-    nora: 'NightOwl87 — night archivist, dry humor, forum rabbit holes',
-    henderson: 'motel manager, formal, rent-focused',
+    [CORE_IDS.RYAN]: 'food-cart coworker, practical, teasing, teaches Pulse/software',
+    [CORE_IDS.MAYA]: 'starlight_maya — quiet, lowercase, music, guarded then warm',
+    [CORE_IDS.NORA]: 'NightOwl87 — night archivist, dry humor, forum rabbit holes',
+    [CORE_IDS.HENDERSON]: 'motel manager, formal, rent-focused',
   },
   tone: 'intimate, slightly lonely, warm when connected, occasionally uneasy, grounded, no supernatural as fact, no horror',
   hardRules: [

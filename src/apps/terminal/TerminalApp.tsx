@@ -3,6 +3,7 @@ import { useSimulationStore } from '../../store/useSimulationStore';
 import { useWindowStore } from '../../store/useWindowStore';
 import { getFileInfoFromUrl, formatFileSize } from '../../engine/fileUtils';
 import { soundManager } from '../../audio/SoundManager';
+import { useGameConfigStore } from '../../store/useGameConfigStore';
 
 interface TerminalLine {
   id: string;
@@ -19,15 +20,20 @@ const KNOWN_HOSTS: Record<string, { ip: string; hops: string[] }> = {
   'gateway.local': { ip: '192.168.1.1', hops: ['192.168.1.1 (gateway.local)'] },
 };
 
+function terminalOsVersion(osVersion: string | null): string {
+  return osVersion ? osVersion.replace(/^Orion_/, '') : 'None';
+}
+
 export const TerminalApp: React.FC<{ windowId: string }> = ({ windowId }) => {
   const vfs = useSimulationStore((s) => s.state.vfs);
   const hardware = useSimulationStore((s) => s.state.hardware);
+  const osVersion = useSimulationStore((s) => s.state.os.currentOsId);
   const dispatchAction = useSimulationStore((s) => s.dispatchAction);
   const closeWindow = useWindowStore((s) => s.closeWindow);
 
   const [currentPath, setCurrentPath] = useState<string>('C:');
   const [lines, setLines] = useState<TerminalLine[]>([
-    { id: '1', type: 'system', text: `Orion OS Command Prompt [Version ${hardware.osVersion === 'Orion_4.8' ? '4.80.1998' : '6.00.2001'}]` },
+    { id: '1', type: 'system', text: `Orion OS Command Prompt [Version ${terminalOsVersion(osVersion)}]` },
     { id: '2', type: 'system', text: '(C) Copyright 1985-2000 Orion Systems Corp. All rights reserved.\nType "help" for a list of available commands.\n' },
   ]);
   const [inputVal, setInputVal] = useState<string>('');
@@ -101,10 +107,47 @@ export const TerminalApp: React.FC<{ windowId: string }> = ({ windowId }) => {
           '  IPCONFIG [/all]     Displays all current TCP/IP network configuration values.\n' +
           '  UNZIP <archive>     Extracts files from a compressed ZIP archive.\n' +
           '  DOWNLOAD <url>      Downloads a file from any .local URL (alias: wget, curl).\n' +
-          '  SAVE <path> <text>  Saves text to a file on disk (e.g. save C:/Documents/note.txt \"hi\").\n' +
+          '  SAVE <path> <text>  Saves text to a file on disk (e.g. save C:/Documents/note.txt "hi").\n' +
+          '  CONFIG [get|set]    Inspects or modifies Player and Dev game configuration.\n' +
           '  VER                 Displays the Orion OS version.\n' +
           '  EXIT                Quits the Command Prompt session.'
         );
+        break;
+      }
+
+      case 'config': {
+        const sub = (args[0] || 'get').toLowerCase();
+        const configState = useGameConfigStore.getState();
+        if (sub === 'get') {
+          addLine(
+            '\nGame Configuration:\n' +
+            JSON.stringify({ player: configState.player, dev: configState.dev }, null, 2)
+          );
+        } else if (sub === 'reset') {
+          configState.resetDefaults();
+          addLine('Game configuration reset to defaults.');
+        } else if (sub === 'set') {
+          const key = args[1];
+          const rawVal = args[2];
+          if (!key || rawVal === undefined) {
+            addLine('Usage: config set <player|dev>.<key> <value>', 'error');
+            break;
+          }
+          const val = rawVal === 'true' ? true : rawVal === 'false' ? false : !isNaN(Number(rawVal)) ? Number(rawVal) : rawVal;
+          if (key.startsWith('dev.')) {
+            const devKey = key.slice(4);
+            configState.setDevConfig({ [devKey]: val });
+            addLine(`Updated dev.${devKey} = ${String(val)}`);
+          } else if (key.startsWith('player.')) {
+            const pKey = key.slice(7);
+            configState.setPlayerConfig({ [pKey]: val });
+            addLine(`Updated player.${pKey} = ${String(val)}`);
+          } else {
+            addLine('Config key must start with "player." or "dev."', 'error');
+          }
+        } else {
+          addLine('Usage: config [get | set <key> <val> | reset]', 'error');
+        }
         break;
       }
 
@@ -115,7 +158,7 @@ export const TerminalApp: React.FC<{ windowId: string }> = ({ windowId }) => {
       }
 
       case 'ver': {
-        addLine(`Orion OS [Version ${hardware.osVersion === 'Orion_4.8' ? '4.80.1998' : '6.00.2001'}]`);
+        addLine(`Orion OS [Version ${terminalOsVersion(osVersion)}]`);
         break;
       }
 
@@ -125,6 +168,9 @@ export const TerminalApp: React.FC<{ windowId: string }> = ({ windowId }) => {
       }
 
       case 'ipconfig': {
+        const connectionLabel = hardware.connectionType
+          ? hardware.connectionType.toUpperCase()
+          : 'NONE';
         addLine(
           '\nOrion IP Configuration\n\n' +
           'Ethernet adapter Local Area Connection:\n\n' +
@@ -132,8 +178,8 @@ export const TerminalApp: React.FC<{ windowId: string }> = ({ windowId }) => {
           `   IP Address. . . . . . . . . . . . : 192.168.1.104\n` +
           `   Subnet Mask . . . . . . . . . . . : 255.255.255.0\n` +
           `   Default Gateway . . . . . . . . . : 192.168.1.1\n` +
-          `   Connection Type . . . . . . . . . : ${hardware.connectionType.toUpperCase()} (${hardware.connectionSpeedKbps} kbps)\n` +
-          `   Physical Adapter State  . . . . . : CONNECTED`
+          `   Connection Type . . . . . . . . . : ${connectionLabel} (${hardware.connectionSpeedKbps} kbps)\n` +
+          `   Physical Adapter State  . . . . . : ${hardware.connectionType ? 'CONNECTED' : 'DISCONNECTED'}`
         );
         break;
       }
@@ -163,7 +209,6 @@ export const TerminalApp: React.FC<{ windowId: string }> = ({ windowId }) => {
           : `${currentPath === 'C:' ? 'C:' : currentPath}/${target}`;
         resolvedPath = resolvedPath.replace(/\/+/g, '/');
 
-        // Check if directory exists in VFS
         const dirRecord = vfs.files[resolvedPath];
         if (dirRecord && dirRecord.kind === 'directory') {
           setCurrentPath(resolvedPath);

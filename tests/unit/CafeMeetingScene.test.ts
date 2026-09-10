@@ -11,7 +11,7 @@ describe('Café Meeting Scene & Physical Social Mechanics Test Suite', () => {
 
   beforeEach(() => {
     simEngine = new SimulationEngine();
-    narrativeEngine = new NarrativeEngine(undefined, ALL_STORY_KNOTS);
+    narrativeEngine = new NarrativeEngine(ALL_STORY_KNOTS);
     adapter = new InkAdapter(simEngine, narrativeEngine);
   });
 

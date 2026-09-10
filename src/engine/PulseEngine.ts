@@ -2,6 +2,7 @@
 // Mirrors OsEngine but for Pulse Messenger — version lineage, requirements, install realism.
 
 import { EventBus } from './EventBus';
+import { isMinOsSatisfied } from './OsCatalog';
 import {
   getAllPulseReleases,
   getPulseReleaseById,
@@ -13,7 +14,8 @@ import {
 import type { HardwareState, OsVersion } from './types';
 
 export interface PulseEngineState {
-  currentPulseId: string; // e.g. 'pulse_5.2'
+  // Empty string is the persisted save-compatible representation of "not installed".
+  currentPulseId: string;
   installedPatchIds: string[];
   lastUpdateAtMinute?: number;
   lastUpdateLog?: string[];
@@ -23,7 +25,7 @@ export interface PulseEngineState {
 
 export class PulseEngine {
   private eventBus: EventBus;
-  private currentPulseId: string;
+  private currentPulseId: string | null;
   private installedPatchIds: Set<string> = new Set();
   private lastUpdateAtMinute?: number;
   private lastUpdateLog: string[] = [];
@@ -31,7 +33,7 @@ export class PulseEngine {
 
   constructor(eventBus: EventBus, initialState?: Partial<PulseEngineState>) {
     this.eventBus = eventBus;
-    this.currentPulseId = initialState?.currentPulseId ?? 'pulse_5.2';
+    this.currentPulseId = initialState?.currentPulseId || 'pulse_5.2';
     if (initialState?.installedPatchIds) {
       for (const id of initialState.installedPatchIds) this.installedPatchIds.add(id);
     }
@@ -43,14 +45,35 @@ export class PulseEngine {
         restoreProceduralPulseReleases(initialState.proceduralCatalog as unknown as PulseRelease[]);
       } catch {}
     }
+
+    this.eventBus.on('software:uninstalled' as any, ({ software }: any) => {
+      const appId = String(software?.appId ?? '');
+      if (appId === 'app.pulse' || appId === 'app.pulse_messenger') {
+        this.syncInstalledVersion(null);
+      }
+    });
   }
 
   public getCurrentRelease(): PulseRelease {
-    return getPulseReleaseById(this.currentPulseId) ?? getPulseReleaseById('pulse_5.2')!;
+    return getPulseReleaseById(this.currentPulseId ?? '') ?? getPulseReleaseById('pulse_5.2')!;
   }
 
-  public getCurrentPulseId(): string {
+  public getCurrentPulseId(): string | null {
     return this.currentPulseId;
+  }
+
+  public syncInstalledVersion(version: string | null): void {
+    if (version === null) {
+      this.currentPulseId = null;
+      this.installedPatchIds.clear();
+      return;
+    }
+
+    const release = getAllPulseReleases().find((candidate) => candidate.version === version);
+    if (!release) {
+      throw new Error(`Unknown installed Pulse version: ${version}`);
+    }
+    this.currentPulseId = release.id;
   }
 
   public getState(): PulseEngineState {
@@ -61,7 +84,7 @@ export class PulseEngine {
       procedural = [];
     }
     return {
-      currentPulseId: this.currentPulseId,
+      currentPulseId: this.currentPulseId ?? '',
       installedPatchIds: Array.from(this.installedPatchIds),
       lastUpdateAtMinute: this.lastUpdateAtMinute,
       lastUpdateLog: [...this.lastUpdateLog],
@@ -71,7 +94,9 @@ export class PulseEngine {
   }
 
   public loadState(state: Partial<PulseEngineState>): void {
-    if (state.currentPulseId) this.currentPulseId = state.currentPulseId;
+    if (Object.prototype.hasOwnProperty.call(state, 'currentPulseId')) {
+      this.currentPulseId = state.currentPulseId || null;
+    }
     if (state.installedPatchIds) {
       this.installedPatchIds.clear();
       for (const id of state.installedPatchIds) this.installedPatchIds.add(id);
@@ -94,11 +119,7 @@ export class PulseEngine {
     if (target.id === this.currentPulseId) reasons.push(`Already on ${target.displayName}.`);
     if (target.requirements.minRamMB > hw.ramMB) reasons.push(`Requires ${target.requirements.minRamMB}MB RAM (have ${hw.ramMB}MB).`);
     if (target.requirements.minDiskMB > hw.hddFreeGB * 1024) reasons.push(`Requires ${target.requirements.minDiskMB}MB free (have ${(hw.hddFreeGB * 1024).toFixed(0)}MB).`);
-    // OS check via simple string compare — Pulse 6.x requires Orion 6.0+
-    if (target.requirements.minOs === 'Orion_6.0' && currentOs === 'Orion_4.8') {
-      reasons.push(`Requires ${target.requirements.minOs} or later (have ${currentOs}).`);
-    }
-    if (target.requirements.minOs === 'Orion_6.0' && currentOs.toString().includes('5.')) {
+    if (!isMinOsSatisfied(currentOs, target.requirements.minOs)) {
       reasons.push(`Requires ${target.requirements.minOs} or later (have ${currentOs}).`);
     }
     return { ok: reasons.length === 0, reasons, release: target };
@@ -127,7 +148,7 @@ export class PulseEngine {
       const prev = this.currentPulseId;
       this.currentPulseId = target.id;
       this.lastUpdateAtMinute = currentMinute;
-      this.log(`Upgraded ${prev} → ${target.id} (${target.version}).`);
+      this.log(`Upgraded ${prev ?? 'not installed'} → ${target.id} (${target.version}).`);
     }
     this.eventBus.emit('software:installed' as any, { software: { appId: 'app.pulse', version: target.version } });
     return { success: true, release: target };

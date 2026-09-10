@@ -1,6 +1,24 @@
 import { DownloadTask, DownloadManagerState, DownloadManagerType } from './types';
 import { EventBus } from './EventBus';
 import { FileSystemEngine } from './FileSystemEngine';
+import { legacyDownloadProfile } from './DownloadCompatibility';
+
+export interface DownloadClientProfile {
+  clientId: string;
+  maxConcurrent: number;
+  supportsResume: boolean;
+  supportsQueueReordering?: boolean;
+}
+
+type ProfiledDownloadTask = DownloadTask & {
+  clientProfile?: DownloadClientProfile;
+};
+
+const DEFAULT_CLIENT_PROFILE: DownloadClientProfile = {
+  clientId: 'host-default',
+  maxConcurrent: 1,
+  supportsResume: true,
+};
 
 export interface DownloadManagerDependencies {
   eventBus: EventBus;
@@ -9,12 +27,10 @@ export interface DownloadManagerDependencies {
 }
 
 export class DownloadManager {
-  private tasks: Map<string, DownloadTask> = new Map();
+  private tasks: Map<string, ProfiledDownloadTask> = new Map();
   private eventBus: EventBus;
   private vfs: FileSystemEngine;
   private getConnectionSpeedKbps: () => number;
-  private maxConcurrentBrowser = 1;
-  private maxConcurrentFlashFetch = 4;
 
   constructor(deps: DownloadManagerDependencies, initialState?: DownloadManagerState) {
     this.eventBus = deps.eventBus;
@@ -26,11 +42,9 @@ export class DownloadManager {
     }
   }
 
-  public getState(): DownloadManagerState {
+  public getState(): Pick<DownloadManagerState, 'tasks'> {
     return {
       tasks: Array.from(this.tasks.values()).map(t => ({ ...t })),
-      maxConcurrentBrowser: this.maxConcurrentBrowser,
-      maxConcurrentFlashFetch: this.maxConcurrentFlashFetch,
     };
   }
 
@@ -39,6 +53,7 @@ export class DownloadManager {
     for (const task of state.tasks) {
       this.tasks.set(task.id, { ...task });
     }
+    this.updateQueueSlots();
     this.recalculateBandwidth();
   }
 
@@ -51,10 +66,15 @@ export class DownloadManager {
     fileKind?: 'executable' | 'installer' | 'archive' | 'audio' | 'image' | 'text';
     resumable?: boolean;
     manager?: DownloadManagerType;
+    clientProfile?: DownloadClientProfile;
     currentMinute?: number;
     appAssociation?: string;
   }): DownloadTask {
-    // Check available disk space
+    const connectionSpeedKbps = this.getConnectionSpeedKbps();
+    if (!Number.isFinite(connectionSpeedKbps) || connectionSpeedKbps <= 0) {
+      throw new Error('No usable network connection is available for this download.');
+    }
+
     if (this.vfs.getFreeDiskBytes() < params.totalBytes) {
       throw new Error(
         `Insufficient disk space on C:. Required: ${params.totalBytes} bytes, Available: ${this.vfs.getFreeDiskBytes()} bytes.`
@@ -62,10 +82,10 @@ export class DownloadManager {
     }
 
     const id = `dl_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
-    const manager = params.manager || 'browser';
+    const clientProfile = params.clientProfile ?? this.defaultProfileForRequest(params.manager);
     const currentMinute = params.currentMinute ?? 0;
 
-    const task: DownloadTask = {
+    const task: ProfiledDownloadTask = {
       id,
       sourceId: params.sourceId,
       sourceUrl: params.sourceUrl,
@@ -76,8 +96,10 @@ export class DownloadManager {
       sourceMaxKbps: params.sourceMaxKbps,
       allocatedKbps: 0,
       status: 'queued',
-      resumable: params.resumable ?? true,
-      manager,
+      resumable: clientProfile.supportsResume && (params.resumable ?? true),
+      // Retained only as legacy task metadata for save compatibility.
+      manager: params.manager as DownloadManagerType,
+      clientProfile: { ...clientProfile },
       startedAtMinute: currentMinute,
       fileKind: params.fileKind ?? 'executable',
       appAssociation: params.appAssociation,
@@ -108,7 +130,7 @@ export class DownloadManager {
     if (!task || task.status !== 'paused') return false;
 
     if (!task.resumable) {
-      task.downloadedBytes = 0; // Non-resumable downloads restart
+      task.downloadedBytes = 0;
     }
 
     task.status = 'queued';
@@ -153,7 +175,6 @@ export class DownloadManager {
       const activeTasks = this.getActiveDownloads();
       if (activeTasks.length === 0) break;
 
-      // Find the earliest completion time among active tasks
       let minTimeToCompletion = remainingSeconds;
       for (const task of activeTasks) {
         if (task.allocatedKbps > 0) {
@@ -168,7 +189,6 @@ export class DownloadManager {
 
       const stepSeconds = Math.min(remainingSeconds, Math.max(0.1, minTimeToCompletion));
 
-      // Advance bytes for all active tasks
       for (const task of activeTasks) {
         if (task.allocatedKbps > 0) {
           const bytesTransferred = ((task.allocatedKbps * 1024) / 8) * stepSeconds;
@@ -189,7 +209,6 @@ export class DownloadManager {
     task.allocatedKbps = 0;
     task.completedAtMinute = currentMinute;
 
-    // Create persistent file in VFS
     const filePath = `${task.targetDirectory}/${task.fileName}`;
     try {
       this.vfs.createFile(
@@ -208,39 +227,33 @@ export class DownloadManager {
         currentMinute
       );
     } catch {
-      // File might already exist if re-downloaded
+      // File might already exist if re-downloaded.
     }
 
     this.eventBus.emit('download:completed', { task: { ...task }, filePath });
   }
 
   public updateQueueSlots(): void {
-    const flashFetchActive = Array.from(this.tasks.values()).filter(
-      t => t.manager === 'flashfetch' && t.status === 'downloading'
-    ).length;
-    const browserActive = Array.from(this.tasks.values()).filter(
-      t => t.manager === 'browser' && t.status === 'downloading'
-    ).length;
-
-    let availableBrowserSlots = this.maxConcurrentBrowser - browserActive;
-    let availableFlashFetchSlots = this.maxConcurrentFlashFetch - flashFetchActive;
+    const activeCounts = new Map<string, number>();
+    for (const task of this.tasks.values()) {
+      if (task.status !== 'downloading') continue;
+      const profile = this.profileForTask(task);
+      activeCounts.set(profile.clientId, (activeCounts.get(profile.clientId) ?? 0) + 1);
+    }
 
     for (const task of this.tasks.values()) {
-      if (task.status === 'queued') {
-        if (task.manager === 'flashfetch' && availableFlashFetchSlots > 0) {
-          task.status = 'downloading';
-          availableFlashFetchSlots--;
-        } else if (task.manager === 'browser' && availableBrowserSlots > 0) {
-          task.status = 'downloading';
-          availableBrowserSlots--;
-        }
+      if (task.status !== 'queued') continue;
+      const profile = this.profileForTask(task);
+      const active = activeCounts.get(profile.clientId) ?? 0;
+      const maxConcurrent = Math.max(1, Math.floor(profile.maxConcurrent));
+      if (active < maxConcurrent) {
+        task.status = 'downloading';
+        activeCounts.set(profile.clientId, active + 1);
       }
     }
   }
 
-  /**
-   * Water-filling bandwidth allocation algorithm.
-   */
+  /** Water-filling bandwidth allocation algorithm. */
   public recalculateBandwidth(): void {
     const activeTasks = this.getActiveDownloads();
     if (activeTasks.length === 0) return;
@@ -249,7 +262,6 @@ export class DownloadManager {
     let unassigned = [...activeTasks];
     let remainingBandwidth = totalConnectionKbps;
 
-    // Reset allocated
     for (const t of activeTasks) t.allocatedKbps = 0;
 
     while (unassigned.length > 0 && remainingBandwidth > 0) {
@@ -267,8 +279,17 @@ export class DownloadManager {
           task.allocatedKbps = fairShare;
         }
         remainingBandwidth = 0;
-        break;
       }
     }
+  }
+
+  private profileForTask(task: ProfiledDownloadTask): DownloadClientProfile {
+    if (task.clientProfile) return task.clientProfile;
+    if (task.manager) return legacyDownloadProfile(task.manager);
+    return DEFAULT_CLIENT_PROFILE;
+  }
+
+  private defaultProfileForRequest(manager?: DownloadManagerType): DownloadClientProfile {
+    return manager ? legacyDownloadProfile(manager) : DEFAULT_CLIENT_PROFILE;
   }
 }

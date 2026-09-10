@@ -7,6 +7,7 @@ import { buildCharacter, type BuiltCharacter, type CharacterDefinition } from '.
 import {
   CHARACTER_ARCHETYPES,
   listArchetypes,
+  pickTemplateAppearance,
   pickTemplateIntroLine,
   pickTemplateName,
 } from './characterTemplates';
@@ -56,6 +57,21 @@ export function hashSeed(value: string): number {
   return h;
 }
 
+export const ARCHETYPE_ROLE_POOLS: Record<CharacterArchetype, string[]> = {
+  artist: ['tape-trader', 'darkroom-hobbyist', 'indie-musician', 'rain-lover'],
+  coworker: ['shift-worker', 'taco-lover', 'hardware-modder', 'cart-helper'],
+  nightowl: ['board-moderator', 'log-indexer', 'audio-archivist', 'night-shift'],
+  regular: ['cafe-regular', 'canal-walker', 'bookworm', 'vinyl-collector'],
+  student: ['crammer', 'radio-listener', 'zine-maker', 'dorm-sleeper'],
+  trader: ['floppy-swapper', 'benchmarker', 'cable-collector', 'overclocker'],
+};
+
+export function pickArchetypeRoles(archetype: CharacterArchetype, seed: string): string[] {
+  const pool = ARCHETYPE_ROLE_POOLS[archetype] ?? ['regular'];
+  const roll = hashSeed(`role:${seed}`) % pool.length;
+  return [pool[roll]!];
+}
+
 function slugify(value: string): string {
   const slug = value.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 32);
   return /^[a-z]/.test(slug) ? slug : `pal_${slug}`;
@@ -83,7 +99,7 @@ function buildIntroText(displayName: string, archetype: CharacterArchetype, seed
 }
 
 function templateProfilePatch(displayName: string, archetype: CharacterArchetype): NewcomerProfilePatch {
-  const template = CHARACTER_ARCHETYPES[archetype];
+  const template = CHARACTER_ARCHETYPES[archetype] ?? CHARACTER_ARCHETYPES['regular'];
   return {
     headline: `${displayName} • Oakhaven local`,
     bio: template.personaHint,
@@ -153,8 +169,9 @@ export async function generateNewcomer(
             'You invent ONE new friend for a fictional 2005 desktop sandbox game (Oakhaven, dial-up era). ' +
             'Return JSON only, matching the schema exactly. Mundane believable person, no real people, no real brands, ' +
             'handles like 2005 forum names. Keep every field personality-consistent with the archetype.';
+          const hint = CHARACTER_ARCHETYPES[archetype]?.personaHint ?? '';
           const user =
-            `Archetype: ${archetype} (${CHARACTER_ARCHETYPES[archetype].personaHint}) | ` +
+            `Archetype: ${archetype} (${hint}) | ` +
             `Met via: ${METVIA_FLAVOR[req.metVia]} | Current day: ${req.day} | ` +
             `Taken ids/handles (avoid all): ${existing}. ` +
             `introText: their first Pulse message to the player (10-300 chars, era voice, no URL — link appended automatically).`;
@@ -171,8 +188,11 @@ export async function generateNewcomer(
               interests: { type: 'array', minItems: 3, maxItems: 5, items: { type: 'string', minLength: 2, maxLength: 20 } },
               songTitle: { type: 'string', minLength: 3, maxLength: 50 },
               introText: { type: 'string', minLength: 10, maxLength: 300 },
+              hair: { type: 'string', minLength: 2, maxLength: 24 },
+              eyes: { type: 'string', minLength: 2, maxLength: 24 },
+              languages: { type: 'array', minItems: 1, maxItems: 3, items: { type: 'object', properties: { lang: { type: 'string', enum: ['en', 'es', 'fr', 'de', 'it', 'pt', 'ru', 'ar', 'zh', 'ja'] }, level: { type: 'integer', minimum: 1, maximum: 5 } }, required: ['lang', 'level'] } },
             },
-            required: ['id', 'displayName', 'handle', 'archetype', 'headline', 'bio', 'interests', 'songTitle', 'introText'],
+            required: ['id', 'displayName', 'handle', 'archetype', 'headline', 'bio', 'interests', 'songTitle', 'introText', 'hair', 'eyes', 'languages'],
           } as const;
           const raw = await completeJson({
             providerId,
@@ -195,6 +215,11 @@ export async function generateNewcomer(
             metVia: req.metVia,
             createdDay: req.day,
             status: 'stranger',
+            // Online sources birth remote buddies (no art, no in-person life).
+            reach: req.metVia === 'work' || req.metVia === 'intro' || req.metVia === 'core' ? 'local' : 'remote',
+            appearance: { hair: parsed.hair, eyes: parsed.eyes },
+            languages: parsed.languages.map((l) => ({ lang: l.lang, level: l.level })),
+            roles: pickArchetypeRoles(parsed.archetype, `${seed}:${aiId}`),
           });
           return {
             definition: built.definition,
@@ -235,6 +260,13 @@ function templateResult(
     metVia: req.metVia,
     createdDay: req.day,
     status: 'stranger',
+    // Online sources birth remote buddies (no art, no in-person life).
+    reach: req.metVia === 'work' || req.metVia === 'intro' || req.metVia === 'core' ? 'local' : 'remote',
+    roles: pickArchetypeRoles(archetype, `${seed}:${id}`),
+    ...(() => {
+      const look = pickTemplateAppearance(`${seed}:${id}`);
+      return { appearance: { hair: look.hair, eyes: look.eyes }, languages: look.languages };
+    })(),
   });
   return {
     definition: built.definition,

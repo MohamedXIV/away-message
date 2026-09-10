@@ -1,6 +1,16 @@
 import { describe, it, expect } from 'vitest';
 import { getFileInfoFromUrl, isDownloadableUrl, formatFileSize } from '../../src/engine/fileUtils';
 import { SimulationEngine } from '../../src/engine/SimulationEngine';
+import { createScrapYardBundle } from '../../src/engine/hardware/catalog';
+import { legacyModularToCanonical } from '../../src/engine/hardware/state';
+
+function makeNetworkedEngine(): SimulationEngine {
+  const canonical = legacyModularToCanonical(createScrapYardBundle());
+  return new SimulationEngine({
+    computer: canonical.computer,
+    display: canonical.display,
+  } as any);
+}
 
 describe('Unified FileUtils — Download/Save/Install Pipeline', () => {
   it('detects file kind from extension', () => {
@@ -44,7 +54,7 @@ describe('Unified FileUtils — Download/Save/Install Pipeline', () => {
   });
 
   it('triggers download via SimulationEngine from any URL', () => {
-    const engine = new SimulationEngine();
+    const engine = makeNetworkedEngine();
     const url = 'http://rain-archive.local/files/test_archive.zip';
     const info = getFileInfoFromUrl(url)!;
     expect(info).not.toBeNull();
@@ -63,7 +73,7 @@ describe('Unified FileUtils — Download/Save/Install Pipeline', () => {
   });
 
   it('completes download and creates VFS file in C:/Downloads', () => {
-    const engine = new SimulationEngine();
+    const engine = makeNetworkedEngine();
     const url = 'http://example.local/files/demo_installer.exe';
     const info = getFileInfoFromUrl(url)!;
     engine.dispatchAction({
@@ -90,7 +100,7 @@ describe('Unified FileUtils — Download/Save/Install Pipeline', () => {
       type: 'VFS_CREATE_FILE',
       file: {
         name: 'Pulse_test.txt',
-        path: 'C:/Documents/Pulse_test.txt',
+        path: `C:/Documents/Pulse_test.txt`,
         parentPath: 'C:/Documents',
         kind: 'text',
         sizeBytes: content.length,

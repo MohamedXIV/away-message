@@ -5,7 +5,7 @@ import { MessageHistoryView } from './MessageHistoryView';
 import { MessageInputBar } from './MessageInputBar';
 import { AuthoredResponseMenu } from './AuthoredResponseMenu';
 import { ReplyChips } from './ReplyChips';
-import { useReplySuggestions } from '../hooks/useReplySuggestions';
+import { useReplySuggestions, type ReplySuggestionItem } from '../hooks/useReplySuggestions';
 import { DialogueChoiceOption } from '../types';
 
 interface ChatWindowProps {
@@ -23,8 +23,8 @@ interface ChatWindowProps {
   onSendMessage: (buddyId: string, text: string) => void;
   onBuzz?: (buddyId: string) => void;
   onSelectChoice: (choice: DialogueChoiceOption, buddyId: string) => void;
-  /** AI reply suggestions for the player (P8/B2). Null = feature off. */
-  suggestionFetcher?: ((buddyId: string) => Promise<string[]>) | null;
+  /** AI reply suggestions for the player (P8/B2, tone + battery enriched). Null = feature off. */
+  suggestionFetcher?: ((buddyId: string) => Promise<ReplySuggestionItem[]>) | null;
 }
 
 export const ChatWindow: React.FC<ChatWindowProps> = ({
