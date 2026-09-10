@@ -3,6 +3,8 @@ import { SemanticPuppet } from './SemanticPuppet';
 export type AwayPuppetToolName =
   | 'away.inspect_contract'
   | 'away.set_morph'
+  | 'away.set_expression'
+  | 'away.set_pose'
   | 'part.set_visibility'
   | 'part.set_tint';
 
@@ -14,6 +16,8 @@ export interface AwayPuppetToolService {
 const MODEL_FACING_TOOLS: readonly AwayPuppetToolName[] = [
   'away.inspect_contract',
   'away.set_morph',
+  'away.set_expression',
+  'away.set_pose',
   'part.set_visibility',
   'part.set_tint',
 ];
@@ -63,6 +67,18 @@ export function createAwayPuppetToolService(puppet: SemanticPuppet): AwayPuppetT
         case 'away.set_morph': {
           const args = requireRecord(rawArgs);
           puppet.setMorph(requireString(args, 'name'), requireNumber(args, 'value'));
+          return { ok: true };
+        }
+
+        case 'away.set_expression': {
+          const args = requireRecord(rawArgs);
+          puppet.setExpression(requireString(args, 'name'));
+          return { ok: true };
+        }
+
+        case 'away.set_pose': {
+          const args = requireRecord(rawArgs);
+          puppet.setPose(requireString(args, 'name'));
           return { ok: true };
         }
 
