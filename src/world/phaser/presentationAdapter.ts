@@ -119,8 +119,11 @@ export function createWorldSceneProjection(
   const spaceIds = new Set(spaces.map((s) => s.id));
   const viewsInPlace = GENERATED_VIEWS.filter((v) => spaceIds.has(v.spaceId));
 
-  const activeView = (viewId ? viewsInPlace.find((v) => v.id === viewId) : viewsInPlace[0])
-    ?? (viewId ? GENERATED_VIEWS.find((v) => v.id === viewId) : null);
+  const activeView = viewId ? viewsInPlace.find((v) => v.id === viewId) : viewsInPlace[0];
+
+  if (viewId && !activeView) {
+    throw new Error(`View ${viewId} does not belong to place ${placeId}`);
+  }
 
   const activeSpace = activeView ? spaces.find((s) => s.id === activeView.spaceId) : null;
 
