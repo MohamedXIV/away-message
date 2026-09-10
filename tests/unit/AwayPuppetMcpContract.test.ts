@@ -47,6 +47,8 @@ function makeFixture() {
       tints: {
         hair: { nodeIds: ['NodeHairFront'] },
       },
+      expressions: {},
+      poses: {},
     },
     raw,
   );
