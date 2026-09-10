@@ -100,7 +100,7 @@ export function serializeTransitAccess(links: readonly TransitAccessLink[]): str
   return JSON.stringify(
     links.map((link) => ({
       stopId: link.stopId.trim(),
-      walkMinutes: Math.max(1, Math.round(link.walkMinutes || 1)),
+      walkMinutes: link.walkMinutes,
     })),
   );
 }
@@ -150,6 +150,50 @@ export function reorderBusLineStops(
   return {
     stops: nextStops,
     segments: nextSegments,
+  };
+}
+
+export function removeBusLineStop(
+  currentStops: readonly string[],
+  currentSegments: readonly number[],
+  removeIndex: number,
+): { stops: string[]; segments: number[] } {
+  if (removeIndex < 0 || removeIndex >= currentStops.length) {
+    return {
+      stops: [...currentStops],
+      segments: resizeSegmentMinutes(currentSegments, currentStops.length),
+    };
+  }
+
+  const nextStops = currentStops.filter((_, idx) => idx !== removeIndex);
+  if (nextStops.length < 2) {
+    return {
+      stops: nextStops,
+      segments: [],
+    };
+  }
+
+  const nextSegments: number[] = [];
+  if (removeIndex === 0) {
+    nextSegments.push(...currentSegments.slice(1));
+  } else if (removeIndex === currentStops.length - 1) {
+    nextSegments.push(...currentSegments.slice(0, -1));
+  } else {
+    for (let i = 0; i < currentStops.length - 1; i++) {
+      if (i === removeIndex - 1) {
+        const seg1 = currentSegments[i] ?? 10;
+        const seg2 = currentSegments[i + 1] ?? 10;
+        nextSegments.push(seg1 + seg2);
+        i++;
+      } else {
+        nextSegments.push(currentSegments[i] ?? 10);
+      }
+    }
+  }
+
+  return {
+    stops: nextStops,
+    segments: resizeSegmentMinutes(nextSegments, nextStops.length),
   };
 }
 

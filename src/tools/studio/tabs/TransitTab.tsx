@@ -9,6 +9,7 @@ import {
   parseStringList,
   resizeSegmentMinutes,
   reorderBusLineStops,
+  removeBusLineStop,
 } from '../transitAuthoring';
 import { FieldErrorDisplay, RowErrorBanner } from '../components/FieldErrorDisplay';
 
@@ -236,9 +237,21 @@ export const TransitTab: React.FC<Props> = ({ studio }) => {
       <section className="flex-1 overflow-y-auto p-6">
         {section === 'stops' && activeStop ? (
           <div className="max-w-4xl space-y-5">
-            <div>
-              <h2 className="text-lg font-bold text-white">{String(activeStop['name'] || activeStopId)}</h2>
-              <div className="text-xs font-mono text-purple-400">Transit stop: @{activeStopId}</div>
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-lg font-bold text-white">{String(activeStop['name'] || activeStopId)}</h2>
+                <div className="text-xs font-mono text-purple-400">Transit stop: @{activeStopId}</div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  studio.deleteRow('transitStops', activeStopId);
+                  setSelectedStopId('');
+                }}
+                className="rounded bg-red-950/60 hover:bg-red-900/60 border border-red-800/60 px-3 py-1 text-xs font-bold text-red-300"
+              >
+                Delete Stop
+              </button>
             </div>
 
             <RowErrorBanner allErrors={studio.validationErrors} table="transitStops" rowId={activeStopId} />
@@ -291,6 +304,11 @@ export const TransitTab: React.FC<Props> = ({ studio }) => {
                         {String(places[id]?.['name'] || id)}
                       </option>
                     ))}
+                    {Boolean(activeStop['placeId']) && !placesForDistrict(String(activeStop['districtId'] ?? '')).includes(String(activeStop['placeId'])) && (
+                      <option value={String(activeStop['placeId'])}>
+                        ⚠ Place: @{String(activeStop['placeId'])} (different district)
+                      </option>
+                    )}
                   </select>
                 </label>
                 <FieldErrorDisplay allErrors={studio.validationErrors} table="transitStops" rowId={activeStopId} field="placeId" />
@@ -314,9 +332,21 @@ export const TransitTab: React.FC<Props> = ({ studio }) => {
           </div>
         ) : section === 'lines' && activeLine ? (
           <div className="max-w-4xl space-y-6">
-            <div>
-              <h2 className="text-lg font-bold text-white">{String(activeLine['name'] || activeLineId)}</h2>
-              <div className="text-xs font-mono text-purple-400">Bus line: @{activeLineId}</div>
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-lg font-bold text-white">{String(activeLine['name'] || activeLineId)}</h2>
+                <div className="text-xs font-mono text-purple-400">Bus line: @{activeLineId}</div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  studio.deleteRow('busLines', activeLineId);
+                  setSelectedLineId('');
+                }}
+                className="rounded bg-red-950/60 hover:bg-red-900/60 border border-red-800/60 px-3 py-1 text-xs font-bold text-red-300"
+              >
+                Delete Line
+              </button>
             </div>
 
             <RowErrorBanner allErrors={studio.validationErrors} table="busLines" rowId={activeLineId} />
@@ -370,14 +400,14 @@ export const TransitTab: React.FC<Props> = ({ studio }) => {
                     <input
                       type="number"
                       min={0}
-                      max={1439}
+                      max={1440}
                       value={Number(activeLine[cell] ?? 0)}
                       onChange={(event) => studio.setCell('busLines', activeLineId, cell, Number(event.target.value))}
                       className="mt-1 w-full rounded bg-[#130d24] border border-purple-800/60 px-3 py-2 text-sm text-white"
                     />
                     <div className="mt-1 text-[10px] text-gray-400 font-mono">{minuteToTimeStr(Number(activeLine[cell] ?? 0))}</div>
                   </label>
-                  <FieldErrorDisplay allErrors={studio.validationErrors} table="busLines" rowId={activeLineId} field={cell} />
+                  <FieldErrorDisplay allErrors={studio.validationErrors} table="busLines" rowId={activeLineId} field={[cell, 'service']} />
                 </div>
               ))}
             </div>
@@ -446,7 +476,11 @@ export const TransitTab: React.FC<Props> = ({ studio }) => {
                       </button>
                       <button
                         type="button"
-                        onClick={() => setLineStops(activeLineStops.filter((_, stopIndex) => stopIndex !== index))}
+                        onClick={() => {
+                          const result = removeBusLineStop(activeLineStops, activeSegments, index);
+                          studio.setCell('busLines', activeLineId, 'stopIds', JSON.stringify(result.stops));
+                          studio.setCell('busLines', activeLineId, 'segmentMinutes', JSON.stringify(result.segments));
+                        }}
                         className="px-2 py-1 text-xs rounded bg-red-950/60 hover:bg-red-900/60 text-red-300 font-bold"
                       >
                         Remove
@@ -454,23 +488,33 @@ export const TransitTab: React.FC<Props> = ({ studio }) => {
                     </div>
 
                     {index < activeLineStops.length - 1 && (
-                      <div className="flex items-center gap-2 pl-8 py-1">
-                        <div className="w-0.5 h-6 bg-purple-600/60 ml-2.5" />
-                        <div className="flex items-center gap-2 rounded bg-[#0b0514] border border-purple-800/40 px-3 py-1 text-xs text-purple-300">
-                          <span className="text-purple-400 font-mono text-[11px]">↓ Segment ride:</span>
-                          <input
-                            aria-label={`Segment duration between stop ${index + 1} and stop ${index + 2}`}
-                            type="number"
-                            min={1}
-                            value={activeSegments[index] ?? 10}
-                            onChange={(event) => {
-                              const next = [...activeSegments];
-                              next[index] = Math.max(1, Number(event.target.value));
-                              studio.setCell('busLines', activeLineId, 'segmentMinutes', JSON.stringify(next));
-                            }}
-                            className="w-16 rounded bg-[#130d24] border border-purple-700/60 px-2 py-0.5 text-xs text-white font-mono text-center"
+                      <div className="flex flex-col pl-8 py-1">
+                        <div className="flex items-center gap-2">
+                          <div className="w-0.5 h-6 bg-purple-600/60 ml-2.5" />
+                          <div className="flex items-center gap-2 rounded bg-[#0b0514] border border-purple-800/40 px-3 py-1 text-xs text-purple-300">
+                            <span className="text-purple-400 font-mono text-[11px]">↓ Segment ride:</span>
+                            <input
+                              aria-label={`Segment duration between stop ${index + 1} and stop ${index + 2}`}
+                              type="number"
+                              value={activeSegments[index] ?? 10}
+                              onChange={(event) => {
+                                const next = [...activeSegments];
+                                next[index] = Number(event.target.value);
+                                studio.setCell('busLines', activeLineId, 'segmentMinutes', JSON.stringify(next));
+                              }}
+                              className="w-16 rounded bg-[#130d24] border border-purple-700/60 px-2 py-0.5 text-xs text-white font-mono text-center"
+                            />
+                            <span className="text-gray-400 font-mono">min</span>
+                          </div>
+                        </div>
+                        <div className="pl-6">
+                          <FieldErrorDisplay
+                            allErrors={studio.validationErrors}
+                            table="busLines"
+                            rowId={activeLineId}
+                            field="segmentMinutes"
+                            index={index}
                           />
-                          <span className="text-gray-400 font-mono">min</span>
                         </div>
                       </div>
                     )}
@@ -481,7 +525,9 @@ export const TransitTab: React.FC<Props> = ({ studio }) => {
           </div>
         ) : (
           <div className="h-full flex items-center justify-center text-sm text-gray-500">
-            {section === 'lines' && stopIds.length < 2
+            {section === 'stops' && districtIds.length === 0
+              ? 'Create a district first, then add transit stops.'
+              : section === 'lines' && stopIds.length < 2
               ? 'Create at least two transit stops before adding a bus line.'
               : `No ${section} authored yet.`}
           </div>
