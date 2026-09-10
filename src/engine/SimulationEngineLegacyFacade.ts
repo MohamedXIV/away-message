@@ -9,10 +9,21 @@ import { InventoryEngine, type HardwareInstallSlot } from './InventoryEngine';
 import { HARDWARE_STORE_INVENTORY, PHYSICAL_ITEM_CATALOG } from './hardware/catalog';
 import { getReleaseById } from './OsCatalog';
 import { SimulationEngine as SimulationEngineCore } from './SimulationEngineCore';
-import { buildLifeMatrixSnapshot } from './life/LifeSnapshot';
-import { createSimulationLifeSources } from './life/LifeSources';
-import { buildCharacterObligations } from './life/Obligations';
-import type { CharacterObligation, LifeMatrixSnapshot } from './life/types';
+import {
+  buildLifeMatrixSnapshot,
+  createSimulationLifeSources,
+  buildCharacterObligations,
+  deriveDefaultNpcPressure,
+  advanceNpcPressure,
+  projectLifePressureView,
+  initializeActorGoals,
+  type CharacterObligation,
+  type FidelityTier,
+  type LifeMatrixSnapshot,
+  type LifePressureView,
+  type NpcPressureState,
+  type PersonalGoal,
+} from './life';
 import {
   createEmptyComputerSetup,
   createEmptyDisplaySetup,
@@ -76,6 +87,9 @@ export class SimulationEngine extends SimulationEngineCore {
 
   private v6CachedBase: Readonly<TransportSimulationState> | null = null;
   private v6CachedState: Readonly<LiveSimulationState> | null = null;
+  private npcPressureCache: Map<string, NpcPressureState> = new Map();
+  private npcGoalsCache: Map<string, PersonalGoal[]> = new Map();
+
 
   constructor(initialState?: Partial<TransportSimulationState>) {
     const computer = initialState?.computer ?? createEmptyComputerSetup();
@@ -175,6 +189,79 @@ export class SimulationEngine extends SimulationEngineCore {
     const snapshot = this.getLifeSnapshot(actorId);
     return snapshot ? buildCharacterObligations(snapshot) : [];
   }
+
+  public getNpcPressure(actorId: string): LifePressureView | null {
+    const buddy = this.social.getBuddy(actorId);
+    if (!buddy) return null;
+
+    let state = this.npcPressureCache.get(actorId);
+    const atMinute = this.clock.getTotalMinutes();
+    const day = this.clock.getTime().day;
+
+    if (!state) {
+      const routine = buddy.schedule[day] ?? buddy.schedule[1] ?? [];
+      const traits = this.social.getTraits(actorId);
+      const tier: FidelityTier = buddy.reach === 'remote' ? 'background_remote' : 'important_local';
+      state = deriveDefaultNpcPressure(actorId, traits, routine as any, tier);
+      this.npcPressureCache.set(actorId, state);
+    }
+
+    if (state.lastUpdatedMinute < atMinute) {
+      const scheduleBlocks = (buddy.schedule[day] ?? []) as any[];
+      const minuteOfDay = ((atMinute % 1440) + 1440) % 1440;
+      const isAtWork = scheduleBlocks.some((b) =>
+        b.status === 'away' && minuteOfDay >= b.startMinuteOfDay && minuteOfDay < b.endMinuteOfDay
+      );
+      const inAppointment = this.world.getAppointments().some((a) =>
+        a.characterId === actorId && a.targetDay === day && minuteOfDay >= a.startMinute && minuteOfDay < (a.endMinute ?? a.startMinute + 60)
+      );
+      state = advanceNpcPressure(state, state.lastUpdatedMinute, atMinute, {
+        day,
+        isAtWork,
+        inAppointment,
+      });
+      this.npcPressureCache.set(actorId, state);
+    }
+
+    return projectLifePressureView(state, atMinute);
+  }
+
+  public getPersonalGoals(actorId: string): PersonalGoal[] {
+    const buddy = this.social.getBuddy(actorId);
+    if (!buddy) return [];
+
+    let goals = this.npcGoalsCache.get(actorId);
+    if (!goals) {
+      const traits = this.social.getTraits(actorId);
+      const tier: FidelityTier = buddy.reach === 'remote' ? 'background_remote' : 'important_local';
+      const bonds = this.social
+        .getBuddies()
+        .filter((target) => target.id !== actorId)
+        .map((target) => ({ targetId: target.id, ...this.social.getNpcBond(actorId, target.id).dims }));
+      const events = this.world.getTriggeredEvents().map((e) => ({ ...e }));
+      const seed = `away_seed_${this.clock.getTime().day}`;
+
+      goals = initializeActorGoals(
+        actorId,
+        buddy.archetype || 'regular',
+        seed,
+        traits,
+        bonds,
+        events,
+        tier,
+      );
+      this.npcGoalsCache.set(actorId, goals);
+    }
+
+    return goals.map((g) => ({ ...g }));
+  }
+
+  public getFidelityTier(actorId: string): FidelityTier {
+    const buddy = this.social.getBuddy(actorId);
+    if (!buddy) return 'background_remote';
+    return buddy.reach === 'remote' ? 'background_remote' : 'important_local';
+  }
+
 
   public setComputerPower(poweredOn: boolean): ActionResult {
     if (!this.hardware.getComputerState().assembled) {

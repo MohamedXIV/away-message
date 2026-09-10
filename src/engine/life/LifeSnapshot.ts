@@ -73,6 +73,8 @@ export function buildLifeMatrixSnapshot(
       .map((appointment) => ({ ...appointment })),
     worldEvents: sources.getTriggeredEvents().map((event) => ({ ...event })),
     presence: { ...sources.getPresence(actorId) },
-    pressure: {},
+    pressure: sources.getPressure ? { ...sources.getPressure(actorId, atMinute) } : {},
+    goals: sources.getGoals ? sources.getGoals(actorId).map((goal) => ({ ...goal })) : [],
+    ...(sources.getFidelityTier ? { fidelityTier: sources.getFidelityTier(actorId) } : {}),
   };
 }
