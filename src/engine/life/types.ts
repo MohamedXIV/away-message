@@ -65,6 +65,38 @@ export interface LifePressureView {
   stress?: number;
 }
 
+export type ObligationSourceKind =
+  | 'routine'
+  | 'appointment'
+  | 'job'
+  | 'promise'
+  | 'world_event'
+  | 'commerce'
+  | 'personal_goal';
+
+export type ObligationFlexibility = 'fixed' | 'bounded' | 'flexible';
+export type ObligationStatus =
+  | 'pending'
+  | 'planned'
+  | 'in_progress'
+  | 'satisfied'
+  | 'missed'
+  | 'cancelled';
+
+export interface CharacterObligation {
+  id: string;
+  actorId: string;
+  sourceKind: ObligationSourceKind;
+  sourceId?: string;
+  preferredAt?: number;
+  earliestAt?: number;
+  latestAt?: number;
+  destinationPlaceId?: string;
+  priority: number;
+  flexibility: ObligationFlexibility;
+  status: ObligationStatus;
+}
+
 export interface LifeMatrixSnapshot {
   actorId: string;
   atMinute: number;
