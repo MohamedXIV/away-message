@@ -221,6 +221,16 @@ export class SimulationEngine extends LegacySimulationEngine {
     return transferred;
   }
 
+  public openPhysicalContainer(
+    containerInstanceId: string,
+    destinationContainerInstanceId: string = PLAYER_INVENTORY_CONTAINER_ID,
+  ): ItemInstance[] {
+    const physicalItems = this.physicalItems();
+    const moved = physicalItems.unpackContainer(containerInstanceId, destinationContainerInstanceId);
+    this.physicalWorldState = physicalItems.getState();
+    return moved;
+  }
+
   public override getState(): Readonly<LiveSimulationState> {
     return {
       ...super.getState(),
