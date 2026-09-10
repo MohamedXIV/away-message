@@ -7,12 +7,6 @@ import {
   createViewTransitionIntent,
   getLightingForTimeOfDay,
 } from '../../src/world/phaser/presentationAdapter';
-import {
-  GENERATED_PLACES,
-  GENERATED_VIEWS,
-  GENERATED_ANCHORS,
-  GENERATED_INTERACTIONS,
-} from '../../src/engine/worldContent.generated';
 
 describe('Physical World Presentation Adapter', () => {
   it('projects place_a1 and view_a1 deterministically from generated #51 world definitions', () => {
