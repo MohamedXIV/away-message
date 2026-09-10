@@ -128,6 +128,22 @@ describe('Life Matrix compatibility with existing Away authorities', () => {
     expect(sim.exportSnapshot()).toEqual(before);
   });
 
+  it('exposes deterministic on-demand character obligations without mutating sources', () => {
+    const sim = new SimulationEngine();
+    const buddy = sim.social.getBuddies()[0];
+    expect(buddy).toBeDefined();
+    if (!buddy) throw new Error('Expected an existing Away character.');
+
+    const before = sim.exportSnapshot();
+    const first = sim.getCharacterObligations(buddy.id);
+    const again = sim.getCharacterObligations(buddy.id);
+
+    expect(first).toEqual(again);
+    expect(first).not.toBe(again);
+    expect(sim.getCharacterObligations('__missing_actor__')).toEqual([]);
+    expect(sim.exportSnapshot()).toEqual(before);
+  });
+
   it('does not change simulation outcomes when snapshots are observed around time advances', () => {
     const now = vi.spyOn(Date, 'now').mockReturnValue(1_789_000_000_000);
     const random = vi.spyOn(Math, 'random').mockReturnValue(0.3141592653);
