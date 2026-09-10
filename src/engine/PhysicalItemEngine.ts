@@ -34,6 +34,11 @@ export interface PhysicalWorldState {
   containers: Record<string, ContainerInstance>;
 }
 
+export interface PhysicalMaterializationBatch {
+  items: readonly ItemInstance[];
+  containers: readonly ContainerInstance[];
+}
+
 function cloneLocation(location: PhysicalItemLocation): PhysicalItemLocation {
   return { ...location };
 }
@@ -87,6 +92,59 @@ export class PhysicalItemEngine {
           item.location.containerInstanceId === containerInstanceId,
       )
       .map((item) => ({ ...item, location: cloneLocation(item.location) }));
+  }
+
+  /**
+   * Atomically add a set of exact physical identities. A portable container may
+   * intentionally use the same instance ID in both maps: the item is the shell
+   * with a location, while the container is the contents boundary.
+   */
+  public materializeBatch(batch: PhysicalMaterializationBatch): void {
+    const candidate = cloneState(this.state);
+
+    for (const container of batch.containers) {
+      if (candidate.containers[container.instanceId]) {
+        throw new Error(`Physical container instance already exists: ${container.instanceId}.`);
+      }
+      candidate.containers[container.instanceId] = { ...container };
+    }
+
+    for (const item of batch.items) {
+      if (candidate.items[item.instanceId]) {
+        throw new Error(`Physical item instance already exists: ${item.instanceId}.`);
+      }
+      candidate.items[item.instanceId] = {
+        ...item,
+        location: cloneLocation(item.location),
+      };
+    }
+
+    this.validateState(candidate);
+    this.state = candidate;
+  }
+
+  /** Move every current member of one container into another in one commit. */
+  public unpackContainer(
+    sourceContainerInstanceId: string,
+    destinationContainerInstanceId: string,
+  ): ItemInstance[] {
+    this.requireContainer(sourceContainerInstanceId);
+    this.requireContainer(destinationContainerInstanceId);
+
+    const contents = this.getContainerContents(sourceContainerInstanceId);
+    if (contents.length === 0) return [];
+
+    const candidate = cloneState(this.state);
+    for (const item of contents) {
+      candidate.items[item.instanceId] = {
+        ...candidate.items[item.instanceId]!,
+        location: { kind: 'container', containerInstanceId: destinationContainerInstanceId },
+      };
+    }
+    this.validateState(candidate);
+    this.state = candidate;
+
+    return contents.map((item) => this.getItem(item.instanceId));
   }
 
   public transfer(instanceId: string, destination: PhysicalItemLocation): ItemInstance {
