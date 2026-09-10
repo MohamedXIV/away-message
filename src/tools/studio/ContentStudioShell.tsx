@@ -10,6 +10,7 @@ import { CharactersTab } from './tabs/CharactersTab';
 import { ArchetypesTab } from './tabs/ArchetypesTab';
 import { DialoguePoolsTab } from './tabs/DialoguePoolsTab';
 import { AffinitySeedsTab } from './tabs/AffinitySeedsTab';
+import { WorldBasicsTab } from './tabs/WorldBasicsTab';
 import { RawInspectorTab } from './tabs/RawInspectorTab';
 import { ValidationErrorsModal } from './components/ValidationErrorsModal';
 
@@ -65,6 +66,9 @@ export const ContentStudioShell: React.FC<Props> = ({ store }) => {
   const archCount = Object.keys(studio.tables['archetypes'] ?? {}).length;
   const poolCount = Object.keys(studio.tables['dialoguePools'] ?? {}).length;
   const seedCount = Object.keys(studio.tables['affinitySeeds'] ?? {}).length;
+  const worldCount =
+    Object.keys(studio.tables['districts'] ?? {}).length +
+    Object.keys(studio.tables['places'] ?? {}).length;
   const errorCount = studio.validationErrors.length;
 
   if (isMinimized) {
@@ -102,9 +106,7 @@ export const ContentStudioShell: React.FC<Props> = ({ store }) => {
 
   return (
     <div className="fixed inset-0 z-[200] flex flex-col bg-[#0d0718] text-purple-100 font-sans select-none overflow-hidden">
-      {/* Top Header Bar */}
       <header className="h-12 border-b border-purple-800/60 bg-[#15092a] px-4 flex items-center justify-between gap-4 shrink-0 shadow-md">
-        {/* Brand / Title */}
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-1.5">
             <span className="text-base font-extrabold tracking-wide text-transparent bg-clip-text bg-gradient-to-r from-purple-300 to-pink-300">
@@ -117,13 +119,13 @@ export const ContentStudioShell: React.FC<Props> = ({ store }) => {
           <span className="text-[10px] font-mono text-purple-400">v{CONTENT_VERSION}</span>
         </div>
 
-        {/* Tab Navigation */}
         <nav className="flex items-center gap-1 bg-[#100720] p-1 rounded-lg border border-purple-900/60">
           {[
             { id: 'characters', label: 'Characters', count: charCount },
             { id: 'archetypes', label: 'Archetypes', count: archCount },
             { id: 'dialoguePools', label: 'Dialogue Pools', count: poolCount },
             { id: 'affinitySeeds', label: 'Affinity Seeds', count: seedCount },
+            { id: 'world', label: 'World', count: worldCount },
             { id: 'raw', label: 'Raw DB' },
           ].map((tab) => {
             const isActive = activeTab === tab.id;
@@ -153,9 +155,7 @@ export const ContentStudioShell: React.FC<Props> = ({ store }) => {
           })}
         </nav>
 
-        {/* Actions & Status */}
         <div className="flex items-center gap-2">
-          {/* Validation Status */}
           {errorCount === 0 ? (
             <div className="flex items-center gap-1 text-[11px] font-semibold text-emerald-400 bg-emerald-950/40 border border-emerald-800/40 px-2 py-0.5 rounded">
               <span>&check;</span>
@@ -172,7 +172,6 @@ export const ContentStudioShell: React.FC<Props> = ({ store }) => {
             </button>
           )}
 
-          {/* Export Actions */}
           <button
             type="button"
             onClick={handleCopyJson}
@@ -189,7 +188,6 @@ export const ContentStudioShell: React.FC<Props> = ({ store }) => {
             Export store.json
           </button>
 
-          {/* Minimize toggle */}
           <button
             type="button"
             onClick={() => setIsMinimized(true)}
@@ -208,7 +206,6 @@ export const ContentStudioShell: React.FC<Props> = ({ store }) => {
         </div>
       </header>
 
-      {/* Toast Notification Banner */}
       {toastMessage && (
         <div className="bg-purple-900/90 border-b border-purple-700 px-4 py-1.5 text-xs text-center text-purple-100 font-medium flex items-center justify-center gap-2">
           <span>{toastMessage}</span>
@@ -222,16 +219,15 @@ export const ContentStudioShell: React.FC<Props> = ({ store }) => {
         </div>
       )}
 
-      {/* Main Tab Body */}
       <main className="flex-1 overflow-hidden">
         {activeTab === 'characters' && <CharactersTab studio={studio} />}
         {activeTab === 'archetypes' && <ArchetypesTab studio={studio} />}
         {activeTab === 'dialoguePools' && <DialoguePoolsTab studio={studio} />}
         {activeTab === 'affinitySeeds' && <AffinitySeedsTab studio={studio} />}
+        {activeTab === 'world' && <WorldBasicsTab studio={studio} />}
         {activeTab === 'raw' && <RawInspectorTab studio={studio} />}
       </main>
 
-      {/* Validation Modal */}
       <ValidationErrorsModal
         isOpen={showValidationModal}
         errors={studio.validationErrors}
