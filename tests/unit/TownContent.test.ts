@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { readFileSync } from 'node:fs';
 import { CONTENT_SCHEMA } from '../../src/tools/content/schema';
 import {
   parseContentJson,
@@ -211,8 +212,16 @@ describe('Town content codegen (#51 slice 1)', () => {
   });
 
   it('round-trips the real store.json through parse + validate', () => {
-    // Fixture tables are the contract; the live store must at least parse.
-    // (Live-store town rows land in a later commit via the generation path.)
-    expect(() => parseContentJson(JSON.stringify(validTownTables()))).not.toThrow();
+    const raw = readFileSync(new URL('../../content/store.json', import.meta.url), 'utf8');
+    const tables = parseContentJson(raw);
+    expect(validateContent(tables)).toEqual([]);
+    expect(Object.keys(tables['districts'] ?? {}).sort()).toEqual(['district_a', 'district_b']);
+    expect(Object.keys(tables['busLines'] ?? {})).toEqual(['line_ab']);
+  });
+
+  it('stays in sync: committed world registry matches content/store.json', () => {
+    const raw = readFileSync(new URL('../../content/store.json', import.meta.url), 'utf8');
+    const committed = readFileSync(new URL('../../src/engine/worldContent.generated.ts', import.meta.url), 'utf8');
+    expect(generateWorldRegistrySource(parseContentJson(raw))).toBe(committed);
   });
 });
