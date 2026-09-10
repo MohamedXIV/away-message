@@ -373,5 +373,22 @@
       "segmentMinutes": "[12]",
       "fare": 2
     }
+  },
+  "items": {
+    "item_a": {
+      "name": "Item A",
+      "kind": "food",
+      "portable": true,
+      "volume": 1,
+      "tags": "[\"food\",\"perishable\"]"
+    }
+  },
+  "containers": {
+    "container_a": {
+      "name": "Container A",
+      "capacity": 10,
+      "allowedItemKinds": "[\"food\"]",
+      "tags": "[\"storage\"]"
+    }
   }
 }

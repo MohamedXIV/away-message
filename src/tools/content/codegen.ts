@@ -372,6 +372,10 @@ export function validateContent(tables: ContentTables): string[] {
   // hydration from the character registry) keep passing.
   errors.push(...validateWorldContent(tables));
 
+  // 8. World items/containers (#51 slice 2). Definition-only: no instance
+  // state (location, contents, owner, stock) belongs in these tables.
+  errors.push(...validateWorldItems(tables));
+
   return errors;
 }
 
@@ -549,6 +553,96 @@ export function validateWorldContent(tables: ContentTables): string[] {
     if (!num(fare) || (fare as number) < 0) {
       errors.push(`busLines/${id}.fare: must be a non-negative number.`);
     }
+  }
+
+  return errors;
+}
+
+/**
+ * Semantic validation for the item/container content tables (#51 slice 2).
+ * Every error identifies table/id/field so Content Studio (#52) can show
+ * useful per-row feedback. Never repairs: invalid content fails loudly.
+ * Kinds are an open tag vocabulary (format-checked only) so new kinds can
+ * be authored without gameplay-code edits.
+ */
+export function validateWorldItems(tables: ContentTables): string[] {
+  const errors: string[] = [];
+  const items = tables['items'] ?? {};
+  const containers = tables['containers'] ?? {};
+
+  const num = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
+  const checkTag = (table: string, id: string, field: string, value: unknown): void => {
+    if (typeof value !== 'string' || !/^[a-z][a-z0-9_-]{1,23}$/.test(value)) {
+      errors.push(`${table}/${id}.${field}: '${String(value)}' must be a lowercase tag ≤ 24 chars.`);
+    }
+  };
+  const checkTags = (table: string, id: string, row: Record<string, unknown>): void => {
+    let tags: unknown = null;
+    try {
+      tags = JSON.parse(String(row['tags'] ?? '[]'));
+    } catch {
+      errors.push(`${table}/${id}.tags: invalid JSON array.`);
+      return;
+    }
+    if (!Array.isArray(tags)) {
+      errors.push(`${table}/${id}.tags: must be a JSON array.`);
+      return;
+    }
+    if (tags.length > 12) errors.push(`${table}/${id}.tags: max 12 tags.`);
+    for (const tag of tags) checkTag(table, id, 'tags', tag);
+  };
+  const checkName = (table: string, id: string, row: Record<string, unknown>): void => {
+    const name = row['name'];
+    if (typeof name !== 'string' || !name.trim() || name.length > 60) {
+      errors.push(`${table}/${id}.name: must be a non-empty string <= 60 chars.`);
+    }
+  };
+
+  for (const [id, row] of Object.entries(items)) {
+    if (!row || typeof row !== 'object') {
+      errors.push(`items/${id}: must be an object.`);
+      continue;
+    }
+    const idCheck = validateWorldId(id);
+    if (!idCheck.ok) errors.push(`items/${id}: ${idCheck.error}`);
+    const r = row as Record<string, unknown>;
+    checkName('items', id, r);
+    checkTag('items', id, 'kind', r['kind']);
+    if (typeof r['portable'] !== 'boolean') {
+      errors.push(`items/${id}.portable: must be a boolean.`);
+    }
+    if (!num(r['volume']) || (r['volume'] as number) < 0) {
+      errors.push(`items/${id}.volume: must be a non-negative number of capacity units.`);
+    }
+    checkTags('items', id, r);
+  }
+
+  for (const [id, row] of Object.entries(containers)) {
+    if (!row || typeof row !== 'object') {
+      errors.push(`containers/${id}: must be an object.`);
+      continue;
+    }
+    const idCheck = validateWorldId(id);
+    if (!idCheck.ok) errors.push(`containers/${id}: ${idCheck.error}`);
+    const r = row as Record<string, unknown>;
+    checkName('containers', id, r);
+    if (!num(r['capacity']) || (r['capacity'] as number) <= 0) {
+      errors.push(`containers/${id}.capacity: must be a positive number of capacity units.`);
+    }
+    let kinds: unknown = null;
+    try {
+      kinds = JSON.parse(String(r['allowedItemKinds'] ?? '[]'));
+    } catch {
+      errors.push(`containers/${id}.allowedItemKinds: invalid JSON array.`);
+      kinds = null;
+    }
+    if (Array.isArray(kinds)) {
+      if (kinds.length > 24) errors.push(`containers/${id}.allowedItemKinds: max 24 kinds.`);
+      for (const kind of kinds) checkTag('containers', id, 'allowedItemKinds', kind);
+    } else if (kinds !== null) {
+      errors.push(`containers/${id}.allowedItemKinds: must be a JSON array ([] = unrestricted).`);
+    }
+    checkTags('containers', id, r);
   }
 
   return errors;
@@ -786,6 +880,8 @@ export function generateWorldRegistrySource(tables: ContentTables): string {
   const places = tables['places'] ?? {};
   const transitStops = tables['transitStops'] ?? {};
   const busLines = tables['busLines'] ?? {};
+  const items = tables['items'] ?? {};
+  const containers = tables['containers'] ?? {};
 
   const lines: string[] = [];
   lines.push('// GENERATED — do not edit by hand.');
@@ -914,6 +1010,60 @@ export function generateWorldRegistrySource(tables: ContentTables): string {
     lines.push(`    headwayMinutes: ${Number(r['headwayMinutes'] ?? 0)},`);
     lines.push(`    segmentMinutes: [${numArr(r['segmentMinutes']).join(', ')}],`);
     lines.push(`    fare: ${Number(r['fare'] ?? 0)},`);
+    lines.push('  },');
+  }
+  lines.push('];');
+  lines.push('');
+
+  lines.push('export interface GeneratedItemDef {');
+  lines.push('  id: string;');
+  lines.push('  name: string;');
+  lines.push('  kind: string;');
+  lines.push('  portable: boolean;');
+  lines.push('  volume: number;');
+  lines.push('  tags: string[];');
+  lines.push('}');
+  lines.push('');
+  lines.push('export interface GeneratedContainerDef {');
+  lines.push('  id: string;');
+  lines.push('  name: string;');
+  lines.push('  capacity: number;');
+  lines.push('  allowedItemKinds: string[];');
+  lines.push('  tags: string[];');
+  lines.push('}');
+  lines.push('');
+
+  const strArr = (v: unknown): string[] => {
+    try {
+      const parsed: unknown = JSON.parse(String(v ?? '[]'));
+      return Array.isArray(parsed) ? parsed.filter((x): x is string => typeof x === 'string') : [];
+    } catch { return []; }
+  };
+
+  lines.push('export const GENERATED_ITEMS: GeneratedItemDef[] = [');
+  for (const id of Object.keys(items).sort()) {
+    const r = items[id] as Record<string, unknown>;
+    lines.push('  {');
+    lines.push(`    id: ${tsString(id)},`);
+    lines.push(`    name: ${tsString(String(r['name'] ?? ''))},`);
+    lines.push(`    kind: ${tsString(String(r['kind'] ?? 'misc'))},`);
+    lines.push(`    portable: ${r['portable'] === true ? 'true' : 'false'},`);
+    lines.push(`    volume: ${Number(r['volume'] ?? 0)},`);
+    lines.push(`    tags: [${strArr(r['tags']).map((t) => tsString(t)).join(', ')}],`);
+    lines.push('  },');
+  }
+  lines.push('];');
+  lines.push('');
+
+  lines.push('export const GENERATED_CONTAINERS: GeneratedContainerDef[] = [');
+  for (const id of Object.keys(containers).sort()) {
+    const r = containers[id] as Record<string, unknown>;
+    lines.push('  {');
+    lines.push(`    id: ${tsString(id)},`);
+    lines.push(`    name: ${tsString(String(r['name'] ?? ''))},`);
+    lines.push(`    capacity: ${Number(r['capacity'] ?? 0)},`);
+    lines.push(`    allowedItemKinds: [${strArr(r['allowedItemKinds']).map((k) => tsString(k)).join(', ')}],`);
+    lines.push(`    tags: [${strArr(r['tags']).map((t) => tsString(t)).join(', ')}],`);
     lines.push('  },');
   }
   lines.push('];');

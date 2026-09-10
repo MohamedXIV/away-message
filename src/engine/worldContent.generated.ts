@@ -1,6 +1,6 @@
 // GENERATED — do not edit by hand.
-// Source: content/store.json (content vf6d90422). Regenerate: npm run content:pull.
-export const WORLD_CONTENT_VERSION = 'f6d90422';
+// Source: content/store.json (content v5d81ae8f). Regenerate: npm run content:pull.
+export const WORLD_CONTENT_VERSION = '5d81ae8f';
 
 export interface GeneratedDistrictDef {
   id: string;
@@ -103,5 +103,43 @@ export const GENERATED_BUS_LINES: GeneratedBusLineDef[] = [
     headwayMinutes: 20,
     segmentMinutes: [12],
     fare: 2,
+  },
+];
+
+export interface GeneratedItemDef {
+  id: string;
+  name: string;
+  kind: string;
+  portable: boolean;
+  volume: number;
+  tags: string[];
+}
+
+export interface GeneratedContainerDef {
+  id: string;
+  name: string;
+  capacity: number;
+  allowedItemKinds: string[];
+  tags: string[];
+}
+
+export const GENERATED_ITEMS: GeneratedItemDef[] = [
+  {
+    id: "item_a",
+    name: "Item A",
+    kind: "food",
+    portable: true,
+    volume: 1,
+    tags: ["food", "perishable"],
+  },
+];
+
+export const GENERATED_CONTAINERS: GeneratedContainerDef[] = [
+  {
+    id: "container_a",
+    name: "Container A",
+    capacity: 10,
+    allowedItemKinds: ["food"],
+    tags: ["storage"],
   },
 ];
