@@ -7,66 +7,7 @@ import {
   generateWorldRegistrySource,
 } from '../../src/tools/content/codegen';
 import type { ContentTables } from '../../src/tools/content/codegen';
-
-/**
- * #51 Slice 1 — district/place/transit content contract.
- * Neutral contract fixture (not production town content):
- *   District A (district_a): Place A1 (place_a1), Stop A (stop_a)
- *   District B (district_b): Place B1 (place_b1), Stop B (stop_b)
- *   Bus Line (line_ab): stop_a → stop_b
- */
-export function validTownTables(): ContentTables {
-  return {
-    // Minimal character-domain scaffold: validateContent requires at least
-    // one archetype, and the live store always carries both domains.
-    archetypes: {
-      regular: {
-        label: 'Regular',
-        description: 'Town fixture scaffold.',
-        personaHint: 'Steady.',
-        vocabulary: '[]',
-        defaultInterests: '[]',
-        defaultSong: '',
-        typingSpeedWpm: 70,
-      },
-    },
-    districts: {
-      district_a: { name: 'District A', mapX: 20, mapY: 60, tags: '["residential"]' },
-      district_b: { name: 'District B', mapX: 80, mapY: 40, tags: '["downtown"]' },
-    },
-    places: {
-      place_a1: {
-        districtId: 'district_a',
-        name: 'Place A1',
-        transitAccess: JSON.stringify([{ stopId: 'stop_a', walkMinutes: 4 }]),
-      },
-      place_b1: {
-        districtId: 'district_b',
-        name: 'Place B1',
-        transitAccess: JSON.stringify([{ stopId: 'stop_b', walkMinutes: 5 }]),
-      },
-    },
-    transitStops: {
-      stop_a: { districtId: 'district_a', name: 'Stop A', placeId: 'place_a1', mapX: 22, mapY: 58 },
-      stop_b: { districtId: 'district_b', name: 'Stop B', placeId: 'place_b1', mapX: 78, mapY: 42 },
-    },
-    busLines: {
-      line_ab: {
-        name: 'Line AB',
-        stopIds: JSON.stringify(['stop_a', 'stop_b']),
-        serviceStartMinute: 360,
-        serviceEndMinute: 1380,
-        headwayMinutes: 20,
-        segmentMinutes: JSON.stringify([12]),
-        fare: 2,
-      },
-    },
-  };
-}
-
-function clone(tables: ContentTables): ContentTables {
-  return JSON.parse(JSON.stringify(tables));
-}
+import { validTownTables, cloneTables as clone } from './worldFixtures';
 
 describe('Town content schema (#51 slice 1)', () => {
   it('declares district/place/transit tables in CONTENT_SCHEMA', () => {
