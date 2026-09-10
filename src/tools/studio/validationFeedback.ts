@@ -42,15 +42,25 @@ export function getFieldErrors(
   allErrors: readonly string[],
   table: string,
   rowId: string,
-  field?: string,
+  field?: string | readonly string[],
+  index?: number,
 ): string[] {
+  const fields = field ? (Array.isArray(field) ? field : [field]) : undefined;
   return allErrors
     .map(parseFieldError)
     .filter(
       (e) =>
         e.table === table &&
         e.rowId === rowId &&
-        (!field || e.field === field || e.field?.startsWith(`${field}.`) || e.field?.startsWith(`${field}[`)),
+        (!fields ||
+          fields.some(
+            (f) =>
+              e.field === f ||
+              e.field?.startsWith(`${f}.`) ||
+              e.field?.startsWith(`${f}[`) ||
+              ((f === 'serviceStartMinute' || f === 'serviceEndMinute' || f === 'service') && e.field === 'service'),
+          )) &&
+        (index === undefined || e.index === undefined || e.index === index),
     )
     .map((e) => e.message || e.raw);
 }

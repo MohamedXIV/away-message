@@ -6,7 +6,8 @@ interface FieldErrorDisplayProps {
   allErrors?: readonly string[];
   table?: string;
   rowId?: string;
-  field?: string;
+  field?: string | readonly string[];
+  index?: number;
 }
 
 export const FieldErrorDisplay: React.FC<FieldErrorDisplayProps> = ({
@@ -15,11 +16,12 @@ export const FieldErrorDisplay: React.FC<FieldErrorDisplayProps> = ({
   table,
   rowId,
   field,
+  index,
 }) => {
   const errors =
     directErrors ??
     (allErrors && table && rowId && field
-      ? getFieldErrors(allErrors, table, rowId, field)
+      ? getFieldErrors(allErrors, table, rowId, field, index)
       : []);
 
   if (!errors || errors.length === 0) return null;

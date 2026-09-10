@@ -58,4 +58,38 @@ describe('Content Studio validation feedback', () => {
       'must be a non-empty string <= 60 chars.',
     ]);
   });
+
+  it('resolves field aliases such as bus service windows and supports multi-field queries', () => {
+    const allErrors = [
+      'busLines/line_express.service: serviceEndMinute (300) must be after serviceStartMinute (360).',
+      'busLines/line_express.headwayMinutes: must be a positive integer <= 240.',
+    ];
+
+    // Querying with serviceStartMinute should find the .service error via field alias mapping
+    expect(getFieldErrors(allErrors, 'busLines', 'line_express', 'serviceStartMinute')).toEqual([
+      'serviceEndMinute (300) must be after serviceStartMinute (360).',
+    ]);
+    expect(getFieldErrors(allErrors, 'busLines', 'line_express', 'serviceEndMinute')).toEqual([
+      'serviceEndMinute (300) must be after serviceStartMinute (360).',
+    ]);
+    // Array of fields
+    expect(getFieldErrors(allErrors, 'busLines', 'line_express', ['headwayMinutes', 'service'])).toHaveLength(2);
+  });
+
+  it('filters errors by specific array index when provided', () => {
+    const allErrors = [
+      'busLines/line_loop.segmentMinutes[0]: must be a positive number of minutes.',
+      'busLines/line_loop.segmentMinutes[2]: must be a positive number of minutes.',
+    ];
+
+    expect(getFieldErrors(allErrors, 'busLines', 'line_loop', 'segmentMinutes', 0)).toEqual([
+      'must be a positive number of minutes.',
+    ]);
+    expect(getFieldErrors(allErrors, 'busLines', 'line_loop', 'segmentMinutes', 1)).toEqual([]);
+    expect(getFieldErrors(allErrors, 'busLines', 'line_loop', 'segmentMinutes', 2)).toEqual([
+      'must be a positive number of minutes.',
+    ]);
+    // Without index, returns all errors for that field
+    expect(getFieldErrors(allErrors, 'busLines', 'line_loop', 'segmentMinutes')).toHaveLength(2);
+  });
 });
