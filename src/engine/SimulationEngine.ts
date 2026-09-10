@@ -21,7 +21,7 @@ import {
   type PhysicalItemLocation,
   type PhysicalWorldState,
 } from './PhysicalItemEngine';
-import { GROCERY_SKUS, type DeliveryOrder } from './DeliveryEngine';
+import { GROCERY_SKUS, type DeliveryOrder, type Fulfillment } from './DeliveryEngine';
 import { PHYSICAL_ITEM_CATALOG } from './hardware/catalog';
 import type { SimulationState as TransportSimulationState } from './types';
 import { GENERATED_CONTAINERS, GENERATED_ITEMS } from './worldContent.generated';
@@ -37,6 +37,7 @@ type InitialSimulationState = Partial<TransportSimulationState> & {
 };
 
 const DELIVERY_PARCEL_DEFINITION_ID = 'delivery_parcel';
+const SHOPPING_BAG_DEFINITION_ID = 'corner_mart_shopping_bag';
 const DELIVERY_ANCHOR_ID = 'room104:delivery';
 const CORNER_MART_ITEM_KIND = 'corner-mart-item';
 
@@ -68,6 +69,15 @@ const PHYSICAL_ITEM_DEFINITIONS: Readonly<Record<string, PhysicalItemDefinition>
       DELIVERY_PARCEL_DEFINITION_ID,
       {
         id: DELIVERY_PARCEL_DEFINITION_ID,
+        kind: 'container',
+        portable: true,
+        volume: 1,
+      } satisfies PhysicalItemDefinition,
+    ] as const,
+    [
+      SHOPPING_BAG_DEFINITION_ID,
+      {
+        id: SHOPPING_BAG_DEFINITION_ID,
         kind: 'container',
         portable: true,
         volume: 1,
@@ -106,6 +116,14 @@ const PHYSICAL_CONTAINER_DEFINITIONS: Readonly<Record<string, PhysicalContainerD
       DELIVERY_PARCEL_DEFINITION_ID,
       {
         id: DELIVERY_PARCEL_DEFINITION_ID,
+        capacity: 64,
+        allowedItemKinds: [CORNER_MART_ITEM_KIND],
+      } satisfies PhysicalContainerDefinition,
+    ] as const,
+    [
+      SHOPPING_BAG_DEFINITION_ID,
+      {
+        id: SHOPPING_BAG_DEFINITION_ID,
         capacity: 64,
         allowedItemKinds: [CORNER_MART_ITEM_KIND],
       } satisfies PhysicalContainerDefinition,
@@ -168,32 +186,48 @@ export class SimulationEngine extends LegacySimulationEngine {
     );
   }
 
-  private materializeDeliveryParcel(order: DeliveryOrder): boolean {
+  private materializeGroceryContainer(
+    order: DeliveryOrder,
+    containerId: string,
+    containerDefinitionId: string,
+    shellLocation: PhysicalItemLocation,
+    itemIdPrefix: string,
+  ): void {
     const physicalItems = this.physicalItems();
-    const parcelId = `parcel:${order.id}`;
     const skuOrdinals = new Map<string, number>();
     const contents = order.items.flatMap((line) => {
       const start = skuOrdinals.get(line.sku) ?? 0;
       skuOrdinals.set(line.sku, start + line.qty);
       return Array.from({ length: line.qty }, (_, offset) => ({
-        instanceId: `order-item:${order.id}:${line.sku}:${start + offset}`,
+        instanceId: `${itemIdPrefix}:${order.id}:${line.sku}:${start + offset}`,
         definitionId: groceryDefinitionId(line.sku),
-        location: { kind: 'container' as const, containerInstanceId: parcelId },
+        location: { kind: 'container' as const, containerInstanceId: containerId },
       }));
     });
 
     physicalItems.materializeBatch({
-      containers: [{ instanceId: parcelId, definitionId: DELIVERY_PARCEL_DEFINITION_ID }],
+      containers: [{ instanceId: containerId, definitionId: containerDefinitionId }],
       items: [
         {
-          instanceId: parcelId,
-          definitionId: DELIVERY_PARCEL_DEFINITION_ID,
-          location: { kind: 'worldAnchor', anchorId: DELIVERY_ANCHOR_ID },
+          instanceId: containerId,
+          definitionId: containerDefinitionId,
+          location: shellLocation,
         },
         ...contents,
       ],
     });
     this.physicalWorldState = physicalItems.getState();
+  }
+
+  private materializeDeliveryParcel(order: DeliveryOrder): boolean {
+    const parcelId = `parcel:${order.id}`;
+    this.materializeGroceryContainer(
+      order,
+      parcelId,
+      DELIVERY_PARCEL_DEFINITION_ID,
+      { kind: 'worldAnchor', anchorId: DELIVERY_ANCHOR_ID },
+      'order-item',
+    );
 
     // Keep the established arrival traces, but they now mean parcel arrival,
     // not pantry teleportation. These are best-effort after the physical commit.
@@ -205,6 +239,59 @@ export class SimulationEngine extends LegacySimulationEngine {
       });
     } catch {}
     return true;
+  }
+
+  public override placeGroceryOrder(
+    rawItems: Array<{ sku: string; qty: number }>,
+    fulfillment: Fulfillment,
+    nowMinute: number,
+  ) {
+    if (fulfillment !== 'pickup') {
+      return super.placeGroceryOrder(rawItems, fulfillment, nowMinute);
+    }
+
+    const items = (rawItems || [])
+      .filter((item) => item && GROCERY_SKUS[item.sku] && Number.isFinite(item.qty) && item.qty >= 1)
+      .map((item) => ({ sku: item.sku, qty: Math.min(9, Math.floor(item.qty)) }));
+    if (items.length === 0) return { success: false, error: 'Cart is empty.' };
+
+    const total = items.reduce((sum, item) => sum + GROCERY_SKUS[item.sku]!.price * item.qty, 0);
+    if (!this.economy.canAfford(total)) {
+      return { success: false, error: `Cannot afford $${total.toFixed(2)} order.` };
+    }
+    if (this.economy.getState().energy < 20) {
+      return { success: false, error: 'Too tired for a store run (need 20% energy).' };
+    }
+
+    // The order ID is the stable purchase identity. All validation that can reject
+    // checkout happens before cash, order history, or physical ownership changes.
+    const order = this.delivery.recordPickup(items, total, this.clock.getTotalMinutes());
+    const bagId = `shopping-bag:${order.id}`;
+    this.materializeGroceryContainer(
+      order,
+      bagId,
+      SHOPPING_BAG_DEFINITION_ID,
+      { kind: 'container', containerInstanceId: PLAYER_INVENTORY_CONTAINER_ID },
+      'pickup-item',
+    );
+
+    this.economy.spendCash(total, 'CornerMart pickup');
+    this.advanceGameMinutes(30, 'CornerMart pickup run');
+    this.economy.consumeEnergy(5);
+    this.telemetry.logEvent('economy', 'order_pickup', this.clock.getTotalMinutes(), {
+      orderId: order.id,
+      total,
+      bagId,
+    });
+
+    return {
+      success: true,
+      data: {
+        orderId: order.id,
+        etaMinute: this.clock.getTotalMinutes(),
+        summary: 'Picked up from CornerMart — shopping bag is being carried.',
+      },
+    };
   }
 
   public getPhysicalWorldState(): PhysicalWorldState {
