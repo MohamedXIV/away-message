@@ -5,58 +5,7 @@ import {
   validateContent,
   generateWorldRegistrySource,
 } from '../../src/tools/content/codegen';
-import type { ContentTables } from '../../src/tools/content/codegen';
-import { validAnchorTables, cloneTables as clone } from './worldFixtures';
-
-/**
- * #51 Slice 5 — asset definitions + normal-map metadata.
- * An asset is a renderer-neutral reference (diffuse/base source plus an
- * optional normal-map sibling asset). Items and views may point at an
- * asset via optional assetId. No Phaser rendering lives here.
- */
-export function validAssetTables(): ContentTables {
-  const base = validAnchorTables();
-  const views = { ...(base['views'] as Record<string, Record<string, unknown>>) };
-  views['view_a1'] = { ...views['view_a1'], assetId: 'asset_a1' };
-  return {
-    ...base,
-    items: {
-      item_a: {
-        name: 'Item A',
-        kind: 'food',
-        portable: true,
-        volume: 1,
-        assetId: 'asset_a1',
-        tags: '["food","perishable"]',
-      },
-    },
-    containers: {
-      container_a: {
-        name: 'Container A',
-        capacity: 10,
-        allowedItemKinds: '["food"]',
-        tags: '["storage"]',
-      },
-    },
-    views,
-    assets: {
-      asset_a1: {
-        name: 'Asset A1',
-        kind: 'image',
-        uri: 'assets/world/a1.png',
-        normalMapAssetId: 'asset_a1_n',
-        tags: '[]',
-      },
-      asset_a1_n: {
-        name: 'Asset A1 Normal',
-        kind: 'image',
-        uri: 'assets/world/a1_n.png',
-        normalMapAssetId: '',
-        tags: '[]',
-      },
-    },
-  };
-}
+import { validAssetTables, cloneTables as clone } from './worldFixtures';
 
 describe('World content assets (#51 slice 5)', () => {
   it('accepts the minimal valid asset fixture', () => {

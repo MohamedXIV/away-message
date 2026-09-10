@@ -59,6 +59,52 @@ export function cloneTables(tables: ContentTables): ContentTables {
   return JSON.parse(JSON.stringify(tables));
 }
 
+/** Slice-5 composition: asset_a1 (image + normal sibling) linked from item_a/view_a1. */
+export function validAssetTables(): ContentTables {
+  const base = validAnchorTables();
+  const items = { ...(base['items'] as Record<string, Record<string, unknown>> | undefined) };
+  const views = { ...(base['views'] as Record<string, Record<string, unknown>>) };
+  if (items['item_a']) {
+    items['item_a'] = { ...items['item_a'], assetId: 'asset_a1' };
+  } else {
+    items['item_a'] = {
+      name: 'Item A',
+      kind: 'food',
+      portable: true,
+      volume: 1,
+      assetId: 'asset_a1',
+      tags: '["food","perishable"]',
+    };
+  }
+  if (!base['containers']) {
+    (base as Record<string, unknown>)['containers'] = {
+      container_a: { name: 'Container A', capacity: 10, allowedItemKinds: '["food"]', tags: '["storage"]' },
+    };
+  }
+  views['view_a1'] = { ...views['view_a1'], assetId: 'asset_a1' };
+  return {
+    ...base,
+    items,
+    views,
+    assets: {
+      asset_a1: {
+        name: 'Asset A1',
+        kind: 'image',
+        uri: 'assets/world/a1.png',
+        normalMapAssetId: 'asset_a1_n',
+        tags: '[]',
+      },
+      asset_a1_n: {
+        name: 'Asset A1 Normal',
+        kind: 'image',
+        uri: 'assets/world/a1_n.png',
+        normalMapAssetId: '',
+        tags: '[]',
+      },
+    },
+  };
+}
+
 /** Slice-4 composition: anchor_a1 in view_a1 with one inspect interaction. */
 export function validAnchorTables(): ContentTables {
   return {
