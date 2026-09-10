@@ -123,6 +123,30 @@ export class PhysicalItemEngine {
     this.state = candidate;
   }
 
+  /** Move every current member of one container into another in one commit. */
+  public unpackContainer(
+    sourceContainerInstanceId: string,
+    destinationContainerInstanceId: string,
+  ): ItemInstance[] {
+    this.requireContainer(sourceContainerInstanceId);
+    this.requireContainer(destinationContainerInstanceId);
+
+    const contents = this.getContainerContents(sourceContainerInstanceId);
+    if (contents.length === 0) return [];
+
+    const candidate = cloneState(this.state);
+    for (const item of contents) {
+      candidate.items[item.instanceId] = {
+        ...candidate.items[item.instanceId]!,
+        location: { kind: 'container', containerInstanceId: destinationContainerInstanceId },
+      };
+    }
+    this.validateState(candidate);
+    this.state = candidate;
+
+    return contents.map((item) => this.getItem(item.instanceId));
+  }
+
   public transfer(instanceId: string, destination: PhysicalItemLocation): ItemInstance {
     const current = this.state.items[instanceId];
     if (!current) throw new Error(`Unknown physical item instance: ${instanceId}.`);
