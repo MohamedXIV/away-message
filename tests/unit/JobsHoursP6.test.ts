@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { SimulationEngine } from '../../src/engine/SimulationEngine';
 import { GIGS, jobRoll, replyDelayMinutes, decideApplication } from '../../src/engine/JobDirector';
+import { buildCharacterObligations } from '../../src/engine/life/Obligations';
 import { isOptionOpen, openHoursLabel } from '../../src/world/data/roomInteractables';
 import { isOutingOpen } from '../../src/engine/OutingDirector';
 import { computeSleepPlan, sleepQualityNote } from '../../src/world/modals/SleepTransitionModal';
@@ -101,6 +102,22 @@ describe('P6 job applications (SimulationEngine)', () => {
       expect(appt).toBeDefined();
       expect(appt.wageOverride).toBe(20);
       expect(appt.status).toBe('confirmed');
+      expect(appt.origin).toEqual({ kind: 'job', id: 'flyer_run' });
+
+      const life = sim.getLifeSnapshot(appt.characterId);
+      expect(life).not.toBeNull();
+      const jobObligations = buildCharacterObligations(life!).filter(
+        (obligation) => obligation.sourceKind === 'job',
+      );
+      expect(jobObligations).toHaveLength(1);
+      expect(jobObligations[0]).toMatchObject({
+        id: `job:${appt.characterId}:${appt.id}`,
+        actorId: appt.characterId,
+        sourceKind: 'job',
+        sourceId: 'flyer_run',
+        destinationPlaceId: 'work',
+        status: 'pending',
+      });
     } else {
       expect(jobMsgs[0]!.tags).toContain('rejected');
     }

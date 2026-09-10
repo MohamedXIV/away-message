@@ -11,7 +11,8 @@ import { getReleaseById } from './OsCatalog';
 import { SimulationEngine as SimulationEngineCore } from './SimulationEngineCore';
 import { buildLifeMatrixSnapshot } from './life/LifeSnapshot';
 import { createSimulationLifeSources } from './life/LifeSources';
-import type { LifeMatrixSnapshot } from './life/types';
+import { buildCharacterObligations } from './life/Obligations';
+import type { CharacterObligation, LifeMatrixSnapshot } from './life/types';
 import {
   createEmptyComputerSetup,
   createEmptyDisplaySetup,
@@ -163,6 +164,16 @@ export class SimulationEngine extends SimulationEngineCore {
       actorId,
       this.clock.getTotalMinutes(),
     );
+  }
+
+  /**
+   * On-demand character obligations: projects the actor's current life
+   * snapshot through the pure obligation projector. No cache, no tick
+   * hook, no persisted state — missing actors yield an empty list.
+   */
+  public getCharacterObligations(actorId: string): CharacterObligation[] {
+    const snapshot = this.getLifeSnapshot(actorId);
+    return snapshot ? buildCharacterObligations(snapshot) : [];
   }
 
   public setComputerPower(poweredOn: boolean): ActionResult {
