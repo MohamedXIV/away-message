@@ -123,6 +123,38 @@ describe('physical delivery arrival', () => {
     ]);
   });
 
+  it('persists an in-transit order, then materializes the same exact shipment after reload', () => {
+    const sim = new SimulationEngine();
+    sim.economy.earnCash(100, 'delivery transit persistence test');
+    const placed = sim.dispatchAction({
+      type: 'PLAYER_PLACE_ORDER',
+      items: [{ sku: 'noodles_cup', qty: 2 }],
+      fulfillment: 'delivery',
+    });
+    const orderId = (placed.data as { orderId: string }).orderId;
+    const beforeSave = sim.delivery.getState().orders.find((candidate) => candidate.id === orderId)!;
+    expect(beforeSave.status).toBe('transit');
+    expect(sim.getPhysicalWorldState().items[`parcel:${orderId}`]).toBeUndefined();
+
+    const restored = new SimulationEngine(sim.exportSnapshot());
+    const afterLoad = restored.delivery.getState().orders.find((candidate) => candidate.id === orderId)!;
+    expect(afterLoad).toEqual(beforeSave);
+    restored.advanceGameMinutes(afterLoad.readyMinute - restored.clock.getTotalMinutes() + 1, 'finish restored courier');
+
+    expect(restored.delivery.getState().orders.find((candidate) => candidate.id === orderId)?.status).toBe('done');
+    expect(restored.getPhysicalWorldState().items[`parcel:${orderId}`]?.location).toEqual({
+      kind: 'worldAnchor',
+      anchorId: 'room104:delivery',
+    });
+    expect(Object.values(restored.getPhysicalWorldState().items)
+      .filter((item) => item.location.kind === 'container' && item.location.containerInstanceId === `parcel:${orderId}`)
+      .map((item) => item.instanceId))
+      .toEqual([
+        `order-item:${orderId}:noodles_cup:0`,
+        `order-item:${orderId}:noodles_cup:1`,
+      ]);
+  });
+
   it('persists an arrived parcel and exact contents across save/reload without duplicating arrival', () => {
     const sim = new SimulationEngine();
     sim.economy.earnCash(100, 'delivery persistence test');
