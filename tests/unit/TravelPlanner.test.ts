@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
+import { BUS_FARE } from '../../src/engine/CityMap';
 import { buildTransitNetwork } from '../../src/engine/transit/TransitNetwork';
-import { planTravel } from '../../src/engine/transit/TravelPlanner';
+import { BUS_ITINERARY_FARE, RAIN_WALK_MULTIPLIER, planTravel } from '../../src/engine/transit/TravelPlanner';
 import { twoLineFixture } from './transitFixtures';
 
 /** Fixture plus a second place sharing stop_a (walkable without any bus). */
@@ -303,5 +304,99 @@ describe('TravelPlanner transfers and tie-breaks (#35 slice 4)', () => {
     expect(JSON.stringify(playerPlan)).toBe(JSON.stringify(npcPlan));
     // Repeated reads are stable.
     expect(planTravel(network, { ...request })).toEqual(playerPlan);
+  });
+});
+
+describe('TravelPlanner service modifiers and parity (#35 slice 5)', () => {
+  it('shifts departures by line delay', () => {
+    const network = buildTransitNetwork(twoLineFixture());
+    // line_ab delayed 10: departures 370, 390, ...; walk 4 (stop_a 604),
+    // board 610 (wait 6), alight 622, walk 5 → arrive 627.
+    const result = planTravel(network, {
+      originPlaceId: 'place_a1',
+      destinationPlaceId: 'place_b1',
+      departAtMinute: 600,
+      service: {
+        closedStopIds: [],
+        closedLineIds: [],
+        lineDelayMinutes: { line_ab: 10 },
+        headwayMultiplier: {},
+      },
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error('Expected a delayed bus plan.');
+    expect(result.plan.waitMinutes).toBe(6);
+    expect(result.plan.arriveAtMinute).toBe(627);
+  });
+
+  it('reduces frequency by headway multiplier', () => {
+    const network = buildTransitNetwork(twoLineFixture());
+    // line_ab every 40: departures 360, ..., 600; walk 4 (stop_a 604),
+    // board 640 (wait 36), alight 652, walk 5 → arrive 657.
+    const result = planTravel(network, {
+      originPlaceId: 'place_a1',
+      destinationPlaceId: 'place_b1',
+      departAtMinute: 600,
+      service: {
+        closedStopIds: [],
+        closedLineIds: [],
+        lineDelayMinutes: {},
+        headwayMultiplier: { line_ab: 2 },
+      },
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error('Expected a reduced-service bus plan.');
+    expect(result.plan.waitMinutes).toBe(36);
+    expect(result.plan.arriveAtMinute).toBe(657);
+  });
+
+  it('reports stop_closed when destination access is closed', () => {
+    const network = buildTransitNetwork(twoLineFixture());
+    expect(
+      planTravel(network, {
+        originPlaceId: 'place_a1',
+        destinationPlaceId: 'place_b1',
+        departAtMinute: 600,
+        service: {
+          closedStopIds: ['stop_b'],
+          closedLineIds: [],
+          lineDelayMinutes: {},
+          headwayMultiplier: {},
+        },
+      }),
+    ).toEqual({ ok: false, reason: 'stop_closed' });
+  });
+
+  it('reports line_closed when every line is closed', () => {
+    const network = buildTransitNetwork(twoLineFixture());
+    expect(
+      planTravel(network, {
+        originPlaceId: 'place_a1',
+        destinationPlaceId: 'place_b1',
+        departAtMinute: 600,
+        service: {
+          closedStopIds: [],
+          closedLineIds: ['line_ab', 'line_bc'],
+          lineDelayMinutes: {},
+          headwayMultiplier: {},
+        },
+      }),
+    ).toEqual({ ok: false, reason: 'line_closed' });
+  });
+
+  it('preserves legacy tuning: $2 flat fare and 1.25 rain walking', () => {
+    const network = buildTransitNetwork(twoLineFixture());
+    expect(BUS_ITINERARY_FARE).toBe(BUS_FARE);
+    expect(RAIN_WALK_MULTIPLIER).toBe(1.25);
+    // One transfer still charges a single flat fare, like one bus leg.
+    const result = planTravel(network, {
+      originPlaceId: 'place_a1',
+      destinationPlaceId: 'place_c1',
+      departAtMinute: 600,
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error('Expected a transfer plan.');
+    expect(result.plan.fare).toBe(BUS_FARE);
+    expect(result.plan.transferCount).toBe(1);
   });
 });
