@@ -134,4 +134,42 @@ describe('LivingPlaceRuntime', () => {
     expect(runtime.resolveVisibleObjects([binding])[0]?.instanceId).toBe('item:lamp:1');
     expect(runtime.getObjectState('item:lamp:1')).toEqual({ switchedOn: true });
   });
+
+  it('lets a bus-stop hotspot emit a trip request without owning fare or service truth', () => {
+    const stop = projection('view_a');
+    stop.anchors[0].interactions = [
+      { id: 'request_trip', capability: 'request_trip', name: 'Request trip', tags: ['transit'] },
+    ];
+    const runtime = new LivingPlaceRuntime(stop);
+    const before = runtime.getSnapshot();
+
+    expect(runtime.interact('anchor_visible', 'request_trip', { destinationPlaceId: 'place_b' })).toEqual({
+      type: 'INTERACTION',
+      anchorId: 'anchor_visible',
+      capability: 'request_trip',
+      name: 'Request trip',
+      payload: { destinationPlaceId: 'place_b' },
+    });
+    expect(runtime.getSnapshot()).toEqual(before);
+  });
+
+  it('binds an active itinerary leg as immutable presentation context without advancing transit truth', () => {
+    const runtime = new LivingPlaceRuntime(projection('view_a'));
+    const authoritativeLeg = {
+      id: 'leg:42',
+      routeId: 'route:7',
+      fromStopId: 'stop:a',
+      toStopId: 'stop:b',
+      status: 'riding',
+      remainingMinutes: 12,
+    };
+
+    runtime.bindTransitLeg(authoritativeLeg);
+    const presented = runtime.getTransitLeg();
+    expect(presented).toEqual(authoritativeLeg);
+
+    if (presented) presented.remainingMinutes = 1;
+    expect(authoritativeLeg.remainingMinutes).toBe(12);
+    expect(runtime.getTransitLeg()?.remainingMinutes).toBe(12);
+  });
 });
