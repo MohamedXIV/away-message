@@ -11,6 +11,7 @@ export interface PhaserWorldRuntimeOptions {
   parent: HTMLElement;
   projection: WorldSceneProjection;
   onIntent?: (intent: WorldInteractionIntent) => void;
+  renderType?: number;
 }
 
 export class PhaserWorldRuntime {
@@ -19,11 +20,13 @@ export class PhaserWorldRuntime {
   private parent: HTMLElement;
   private onIntent?: (intent: WorldInteractionIntent) => void;
   private currentProjection: WorldSceneProjection;
+  private renderType?: number;
 
   constructor(options: PhaserWorldRuntimeOptions) {
     this.parent = options.parent;
     this.onIntent = options.onIntent;
     this.currentProjection = options.projection;
+    this.renderType = options.renderType;
 
     this.initGame();
   }
@@ -40,7 +43,7 @@ export class PhaserWorldRuntime {
     };
 
     const config: Phaser.Types.Core.GameConfig = {
-      type: Phaser.AUTO,
+      type: this.renderType ?? Phaser.AUTO,
       parent: this.parent,
       width,
       height,

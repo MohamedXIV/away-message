@@ -2,6 +2,7 @@
 // tests/unit/PhysicalWorldLifecycle.test.ts
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import Phaser from 'phaser';
 import { PhaserWorldRuntime } from '../../src/world/phaser/PhaserWorldRuntime';
 import { createTechnicalFixtureProjection } from '../../src/world/phaser/technicalFixture';
 import type { WorldInteractionIntent } from '../../src/world/phaser/types';
@@ -25,6 +26,7 @@ describe('Phaser Physical World Runtime Lifecycle', () => {
     const runtime = new PhaserWorldRuntime({
       parent: container,
       projection,
+      renderType: Phaser.HEADLESS,
     });
 
     expect(runtime).toBeDefined();
@@ -44,6 +46,7 @@ describe('Phaser Physical World Runtime Lifecycle', () => {
     const runtime1 = new PhaserWorldRuntime({
       parent: container,
       projection,
+      renderType: Phaser.HEADLESS,
     });
     runtime1.destroy();
     expect(container.querySelectorAll('canvas').length).toBe(0);
@@ -52,6 +55,7 @@ describe('Phaser Physical World Runtime Lifecycle', () => {
     const runtime2 = new PhaserWorldRuntime({
       parent: container,
       projection,
+      renderType: Phaser.HEADLESS,
     });
     runtime2.destroy();
     expect(container.querySelectorAll('canvas').length).toBe(0);
@@ -60,6 +64,7 @@ describe('Phaser Physical World Runtime Lifecycle', () => {
     const runtime3 = new PhaserWorldRuntime({
       parent: container,
       projection,
+      renderType: Phaser.HEADLESS,
     });
     runtime3.destroy();
     expect(container.querySelectorAll('canvas').length).toBe(0);
@@ -70,6 +75,7 @@ describe('Phaser Physical World Runtime Lifecycle', () => {
     const runtime = new PhaserWorldRuntime({
       parent: container,
       projection,
+      renderType: Phaser.HEADLESS,
     });
 
     expect(() => {
@@ -87,6 +93,7 @@ describe('Phaser Physical World Runtime Lifecycle', () => {
     const runtime = new PhaserWorldRuntime({
       parent: container,
       projection,
+      renderType: Phaser.HEADLESS,
       onIntent: (intent) => intents.push(intent),
     });
 

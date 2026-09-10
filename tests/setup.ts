@@ -27,6 +27,10 @@ if (typeof window !== 'undefined' && typeof HTMLCanvasElement !== 'undefined') {
     resetTransform: () => {},
   };
 
+  if (!(window as any).CanvasRenderingContext2D) {
+    (window as any).CanvasRenderingContext2D = function CanvasRenderingContext2D() {};
+  }
+
   HTMLCanvasElement.prototype.getContext = function (type: string) {
     if (type === '2d') return dummyContext as unknown as CanvasRenderingContext2D;
     return null;
