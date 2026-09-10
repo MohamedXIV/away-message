@@ -9,6 +9,9 @@ import { InventoryEngine, type HardwareInstallSlot } from './InventoryEngine';
 import { HARDWARE_STORE_INVENTORY, PHYSICAL_ITEM_CATALOG } from './hardware/catalog';
 import { getReleaseById } from './OsCatalog';
 import { SimulationEngine as SimulationEngineCore } from './SimulationEngineCore';
+import { buildLifeMatrixSnapshot } from './life/LifeSnapshot';
+import { createSimulationLifeSources } from './life/LifeSources';
+import type { LifeMatrixSnapshot } from './life/types';
 import {
   createEmptyComputerSetup,
   createEmptyDisplaySetup,
@@ -152,6 +155,14 @@ export class SimulationEngine extends SimulationEngineCore {
 
   public getPcBootState(): PcBootState {
     return resolvePcBootState(this.getState());
+  }
+
+  public getLifeSnapshot(actorId: string): LifeMatrixSnapshot | null {
+    return buildLifeMatrixSnapshot(
+      createSimulationLifeSources(this),
+      actorId,
+      this.clock.getTotalMinutes(),
+    );
   }
 
   public setComputerPower(poweredOn: boolean): ActionResult {
