@@ -44,6 +44,7 @@ export interface LifeAppointmentView {
   endMinute?: number;
   rsvp?: string;
   status?: string;
+  origin?: { kind: 'job'; id: string };
 }
 
 export interface LifeWorldEventView {

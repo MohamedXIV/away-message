@@ -84,11 +84,12 @@ export function buildCharacterObligations(
       appointment.targetDay,
       appointment.endMinute ?? appointment.startMinute,
     );
+    const isJob = appointment.origin?.kind === 'job';
     obligations.push({
-      id: `appointment:${snapshot.actorId}:${appointment.id}`,
+      id: `${isJob ? 'job' : 'appointment'}:${snapshot.actorId}:${appointment.id}`,
       actorId: snapshot.actorId,
-      sourceKind: 'appointment',
-      sourceId: appointment.id,
+      sourceKind: isJob ? 'job' : 'appointment',
+      sourceId: isJob ? appointment.origin!.id : appointment.id,
       preferredAt: earliestAt,
       earliestAt,
       latestAt,
