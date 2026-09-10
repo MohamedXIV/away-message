@@ -13,8 +13,17 @@ import {
   bridgeOwnedInventoryIntoPhysicalWorld,
   PLAYER_INVENTORY_CONTAINER_ID,
 } from './PhysicalItemBridge';
-import type { PhysicalWorldState } from './PhysicalItemEngine';
+import {
+  PhysicalItemEngine,
+  type ItemInstance,
+  type PhysicalContainerDefinition,
+  type PhysicalItemDefinition,
+  type PhysicalItemLocation,
+  type PhysicalWorldState,
+} from './PhysicalItemEngine';
+import { PHYSICAL_ITEM_CATALOG } from './hardware/catalog';
 import type { SimulationState as TransportSimulationState } from './types';
+import { GENERATED_CONTAINERS, GENERATED_ITEMS } from './worldContent.generated';
 
 export * from './SimulationEngineLegacyFacade';
 
@@ -25,6 +34,48 @@ export type LiveSimulationState = LegacyLiveSimulationState & {
 type InitialSimulationState = Partial<TransportSimulationState> & {
   physicalWorld?: PhysicalWorldState;
 };
+
+const PHYSICAL_ITEM_DEFINITIONS: Readonly<Record<string, PhysicalItemDefinition>> =
+  Object.fromEntries([
+    ...GENERATED_ITEMS.map((item) => [
+      item.id,
+      {
+        id: item.id,
+        kind: item.kind,
+        portable: item.portable,
+        volume: item.volume,
+      } satisfies PhysicalItemDefinition,
+    ] as const),
+    ...Object.values(PHYSICAL_ITEM_CATALOG).map((item) => [
+      item.id,
+      {
+        id: item.id,
+        kind: item.kind,
+        portable: true,
+        volume: 1,
+      } satisfies PhysicalItemDefinition,
+    ] as const),
+  ]);
+
+const PHYSICAL_CONTAINER_DEFINITIONS: Readonly<Record<string, PhysicalContainerDefinition>> =
+  Object.fromEntries([
+    ...GENERATED_CONTAINERS.map((container) => [
+      container.id,
+      {
+        id: container.id,
+        capacity: container.capacity,
+        allowedItemKinds: container.allowedItemKinds,
+      } satisfies PhysicalContainerDefinition,
+    ] as const),
+    [
+      'player_inventory',
+      {
+        id: 'player_inventory',
+        capacity: Number.MAX_SAFE_INTEGER,
+        allowedItemKinds: [],
+      } satisfies PhysicalContainerDefinition,
+    ] as const,
+  ]);
 
 function emptyPhysicalWorld(): PhysicalWorldState {
   return {
@@ -71,6 +122,28 @@ export class SimulationEngine extends LegacySimulationEngine {
     // Defensive only for superclass construction: once our constructor returns,
     // physicalWorldState is always initialized through hydratePhysicalWorld().
     return this.physicalWorldState ?? emptyPhysicalWorld();
+  }
+
+  private physicalItems(): PhysicalItemEngine {
+    return new PhysicalItemEngine(
+      this.currentPhysicalWorld(),
+      PHYSICAL_ITEM_DEFINITIONS,
+      PHYSICAL_CONTAINER_DEFINITIONS,
+    );
+  }
+
+  public getPhysicalWorldState(): PhysicalWorldState {
+    return clonePhysicalWorld(this.currentPhysicalWorld());
+  }
+
+  public transferPhysicalItem(
+    instanceId: string,
+    destination: PhysicalItemLocation,
+  ): ItemInstance {
+    const physicalItems = this.physicalItems();
+    const transferred = physicalItems.transfer(instanceId, destination);
+    this.physicalWorldState = physicalItems.getState();
+    return transferred;
   }
 
   public override getState(): Readonly<LiveSimulationState> {
