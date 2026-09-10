@@ -376,6 +376,10 @@ export function validateContent(tables: ContentTables): string[] {
   // state (location, contents, owner, stock) belongs in these tables.
   errors.push(...validateWorldItems(tables));
 
+  // 9. World spaces/views (#51 slice 3). Renderer-neutral authored
+  // hierarchy: a view is not a Phaser Scene.
+  errors.push(...validateWorldSpaces(tables));
+
   return errors;
 }
 
@@ -648,6 +652,97 @@ export function validateWorldItems(tables: ContentTables): string[] {
   return errors;
 }
 
+/**
+ * Semantic validation for the space/view content tables (#51 slice 3).
+ * Every error identifies table/id/field so Content Studio (#52) can show
+ * useful per-row feedback. Never repairs: invalid content fails loudly.
+ */
+export function validateWorldSpaces(tables: ContentTables): string[] {
+  const errors: string[] = [];
+  const places = tables['places'] ?? {};
+  const spaces = tables['spaces'] ?? {};
+  const views = tables['views'] ?? {};
+
+  const checkName = (table: string, id: string, row: Record<string, unknown>): void => {
+    const name = row['name'];
+    if (typeof name !== 'string' || !name.trim() || name.length > 60) {
+      errors.push(`${table}/${id}.name: must be a non-empty string <= 60 chars.`);
+    }
+  };
+  const checkTags = (table: string, id: string, row: Record<string, unknown>): void => {
+    let tags: unknown = null;
+    try {
+      tags = JSON.parse(String(row['tags'] ?? '[]'));
+    } catch {
+      errors.push(`${table}/${id}.tags: invalid JSON array.`);
+      return;
+    }
+    if (!Array.isArray(tags)) {
+      errors.push(`${table}/${id}.tags: must be a JSON array.`);
+      return;
+    }
+    if (tags.length > 12) errors.push(`${table}/${id}.tags: max 12 tags.`);
+    for (const tag of tags) {
+      if (typeof tag !== 'string' || !/^[a-z][a-z0-9_-]{1,23}$/.test(tag)) {
+        errors.push(`${table}/${id}.tags: '${String(tag)}' must be a lowercase tag ≤ 24 chars.`);
+      }
+    }
+  };
+
+  for (const [id, row] of Object.entries(spaces)) {
+    if (!row || typeof row !== 'object') {
+      errors.push(`spaces/${id}: must be an object.`);
+      continue;
+    }
+    const idCheck = validateWorldId(id);
+    if (!idCheck.ok) errors.push(`spaces/${id}: ${idCheck.error}`);
+    const r = row as Record<string, unknown>;
+    const placeId = r['placeId'];
+    if (typeof placeId !== 'string' || !places[placeId]) {
+      errors.push(`spaces/${id}.placeId: unknown place '${String(placeId)}'.`);
+    }
+    checkName('spaces', id, r);
+    checkTags('spaces', id, r);
+  }
+
+  for (const [id, row] of Object.entries(views)) {
+    if (!row || typeof row !== 'object') {
+      errors.push(`views/${id}: must be an object.`);
+      continue;
+    }
+    const idCheck = validateWorldId(id);
+    if (!idCheck.ok) errors.push(`views/${id}: ${idCheck.error}`);
+    const r = row as Record<string, unknown>;
+    const spaceId = r['spaceId'];
+    if (typeof spaceId !== 'string' || !spaces[spaceId]) {
+      errors.push(`views/${id}.spaceId: unknown space '${String(spaceId)}'.`);
+    }
+    checkName('views', id, r);
+    let neighbors: unknown = null;
+    try {
+      neighbors = JSON.parse(String(r['neighbors'] ?? '[]'));
+    } catch {
+      errors.push(`views/${id}.neighbors: invalid JSON array.`);
+      neighbors = null;
+    }
+    if (Array.isArray(neighbors)) {
+      if (neighbors.length > 12) errors.push(`views/${id}.neighbors: max 12 neighbors.`);
+      for (const [i, neighbor] of neighbors.entries()) {
+        if (typeof neighbor !== 'string' || !views[String(neighbor)]) {
+          errors.push(`views/${id}.neighbors[${i}]: unknown view '${String(neighbor)}'.`);
+        } else if (neighbor === id) {
+          errors.push(`views/${id}.neighbors[${i}]: a view cannot neighbor itself.`);
+        }
+      }
+    } else if (neighbors !== null) {
+      errors.push(`views/${id}.neighbors: must be a JSON array of view ids.`);
+    }
+    checkTags('views', id, r);
+  }
+
+  return errors;
+}
+
 /** Stable 8-hex digest of canonical tables (the content version stamp). */
 export function contentHash(tables: ContentTables): string {
   const str = JSON.stringify(canonicalize(tables));
@@ -882,6 +977,8 @@ export function generateWorldRegistrySource(tables: ContentTables): string {
   const busLines = tables['busLines'] ?? {};
   const items = tables['items'] ?? {};
   const containers = tables['containers'] ?? {};
+  const spaces = tables['spaces'] ?? {};
+  const views = tables['views'] ?? {};
 
   const lines: string[] = [];
   lines.push('// GENERATED — do not edit by hand.');
@@ -1063,6 +1160,49 @@ export function generateWorldRegistrySource(tables: ContentTables): string {
     lines.push(`    name: ${tsString(String(r['name'] ?? ''))},`);
     lines.push(`    capacity: ${Number(r['capacity'] ?? 0)},`);
     lines.push(`    allowedItemKinds: [${strArr(r['allowedItemKinds']).map((k) => tsString(k)).join(', ')}],`);
+    lines.push(`    tags: [${strArr(r['tags']).map((t) => tsString(t)).join(', ')}],`);
+    lines.push('  },');
+  }
+  lines.push('];');
+  lines.push('');
+
+  lines.push('export interface GeneratedSpaceDef {');
+  lines.push('  id: string;');
+  lines.push('  placeId: string;');
+  lines.push('  name: string;');
+  lines.push('  tags: string[];');
+  lines.push('}');
+  lines.push('');
+  lines.push('export interface GeneratedViewDef {');
+  lines.push('  id: string;');
+  lines.push('  spaceId: string;');
+  lines.push('  name: string;');
+  lines.push('  neighbors: string[];');
+  lines.push('  tags: string[];');
+  lines.push('}');
+  lines.push('');
+
+  lines.push('export const GENERATED_SPACES: GeneratedSpaceDef[] = [');
+  for (const id of Object.keys(spaces).sort()) {
+    const r = spaces[id] as Record<string, unknown>;
+    lines.push('  {');
+    lines.push(`    id: ${tsString(id)},`);
+    lines.push(`    placeId: ${tsString(String(r['placeId'] ?? ''))},`);
+    lines.push(`    name: ${tsString(String(r['name'] ?? ''))},`);
+    lines.push(`    tags: [${strArr(r['tags']).map((t) => tsString(t)).join(', ')}],`);
+    lines.push('  },');
+  }
+  lines.push('];');
+  lines.push('');
+
+  lines.push('export const GENERATED_VIEWS: GeneratedViewDef[] = [');
+  for (const id of Object.keys(views).sort()) {
+    const r = views[id] as Record<string, unknown>;
+    lines.push('  {');
+    lines.push(`    id: ${tsString(id)},`);
+    lines.push(`    spaceId: ${tsString(String(r['spaceId'] ?? ''))},`);
+    lines.push(`    name: ${tsString(String(r['name'] ?? ''))},`);
+    lines.push(`    neighbors: [${strArr(r['neighbors']).map((n) => tsString(n)).join(', ')}],`);
     lines.push(`    tags: [${strArr(r['tags']).map((t) => tsString(t)).join(', ')}],`);
     lines.push('  },');
   }

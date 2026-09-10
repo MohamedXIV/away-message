@@ -1,6 +1,6 @@
 // GENERATED — do not edit by hand.
-// Source: content/store.json (content v5d81ae8f). Regenerate: npm run content:pull.
-export const WORLD_CONTENT_VERSION = '5d81ae8f';
+// Source: content/store.json (content v18a6b04c). Regenerate: npm run content:pull.
+export const WORLD_CONTENT_VERSION = '18a6b04c';
 
 export interface GeneratedDistrictDef {
   id: string;
@@ -141,5 +141,46 @@ export const GENERATED_CONTAINERS: GeneratedContainerDef[] = [
     capacity: 10,
     allowedItemKinds: ["food"],
     tags: ["storage"],
+  },
+];
+
+export interface GeneratedSpaceDef {
+  id: string;
+  placeId: string;
+  name: string;
+  tags: string[];
+}
+
+export interface GeneratedViewDef {
+  id: string;
+  spaceId: string;
+  name: string;
+  neighbors: string[];
+  tags: string[];
+}
+
+export const GENERATED_SPACES: GeneratedSpaceDef[] = [
+  {
+    id: "space_a1",
+    placeId: "place_a1",
+    name: "Space A1",
+    tags: ["interior"],
+  },
+];
+
+export const GENERATED_VIEWS: GeneratedViewDef[] = [
+  {
+    id: "view_a1",
+    spaceId: "space_a1",
+    name: "View A1",
+    neighbors: ["view_a2"],
+    tags: [],
+  },
+  {
+    id: "view_a2",
+    spaceId: "space_a1",
+    name: "View A2",
+    neighbors: ["view_a1"],
+    tags: [],
   },
 ];

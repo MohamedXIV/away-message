@@ -390,5 +390,26 @@
       "allowedItemKinds": "[\"food\"]",
       "tags": "[\"storage\"]"
     }
+  },
+  "spaces": {
+    "space_a1": {
+      "placeId": "place_a1",
+      "name": "Space A1",
+      "tags": "[\"interior\"]"
+    }
+  },
+  "views": {
+    "view_a1": {
+      "spaceId": "space_a1",
+      "name": "View A1",
+      "neighbors": "[\"view_a2\"]",
+      "tags": "[]"
+    },
+    "view_a2": {
+      "spaceId": "space_a1",
+      "name": "View A2",
+      "neighbors": "[\"view_a1\"]",
+      "tags": "[]"
+    }
   }
 }

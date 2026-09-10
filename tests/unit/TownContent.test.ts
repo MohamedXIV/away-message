@@ -6,7 +6,6 @@ import {
   validateContent,
   generateWorldRegistrySource,
 } from '../../src/tools/content/codegen';
-import type { ContentTables } from '../../src/tools/content/codegen';
 import { validTownTables, cloneTables as clone } from './worldFixtures';
 
 describe('Town content schema (#51 slice 1)', () => {

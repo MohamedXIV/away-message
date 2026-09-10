@@ -18,6 +18,8 @@
 // - containers: authored container-capacity/acceptance definitions
 // - districts: geographic/social town groupings (one town, one simulation)
 // - places: canonical destinations, each in exactly one district
+// - spaces: authored sub-areas inside one place (Place → Space → View)
+// - views: renderer-neutral authored viewpoints inside one space
 // - transitStops: bus stops, each in one district, optionally at a place
 // - busLines: ordered-stop bus service (window, headway, segments, fare)
 
@@ -135,6 +137,19 @@ export const CONTENT_SCHEMA = {
     name: { type: 'string', default: '' },
     // JSON array of {stopId, walkMinutes} walking-access links to transit stops.
     transitAccess: { type: 'string', default: '[]' },
+  },
+  spaces: {
+    placeId: { type: 'string', default: '' },
+    name: { type: 'string', default: '' },
+    // JSON array of semantic tags, e.g. ["interior","upstairs"].
+    tags: { type: 'string', default: '[]' },
+  },
+  views: {
+    spaceId: { type: 'string', default: '' },
+    name: { type: 'string', default: '' },
+    // JSON array of neighboring view ids within the same space.
+    neighbors: { type: 'string', default: '[]' },
+    tags: { type: 'string', default: '[]' },
   },
   transitStops: {
     districtId: { type: 'string', default: '' },
