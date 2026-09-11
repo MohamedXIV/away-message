@@ -10,6 +10,7 @@ export type AwayPuppetToolName =
   | 'node.list'
   | 'part.list'
   | 'away.inspect_contract'
+  | 'away.validate_rig'
   | 'away.set_morph'
   | 'away.test_morph_extremes'
   | 'away.set_expression'
@@ -34,7 +35,7 @@ export interface AwayPuppetOpenLifecycle {
 
 const MODEL_FACING_TOOLS: readonly AwayPuppetToolName[] = [
   'puppet.open', 'puppet.inspect', 'puppet.validate', 'parameter.list', 'parameter.get', 'parameter.set',
-  'node.list', 'part.list', 'away.inspect_contract', 'away.set_morph', 'away.test_morph_extremes',
+  'node.list', 'part.list', 'away.inspect_contract', 'away.validate_rig', 'away.set_morph', 'away.test_morph_extremes',
   'away.set_expression', 'away.set_pose', 'part.set_visibility', 'part.set_tint',
 ];
 
@@ -88,7 +89,8 @@ export function createAwayPuppetToolService(
         }
         case 'puppet.inspect':
         case 'away.inspect_contract': return current.puppet.inspect();
-        case 'puppet.validate': return { ok: true, contractVersion: current.puppet.inspect().contractVersion };
+        case 'puppet.validate':
+        case 'away.validate_rig': return { ok: true, contractVersion: current.puppet.inspect().contractVersion };
         case 'parameter.list': return [...current.puppet.inspect().morphs];
         case 'parameter.get': {
           const args = requireRecord(rawArgs);
