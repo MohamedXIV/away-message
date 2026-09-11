@@ -23,6 +23,8 @@ import {
 } from './PhysicalItemEngine';
 import { GROCERY_SKUS, type DeliveryOrder, type Fulfillment } from './DeliveryEngine';
 import { PHYSICAL_ITEM_CATALOG } from './hardware/catalog';
+import { parseActiveTravel } from './transit/ActiveTravel';
+import type { ActiveTravelState } from './transit/types';
 import type { SimulationState as TransportSimulationState } from './types';
 import { GENERATED_CONTAINERS, GENERATED_ITEMS } from './worldContent.generated';
 
@@ -30,10 +32,12 @@ export * from './SimulationEngineLegacyFacade';
 
 export type LiveSimulationState = LegacyLiveSimulationState & {
   physicalWorld: PhysicalWorldState;
+  activeTravel: ActiveTravelState | null;
 };
 
 type InitialSimulationState = Partial<TransportSimulationState> & {
   physicalWorld?: PhysicalWorldState;
+  activeTravel?: ActiveTravelState | null;
 };
 
 const DELIVERY_PARCEL_DEFINITION_ID = 'delivery_parcel';
@@ -156,12 +160,18 @@ function clonePhysicalWorld(state: PhysicalWorldState): PhysicalWorldState {
   };
 }
 
+function cloneActiveTravel(state: ActiveTravelState): ActiveTravelState {
+  return parseActiveTravel(structuredClone(state));
+}
+
 export class SimulationEngine extends LegacySimulationEngine {
   private physicalWorldState: PhysicalWorldState | null = null;
+  private activeTravelState: ActiveTravelState | null = null;
 
   public constructor(initialState?: InitialSimulationState) {
     super(initialState);
     this.physicalWorldState = this.hydratePhysicalWorld(initialState?.physicalWorld);
+    this.activeTravelState = initialState?.activeTravel ? cloneActiveTravel(initialState.activeTravel) : null;
     this.delivery.setArrivalHandler((order) => this.materializeDeliveryParcel(order));
   }
 
@@ -318,10 +328,19 @@ export class SimulationEngine extends LegacySimulationEngine {
     return moved;
   }
 
+  public setActiveTravel(state: ActiveTravelState | null): void {
+    this.activeTravelState = state ? cloneActiveTravel(state) : null;
+  }
+
+  public getActiveTravel(): ActiveTravelState | null {
+    return this.activeTravelState ? cloneActiveTravel(this.activeTravelState) : null;
+  }
+
   public override getState(): Readonly<LiveSimulationState> {
     return {
       ...super.getState(),
       physicalWorld: clonePhysicalWorld(this.currentPhysicalWorld()),
+      activeTravel: this.getActiveTravel(),
     };
   }
 
@@ -329,14 +348,24 @@ export class SimulationEngine extends LegacySimulationEngine {
     return {
       ...super.exportSnapshot(),
       physicalWorld: clonePhysicalWorld(this.currentPhysicalWorld()),
+      activeTravel: this.getActiveTravel(),
     };
   }
 
   public override loadSnapshot(snapshot: TransportSimulationState): void {
-    const persisted = (snapshot as TransportSimulationState & { physicalWorld?: PhysicalWorldState })
-      .physicalWorld;
+    const extendedSnapshot = snapshot as TransportSimulationState & {
+      physicalWorld?: PhysicalWorldState;
+      activeTravel?: unknown;
+    };
+    const persistedPhysicalWorld = extendedSnapshot.physicalWorld;
+    const persistedActiveTravel = extendedSnapshot.activeTravel == null
+      ? null
+      : parseActiveTravel(extendedSnapshot.activeTravel);
+
+    // Validate the transit extension before mutating any underlying simulation root.
     super.loadSnapshot(snapshot);
-    this.physicalWorldState = this.hydratePhysicalWorld(persisted);
+    this.physicalWorldState = this.hydratePhysicalWorld(persistedPhysicalWorld);
+    this.activeTravelState = persistedActiveTravel;
     this.delivery.setArrivalHandler((order) => this.materializeDeliveryParcel(order));
   }
 }
