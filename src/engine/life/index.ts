@@ -3,6 +3,18 @@ export { createLifeSources, createSimulationLifeSources } from './LifeSources';
 export { buildLifeMatrixSnapshot } from './LifeSnapshot';
 export { buildCharacterObligations } from './Obligations';
 export {
+  selectCharacterIntent,
+  INTENT_PREPARE_WINDOW_MINUTES,
+  INTENT_REEVALUATE_HORIZON_MINUTES,
+  INTENT_DUE_NOW_BONUS,
+  INTENT_STARTS_SOON_BONUS,
+  INTENT_DEADLINE_NEAR_BONUS,
+  INTENT_TRAIT_NUDGE,
+  INTENT_OPPORTUNITY_BONUS,
+  INTENT_REST_PRIORITY,
+  INTENT_ROUTINE_FLOW_PRIORITY,
+} from './Intent';
+export {
   deriveDefaultNpcPressure,
   advanceNpcPressure,
   projectLifePressureView,
