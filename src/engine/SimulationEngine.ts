@@ -23,6 +23,12 @@ import {
 } from './PhysicalItemEngine';
 import { GROCERY_SKUS, type DeliveryOrder, type Fulfillment } from './DeliveryEngine';
 import { PHYSICAL_ITEM_CATALOG } from './hardware/catalog';
+import {
+  commitTravelPlan as createActiveTravel,
+  parseActiveTravel,
+  travelStateAtMinute,
+} from './transit/ActiveTravel';
+import type { ActiveTravelState, TravelPlan } from './transit/types';
 import type { SimulationState as TransportSimulationState } from './types';
 import { GENERATED_CONTAINERS, GENERATED_ITEMS } from './worldContent.generated';
 import {
@@ -39,10 +45,12 @@ export * from './SimulationEngineLegacyFacade';
 
 export type LiveSimulationState = LegacyLiveSimulationState & {
   physicalWorld: PhysicalWorldState;
+  activeTravel: ActiveTravelState | null;
 };
 
 type InitialSimulationState = Partial<TransportSimulationState> & {
   physicalWorld?: PhysicalWorldState;
+  activeTravel?: ActiveTravelState | null;
 };
 
 const DELIVERY_PARCEL_DEFINITION_ID = 'delivery_parcel';
@@ -165,18 +173,26 @@ function clonePhysicalWorld(state: PhysicalWorldState): PhysicalWorldState {
   };
 }
 
+function cloneActiveTravel(state: ActiveTravelState): ActiveTravelState {
+  return parseActiveTravel(structuredClone(state));
+}
+
 export class SimulationEngine extends LegacySimulationEngine {
   private physicalWorldState: PhysicalWorldState | null = null;
+  private activeTravelState: ActiveTravelState | null = null;
   /** Player Inner Voice rules gate (#23). Owns cooldown/notable-history only. */
   private readonly innerVoice: InnerVoiceEngine;
 
   public constructor(initialState?: InitialSimulationState) {
     super(initialState);
     this.physicalWorldState = this.hydratePhysicalWorld(initialState?.physicalWorld);
+    this.activeTravelState = initialState?.activeTravel ? cloneActiveTravel(initialState.activeTravel) : null;
     this.innerVoice = new InnerVoiceEngine(
       (initialState as TransportSimulationState | undefined)?.innerVoice ?? null,
     );
     this.delivery.setArrivalHandler((order) => this.materializeDeliveryParcel(order));
+    this.events.on('time:tick', () => this.synchronizeActiveTravel());
+    this.events.on('time:jump', () => this.synchronizeActiveTravel());
   }
 
   private hydratePhysicalWorld(persisted?: PhysicalWorldState): PhysicalWorldState {
@@ -187,8 +203,6 @@ export class SimulationEngine extends LegacySimulationEngine {
   }
 
   private currentPhysicalWorld(): PhysicalWorldState {
-    // Defensive only for superclass construction: once our constructor returns,
-    // physicalWorldState is always initialized through hydratePhysicalWorld().
     return this.physicalWorldState ?? emptyPhysicalWorld();
   }
 
@@ -198,6 +212,35 @@ export class SimulationEngine extends LegacySimulationEngine {
       PHYSICAL_ITEM_DEFINITIONS,
       PHYSICAL_CONTAINER_DEFINITIONS,
     );
+  }
+
+  private synchronizeActiveTravel(): void {
+    const current = this.activeTravelState;
+    if (!current || current.status !== 'active') return;
+
+    const resolved = travelStateAtMinute(current, this.clock.getTotalMinutes());
+    if (
+      resolved.status === current.status &&
+      resolved.currentLegIndex === current.currentLegIndex
+    ) {
+      return;
+    }
+
+    const arrivedNow = resolved.status === 'arrived';
+    this.activeTravelState = {
+      ...current,
+      ...resolved,
+    };
+
+    if (arrivedNow) {
+      try {
+        this.telemetry.logEvent('world', 'travel_arrived', this.clock.getTotalMinutes(), {
+          actorId: current.actorId,
+          destinationPlaceId: current.plan.destinationPlaceId,
+          purposeRef: current.purposeRef ?? null,
+        });
+      } catch {}
+    }
   }
 
   private materializeGroceryContainer(
@@ -243,8 +286,6 @@ export class SimulationEngine extends LegacySimulationEngine {
       'order-item',
     );
 
-    // Keep the established arrival traces, but they now mean parcel arrival,
-    // not pantry teleportation. These are best-effort after the physical commit.
     try { this.world.setFlag(`delivery_arrived_${order.id}`, true); } catch {}
     try {
       this.telemetry.logEvent('economy', 'order_delivered', this.clock.getTotalMinutes(), {
@@ -277,8 +318,6 @@ export class SimulationEngine extends LegacySimulationEngine {
       return { success: false, error: 'Too tired for a store run (need 20% energy).' };
     }
 
-    // The order ID is the stable purchase identity. All validation that can reject
-    // checkout happens before cash, order history, or physical ownership changes.
     const order = this.delivery.recordPickup(items, total, this.clock.getTotalMinutes());
     const bagId = `shopping-bag:${order.id}`;
     this.materializeGroceryContainer(
@@ -332,10 +371,67 @@ export class SimulationEngine extends LegacySimulationEngine {
     return moved;
   }
 
+  public setActiveTravel(state: ActiveTravelState | null): void {
+    this.activeTravelState = state ? cloneActiveTravel(state) : null;
+  }
+
+  public getActiveTravel(): ActiveTravelState | null {
+    return this.activeTravelState ? cloneActiveTravel(this.activeTravelState) : null;
+  }
+
+  public startTravel(
+    actorId: string,
+    plan: TravelPlan,
+    purposeRef?: string,
+  ): { success: boolean; data?: ActiveTravelState; error?: string } {
+    if (this.activeTravelState?.status === 'active') {
+      return { success: false, error: 'An active journey is already in progress.' };
+    }
+    if (!Number.isFinite(plan.fare) || plan.fare < 0) {
+      return { success: false, error: 'Travel fare is invalid.' };
+    }
+    if (actorId === 'player' && !this.economy.canAfford(plan.fare)) {
+      return { success: false, error: `Cannot afford $${plan.fare.toFixed(2)} travel fare.` };
+    }
+
+    const committed = createActiveTravel(
+      actorId,
+      plan,
+      this.clock.getTotalMinutes(),
+      purposeRef,
+    );
+
+    this.activeTravelState = committed;
+    if (actorId === 'player') {
+      const fareResult = this.dispatchAction({
+        type: 'PLAYER_SPEND_CASH',
+        amount: plan.fare,
+        reason: 'Transit fare',
+      });
+      if (!fareResult.success) {
+        this.activeTravelState = null;
+        return { success: false, error: fareResult.error ?? `Cannot afford $${plan.fare.toFixed(2)} travel fare.` };
+      }
+    }
+
+    try {
+      this.telemetry.logEvent('world', 'travel_departed', this.clock.getTotalMinutes(), {
+        actorId,
+        originPlaceId: plan.originPlaceId,
+        destinationPlaceId: plan.destinationPlaceId,
+        fare: plan.fare,
+        purposeRef: purposeRef ?? null,
+      });
+    } catch {}
+
+    return { success: true, data: cloneActiveTravel(committed) };
+  }
+
   public override getState(): Readonly<LiveSimulationState> {
     return {
       ...super.getState(),
       physicalWorld: clonePhysicalWorld(this.currentPhysicalWorld()),
+      activeTravel: this.getActiveTravel(),
       innerVoice: this.innerVoice.getPersistedState(),
     };
   }
@@ -344,23 +440,27 @@ export class SimulationEngine extends LegacySimulationEngine {
     return {
       ...super.exportSnapshot(),
       physicalWorld: clonePhysicalWorld(this.currentPhysicalWorld()),
+      activeTravel: this.getActiveTravel(),
       innerVoice: this.innerVoice.getPersistedState(),
     };
   }
 
   public override loadSnapshot(snapshot: TransportSimulationState): void {
-    const persisted = (snapshot as TransportSimulationState & { physicalWorld?: PhysicalWorldState })
-      .physicalWorld;
+    const extendedSnapshot = snapshot as TransportSimulationState & {
+      physicalWorld?: PhysicalWorldState;
+      activeTravel?: unknown;
+    };
+    const persistedPhysicalWorld = extendedSnapshot.physicalWorld;
+    const persistedActiveTravel = extendedSnapshot.activeTravel == null
+      ? null
+      : parseActiveTravel(extendedSnapshot.activeTravel);
+
     super.loadSnapshot(snapshot);
-    this.physicalWorldState = this.hydratePhysicalWorld(persisted);
+    this.physicalWorldState = this.hydratePhysicalWorld(persistedPhysicalWorld);
+    this.activeTravelState = persistedActiveTravel;
     this.innerVoice.hydrate(snapshot.innerVoice ?? emptyInnerVoicePersistedState());
     this.delivery.setArrivalHandler((order) => this.materializeDeliveryParcel(order));
   }
-
-  // ---- Player Inner Voice public API (#23) ----
-  // Rule-governed thought requests. These never mutate gameplay state;
-  // they only read the caller-provided knowledge view and advance the
-  // voice's own cooldown/notable-history.
 
   public getInnerVoiceEngine(): InnerVoiceEngine {
     return this.innerVoice;
