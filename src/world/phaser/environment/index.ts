@@ -5,3 +5,4 @@ export * from './puddles';
 export * from './weatherLayers';
 export * from './ambientMotion';
 export * from './lightingEngine';
+export * from './EnvironmentManager';

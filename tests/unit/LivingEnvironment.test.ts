@@ -1,6 +1,10 @@
+// @vitest-environment jsdom
 // tests/unit/LivingEnvironment.test.ts
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import Phaser from 'phaser';
+import { createTechnicalFixtureProjection } from '../../src/world/phaser/technicalFixture';
+import { EnvironmentManager } from '../../src/world/phaser/environment/EnvironmentManager';
 import {
   interpolateDayPhase,
   CANONICAL_DAY_PHASES,
@@ -380,6 +384,102 @@ describe('Living Environment Subsystem', () => {
       // After flash has ended (t = 1400ms)
       const after = evaluateAuthoredLight(exteriorLightDef, 1400, nightPhase, flashState);
       expect(after.intensity).toBeCloseTo(before.intensity, 2);
+    });
+  });
+
+  describe('6. Living Environment Manager & Technical Fixture Configuration', () => {
+    it('provides rich living environment parameters in technical fixture projection', () => {
+      const projection = createTechnicalFixtureProjection();
+      expect(projection.minuteOfDay).toBe(1170); // Dusk/Evening
+      expect(projection.windIntensity).toBe(0.35);
+      expect(projection.isInterior).toBe(true);
+
+      // Authored lights
+      expect(projection.authoredLights?.length).toBeGreaterThanOrEqual(2);
+      const deskLamp = projection.authoredLights?.find((l) => l.id === 'desk_lamp');
+      expect(deskLamp).toBeDefined();
+      expect(deskLamp?.kind).toBe('lamp');
+      expect(deskLamp?.flicker).toBeDefined();
+
+      const windowExt = projection.authoredLights?.find((l) => l.id === 'window_exterior');
+      expect(windowExt).toBeDefined();
+      expect(windowExt?.isExterior).toBe(true);
+
+      // Ambient motions
+      expect(projection.ambientMotions?.length).toBeGreaterThanOrEqual(2);
+      const clockHand = projection.ambientMotions?.find((m) => m.targetName === 'fixture_clock_hand');
+      expect(clockHand?.type).toBe('rotation');
+
+      const curtain = projection.ambientMotions?.find((m) => m.targetName === 'fixture_curtain');
+      expect(curtain?.type).toBe('sway');
+
+      // Puddle zones
+      expect(projection.puddleZones?.length).toBeGreaterThanOrEqual(1);
+      const puddle = projection.puddleZones?.[0];
+      expect(puddle?.threshold).toBe(0.25);
+      expect(puddle?.fillRate).toBe(0.06);
+    });
+
+    it('coordinates day phases, puddle state, motion targets, and lightning in EnvironmentManager', () => {
+      const projection = createTechnicalFixtureProjection({
+        weather: 'rain',
+        minuteOfDay: 1200,
+      });
+
+      const mockScene: any = {
+        scale: { width: 1280, height: 720 },
+        time: { now: 5000 },
+        lights: {
+          enable: () => {},
+          setAmbientColor: () => {},
+          addLight: () => ({ setIntensity: () => {}, setColor: () => {} }),
+        },
+        add: {
+          particles: () => ({ setDepth: () => {}, start: () => {}, stop: () => {}, destroy: () => {} }),
+          renderTexture: () => ({ setDepth: () => {}, setAlpha: () => {}, clear: () => {}, fill: () => {}, destroy: () => {} }),
+          graphics: () => ({ setDepth: () => {}, clear: () => {}, lineStyle: () => {}, strokeEllipse: () => {}, destroy: () => {} }),
+        },
+        textures: {
+          exists: () => true,
+        },
+      };
+
+      const envMgr = new EnvironmentManager(mockScene, projection);
+      envMgr.init();
+
+      // Verify day phase params initialized
+      expect(envMgr.getDayPhaseParams()).toBeDefined();
+      expect(envMgr.getDayPhaseParams().ambientColor).toBeTruthy();
+
+      // Register mock motion target
+      const mockCurtain = { x: 100, y: 100, angle: 0, scaleX: 1, scaleY: 1, alpha: 1 };
+      envMgr.registerMotionTarget('fixture_curtain', mockCurtain as any);
+
+      // Advance update by 10 minutes of rain (600,000 ms)
+      envMgr.update(6000, 600000);
+
+      // Motion target was updated
+      expect(mockCurtain.x).not.toBe(100);
+
+      // Puddle state must have accumulated
+      const puddle = envMgr.getPuddleState('puddle_default');
+      expect(puddle).toBeDefined();
+      expect(puddle?.wetness).toBeGreaterThan(0.25);
+      expect(puddle?.poolFill).toBeGreaterThan(0);
+      expect(envMgr.hasActiveRipples()).toBe(true);
+
+      // Trigger lightning
+      envMgr.triggerLightning(300, 3.5);
+      envMgr.update(6100, 100);
+
+      // Apply clear weather
+      envMgr.applyProjection(createTechnicalFixtureProjection({ weather: 'clear' }));
+      // Puddle drains when dry (20 minutes = 1,200,000 ms)
+      envMgr.update(7000, 1200000);
+      const drained = envMgr.getPuddleState('puddle_default');
+      expect(drained?.wetness).toBeLessThan(puddle!.wetness);
+
+      envMgr.destroy();
     });
   });
 });

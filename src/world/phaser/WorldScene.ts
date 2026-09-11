@@ -8,6 +8,7 @@ import type {
   WorldFixtureCapabilityReport,
 } from './types';
 import { ensureFixtureTextures, createTechnicalFixtureProjection } from './technicalFixture';
+import { EnvironmentManager } from './environment/EnvironmentManager';
 
 export interface WorldSceneInitData {
   projection: WorldSceneProjection;
@@ -19,6 +20,7 @@ export class WorldScene extends Phaser.Scene {
 
   public projection: WorldSceneProjection = createTechnicalFixtureProjection();
   private onIntent?: (intent: WorldInteractionIntent) => void;
+  private environmentManager?: EnvironmentManager;
 
   // Visual Display Layers
   private layerBackground?: Phaser.GameObjects.Container;
@@ -30,6 +32,8 @@ export class WorldScene extends Phaser.Scene {
   private bgImage?: Phaser.GameObjects.Image;
   private deskImage?: Phaser.GameObjects.Image;
   private assetA1Image?: Phaser.GameObjects.Image;
+  private curtainImage?: Phaser.GameObjects.Image;
+  private clockHandImage?: Phaser.GameObjects.Image;
   private puddleRenderTexture?: Phaser.GameObjects.RenderTexture;
 
   // Lights
@@ -89,15 +93,27 @@ export class WorldScene extends Phaser.Scene {
     // 6. Setup Render-Texture / Filter Path for reflections/wetness
     this.setupRenderTexturePath(width, height);
 
-    // 7. Setup Authored Pointer Hotspots
+    // 7. Setup Living Environment Subsystem
+    this.environmentManager = new EnvironmentManager(this, this.projection);
+    this.environmentManager.init();
+    if (this.curtainImage) this.environmentManager.registerMotionTarget('fixture_curtain', this.curtainImage);
+    if (this.clockHandImage) this.environmentManager.registerMotionTarget('fixture_clock_hand', this.clockHandImage);
+    if (this.deskImage) this.environmentManager.registerMotionTarget('fixture_desk', this.deskImage);
+    if (this.assetA1Image) this.environmentManager.registerMotionTarget('asset_a1', this.assetA1Image);
+
+    // 8. Setup Authored Pointer Hotspots
     this.setupHotspots(width, height);
 
-    // 8. Setup Pointer Movement for Movable Light
+    // 9. Setup Pointer Movement for Movable Light
     this.setupPointerTracking();
 
-    // 9. Initial Camera setup
+    // 10. Initial Camera setup
     this.cameras.main.setZoom(1.0);
     this.cameras.main.centerOn(width / 2, height / 2);
+  }
+
+  public override update(time: number, delta: number): void {
+    this.environmentManager?.update(time, delta);
   }
 
   /**
@@ -171,6 +187,24 @@ export class WorldScene extends Phaser.Scene {
     }
     if (typeof objWithLighting.setSelfShadow === 'function') {
       objWithLighting.setSelfShadow(true, 0.45, 0.25);
+    }
+
+    // Window curtain for ambient sway
+    if (this.textures.exists('fixture_curtain')) {
+      const curtainX = width * 0.28;
+      const curtainY = height * 0.12;
+      this.curtainImage = this.add.image(curtainX, curtainY, 'fixture_curtain');
+      this.curtainImage.setOrigin(0.5, 0); // Pin top for natural sway
+      this.curtainImage.setScale(scaleFactor * 1.1);
+      this.layerScenery?.add(this.curtainImage);
+    }
+
+    // Clock hand pointer for Asset A1 ambient rotation
+    if (this.textures.exists('fixture_clock_hand')) {
+      this.clockHandImage = this.add.image(a1X, a1Y, 'fixture_clock_hand');
+      this.clockHandImage.setOrigin(0.5, 0.875); // Pivot at center boss
+      this.clockHandImage.setScale(scaleFactor * 1.15);
+      this.layerActors?.add(this.clockHandImage);
     }
   }
 
@@ -362,6 +396,7 @@ export class WorldScene extends Phaser.Scene {
    */
   public updateProjection(newProjection: WorldSceneProjection): void {
     this.projection = newProjection;
+    this.environmentManager?.applyProjection(newProjection);
 
     // 1. Update lighting
     this.applyAmbientLighting();
@@ -413,9 +448,18 @@ export class WorldScene extends Phaser.Scene {
       this.assetA1Image.setPosition(width * 0.68, height * 0.35);
       this.assetA1Image.setScale(Math.min(width / 1600, height / 900) * 1.15);
     }
+    if (this.curtainImage) {
+      this.curtainImage.setPosition(width * 0.28, height * 0.12);
+      this.curtainImage.setScale(Math.min(width / 1600, height / 900) * 1.1);
+    }
+    if (this.clockHandImage) {
+      this.clockHandImage.setPosition(width * 0.68, height * 0.35);
+      this.clockHandImage.setScale(Math.min(width / 1600, height / 900) * 1.15);
+    }
 
     this.setupHotspots(width, height);
     this.refreshRenderTextureReflection();
+    this.environmentManager?.handleResize(width, height);
   }
 
   /**
@@ -436,18 +480,26 @@ export class WorldScene extends Phaser.Scene {
     return this.currentFocus;
   }
 
+  public getEnvironmentManager(): EnvironmentManager | undefined {
+    return this.environmentManager;
+  }
+
   public getCapabilityReport(): WorldFixtureCapabilityReport {
     return {
       reactLifecycle: true,
       noDuplicateCanvas: true,
       layeredRendering: !!(this.layerBackground && this.layerScenery && this.layerActors && this.layerForeground),
       normalMapLighting: !!(this.lights && this.assetA1Image),
-      movablePointLight: !!this.movableLight,
+      movablePointLight: !!(this.movableLight ?? this.environmentManager?.getMovableLight()),
       particles: !!(this.dustMoteEmitter && this.rainEmitter),
       renderTextureFilter: !!this.puddleRenderTexture,
       hotspotInteraction: this.hotspotZones.size > 0,
       cameraTransition: true,
       hidpiResize: true,
+      dayPhaseInterpolation: true,
+      ambientMotion: true,
+      weatherOcclusion: true,
+      puddleZones: true,
     };
   }
 }

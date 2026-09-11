@@ -2,6 +2,9 @@
 
 import type React from 'react';
 import type { TimeOfDay, WeatherType } from '../types';
+import type { PuddleZoneDef } from './environment/puddles';
+import type { AmbientMotionDef } from './environment/ambientMotion';
+import type { AuthoredLightDef } from './environment/lightingEngine';
 
 export interface WorldPointLightDef {
   id: string;
@@ -70,6 +73,12 @@ export interface WorldSceneProjection {
   anchors: WorldAnchorProjection[];
   availableViews: WorldViewSummary[];
   focus?: WorldCameraFocus | null;
+  minuteOfDay?: number;
+  isInterior?: boolean;
+  windIntensity?: number;
+  puddleZones?: PuddleZoneDef[];
+  ambientMotions?: AmbientMotionDef[];
+  authoredLights?: AuthoredLightDef[];
 }
 
 export type WorldInteractionIntentType =
@@ -106,4 +115,8 @@ export interface WorldFixtureCapabilityReport {
   hotspotInteraction: boolean;
   cameraTransition: boolean;
   hidpiResize: boolean;
+  dayPhaseInterpolation: boolean;
+  ambientMotion: boolean;
+  weatherOcclusion: boolean;
+  puddleZones: boolean;
 }

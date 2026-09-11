@@ -32,9 +32,9 @@ export const CANONICAL_DAY_PHASES: Record<
   night_late_night: {
     id: 'night_late_night',
     name: 'Night / Late Night',
-    minuteOfDay: 60, // 01:00
+    minuteOfDay: 150, // 02:30 (deepest darkest night)
     ambientColor: '#1e293b',
-    ambientIntensity: 0.30,
+    ambientIntensity: 0.25,
     exteriorColor: '#0f172a',
     exteriorIntensity: 0.25,
     artificialLightProminence: 0.95,

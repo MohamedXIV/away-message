@@ -285,6 +285,52 @@ export function createFixtureRainCanvas(): HTMLCanvasElement | null {
 }
 
 /**
+ * Procedural curtain canvas for ambient sway motion
+ */
+export function createFixtureCurtainCanvas(): HTMLCanvasElement | null {
+  return createProceduralCanvas(80, 420, (ctx, w, h) => {
+    // Folded warm burgundy fabric with vertical pleats
+    const grad = ctx.createLinearGradient(0, 0, w, 0);
+    grad.addColorStop(0, '#581c25');
+    grad.addColorStop(0.3, '#7a2d39');
+    grad.addColorStop(0.7, '#42141c');
+    grad.addColorStop(1, '#66222c');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, w, h);
+
+    // Vertical pleat shadow lines
+    ctx.strokeStyle = 'rgba(20, 6, 8, 0.5)';
+    ctx.lineWidth = 2;
+    for (let x = 15; x < w; x += 20) {
+      ctx.beginPath();
+      ctx.moveTo(x, 0);
+      ctx.lineTo(x, h);
+      ctx.stroke();
+    }
+  });
+}
+
+/**
+ * Procedural clock hand canvas for ambient rotation motion
+ */
+export function createFixtureClockHandCanvas(): HTMLCanvasElement | null {
+  return createProceduralCanvas(16, 80, (ctx, w, h) => {
+    ctx.fillStyle = '#ffdf78';
+    ctx.beginPath();
+    ctx.arc(8, 70, 6, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = '#ffea9f';
+    ctx.beginPath();
+    ctx.moveTo(6, 70);
+    ctx.lineTo(8, 10);
+    ctx.lineTo(10, 70);
+    ctx.closePath();
+    ctx.fill();
+  });
+}
+
+/**
  * Registers all fixture procedural textures into a Phaser Scene if not already loaded.
  */
 export function ensureFixtureTextures(scene: Phaser.Scene): void {
@@ -330,17 +376,35 @@ export function ensureFixtureTextures(scene: Phaser.Scene): void {
     const rainCanvas = createFixtureRainCanvas();
     if (rainCanvas) textures.addCanvas('fixture_rain', rainCanvas);
   }
+
+  // 5. Ambient Motion Textures
+  if (!textures.exists('fixture_curtain')) {
+    const curtainCanvas = createFixtureCurtainCanvas();
+    if (curtainCanvas) textures.addCanvas('fixture_curtain', curtainCanvas);
+  }
+
+  if (!textures.exists('fixture_clock_hand')) {
+    const handCanvas = createFixtureClockHandCanvas();
+    if (handCanvas) textures.addCanvas('fixture_clock_hand', handCanvas);
+  }
 }
 
+import type { CreateProjectionOptions } from './presentationAdapter';
+
 /**
- * Default projection for the Technical Fixture
+ * Default projection for the Technical Fixture showcasing living environment capabilities
  */
-export function createTechnicalFixtureProjection(): WorldSceneProjection {
+export function createTechnicalFixtureProjection(
+  overrides: Partial<CreateProjectionOptions> = {}
+): WorldSceneProjection {
   return createWorldSceneProjection({
     placeId: 'place_a1',
     viewId: 'view_a1',
     timeOfDay: 'evening',
+    minuteOfDay: 1170, // 19:30 Dusk/Evening
     weather: 'clear',
+    windIntensity: 0.35,
+    isInterior: true,
     customLights: [
       {
         id: 'desk_lamp',
@@ -361,5 +425,84 @@ export function createTechnicalFixtureProjection(): WorldSceneProjection {
         movable: false,
       },
     ],
+    authoredLights: [
+      {
+        id: 'desk_lamp',
+        kind: 'lamp',
+        x: 0.65,
+        y: 0.55,
+        radius: 380,
+        color: '#ffe090',
+        baseIntensity: 1.8,
+        flicker: {
+          type: 'subtle',
+          frequency: 3,
+          amplitude: 0.05,
+        },
+        movable: true,
+      },
+      {
+        id: 'window_exterior',
+        kind: 'window',
+        x: 0.22,
+        y: 0.35,
+        radius: 420,
+        color: '#7ea4c9',
+        baseIntensity: 0.9,
+        isExterior: true,
+      },
+      {
+        id: 'neon_sign',
+        kind: 'neon',
+        x: 0.82,
+        y: 0.15,
+        radius: 180,
+        color: '#38bdf8',
+        baseIntensity: 0.8,
+        flicker: {
+          type: 'neon',
+          frequency: 7,
+          amplitude: 0.12,
+        },
+      },
+    ],
+    ambientMotions: [
+      {
+        id: 'motion_clock',
+        targetName: 'fixture_clock_hand',
+        type: 'rotation',
+        speed: 12, // 12 deg / sec
+      },
+      {
+        id: 'motion_curtain',
+        targetName: 'fixture_curtain',
+        type: 'sway',
+        speed: 0.8,
+        amplitude: 5,
+        windFactor: 2.5,
+      },
+      {
+        id: 'motion_desk',
+        targetName: 'fixture_desk',
+        type: 'vibration',
+        speed: 24,
+        amplitude: 0.3,
+      },
+    ],
+    puddleZones: [
+      {
+        id: 'puddle_default',
+        x: 0.22,
+        y: 0.82,
+        width: 0.24,
+        height: 0.14,
+        threshold: 0.25,
+        fillRate: 0.06,
+        drainRate: 0.02,
+        maxCapacity: 1.0,
+        rippleIntensity: 1.0,
+      },
+    ],
+    ...overrides,
   });
 }

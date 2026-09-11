@@ -141,9 +141,100 @@ export const PhysicalWorldHost: React.FC<PhysicalWorldHostProps> = ({
             </div>
           )}
 
+          {/* Living Environment Debug Controls */}
+          <div className="flex flex-col gap-1.5 pt-1.5 border-t border-slate-800 text-[10px]">
+            <div className="font-bold text-amber-300">Environment & Lighting:</div>
+
+            {/* Five Day Phases */}
+            <div className="flex items-center gap-1 flex-wrap">
+              <span className="text-slate-400">Phase:</span>
+              {[
+                { name: 'Dawn', min: 390 },
+                { name: 'Day', min: 720 },
+                { name: 'Aft', min: 990 },
+                { name: 'Dusk', min: 1170 },
+                { name: 'Night', min: 60 },
+              ].map((p) => (
+                <button
+                  key={p.name}
+                  onClick={() => {
+                    const scene = runtimeRef.current?.getScene();
+                    if (scene) {
+                      runtimeRef.current?.updateProjection({
+                        ...projection,
+                        minuteOfDay: p.min,
+                      });
+                    }
+                  }}
+                  className="px-1.5 py-0.5 rounded bg-slate-800 hover:bg-slate-700 border border-slate-600 text-slate-200"
+                >
+                  {p.name}
+                </button>
+              ))}
+            </div>
+
+            {/* Weather & Occlusion */}
+            <div className="flex items-center gap-1 flex-wrap">
+              <span className="text-slate-400">Weather:</span>
+              <button
+                onClick={() => {
+                  runtimeRef.current?.updateProjection({
+                    ...projection,
+                    weather: 'clear',
+                  });
+                }}
+                className={`px-1.5 py-0.5 rounded border text-[10px] ${
+                  projection.weather === 'clear'
+                    ? 'bg-amber-600 border-amber-500 text-white'
+                    : 'bg-slate-800 border-slate-600 text-slate-300'
+                }`}
+              >
+                Clear
+              </button>
+              <button
+                onClick={() => {
+                  runtimeRef.current?.updateProjection({
+                    ...projection,
+                    weather: 'rain',
+                  });
+                }}
+                className={`px-1.5 py-0.5 rounded border text-[10px] ${
+                  projection.weather === 'rain'
+                    ? 'bg-blue-600 border-blue-500 text-white'
+                    : 'bg-slate-800 border-slate-600 text-slate-300'
+                }`}
+              >
+                Rain
+              </button>
+              <button
+                onClick={() => {
+                  const isCurrentlyInterior = projection.isInterior ?? true;
+                  runtimeRef.current?.updateProjection({
+                    ...projection,
+                    isInterior: !isCurrentlyInterior,
+                  });
+                }}
+                className="px-1.5 py-0.5 rounded bg-slate-800 hover:bg-slate-700 border border-slate-600 text-slate-200"
+                title="Toggle Indoor vs Outdoor occlusion"
+              >
+                {projection.isInterior ?? true ? '🏢 Indoor' : '🌳 Outdoor'}
+              </button>
+              <button
+                onClick={() => {
+                  const scene = runtimeRef.current?.getScene();
+                  scene?.getEnvironmentManager()?.triggerLightning();
+                }}
+                className="px-1.5 py-0.5 rounded bg-indigo-900 hover:bg-indigo-800 border border-indigo-600 text-indigo-200 font-bold"
+                title="Trigger lightning flash spike"
+              >
+                ⚡ Flash
+              </button>
+            </div>
+          </div>
+
           {/* Capabilities Report Badge */}
           {capabilityReport && (
-            <div className="pt-1 border-t border-slate-800 text-[10px] text-slate-400 grid grid-cols-2 gap-1">
+            <div className="pt-1.5 border-t border-slate-800 text-[10px] text-slate-400 grid grid-cols-2 gap-1">
               <span className={capabilityReport.layeredRendering ? 'text-green-400' : 'text-red-400'}>
                 ✓ Layered Sprites
               </span>
@@ -161,6 +252,18 @@ export const PhysicalWorldHost: React.FC<PhysicalWorldHostProps> = ({
               </span>
               <span className={capabilityReport.hotspotInteraction ? 'text-green-400' : 'text-red-400'}>
                 ✓ Hotspots
+              </span>
+              <span className={capabilityReport.dayPhaseInterpolation ? 'text-green-400' : 'text-red-400'}>
+                ✓ Day Phases
+              </span>
+              <span className={capabilityReport.ambientMotion ? 'text-green-400' : 'text-red-400'}>
+                ✓ Ambient Motion
+              </span>
+              <span className={capabilityReport.weatherOcclusion ? 'text-green-400' : 'text-red-400'}>
+                ✓ Rain Occlusion
+              </span>
+              <span className={capabilityReport.puddleZones ? 'text-green-400' : 'text-red-400'}>
+                ✓ Puddle Zones
               </span>
             </div>
           )}
