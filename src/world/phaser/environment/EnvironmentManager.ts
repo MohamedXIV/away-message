@@ -128,15 +128,13 @@ export class EnvironmentManager {
     this.applyAmbientLighting();
     this.applyWeatherResolution();
     this.refreshPuddleDefs();
+    if (this.scene?.scale) {
+      this.syncPuddleVisuals(this.scene.scale.width, this.scene.scale.height);
+    }
   }
 
   public handleResize(width: number, height: number): void {
-    if (this.puddleRenderTexture) {
-      const puddleW = Math.round(width * 0.24);
-      const puddleH = Math.round(height * 0.14);
-      this.puddleRenderTexture.setPosition(width * 0.22, height * 0.82);
-      this.puddleRenderTexture.setSize(puddleW, puddleH);
-    }
+    this.syncPuddleVisuals(width, height);
   }
 
   public triggerLightning(durationMs = 300, peakIntensity = 3.5): void {
@@ -157,6 +155,10 @@ export class EnvironmentManager {
 
   public getPuddleState(id: string): PuddleZoneState | undefined {
     return this.puddleStates.get(id);
+  }
+
+  public hasPuddleRenderTarget(): boolean {
+    return this.puddleRenderTexture !== undefined;
   }
 
   public getMovableLight(): Phaser.GameObjects.Light | undefined {
@@ -428,37 +430,53 @@ export class EnvironmentManager {
 
   private setupPuddleZones(width: number, height: number): void {
     this.refreshPuddleDefs();
+    this.syncPuddleVisuals(width, height);
+  }
 
-    // Setup Render-Texture for reflection wash
-    const puddleW = Math.round(width * 0.24);
-    const puddleH = Math.round(height * 0.14);
-    const puddleX = width * 0.22;
-    const puddleY = height * 0.82;
+  private syncPuddleVisuals(width: number, height: number): void {
+    const zones = this.projection.puddleZones;
+    const primary = zones?.[0];
+    if (!zones || zones.length === 0 || !primary) {
+      if (this.puddleRenderTexture) {
+        this.puddleRenderTexture.destroy();
+        this.puddleRenderTexture = undefined;
+      }
+      if (this.puddleRippleGraphics) {
+        this.puddleRippleGraphics.destroy();
+        this.puddleRippleGraphics = undefined;
+      }
+      return;
+    }
 
-    this.puddleRenderTexture = this.scene.add.renderTexture(puddleX, puddleY, puddleW, puddleH);
-    this.puddleRenderTexture.setDepth(22);
-    this.puddleRenderTexture.setAlpha(0.65);
+    const puddleW = Math.max(1, Math.round(width * primary.width));
+    const puddleH = Math.max(1, Math.round(height * primary.height));
+    const puddleX = width * primary.x;
+    const puddleY = height * primary.y;
 
-    // Ripple vector overlay graphics
-    this.puddleRippleGraphics = this.scene.add.graphics();
-    this.puddleRippleGraphics.setDepth(23);
+    if (!this.puddleRenderTexture) {
+      this.puddleRenderTexture = this.scene.add.renderTexture(puddleX, puddleY, puddleW, puddleH);
+      this.puddleRenderTexture.setDepth(22);
+      this.puddleRenderTexture.setAlpha(0);
+    } else {
+      this.puddleRenderTexture.setPosition(puddleX, puddleY);
+      this.puddleRenderTexture.setSize(puddleW, puddleH);
+    }
+
+    if (!this.puddleRippleGraphics) {
+      this.puddleRippleGraphics = this.scene.add.graphics();
+      this.puddleRippleGraphics.setDepth(23);
+    }
   }
 
   private refreshPuddleDefs(): void {
-    const zones = this.projection.puddleZones ?? [
-      {
-        id: 'puddle_default',
-        x: 0.22,
-        y: 0.82,
-        width: 0.24,
-        height: 0.14,
-        threshold: 0.25,
-        fillRate: 0.06,
-        drainRate: 0.02,
-        maxCapacity: 1.0,
-        rippleIntensity: 1.0,
-      },
-    ];
+    const zones = this.projection.puddleZones ?? [];
+    const activeZoneIds = new Set(zones.map((z) => z.id));
+
+    for (const id of Array.from(this.puddleStates.keys())) {
+      if (!activeZoneIds.has(id)) {
+        this.puddleStates.delete(id);
+      }
+    }
 
     for (const z of zones) {
       if (!this.puddleStates.has(z.id)) {
@@ -473,28 +491,25 @@ export class EnvironmentManager {
   }
 
   private updatePuddles(_timeMs: number, deltaMinutes: number): void {
-    const rainIntensity = this.projection.weather === 'rain' ? 1.0 : 0;
-    const zones = this.projection.puddleZones ?? [
-      {
-        id: 'puddle_default',
-        x: 0.22,
-        y: 0.82,
-        width: 0.24,
-        height: 0.14,
-        threshold: 0.25,
-        fillRate: 0.06,
-        drainRate: 0.02,
-        maxCapacity: 1.0,
-        rippleIntensity: 1.0,
-      },
-    ];
+    const zones = this.projection.puddleZones;
+    const primaryZone = zones?.[0];
+    if (!zones || zones.length === 0 || !primaryZone) {
+      if (this.puddleStates.size > 0) {
+        this.puddleStates.clear();
+      }
+      return;
+    }
+
+    // Rain accumulates ground puddles only outdoors; interior scenes occlude precipitation
+    const isGroundRainActive = this.projection.weather === 'rain' && !this.projection.isInterior;
+    const rainIntensity = isGroundRainActive ? 1.0 : 0;
 
     this.puddleStates = updatePuddleZones(zones, this.puddleStates, rainIntensity, deltaMinutes);
 
-    // Render reflection wash and ripples
-    const defaultState = this.puddleStates.get('puddle_default');
-    const poolFill = defaultState?.poolFill ?? 0;
-    const wetness = defaultState?.wetness ?? 0;
+    // Render reflection wash and ripples for primary authored zone
+    const primaryState = this.puddleStates.get(primaryZone.id);
+    const poolFill = primaryState?.poolFill ?? 0;
+    const wetness = primaryState?.wetness ?? 0;
 
     if (this.puddleRenderTexture) {
       this.puddleRenderTexture.clear();
@@ -510,12 +525,12 @@ export class EnvironmentManager {
 
     if (this.puddleRippleGraphics) {
       this.puddleRippleGraphics.clear();
-      if (defaultState?.hasRipples && poolFill > 0) {
+      if (primaryState?.hasRipples && poolFill > 0) {
         this.rippleTime += deltaMinutes * 60; // elapsed seconds
         const w = this.scene.scale.width;
         const h = this.scene.scale.height;
-        const px = w * 0.22;
-        const py = h * 0.82;
+        const px = w * primaryZone.x;
+        const py = h * primaryZone.y;
 
         this.puddleRippleGraphics.lineStyle(1.5, 0xd0e8ff, 0.45);
         // Draw 2 concentric expanding ripple rings

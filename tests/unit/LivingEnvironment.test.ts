@@ -416,31 +416,47 @@ describe('Living Environment Subsystem', () => {
       expect(puddle?.fillRate).toBe(0.06);
     });
 
+    const createMockScene = () => ({
+      scale: { width: 1280, height: 720 },
+      time: { now: 5000 },
+      lights: {
+        enable: () => {},
+        setAmbientColor: () => {},
+        addLight: () => ({ setIntensity: () => {}, setColor: () => {} }),
+      },
+      add: {
+        particles: () => ({ setDepth: () => {}, start: () => {}, stop: () => {}, destroy: () => {} }),
+        renderTexture: () => ({
+          setDepth: () => {},
+          setAlpha: () => {},
+          setPosition: () => {},
+          setSize: () => {},
+          clear: () => {},
+          fill: () => {},
+          destroy: () => {},
+        }),
+        graphics: () => ({
+          setDepth: () => {},
+          clear: () => {},
+          lineStyle: () => {},
+          strokeEllipse: () => {},
+          destroy: () => {},
+        }),
+      },
+      textures: {
+        exists: () => true,
+      },
+    });
+
     it('coordinates day phases, puddle state, motion targets, and lightning in EnvironmentManager', () => {
       const projection = createTechnicalFixtureProjection({
         weather: 'rain',
+        isInterior: false,
         minuteOfDay: 1200,
       });
 
-      const mockScene: any = {
-        scale: { width: 1280, height: 720 },
-        time: { now: 5000 },
-        lights: {
-          enable: () => {},
-          setAmbientColor: () => {},
-          addLight: () => ({ setIntensity: () => {}, setColor: () => {} }),
-        },
-        add: {
-          particles: () => ({ setDepth: () => {}, start: () => {}, stop: () => {}, destroy: () => {} }),
-          renderTexture: () => ({ setDepth: () => {}, setAlpha: () => {}, clear: () => {}, fill: () => {}, destroy: () => {} }),
-          graphics: () => ({ setDepth: () => {}, clear: () => {}, lineStyle: () => {}, strokeEllipse: () => {}, destroy: () => {} }),
-        },
-        textures: {
-          exists: () => true,
-        },
-      };
-
-      const envMgr = new EnvironmentManager(mockScene, projection);
+      const mockScene = createMockScene();
+      const envMgr = new EnvironmentManager(mockScene as any, projection);
       envMgr.init();
 
       // Verify day phase params initialized
@@ -451,7 +467,7 @@ describe('Living Environment Subsystem', () => {
       const mockCurtain = { x: 100, y: 100, angle: 0, scaleX: 1, scaleY: 1, alpha: 1 };
       envMgr.registerMotionTarget('fixture_curtain', mockCurtain as any);
 
-      // Advance update by 10 minutes of rain (600,000 ms)
+      // Advance update by 10 minutes of outdoor rain (600,000 ms)
       envMgr.update(6000, 600000);
 
       // Motion target was updated
@@ -474,6 +490,76 @@ describe('Living Environment Subsystem', () => {
       envMgr.update(7000, 1200000);
       const drained = envMgr.getPuddleState('puddle_default');
       expect(drained?.wetness).toBeLessThan(puddle!.wetness);
+
+      envMgr.destroy();
+    });
+
+    it('regression (1): no authored puddleZones results in no synthetic puddle or render target', () => {
+      const projection = createTechnicalFixtureProjection({
+        weather: 'rain',
+        isInterior: false,
+        puddleZones: undefined,
+      });
+
+      const mockScene = createMockScene();
+      const envMgr = new EnvironmentManager(mockScene as any, projection);
+      envMgr.init();
+
+      expect(envMgr.getPuddleStates().size).toBe(0);
+      expect(envMgr.getPuddleState('puddle_default')).toBeUndefined();
+      expect(envMgr.hasPuddleRenderTarget()).toBe(false);
+
+      // Run 10 minutes of outdoor rain
+      envMgr.update(6000, 600000);
+
+      expect(envMgr.getPuddleStates().size).toBe(0);
+      expect(envMgr.getPuddleState('puddle_default')).toBeUndefined();
+      expect(envMgr.hasPuddleRenderTarget()).toBe(false);
+      expect(envMgr.hasActiveRipples()).toBe(false);
+
+      envMgr.destroy();
+    });
+
+    it('regression (2): rainy interior prevents ground puddle accumulation', () => {
+      const projection = createTechnicalFixtureProjection({
+        weather: 'rain',
+        isInterior: true,
+        minuteOfDay: 1200,
+      });
+
+      const mockScene = createMockScene();
+      const envMgr = new EnvironmentManager(mockScene as any, projection);
+      envMgr.init();
+
+      // Authored zone exists in technical fixture
+      expect(envMgr.getPuddleState('puddle_default')).toBeDefined();
+      expect(envMgr.hasPuddleRenderTarget()).toBe(true);
+
+      // Advance 10 minutes of rain while indoors (600,000 ms)
+      envMgr.update(6000, 600000);
+
+      const puddle = envMgr.getPuddleState('puddle_default');
+      expect(puddle).toBeDefined();
+      expect(puddle?.wetness).toBe(0);
+      expect(puddle?.poolFill).toBe(0);
+      expect(puddle?.hasRipples).toBe(false);
+      expect(envMgr.hasActiveRipples()).toBe(false);
+
+      // Transition to outdoor rain
+      envMgr.applyProjection(
+        createTechnicalFixtureProjection({
+          weather: 'rain',
+          isInterior: false,
+          minuteOfDay: 1200,
+        }),
+      );
+
+      envMgr.update(7000, 600000); // 10 minutes of outdoor rain
+      const outdoorPuddle = envMgr.getPuddleState('puddle_default');
+      expect(outdoorPuddle?.wetness).toBeGreaterThan(0.25);
+      expect(outdoorPuddle?.poolFill).toBeGreaterThan(0);
+      expect(outdoorPuddle?.hasRipples).toBe(true);
+      expect(envMgr.hasActiveRipples()).toBe(true);
 
       envMgr.destroy();
     });
