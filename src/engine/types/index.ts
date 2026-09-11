@@ -2,6 +2,8 @@
 // TIME & CLOCK DOMAIN
 // ==========================================
 
+import type { InnerVoicePersistedState } from '../innerVoice/types';
+
 export type TimeOfDay = 'morning' | 'day' | 'evening' | 'night' | 'late_night';
 
 export interface GameTime {
@@ -703,8 +705,7 @@ export interface TelemetryStats {
 
 export interface SimulationState {
   version: number;
-  time: GameTime;
-  player: PlayerState;
+  time: GameTime;  player: PlayerState;
   hardware: HardwareState;
   computer: ComputerSetupState;
   display: DisplaySetupState;
@@ -725,6 +726,12 @@ export interface SimulationState {
     logs: TelemetryRecord[];
   };
   activeView: 'pc' | 'room' | 'cafe' | 'work' | 'city';
+  /**
+   * Player Inner Voice cooldown/notable-history (#23). Additive and optional:
+   * absent in older saves (clean defaults apply), ignored by older builds.
+   * No SAVE_FORMAT bump required.
+   */
+  innerVoice?: InnerVoicePersistedState;
 }
 
 export interface StorePurchaseResultData {
