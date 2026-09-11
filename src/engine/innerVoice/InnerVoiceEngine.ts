@@ -19,20 +19,13 @@ import {
   type ThoughtTrigger,
 } from './types';
 
-/** Cooldown window (game minutes) for ordinary cooldown keys. */
 export const INNER_VOICE_DEFAULT_COOLDOWN_MINUTES = 120;
-/** Shorter window for explicit Inspect/Think re-requests. */
 export const INNER_VOICE_INSPECT_COOLDOWN_MINUTES = 15;
-/** Extended window for notable (urgent / high-priority) thoughts. */
 export const INNER_VOICE_NOTABLE_COOLDOWN_MINUTES = 2880;
-/** Priority at or above which a thought counts as notable. */
 export const INNER_VOICE_NOTABLE_PRIORITY = 80;
-/** Max queued intents waiting for the single active slot. */
 export const INNER_VOICE_MAX_QUEUE = 8;
-/** Max recent intents remembered (session + persisted ids). */
 export const INNER_VOICE_MAX_RECENT = 20;
 
-/** Only these knowledge view fields may feed a ThoughtIntent. */
 const ALLOWED_KNOWLEDGE_KEYS: ReadonlySet<string> = new Set([
   'visiblePlaceId',
   'visibleObjects',
@@ -44,7 +37,6 @@ const ALLOWED_KNOWLEDGE_KEYS: ReadonlySet<string> = new Set([
   'weatherHint',
 ]);
 
-/** Only these knowledge-ref namespaces may feed a ThoughtIntent. */
 const ALLOWED_REF_PREFIXES = ['visible:', 'learned:', 'memory:', 'player:'];
 
 function normalizeKnowledgeToken(value: string): string {
@@ -60,16 +52,16 @@ function listContainsKnowledgeToken(values: readonly string[] | undefined, token
   });
 }
 
+function hintContainsKnowledgeToken(hint: string | undefined, token: string): boolean {
+  if (!hint || !token) return false;
+  return normalizeKnowledgeToken(hint).includes(normalizeKnowledgeToken(token));
+}
+
 function isAllowedRef(ref: string): boolean {
   if (typeof ref !== 'string' || ref.trim() === '') return false;
   return ALLOWED_REF_PREFIXES.some((prefix) => ref.startsWith(prefix));
 }
 
-/**
- * A namespace alone is not proof of knowledge. Every ref must be backed by
- * the caller-provided PlayerKnowledgeView so hidden facts cannot be disguised
- * as learned:/visible:/memory:/player: references.
- */
 function isRefBackedByKnowledge(ref: string, knowledge: PlayerKnowledgeView): boolean {
   const parts = ref.split(':');
   const namespace = parts[0];
@@ -84,7 +76,7 @@ function isRefBackedByKnowledge(ref: string, knowledge: PlayerKnowledgeView): bo
       return Boolean(token) && listContainsKnowledgeToken(knowledge.visibleObjects, token);
     }
     if (domain === 'weather') {
-      return Boolean(knowledge.weatherHint);
+      return hintContainsKnowledgeToken(knowledge.weatherHint, token);
     }
     return false;
   }
@@ -100,17 +92,16 @@ function isRefBackedByKnowledge(ref: string, knowledge: PlayerKnowledgeView): bo
   }
 
   if (namespace === 'player') {
-    if (domain === 'body') return Boolean(knowledge.bodyHint);
-    if (domain === 'economy') return Boolean(knowledge.economyHint);
-    if (domain === 'time') return Boolean(knowledge.timeHint);
-    if (domain === 'weather') return Boolean(knowledge.weatherHint);
+    if (domain === 'body') return hintContainsKnowledgeToken(knowledge.bodyHint, token);
+    if (domain === 'economy') return hintContainsKnowledgeToken(knowledge.economyHint, token);
+    if (domain === 'time') return hintContainsKnowledgeToken(knowledge.timeHint, token);
+    if (domain === 'weather') return hintContainsKnowledgeToken(knowledge.weatherHint, token);
     return false;
   }
 
   return false;
 }
 
-/** Default priority when the trigger leaves it to the rules. */
 function defaultPriorityFor(presentation: ThoughtPresentation): number {
   if (presentation === 'urgent') return 80;
   if (presentation === 'inspect') return 50;
@@ -135,7 +126,6 @@ export class InnerVoiceEngine {
     if (persisted) this.hydrate(persisted);
   }
 
-  /** Restore cooldown/notable-history only. Queue + active stay session-ephemeral. */
   public hydrate(persisted: InnerVoicePersistedState): void {
     this.cooldowns = new Map(
       Object.entries(persisted.cooldowns ?? {}).filter(
@@ -143,11 +133,8 @@ export class InnerVoiceEngine {
       ),
     );
     this.notableIds = new Set((persisted.notableIds ?? []).filter((id) => typeof id === 'string'));
-    // persisted.recent round-trips for history fidelity; cooldowns own replay
-    // protection, so no live slots are seeded here.
   }
 
-  /** Minimal persisted slice: cooldown/notable-history only. */
   public getPersistedState(): InnerVoicePersistedState {
     return {
       cooldowns: Object.fromEntries(this.cooldowns),
@@ -171,7 +158,6 @@ export class InnerVoiceEngine {
     return this.queue.length;
   }
 
-  /** Dismiss the active thought; promote the highest-priority queued intent. */
   public dismissActive(): void {
     if (this.active) {
       this.recent.push(this.active);
@@ -184,11 +170,6 @@ export class InnerVoiceEngine {
     }
   }
 
-  /**
-   * Explicit player Inspect/Think path. Bypasses ambient UI suppression
-   * (the player asked), keeps knowledge/cooldown/dedupe governance, and
-   * never touches world state — it only reads the given knowledge view.
-   */
   public requestInspect(request: InspectThoughtRequest, nowMinute: number): ThoughtIntent | null {
     return this.request(
       {
@@ -208,11 +189,6 @@ export class InnerVoiceEngine {
     );
   }
 
-  /**
-   * Rule-governed request. Returns an approved ThoughtIntent or null when
-   * no thought is owed (ineligible, hidden knowledge, cooldown, dedupe,
-   * suppressed, or queued behind a more important active thought).
-   */
   public request(
     trigger: ThoughtTrigger,
     nowMinute: number,
@@ -226,7 +202,6 @@ export class InnerVoiceEngine {
     const inspectBypass =
       (ui as (InnerVoiceUiState & { inspectBypass?: boolean }) | undefined)?.inspectBypass === true;
 
-    // Shape eligibility: bounded contract, no empty semantic core.
     if (!trigger || typeof trigger.topic !== 'string' || trigger.topic.trim() === '') return null;
     if (typeof trigger.semanticMeaning !== 'string' || trigger.semanticMeaning.trim() === '') return null;
     if (typeof trigger.source !== 'string' || trigger.source.trim() === '') return null;
@@ -234,10 +209,7 @@ export class InnerVoiceEngine {
     const tone = trigger.tone ?? 'neutral';
     if (!(THOUGHT_TONES as readonly string[]).includes(tone)) return null;
 
-    // Knowledge safety: the view itself must carry no smuggled hidden fields.
     if (!this.isKnowledgeViewClean(trigger.knowledge)) return null;
-    // Every provenance ref must be both namespace-safe and actually backed by
-    // the supplied player knowledge view; allowed prefixes are not sufficient.
     for (const ref of trigger.knowledgeRefs) {
       if (!isAllowedRef(ref) || !isRefBackedByKnowledge(ref, trigger.knowledge)) return null;
     }
