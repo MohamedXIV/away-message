@@ -314,7 +314,7 @@ export function createFixtureCurtainCanvas(): HTMLCanvasElement | null {
  * Procedural clock hand canvas for ambient rotation motion
  */
 export function createFixtureClockHandCanvas(): HTMLCanvasElement | null {
-  return createProceduralCanvas(16, 80, (ctx, w, h) => {
+  return createProceduralCanvas(16, 80, (ctx) => {
     ctx.fillStyle = '#ffdf78';
     ctx.beginPath();
     ctx.arc(8, 70, 6, 0, Math.PI * 2);

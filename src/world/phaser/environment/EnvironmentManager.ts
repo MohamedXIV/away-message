@@ -3,12 +3,11 @@
 import Phaser from 'phaser';
 import type { WorldSceneProjection } from '../types';
 import { interpolateDayPhase, type DayPhaseParameters } from './dayPhases';
-import { updatePuddleZones, type PuddleZoneDef, type PuddleZoneState } from './puddles';
+import { updatePuddleZones, type PuddleZoneState } from './puddles';
 import { resolveWeatherLayers, type WeatherLayerResolution } from './weatherLayers';
-import { evaluateAmbientMotion, type AmbientMotionDef } from './ambientMotion';
+import { evaluateAmbientMotion } from './ambientMotion';
 import {
   evaluateAuthoredLight,
-  type AuthoredLightDef,
   type LightningFlashState,
 } from './lightingEngine';
 
@@ -24,7 +23,6 @@ export class EnvironmentManager {
   private dynamicLights: Map<string, Phaser.GameObjects.Light> = new Map();
   private movableLight?: Phaser.GameObjects.Light;
   private activeLightning: LightningFlashState | null = null;
-  private lastLightningTriggerTime = 0;
 
   // Particle Emitters
   private dustMoteEmitter?: Phaser.GameObjects.Particles.ParticleEmitter;
@@ -474,7 +472,7 @@ export class EnvironmentManager {
     }
   }
 
-  private updatePuddles(timeMs: number, deltaMinutes: number): void {
+  private updatePuddles(_timeMs: number, deltaMinutes: number): void {
     const rainIntensity = this.projection.weather === 'rain' ? 1.0 : 0;
     const zones = this.projection.puddleZones ?? [
       {

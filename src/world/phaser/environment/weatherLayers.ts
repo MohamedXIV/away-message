@@ -1,6 +1,6 @@
 // src/world/phaser/environment/weatherLayers.ts
 
-import type { WeatherType } from '../types';
+import type { WeatherType } from '../../types';
 
 export interface WeatherLayerOptions {
   weather: WeatherType;

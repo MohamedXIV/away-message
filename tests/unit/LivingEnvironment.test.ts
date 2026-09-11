@@ -1,8 +1,7 @@
 // @vitest-environment jsdom
 // tests/unit/LivingEnvironment.test.ts
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import Phaser from 'phaser';
+import { describe, it, expect } from 'vitest';
 import { createTechnicalFixtureProjection } from '../../src/world/phaser/technicalFixture';
 import { EnvironmentManager } from '../../src/world/phaser/environment/EnvironmentManager';
 import {
@@ -15,10 +14,7 @@ import {
   type PuddleZoneDef,
   type PuddleZoneState,
 } from '../../src/world/phaser/environment/puddles';
-import {
-  resolveWeatherLayers,
-  type WeatherLayerResolution,
-} from '../../src/world/phaser/environment/weatherLayers';
+import { resolveWeatherLayers } from '../../src/world/phaser/environment/weatherLayers';
 import {
   evaluateAmbientMotion,
   type AmbientMotionDef,
