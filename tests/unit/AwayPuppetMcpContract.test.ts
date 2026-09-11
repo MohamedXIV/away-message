@@ -17,6 +17,11 @@ class FakeRawPuppet implements RawPuppetAdapter {
 
   hasParameter(id: string): boolean { return this.parameters.has(id); }
   hasNode(id: string): boolean { return this.visibleNodes.has(id); }
+  getParameter(id: string): number {
+    const value = this.parameters.get(id);
+    if (value === undefined) throw new Error(`Unknown raw parameter: ${id}`);
+    return value;
+  }
   setParameter(id: string, value: number): void { this.parameters.set(id, value); }
   setNodeVisibility(id: string, visible: boolean): void { this.visibleNodes.set(id, visible); }
   setNodeTint(id: string, color: string): void { this.tints.set(id, color); }
@@ -44,10 +49,13 @@ describe('Away Puppet MCP semantic contract', () => {
       'puppet.inspect',
       'puppet.validate',
       'parameter.list',
+      'parameter.get',
+      'parameter.set',
       'node.list',
       'part.list',
       'away.inspect_contract',
       'away.set_morph',
+      'away.test_morph_extremes',
       'away.set_expression',
       'away.set_pose',
       'part.set_visibility',
@@ -83,6 +91,33 @@ describe('Away Puppet MCP semantic contract', () => {
     expect(serialized).not.toContain('ParamSmile');
     expect(serialized).not.toContain('ParamHeadTilt');
     expect(serialized).not.toContain('NodeHairFront');
+  });
+
+  it('gets and sets parameters only by semantic morph name', () => {
+    const { raw, puppet } = makeFixture();
+    const service = createAwayPuppetToolService(puppet);
+
+    expect(service.call('parameter.get', { name: 'body.mass' })).toEqual({ name: 'body.mass', value: 0 });
+    expect(service.call('parameter.set', { name: 'body.mass', value: 0.4 })).toEqual({ ok: true });
+    expect(service.call('parameter.get', { name: 'body.mass' })).toEqual({ name: 'body.mass', value: 0.4 });
+    expect(raw.parameters.get('ParamBodyMass')).toBe(0.4);
+
+    expect(() => service.call('parameter.get', { name: 'ParamBodyMass' })).toThrow(/Unknown morph/);
+    expect(() => service.call('parameter.set', { name: 'ParamBodyMass', value: 0.5 })).toThrow(/Unknown morph/);
+  });
+
+  it('tests semantic morph extremes deterministically and restores the original value', () => {
+    const { raw, puppet } = makeFixture();
+    const service = createAwayPuppetToolService(puppet);
+    raw.parameters.set('ParamBodyMass', 0.25);
+
+    expect(service.call('away.test_morph_extremes', { name: 'body.mass' })).toEqual({
+      name: 'body.mass',
+      min: -1,
+      max: 1,
+      restored: 0.25,
+    });
+    expect(raw.parameters.get('ParamBodyMass')).toBe(0.25);
   });
 
   it('routes MCP semantic operations through the same validation as direct calls', () => {
