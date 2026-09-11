@@ -23,8 +23,12 @@ import {
 } from './PhysicalItemEngine';
 import { GROCERY_SKUS, type DeliveryOrder, type Fulfillment } from './DeliveryEngine';
 import { PHYSICAL_ITEM_CATALOG } from './hardware/catalog';
-import { parseActiveTravel } from './transit/ActiveTravel';
-import type { ActiveTravelState } from './transit/types';
+import {
+  commitTravelPlan as createActiveTravel,
+  parseActiveTravel,
+  travelStateAtMinute,
+} from './transit/ActiveTravel';
+import type { ActiveTravelState, TravelPlan } from './transit/types';
 import type { SimulationState as TransportSimulationState } from './types';
 import { GENERATED_CONTAINERS, GENERATED_ITEMS } from './worldContent.generated';
 import {
@@ -187,6 +191,8 @@ export class SimulationEngine extends LegacySimulationEngine {
       (initialState as TransportSimulationState | undefined)?.innerVoice ?? null,
     );
     this.delivery.setArrivalHandler((order) => this.materializeDeliveryParcel(order));
+    this.events.on('time:tick', () => this.synchronizeActiveTravel());
+    this.events.on('time:jump', () => this.synchronizeActiveTravel());
   }
 
   private hydratePhysicalWorld(persisted?: PhysicalWorldState): PhysicalWorldState {
@@ -206,6 +212,35 @@ export class SimulationEngine extends LegacySimulationEngine {
       PHYSICAL_ITEM_DEFINITIONS,
       PHYSICAL_CONTAINER_DEFINITIONS,
     );
+  }
+
+  private synchronizeActiveTravel(): void {
+    const current = this.activeTravelState;
+    if (!current || current.status !== 'active') return;
+
+    const resolved = travelStateAtMinute(current, this.clock.getTotalMinutes());
+    if (
+      resolved.status === current.status &&
+      resolved.currentLegIndex === current.currentLegIndex
+    ) {
+      return;
+    }
+
+    const arrivedNow = resolved.status === 'arrived' && current.status !== 'arrived';
+    this.activeTravelState = {
+      ...current,
+      ...resolved,
+    };
+
+    if (arrivedNow) {
+      try {
+        this.telemetry.logEvent('world', 'travel_arrived', this.clock.getTotalMinutes(), {
+          actorId: current.actorId,
+          destinationPlaceId: current.plan.destinationPlaceId,
+          purposeRef: current.purposeRef ?? null,
+        });
+      } catch {}
+    }
   }
 
   private materializeGroceryContainer(
@@ -342,6 +377,46 @@ export class SimulationEngine extends LegacySimulationEngine {
 
   public getActiveTravel(): ActiveTravelState | null {
     return this.activeTravelState ? cloneActiveTravel(this.activeTravelState) : null;
+  }
+
+  public startTravel(
+    actorId: string,
+    plan: TravelPlan,
+    purposeRef?: string,
+  ): { success: boolean; data?: ActiveTravelState; error?: string } {
+    if (this.activeTravelState?.status === 'active') {
+      return { success: false, error: 'An active journey is already in progress.' };
+    }
+    if (!Number.isFinite(plan.fare) || plan.fare < 0) {
+      return { success: false, error: 'Travel fare is invalid.' };
+    }
+    if (actorId === 'player' && !this.economy.canAfford(plan.fare)) {
+      return { success: false, error: `Cannot afford $${plan.fare.toFixed(2)} travel fare.` };
+    }
+
+    const committed = createActiveTravel(
+      actorId,
+      plan,
+      this.clock.getTotalMinutes(),
+      purposeRef,
+    );
+
+    if (actorId === 'player' && !this.economy.spendCash(plan.fare, 'Transit fare')) {
+      return { success: false, error: `Cannot afford $${plan.fare.toFixed(2)} travel fare.` };
+    }
+
+    this.activeTravelState = committed;
+    try {
+      this.telemetry.logEvent('world', 'travel_departed', this.clock.getTotalMinutes(), {
+        actorId,
+        originPlaceId: plan.originPlaceId,
+        destinationPlaceId: plan.destinationPlaceId,
+        fare: plan.fare,
+        purposeRef: purposeRef ?? null,
+      });
+    } catch {}
+
+    return { success: true, data: cloneActiveTravel(committed) };
   }
 
   public override getState(): Readonly<LiveSimulationState> {
