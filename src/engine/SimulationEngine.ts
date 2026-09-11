@@ -401,11 +401,19 @@ export class SimulationEngine extends LegacySimulationEngine {
       purposeRef,
     );
 
-    if (actorId === 'player' && !this.economy.spendCash(plan.fare, 'Transit fare')) {
-      return { success: false, error: `Cannot afford $${plan.fare.toFixed(2)} travel fare.` };
+    this.activeTravelState = committed;
+    if (actorId === 'player') {
+      const fareResult = this.dispatchAction({
+        type: 'PLAYER_SPEND_CASH',
+        amount: plan.fare,
+        reason: 'Transit fare',
+      });
+      if (!fareResult.success) {
+        this.activeTravelState = null;
+        return { success: false, error: fareResult.error ?? `Cannot afford $${plan.fare.toFixed(2)} travel fare.` };
+      }
     }
 
-    this.activeTravelState = committed;
     try {
       this.telemetry.logEvent('world', 'travel_departed', this.clock.getTotalMinutes(), {
         actorId,
@@ -415,7 +423,6 @@ export class SimulationEngine extends LegacySimulationEngine {
         purposeRef: purposeRef ?? null,
       });
     } catch {}
-    this.notifySubscribers();
 
     return { success: true, data: cloneActiveTravel(committed) };
   }
