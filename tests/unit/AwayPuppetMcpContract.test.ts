@@ -41,6 +41,11 @@ describe('Away Puppet MCP semantic contract', () => {
     const { puppet } = makeFixture();
     const service = createAwayPuppetToolService(puppet);
     expect(service.listTools()).toEqual([
+      'puppet.inspect',
+      'puppet.validate',
+      'parameter.list',
+      'node.list',
+      'part.list',
       'away.inspect_contract',
       'away.set_morph',
       'away.set_expression',
@@ -49,6 +54,35 @@ describe('Away Puppet MCP semantic contract', () => {
       'part.set_tint',
     ]);
     expect(service.listTools().some((name) => /malloc|free|pointer|raw\.inochi/i.test(name))).toBe(false);
+  });
+
+  it('exposes semantic inspection inventory without leaking raw Inochi parameter or node ids', () => {
+    const { puppet } = makeFixture();
+    const service = createAwayPuppetToolService(puppet);
+
+    expect(service.call('puppet.inspect')).toEqual({
+      morphs: ['body.mass'],
+      slots: ['hair.front'],
+      tints: ['hair'],
+      expressions: ['awkward_smile'],
+      poses: ['relaxed'],
+      contractVersion: 1,
+    });
+    expect(service.call('puppet.validate')).toEqual({ ok: true, contractVersion: 1 });
+    expect(service.call('parameter.list')).toEqual(['body.mass']);
+    expect(service.call('node.list')).toEqual(['hair.front']);
+    expect(service.call('part.list')).toEqual(['hair.front']);
+
+    const serialized = JSON.stringify({
+      inspect: service.call('puppet.inspect'),
+      parameters: service.call('parameter.list'),
+      nodes: service.call('node.list'),
+      parts: service.call('part.list'),
+    });
+    expect(serialized).not.toContain('ParamBodyMass');
+    expect(serialized).not.toContain('ParamSmile');
+    expect(serialized).not.toContain('ParamHeadTilt');
+    expect(serialized).not.toContain('NodeHairFront');
   });
 
   it('routes MCP semantic operations through the same validation as direct calls', () => {
