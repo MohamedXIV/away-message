@@ -226,7 +226,7 @@ export class SimulationEngine extends LegacySimulationEngine {
       return;
     }
 
-    const arrivedNow = resolved.status === 'arrived' && current.status !== 'arrived';
+    const arrivedNow = resolved.status === 'arrived';
     this.activeTravelState = {
       ...current,
       ...resolved,
