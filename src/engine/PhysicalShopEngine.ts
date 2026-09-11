@@ -26,6 +26,11 @@ export interface PhysicalShopEngineOptions {
   persistedState?: PhysicalShopState;
 }
 
+export interface PhysicalShopCheckoutQuote {
+  itemIds: string[];
+  total: number;
+}
+
 function cloneState(state: PhysicalShopState): PhysicalShopState {
   return {
     stockBySlot: { ...state.stockBySlot },
@@ -110,6 +115,52 @@ export class PhysicalShopEngine {
     return cloneState(this.state);
   }
 
+  public getCashierCapabilities(): { talk: true; checkout: boolean } {
+    return {
+      talk: true,
+      checkout: Object.values(this.state.ownershipByItemId).some((ownership) => ownership === 'unpaid'),
+    };
+  }
+
+  public getCheckoutQuote(pricesByDefinitionId: Readonly<Record<string, number>>): PhysicalShopCheckoutQuote {
+    const itemIds = Object.entries(this.state.ownershipByItemId)
+      .filter(([, ownership]) => ownership === 'unpaid')
+      .map(([instanceId]) => instanceId);
+
+    let total = 0;
+    for (const instanceId of itemIds) {
+      const item = this.physicalItems.getItem(instanceId);
+      if (item.location.kind !== 'container') {
+        throw new Error(`Unpaid item ${instanceId} is not currently carried in a container.`);
+      }
+      const price = pricesByDefinitionId[item.definitionId];
+      if (!Number.isFinite(price) || price! < 0) {
+        throw new Error(`No valid checkout price for item definition ${item.definitionId}.`);
+      }
+      total += price!;
+    }
+
+    return { itemIds, total };
+  }
+
+  public finalizeCheckout(quote: PhysicalShopCheckoutQuote): void {
+    if (quote.itemIds.length === 0) throw new Error('Checkout quote contains no unpaid goods.');
+
+    for (const instanceId of quote.itemIds) {
+      if (this.state.ownershipByItemId[instanceId] !== 'unpaid') {
+        throw new Error(`Item ${instanceId} is no longer unpaid store merchandise.`);
+      }
+      const item = this.physicalItems.getItem(instanceId);
+      if (item.location.kind !== 'container') {
+        throw new Error(`Unpaid item ${instanceId} is no longer carried in a container.`);
+      }
+    }
+
+    for (const instanceId of quote.itemIds) {
+      this.state.ownershipByItemId[instanceId] = 'owned';
+    }
+  }
+
   public take(instanceId: string, destinationContainerInstanceId: string): void {
     if (this.state.ownershipByItemId[instanceId] !== 'store') {
       throw new Error(`Item ${instanceId} is not available store stock.`);
@@ -172,7 +223,10 @@ export class PhysicalShopEngine {
 
     for (const [instanceId, ownership] of Object.entries(this.state.ownershipByItemId)) {
       if (ownership === 'store') continue;
-      this.physicalItems.getItem(instanceId);
+      const item = this.physicalItems.getItem(instanceId);
+      if (item.location.kind !== 'container') {
+        throw new Error(`Persisted carried item ${instanceId} is not located in a container.`);
+      }
       const slotId = this.state.originalSlotByItemId[instanceId];
       if (!slotId || !this.slotsById.has(slotId)) {
         throw new Error(`Persisted carried item ${instanceId} has no authored origin slot.`);
