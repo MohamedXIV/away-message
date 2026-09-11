@@ -1,6 +1,11 @@
 import { SemanticPuppet } from './SemanticPuppet';
 
 export type AwayPuppetToolName =
+  | 'puppet.inspect'
+  | 'puppet.validate'
+  | 'parameter.list'
+  | 'node.list'
+  | 'part.list'
   | 'away.inspect_contract'
   | 'away.set_morph'
   | 'away.set_expression'
@@ -14,6 +19,11 @@ export interface AwayPuppetToolService {
 }
 
 const MODEL_FACING_TOOLS: readonly AwayPuppetToolName[] = [
+  'puppet.inspect',
+  'puppet.validate',
+  'parameter.list',
+  'node.list',
+  'part.list',
   'away.inspect_contract',
   'away.set_morph',
   'away.set_expression',
@@ -61,8 +71,21 @@ export function createAwayPuppetToolService(puppet: SemanticPuppet): AwayPuppetT
 
     call(name: string, rawArgs?: unknown): unknown {
       switch (name) {
+        case 'puppet.inspect':
         case 'away.inspect_contract':
           return puppet.inspect();
+
+        case 'puppet.validate': {
+          const inspection = puppet.inspect();
+          return { ok: true, contractVersion: inspection.contractVersion };
+        }
+
+        case 'parameter.list':
+          return [...puppet.inspect().morphs];
+
+        case 'node.list':
+        case 'part.list':
+          return [...puppet.inspect().slots];
 
         case 'away.set_morph': {
           const args = requireRecord(rawArgs);
