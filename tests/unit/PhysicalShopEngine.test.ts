@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { SimulationEngine } from '../../src/engine/SimulationEngine';
+import { checkoutPhysicalShop } from '../../src/engine/PhysicalShopCheckout';
 import {
   PhysicalItemEngine,
   type PhysicalContainerDefinition,
@@ -117,7 +118,7 @@ describe('PhysicalShopEngine (#27)', () => {
     expect(shop.getCashierCapabilities()).toEqual({ talk: true, checkout: true });
   });
 
-  it('lets SimulationEngine own atomic checkout, deduct exactly once, and preserve carried locations', () => {
+  it('routes atomic checkout through SimulationEngine, deducts exactly once, and preserves carried locations', () => {
     const simulation = new SimulationEngine();
     const { shop, physicalItems } = createShop();
     const instanceIds = [
@@ -131,7 +132,7 @@ describe('PhysicalShopEngine (#27)', () => {
       0,
     );
     const cashBefore = simulation.getState().player.cash;
-    const result = simulation.checkoutPhysicalShop(shop, prices);
+    const result = checkoutPhysicalShop(simulation, shop, prices);
 
     expect(result).toEqual({ success: true, total: expectedTotal, itemIds: instanceIds });
     expect(simulation.getState().player.cash).toBe(cashBefore - expectedTotal);
@@ -144,7 +145,7 @@ describe('PhysicalShopEngine (#27)', () => {
     }
 
     const cashAfter = simulation.getState().player.cash;
-    expect(simulation.checkoutPhysicalShop(shop, prices).success).toBe(false);
+    expect(checkoutPhysicalShop(simulation, shop, prices).success).toBe(false);
     expect(simulation.getState().player.cash).toBe(cashAfter);
   });
 
@@ -157,7 +158,7 @@ describe('PhysicalShopEngine (#27)', () => {
     const beforeState = shop.getState();
     const beforeWorld = physicalItems.getState();
     const cashBefore = simulation.getState().player.cash;
-    const result = simulation.checkoutPhysicalShop(shop, { soda: 1000, noodles: 1000 });
+    const result = checkoutPhysicalShop(simulation, shop, { soda: 1000, noodles: 1000 });
 
     expect(result.success).toBe(false);
     expect(simulation.getState().player.cash).toBe(cashBefore);
@@ -177,7 +178,7 @@ describe('PhysicalShopEngine (#27)', () => {
     const { shop, physicalItems } = createShop();
     const instanceId = shop.getState().stockBySlot['front_shelf:0']!;
     shop.take(instanceId, 'player_inventory');
-    expect(simulation.checkoutPhysicalShop(shop, prices).success).toBe(true);
+    expect(checkoutPhysicalShop(simulation, shop, prices).success).toBe(true);
 
     const restored = createShop(shop.getState(), physicalItems.getState());
     expect(restored.shop.getState().ownershipByItemId[instanceId]).toBe('owned');
