@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { GeneratedChatResponse, GeneratedSiteContent, SuggestedReplies } from './types';
+import type { GeneratedChatResponse, GeneratedSiteContent, InnerVoiceThought, SuggestedReplies } from './types';
 
 const boundedText = (max: number) => z.string().trim().min(1).max(max);
 
@@ -89,4 +89,17 @@ export function parseSuggestedReplies(value: unknown): SuggestedReplies {
     });
   if (replies.length < 3) throw new Error('Expected 3 distinct suggested replies.');
   return { replies };
+}
+
+/**
+ * Strict Inner Voice paraphrase shape (#23): exactly one short thought.
+ * `.strict()` rejects any smuggled mutation fields (cashDelta,
+ * relationshipDelta, grantItem, socialAction, ...).
+ */
+export const InnerVoiceThoughtSchema = z.object({
+  thought: boundedText(140),
+}).strict();
+
+export function parseInnerVoiceThought(value: unknown): InnerVoiceThought {
+  return InnerVoiceThoughtSchema.parse(value);
 }
