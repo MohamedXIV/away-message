@@ -55,6 +55,7 @@ describe('Away Puppet MCP semantic contract', () => {
       'node.list',
       'part.list',
       'away.inspect_contract',
+      'away.validate_rig',
       'away.set_morph',
       'away.test_morph_extremes',
       'away.set_expression',
@@ -106,6 +107,7 @@ describe('Away Puppet MCP semantic contract', () => {
       contractVersion: 1,
     });
     expect(service.call('puppet.validate')).toEqual({ ok: true, contractVersion: 1 });
+    expect(service.call('away.validate_rig')).toEqual({ ok: true, contractVersion: 1 });
     expect(service.call('parameter.list')).toEqual(['body.mass']);
     expect(service.call('node.list')).toEqual(['hair.front']);
     expect(service.call('part.list')).toEqual(['hair.front']);
