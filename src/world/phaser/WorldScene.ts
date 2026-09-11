@@ -9,6 +9,8 @@ import type {
 } from './types';
 import { ensureFixtureTextures, createTechnicalFixtureProjection } from './technicalFixture';
 import { EnvironmentManager } from './environment/EnvironmentManager';
+import { audioService, type AudioService } from '../../audio/AudioService';
+import { mapViewCoordinatesToAudioPosition } from '../../audio/spatialMapping';
 
 export interface WorldSceneInitData {
   projection: WorldSceneProjection;
@@ -21,6 +23,7 @@ export class WorldScene extends Phaser.Scene {
   public projection: WorldSceneProjection = createTechnicalFixtureProjection();
   private onIntent?: (intent: WorldInteractionIntent) => void;
   private environmentManager?: EnvironmentManager;
+  private audioHandles: string[] = [];
 
   // Visual Display Layers
   private layerBackground?: Phaser.GameObjects.Container;
@@ -110,6 +113,13 @@ export class WorldScene extends Phaser.Scene {
     // 10. Initial Camera setup
     this.cameras.main.setZoom(1.0);
     this.cameras.main.centerOn(width / 2, height / 2);
+
+    // 11. Setup Spatial Audio Subsystem
+    this.setupSpatialAudio();
+
+    // Register scene cleanup hooks
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.handleShutdown, this);
+    this.events.once(Phaser.Scenes.Events.DESTROY, this.handleDestroy, this);
   }
 
   public override update(time: number, delta: number): void {
@@ -427,6 +437,17 @@ export class WorldScene extends Phaser.Scene {
       this.cameras.main.pan(fx, fy, 600, 'Power2');
       this.cameras.main.zoomTo(newProjection.focus.zoom, 600, 'Power2');
     }
+
+    // 5. Update audio environment & listener
+    if (newProjection.listenerOrientation) {
+      audioService.setListenerOrientation(newProjection.listenerOrientation);
+    }
+    audioService.updateEnvironment({
+      rainIntensity: newProjection.weather === 'rain' ? 1.0 : 0.0,
+      windIntensity: newProjection.windIntensity ?? 0,
+      isInterior: newProjection.isInterior ?? true,
+      timeOfDay: newProjection.timeOfDay,
+    });
   }
 
   /**
@@ -500,6 +521,50 @@ export class WorldScene extends Phaser.Scene {
       ambientMotion: true,
       weatherOcclusion: true,
       puddleZones: true,
+      spatialAudio: true,
     };
+  }
+
+  private setupSpatialAudio(): void {
+    if (this.projection.listenerOrientation) {
+      audioService.setListenerOrientation(this.projection.listenerOrientation);
+    }
+    audioService.updateEnvironment({
+      rainIntensity: this.projection.weather === 'rain' ? 1.0 : 0.0,
+      windIntensity: this.projection.windIntensity ?? 0,
+      isInterior: this.projection.isInterior ?? true,
+      timeOfDay: this.projection.timeOfDay,
+    });
+
+    if (this.projection.spatialAudioSources) {
+      for (const src of this.projection.spatialAudioSources) {
+        const audioPos = mapViewCoordinatesToAudioPosition(src.x, src.y, src.z ?? 0);
+        const handle = audioService.play(src.eventId, {
+          loop: src.loop ?? true,
+          volume: src.volume ?? 1.0,
+          bus: src.bus ?? 'ambience',
+          position: audioPos,
+          parameters: src.parameters,
+        });
+        if (handle) {
+          this.audioHandles.push(handle);
+        }
+      }
+    }
+  }
+
+  private handleShutdown(): void {
+    for (const handle of this.audioHandles) {
+      audioService.stop(handle, 0);
+    }
+    this.audioHandles = [];
+  }
+
+  private handleDestroy(): void {
+    this.handleShutdown();
+  }
+
+  public getAudioService(): AudioService {
+    return audioService;
   }
 }

@@ -230,6 +230,41 @@ export const PhysicalWorldHost: React.FC<PhysicalWorldHostProps> = ({
                 ⚡ Flash
               </button>
             </div>
+
+            {/* Spatial Audio & Listener Direction */}
+            <div className="flex items-center gap-1 flex-wrap">
+              <span className="text-slate-400">Audio Facing:</span>
+              {(['forward', 'left', 'right', 'back'] as const).map((dir) => (
+                <button
+                  key={dir}
+                  onClick={() => {
+                    runtimeRef.current?.updateProjection({
+                      ...projection,
+                      listenerOrientation: dir,
+                    });
+                  }}
+                  className={`px-1.5 py-0.5 rounded border text-[10px] ${
+                    (projection.listenerOrientation ?? 'forward') === dir
+                      ? 'bg-emerald-700 border-emerald-500 text-white'
+                      : 'bg-slate-800 border-slate-600 text-slate-300'
+                  }`}
+                >
+                  {dir}
+                </button>
+              ))}
+              <button
+                onClick={() => {
+                  const scene = runtimeRef.current?.getScene();
+                  scene?.getAudioService()?.play('sfx.door_open', {
+                    position: { x: -0.7, y: 0, z: 0.3 },
+                  });
+                }}
+                className="px-1.5 py-0.5 rounded bg-amber-900 hover:bg-amber-800 border border-amber-700 text-amber-200 text-[10px]"
+                title="Play 3D positional knock sound from left door"
+              >
+                🚪 Knock
+              </button>
+            </div>
           </div>
 
           {/* Capabilities Report Badge */}
@@ -264,6 +299,9 @@ export const PhysicalWorldHost: React.FC<PhysicalWorldHostProps> = ({
               </span>
               <span className={capabilityReport.puddleZones ? 'text-green-400' : 'text-red-400'}>
                 ✓ Puddle Zones
+              </span>
+              <span className={capabilityReport.spatialAudio ? 'text-green-400' : 'text-red-400'}>
+                ✓ Spatial Audio
               </span>
             </div>
           )}
