@@ -30,7 +30,6 @@ describe('InnerVoiceEngine rules (rules decide, AI only paraphrases)', () => {
       knowledge: {
         visiblePlaceId: 'corner_mart',
         weatherHint: 'rain has started outside',
-        // Runtime-only hidden fields smuggled past the type boundary.
         hiddenMotive: 'she is lying about the money',
         undisclosedFact: 'the safe code is 4412',
         npcPrivateSchedule: 'meets at midnight',
@@ -38,7 +37,6 @@ describe('InnerVoiceEngine rules (rules decide, AI only paraphrases)', () => {
     } as Partial<ThoughtTrigger> as ThoughtTrigger);
     expect(engine.request(hidden, 100)).toBeNull();
 
-    // Even a directly-constructed intent built from hidden refs must be rejected.
     expect(
       engine.request(
         ambientTrigger({ knowledgeRefs: ['undisclosed:item:safe_code'] }),
@@ -47,18 +45,51 @@ describe('InnerVoiceEngine rules (rules decide, AI only paraphrases)', () => {
     ).toBeNull();
   });
 
+  it('rejects allowed-looking provenance refs that are not actually present in player knowledge', () => {
+    const engine = new InnerVoiceEngine();
+
+    expect(
+      engine.request(
+        ambientTrigger({
+          knowledgeRefs: ['learned:npc_secret'],
+          knowledge: { learnedFacts: ['known_shop_hours'] },
+        }),
+        120,
+      ),
+    ).toBeNull();
+
+    expect(
+      engine.request(
+        ambientTrigger({
+          knowledgeRefs: ['visible:place:secret_room'],
+          knowledge: { visiblePlaceId: 'corner_mart' },
+        }),
+        121,
+      ),
+    ).toBeNull();
+
+    const valid = engine.request(
+      ambientTrigger({
+        topic: 'last bus',
+        semanticMeaning: 'i remember when the last bus leaves',
+        cooldownKey: 'learned:last_bus',
+        knowledgeRefs: ['learned:last_bus'],
+        knowledge: { learnedFacts: ['last_bus'] },
+      }),
+      122,
+    );
+    expect(valid).not.toBeNull();
+  });
+
   it('2. cooldown prevents repeated thought spam', () => {
     const engine = new InnerVoiceEngine();
     const first = engine.request(ambientTrigger(), 1000);
     expect(first).not.toBeNull();
     expect(first?.cooldownKey).toBe('weather:rain');
 
-    // Same cooldown key inside the window is suppressed.
     expect(engine.request(ambientTrigger(), 1010)).toBeNull();
     expect(engine.request(ambientTrigger(), 1100)).toBeNull();
 
-    // After the thought is dismissed and the window elapses, the same
-    // observation may surface again (no permanent spam-block for ordinary notes).
     engine.dismissActive();
     const later = engine.request(ambientTrigger(), 5000);
     expect(later).not.toBeNull();
@@ -86,10 +117,8 @@ describe('InnerVoiceEngine rules (rules decide, AI only paraphrases)', () => {
     );
     expect(urgent).not.toBeNull();
     expect(urgent?.presentation).toBe('urgent');
-    // Preemption: the urgent thought is now the single active thought.
     expect(engine.peekActive()?.id).toBe(urgent?.id);
 
-    // A late ambient thought must not displace the urgent one.
     const lateAmbient = engine.request(
       ambientTrigger({ cooldownKey: 'street:neon', topic: 'neon flicker' }),
       106,
@@ -157,7 +186,6 @@ describe('InnerVoiceEngine rules (rules decide, AI only paraphrases)', () => {
     );
     expect(notable).not.toBeNull();
 
-    // Hydrate a fresh engine from persisted cooldown/notable state: same trigger suppressed.
     const persisted = first.getPersistedState();
     const second = new InnerVoiceEngine(persisted);
     expect(
