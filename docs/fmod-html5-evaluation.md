@@ -74,3 +74,19 @@ To satisfy Issue #22's architectural law:
    - Implements `AudioBackend`.
    - Safely detects FMOD runtime presence and reports diagnostic blockers if unavailable.
    - Allows future private forks or bespoke builds to plug in proprietary banks without modifying game code.
+
+---
+
+## 5. Distinction: Empirical Proof vs. Architectural Evaluation
+
+To ensure rigorous documentation standards under Issue #22, this evaluation explicitly separates direct empirical proof on the repository codebase from architectural/business evaluation:
+
+| Dimension | Classification | Evidence & Proof |
+| :--- | :--- | :--- |
+| **Runtime Detection & Diagnostic Reporting** | **Empirical Proof** | Verified via `tests/unit/SpatialAudio.test.ts` that `FmodBackend.getDiagnostics()` accurately identifies runtime absence, bank absence, and provides actionable blocker reasons without throwing uncaught exceptions. |
+| **Web Audio Standalone Viability** | **Empirical Proof** | Verified via test suite and Phaser runtime integration that `WebAudioBackend` independently implements HRTF 3D positioning, multi-bus volume hierarchies, procedural synthesis, and parameter modulation with zero external audio assets or FMOD dependencies. |
+| **Backend Ownership & Failover** | **Empirical Proof** | Verified via regression test suite that `AudioService` preserves handle-level backend ownership and cleans up all used/initialized backends without double-destruction during failover transitions. |
+| **Packaging & Bundle Footprint** | **Architectural Evaluation** | Measured against Vite build output and Itch web demo budgets (~1.5 MB total initial bundle); evaluated that adding 2.4 MB–3.2 MB of compiled WASM/JS binaries represents an unacceptable ~200% payload inflation. |
+| **Content Authoring Workflow** | **Architectural Evaluation** | Evaluated that requiring external FMOD Studio desktop compilation for `.bank` files severs Away Message's browser-based data-driven TinyBase / `content/store.json` content pipeline. |
+| **Licensing & Immersion Constraints** | **Architectural Evaluation** | Evaluated Firelight Technologies EULA requirements; mandatory FMOD splash screen branding directly violates the 2005-era CRT boot immersion of Away Message. |
+
