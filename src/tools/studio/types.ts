@@ -10,6 +10,7 @@ export type StudioTab =
   | 'affinitySeeds'
   | 'world'
   | 'transit'
+  | 'events'
   | 'physical'
   | 'scenes'
   | 'assets'

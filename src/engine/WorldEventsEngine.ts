@@ -6,6 +6,13 @@ import { Appointment, GlobalEvent, WorldState, BuddyAttitude, BuddyEventKnowledg
 import { normalizeBuddyId } from './SocialEngine';
 import { ARCHETYPE_ATTITUDES, resolveArchetype } from './characterTemplates';
 import { CORE_IDS, coreBuddyIds } from './coreBuddies';
+import { GENERATED_EVENT_MODIFIERS } from './worldContent.generated';
+import {
+  projectActiveModifiers,
+  toModifierSpecs,
+  type WorldModifier,
+  type WorldModifierFilter,
+} from './WorldModifiers';
 
 // Re-export for convenience
 export type { GlobalEvent, WorldState };
@@ -297,6 +304,35 @@ export class WorldEventsEngine {
 
   public getPendingEvents(): Omit<GlobalEvent, 'isTriggered' | 'triggeredAtMinute'>[] {
     return Array.from(this.pendingEvents.values());
+  }
+
+  /**
+   * Bounded active-modifier query (#46). Pure projection over authored specs
+   * × canonical triggered events × time: deterministic, idempotent, and
+   * mutation-free (fresh frozen copies per call). Owning domains decide how
+   * to apply the returned effects; this engine never touches consumer state.
+   */
+  public queryActiveModifiers(
+    options?: WorldModifierFilter & { atMinute?: number },
+  ): WorldModifier[] {
+    const atMinute = options?.atMinute ?? this.latestTriggerMinute();
+    return projectActiveModifiers(
+      toModifierSpecs(GENERATED_EVENT_MODIFIERS),
+      this.getTriggeredEvents(),
+      atMinute,
+      options ? { domain: options.domain, kind: options.kind, targetId: options.targetId } : undefined,
+    );
+  }
+
+  /** Latest trigger minute, so a bare query means "as of current event truth". */
+  private latestTriggerMinute(): number {
+    let latest = 0;
+    for (const event of this.triggeredEvents.values()) {
+      if (Number.isFinite(event.triggeredAtMinute) && (event.triggeredAtMinute as number) > latest) {
+        latest = event.triggeredAtMinute as number;
+      }
+    }
+    return latest;
   }
 
   /** Global knowledge context (shared) */
