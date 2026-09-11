@@ -154,6 +154,10 @@ export function projectActiveModifiers(
   atMinute: number,
   filter?: WorldModifierFilter,
 ): WorldModifier[] {
+  // Non-finite time can never satisfy a window guard explicitly: NaN
+  // comparisons are false on both sides, so reject up front instead of
+  // letting triggered effects slip through.
+  if (!Number.isFinite(atMinute)) return [];
   const fired = new Map<string, number>();
   for (const event of triggered) {
     if (event && typeof event.id === 'string' && Number.isFinite(event.triggeredAtMinute)) {

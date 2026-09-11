@@ -311,28 +311,22 @@ export class WorldEventsEngine {
    * × canonical triggered events × time: deterministic, idempotent, and
    * mutation-free (fresh frozen copies per call). Owning domains decide how
    * to apply the returned effects; this engine never touches consumer state.
+   *
+   * Time is explicit and must be finite: there is no "current time" inside
+   * this engine, and inferring it from event history would resurrect expired
+   * modifiers. Non-finite time yields no modifiers.
    */
   public queryActiveModifiers(
-    options?: WorldModifierFilter & { atMinute?: number },
+    options: WorldModifierFilter & { atMinute: number },
   ): WorldModifier[] {
-    const atMinute = options?.atMinute ?? this.latestTriggerMinute();
+    const atMinute = options?.atMinute;
+    if (!Number.isFinite(atMinute)) return [];
     return projectActiveModifiers(
       toModifierSpecs(GENERATED_EVENT_MODIFIERS),
       this.getTriggeredEvents(),
       atMinute,
-      options ? { domain: options.domain, kind: options.kind, targetId: options.targetId } : undefined,
+      { domain: options.domain, kind: options.kind, targetId: options.targetId },
     );
-  }
-
-  /** Latest trigger minute, so a bare query means "as of current event truth". */
-  private latestTriggerMinute(): number {
-    let latest = 0;
-    for (const event of this.triggeredEvents.values()) {
-      if (Number.isFinite(event.triggeredAtMinute) && (event.triggeredAtMinute as number) > latest) {
-        latest = event.triggeredAtMinute as number;
-      }
-    }
-    return latest;
   }
 
   /** Global knowledge context (shared) */

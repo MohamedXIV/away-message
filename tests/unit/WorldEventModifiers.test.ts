@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { SimulationEngine } from '../../src/engine/SimulationEngine';
-import { totalDeliveryBacklogExtra } from '../../src/engine/WorldModifiers';
+import { projectActiveModifiers, totalDeliveryBacklogExtra } from '../../src/engine/WorldModifiers';
 
 /**
  * RED-first TDD for #46: WorldEventsEngine publishes bounded modifiers,
@@ -155,5 +155,44 @@ describe('World event modifiers (#46)', () => {
 
     // Transit publishes nothing yet (#35 owns the future consumer).
     expect(sim.world.queryActiveModifiers({ domain: 'transit', atMinute })).toEqual([]);
+  });
+
+  it('expired modifiers cannot be resurrected by an omitted/default-time query', () => {
+    const sim = new SimulationEngine();
+    const firedAt = 4 * 1440;
+    sim.world.triggerEventById('city_canal_festival', firedAt);
+    expect(sim.world.queryActiveModifiers({ atMinute: firedAt + 10 })).toHaveLength(2);
+
+    const query = sim.world.queryActiveModifiers.bind(sim.world);
+    const pastExpiry = firedAt + 2881;
+    expect(sim.world.queryActiveModifiers({ atMinute: pastExpiry })).toEqual([]);
+    // No default-time path exists: omitted, undefined, and domain-only calls yield nothing.
+    expect((query as (options?: object) => unknown)()).toEqual([]);
+    expect(query({ atMinute: undefined } as never)).toEqual([]);
+    expect((query as (options: object) => unknown)({ domain: 'delivery' })).toEqual([]);
+  });
+
+  it('NaN cannot make modifiers active', () => {
+    const sim = new SimulationEngine();
+    const firedAt = 4 * 1440;
+    sim.world.triggerEventById('city_canal_festival', firedAt);
+    expect(sim.world.queryActiveModifiers({ atMinute: NaN })).toEqual([]);
+    expect(sim.world.queryActiveModifiers({ domain: 'delivery', atMinute: NaN })).toEqual([]);
+    // Projector-level guard: non-finite time short-circuits before window checks.
+    expect(
+      projectActiveModifiers(
+        [{ id: 'x', eventId: 'city_canal_festival', domain: 'delivery', kind: 'courier_backlog', durationMinutes: 2880, targetIds: [] }],
+        [{ id: 'city_canal_festival', triggeredAtMinute: firedAt }],
+        NaN,
+      ),
+    ).toEqual([]);
+    // Finite behavior is unchanged by the guard.
+    expect(
+      projectActiveModifiers(
+        [{ id: 'x', eventId: 'city_canal_festival', domain: 'delivery', kind: 'courier_backlog', durationMinutes: 2880, targetIds: [] }],
+        [{ id: 'city_canal_festival', triggeredAtMinute: firedAt }],
+        firedAt + 1,
+      ),
+    ).toHaveLength(1);
   });
 });
