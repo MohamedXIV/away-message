@@ -5,6 +5,7 @@ export interface RawPuppetAdapter {
   setParameter(id: string, value: number): void;
   setNodeVisibility(id: string, visible: boolean): void;
   setNodeTint(id: string, color: string): void;
+  assignSlot?(nodeId: string, assetId: string): void;
 }
 
 export interface AwayMorphDefinition {
@@ -105,6 +106,13 @@ export class SemanticPuppet {
     if (!morph) throw new Error(`Unknown morph: ${name}`);
     if (!Number.isFinite(value) || value < morph.min || value > morph.max) throw new Error(`Morph ${name} value ${value} is outside [${morph.min}, ${morph.max}]`);
     this.raw.setParameter(morph.parameterId, value);
+  }
+
+  assignSlot(slotName: string, assetId: string): void {
+    const slot = this.metadata.slots[slotName];
+    if (!slot) throw new Error(`Unknown slot: ${slotName}`);
+    if (typeof this.raw.assignSlot !== 'function') throw new Error('Slot assignment is unavailable for this puppet adapter');
+    this.raw.assignSlot(slot.nodeId, assetId);
   }
 
   setPartVisibility(slotName: string, visible: boolean): void {
