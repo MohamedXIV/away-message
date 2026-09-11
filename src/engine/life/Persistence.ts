@@ -172,8 +172,11 @@ export function hydrateNpcLives(data: unknown): NpcLifePersistedState {
     if (typeof actorId !== 'string' || actorId === '') continue;
     if (!rawEntry || typeof rawEntry !== 'object') continue;
     const entry = rawEntry as Partial<NpcLifeEntry>;
-    const goals = hydratePersonalGoals(entry.goals).slice(0, MAX_ACTIVE_GOALS_PER_ACTOR);
-    const pressure = hydrateNpcPressure(entry.pressure);
+    const goals = hydratePersonalGoals(entry.goals)
+      .filter((goal) => goal.actorId === actorId)
+      .slice(0, MAX_ACTIVE_GOALS_PER_ACTOR);
+    const hydratedPressure = hydrateNpcPressure(entry.pressure);
+    const pressure = hydratedPressure?.actorId === actorId ? hydratedPressure : null;
     if (!pressure && goals.length === 0) continue;
     out[actorId] = {
       goals,
