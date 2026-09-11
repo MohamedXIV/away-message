@@ -20,6 +20,7 @@ export interface GeneratedPlaceDef {
   districtId: string;
   name: string;
   transitAccess: GeneratedPlaceTransitAccess[];
+  legacyIds?: string[];
 }
 
 export interface GeneratedTransitStopDef {
@@ -65,12 +66,14 @@ export const GENERATED_PLACES: GeneratedPlaceDef[] = [
     districtId: "district_a",
     name: "Place A1",
     transitAccess: [{ stopId: "stop_a", walkMinutes: 4 }],
+    legacyIds: [],
   },
   {
     id: "place_b1",
     districtId: "district_b",
     name: "Place B1",
     transitAccess: [{ stopId: "stop_b", walkMinutes: 5 }],
+    legacyIds: [],
   },
 ];
 

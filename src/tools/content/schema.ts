@@ -144,6 +144,11 @@ export const CONTENT_SCHEMA = {
     name: { type: 'string', default: '' },
     // JSON array of {stopId, walkMinutes} walking-access links to transit stops.
     transitAccess: { type: 'string', default: '[]' },
+    // JSON array of legacy location ids (e.g. appointment locationId values
+    // like "cafe") that resolve to this transit place. Empty by default:
+    // unmapped ids fail travel planning deterministically instead of
+    // inventing geography. Real town content populates this later.
+    legacyIds: { type: 'string', default: '[]' },
   },
   spaces: {
     placeId: { type: 'string', default: '' },
