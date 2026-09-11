@@ -43,7 +43,7 @@ describe('SimulationEngine transit persistence (#35)', () => {
   });
 
   it('loads older snapshots that predate active-travel persistence as no active journey', () => {
-    const legacy = new SimulationEngine().exportSnapshot() as Record<string, unknown>;
+    const legacy = new SimulationEngine().exportSnapshot() as unknown as Record<string, unknown>;
     delete legacy.activeTravel;
 
     const restored = new SimulationEngine();
