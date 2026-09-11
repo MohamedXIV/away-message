@@ -15,6 +15,7 @@ import { SoftwareRegistry } from './SoftwareRegistry';
 import { SocialEngine } from './SocialEngine';
 import { TelemetryEngine } from './TelemetryEngine';
 import { WorldEventsEngine } from './WorldEventsEngine';
+import { totalDeliveryBacklogExtra } from './WorldModifiers';
 import { OsEngine } from './OsEngine';
 import { PulseEngine } from './PulseEngine';
 import { MyPlaceEngine, CORE_PROFILE_ALIASES } from './MyPlaceEngine';
@@ -1489,7 +1490,15 @@ export class SimulationEngine {
         return { success: true, data: { orderId: order.id, etaMinute: this.clock.getTotalMinutes(), summary: 'Picked up from CornerMart — pantry stocked.' } };
       }
       this.economy.spendCash(total, 'CornerMart delivery');
-      const order = this.delivery.placeDelivery(items, total, nowMinute);
+      // World-event courier backlog (#46): the event engine only publishes the
+      // semantic effect; DeliveryEngine owns readyMinute via placeDelivery.
+      let backlogExtra = 0;
+      try {
+        backlogExtra = totalDeliveryBacklogExtra(
+          this.world.queryActiveModifiers({ domain: 'delivery', atMinute: nowMinute }),
+        );
+      } catch { backlogExtra = 0; }
+      const order = this.delivery.placeDelivery(items, total, nowMinute, { etaExtraMinutes: backlogExtra });
       this.telemetry.logEvent('economy', 'order_placed', nowMinute, { orderId: order.id, total, etaMinute: order.readyMinute });
       this.notifySubscribers();
       const etaH = Math.round((order.readyMinute - nowMinute) / 60);

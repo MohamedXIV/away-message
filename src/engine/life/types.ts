@@ -55,6 +55,22 @@ export interface LifeWorldEventView {
   triggeredAtMinute?: number;
 }
 
+/**
+ * Read-only active-effect view (#46). Provenance only: it references the
+ * source event and the authored modifier, never event mutable status,
+ * attitudes, takes, or consumer outcomes. Recomputed on demand, never
+ * persisted.
+ */
+export interface LifeWorldModifierView {
+  modifierId: string;
+  sourceEventId: string;
+  domain: string;
+  kind: string;
+  startsAtMinute: number;
+  endsAtMinute?: number;
+  value?: number | string | boolean;
+}
+
 export interface LifePresenceView {
   messengerStatus: string;
   awayMessage?: string;
@@ -179,6 +195,11 @@ export interface LifeMatrixSnapshot {
   agenda: LifeAgendaEntry[];
   appointments: LifeAppointmentView[];
   worldEvents: LifeWorldEventView[];
+  /**
+   * Active event effects at atMinute (#46). Optional so older hand-built
+   * snapshots keep compiling; buildLifeMatrixSnapshot always sets it.
+   */
+  eventEffects?: LifeWorldModifierView[];
   presence: LifePresenceView;
   pressure: LifePressureView;
   goals?: PersonalGoal[];

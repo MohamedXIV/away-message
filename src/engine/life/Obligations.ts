@@ -130,5 +130,28 @@ export function buildCharacterObligations(
     }
   }
 
+  // Event opportunities (#46): optional intent candidates sourced from
+  // active life-domain effects. Source-backed (sourceId = event id, time
+  // bounds from the effect window), list-only — no selection (#44).
+  const seenOpportunities = new Set<string>();
+  for (const effect of snapshot.eventEffects ?? []) {
+    if (effect.domain !== 'life' || !effect.kind.endsWith('_opportunity')) continue;
+    if (seenOpportunities.has(effect.sourceEventId)) continue;
+    seenOpportunities.add(effect.sourceEventId);
+    obligations.push({
+      id: `world_event:${snapshot.actorId}:${effect.sourceEventId}`,
+      actorId: snapshot.actorId,
+      sourceKind: 'world_event',
+      sourceId: effect.sourceEventId,
+      earliestAt: effect.startsAtMinute,
+      latestAt: effect.endsAtMinute ?? effect.startsAtMinute + 2 * 1440,
+      priority: typeof effect.value === 'number' && Number.isFinite(effect.value)
+        ? Math.max(0, Math.min(100, Math.round(effect.value)))
+        : 50,
+      flexibility: 'flexible',
+      status: 'pending',
+    });
+  }
+
   return stableSort(obligations);
 }

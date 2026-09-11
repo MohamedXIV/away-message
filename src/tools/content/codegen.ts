@@ -5,6 +5,14 @@
 // The thin Node runner lives in tools/pull-content.ts (fs + argv only).
 
 import type { HairColor, EyeColor } from '../../engine/types';
+import {
+  WORLD_MODIFIER_DOMAINS,
+  WORLD_MODIFIER_KINDS,
+  WORLD_MODIFIER_MAX_DELIVERY_EXTRA_MINUTES,
+  WORLD_MODIFIER_MAX_DURATION_MINUTES,
+  parseModifierValue,
+  type WorldModifierDomain,
+} from '../../engine/WorldModifiers';
 
 export type ContentTables = Record<string, Record<string, Record<string, unknown>>>;
 
@@ -392,6 +400,10 @@ export function validateContent(tables: ContentTables): string[] {
   // configuration only; mutable light/weather/event state stays out.
   errors.push(...validateWorldProfiles(tables));
 
+  // 13. World-event modifier specs (#46). Authored effect templates only;
+  // canonical event truth and active windows stay in WorldEventsEngine.
+  errors.push(...validateEventModifiers(tables));
+
   return errors;
 }
 
@@ -568,6 +580,94 @@ export function validateWorldContent(tables: ContentTables): string[] {
     const fare = r['fare'];
     if (!num(fare) || (fare as number) < 0) {
       errors.push(`busLines/${id}.fare: must be a non-negative number.`);
+    }
+  }
+
+  return errors;
+}
+
+/**
+ * Semantic validation for world-event modifier specs (#46). Authored effect
+ * templates only: unknown event ids validate structurally (they publish
+ * nothing until such an event triggers), but domains/kinds/values must fit
+ * the engine's closed vocabulary. Never repairs: fails loudly.
+ */
+export function validateEventModifiers(tables: ContentTables): string[] {
+  const errors: string[] = [];
+  const specs = tables['eventModifiers'] ?? {};
+  const places = tables['places'] ?? {};
+  const transitStops = tables['transitStops'] ?? {};
+  const busLines = tables['busLines'] ?? {};
+
+  for (const [id, row] of Object.entries(specs)) {
+    if (!row || typeof row !== 'object') {
+      errors.push(`eventModifiers/${id}: must be an object.`);
+      continue;
+    }
+    const idCheck = validateWorldId(id);
+    if (!idCheck.ok) errors.push(`eventModifiers/${id}: ${idCheck.error}`);
+    const r = row as Record<string, unknown>;
+
+    const eventId = r['eventId'];
+    if (typeof eventId !== 'string' || !/^[a-z0-9_]+$/.test(eventId)) {
+      errors.push(`eventModifiers/${id}.eventId: must be a snake_case event id.`);
+    }
+    const domain = r['domain'];
+    if (typeof domain !== 'string' || !(WORLD_MODIFIER_DOMAINS as readonly string[]).includes(domain)) {
+      errors.push(
+        `eventModifiers/${id}.domain: must be one of ${(WORLD_MODIFIER_DOMAINS as readonly string[]).join(', ')}.`
+      );
+      continue;
+    }
+    const kinds = WORLD_MODIFIER_KINDS[domain as WorldModifierDomain];
+    const kind = r['kind'];
+    if (typeof kind !== 'string' || !kinds.includes(kind)) {
+      errors.push(`eventModifiers/${id}.kind: must be one of ${kinds.join(', ')} for domain '${domain}'.`);
+    }
+    const duration = r['durationMinutes'];
+    if (!Number.isInteger(duration) || (duration as number) < 0 || (duration as number) > WORLD_MODIFIER_MAX_DURATION_MINUTES) {
+      errors.push(
+        `eventModifiers/${id}.durationMinutes: must be an int 0..${WORLD_MODIFIER_MAX_DURATION_MINUTES}.`
+      );
+    }
+    let targets: unknown = null;
+    try {
+      targets = JSON.parse(String(r['targetIds'] ?? '[]'));
+    } catch {
+      errors.push(`eventModifiers/${id}.targetIds: invalid JSON array.`);
+      continue;
+    }
+    if (!Array.isArray(targets)) {
+      errors.push(`eventModifiers/${id}.targetIds: must be a JSON array.`);
+    } else {
+      if (targets.length > 16) errors.push(`eventModifiers/${id}.targetIds: max 16 targets.`);
+      for (const [i, target] of targets.entries()) {
+        if (typeof target !== 'string' || !target) {
+          errors.push(`eventModifiers/${id}.targetIds[${i}]: must be a non-empty id string.`);
+          continue;
+        }
+        if (!places[target] && !transitStops[target] && !busLines[target]) {
+          errors.push(`eventModifiers/${id}.targetIds[${i}]: unknown place/stop/line '${target}'.`);
+        }
+      }
+    }
+    const value = r['value'];
+    if (typeof value !== 'string') {
+      errors.push(`eventModifiers/${id}.value: must be a string cell (parsed by kind).`);
+    } else if (value.length > 80) {
+      errors.push(`eventModifiers/${id}.value: max 80 chars.`);
+    } else if (domain === 'delivery' && kind === 'courier_backlog' && value.trim() !== '') {
+      const minutes = Number(value);
+      if (!Number.isFinite(minutes) || Math.round(minutes) < 0 || Math.round(minutes) > WORLD_MODIFIER_MAX_DELIVERY_EXTRA_MINUTES) {
+        errors.push(
+          `eventModifiers/${id}.value: courier_backlog must be empty or 0..${WORLD_MODIFIER_MAX_DELIVERY_EXTRA_MINUTES} minutes.`
+        );
+      }
+    } else if (domain === 'life' && typeof kind === 'string' && kind.endsWith('_opportunity') && value.trim() !== '') {
+      const priority = Number(value);
+      if (!Number.isFinite(priority) || Math.round(priority) < 0 || Math.round(priority) > 100) {
+        errors.push(`eventModifiers/${id}.value: life opportunities must be empty or a priority 0..100.`);
+      }
     }
   }
 
@@ -1257,6 +1357,7 @@ export function generateWorldRegistrySource(tables: ContentTables): string {
   const places = tables['places'] ?? {};
   const transitStops = tables['transitStops'] ?? {};
   const busLines = tables['busLines'] ?? {};
+  const eventModifiers = tables['eventModifiers'] ?? {};
   const items = tables['items'] ?? {};
   const containers = tables['containers'] ?? {};
   const spaces = tables['spaces'] ?? {};
@@ -1646,6 +1747,40 @@ export function generateWorldRegistrySource(tables: ContentTables): string {
     lines.push(`    timeOfDay: ${optStr(r['timeOfDay'])},`);
     lines.push(`    density: ${Number(r['density'] ?? 0)},`);
     lines.push(`    tags: [${strArr(r['tags']).map((t) => tsString(t)).join(', ')}],`);
+    lines.push('  },');
+  }
+  lines.push('];');
+  lines.push('');
+
+  lines.push('export interface GeneratedEventModifierDef {');
+  lines.push('  id: string;');
+  lines.push('  eventId: string;');
+  lines.push('  domain: string;');
+  lines.push('  kind: string;');
+  lines.push('  durationMinutes: number;');
+  lines.push('  targetIds: string[];');
+  lines.push('  value?: number | string | boolean;');
+  lines.push('}');
+  lines.push('');
+
+  lines.push('export const GENERATED_EVENT_MODIFIERS: GeneratedEventModifierDef[] = [');
+  for (const id of Object.keys(eventModifiers).sort()) {
+    const r = eventModifiers[id] as Record<string, unknown>;
+    const domain = String(r['domain'] ?? '');
+    const kind = String(r['kind'] ?? '');
+    const value = (WORLD_MODIFIER_DOMAINS as readonly string[]).includes(domain)
+      ? parseModifierValue(domain as WorldModifierDomain, kind, String(r['value'] ?? ''))
+      : undefined;
+    lines.push('  {');
+    lines.push(`    id: ${tsString(id)},`);
+    lines.push(`    eventId: ${tsString(String(r['eventId'] ?? ''))},`);
+    lines.push(`    domain: ${tsString(domain)},`);
+    lines.push(`    kind: ${tsString(kind)},`);
+    lines.push(`    durationMinutes: ${Number(r['durationMinutes'] ?? 0)},`);
+    lines.push(`    targetIds: [${strArr(r['targetIds']).map((t) => tsString(t)).join(', ')}],`);
+    if (value !== undefined) {
+      lines.push(`    value: ${typeof value === 'string' ? tsString(value) : String(value)},`);
+    }
     lines.push('  },');
   }
   lines.push('];');

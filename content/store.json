@@ -374,6 +374,32 @@
       "fare": 2
     }
   },
+  "eventModifiers": {
+    "festival_courier_backlog": {
+      "eventId": "city_canal_festival",
+      "domain": "delivery",
+      "kind": "courier_backlog",
+      "durationMinutes": 2880,
+      "targetIds": "[]",
+      "value": "360"
+    },
+    "festival_night_opportunity": {
+      "eventId": "city_canal_festival",
+      "domain": "life",
+      "kind": "festival_opportunity",
+      "durationMinutes": 2880,
+      "targetIds": "[]",
+      "value": "60"
+    },
+    "os7_upgrade_opportunity": {
+      "eventId": "orion_os_7_release",
+      "domain": "life",
+      "kind": "upgrade_opportunity",
+      "durationMinutes": 4320,
+      "targetIds": "[]",
+      "value": "40"
+    }
+  },
   "items": {
     "item_a": {
       "name": "Item A",

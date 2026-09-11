@@ -21,40 +21,56 @@ import type {
   WorldPointLightDef,
 } from './types';
 
+import { interpolateDayPhase, CANONICAL_DAY_PHASES } from './environment/dayPhases';
+import type { PuddleZoneDef } from './environment/puddles';
+import type { AmbientMotionDef } from './environment/ambientMotion';
+import type { AuthoredLightDef } from './environment/lightingEngine';
+
 export interface CreateProjectionOptions {
   placeId: string;
   viewId?: string;
   timeOfDay?: TimeOfDay;
+  minuteOfDay?: number;
   weather?: WeatherType;
   customLights?: WorldPointLightDef[];
+  authoredLights?: AuthoredLightDef[];
+  puddleZones?: PuddleZoneDef[];
+  ambientMotions?: AmbientMotionDef[];
+  windIntensity?: number;
+  isInterior?: boolean;
   focus?: WorldCameraFocus | null;
+}
+
+export function getMinuteForTimeOfDay(timeOfDay: TimeOfDay): number {
+  switch (timeOfDay) {
+    case 'morning':
+      return CANONICAL_DAY_PHASES.dawn_morning.minuteOfDay;
+    case 'day':
+      return CANONICAL_DAY_PHASES.day.minuteOfDay;
+    case 'evening':
+      return CANONICAL_DAY_PHASES.dusk_evening.minuteOfDay;
+    case 'night':
+      return 1320; // 22:00 (evening-to-night transition)
+    case 'late_night':
+      return CANONICAL_DAY_PHASES.night_late_night.minuteOfDay; // 150 (02:30 deepest night)
+    default:
+      return 720;
+  }
 }
 
 export function getLightingForTimeOfDay(
   timeOfDay: TimeOfDay,
-  customLights: WorldPointLightDef[] = []
+  customLights: WorldPointLightDef[] = [],
+  minuteOfDay?: number
 ): WorldLightingProjection {
-  // Check generated light profiles first
+  const minute = minuteOfDay ?? getMinuteForTimeOfDay(timeOfDay);
+  const phaseParams = interpolateDayPhase(minute);
+
+  // Check generated light profiles for explicit overrides
   const profile = GENERATED_LIGHT_PROFILES.find((p) => p.timeOfDay === timeOfDay);
 
-  const ambientColorMap: Record<TimeOfDay, string> = {
-    morning: '#fff2d0',
-    day: '#ffffff',
-    evening: '#ffaa77',
-    night: '#2b334d',
-    late_night: '#191e30',
-  };
-
-  const intensityMap: Record<TimeOfDay, number> = {
-    morning: 0.8,
-    day: 1.0,
-    evening: 0.7,
-    night: 0.35,
-    late_night: 0.25,
-  };
-
-  const ambientColor = profile?.colorTint ?? ambientColorMap[timeOfDay] ?? '#ffffff';
-  const ambientIntensity = profile?.intensity ?? intensityMap[timeOfDay] ?? 1.0;
+  const ambientColor = profile?.colorTint ?? phaseParams.ambientColor;
+  const ambientIntensity = profile ? profile.intensity : phaseParams.ambientIntensity;
 
   // Default point lights if none provided
   const pointLights: WorldPointLightDef[] = customLights.length > 0
@@ -112,6 +128,12 @@ export function createWorldSceneProjection(
     weather = 'clear',
     customLights = [],
     focus = null,
+    minuteOfDay,
+    authoredLights,
+    puddleZones,
+    ambientMotions,
+    windIntensity = 0,
+    isInterior: explicitIsInterior,
   } = options;
 
   const place = GENERATED_PLACES.find((p) => p.id === placeId);
@@ -119,10 +141,17 @@ export function createWorldSceneProjection(
   const spaceIds = new Set(spaces.map((s) => s.id));
   const viewsInPlace = GENERATED_VIEWS.filter((v) => spaceIds.has(v.spaceId));
 
-  const activeView = (viewId ? viewsInPlace.find((v) => v.id === viewId) : viewsInPlace[0])
-    ?? (viewId ? GENERATED_VIEWS.find((v) => v.id === viewId) : null);
+  const activeView = viewId ? viewsInPlace.find((v) => v.id === viewId) : viewsInPlace[0];
+
+  // Authored places must never borrow a globally matching view from another place.
+  // Keep the legacy empty-projection fallback for wholly unauthored/missing places so
+  // callers can fail soft while content authoring is incomplete.
+  if (place && viewId && !activeView) {
+    throw new Error(`View ${viewId} does not belong to place ${placeId}`);
+  }
 
   const activeSpace = activeView ? spaces.find((s) => s.id === activeView.spaceId) : null;
+  const isInterior = explicitIsInterior ?? (activeSpace ? !activeSpace.tags.includes('exterior') : true);
 
   // Asset resolution
   let assetId: string | null = activeView?.assetId ?? null;
@@ -164,7 +193,8 @@ export function createWorldSceneProjection(
     neighbors: v.neighbors,
   }));
 
-  const lighting = getLightingForTimeOfDay(timeOfDay, customLights);
+  const effectiveMinute = minuteOfDay ?? getMinuteForTimeOfDay(timeOfDay);
+  const lighting = getLightingForTimeOfDay(timeOfDay, customLights, effectiveMinute);
   const particles = getParticlesForWeather(weather);
 
   return {
@@ -183,6 +213,12 @@ export function createWorldSceneProjection(
     anchors: anchorProjections,
     availableViews,
     focus,
+    minuteOfDay: effectiveMinute,
+    isInterior,
+    windIntensity,
+    puddleZones,
+    ambientMotions,
+    authoredLights,
   };
 }
 

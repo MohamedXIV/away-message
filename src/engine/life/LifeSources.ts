@@ -9,6 +9,7 @@ import type {
   LifePromiseView,
   LifeRelationshipView,
   LifeWorldEventView,
+  LifeWorldModifierView,
   PersonalGoal,
   FidelityTier,
 } from './types';
@@ -31,6 +32,11 @@ export interface LifeSourceAdapterInput {
   getPressure?(actorId: string, atMinute: number): LifePressureView;
   getGoals?(actorId: string): PersonalGoal[];
   getFidelityTier?(actorId: string): FidelityTier;
+  /**
+   * Active event effects at a minute (#46). Optional so hand-built adapters
+   * keep compiling; the simulation adapter always provides it.
+   */
+  getActiveModifiers?(atMinute: number): LifeWorldModifierView[];
 }
 
 export type LifeSources = Readonly<LifeSourceAdapterInput>;
@@ -51,7 +57,7 @@ type SocialLifeReads = Pick<
   | 'getPresence'
 >;
 
-type WorldLifeReads = Pick<WorldEventsEngine, 'getAppointments' | 'getTriggeredEvents'>;
+type WorldLifeReads = Pick<WorldEventsEngine, 'getAppointments' | 'getTriggeredEvents' | 'queryActiveModifiers'>;
 
 export interface SimulationLifeSourceHost {
   readonly social: SocialLifeReads;
@@ -151,5 +157,16 @@ export function createSimulationLifeSources(sim: SimulationLifeSourceHost): Life
     getPressure: (actorId) => sim.getNpcPressure?.(actorId) ?? {},
     getGoals: (actorId) => sim.getPersonalGoals?.(actorId) ?? [],
     getFidelityTier: (actorId) => sim.getFidelityTier?.(actorId) ?? 'important_local',
+    // Active effects only: provenance views, never event truth or outcomes.
+    getActiveModifiers: (atMinute) =>
+      sim.world.queryActiveModifiers({ atMinute }).map((modifier) => ({
+        modifierId: modifier.id,
+        sourceEventId: modifier.sourceEventId,
+        domain: modifier.domain,
+        kind: modifier.kind,
+        startsAtMinute: modifier.startsAtMinute,
+        ...(modifier.endsAtMinute === undefined ? {} : { endsAtMinute: modifier.endsAtMinute }),
+        ...(modifier.value === undefined ? {} : { value: modifier.value }),
+      })),
   });
 }

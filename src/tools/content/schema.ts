@@ -234,6 +234,25 @@ export const CONTENT_SCHEMA = {
     // Fare per complete planned itinerary using this line.
     fare: { type: 'number', default: 2 },
   },
+  eventModifiers: {
+    // Canonical world-event id this modifier spec attaches to (e.g. city_canal_festival).
+    // Must match a WorldEventsEngine catalog or injectable event id; unknown ids
+    // validate structurally but publish nothing until such an event triggers.
+    eventId: { type: 'string', default: '' },
+    // Owning consumer domain. WorldEventsEngine publishes; each domain applies.
+    // transit | place | staffing | delivery | network | life
+    domain: { type: 'string', default: '' },
+    // Bounded semantic kind within the domain (see validateEventModifiers).
+    kind: { type: 'string', default: '' },
+    // Active-window length in game minutes from the event trigger; 0 = momentary
+    // (active only at the exact trigger minute), max 4320 (3 days).
+    durationMinutes: { type: 'number', default: 1440 },
+    // JSON array of targeted place/stop/line ids; [] = domain-wide effect.
+    targetIds: { type: 'string', default: '[]' },
+    // Scalar payload meaning depends on kind (e.g. extra courier minutes).
+    // Stored as string; parsed by kind (number | boolean | short string).
+    value: { type: 'string', default: '' },
+  },
 } as const satisfies TablesSchema;
 
 export type ContentStore = ReturnType<typeof createContentStore>;

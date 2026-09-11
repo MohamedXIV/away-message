@@ -63,6 +63,7 @@ if (process.argv.includes('--check')) {
   const places = Object.keys(tables['places'] ?? {}).length;
   const stops = Object.keys(tables['transitStops'] ?? {}).length;
   const lines = Object.keys(tables['busLines'] ?? {}).length;
+  const modifiers = Object.keys(tables['eventModifiers'] ?? {}).length;
   console.log(`content:pull ok — ${ids} characters, ${pools} dialogue pools → src/engine/coreBuddies.generated.ts`);
-  console.log(`content:pull ok — ${districts} districts, ${places} places, ${stops} stops, ${lines} bus lines → src/engine/worldContent.generated.ts`);
+  console.log(`content:pull ok — ${districts} districts, ${places} places, ${stops} stops, ${lines} bus lines, ${modifiers} event modifiers → src/engine/worldContent.generated.ts`);
 }

@@ -12,6 +12,7 @@ import { DialoguePoolsTab } from './tabs/DialoguePoolsTab';
 import { AffinitySeedsTab } from './tabs/AffinitySeedsTab';
 import { WorldBasicsTab } from './tabs/WorldBasicsTab';
 import { TransitTab } from './tabs/TransitTab';
+import { EventsTab } from './tabs/EventsTab';
 import { PhysicalDefinitionsTab } from './tabs/PhysicalDefinitionsTab';
 import { ScenesTab } from './tabs/ScenesTab';
 import { AssetsTab } from './tabs/AssetsTab';
@@ -77,6 +78,7 @@ export const ContentStudioShell: React.FC<Props> = ({ store }) => {
   const transitCount =
     Object.keys(studio.tables['transitStops'] ?? {}).length +
     Object.keys(studio.tables['busLines'] ?? {}).length;
+  const eventCount = Object.keys(studio.tables['eventModifiers'] ?? {}).length;
   const physicalCount =
     Object.keys(studio.tables['items'] ?? {}).length +
     Object.keys(studio.tables['containers'] ?? {}).length;
@@ -146,6 +148,7 @@ export const ContentStudioShell: React.FC<Props> = ({ store }) => {
             { id: 'archetypes', label: 'Archetypes', count: archCount },
             { id: 'world', label: 'World', count: worldCount },
             { id: 'transit', label: 'Transit', count: transitCount },
+            { id: 'events', label: 'Events', count: eventCount },
             { id: 'physical', label: 'Physical', count: physicalCount },
             { id: 'scenes', label: 'Scenes', count: sceneCount },
             { id: 'assets', label: 'Assets', count: assetCount },
@@ -252,6 +255,7 @@ export const ContentStudioShell: React.FC<Props> = ({ store }) => {
         {activeTab === 'affinitySeeds' && <AffinitySeedsTab studio={studio} />}
         {activeTab === 'world' && <WorldBasicsTab studio={studio} />}
         {activeTab === 'transit' && <TransitTab studio={studio} />}
+        {activeTab === 'events' && <EventsTab studio={studio} />}
         {activeTab === 'physical' && <PhysicalDefinitionsTab studio={studio} />}
         {activeTab === 'scenes' && <ScenesTab studio={studio} />}
         {activeTab === 'assets' && <AssetsTab studio={studio} />}
