@@ -5,6 +5,16 @@ import { EconomyEngine } from '../../src/engine/EconomyEngine';
 import { FileSystemEngine } from '../../src/engine/FileSystemEngine';
 import { DownloadManager } from '../../src/engine/DownloadManager';
 import { SimulationEngine } from '../../src/engine/SimulationEngine';
+import { createScrapYardBundle } from '../../src/engine/hardware/catalog';
+import { legacyModularToCanonical } from '../../src/engine/hardware/state';
+
+function makeNetworkedEngine(): SimulationEngine {
+  const canonical = legacyModularToCanonical(createScrapYardBundle());
+  return new SimulationEngine({
+    computer: canonical.computer,
+    display: canonical.display,
+  } as any);
+}
 
 describe('Adversarial Stress Test Suite — Milestone 1 Engine', () => {
   // =========================================================================
@@ -621,7 +631,7 @@ describe('Adversarial Stress Test Suite — Milestone 1 Engine', () => {
   // =========================================================================
   describe('SimulationEngine: Integrated High-Entropy 14-Day Simulation Stress', () => {
     it('executes a full 14-day continuous lifecycle with mixed work shifts, rent payments, downloads and sleep cycles', () => {
-      const sim = new SimulationEngine();
+      const sim = makeNetworkedEngine();
 
       expect(sim.getState().time.day).toBe(1);
       expect(sim.getState().player.cash).toBe(38.0);

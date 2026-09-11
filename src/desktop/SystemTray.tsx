@@ -118,7 +118,7 @@ export const SystemTray: React.FC<SystemTrayProps> = ({ onOpenDialUp }) => {
       {/* 1. Network Activity Monitor */}
       <div
         className="flex items-center gap-1 cursor-pointer px-1 py-0.5 hover:bg-white/20 rounded"
-        title={`${hardware.connectionType.toUpperCase()} (${hardware.connectionSpeedKbps} kbps) - ${
+        title={`${hardware.connectionType ? hardware.connectionType.toUpperCase() : 'OFFLINE'} (${hardware.connectionSpeedKbps} kbps) - ${
           activeDownloads.length
         } active download(s)`}
         onClick={onOpenDialUp}

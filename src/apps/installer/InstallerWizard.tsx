@@ -19,6 +19,9 @@ export const InstallerWizard: React.FC<InstallerWizardProps> = ({ window }) => {
   // Map fileName to softwareId
   const FILE_TO_SOFTWARE: Record<string, string> = {
     'pulse52_setup.exe': 'sw_pulse_52',
+    'pulse_5.2.exe': 'sw_pulse_52',
+    'pulse_5.2_setup.exe': 'sw_pulse_52',
+    'pulse_6.0.exe': 'sw_pulse_60',
     'retroamp_setup.exe': 'sw_retroamp_23',
     'flashfetch_setup.exe': 'sw_flashfetch_31',
     'zipmate_setup.exe': 'sw_zipmate_40',

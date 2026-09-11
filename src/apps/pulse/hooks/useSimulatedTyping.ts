@@ -6,6 +6,7 @@ import { DIALOGUE_SCRIPTS } from '../data/dialogueTrees';
 import { parseNarrativeTag } from '../../../narrative/tagParser';
 import type { GeneratedChatResponse } from '../../../ai/types';
 import { getNpcStyle } from '../data/npcStyles';
+import { CORE_IDS } from '../../../engine/coreBuddies';
 
 export interface TypingState {
   isTyping: boolean;
@@ -83,7 +84,7 @@ export function useSimulatedTyping(_activeConversationBuddyId: string | null) {
             type: 'NARRATIVE_SCHEDULE_APPOINTMENT',
             appointment: {
               id: parsed.appointmentId,
-              characterId: parsed.characterId || 'maya',
+              characterId: parsed.characterId || CORE_IDS.MAYA,
               locationId: parsed.location,
               targetDay: parsed.day,
               startMinute: parsed.startMinute,
@@ -107,6 +108,7 @@ export function useSimulatedTyping(_activeConversationBuddyId: string | null) {
     clearTimeouts();
     const buddy = engine.social.getBuddy(script.buddyId);
     const style = getNpcStyle(script.buddyId);
+    const traits = engine.social.getTraits(script.buddyId);
     // Prefer style profile wpm but respect engine's buddy speed if it exists; apply variance for human feel
     const baseWpm = style.typing.wpm ?? buddy?.typingSpeedWpm ?? 60;
     const varianceFactor = 1 + ((Math.random() * 2 - 1) * (style.typing.variance ?? 10) / 100);
@@ -116,16 +118,16 @@ export function useSimulatedTyping(_activeConversationBuddyId: string | null) {
     let accumulatedDelay = 400;
 
     script.messages.forEach((msg, idx) => {
-      // Apply style pause: Maya is hesitant (longer), Ryan is bursty (shorter)
-      const isLongPause = style.buddyId === 'maya' && msg.text.includes('...');
+      // Hesitant buddies (high shyness) pause longer on ellipses.
+      const isLongPause = traits.shyness >= 70 && msg.text.includes('...');
       const hesitationExtra = isLongPause ? 500 : 0;
       const typingDuration = Math.max(800, Math.min(4200, (msg.text.length / cps) * 1000 + hesitationExtra));
 
       const t1 = setTimeout(() => {
         const indicatorText = (() => {
-          if (style.buddyId === 'maya') return 'maya is typing a message...';
-          if (style.buddyId === 'nora') return 'NightOwl87 is typing...';
-          if (style.buddyId === 'henderson') return `${buddy?.displayName || script.buddyId} is typing...`;
+          // Shy buddies show their handle (hiding behind it); formal ones use full names.
+          if (traits.shyness >= 70) return `${buddy?.handle || script.buddyId} is typing...`;
+          if (traits.discipline >= 80) return `${buddy?.displayName || script.buddyId} is typing...`;
           return `${buddy?.displayName || script.buddyId} is typing a message...`;
         })();
         setTypingState((prev) => ({
@@ -251,7 +253,7 @@ export function useSimulatedTyping(_activeConversationBuddyId: string | null) {
             type: 'SOCIAL_SEND_MESSAGE',
             buddyId,
             text: fullText,
-            tags: [choice.socialAction],
+            tags: [choice.socialAction, 'scripted'],
           });
           engine.dispatchAction({
             type: 'SOCIAL_APPLY_ACTION',

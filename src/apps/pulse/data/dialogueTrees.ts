@@ -1,6 +1,7 @@
 import { NpcDialogueScript } from '../types';
 import { ALL_STORY_KNOTS } from '../../../narrative/data/allKnots';
 import { StoryKnot } from '../../../narrative/types';
+import { CORE_IDS } from '../../../engine/coreBuddies';
 
 function knotToScript(knot: StoryKnot): NpcDialogueScript {
   return {
@@ -34,7 +35,7 @@ const baseScripts: NpcDialogueScript[] = ALL_STORY_KNOTS.map(knotToScript);
 // Backwards-compatible aliases for existing unit tests
 const ryanIntroScript: NpcDialogueScript = {
   id: 'ryan_intro',
-  buddyId: 'ryan',
+  buddyId: CORE_IDS.RYAN,
   day: 1,
   messages: [
     { text: 'yo wanderer! smell anything sizzling across the canal?', delaySeconds: 1 },
@@ -58,7 +59,7 @@ const ryanIntroScript: NpcDialogueScript = {
 
 const noraIntroScript: NpcDialogueScript = {
   id: 'nora_intro',
-  buddyId: 'nora',
+  buddyId: CORE_IDS.NORA,
   day: 1,
   messages: [
     { text: '...you are in Room 104 at Starlite, right?', delaySeconds: 1.2 },

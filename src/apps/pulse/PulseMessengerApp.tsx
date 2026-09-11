@@ -32,35 +32,35 @@ import {
   subscribePulseMemoryChanged,
 } from './utils/chatContext';
 import { CHARACTER_ARCHETYPES, pickTemplateOfflineLine, pickRoomExitLine } from '../../engine/characterTemplates';
+import { CORE_BY_ID, CORE_IDS } from '../../engine/coreBuddies';
 import { planInitiatives } from './utils/initiatives';
+import { toneSuggestion } from '../../engine/PlayerActs';
+import type { ReplySuggestionItem } from './hooks/useReplySuggestions';
 import { computeRoomMood, pickDirectTarget, buildRoomContext, roomMoodInstruction, directAddressInstruction, type RoomPair, type DirectTarget } from '../../engine/RoomDirector';
 import type { BuddyCharacter } from '../../engine/types';
 
 function getBuddyPersona(buddyId: string, buddy?: BuddyCharacter | null): string {
-  const personas: Record<string, string> = {
-    ryan: 'Warm, impulsive food-cart coworker. Uses casual slang, jokes, and short messages. He avoids heavy emotional talks unless trust is high.',
-    maya: 'Quiet, observant, creative, and a little guarded. Uses lowercase, pauses, music references, and gentle honesty. She warms up slowly.',
-    nora: 'Night-owl archivist with dry humor. Curious about strange details, concise, slightly cryptic, but not supernatural.',
-    henderson: 'Professional motel manager. Formal, practical, and terse. He cares about rent, schedules, and keeping the property calm.',
-  };
-  if (personas[buddyId]) return personas[buddyId]!;
+  // Core voices come from the registry (same source as buddyPersonaLine).
+  const core = CORE_BY_ID[buddyId];
+  if (core) return core.persona;
   // Dynamic buddies speak from their archetype template (governed, offline-safe).
   const archetype = buddy?.archetype && CHARACTER_ARCHETYPES[buddy.archetype] ? buddy.archetype : undefined;
   if (archetype) {
     const template = CHARACTER_ARCHETYPES[archetype];
-    return `${template.personaHint} Vocabulary hints: ${template.vocabulary.join(', ')}. Quirks: ${template.quirks.join(', ')}.`;
+    if (template) {
+      return `${template.personaHint} Vocabulary hints: ${template.vocabulary.join(', ')}. Quirks: ${template.quirks.join(', ')}.`;
+    }
   }
   return 'A believable online friend with a distinct but grounded personality.';
 }
 
 function getRoomReply(roomId: string): { senderId: string; text: string } {
-  if (roomId === 'pc-help') return { senderId: 'ryan', text: 'drop the specs and someone will probably have a mirror link' };
-  if (roomId === 'night-shift') return { senderId: 'maya', text: 'hold on... i have a track for exactly that mood' };
-  return { senderId: 'nora', text: 'hello, new arrival. please observe the room etiquette.' };
+  if (roomId === 'pc-help') return { senderId: CORE_IDS.RYAN, text: 'drop the specs and someone will probably have a mirror link' };
+  if (roomId === 'night-shift') return { senderId: CORE_IDS.MAYA, text: 'hold on... i have a track for exactly that mood' };
+  return { senderId: CORE_IDS.NORA, text: 'hello, new arrival. please observe the room etiquette.' };
 }
-
 export function getRoomResponderId(roomId: string, participantIds: string[], messageCount: number): string {
-  if (participantIds.length === 0) return 'nora';
+  if (participantIds.length === 0) return CORE_IDS.NORA;
   const offset = roomId.split('').reduce((sum, character) => sum + character.charCodeAt(0), 0);
   return participantIds[(offset + messageCount) % participantIds.length] ?? participantIds[0] ?? 'nora';
 }
@@ -196,7 +196,7 @@ export function collectMissedPresenceActivities(
 }
 
 export function getRoomResponderSequence(roomId: string, participantIds: string[], messageCount: number, playerText: string): string[] {
-  if (participantIds.length === 0) return ['nora'];
+  if (participantIds.length === 0) return [CORE_IDS.NORA];
   const primary = getRoomResponderId(roomId, participantIds, messageCount);
   const hash = hashString(`${roomId}:${messageCount}:${playerText}`);
   const roll = hash % 100;
@@ -228,8 +228,8 @@ export const PulseMessengerApp: React.FC = () => {
   usePulseAudio();
 
   const [session, setSession] = useState<PulseLoginSession | null>(() => tryAutoSign());
-  const [openBuddyIds, setOpenBuddyIds] = useState<string[]>(['maya']);
-  const [activeBuddyId, setActiveBuddyId] = useState<string>('maya');
+  const [openBuddyIds, setOpenBuddyIds] = useState<string[]>([CORE_IDS.MAYA]);
+  const [activeBuddyId, setActiveBuddyId] = useState<string>(CORE_IDS.MAYA);
   const [view, setView] = useState<PulseListView>('contacts');
   const [activeRoomId, setActiveRoomId] = useState<string | null>(null);
   const [selectedBuddyId, setSelectedBuddyId] = useState<string | null>(null);
@@ -402,8 +402,12 @@ export const PulseMessengerApp: React.FC = () => {
         });
         engine.dispatchAction({ type: 'SOCIAL_RECEIVE_MESSAGE', buddyId: buddy.id, text, timestampMinute, deliveredAway: true, tags: ['offline-message', 'offline'] });
         if (elapsed >= 240) {
-          // Very long absence: second message from the most social buddies with a staggered timestamp.
-          if (buddy.id === 'maya' || buddy.id === 'ryan') {
+          // Very long absence: second message from the two warmest buddies, staggered.
+          const warmthRank = [...engine.social.getBuddies()]
+            .filter((b) => !pulseState.blockedBuddyIds.includes(b.id))
+            .sort((a, b) => engine.social.getTraits(b.id).warmth - engine.social.getTraits(a.id).warmth)
+            .findIndex((b) => b.id === buddy.id);
+          if (warmthRank !== -1 && warmthRank < 2) {
             const secondOffset = Math.min(offset + 45, elapsed - 4);
             const secondMinute = Math.min(totalMinutes - 1, pulseState.lastSeenTotalMinutes + secondOffset);
             const secondText = pickOfflineMessage(buddy.id, secondMinute + 999, buddy.archetype, extractLocalLinks(text).length > 0);
@@ -442,8 +446,8 @@ export const PulseMessengerApp: React.FC = () => {
         salt: 'login',
       });
       for (const plan of plans) {
-        engine.dispatchAction({ type: 'SOCIAL_RECEIVE_MESSAGE', buddyId: plan.buddyId, text: plan.text, deliveredAway: false, tags: ['initiative', plan.kind] });
-        offlineActivities.push({ id: `initiative_${plan.buddyId}_${initiativeDay}`, buddyId: plan.buddyId, kind: 'message', text: `${plan.displayName} messaged you first.`, minute: totalMinutes, createdAt: Date.now(), isRead: false });
+        engine.dispatchAction({ type: 'SOCIAL_RECEIVE_MESSAGE', buddyId: plan.buddyId, text: plan.text, deliveredAway: false, tags: ['initiative', plan.kind, ...(plan.tags ?? [])] });
+        offlineActivities.push({ id: `initiative_${plan.buddyId}_${initiativeDay}`, buddyId: plan.buddyId, kind: 'message', text: plan.tags?.includes('buzz') ? `${plan.displayName} buzzed you.` : `${plan.displayName} messaged you first.`, minute: totalMinutes, createdAt: Date.now(), isRead: false });
       }
       Object.assign(initiatedToday, updated);
     } catch { /* initiatives never break login */ }
@@ -499,7 +503,7 @@ export const PulseMessengerApp: React.FC = () => {
       });
       if (plans.length === 0) return;
       for (const plan of plans) {
-        engine.dispatchAction({ type: 'SOCIAL_RECEIVE_MESSAGE', buddyId: plan.buddyId, text: plan.text, deliveredAway: false, tags: ['initiative', plan.kind] });
+        engine.dispatchAction({ type: 'SOCIAL_RECEIVE_MESSAGE', buddyId: plan.buddyId, text: plan.text, deliveredAway: false, tags: ['initiative', plan.kind, ...(plan.tags ?? [])] });
       }
       setPulseState((previous) => ({
         ...previous,
@@ -508,7 +512,7 @@ export const PulseMessengerApp: React.FC = () => {
           id: `initiative_${plan.buddyId}_${day}`,
           buddyId: plan.buddyId,
           kind: 'message' as const,
-          text: `${plan.displayName} messaged you first.`,
+          text: plan.tags?.includes('buzz') ? `${plan.displayName} buzzed you.` : `${plan.displayName} messaged you first.`,
           minute: totalMinutes,
           createdAt: Date.now(),
           isRead: false,
@@ -569,6 +573,13 @@ export const PulseMessengerApp: React.FC = () => {
     setBuzzActive(true);
     window.setTimeout(() => setBuzzActive(false), 650);
   };
+
+  // Incoming NPC buzzes shake the window too (MSN-era nudge, see usePulseNotifications).
+  useEffect(() => {
+    const onBuzz = () => handleBuzz();
+    window.addEventListener('pulse:buzz', onBuzz);
+    return () => window.removeEventListener('pulse:buzz', onBuzz);
+  }, []);
 
   const handleAcceptFriendRequest = () => {
     soundManager.play('invite');
@@ -658,7 +669,13 @@ export const PulseMessengerApp: React.FC = () => {
       window.setTimeout(() => setInviteNotice(null), 2200);
       return;
     }
-    engine.dispatchAction({ type: 'SOCIAL_SEND_MESSAGE', buddyId, text });
+    // Social battery gate: refused lines surface the inner voice, nothing sends.
+    const sendRes = engine.dispatchAction({ type: 'SOCIAL_SEND_MESSAGE', buddyId, text });
+    if (!sendRes.success) {
+      setInviteNotice(sendRes.error || 'You cannot send that right now.');
+      window.setTimeout(() => setInviteNotice(null), 2600);
+      return;
+    }
 
     // Shared pre-send ledger + DM-grade context (P8/A1 — CafeScene uses the same path)
     runChatLedger(engine, buddyId, text, totalMinutes);
@@ -735,7 +752,9 @@ export const PulseMessengerApp: React.FC = () => {
     let finalCandidateTexts = result.data.messages.map((message) => message.text);
     let detectedLinks = finalCandidateTexts.flatMap((candidateText) => extractLocalLinks(candidateText));
     if (detectedLinks.length === 0) {
-      const chance = buddyId === 'nora' ? 14 : buddyId === 'maya' ? 12 : buddyId === 'ryan' ? 8 : 6;
+      // Warmer buddies share links more often (data-driven, no favorites).
+      const traits = engine.social.getTraits(buddyId);
+      const chance = Math.round(6 + traits.warmth * 0.08);
       const recentHadLink = recentMessagesForSummary.slice(-4).some((message) => extractLocalLinks(message.text).length > 0);
       const roll = hashString(`${buddyId}:${totalMinutes}:${text}:${finalCandidateTexts.join('|')}`) % 100;
       if (!recentHadLink && roll < chance) {
@@ -911,7 +930,8 @@ export const PulseMessengerApp: React.FC = () => {
         // Topical-only .local link injection for room replies (low chance + relevance + cooldown)
         const existingRoomLinks = extractLocalLinks(finalText);
         if (!roomExited && existingRoomLinks.length === 0) {
-          const chance = responderId === 'nora' ? 10 : responderId === 'maya' ? 8 : 6;
+          const traits = engine.social.getTraits(responderId);
+          const chance = Math.round(5 + traits.warmth * 0.06);
           const roomHadLink = existingMessages.slice(-6).some((message) => extractLocalLinks(message.text).length > 0);
           if (!roomHadLink && hashString(`${room.id}:${responderId}:${finalText}`) % 100 < chance) {
             const picked = pickTopicalBuddyLink(responderId, `${text} ${finalText}`, `${room.id}:${responderId}:${totalMinutes}`);
@@ -1002,7 +1022,8 @@ export const PulseMessengerApp: React.FC = () => {
         worldKnowledge: whisperWorldKnowledge,
         currentDay: currentDay,
       }, loadAISettings());
-      const fallback = { senderId: targetId, text: targetId === 'maya' ? 'got it... keeping this between us.' : 'yeah, i see it. whisper me if anything changes.' };
+      const shy = engine.social.getTraits(targetId).shyness >= 70;
+      const fallback = { senderId: targetId, text: shy ? 'got it... keeping this between us.' : 'yeah, i see it. whisper me if anything changes.' };
       const replyText = result.meta.fallback ? fallback.text : result.data.messages[0]?.text?.trim();
       // P4 — whispers are 1:1 exchanges, so the model's socialAction counts like a DM
       try {
@@ -1152,7 +1173,7 @@ export const PulseMessengerApp: React.FC = () => {
   const activeRoom = activeRoomId ? getPulseRoom(activeRoomId) : undefined;
 
   // AI reply suggestions for the player (P8/B2): same live context as the NPC side.
-  const suggestionFetcher = useCallback(async (bid: string): Promise<string[]> => {
+  const suggestionFetcher = useCallback(async (bid: string): Promise<ReplySuggestionItem[]> => {
     const buddy = engine.social.getBuddy(bid);
     const recent = engine.social.getMessages(bid).slice(-6).map((message) => ({
       sender: message.senderId === 'player' ? 'player' : 'buddy',
@@ -1168,7 +1189,8 @@ export const PulseMessengerApp: React.FC = () => {
       recentMessages: recent,
       memoryHint,
     }, loadAISettings());
-    return result.data.replies;
+    // Rules enrich every suggestion with tone colour + battery price (never the model).
+    return result.data.replies.map((text) => ({ text, ...toneSuggestion(text) }));
   }, [engine, pulseState.buddyFacts]);
 
   if (!session) return <PulseLoginSplash onLogin={setSession} />;

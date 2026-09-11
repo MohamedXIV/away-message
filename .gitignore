@@ -12,6 +12,7 @@ test-results/
 tsconfig.tsbuildinfo
 
 # Scratch / test files
+temp/
 test.txt
 test_b64.py
 test_herestring.js

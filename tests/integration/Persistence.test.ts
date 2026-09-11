@@ -27,6 +27,7 @@ describe('Persistence Integration Suite (Dexie + fake-indexeddb)', () => {
         cash,
         energy: 100,
         fatigue: 0,
+        socialBattery: 100,
         rentDueDay: 7,
         rentAmount: 140,
         rentPaid: false,

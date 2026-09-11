@@ -4,7 +4,16 @@ import React, { useEffect, useState } from 'react';
 import { DesktopShell } from './desktop/DesktopShell';
 import { RoomScene } from './world/RoomScene';
 import { CafeScene } from './world/CafeScene';
+import { createTechnicalFixtureProjection } from './world/phaser/technicalFixture';
+
+const PhysicalWorldHost = React.lazy(() =>
+  import('./world/phaser/PhysicalWorldHost').then((m) => ({
+    default: m.PhysicalWorldHost,
+  }))
+);
 import { Day14ResolutionModal } from './world/Day14ResolutionModal';
+import { resolveActiveOsPresentation } from './desktop/host/OsPresentation';
+import type { OsVersion } from './engine/types';
 import {
   useSimulationTicker,
   useSimulationStore,
@@ -16,13 +25,67 @@ import { SimulationEngine } from './engine/SimulationEngine';
 import { MainMenu } from './menu/MainMenu';
 import { consumeBootRequest, loadSlotSnapshot, restoreSlotPulse, saveSlot, AUTOSAVE_ID } from './persistence/slots';
 
+// Dev-only content studio (TinyBase Inspector): lazy + query-gated so the
+// editor never enters the production bundle. Open with ?studio in dev.
+const ContentInspectorPane = React.lazy(() =>
+  import('./tools/ContentInspector').then((m) => ({ default: m.ContentInspector }))
+);
+function useContentStudio(): boolean {
+  const [enabled, setEnabled] = useState(false);
+  useEffect(() => {
+    try {
+      const env = (import.meta as unknown as { env: Record<string, string | boolean | undefined> }).env;
+      if (env.DEV && new URLSearchParams(window.location.search).has('studio')) {
+        setEnabled(true);
+      }
+    } catch { /* studio flag is best-effort */ }
+  }, []);
+  return enabled;
+}
+
+function usePhaserFixtureMode(): [boolean, (active: boolean) => void] {
+  const [enabled, setEnabled] = useState(false);
+  useEffect(() => {
+    try {
+      if (typeof window !== 'undefined') {
+        const params = new URLSearchParams(window.location.search);
+        if (params.get('fixture') === 'world' || params.get('renderer') === 'phaser') {
+          setEnabled(true);
+        }
+      }
+    } catch { /* best-effort */ }
+  }, []);
+
+  const toggle = (active: boolean) => {
+    setEnabled(active);
+    try {
+      if (typeof window !== 'undefined') {
+        const url = new URL(window.location.href);
+        if (active) {
+          url.searchParams.set('fixture', 'world');
+        } else {
+          url.searchParams.delete('fixture');
+          url.searchParams.delete('renderer');
+        }
+        window.history.replaceState({}, '', url.toString());
+      }
+    } catch {}
+  };
+
+  return [enabled, toggle];
+}
+
+export function resolveAppTheme(osVersion: OsVersion | null): string | null {
+  return resolveActiveOsPresentation(osVersion)?.themeId ?? null;
+}
+
 export const App: React.FC = () => {
   // Start the continuous simulation clock animation loop
   useSimulationTicker({ enabled: true });
 
   const unlockAudio = useAudioStore((s) => s.unlockAudio);
   const osState = useSimulationStore((s) => s.state.os);
-  const osVersion = osState.currentOsId as string;
+  const osVersion = osState.currentOsId;
   const activeView = useActiveView();
   const switchView = useSimulationStore((s) => s.switchView);
   const setWorldFlag = useSimulationStore((s) => s.setWorldFlag);
@@ -36,6 +99,9 @@ export const App: React.FC = () => {
   const [phase, setPhase] = useState<'menu' | 'loading' | 'game'>('menu');
   const [bootError, setBootError] = useState<string | null>(null);
   const [savedFlash, setSavedFlash] = useState(false);
+  const contentStudio = useContentStudio();
+  const [phaserFixtureActive, setPhaserFixtureActive] = usePhaserFixtureMode();
+  const [fixtureProjection, setFixtureProjection] = useState(() => createTechnicalFixtureProjection());
 
   useEffect(() => {
     const request = consumeBootRequest();
@@ -48,6 +114,8 @@ export const App: React.FC = () => {
           if (!snapshot) throw new Error(`Save slot '${request.slotId}' is empty or unreadable.`);
           await restoreSlotPulse(request.slotId);
           useSimulationStore.getState().setEngine(new SimulationEngine(snapshot as any));
+        } else if (request.kind === 'new') {
+          useSimulationStore.getState().setEngine(new SimulationEngine());
         }
         setPhase('game');
       } catch (error) {
@@ -94,9 +162,13 @@ export const App: React.FC = () => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'F2' || (e.altKey && e.key.toLowerCase() === 'r')) {
         e.preventDefault();
+        const hardwareState = useSimulationStore.getState().state.hardware;
         if (activeView === 'pc') {
           switchView('room');
         } else if (activeView === 'room') {
+          if (!hardwareState?.hasComputer) {
+            return;
+          }
           switchView('pc');
         }
       }
@@ -130,45 +202,105 @@ export const App: React.FC = () => {
     window.location.reload();
   };
 
-  // Orion OS themes: 4.8→orion48, 5.x→orion50, 6.x→orion60, 7.x→orion70 (AI releases use same mapping)
-  const themeAttr = (() => {
-    if (osVersion.includes('7.0')) return 'orion70';
-    if (osVersion.includes('6.')) return 'orion60';
-    if (osVersion.includes('5.')) return 'orion50';
-    return 'orion48';
-  })();
+  const themeAttr = resolveAppTheme(osVersion);
 
   return (
-    <div data-theme={themeAttr} className="w-full h-full overflow-hidden select-none bg-black">
-      {phase === 'menu' && <MainMenu onBoot={() => setPhase('game')} />}
-      {phase === 'loading' && (
-        <div className="w-full h-full flex flex-col items-center justify-center gap-3 bg-black text-slate-300 font-sans">
-          <div className="text-4xl animate-pulse">💾</div>
-          <div className="text-sm font-bold tracking-widest">LOADING ROOM 104…</div>
-          {bootError && <div className="text-xs text-red-400">{bootError}</div>}
-        </div>
-      )}
-      {phase === 'game' && (
-        <>
-          {/* Top-Level View Router */}
-          {activeView === 'pc' && <DesktopShell />}
-          {activeView === 'room' && <RoomScene />}
-          {activeView === 'cafe' && <CafeScene />}
-          {activeView === 'work' && <RoomScene />}
-
-          {/* Day 14 Evaluation Resolution Modal Overlay */}
-          {showDay14Modal && (
-            <Day14ResolutionModal
-              onContinueFreePlay={handleContinueFreePlay}
-              onRestartGame={handleRestartGame}
-            />
-          )}
-
-          {/* Autosave badge */}
-          {savedFlash && (
-            <div className="absolute bottom-10 right-3 z-50 border border-[#38516e] bg-[#e8f5e9] px-3 py-1.5 text-[11px] font-bold text-green-900 shadow">
-              ✓ Saved
+    <div data-theme={themeAttr ?? undefined} className="w-full h-full overflow-hidden select-none bg-black">
+      {phaserFixtureActive ? (
+        <React.Suspense
+          fallback={
+            <div className="w-full h-full flex flex-col items-center justify-center gap-3 bg-black text-slate-300 font-sans">
+              <div className="text-4xl animate-pulse">⚙</div>
+              <div className="text-sm font-bold tracking-widest text-amber-400">
+                INITIALIZING PHASER 4 RUNTIME…
+              </div>
             </div>
+          }
+        >
+          <PhysicalWorldHost
+            projection={fixtureProjection}
+            debug={true}
+            onIntent={(intent) => {
+              if (intent.type === 'VIEW_TRANSITION' && intent.targetViewId) {
+                setFixtureProjection((prev) => ({
+                  ...prev,
+                  viewId: intent.targetViewId!,
+                  viewName: intent.targetViewId === 'view_a2' ? 'View A2 (Desk Focus)' : 'View A1 (Overview)',
+                }));
+              }
+            }}
+            overlaySlot={
+              <div className="p-3 flex justify-between items-center pointer-events-auto">
+                <button
+                  onClick={() => setPhaserFixtureActive(false)}
+                  className="px-3 py-1 bg-slate-900/90 hover:bg-slate-800 text-amber-300 border border-slate-700 text-xs font-mono shadow-md rounded flex items-center gap-1.5 cursor-pointer"
+                >
+                  ← Return to Room 104 (Canvas2D)
+                </button>
+              </div>
+            }
+          />
+        </React.Suspense>
+      ) : (
+        <>
+          {phase === 'menu' && (
+            <div className="relative w-full h-full">
+              <MainMenu onBoot={() => setPhase('game')} />
+              <button
+                onClick={() => setPhaserFixtureActive(true)}
+                className="absolute bottom-3 left-3 z-50 px-2.5 py-1 bg-slate-900/90 hover:bg-slate-800 text-[11px] text-amber-400 border border-slate-700 font-mono shadow rounded cursor-pointer"
+                title="Open Phaser 4 Physical World Technical Fixture"
+              >
+                ⚙ Phaser 4 Fixture
+              </button>
+            </div>
+          )}
+          {phase === 'loading' && (
+            <div className="w-full h-full flex flex-col items-center justify-center gap-3 bg-black text-slate-300 font-sans">
+              <div className="text-4xl animate-pulse">💾</div>
+              <div className="text-sm font-bold tracking-widest">LOADING ROOM 104…</div>
+              {bootError && <div className="text-xs text-red-400">{bootError}</div>}
+            </div>
+          )}
+          {phase === 'game' && (
+            <>
+              {/* Top-Level View Router */}
+              {activeView === 'pc' && <DesktopShell />}
+              {activeView === 'room' && <RoomScene />}
+              {activeView === 'cafe' && <CafeScene />}
+              {activeView === 'work' && <RoomScene />}
+
+              {/* Dev toggle for Phaser 4 Physical World Fixture */}
+              <button
+                onClick={() => setPhaserFixtureActive(true)}
+                className="absolute bottom-2 left-2 z-40 px-2 py-1 bg-slate-900/85 hover:bg-slate-800 text-[10px] text-amber-400 border border-slate-700 font-mono shadow rounded cursor-pointer"
+                title="Open Phaser 4 Physical World Technical Fixture"
+              >
+                ⚙ Phaser 4 Fixture
+              </button>
+
+              {/* Day 14 Evaluation Resolution Modal Overlay */}
+              {showDay14Modal && (
+                <Day14ResolutionModal
+                  onContinueFreePlay={handleContinueFreePlay}
+                  onRestartGame={handleRestartGame}
+                />
+              )}
+
+              {/* Autosave badge */}
+              {savedFlash && (
+                <div className="absolute bottom-10 right-3 z-50 border border-[#38516e] bg-[#e8f5e9] px-3 py-1.5 text-[11px] font-bold text-green-900 shadow">
+                  ✓ Saved
+                </div>
+              )}
+
+              {/* Dev content studio overlay (never in production builds) */}
+              {contentStudio && (
+                <React.Suspense fallback={null}>
+                  <ContentInspectorPane />
+                </React.Suspense>
+              )}
+            </>
           )}
         </>
       )}

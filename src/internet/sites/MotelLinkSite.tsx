@@ -35,7 +35,7 @@ export const MotelLinkSite: React.FC<SiteRouteProps> = () => {
             </div>
             <div>
               <span className="text-gray-400">Active Modem/Link: </span>
-              <span className="text-emerald-400">{hardware.connectionType.toUpperCase()}</span>
+              <span className="text-emerald-400">{hardware.connectionType ? hardware.connectionType.toUpperCase() : 'NONE'}</span>
             </div>
             <div>
               <span className="text-gray-400">Default Gateway: </span>

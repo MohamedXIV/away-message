@@ -2,6 +2,8 @@
 // TIME & CLOCK DOMAIN
 // ==========================================
 
+import type { InnerVoicePersistedState } from '../innerVoice/types';
+
 export type TimeOfDay = 'morning' | 'day' | 'evening' | 'night' | 'late_night';
 
 export interface GameTime {
@@ -53,6 +55,10 @@ export interface PlayerState {
   pantry: { noodles: number; groceries: number };
   // P7 where the player physically is (map travel, persisted)
   location: import('../CityMap').CityNodeId;
+  // Social battery (visible meter): the introvert protagonist spends it on
+  // every social act and recharges alone. 0 = socially blocked (soft-lock
+  // proof: sleep, solitude and apologies always work). Old saves start full.
+  socialBattery: number;       // 0..100 (100 = fresh, 0 = drained)
 }
 
 export interface WorkShiftResult {
@@ -72,18 +78,58 @@ export type ConnectionType = 'dialup_56k' | 'dsl_256k' | 'dsl_512k' | 'dsl_1m';
 // Core OS lineage — now heavy, supports 4.8 / 5.0 / 6.0 / 6.1 / 7.0-beta / 7.0 / 7.0.1 + procedural
 export type OsVersion = 'Orion_4.8' | 'Orion_5.0' | 'Orion_6.0' | 'Orion_6.1' | 'Orion_7.0-beta' | 'Orion_7.0' | 'Orion_7.0.1' | (string & {});
 
+export type OwnedItemKind = 'hardware' | 'display' | 'media';
+export type OwnedItemLocation = 'inventory' | 'room_package' | 'installed' | 'inserted';
+
+export interface OwnedItem {
+  instanceId: string;
+  catalogItemId: string;
+  kind: OwnedItemKind;
+  location: OwnedItemLocation;
+}
+
+export interface LegacyRecoveryState {
+  starterBundlePurchaseLost: boolean;
+  consumed: boolean;
+}
+
+export interface PlayerInventoryState {
+  items: OwnedItem[];
+  purchaseCounts: Record<string, number>;
+  legacyRecovery?: LegacyRecoveryState;
+}
+
+export interface ComputerSetupState {
+  assembled: boolean;
+  poweredOn: boolean;
+  chassis: import('../hardware/types').ChassisComponent | null;
+  motherboard: import('../hardware/types').MotherboardComponent | null;
+  cpu: import('../hardware/types').CpuComponent | null;
+  ramSticks: import('../hardware/types').RamStickComponent[];
+  storage: import('../hardware/types').StorageComponent[];
+  opticalDrives: import('../hardware/types').OpticalDriveComponent[];
+  soundCard: import('../hardware/types').SoundCardComponent | null;
+  networkCard: import('../hardware/types').NetworkCardComponent | null;
+  insertedMediaId: string | null;
+}
+
+export interface DisplaySetupState {
+  monitor: import('../hardware/types').MonitorComponent | null;
+}
+
 export interface HardwareState {
-  cpuTier: number;                  // 1 (Single-Core 450MHz), 2 (Dual-Core 800MHz)
+  hasComputer: boolean;
+  isPoweredOn: boolean;
+  cpuTier: number;
   cpuName: string;
-  ramMB: number;                    // Starting: 512, Upgraded: 1024
-  hddTotalGB: number;               // 40 GB
-  hddFreeGB: number;                // Starting: ~7.0 GB free (33 GB OS baseline)
-  connectionType: ConnectionType;   // Starting: 'dsl_256k'
-  connectionSpeedKbps: number;      // 256, 512, 1024
-  osVersion: OsVersion;             // Starting: 'Orion_4.8'
-  soundCardInstalled: boolean;      // true
-  speakersInstalled: boolean;       // false -> true
-  webcamInstalled: boolean;         // false -> true
+  ramMB: number;
+  hddTotalGB: number;
+  hddFreeGB: number;
+  connectionType: ConnectionType | null;
+  connectionSpeedKbps: number;
+  soundCardInstalled: boolean;
+  speakersInstalled: boolean;
+  webcamInstalled: boolean;
 }
 
 export interface RamPressure {
@@ -95,13 +141,13 @@ export interface RamPressure {
 }
 
 export interface OsEngineState {
-  currentOsId: OsVersion;
+  currentOsId: OsVersion | null;
   installedPatchIds: OsVersion[];
   lastBootAtMinute?: number;
   lastInstallAtMinute?: number;
   lastInstallLog?: string[];
   pendingReboot?: boolean;
-  proceduralCatalog?: any[];
+  proceduralCatalog?: unknown[];
 }
 
 export interface PulseEngineState {
@@ -296,6 +342,24 @@ export interface RelationshipDimensions {
   comfort: number;      // 0..100
   respect: number;      // 0..100
   annoyance: number;    // 0..100
+  // Character Lives (v4): carried on every bond so crushes, suspicion and
+  // grudges can live between NPCs too. 0 = none, 100 = consuming.
+  affection: number;    // 0..100
+  attraction: number;   // 0..100
+  suspicion: number;    // 0..100
+  resentment: number;   // 0..100
+}
+
+// Character Lives — fixed temperament (Big5-lite). Set once at creation
+// (core 4 hand-authored, procedural from archetype + stable id jitter) and
+// never mutated afterwards, never chosen by AI. Rules read these to weight
+// rolls and pick template lines; AI only paraphrases inside chat.
+export interface CharacterTraits {
+  shyness: number;      // 0..100 — high = terse, guarded, modest; low = forward
+  warmth: number;       // 0..100 — high = seeks contact, forgiving
+  discipline: number;   // 0..100 — high = keeps schedule and promises, leaves on time
+  spontaneity: number;  // 0..100 — high = more NPC-NPC run-ins and dynamic plans
+  loyalty: number;      // 0..100 — high = keeps confidences, resents betrayal harder
 }
 
 export interface ScheduleBlock {
@@ -305,9 +369,36 @@ export interface ScheduleBlock {
   awayMessage: string;
 }
 
-export type CharacterArchetype = 'coworker' | 'nightowl' | 'student' | 'trader' | 'artist' | 'regular';
+export type CharacterArchetype = 'coworker' | 'nightowl' | 'student' | 'trader' | 'artist' | 'regular' | (string & {});
 export type BuddyLifecycleStatus = 'stranger' | 'acquaintance' | 'friend' | 'close' | 'distant' | 'gone' | 'blocked';
 export type BuddyMetVia = 'nightboard' | 'myplace' | 'pulse-room' | 'work' | 'intro' | 'core';
+
+export type HairColor = 'black' | 'dark_brown' | 'brown' | 'light_brown' | 'blonde' | 'auburn' | 'red' | 'grey' | 'dyed_blue' | 'dyed_pink' | 'dyed_green';
+export type EyeColor = 'brown' | 'dark_brown' | 'hazel' | 'blue' | 'green' | 'grey' | 'amber';
+
+export interface CharacterRoutine {
+  wakeMinute: number;
+  sleepMinute: number;
+  workShift: 'morning' | 'day' | 'evening' | 'night' | 'flexible';
+  preferredHangout?: string;
+}
+
+export interface CharacterArtProfile {
+  engine: 'live2d' | 'mesh' | 'none';
+  modelPath: string;
+  expressions: Record<string, string>;
+  defaultOutfit: string;
+}
+
+/** Pre-game history: who this buddy was to the player before day 1. */
+export interface BuddyBackstory {
+  relationship: 'stranger' | 'acquaintance' | 'friend' | 'close' | 'estranged';
+  label: string; // ≤ 60 chars, e.g. 'old friend from the food-cart shifts'
+  lapseDays: number; // days since last contact (0 = in touch)
+  knowsAccounts: boolean; // the player once knew their handles (frictionless re-learn)
+  candidates: Array<{ handle: string; status: 'active' | 'dead' | 'changed'; note?: string }>; // ≤ 3 old handles to try
+  bioSeed: string; // ≤ 200 chars of flavor for generated profiles
+}
 
 export interface BuddyCharacter {
   id: string;
@@ -317,12 +408,28 @@ export interface BuddyCharacter {
   schedule: Record<number, ScheduleBlock[]>; // Keyed by day (1..14 legacy, 1..7 weekly for dynamic)
   initialRelationships: RelationshipDimensions;
   typingSpeedWpm: number;
+  // Character Lives (v4): fixed temperament, set at creation, never mutated.
+  // Required on new defs; v3 saves are backfilled deterministically on load.
+  traits: CharacterTraits;
   // Dynamic-roster metadata (optional so legacy defs keep compiling)
   archetype?: CharacterArchetype;
   status?: BuddyLifecycleStatus;
   metVia?: BuddyMetVia;
   isProcedural?: boolean;
   createdDay?: number;
+  // Free roster (v5): data-owned identity. All optional with engine backfills
+  // so legacy/procedural defs keep compiling; the content store fills them.
+  /** Physical vs far-away: remote buddies never meet in person (no art). */
+  reach?: 'local' | 'remote';
+  appearance?: { hair: HairColor | string; eyes: EyeColor | string };
+  languages?: Array<{ lang: string; level: number }>; // 1..5 proficiency
+  /** Capability tags: landlord, diner... engine queries these, never ids. */
+  roles?: string[];
+  backstory?: BuddyBackstory;
+  chatColor?: string;
+  bio?: string;
+  routine?: CharacterRoutine;
+  art?: CharacterArtProfile;
 }
 
 export interface BuddyPresence {
@@ -360,6 +467,21 @@ export interface SocialEngineState {
   affinities?: Record<string, number>;
   // P4 room-bump daily caps: "a__b_day" keys → used points (persisted, pruned)
   affinityCaps?: Record<string, number>;
+  // Character Lives (v4): directed NPC↔NPC bonds "from__to" (persisted)
+  npcBonds?: Record<string, NpcBondState>;
+  // Character Lives (v4): per-buddy planned blocks keyed by buddy id (persisted, pruned)
+  agenda?: Record<string, AgendaItem[]>;
+  // Character Lives (v4): player mediations between NPCs, capped (persisted)
+  mediations?: MediationRecord[];
+  // Character Lives (v4): witnessable NPC↔NPC moments, capped (persisted)
+  npcSocialLog?: NpcInteractionLog[];
+  // Introvert protagonist (v4): each buddy's read of the player, keyed by buddy id (persisted)
+  playerReads?: Record<string, PlayerReadState>;
+  // Free roster (v5): pulse handles the player has learned, keyed by buddy id (persisted).
+  // Empty at new game — contacts are earned through meetings, intros, and backstory.
+  knownHandles?: Record<string, string[]>;
+  // Free roster (v5): one-line epitaphs for pruned gone buddies, oldest-first (persisted, capped).
+  epitaphs?: string[];
 }
 
 // ==========================================
@@ -390,6 +512,82 @@ export type RelationshipStage = 'stranger' | 'acquaintance' | 'friend' | 'close'
 export type DailyMood = 'warm' | 'steady' | 'tired' | 'off' | 'cold';
 
 // ==========================================
+// CHARACTER LIVES — NPC inner life (v4 save shape)
+// Rules decide, AI paraphrases. Every roll below is a seeded hash —
+// no Math.random, no model-picked numbers, offline-safe by construction.
+// ==========================================
+
+/** Directed bond between two NPCs (the player is never a party to one). All dims 0..100. */
+export interface NpcBondDims {
+  familiarity: number;
+  trust: number;
+  comfort: number;
+  respect: number;
+  affection: number;
+  attraction: number;
+  annoyance: number;
+  suspicion: number;
+  resentment: number;
+}
+
+/** Cozy, non-explicit romance ladder. 'dating' is informal (no ceremony, no UI meter). */
+export type NpcRomanceStage = 'none' | 'crush' | 'dating';
+
+export interface NpcBondState {
+  dims: NpcBondDims;
+  romance: NpcRomanceStage;
+  romanceSinceDay: number; // day the current stage started (1 when 'none')
+  updatedDay: number;      // last day this bond moved
+}
+
+/** One planned block in a buddy's life (sleep/work/social/errand). */
+export type AgendaKind = 'sleep' | 'work' | 'social' | 'errand';
+
+export interface AgendaItem {
+  id: string;
+  kind: AgendaKind;
+  label: string;       // <= 60 chars, template-pool text (never freeform AI text in saves)
+  day: number;
+  startMinute: number; // minute of day 0..1439
+  endMinute: number;   // minute of day 1..1440
+}
+
+/** Player mediation between two NPCs: asked → player acts → the pair may compare notes. */
+export type MediationKind = 'introduce' | 'strengthen' | 'ask_about';
+export type MediationStatus = 'open' | 'fulfilled' | 'ignored' | 'sabotaged' | 'exposed';
+
+export interface MediationRecord {
+  id: string;
+  requesterId: string; // buddy who asked the player
+  targetId: string;    // buddy they asked about / want to meet / bond with
+  kind: MediationKind;
+  status: MediationStatus;
+  createdDay: number;
+  resolvedDay?: number;
+}
+
+/** Witnessable NPC↔NPC moment (rules-decided, capped, prompt-visible as gossip). */
+export interface NpcInteractionLog {
+  id: string;
+  day: number;
+  firstId: string;
+  secondId: string;
+  location: string; // display label from the template pool
+  line: string;     // witness line (<= 140 chars)
+}
+
+/**
+ * One buddy's read of the PLAYER (the introvert protagonist). Beliefs start
+ * neutral (50s) — strangers misread quiet as cold until behavior teaches
+ * them otherwise. Certainty 0..100 slows learning as it grows.
+ */
+export interface PlayerReadState {
+  beliefs: CharacterTraits;
+  certainty: number; // 0..100
+  updatedDay: number;
+}
+
+// ==========================================
 // WORLD / SANDBOX DOMAIN (replaces narrative beats)
 // ==========================================
 
@@ -410,6 +608,8 @@ export interface Appointment {
   playerShowed?: boolean;
   // P6 job-board shifts pay their gig wage instead of the standard side-shift wage
   wageOverride?: number;
+  // P6 job provenance: set when this appointment was created from a job-board gig acceptance
+  origin?: { kind: 'job'; id: string };
 }
 
 /** P5 live-meeting lifecycle: scheduled → confirmed → happened/missed, or cancelled. */
@@ -505,9 +705,11 @@ export interface TelemetryStats {
 
 export interface SimulationState {
   version: number;
-  time: GameTime;
-  player: PlayerState;
+  time: GameTime;  player: PlayerState;
   hardware: HardwareState;
+  computer: ComputerSetupState;
+  display: DisplaySetupState;
+  inventory: PlayerInventoryState;
   os: OsEngineState;
   pulse: PulseEngineState;
   myplace: MyPlaceEngineState;
@@ -524,6 +726,18 @@ export interface SimulationState {
     logs: TelemetryRecord[];
   };
   activeView: 'pc' | 'room' | 'cafe' | 'work' | 'city';
+  /**
+   * Player Inner Voice cooldown/notable-history (#23). Additive and optional:
+   * absent in older saves (clean defaults apply), ignored by older builds.
+   * No SAVE_FORMAT bump required.
+   */
+  innerVoice?: InnerVoicePersistedState;
+}
+
+export interface StorePurchaseResultData {
+  purchasedItemIds: string[];
+  charged: number;
+  recoveredLegacyPurchase: boolean;
 }
 
 export type SimulationAction =
@@ -532,6 +746,7 @@ export type SimulationAction =
   | { type: 'VIEW_SWITCH'; view: 'pc' | 'room' | 'cafe' | 'work' | 'city' }
   | { type: 'PLAYER_EARN_CASH'; amount: number; reason: string }
   | { type: 'PLAYER_SPEND_CASH'; amount: number; reason: string }
+  | { type: 'STORE_PURCHASE_ITEM'; storeId: 'silicon_spares'; skuId: string }
   | { type: 'PLAYER_WORK_SHIFT'; durationMinutes?: number; wage?: number }
   | { type: 'PLAYER_PAY_RENT' }
   | { type: 'PLAYER_PAY_INTERNET' }
@@ -558,6 +773,13 @@ export type SimulationAction =
   | { type: 'SOCIAL_SEND_MESSAGE'; buddyId: string; text: string; tags?: string[]; imageUrl?: string; imagePrompt?: string; imageCaption?: string }
   | { type: 'SOCIAL_RECEIVE_MESSAGE'; buddyId: string; text: string; timestampMinute?: number; deliveredAway?: boolean; tags?: string[]; imageUrl?: string; imagePrompt?: string; imageCaption?: string }
   | { type: 'SOCIAL_APPLY_ACTION'; buddyId: string; socialAction: string }
+  // Character Lives (v4): the player's answer to an NPC mediation request.
+  // Rules resolve it; the Pulse UI may dispatch this (chat command or button follow-up).
+  | { type: 'MEDIATION_RESPOND'; mediationId: string; choice: 'help' | 'ignore' | 'badmouth' }
+  // Free roster (v5): the player types a pulse handle to add (rules check it).
+  | { type: 'ADD_CONTACT'; handle: string }
+  // Free roster (v5): the player browses NightBoard for someone new (rules throttle it).
+  | { type: 'NIGHTBOARD_MEET' }
   | { type: 'SOCIAL_ADD_BUDDY'; buddy: BuddyCharacter; introText?: string; silent?: boolean }
   | { type: 'SOCIAL_REMOVE_BUDDY'; buddyId: string }
   | { type: 'WORLD_SET_FLAG'; key: string; value: boolean | number | string }
@@ -589,7 +811,10 @@ export interface SimulationEventMap {
   'economy:rent_paid': { day: number; amount: number };
   'economy:energy_changed': { previousEnergy: number; newEnergy: number; delta: number };
   'hardware:upgraded': { component: string; oldValue: unknown; newValue: unknown };
-  'hardware:os_migrated': { from: OsVersion; to: OsVersion };
+  'hardware:os_migrated': { from: OsVersion | null; to: OsVersion };
+  'hardware:disc_inserted': { disc: import('../hardware/types').InsertedDisc };
+  'hardware:disc_ejected': Record<string, never>;
+  'hardware:power_changed': { isPoweredOn: boolean };
   'download:started': { task: DownloadTask };
   'download:paused': { task: DownloadTask };
   'download:resumed': { task: DownloadTask };

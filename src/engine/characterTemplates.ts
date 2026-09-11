@@ -8,12 +8,14 @@ import type {
   BuddyCharacter,
   BuddyPresenceStatus,
   CharacterArchetype,
+  CharacterTraits,
   DailyMood,
   GlobalEventCategory,
   RelationshipDimensions,
   RelationshipStage,
   ScheduleBlock,
 } from './types';
+import { CORE_BUDDIES, CORE_BY_ID } from './coreBuddies';
 
 export interface ScheduleBlockSpec {
   start: number; // minute of day 0..1439
@@ -29,6 +31,8 @@ export interface CharacterArchetypeTemplate {
   dailyBlocks: ScheduleBlockSpec[];
   initialRelationships: RelationshipDimensions;
   typingSpeedWpm: number;
+  /** Fixed temperament for this archetype (procedural buddies inherit + stable jitter). */
+  defaultTraits: CharacterTraits;
   personaHint: string;
   vocabulary: string[];
   quirks: string[];
@@ -69,7 +73,8 @@ export const CHARACTER_ARCHETYPES: Record<CharacterArchetype, CharacterArchetype
       { start: 1080, end: 1320, status: 'online', msg: 'chilling' },
       { start: 1320, end: 1440, status: 'offline', msg: 'crashed' },
     ],
-    initialRelationships: { familiarity: 25, trust: 30, comfort: 35, respect: 35, annoyance: 0 },
+    initialRelationships: { familiarity: 25, trust: 30, comfort: 35, respect: 35, annoyance: 0, affection: 0, attraction: 0, suspicion: 0, resentment: 0 },
+    defaultTraits: { shyness: 25, warmth: 75, discipline: 55, spontaneity: 70, loyalty: 65 },
     typingSpeedWpm: 75,
     personaHint: 'Practical, friendly, a little teasing. Talks about work, food, and gear.',
     vocabulary: ['yo', 'lol', 'dude', 'brutal shift', 'tacos', 'bench test'],
@@ -93,7 +98,8 @@ export const CHARACTER_ARCHETYPES: Record<CharacterArchetype, CharacterArchetype
       { start: 1140, end: 1320, status: 'away', msg: 'indexing logs' },
       { start: 1320, end: 1440, status: 'online', msg: 'night shift' },
     ],
-    initialRelationships: { familiarity: 5, trust: 15, comfort: 20, respect: 50, annoyance: 0 },
+    initialRelationships: { familiarity: 5, trust: 15, comfort: 20, respect: 50, annoyance: 0, affection: 0, attraction: 0, suspicion: 0, resentment: 0 },
+    defaultTraits: { shyness: 60, warmth: 45, discipline: 70, spontaneity: 35, loyalty: 75 },
     typingSpeedWpm: 90,
     personaHint: 'Dry humor, concise, a little cryptic. Curious about strange details.',
     vocabulary: ['logged', 'archive', 'frequency', 'quiet', 'noted'],
@@ -118,7 +124,8 @@ export const CHARACTER_ARCHETYPES: Record<CharacterArchetype, CharacterArchetype
       { start: 1020, end: 1380, status: 'online', msg: 'cramming / chatting' },
       { start: 1380, end: 1440, status: 'offline', msg: 'crashed' },
     ],
-    initialRelationships: { familiarity: 10, trust: 15, comfort: 25, respect: 30, annoyance: 0 },
+    initialRelationships: { familiarity: 10, trust: 15, comfort: 25, respect: 30, annoyance: 0, affection: 0, attraction: 0, suspicion: 0, resentment: 0 },
+    defaultTraits: { shyness: 30, warmth: 80, discipline: 40, spontaneity: 85, loyalty: 55 },
     typingSpeedWpm: 85,
     personaHint: 'Energetic, abbreviation-heavy, asks lots of questions. Big on music and campus gossip.',
     vocabulary: ['omg', 'brb', 'lol', 'quiz', 'cramming', 'u up?'],
@@ -142,7 +149,8 @@ export const CHARACTER_ARCHETYPES: Record<CharacterArchetype, CharacterArchetype
       { start: 960, end: 1200, status: 'online', msg: 'back at the desk' },
       { start: 1200, end: 1440, status: 'offline', msg: 'early night' },
     ],
-    initialRelationships: { familiarity: 8, trust: 10, comfort: 15, respect: 40, annoyance: 0 },
+    initialRelationships: { familiarity: 8, trust: 10, comfort: 15, respect: 40, annoyance: 0, affection: 0, attraction: 0, suspicion: 0, resentment: 0 },
+    defaultTraits: { shyness: 35, warmth: 40, discipline: 85, spontaneity: 45, loyalty: 50 },
     typingSpeedWpm: 70,
     personaHint: 'Terse, numbers-first, always checking prices. Friendly when a deal lands.',
     vocabulary: ['tape', 'spread', 'bid', 'closed at', 'volume'],
@@ -166,7 +174,8 @@ export const CHARACTER_ARCHETYPES: Record<CharacterArchetype, CharacterArchetype
       { start: 1020, end: 1260, status: 'online', msg: 'home, noodling on guitar' },
       { start: 1260, end: 1440, status: 'online', msg: 'late set / listening room' },
     ],
-    initialRelationships: { familiarity: 15, trust: 20, comfort: 25, respect: 35, annoyance: 0 },
+    initialRelationships: { familiarity: 15, trust: 20, comfort: 25, respect: 35, annoyance: 0, affection: 0, attraction: 0, suspicion: 0, resentment: 0 },
+    defaultTraits: { shyness: 70, warmth: 65, discipline: 45, spontaneity: 60, loyalty: 80 },
     typingSpeedWpm: 70,
     personaHint: 'Warm, expressive, talks in images. Shares songs, gigs, and gear talk.',
     vocabulary: ['tone', 'take', 'mix', 'gig', 'strings', '~'],
@@ -190,7 +199,8 @@ export const CHARACTER_ARCHETYPES: Record<CharacterArchetype, CharacterArchetype
       { start: 1140, end: 1350, status: 'online', msg: 'evening check-in' },
       { start: 1350, end: 1440, status: 'offline', msg: 'winding down' },
     ],
-    initialRelationships: { familiarity: 10, trust: 15, comfort: 20, respect: 30, annoyance: 0 },
+    initialRelationships: { familiarity: 10, trust: 15, comfort: 20, respect: 30, annoyance: 0, affection: 0, attraction: 0, suspicion: 0, resentment: 0 },
+    defaultTraits: { shyness: 40, warmth: 55, discipline: 80, spontaneity: 30, loyalty: 70 },
     typingSpeedWpm: 65,
     personaHint: 'Easygoing, balanced, a good listener. Small talk that turns real slowly.',
     vocabulary: ['hey', 'nice', 'how was', 'sounds good'],
@@ -206,7 +216,7 @@ export const CHARACTER_ARCHETYPES: Record<CharacterArchetype, CharacterArchetype
 };
 
 export function getArchetypeTemplate(archetype: CharacterArchetype): CharacterArchetypeTemplate {
-  return CHARACTER_ARCHETYPES[archetype];
+  return CHARACTER_ARCHETYPES[archetype]!;
 }
 
 export interface NamePoolEntry {
@@ -292,6 +302,30 @@ function hashSeed(value: string): number {
   return h;
 }
 
+/**
+ * Avalanche a seed string into a well-spread 32-bit hash. Plain hashSeed
+ * clusters when inputs differ only in a trailing digit (e.g. consecutive
+ * days → consecutive rolls), which would correlate whole systems day to day.
+ * New code must roll/pick through these helpers, never raw hashSeed % N.
+ */
+export function spreadSeed(seed: string): number {
+  let h = hashSeed(seed);
+  h = Math.imul(h ^ (h >>> 16), 2246822519);
+  h = Math.imul(h ^ (h >>> 13), 3266489917);
+  h ^= h >>> 16;
+  return h >>> 0;
+}
+
+/** Deterministic 0..99 roll with good spread across sequential inputs. */
+export function rollSeeded100(seed: string): number {
+  return spreadSeed(seed) % 100;
+}
+
+/** Deterministic pool pick with good spread across sequential inputs. */
+export function pickSeeded<T>(pool: readonly T[], seed: string): T {
+  return pool[spreadSeed(seed) % pool.length]!;
+}
+
 /** Deterministic name pick that skips taken ids (suffixes _2, _3 when pools exhaust). */
 export function pickTemplateName(
   archetype: CharacterArchetype,
@@ -299,7 +333,7 @@ export function pickTemplateName(
   takenIds: Set<string> | string[]
 ): NamePoolEntry {
   const taken = takenIds instanceof Set ? takenIds : new Set(takenIds);
-  const pool = ARCHETYPE_NAME_POOLS[archetype];
+  const pool = ARCHETYPE_NAME_POOLS[archetype]!;
   const start = hashSeed(`${seed}:${archetype}`) % pool.length;
   for (let i = 0; i < pool.length; i++) {
     const entry = pool[(start + i) % pool.length]!;
@@ -314,18 +348,15 @@ export function pickTemplateName(
 
 /** Deterministic first-contact line with {name} filled in (no link — director appends it). */
 export function pickTemplateIntroLine(archetype: CharacterArchetype, seed: string, displayName: string): string {
-  const lines = ARCHETYPE_INTRO_LINES[archetype];
+  const lines = ARCHETYPE_INTRO_LINES[archetype]!;
   const line = lines[hashSeed(`${seed}:${archetype}:intro`) % lines.length]!;
   return line.replaceAll('{name}', displayName);
 }
 
-/** Legacy core ids → archetype (keeps the original 4 voices byte-identical). */
-export const CORE_ID_TO_ARCHETYPE: Record<string, CharacterArchetype> = {
-  ryan: 'coworker',
-  maya: 'artist',
-  nora: 'nightowl',
-  henderson: 'regular',
-};
+/** Core ids → archetype, derived from the registry (single source of truth). */
+export const CORE_ID_TO_ARCHETYPE: Record<string, CharacterArchetype> = Object.fromEntries(
+  CORE_BUDDIES.map((b) => [b.id, b.archetype])
+);
 
 export function resolveArchetype(buddyId: string, stored?: CharacterArchetype): CharacterArchetype {
   if (stored && CHARACTER_ARCHETYPES[stored]) return stored;
@@ -401,7 +432,7 @@ export const ARCHETYPE_ATTITUDES: Record<CharacterArchetype, Record<GlobalEventC
 
 /** Deterministic offline line for an archetype (stable across reloads). */
 export function pickTemplateOfflineLine(archetype: CharacterArchetype, seedMinute: number): string {
-  const lines = CHARACTER_ARCHETYPES[archetype].offlineLines;
+  const lines = CHARACTER_ARCHETYPES[archetype]?.offlineLines ?? CHARACTER_ARCHETYPES['regular'].offlineLines;
   return lines[Math.abs(seedMinute) % lines.length]!;
 }
 
@@ -600,7 +631,7 @@ export function pickInitiativeText(
   switch (kind) {
     case 'event_share': {
       const title = (opts?.eventTitle || 'the latest news').slice(0, 80);
-      return pickFromPool(ARCHETYPE_EVENT_SHARE_LINES[arch], `${seed}:event`).replaceAll('{event}', title);
+      return pickFromPool(ARCHETYPE_EVENT_SHARE_LINES[arch]!, `${seed}:event`).replaceAll('{event}', title);
     }
     case 'promise_reminder': {
       const promise = (opts?.promiseText || 'that thing you promised').slice(0, 120);
@@ -610,23 +641,23 @@ export function pickInitiativeText(
       return pickFromPool(CAFE_INVITE_LINES, `${seed}:cafe`);
     case 'checkin':
     default:
-      return pickFromPool(ARCHETYPE_INITIATIVE_LINES[arch], `${seed}:checkin`);
+      return pickFromPool(ARCHETYPE_INITIATIVE_LINES[arch]!, `${seed}:checkin`);
   }
 }
 
 export function pickConfrontLine(archetype: CharacterArchetype, seed: string): string {
   const arch = CHARACTER_ARCHETYPES[archetype] ? archetype : 'regular';
-  return pickFromPool(ARCHETYPE_CONFRONT_LINES[arch], `${seed}:confront`);
+  return pickFromPool(ARCHETYPE_CONFRONT_LINES[arch]!, `${seed}:confront`);
 }
 
 export function pickFarewellLine(archetype: CharacterArchetype, seed: string): string {
   const arch = CHARACTER_ARCHETYPES[archetype] ? archetype : 'regular';
-  return pickFromPool(ARCHETYPE_FAREWELL_LINES[arch], `${seed}:farewell`);
+  return pickFromPool(ARCHETYPE_FAREWELL_LINES[arch]!, `${seed}:farewell`);
 }
 
 export function pickReturnLine(archetype: CharacterArchetype, seed: string): string {
   const arch = CHARACTER_ARCHETYPES[archetype] ? archetype : 'regular';
-  return pickFromPool(ARCHETYPE_RETURN_LINES[arch], `${seed}:return`);
+  return pickFromPool(ARCHETYPE_RETURN_LINES[arch]!, `${seed}:return`);
 }
 
 /** C2 gossip line about another buddy's visible absence (name + status filled by caller). */export function pickGossipLine(
@@ -874,7 +905,7 @@ function fillBoard(text: string, replacements: Record<string, string>): string {
 
 export function pickBoardTopic(archetype: CharacterArchetype, week: number, slot: number): { title: string; body: string } {
   const arch = CHARACTER_ARCHETYPES[archetype] ? archetype : 'regular';
-  const pool = BOARD_THREAD_TOPICS[arch];
+  const pool = BOARD_THREAD_TOPICS[arch]!;
   const entry = pool[(week * 2 + slot) % pool.length]!;
   return { title: entry.title, body: entry.body };
 }
@@ -1030,7 +1061,7 @@ export function listArchetypes(): CharacterArchetype[] {
 
 /** Build a weekly schedule for an archetype (days 1..7, rotation handled by SocialEngine lookup). */
 export function buildScheduleForArchetype(archetype: CharacterArchetype): Record<number, ScheduleBlock[]> {
-  return buildWeeklySchedule(CHARACTER_ARCHETYPES[archetype].dailyBlocks);
+  return buildWeeklySchedule(CHARACTER_ARCHETYPES[archetype]?.dailyBlocks ?? CHARACTER_ARCHETYPES['regular'].dailyBlocks);
 }
 
 /** Validate a candidate buddy id (snake_case, engine-canonical). */
@@ -1042,10 +1073,6 @@ export function validateCharacterId(id: string): { ok: boolean; error?: string }
   const reserved = ['player', 'system', 'you', 'me', 'unknown'];
   if (reserved.includes(id)) return { ok: false, error: `Buddy id '${id}' is reserved.` };
   return { ok: true };
-}
-
-export function isCoreBuddyId(id: string): boolean {
-  return id === 'ryan' || id === 'maya' || id === 'nora' || id === 'henderson';
 }
 
 /** Type guard for schedule blocks (used when restoring persisted defs). */
@@ -1078,7 +1105,296 @@ export function clampRelationships(rel: RelationshipDimensions): RelationshipDim
     comfort: clamp(rel.comfort),
     respect: clamp(rel.respect),
     annoyance: clamp(rel.annoyance),
+    affection: clamp(rel.affection ?? 0),
+    attraction: clamp(rel.attraction ?? 0),
+    suspicion: clamp(rel.suspicion ?? 0),
+    resentment: clamp(rel.resentment ?? 0),
   };
+}
+
+/** Clamp traits into 0..100 (integers). Missing keys fall back to 50 (neutral). */
+export function clampTraits(traits: Partial<CharacterTraits> | undefined): CharacterTraits {
+  const clamp = (n: unknown) => (typeof n === 'number' && Number.isFinite(n) ? Math.max(0, Math.min(100, Math.round(n))) : 50);
+  return {
+    shyness: clamp(traits?.shyness),
+    warmth: clamp(traits?.warmth),
+    discipline: clamp(traits?.discipline),
+    spontaneity: clamp(traits?.spontaneity),
+    loyalty: clamp(traits?.loyalty),
+  };
+}
+
+/**
+ * Hand-authored temperament for the core 4 (code-owned, never persisted).
+ * Derived from the registry — edit content/store.json, never this map.
+ */
+export const CORE_TRAITS: Record<string, CharacterTraits> = Object.fromEntries(
+  CORE_BUDDIES.map((b) => [b.id, { ...b.traits }])
+);
+
+/** Traits for a buddy id: core hand-authored wins, everyone else inherits their archetype. */
+export function traitsForBuddy(buddyId: string, archetype: CharacterArchetype): CharacterTraits {
+  const core = CORE_BY_ID[buddyId];
+  if (core) return { ...core.traits };
+  return { ...(CHARACTER_ARCHETYPES[archetype]?.defaultTraits ?? CHARACTER_ARCHETYPES['regular'].defaultTraits) };
+}
+
+/**
+ * The PLAYER is a fixed character with a story, not an avatar: introverted,
+ * homebound, shy, taciturn. Buddies never see these numbers — each builds
+ * its own read through observation (see SocialEngine playerReads), starting
+ * neutral and often misreading quiet as cold. Exported as canon + test anchor.
+ */
+export const PLAYER_TRAITS: CharacterTraits = {
+  shyness: 85,
+  warmth: 55,
+  discipline: 60,
+  spontaneity: 25,
+  loyalty: 70,
+};
+
+// ==========================================
+// CHARACTER LIVES — leave lines, agenda labels, run-in spots, mediation asks
+// Rules pick the line (seeded); AI only paraphrases inside live chat.
+// ==========================================
+
+/** Classify a schedule block's away text: sleep/work blocks make a buddy busy (polite-leave rules). */
+export function classifyScheduleBlock(awayMessage: string): 'sleep' | 'work' | null {
+  const msg = (awayMessage || '').toLowerCase();
+  if (/closed|sleep|asleep|crashed|\bnap\b|\bbed\b|winding down|zzz/.test(msg)) return 'sleep';
+  if (/work|shift|cart|desk|office|class|librar|rehearsal|dealing|commute|tape|indexing|front desk/.test(msg)) return 'work';
+  return null;
+}
+
+/** Polite goodbye when a sleep/work block starts mid-contact. Shy buddies use SOFT. */
+export const LEAVE_LINES: Record<'sleep' | 'work', { soft: string[]; direct: string[] }> = {
+  sleep: {
+    soft: [
+      'hey... i gotta crash, sorry. talk tomorrow? ~',
+      'eyes are closing lol. gn, really',
+      'need to sleep... dont stay up too late either',
+    ],
+    direct: [
+      'alright, im crashing. later!',
+      'bed time, dead serious. catch you tomorrow',
+      'gotta sleep, early start. gn!',
+    ],
+  },
+  work: {
+    soft: [
+      'ahh sorry, shift starts — gotta run. talk later?',
+      'boss is glaring lol. brb after work',
+      'duty calls... ill ping you when im back',
+    ],
+    direct: [
+      'shift time, gotta run. later!',
+      'work calls. back this evening',
+      'on the clock now — hmu later',
+    ],
+  },
+};
+
+/** Deterministic leave-line pick: shy (>= 70) buddies apologize softly. */
+export function pickLeaveLine(kind: 'sleep' | 'work', shyness: number, seed: string): string {
+  return pickSeeded(LEAVE_LINES[kind][shyness >= 70 ? 'soft' : 'direct'], `${seed}:leave:${kind}`);
+}
+
+/** Agenda filler labels for free windows (weekly planning pass). */
+export const AGENDA_LABELS: Record<'social' | 'errand', string[]> = {
+  social: ['open mic @ the cafe', 'nightboard thread', 'arcade high-score run', 'canal walk with a friend', 'mixtape swap'],
+  errand: ['laundromat run', 'TechMart browse', 'groceries @ corner store', 'rent envelope drop', 'library return'],
+};
+
+/** Where NPC↔NPC run-ins happen (witness labels). */
+export const NPC_RUNIN_SPOTS = ['the cafe', 'the laundromat', 'the canal', 'the arcade', 'NightBoard', 'the motel lobby'];
+
+/** Witness verbs per NPC↔NPC action (log lines + gossip). */
+export const NPC_RUNIN_VERBS: Record<string, string[]> = {
+  warm_chat: ['caught up', 'chatted a while'],
+  shared_activity: ['hung out', 'grabbed a table together'],
+  deep_talk: ['talked for a long while', 'had a real talk'],
+  small_favor: ['sorted something out together', 'helped each other out'],
+  support_crisis: ['talked through a rough patch', 'stuck close together'],
+  flirt: ['laughed a little too long', 'lingered together'],
+  argument: ['argued', 'had words'],
+  cold_shoulder: ['barely spoke', 'kept their distance'],
+};
+
+/** Deterministic run-in spot + witness verb. */
+export function pickRuninSpot(seed: string): string {
+  return pickSeeded(NPC_RUNIN_SPOTS, `${seed}:spot`);
+}
+
+export function pickRuninVerb(action: string, seed: string): string {
+  return pickSeeded(NPC_RUNIN_VERBS[action] ?? NPC_RUNIN_VERBS['warm_chat']!, `${seed}:verb:${action}`);
+}
+
+/** Mediation request openers ({target} filled by the caller with a display name). */
+export const MEDIATION_ASK_LINES: Record<'introduce' | 'strengthen' | 'ask_about', string[]> = {
+  introduce: [
+    'hey... you know {target}, right? could you introduce us? i get shy asking myself',
+    'do you think you could introduce me to {target}? no pressure tho',
+    'ive been wanting to talk to {target}. would you help break the ice?',
+  ],
+  strengthen: [
+    'me and {target} have been a bit off... could you put in a good word for me?',
+    'if you talk to {target}, tell them i mean well? trying to fix things',
+    '{target} has been distant. if you get a chance, tell them i miss hanging out?',
+  ],
+  ask_about: [
+    'what do you think of {target}? curious what they are like',
+    'you know {target} better than me — are they doing okay?',
+    'is {target} around much lately? wondering how they are',
+  ],
+};
+
+/** Deterministic mediation ask-line pick with {target} filled in. */
+export function pickMediationAskLine(kind: 'introduce' | 'strengthen' | 'ask_about', seed: string, targetName: string): string {
+  return pickSeeded(MEDIATION_ASK_LINES[kind], `${seed}:ask:${kind}`).replaceAll('{target}', targetName);
+}
+
+/** MSN-era nudges: shy buddies ping instead of typing (sent with the 'buzz' tag). */
+export const NPC_BUZZ_LINES = ['*nudge*', '*buzzes you*', '*nudge nudge*'];
+
+/** Natural hair colors for generated buddies (the AI is instructed likewise). */
+export const TEMPLATE_HAIR_COLORS = [
+  'black', 'dark brown', 'brown', 'light brown', 'dirty blonde', 'blonde',
+  'red', 'auburn', 'grey', 'white', 'balding', 'bald',
+];
+
+/** Eye colors for generated buddies. */
+export const TEMPLATE_EYE_COLORS = ['brown', 'dark brown', 'hazel', 'green', 'blue', 'grey'];
+
+/** Era-plausible languages with template weights (first = most common). */
+export const TEMPLATE_LANGUAGES = ['en', 'en', 'en', 'es', 'fr', 'de', 'it', 'pt', 'ru', 'ar', 'zh', 'ja'];
+
+/** Deterministic appearance + languages for a template newcomer. */
+export function pickTemplateAppearance(seed: string): { hair: string; eyes: string; languages: Array<{ lang: string; level: number }> } {
+  const hair = pickSeeded(TEMPLATE_HAIR_COLORS, `${seed}:hair`);
+  const eyes = pickSeeded(TEMPLATE_EYE_COLORS, `${seed}:eyes`);
+  const primary = pickSeeded(TEMPLATE_LANGUAGES, `${seed}:lang1`);
+  const languages: Array<{ lang: string; level: number }> = [
+    { lang: primary, level: 3 + (spreadSeed(`${seed}:lvl1`) % 3) },
+  ];
+  if (spreadSeed(`${seed}:lang2?`) % 100 < 30) {
+    const second = pickSeeded(TEMPLATE_LANGUAGES, `${seed}:lang2`);
+    if (second !== primary) languages.push({ lang: second, level: 1 + (spreadSeed(`${seed}:lvl2`) % 3) });
+  }
+  if (spreadSeed(`${seed}:lang3?`) % 100 < 10) {
+    const third = pickSeeded(TEMPLATE_LANGUAGES, `${seed}:lang3`);
+    if (third !== primary && !languages.some((l) => l.lang === third)) {
+      languages.push({ lang: third, level: 1 + (spreadSeed(`${seed}:lvl3`) % 2) });
+    }
+  }
+  return { hair, eyes, languages };
+}
+
+/** MSN-era signature colors: derived from the registry (edit content, not this map). */
+export const CORE_SIGNATURE_COLORS: Record<string, string> = Object.fromEntries(
+  CORE_BUDDIES.map((b) => [b.id, b.color])
+);
+
+export const ARCHETYPE_SIGNATURE_COLORS: Record<CharacterArchetype, string> = {
+  coworker: '#b3541e',
+  nightowl: '#3d6e9e',
+  student: '#4e9e4e',
+  trader: '#8e7a2e',
+  artist: '#9e4e8e',
+  regular: '#6e6e6e',
+};
+
+/** Signature chat color for a buddy id (core fixed, procedural by archetype). */
+export function buddySignatureColor(buddyId: string, archetype: CharacterArchetype): string {
+  const core = CORE_BY_ID[buddyId];
+  if (core) return core.color;
+  return ARCHETYPE_SIGNATURE_COLORS[archetype] ?? '#800080';
+}
+/** Thank-you lines when the player helps with a mediation (rules-picked, capped). */
+export const MEDIATION_THANKS_LINES = [
+  'thank you... really. that means a lot',
+  'you are a good friend for doing that. thanks!',
+  'aww thanks! i owe you one',
+];
+
+/** Deterministic thanks-line pick. */
+export function pickMediationThanks(seed: string): string {
+  return pickSeeded(MEDIATION_THANKS_LINES, `${seed}:thanks`);
+}
+
+/** Friend-request outcomes (rules-picked, capped). */
+export const CONTACT_ACCEPT_LINES = [
+  'oh hey! added ✓ talk soon?',
+  'hey!! of course — added you back.',
+  'sure, added. whats up?',
+];
+
+export const CONTACT_DECLINE_LINES = [
+  'sorry... do i know you? maybe another time.',
+  'hmm, i dont add strangers. no offense?',
+];
+
+export const CONTACT_BOUNCE_LINES: Record<'dead' | 'changed', string[]> = {
+  dead: [
+    'That Pulse ID does not exist. Check the spelling — or they are long gone.',
+    'No such ID. Dead air.',
+  ],
+  changed: [
+    'That ID is dead — they moved handles a while back.',
+    'Nobody home at that ID anymore.',
+  ],
+};
+
+/** Deterministic contact-line picks. */
+export function pickContactLine(kind: 'accept' | 'decline', seed: string): string {
+  return pickSeeded(kind === 'accept' ? CONTACT_ACCEPT_LINES : CONTACT_DECLINE_LINES, `${seed}:contact:${kind}`);
+}
+
+export function pickContactBounce(status: 'dead' | 'changed', seed: string): string {
+  return pickSeeded(CONTACT_BOUNCE_LINES[status], `${seed}:bounce:${status}`);
+}
+
+/**
+ * Backstory re-introductions ({name} filled by the caller): how someone from
+ * before day 1 says hello again. Strangers never re-introduce (never met).
+ */
+export const BACKSTORY_REINTRO_LINES: Record<'close' | 'friend' | 'acquaintance' | 'estranged', string[]> = {
+  close: [
+    'FINALLY. thought you fell off the planet — {name} here!',
+    '{name} here!! took you long enough to sign on. missed you!',
+  ],
+  friend: [
+    'hey!! its been ages — {name} here. you still on pulse?',
+    '{name}! long time. we should catch up properly soon?',
+  ],
+  acquaintance: [
+    'hey, {name} here — not sure you remember me?',
+    'hi... {name}. we met a while back. how have you been?',
+  ],
+  estranged: [
+    '...hi. its {name}. yeah, that {name}.',
+    '{name}. i know. just... hi.',
+  ],
+};
+
+/** Deterministic re-intro pick with {name} filled in. */
+export function pickBackstoryReintro(depth: 'close' | 'friend' | 'acquaintance' | 'estranged', seed: string, displayName: string): string {
+  return pickSeeded(BACKSTORY_REINTRO_LINES[depth], `${seed}:reintro:${depth}`).replaceAll('{name}', displayName);
+}
+
+/**
+ * MyPlace self-announcement voices ({link} filled by the caller).
+ * Picked by temperament: shy → soft, disciplined → formal, else direct.
+ */
+export const MYPLACE_UPDATE_LINES = {
+  soft: 'hey — i changed my MyPlace a bit, new bio and song. what do you think? {link}',
+  formal: 'updated my MyPlace — new headline. does it read okay? {link}',
+  direct: 'yo changed my MyPlace — added some new stuff. check it? {link} lmk',
+} as const;
+
+/** Deterministic MyPlace announcement pick from temperament. */
+export function pickMyplaceUpdateLine(shyness: number, discipline: number, link: string): string {
+  const kind = shyness >= 65 ? 'soft' : discipline >= 75 ? 'formal' : 'direct';
+  return MYPLACE_UPDATE_LINES[kind].replaceAll('{link}', link);
 }
 
 export type { BuddyCharacter };

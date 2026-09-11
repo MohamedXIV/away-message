@@ -5,6 +5,14 @@ import { EventBus } from './EventBus';
 import { Appointment, GlobalEvent, WorldState, BuddyAttitude, BuddyEventKnowledge, CharacterArchetype } from './types';
 import { normalizeBuddyId } from './SocialEngine';
 import { ARCHETYPE_ATTITUDES, resolveArchetype } from './characterTemplates';
+import { CORE_IDS, coreBuddyIds } from './coreBuddies';
+import { GENERATED_EVENT_MODIFIERS } from './worldContent.generated';
+import {
+  projectActiveModifiers,
+  toModifierSpecs,
+  type WorldModifier,
+  type WorldModifierFilter,
+} from './WorldModifiers';
 
 // Re-export for convenience
 export type { GlobalEvent, WorldState };
@@ -104,7 +112,7 @@ export class WorldEventsEngine {
         if (ids.length > 0) return ids;
       } catch { /* fall through to legacy list */ }
     }
-    return ['ryan', 'maya', 'nora', 'henderson'];
+    return coreBuddyIds();
   }
 
   private archetypeFor(buddyId: string): CharacterArchetype {
@@ -201,16 +209,16 @@ export class WorldEventsEngine {
     // Archetype palette keeps the original 4 voices byte-identical
     // (coworker=ryan, artist=maya, nightowl=nora, regular=henderson).
     const archetype = this.archetypeFor(buddyId);
-    const buddyPalette = ARCHETYPE_ATTITUDES[archetype];
-    const entry = buddyPalette[cat] ?? buddyPalette['city_news']!;
+    const buddyPalette = ARCHETYPE_ATTITUDES[archetype] ?? ARCHETYPE_ATTITUDES['regular'];
+    const entry = (buddyPalette[cat] ?? buddyPalette['city_news'])!;
     // Deterministic pick among takes + slight variance by id hash
     const idx = this.hashStr(`${buddyId}:${evt.id}`) % entry.takes.length;
     const take = entry.takes[idx]!;
     // Override for strong keywords (preserved from the legacy table)
-    if (lower.includes('glitter') && (buddyId === 'maya' || archetype === 'artist')) {
+    if (lower.includes('glitter') && (buddyId === CORE_IDS.MAYA || archetype === 'artist')) {
       return { attitude: 'annoyed', personalTake: "glitter is pretty for 5 seconds then my 56k dies — " + take };
     }
-    if (lower.includes('orion 7') && (buddyId === 'nora' || archetype === 'nightowl')) {
+    if (lower.includes('orion 7') && (buddyId === CORE_IDS.NORA || archetype === 'nightowl')) {
       return { attitude: 'skeptical', personalTake: take };
     }
     return { attitude: entry.att, personalTake: take };
@@ -296,6 +304,29 @@ export class WorldEventsEngine {
 
   public getPendingEvents(): Omit<GlobalEvent, 'isTriggered' | 'triggeredAtMinute'>[] {
     return Array.from(this.pendingEvents.values());
+  }
+
+  /**
+   * Bounded active-modifier query (#46). Pure projection over authored specs
+   * × canonical triggered events × time: deterministic, idempotent, and
+   * mutation-free (fresh frozen copies per call). Owning domains decide how
+   * to apply the returned effects; this engine never touches consumer state.
+   *
+   * Time is explicit and must be finite: there is no "current time" inside
+   * this engine, and inferring it from event history would resurrect expired
+   * modifiers. Non-finite time yields no modifiers.
+   */
+  public queryActiveModifiers(
+    options: WorldModifierFilter & { atMinute: number },
+  ): WorldModifier[] {
+    const atMinute = options?.atMinute;
+    if (!Number.isFinite(atMinute)) return [];
+    return projectActiveModifiers(
+      toModifierSpecs(GENERATED_EVENT_MODIFIERS),
+      this.getTriggeredEvents(),
+      atMinute,
+      { domain: options.domain, kind: options.kind, targetId: options.targetId },
+    );
   }
 
   /** Global knowledge context (shared) */

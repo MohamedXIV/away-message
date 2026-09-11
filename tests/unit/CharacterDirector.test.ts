@@ -19,6 +19,9 @@ describe('characterSchemas (governed newcomer validation)', () => {
     interests: ['Tapes', 'Gigs', 'Rain'],
     songTitle: 'Rehearsal 12B',
     introText: 'hey! june here — loved your vibe. mind if i add you?',
+    hair: 'dark brown',
+    eyes: 'brown',
+    languages: [{ lang: 'en', level: 5 }],
   };
 
   it('accepts a valid newcomer payload', () => {

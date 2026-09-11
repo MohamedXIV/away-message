@@ -4,7 +4,7 @@
 // Travel is walk (free, slow, rain ×1.25, encounters) or bus ($2, ~half time).
 // No state, no AI: the engine owns player.location and calls these helpers.
 
-export type CityNodeId = 'home' | 'lobby' | 'cart' | 'cafe' | 'diner' | 'canal' | 'laundry';
+export type CityNodeId = 'home' | 'lobby' | 'cart' | 'cafe' | 'diner' | 'canal' | 'laundry' | 'techmart';
 
 export interface CityNode {
   id: CityNodeId;
@@ -21,13 +21,14 @@ export interface CityNode {
 }
 
 export const CITY_NODES: Record<CityNodeId, CityNode> = {
-  home: { id: 'home', name: 'Room 104', blurb: 'Your motel room. Bed, kettle, humming PC.', x: 50, y: 78, icon: '🛏️', hint: 'You live here.' },
+  home: { id: 'home', name: 'Room 104', blurb: 'Your motel room. Bed, kettle, desk.', x: 50, y: 78, icon: '🛏️', hint: 'You live here.' },
   lobby: { id: 'lobby', name: 'Motel Lobby', blurb: 'Henderson’s front desk. Keys, ledgers, notices.', x: 50, y: 62, icon: '🛎️', hours: [8, 20], hint: 'Henderson holds court 8–20.' },
   cart: { id: 'cart', name: 'Food Cart', blurb: 'Ryan’s corner stand. Tacos, rush hours, overtime.', x: 22, y: 45, icon: '🚚', hours: [9, 23], hint: 'Ryan grills days, rush at night.' },
   cafe: { id: 'cafe', name: 'Starlight Café', blurb: 'Warm coffee across town. Maya’s orbit.', x: 78, y: 40, icon: '☕', hours: [8, 23], hint: 'Maya drifts through most days.' },
   diner: { id: 'diner', name: '4th St Diner', blurb: 'Blue plates and bottomless coffee. Maya works 11–22.', x: 70, y: 62, icon: '🍽️', hours: [11, 22], hint: 'Maya on shift 11–22.' },
   canal: { id: 'canal', name: 'Canal Walk', blurb: 'Water, wires and hum. Nora walks here late.', x: 30, y: 22, icon: '🌊', hint: 'Nora walks here after 22:00.' },
   laundry: { id: 'laundry', name: 'Suds & Spin', blurb: 'Warm dryers and the bulletin board of town gossip.', x: 50, y: 38, icon: '🧺', hours: [7, 23], hint: 'Gossip never closes. Almost.' },
+  techmart: { id: 'techmart', name: 'Silicon & Spares', blurb: 'Used beige towers, CRT monitors, surplus electronics, and software CDs.', x: 38, y: 55, icon: '🖥️', hours: [9, 20], hint: 'Milo sells refurbished rigs, components, and OS upgrade CDs 9–20.' },
 };
 
 /** Display-hours check (same wrap logic as place hours). */
@@ -55,12 +56,16 @@ interface Edge {
 }
 
 /** Street graph — home/lobby is the hub; cross-links keep trips sane. */
-const EDGES: Edge[] = [  { a: 'home', b: 'lobby', walkMin: 2, bus: false },
+const EDGES: Edge[] = [
+  { a: 'home', b: 'lobby', walkMin: 2, bus: false },
   { a: 'lobby', b: 'cart', walkMin: 13, bus: false },
   { a: 'lobby', b: 'cafe', walkMin: 15, bus: true },
   { a: 'lobby', b: 'diner', walkMin: 18, bus: true },
   { a: 'lobby', b: 'canal', walkMin: 8, bus: false },
   { a: 'lobby', b: 'laundry', walkMin: 10, bus: false },
+  { a: 'lobby', b: 'techmart', walkMin: 12, bus: false },
+  { a: 'techmart', b: 'cart', walkMin: 7, bus: false },
+  { a: 'techmart', b: 'laundry', walkMin: 8, bus: false },
   { a: 'diner', b: 'cafe', walkMin: 10, bus: true },
   { a: 'cart', b: 'canal', walkMin: 8, bus: false },
   { a: 'canal', b: 'laundry', walkMin: 14, bus: false },

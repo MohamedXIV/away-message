@@ -142,6 +142,19 @@ export interface SuggestedReplies {
   replies: string[];
 }
 
+/** Approved semantic input for an Inner Voice paraphrase (#23). Meaning only — never hidden knowledge. */
+export interface InnerVoiceParaphraseRequest {
+  semanticMeaning: string;
+  tone: string;
+  topic: string;
+  voiceHint?: string;
+}
+
+/** The only shape an Inner Voice paraphrase may take: one short thought, nothing else. */
+export interface InnerVoiceThought {
+  thought: string;
+}
+
 export interface BenchmarkResult {
   kind: 'site' | 'chat';
   providerId: AIProviderId;

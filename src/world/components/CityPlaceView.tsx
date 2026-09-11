@@ -10,6 +10,7 @@ import { CITY_NODES, type CityNodeId } from '../../engine/CityMap';
 import { DOOR_OPTIONS } from '../data/roomInteractables';
 import { getWeatherForDay } from '../../engine/WeatherEngine';
 import type { RoomActivityOption } from '../types';
+import { SiliconSparesModal } from '../modals/SiliconSparesModal';
 
 interface CityPlaceViewProps {
   location: CityNodeId;
@@ -33,6 +34,7 @@ export const CityPlaceView: React.FC<CityPlaceViewProps> = ({ location, onOpenMa
   const payRent = useSimulationStore((s) => s.payRent);
   const switchView = useSimulationStore((s) => s.switchView);
   const [notice, setNotice] = useState<string | null>(null);
+  const [showShopModal, setShowShopModal] = useState(false);
 
   const node = CITY_NODES[location];
   const weather = getWeatherForDay(time.day);
@@ -99,6 +101,19 @@ export const CityPlaceView: React.FC<CityPlaceViewProps> = ({ location, onOpenMa
             <div className="text-xs font-bold text-amber-200">☕ Enter Starlight Café</div>
             <div className="text-[11px] text-slate-400 mt-0.5">Warm coffee and in-person conversation.</div>
           </button>
+        )}
+
+        {location === 'techmart' && (
+          <div className="space-y-3">
+            <button
+              onClick={() => setShowShopModal(true)}
+              className="w-full p-3.5 rounded border border-cyan-500/60 bg-cyan-950/40 hover:bg-cyan-950/60 text-left cursor-pointer shadow-lg"
+            >
+              <div className="text-sm font-bold text-cyan-200">🖥️ Enter Silicon &amp; Spares Store</div>
+              <div className="text-xs text-slate-300 mt-1">Browse refurbished computers, CRT monitors, RAM sticks, and OS upgrade CDs.</div>
+            </button>
+            {showShopModal && <SiliconSparesModal onClose={() => setShowShopModal(false)} />}
+          </div>
         )}
 
         {location === 'lobby' && (

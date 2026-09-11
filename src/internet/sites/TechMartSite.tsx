@@ -253,7 +253,7 @@ export const TechMartSite: React.FC<SiteRouteProps> = () => {
             Cash: ${playerCash.toFixed(2)}
           </div>
           <span className="text-[10px] text-blue-200">
-            Current Rig: {hardware.ramMB}MB RAM | {(() => { const r = getReleaseById(osState.currentOsId as any); return r ? r.displayName : hardware.osVersion; })()}
+            Current Rig: {hardware.ramMB}MB RAM | {(() => { const r = getReleaseById(osState.currentOsId as any); return r ? r.displayName : (osState.currentOsId ?? 'No OS'); })()}
             {osState.installedPatchIds.length > 0 ? ` +${osState.installedPatchIds.length} patch` : ''} • {hardware.hddFreeGB.toFixed(1)}GB free
           </span>
         </div>

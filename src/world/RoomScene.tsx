@@ -2,11 +2,14 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import { useSimulationStore } from '../store/useSimulationStore';
+import { resolvePcBootState } from '../engine/SimulationEngine';
 import { soundManager } from '../audio/SoundManager';
 import { RoomCanvasRenderer, getTimeOfDayFromHour } from './RoomCanvas';
+import { getRoomDeskPresentation } from './RoomComputerPresentation';
 import { RoomHotspotId, RoomActivityOption, WeatherType } from './types';
 import { getWeatherForDay, isWetWeather } from '../engine/WeatherEngine';
 import { CITY_NODES, type CityNodeId, type TravelMode } from '../engine/CityMap';
+import { buddyWithRole } from '../engine/coreBuddies';
 import { CityPlaceView } from './components/CityPlaceView';
 
 function playerLocationLabel(location: CityNodeId): string {
@@ -16,6 +19,7 @@ import { WindowObservationModal } from './modals/WindowObservationModal';
 import { BeverageModal } from './modals/BeverageModal';
 import { DoorActionModal } from './modals/DoorActionModal';
 import { SleepTransitionModal } from './modals/SleepTransitionModal';
+import { HardwareWorkbenchModal } from './modals/HardwareWorkbenchModal';
 import { getContextualWindowThought, getStreetSighting } from './data/windowThoughts';
 import {
   Monitor,
@@ -26,16 +30,23 @@ import {
   Clock,
   BedDouble,
   DoorOpen,
+  Wrench,
 } from 'lucide-react';
 
 export const RoomScene: React.FC = () => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const rendererRef = useRef<RoomCanvasRenderer | null>(null);
+  const hotspotClickRef = useRef<(id: RoomHotspotId) => void>(() => undefined);
 
   // Simulation Store selectors
+  const engine = useSimulationStore((s) => s.engine);
+  const syncStateFromEngine = useSimulationStore((s) => s.syncStateFromEngine);
   const time = useSimulationStore((s) => s.state.time);
   const player = useSimulationStore((s) => s.state.player);
-  const hardware = useSimulationStore((s) => s.state.hardware);
+  const computer = useSimulationStore((s) => s.state.computer);
+  const inventory = useSimulationStore((s) => s.state.inventory);
+  const os = useSimulationStore((s) => s.state.os);
+  const osVersion = os.currentOsId;
   const downloads = useSimulationStore((s) => s.state.downloads);
   const world = useSimulationStore((s) => s.state.world);
 
@@ -44,10 +55,15 @@ export const RoomScene: React.FC = () => {
   const restOrSleep = useSimulationStore((s) => s.restOrSleep);
   const spendCash = useSimulationStore((s) => s.spendCash);
   const applyGig = useSimulationStore((s) => s.applyGig);
+  const setupComputerAtHome = useSimulationStore((s) => s.setupComputerAtHome);
+
+  const pcBootState = resolvePcBootState({ computer, inventory, os });
+  const deskPresentation = getRoomDeskPresentation(pcBootState);
+  const assembledComputer = deskPresentation === 'assembled_off' || deskPresentation === 'assembled_on';
 
   // Active Modals
   const [activeModal, setActiveModal] = useState<
-    'window' | 'beverage' | 'door' | 'sleep' | null
+    'window' | 'beverage' | 'door' | 'sleep' | 'hardware' | null
   >(null);
 
   // Weather: live engine forecast mapped to the canvas vocabulary (was a hardcoded 3-day hack)
@@ -72,9 +88,25 @@ export const RoomScene: React.FC = () => {
   const handleHotspotClick = (id: RoomHotspotId) => {
     soundManager.play('click');
     switch (id) {
-      case 'pc':
+      case 'pc': {
+        if (pcBootState === 'no_computer') {
+          flashOutingNotice("Empty desk. You don't have a computer yet! Check Silicon & Spares downtown (Door -> Tech Mart).");
+          break;
+        }
+        if (pcBootState === 'awaiting_setup') {
+          const result = setupComputerAtHome();
+          flashOutingNotice(
+            result.success
+              ? 'Computer assembled and monitor connected. Setup took 15 minutes; the machine is still powered off.'
+              : result.error ?? 'Could not set up the computer.',
+          );
+          break;
+        }
+        // Sitting down never powers the machine implicitly. The physical power
+        // action lives in DesktopShell and routes through the synchronized store.
         switchView('pc');
         break;
+      }
       case 'kettle':
         setActiveModal('beverage');
         break;
@@ -93,6 +125,7 @@ export const RoomScene: React.FC = () => {
         break;
     }
   };
+  hotspotClickRef.current = handleHotspotClick;
 
   // Initialize and update Canvas Renderer
   useEffect(() => {
@@ -110,9 +143,10 @@ export const RoomScene: React.FC = () => {
       hour: time.hour,
       minute: time.minute,
       weather,
-      osVersion: hardware.osVersion,
+      osVersion: deskPresentation === 'assembled_on' ? osVersion : null,
       hasActiveDownloads,
-      onHotspotClick: handleHotspotClick,
+      hasComputer: assembledComputer,
+      onHotspotClick: (id) => hotspotClickRef.current(id),
     });
     rendererRef.current = renderer;
 
@@ -130,11 +164,12 @@ export const RoomScene: React.FC = () => {
         hour: time.hour,
         minute: time.minute,
         weather,
-        osVersion: hardware.osVersion,
+        osVersion: deskPresentation === 'assembled_on' ? osVersion : null,
         hasActiveDownloads,
+        hasComputer: assembledComputer,
       });
     }
-  }, [time.day, time.hour, time.minute, weather, hardware.osVersion, hasActiveDownloads]);
+  }, [time.day, time.hour, time.minute, weather, osVersion, hasActiveDownloads, assembledComputer, deskPresentation]);
 
   // Handle Beverage Selection (meal/grocery money is charged by the engine — never double-spend here)
   const handleSelectBeverage = (option: RoomActivityOption) => {
@@ -150,16 +185,20 @@ export const RoomScene: React.FC = () => {
   const jobBoardEntries = (() => {
     try {
       const engine = useSimulationStore.getState().engine;
-      return engine.getJobBoard().map(({ gig, pending }) => ({
-        gigId: gig.id,
-        title: gig.title,
-        blurb: gig.blurb,
-        pay: gig.pay,
-        durationMin: gig.durationMin,
-        minEnergy: gig.minEnergy,
-        contactName: engine.social.getBuddy(gig.contactBuddyId)?.displayName ?? gig.contactBuddyId,
-        pending,
-      }));
+      return engine.getJobBoard().map(({ gig, pending }) => {
+        const holder = buddyWithRole(gig.contactRole);
+        const contact = holder ? engine.social.getBuddy(holder.id) : undefined;
+        return {
+          gigId: gig.id,
+          title: gig.title,
+          blurb: gig.blurb,
+          pay: gig.pay,
+          durationMin: gig.durationMin,
+          minEnergy: gig.minEnergy,
+          contactName: contact?.displayName ?? gig.contactRole,
+          pending,
+        };
+      });
     } catch { return []; }
   })();
 
@@ -184,6 +223,7 @@ export const RoomScene: React.FC = () => {
         const data = res.data ?? {};
         flashOutingNotice([data.summary, data.encounter].filter(Boolean).join(' — ') || 'You head out.');
         soundManager.play('door_open');
+        setActiveModal(null);
       } else {
         flashOutingNotice(res?.error || 'You decide to stay in.');
       }
@@ -297,6 +337,16 @@ export const RoomScene: React.FC = () => {
                 />
               </div>
             </div>
+            {/* Social battery at a glance (introvert meter — talking spends it, solitude repays it) */}
+            <div className="flex items-center gap-1 font-mono text-[11px]" title={`Social battery ${Math.round(player.socialBattery ?? 100)}% — bold talk costs extra`}>
+              <span>💬</span>
+              <div className="w-12 h-2 bg-slate-800 rounded-full border border-slate-700 overflow-hidden">
+                <div
+                  className={`h-full transition-all duration-300 ${(player.socialBattery ?? 100) <= 0 ? 'bg-red-500' : (player.socialBattery ?? 100) < 25 ? 'bg-amber-500' : 'bg-purple-500'}`}
+                  style={{ width: `${Math.min(100, Math.round(player.socialBattery ?? 100))}%` }}
+                />
+              </div>
+            </div>
           </div>
         </div>
 
@@ -324,16 +374,26 @@ export const RoomScene: React.FC = () => {
             <DoorOpen className="w-3.5 h-3.5" />
             <span>Leave</span>
           </button>
+          {assembledComputer && (
+            <button
+              onClick={() => {
+                soundManager.play('click');
+                setActiveModal('hardware');
+              }}
+              className="flex items-center gap-1 px-2.5 py-1 bg-stone-800 hover:bg-stone-700 border border-amber-800/70 rounded text-amber-100 text-xs font-bold transition-colors cursor-pointer"
+              title="Inspect and install owned hardware in Room 104"
+            >
+              <Wrench className="w-3.5 h-3.5" />
+              <span>Hardware</span>
+            </button>
+          )}
           <button
-            onClick={() => {
-              soundManager.play('click');
-              switchView('pc');
-            }}
+            onClick={() => handleHotspotClick('pc')}
             className="flex items-center gap-1.5 px-3 py-1 bg-amber-600 hover:bg-amber-500 text-slate-950 font-bold rounded shadow transition-all cursor-pointer"
-            title="Sit down at PC Desk"
+            title={pcBootState === 'awaiting_setup' ? 'Set up the computer package' : 'Sit down at PC Desk'}
           >
             <Monitor className="w-3.5 h-3.5" />
-            <span>Sit at PC</span>
+            <span>{pcBootState === 'awaiting_setup' ? 'Set Up PC' : 'Sit at PC'}</span>
           </button>
         </div>
       </div>
@@ -344,6 +404,22 @@ export const RoomScene: React.FC = () => {
           ref={canvasRef}
           className="max-w-full max-h-full aspect-[16/9] shadow-2xl object-contain border border-slate-800 rounded"
         />
+        <div className="absolute top-4 left-4 max-w-xs bg-slate-950/90 border border-slate-700 rounded px-3 py-2 text-[11px] text-slate-200 shadow-xl">
+          {deskPresentation === 'empty' && <span>🪵 Desk: empty — no computer owned.</span>}
+          {deskPresentation === 'package' && (
+            <div className="flex items-center gap-2">
+              <span>📦 Computer package waiting.</span>
+              <button
+                onClick={() => handleHotspotClick('pc')}
+                className="px-2 py-1 bg-amber-600 hover:bg-amber-500 text-slate-950 font-bold rounded cursor-pointer"
+              >
+                Set Up Computer · 15 min
+              </button>
+            </div>
+          )}
+          {deskPresentation === 'assembled_off' && <span>🖥️ Computer assembled — power off.</span>}
+          {deskPresentation === 'assembled_on' && <span>🟢 Computer assembled — power on.</span>}
+        </div>
         {outingNotice && (
           <div className="absolute bottom-3 left-1/2 -translate-x-1/2 max-w-[90%] bg-slate-900/95 border border-amber-500/60 rounded px-3 py-1.5 text-[11px] text-amber-100 shadow-xl text-center">
             {outingNotice}
@@ -394,6 +470,14 @@ export const RoomScene: React.FC = () => {
           currentHour={time.hour}
           currentMinute={time.minute}
           onConfirmSleep={handleConfirmSleep}
+          onClose={() => setActiveModal(null)}
+        />
+      )}
+
+      {activeModal === 'hardware' && (
+        <HardwareWorkbenchModal
+          engine={engine}
+          onStateChanged={syncStateFromEngine}
           onClose={() => setActiveModal(null)}
         />
       )}

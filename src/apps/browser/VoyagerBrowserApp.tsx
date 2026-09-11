@@ -64,6 +64,13 @@ export const VoyagerBrowserApp: React.FC<VoyagerBrowserAppProps> = ({ initialUrl
 
     const result = router.resolveRoute(cleanUrl);
 
+    if (!connectionType) {
+      setIsLoading(false);
+      setLoadProgress(0);
+      setStatusText('Offline — no network adapter is installed.');
+      return;
+    }
+
     router.simulatePageLoad(
       cleanUrl,
       connectionType,
@@ -425,7 +432,7 @@ export const VoyagerBrowserApp: React.FC<VoyagerBrowserAppProps> = ({ initialUrl
       <div className="bg-[#dfdfdf] border-t border-gray-400 px-2 py-0.5 flex justify-between items-center text-[10px] text-gray-600">
         <span className="truncate max-w-sm">{statusText}</span>
         <div className="flex items-center gap-2 font-mono">
-          <span>{connectionType.toUpperCase()}</span>
+          <span>{connectionType ? connectionType.toUpperCase() : 'OFFLINE'}</span>
           <span>|</span>
           <span>Voyager 6.0</span>
         </div>

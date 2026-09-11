@@ -41,6 +41,8 @@ export interface DeliveryEngineState {
   orders: DeliveryOrder[];
 }
 
+export type DeliveryArrivalHandler = (order: DeliveryOrder) => boolean;
+
 function hashText(value: string): number {
   let hash = 0;
   for (let i = 0; i < value.length; i++) hash = (hash * 31 + value.charCodeAt(i)) >>> 0;
@@ -52,10 +54,23 @@ export function deliveryEtaMinutes(orderId: string): number {
   return 120 + (hashText(`courier:${orderId}`) % (22 * 60));
 }
 
+/** Bounded per-order backlog extra applied on top of the deterministic ETA. */
+export const DELIVERY_MAX_BACKLOG_EXTRA_MINUTES = 720;
+
+export interface PlaceDeliveryOptions {
+  /**
+   * Extra courier minutes from active world-event backlog modifiers (#46).
+   * Resolved and bounded by the caller; DeliveryEngine clamps again and owns
+   * the resulting readyMinute as single truth.
+   */
+  etaExtraMinutes?: number;
+}
+
 let orderCounter = 0;
 
 export class DeliveryEngine {
   private orders: DeliveryOrder[] = [];
+  private arrivalHandler: DeliveryArrivalHandler | null = null;
 
   constructor(initialState?: DeliveryEngineState) {
     if (initialState?.orders) {
@@ -70,16 +85,34 @@ export class DeliveryEngine {
     return { orders: this.orders.map((o) => ({ ...o, items: o.items.map((i) => ({ ...i })) })) };
   }
 
+  /**
+   * Canonical SimulationEngine can claim courier arrivals into the physical-world
+   * authority. Returning true means the order was materialized physically and
+   * legacy pantry crediting must be skipped. Without a handler, P6 behavior is
+   * unchanged for legacy consumers.
+   */
+  public setArrivalHandler(handler: DeliveryArrivalHandler | null): void {
+    this.arrivalHandler = handler;
+  }
+
   /** Create a delivery order (pickup trips complete inline — use placePickup instead). */
-  public placeDelivery(items: OrderItem[], total: number, nowMinute: number): DeliveryOrder {
+  public placeDelivery(
+    items: OrderItem[],
+    total: number,
+    nowMinute: number,
+    options?: PlaceDeliveryOptions,
+  ): DeliveryOrder {
     const id = `ord_${nowMinute.toString(36)}_${(orderCounter++).toString(36)}${hashText(items.map((i) => `${i.sku}x${i.qty}`).join(',')).toString(36)}`;
+    const backlogExtra = options?.etaExtraMinutes !== undefined && Number.isFinite(options.etaExtraMinutes)
+      ? Math.max(0, Math.min(DELIVERY_MAX_BACKLOG_EXTRA_MINUTES, Math.floor(options.etaExtraMinutes)))
+      : 0;
     const order: DeliveryOrder = {
       id,
       items: items.map((i) => ({ ...i })),
       total,
       fulfillment: 'delivery',
       placedMinute: nowMinute,
-      readyMinute: nowMinute + deliveryEtaMinutes(id),
+      readyMinute: nowMinute + deliveryEtaMinutes(id) + backlogExtra,
       status: 'transit',
     };
     this.orders.push(order);
@@ -103,15 +136,22 @@ export class DeliveryEngine {
     return { ...order };
   }
 
-  /** Complete due courier orders. Returns completed ones for pantry crediting. */
+  /**
+   * Complete due courier orders. A physical arrival handler runs before the
+   * order commits to done; if physical materialization throws, the order stays
+   * in transit and can retry safely on the next time tick. Unclaimed arrivals
+   * are returned for the legacy pantry-credit path.
+   */
   public completeDue(nowMinute: number): DeliveryOrder[] {
-    const done: DeliveryOrder[] = [];
+    const legacyDone: DeliveryOrder[] = [];
     for (const order of this.orders) {
-      if (order.status === 'transit' && order.fulfillment === 'delivery' && nowMinute >= order.readyMinute) {
-        order.status = 'done';
-        done.push({ ...order, items: order.items.map((i) => ({ ...i })) });
-      }
+      if (order.status !== 'transit' || order.fulfillment !== 'delivery' || nowMinute < order.readyMinute) continue;
+
+      const snapshot = { ...order, items: order.items.map((i) => ({ ...i })) };
+      const physicallyHandled = this.arrivalHandler?.(snapshot) ?? false;
+      order.status = 'done';
+      if (!physicallyHandled) legacyDone.push(snapshot);
     }
-    return done;
+    return legacyDone;
   }
 }

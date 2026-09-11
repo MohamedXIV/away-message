@@ -102,9 +102,9 @@ export interface NarrativeContextSnapshot {
   sim_player_cash: number;
   sim_player_energy: number;
   sim_player_fatigue: number;
-  sim_os_version: OsVersion;
+  sim_os_version: OsVersion | null;
   sim_ram_mb: number;
-  sim_connection_type: ConnectionType;
+  sim_connection_type: ConnectionType | null;
   sim_photobox_installed: boolean;
   sim_weatherbuddy_installed: boolean;
   sim_safesweep_installed: boolean;
@@ -148,7 +148,6 @@ export interface NarrativeEngineState {
   completedBeats: string[];
   visitedKnotIds: string[];
   flags: Record<string, boolean | number | string>;
-  storyStateJson?: string;
 }
 
 export interface BeatTriggerEvaluationResult {
