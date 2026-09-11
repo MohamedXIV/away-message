@@ -1,8 +1,16 @@
 // src/App.tsx
 
 import React, { useEffect, useState } from 'react';
-import { DesktopShell } from './desktop/DesktopShell';import { RoomScene } from './world/RoomScene';
+import { DesktopShell } from './desktop/DesktopShell';
+import { RoomScene } from './world/RoomScene';
 import { CafeScene } from './world/CafeScene';
+import { createTechnicalFixtureProjection } from './world/phaser/technicalFixture';
+
+const PhysicalWorldHost = React.lazy(() =>
+  import('./world/phaser/PhysicalWorldHost').then((m) => ({
+    default: m.PhysicalWorldHost,
+  }))
+);
 import { Day14ResolutionModal } from './world/Day14ResolutionModal';
 import { resolveActiveOsPresentation } from './desktop/host/OsPresentation';
 import type { OsVersion } from './engine/types';
@@ -35,6 +43,38 @@ function useContentStudio(): boolean {
   return enabled;
 }
 
+function usePhaserFixtureMode(): [boolean, (active: boolean) => void] {
+  const [enabled, setEnabled] = useState(false);
+  useEffect(() => {
+    try {
+      if (typeof window !== 'undefined') {
+        const params = new URLSearchParams(window.location.search);
+        if (params.get('fixture') === 'world' || params.get('renderer') === 'phaser') {
+          setEnabled(true);
+        }
+      }
+    } catch { /* best-effort */ }
+  }, []);
+
+  const toggle = (active: boolean) => {
+    setEnabled(active);
+    try {
+      if (typeof window !== 'undefined') {
+        const url = new URL(window.location.href);
+        if (active) {
+          url.searchParams.set('fixture', 'world');
+        } else {
+          url.searchParams.delete('fixture');
+          url.searchParams.delete('renderer');
+        }
+        window.history.replaceState({}, '', url.toString());
+      }
+    } catch {}
+  };
+
+  return [enabled, toggle];
+}
+
 export function resolveAppTheme(osVersion: OsVersion | null): string | null {
   return resolveActiveOsPresentation(osVersion)?.themeId ?? null;
 }
@@ -60,6 +100,8 @@ export const App: React.FC = () => {
   const [bootError, setBootError] = useState<string | null>(null);
   const [savedFlash, setSavedFlash] = useState(false);
   const contentStudio = useContentStudio();
+  const [phaserFixtureActive, setPhaserFixtureActive] = usePhaserFixtureMode();
+  const [fixtureProjection, setFixtureProjection] = useState(() => createTechnicalFixtureProjection());
 
   useEffect(() => {
     const request = consumeBootRequest();
@@ -164,42 +206,101 @@ export const App: React.FC = () => {
 
   return (
     <div data-theme={themeAttr ?? undefined} className="w-full h-full overflow-hidden select-none bg-black">
-      {phase === 'menu' && <MainMenu onBoot={() => setPhase('game')} />}
-      {phase === 'loading' && (
-        <div className="w-full h-full flex flex-col items-center justify-center gap-3 bg-black text-slate-300 font-sans">
-          <div className="text-4xl animate-pulse">💾</div>
-          <div className="text-sm font-bold tracking-widest">LOADING ROOM 104…</div>
-          {bootError && <div className="text-xs text-red-400">{bootError}</div>}
-        </div>
-      )}
-      {phase === 'game' && (
+      {phaserFixtureActive ? (
+        <React.Suspense
+          fallback={
+            <div className="w-full h-full flex flex-col items-center justify-center gap-3 bg-black text-slate-300 font-sans">
+              <div className="text-4xl animate-pulse">⚙</div>
+              <div className="text-sm font-bold tracking-widest text-amber-400">
+                INITIALIZING PHASER 4 RUNTIME…
+              </div>
+            </div>
+          }
+        >
+          <PhysicalWorldHost
+            projection={fixtureProjection}
+            debug={true}
+            onIntent={(intent) => {
+              if (intent.type === 'VIEW_TRANSITION' && intent.targetViewId) {
+                setFixtureProjection((prev) => ({
+                  ...prev,
+                  viewId: intent.targetViewId!,
+                  viewName: intent.targetViewId === 'view_a2' ? 'View A2 (Desk Focus)' : 'View A1 (Overview)',
+                }));
+              }
+            }}
+            overlaySlot={
+              <div className="p-3 flex justify-between items-center pointer-events-auto">
+                <button
+                  onClick={() => setPhaserFixtureActive(false)}
+                  className="px-3 py-1 bg-slate-900/90 hover:bg-slate-800 text-amber-300 border border-slate-700 text-xs font-mono shadow-md rounded flex items-center gap-1.5 cursor-pointer"
+                >
+                  ← Return to Room 104 (Canvas2D)
+                </button>
+              </div>
+            }
+          />
+        </React.Suspense>
+      ) : (
         <>
-          {/* Top-Level View Router */}
-          {activeView === 'pc' && <DesktopShell />}
-          {activeView === 'room' && <RoomScene />}
-          {activeView === 'cafe' && <CafeScene />}
-          {activeView === 'work' && <RoomScene />}
-
-          {/* Day 14 Evaluation Resolution Modal Overlay */}
-          {showDay14Modal && (
-            <Day14ResolutionModal
-              onContinueFreePlay={handleContinueFreePlay}
-              onRestartGame={handleRestartGame}
-            />
-          )}
-
-          {/* Autosave badge */}
-          {savedFlash && (
-            <div className="absolute bottom-10 right-3 z-50 border border-[#38516e] bg-[#e8f5e9] px-3 py-1.5 text-[11px] font-bold text-green-900 shadow">
-              ✓ Saved
+          {phase === 'menu' && (
+            <div className="relative w-full h-full">
+              <MainMenu onBoot={() => setPhase('game')} />
+              <button
+                onClick={() => setPhaserFixtureActive(true)}
+                className="absolute bottom-3 left-3 z-50 px-2.5 py-1 bg-slate-900/90 hover:bg-slate-800 text-[11px] text-amber-400 border border-slate-700 font-mono shadow rounded cursor-pointer"
+                title="Open Phaser 4 Physical World Technical Fixture"
+              >
+                ⚙ Phaser 4 Fixture
+              </button>
             </div>
           )}
+          {phase === 'loading' && (
+            <div className="w-full h-full flex flex-col items-center justify-center gap-3 bg-black text-slate-300 font-sans">
+              <div className="text-4xl animate-pulse">💾</div>
+              <div className="text-sm font-bold tracking-widest">LOADING ROOM 104…</div>
+              {bootError && <div className="text-xs text-red-400">{bootError}</div>}
+            </div>
+          )}
+          {phase === 'game' && (
+            <>
+              {/* Top-Level View Router */}
+              {activeView === 'pc' && <DesktopShell />}
+              {activeView === 'room' && <RoomScene />}
+              {activeView === 'cafe' && <CafeScene />}
+              {activeView === 'work' && <RoomScene />}
 
-          {/* Dev content studio overlay (never in production builds) */}
-          {contentStudio && (
-            <React.Suspense fallback={null}>
-              <ContentInspectorPane />
-            </React.Suspense>
+              {/* Dev toggle for Phaser 4 Physical World Fixture */}
+              <button
+                onClick={() => setPhaserFixtureActive(true)}
+                className="absolute bottom-2 left-2 z-40 px-2 py-1 bg-slate-900/85 hover:bg-slate-800 text-[10px] text-amber-400 border border-slate-700 font-mono shadow rounded cursor-pointer"
+                title="Open Phaser 4 Physical World Technical Fixture"
+              >
+                ⚙ Phaser 4 Fixture
+              </button>
+
+              {/* Day 14 Evaluation Resolution Modal Overlay */}
+              {showDay14Modal && (
+                <Day14ResolutionModal
+                  onContinueFreePlay={handleContinueFreePlay}
+                  onRestartGame={handleRestartGame}
+                />
+              )}
+
+              {/* Autosave badge */}
+              {savedFlash && (
+                <div className="absolute bottom-10 right-3 z-50 border border-[#38516e] bg-[#e8f5e9] px-3 py-1.5 text-[11px] font-bold text-green-900 shadow">
+                  ✓ Saved
+                </div>
+              )}
+
+              {/* Dev content studio overlay (never in production builds) */}
+              {contentStudio && (
+                <React.Suspense fallback={null}>
+                  <ContentInspectorPane />
+                </React.Suspense>
+              )}
+            </>
           )}
         </>
       )}
