@@ -51,4 +51,45 @@ describe('SimulationEngine transit persistence (#35)', () => {
 
     expect(restored.getActiveTravel()).toBeNull();
   });
+
+  it('commits player travel atomically, charges fare once, advances with the clock, and survives reload without restart or recharge', () => {
+    const original = new SimulationEngine();
+    expect(original.getState().player.cash).toBe(38);
+
+    const started = original.startTravel('player', plan, 'buy_groceries');
+    expect(started.success).toBe(true);
+    expect(original.getState().player.cash).toBe(36);
+    expect(original.getActiveTravel()).toMatchObject({
+      actorId: 'player',
+      currentLegIndex: 0,
+      farePaid: 2,
+      status: 'active',
+      purposeRef: 'buy_groceries',
+    });
+
+    original.advanceGameMinutes(17, 'travel progress');
+    expect(original.getActiveTravel()).toMatchObject({ status: 'active', currentLegIndex: 2 });
+
+    const snapshot = original.exportSnapshot();
+    const restored = new SimulationEngine();
+    restored.loadSnapshot(snapshot);
+
+    expect(restored.getState().player.cash).toBe(36);
+    expect(restored.getActiveTravel()).toEqual(original.getActiveTravel());
+
+    restored.advanceGameMinutes(13, 'travel arrival');
+    expect(restored.getActiveTravel()).toMatchObject({ status: 'arrived', currentLegIndex: 3 });
+    expect(restored.getState().player.cash).toBe(36);
+  });
+
+  it('rejects unaffordable player travel without charging or creating an active journey', () => {
+    const original = new SimulationEngine();
+    const expensivePlan: TravelPlan = { ...plan, fare: 50 };
+
+    const started = original.startTravel('player', expensivePlan);
+
+    expect(started.success).toBe(false);
+    expect(original.getState().player.cash).toBe(38);
+    expect(original.getActiveTravel()).toBeNull();
+  });
 });
