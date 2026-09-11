@@ -46,6 +46,7 @@ describe('Away Puppet MCP semantic contract', () => {
     const { puppet } = makeFixture();
     const service = createAwayPuppetToolService(puppet);
     expect(service.listTools()).toEqual([
+      'puppet.open',
       'puppet.inspect',
       'puppet.validate',
       'parameter.list',
@@ -62,6 +63,34 @@ describe('Away Puppet MCP semantic contract', () => {
       'part.set_tint',
     ]);
     expect(service.listTools().some((name) => /malloc|free|pointer|raw\.inochi/i.test(name))).toBe(false);
+  });
+
+  it('opens replacement puppet sessions atomically and disposes the old session only after success', () => {
+    const first = makeFixture();
+    const second = makeFixture();
+    second.raw.parameters.set('ParamBodyMass', 0.75);
+    let firstDisposeCount = 0;
+    let secondDisposeCount = 0;
+    const service = createAwayPuppetToolService(first.puppet, {
+      disposeInitial: () => { firstDisposeCount += 1; },
+      open: (source) => {
+        if (source === 'broken.inp') throw new Error('load failed');
+        return { puppet: second.puppet, dispose: () => { secondDisposeCount += 1; } };
+      },
+    });
+
+    expect(() => service.call('puppet.open', { source: 'broken.inp' })).toThrow(/load failed/);
+    expect(firstDisposeCount).toBe(0);
+    expect(service.call('parameter.get', { name: 'body.mass' })).toEqual({ name: 'body.mass', value: 0 });
+
+    expect(service.call('puppet.open', { source: 'replacement.inp' })).toEqual({
+      ok: true,
+      source: 'replacement.inp',
+      inspection: second.puppet.inspect(),
+    });
+    expect(firstDisposeCount).toBe(1);
+    expect(secondDisposeCount).toBe(0);
+    expect(service.call('parameter.get', { name: 'body.mass' })).toEqual({ name: 'body.mass', value: 0.75 });
   });
 
   it('exposes semantic inspection inventory without leaking raw Inochi parameter or node ids', () => {
