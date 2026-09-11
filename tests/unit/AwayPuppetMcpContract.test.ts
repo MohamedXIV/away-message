@@ -14,6 +14,7 @@ class FakeRawPuppet implements RawPuppetAdapter {
   ]);
   readonly visibleNodes = new Map<string, boolean>([['NodeHairFront', true]]);
   readonly tints = new Map<string, string>();
+  readonly slotAssignments = new Map<string, string>();
 
   hasParameter(id: string): boolean { return this.parameters.has(id); }
   hasNode(id: string): boolean { return this.visibleNodes.has(id); }
@@ -25,6 +26,7 @@ class FakeRawPuppet implements RawPuppetAdapter {
   setParameter(id: string, value: number): void { this.parameters.set(id, value); }
   setNodeVisibility(id: string, visible: boolean): void { this.visibleNodes.set(id, visible); }
   setNodeTint(id: string, color: string): void { this.tints.set(id, color); }
+  assignSlot(nodeId: string, assetId: string): void { this.slotAssignments.set(nodeId, assetId); }
 }
 
 function makeFixture() {
@@ -57,6 +59,7 @@ describe('Away Puppet MCP semantic contract', () => {
       'away.inspect_contract',
       'away.validate_rig',
       'away.set_morph',
+      'away.assign_slot',
       'away.test_morph_extremes',
       'away.set_expression',
       'away.set_pose',
@@ -149,6 +152,16 @@ describe('Away Puppet MCP semantic contract', () => {
       restored: 0.25,
     });
     expect(raw.parameters.get('ParamBodyMass')).toBe(0.25);
+  });
+
+  it('routes semantic slot assignment through the configured slot mapping without exposing raw node ids', () => {
+    const { raw, puppet } = makeFixture();
+    const service = createAwayPuppetToolService(puppet);
+
+    expect(service.call('away.assign_slot', { slot: 'hair.front', assetId: 'hair.front.bob.v1' })).toEqual({ ok: true });
+    expect(raw.slotAssignments.get('NodeHairFront')).toBe('hair.front.bob.v1');
+    expect(() => service.call('away.assign_slot', { slot: 'NodeHairFront', assetId: 'hair.front.bob.v1' })).toThrow(/Unknown slot/);
+    expect(raw.slotAssignments.size).toBe(1);
   });
 
   it('routes MCP semantic operations through the same validation as direct calls', () => {
