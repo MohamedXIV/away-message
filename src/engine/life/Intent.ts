@@ -139,6 +139,25 @@ function candidateForObligation(
           blockers: [],
         };
       }
+      // Far-future fixed destination (#37 handoff): expose WHERE/WHY/window
+      // early enough for mobility planning. No urgency bonus, no departure
+      // claim (that is #37's job with #35 route truth), no route math here.
+      if (startsAt !== undefined && startsAt > now + INTENT_PREPARE_WINDOW_MINUTES) {
+        if (!hasKnownDestination(obligation)) {
+          return blockedFallback(obligation, obligation.priority, [reason, 'upcoming']);
+        }
+        return {
+          kind,
+          sourceKind: obligation.sourceKind,
+          ...(obligation.sourceId === undefined ? {} : { sourceId: obligation.sourceId }),
+          targetPlaceId: obligation.destinationPlaceId,
+          score: obligation.priority,
+          reasons: [reason, 'upcoming'],
+          earliestAt: startsAt,
+          ...(endsAt === undefined ? {} : { latestAt: endsAt }),
+          blockers: [],
+        };
+      }
       return null;
     }
 

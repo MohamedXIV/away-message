@@ -241,4 +241,67 @@ describe('CharacterIntent selector (#44)', () => {
     expect(json).not.toContain('personalTake');
     expect(json).not.toContain('attitude');
   });
+
+  it('12. far-future fixed appointment stays exposed as an upcoming destination intent (#37 handoff)', () => {
+    const intent = selectCharacterIntent(baseSnapshot({
+      agenda: [{ id: 'a1', kind: 'errand', label: 'Buy milk', day: 1, startMinute: 900, endMinute: 960 }],
+      appointments: [{
+        id: 'appt_later', characterId: 'sam', locationId: 'cafe',
+        targetDay: 1, startMinute: 780, endMinute: 840, status: 'confirmed',
+      }],
+    }));
+    expect(intent?.kind).toBe('attend_appointment');
+    expect(intent?.sourceKind).toBe('appointment');
+    expect(intent?.sourceId).toBe('appt_later');
+    expect(intent?.targetPlaceId).toBe('cafe');
+    expect(intent?.earliestAt).toBe(780);
+    expect(intent?.latestAt).toBe(840);
+    expect(intent?.reasons).toContain('upcoming');
+    expect(intent?.blockers).toEqual([]);
+  });
+
+  it('13. far-future job exposes an upcoming perform_work intent', () => {
+    const intent = selectCharacterIntent(baseSnapshot({
+      appointments: [{
+        id: 'gig_later', characterId: 'sam', locationId: 'diner',
+        targetDay: 1, startMinute: 800, endMinute: 920, status: 'confirmed',
+        origin: { kind: 'job', id: 'flyer_run' },
+      }],
+    }));
+    expect(intent?.kind).toBe('perform_work');
+    expect(intent?.sourceKind).toBe('job');
+    expect(intent?.sourceId).toBe('flyer_run');
+    expect(intent?.targetPlaceId).toBe('diner');
+    expect(intent?.reasons).toContain('upcoming');
+  });
+
+  it('14. upcoming intent claims no immediate departure and no route truth', () => {
+    const intent = selectCharacterIntent(baseSnapshot({
+      appointments: [{
+        id: 'appt_later', characterId: 'sam', locationId: 'cafe',
+        targetDay: 1, startMinute: 780, endMinute: 840, status: 'confirmed',
+      }],
+    }));
+    expect(intent?.kind).not.toBe('prepare_to_leave');
+    expect(intent?.reasons).not.toContain('due_now');
+    expect(intent?.reasons).not.toContain('starts_soon');
+    const json = JSON.stringify(intent);
+    expect(json).not.toContain('durationMin');
+    expect(json).not.toContain('departAt');
+    expect(json).not.toContain('route');
+  });
+
+  it('15. far-future unknown destination stays an explainable blocked fallback', () => {
+    const intent = selectCharacterIntent(baseSnapshot({
+      agenda: [{ id: 'a1', kind: 'errand', label: 'Buy milk', day: 1, startMinute: 900, endMinute: 960 }],
+      appointments: [{
+        id: 'appt_nowhere', characterId: 'sam', locationId: '',
+        targetDay: 1, startMinute: 780, endMinute: 840, status: 'confirmed',
+      }],
+    }));
+    expect(intent?.kind).toBe('stay_current_activity');
+    expect(intent?.blockers).toContain('unknown_destination');
+    expect(intent?.targetPlaceId).toBeUndefined();
+    expect(intent?.sourceId).toBe('appt_nowhere');
+  });
 });
