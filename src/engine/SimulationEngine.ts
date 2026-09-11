@@ -25,6 +25,15 @@ import { GROCERY_SKUS, type DeliveryOrder, type Fulfillment } from './DeliveryEn
 import { PHYSICAL_ITEM_CATALOG } from './hardware/catalog';
 import type { SimulationState as TransportSimulationState } from './types';
 import { GENERATED_CONTAINERS, GENERATED_ITEMS } from './worldContent.generated';
+import {
+  InnerVoiceEngine,
+  emptyInnerVoicePersistedState,
+  type InnerVoicePersistedState,
+  type InnerVoiceUiState,
+  type InspectThoughtRequest,
+  type ThoughtIntent,
+  type ThoughtTrigger,
+} from './innerVoice/index';
 
 export * from './SimulationEngineLegacyFacade';
 
@@ -158,10 +167,15 @@ function clonePhysicalWorld(state: PhysicalWorldState): PhysicalWorldState {
 
 export class SimulationEngine extends LegacySimulationEngine {
   private physicalWorldState: PhysicalWorldState | null = null;
+  /** Player Inner Voice rules gate (#23). Owns cooldown/notable-history only. */
+  private readonly innerVoice: InnerVoiceEngine;
 
   public constructor(initialState?: InitialSimulationState) {
     super(initialState);
     this.physicalWorldState = this.hydratePhysicalWorld(initialState?.physicalWorld);
+    this.innerVoice = new InnerVoiceEngine(
+      (initialState as TransportSimulationState | undefined)?.innerVoice ?? null,
+    );
     this.delivery.setArrivalHandler((order) => this.materializeDeliveryParcel(order));
   }
 
@@ -322,6 +336,7 @@ export class SimulationEngine extends LegacySimulationEngine {
     return {
       ...super.getState(),
       physicalWorld: clonePhysicalWorld(this.currentPhysicalWorld()),
+      innerVoice: this.innerVoice.getPersistedState(),
     };
   }
 
@@ -329,6 +344,7 @@ export class SimulationEngine extends LegacySimulationEngine {
     return {
       ...super.exportSnapshot(),
       physicalWorld: clonePhysicalWorld(this.currentPhysicalWorld()),
+      innerVoice: this.innerVoice.getPersistedState(),
     };
   }
 
@@ -337,6 +353,39 @@ export class SimulationEngine extends LegacySimulationEngine {
       .physicalWorld;
     super.loadSnapshot(snapshot);
     this.physicalWorldState = this.hydratePhysicalWorld(persisted);
+    this.innerVoice.hydrate(snapshot.innerVoice ?? emptyInnerVoicePersistedState());
     this.delivery.setArrivalHandler((order) => this.materializeDeliveryParcel(order));
+  }
+
+  // ---- Player Inner Voice public API (#23) ----
+  // Rule-governed thought requests. These never mutate gameplay state;
+  // they only read the caller-provided knowledge view and advance the
+  // voice's own cooldown/notable-history.
+
+  public getInnerVoiceEngine(): InnerVoiceEngine {
+    return this.innerVoice;
+  }
+
+  public getInnerVoiceState(): InnerVoicePersistedState {
+    return this.innerVoice.getPersistedState();
+  }
+
+  public requestInnerThought(
+    trigger: ThoughtTrigger,
+    nowMinute?: number,
+    ui?: InnerVoiceUiState,
+  ): ThoughtIntent | null {
+    return this.innerVoice.request(trigger, nowMinute ?? this.clock.getTotalMinutes(), ui);
+  }
+
+  public requestInspectThought(
+    request: InspectThoughtRequest,
+    nowMinute?: number,
+  ): ThoughtIntent | null {
+    return this.innerVoice.requestInspect(request, nowMinute ?? this.clock.getTotalMinutes());
+  }
+
+  public dismissInnerThought(): void {
+    this.innerVoice.dismissActive();
   }
 }
