@@ -3,6 +3,7 @@
 // ==========================================
 
 import type { InnerVoicePersistedState } from '../innerVoice/types';
+import type { NpcLifePersistedState } from '../life/types';
 
 export type TimeOfDay = 'morning' | 'day' | 'evening' | 'night' | 'late_night';
 
@@ -732,6 +733,13 @@ export interface SimulationState {
    * No SAVE_FORMAT bump required.
    */
   innerVoice?: InnerVoicePersistedState;
+  /**
+   * Canonical NPC pressure + personal goals (#43). Additive and optional:
+   * goals and irreducible pressure only — relationships, economy, transit,
+   * appointments, and events stay with their owners. Absent in older saves
+   * (deterministic defaults apply). No SAVE_FORMAT bump required.
+   */
+  npcLives?: NpcLifePersistedState;
 }
 
 export interface StorePurchaseResultData {

@@ -143,6 +143,19 @@ export interface NpcPressureState {
   cumulativeWorkMinutes?: number;
 }
 
+/**
+ * Canonical per-actor #43 slice: goals + irreducible pressure only.
+ * No relationship/economy/transit/event copies — those authorities stay
+ * external and are read, never stored here.
+ */
+export interface NpcLifeEntry {
+  goals: PersonalGoal[];
+  pressure: NpcPressureState;
+}
+
+/** Persisted #43 state: actor id → canonical entry. Additive and optional. */
+export type NpcLifePersistedState = Record<string, NpcLifeEntry>;
+
 
 export type ObligationSourceKind =
   | 'routine'

@@ -4,10 +4,13 @@ import type {
   GoalKind,
   GoalStatus,
   MoneyBand,
+  NpcLifeEntry,
+  NpcLifePersistedState,
   NpcPressureState,
   PersonalGoal,
   StressBand,
 } from './types';
+import { MAX_ACTIVE_GOALS_PER_ACTOR } from './Goals';
 
 const VALID_GOAL_KINDS = new Set<GoalKind>([
   'save_purchase',
@@ -136,4 +139,55 @@ export function hydrateNpcPressure(
   }
 
   return null;
+}
+
+/** Empty canonical slice for fresh saves (old saves hydrate to this shape). */
+export function emptyNpcLives(): NpcLifePersistedState {
+  return {};
+}
+
+export function serializeNpcLives(state: NpcLifePersistedState): string {
+  return JSON.stringify(state);
+}
+
+/**
+ * Hydrate the canonical #43 slice. Accepts a parsed object or JSON string;
+ * entries survive only with valid pressure or at least one valid goal, and
+ * goals stay bounded. Malformed rows are dropped per project policy —
+ * callers fall back to deterministic defaults for missing actors.
+ */
+export function hydrateNpcLives(data: unknown): NpcLifePersistedState {
+  let parsed: unknown = data;
+  if (typeof data === 'string') {
+    try {
+      parsed = JSON.parse(data);
+    } catch {
+      return {};
+    }
+  }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
+
+  const out: NpcLifePersistedState = {};
+  for (const [actorId, rawEntry] of Object.entries(parsed as Record<string, unknown>)) {
+    if (typeof actorId !== 'string' || actorId === '') continue;
+    if (!rawEntry || typeof rawEntry !== 'object') continue;
+    const entry = rawEntry as Partial<NpcLifeEntry>;
+    const goals = hydratePersonalGoals(entry.goals).slice(0, MAX_ACTIVE_GOALS_PER_ACTOR);
+    const pressure = hydrateNpcPressure(entry.pressure);
+    if (!pressure && goals.length === 0) continue;
+    out[actorId] = {
+      goals,
+      pressure: pressure ?? {
+        actorId,
+        fatigueBand: 'normal',
+        stressBand: 'normal',
+        mood: 'neutral',
+        interruptionTolerance: 'open',
+        activeNeeds: [],
+        lastUpdatedMinute: 0,
+        tier: 'important_local',
+      },
+    };
+  }
+  return out;
 }

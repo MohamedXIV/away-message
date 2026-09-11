@@ -17,10 +17,13 @@ import {
   advanceNpcPressure,
   projectLifePressureView,
   initializeActorGoals,
+  hydrateNpcLives,
   type CharacterObligation,
   type FidelityTier,
   type LifeMatrixSnapshot,
   type LifePressureView,
+  type NpcLifeEntry,
+  type NpcLifePersistedState,
   type NpcPressureState,
   type PersonalGoal,
 } from './life';
@@ -87,8 +90,13 @@ export class SimulationEngine extends SimulationEngineCore {
 
   private v6CachedBase: Readonly<TransportSimulationState> | null = null;
   private v6CachedState: Readonly<LiveSimulationState> | null = null;
-  private npcPressureCache: Map<string, NpcPressureState> = new Map();
-  private npcGoalsCache: Map<string, PersonalGoal[]> = new Map();
+  /**
+   * Canonical #43 runtime: per-actor goals + irreducible pressure. This is
+   * the only mutable home for that state — getState/exportSnapshot project
+   * it into the additive `npcLives` snapshot slice, loadSnapshot/ctor
+   * hydrate it back. No relationship/economy/transit/event copies here.
+   */
+  private npcLivesCache: Map<string, NpcLifeEntry> = new Map();
 
 
   constructor(initialState?: Partial<TransportSimulationState>) {
@@ -123,6 +131,10 @@ export class SimulationEngine extends SimulationEngineCore {
     }
 
     this.inventory = new InventoryEngine(initialState?.inventory ?? createEmptyInventoryState());
+    this.npcLivesCache = new Map(Object.entries(hydrateNpcLives(initialState?.npcLives ?? {})));
+    // Deterministic canonical defaults for every known buddy, advanced to
+    // the authoritative minute — same-minute reads stay pure afterwards.
+    this.ensureAllNpcLifeEntries();
   }
 
   public override getState(): Readonly<LiveSimulationState> {
@@ -139,6 +151,7 @@ export class SimulationEngine extends SimulationEngineCore {
       inventory: this.inventory.getState(),
       os: this.os.getState(),
       installedSoftware: this.software.getInstalledSoftware(),
+      npcLives: this.getNpcLivesState(),
     } as Readonly<LiveSimulationState>;
 
     this.v6CachedBase = base;
@@ -156,6 +169,7 @@ export class SimulationEngine extends SimulationEngineCore {
       inventory: this.inventory.getState(),
       os: this.os.getState(),
       installedSoftware: this.software.getInstalledSoftware(),
+      npcLives: this.getNpcLivesState(),
     } as LiveSimulationState;
 
     this.v6CachedBase = null;
@@ -190,70 +204,159 @@ export class SimulationEngine extends SimulationEngineCore {
     return snapshot ? buildCharacterObligations(snapshot) : [];
   }
 
-  public getNpcPressure(actorId: string): LifePressureView | null {
+  /** Canonical #43 slice as plain snapshot data (deep copies, bounded). */
+  public getNpcLivesState(): NpcLifePersistedState {
+    const out: NpcLifePersistedState = {};
+    for (const [actorId, entry] of this.npcLivesCache) {
+      out[actorId] = {
+        goals: entry.goals.map((goal) => ({
+          ...goal,
+          ...(goal.metadata ? { metadata: { ...goal.metadata } } : {}),
+        })),
+        pressure: {
+          ...entry.pressure,
+          activeNeeds: [...entry.pressure.activeNeeds],
+        },
+      };
+    }
+    return out;
+  }
+
+  private deriveEntryPressure(actorId: string, day: number): NpcPressureState {
+    const buddy = this.social.getBuddy(actorId);
+    const routine = buddy?.schedule[day] ?? buddy?.schedule[1] ?? [];
+    const traits = this.social.getTraits(actorId);
+    const tier: FidelityTier = buddy?.reach === 'remote' ? 'background_remote' : 'important_local';
+    return deriveDefaultNpcPressure(actorId, traits, routine as never, tier);
+  }
+
+  private initializeEntryGoals(actorId: string, day: number): PersonalGoal[] {
+    const buddy = this.social.getBuddy(actorId);
+    if (!buddy) return [];
+    const traits = this.social.getTraits(actorId);
+    const tier: FidelityTier = buddy.reach === 'remote' ? 'background_remote' : 'important_local';
+    const bonds = this.social
+      .getBuddies()
+      .filter((target) => target.id !== actorId)
+      .map((target) => ({ targetId: target.id, ...this.social.getNpcBond(actorId, target.id).dims }));
+    const events = this.world.getTriggeredEvents().map((e) => ({ ...e }));
+    return initializeActorGoals(
+      actorId,
+      buddy.archetype || 'regular',
+      `away_seed_${day}`,
+      traits,
+      bonds,
+      events,
+      tier,
+    );
+  }
+
+  /**
+   * Canonical entry, created deterministically when missing. Creation stamps
+   * the authoritative minute WITHOUT simulating elapsed history — there is
+   * no fake past to replay (old saves, late joiners). Never advances here;
+   * time evolution happens only on explicit reads below. Returns null for
+   * unknown actors (callers keep their null/[] contract).
+   */
+  private getOrCreateNpcLifeEntry(actorId: string): NpcLifeEntry | null {
     const buddy = this.social.getBuddy(actorId);
     if (!buddy) return null;
-
-    let state = this.npcPressureCache.get(actorId);
     const atMinute = this.clock.getTotalMinutes();
     const day = this.clock.getTime().day;
 
-    if (!state) {
-      const routine = buddy.schedule[day] ?? buddy.schedule[1] ?? [];
-      const traits = this.social.getTraits(actorId);
-      const tier: FidelityTier = buddy.reach === 'remote' ? 'background_remote' : 'important_local';
-      state = deriveDefaultNpcPressure(actorId, traits, routine as any, tier);
-      this.npcPressureCache.set(actorId, state);
-    }
+    const existing = this.npcLivesCache.get(actorId);
+    if (existing) return existing;
 
-    if (state.lastUpdatedMinute < atMinute) {
-      const scheduleBlocks = (buddy.schedule[day] ?? []) as any[];
-      const minuteOfDay = ((atMinute % 1440) + 1440) % 1440;
-      const isAtWork = scheduleBlocks.some((b) =>
-        b.status === 'away' && minuteOfDay >= b.startMinuteOfDay && minuteOfDay < b.endMinuteOfDay
-      );
-      const inAppointment = this.world.getAppointments().some((a) =>
-        a.characterId === actorId && a.targetDay === day && minuteOfDay >= a.startMinute && minuteOfDay < (a.endMinute ?? a.startMinute + 60)
-      );
-      state = advanceNpcPressure(state, state.lastUpdatedMinute, atMinute, {
+    const entry: NpcLifeEntry = {
+      goals: this.initializeEntryGoals(actorId, day),
+      pressure: {
+        ...this.deriveEntryPressure(actorId, day),
+        lastUpdatedMinute: atMinute,
+      },
+    };
+    this.npcLivesCache.set(actorId, entry);
+    this.invalidateV6Cache();
+    return entry;
+  }
+
+  /**
+   * Coarse/event-driven time evolution for one entry. Pure function of the
+   * persisted entry plus current schedule/appointment context — identical
+   * reads at identical minutes always agree.
+   */
+  private advanceNpcLifeEntryToNow(actorId: string, entry: NpcLifeEntry): NpcLifeEntry {
+    const buddy = this.social.getBuddy(actorId);
+    if (!buddy) return entry;
+    const atMinute = this.clock.getTotalMinutes();
+    const day = this.clock.getTime().day;
+    if (entry.pressure.lastUpdatedMinute >= atMinute) return entry;
+
+    const scheduleBlocks = (buddy.schedule[day] ?? []) as Array<{
+      status?: string;
+      startMinuteOfDay?: number;
+      endMinuteOfDay?: number;
+    }>;
+    const minuteOfDay = ((atMinute % 1440) + 1440) % 1440;
+    const isAtWork = scheduleBlocks.some((b) =>
+      b.status === 'away'
+      && (b.startMinuteOfDay ?? 0) <= minuteOfDay
+      && minuteOfDay < (b.endMinuteOfDay ?? 0)
+    );
+    const inAppointment = this.world.getAppointments().some((a) =>
+      a.characterId === actorId && a.targetDay === day && minuteOfDay >= a.startMinute && minuteOfDay < (a.endMinute ?? a.startMinute + 60)
+    );
+    const updated: NpcLifeEntry = {
+      goals: entry.goals,
+      pressure: advanceNpcPressure(entry.pressure, entry.pressure.lastUpdatedMinute, atMinute, {
         day,
         isAtWork,
         inAppointment,
-      });
-      this.npcPressureCache.set(actorId, state);
-    }
+      }),
+    };
+    this.npcLivesCache.set(actorId, updated);
+    this.invalidateV6Cache();
+    return updated;
+  }
 
-    return projectLifePressureView(state, atMinute);
+  /** Materialize canonical entries for every known buddy (ctor/load deterministic defaults). */
+  private ensureAllNpcLifeEntries(): void {
+    for (const buddy of this.social.getBuddies()) {
+      this.getOrCreateNpcLifeEntry(buddy.id);
+    }
+  }
+
+  /**
+   * Coarse tick-driven time evolution (#43 fidelity law). Runs after every
+   * clock movement so reads stay pure: observed and control sims evolve
+   * identically whether or not anyone looked. Idempotent at a fixed minute.
+   */
+  private advanceAllNpcPressuresToNow(): void {
+    for (const buddy of this.social.getBuddies()) {
+      const entry = this.getOrCreateNpcLifeEntry(buddy.id);
+      if (entry) this.advanceNpcLifeEntryToNow(buddy.id, entry);
+    }
+  }
+
+  public override advanceGameMinutes(minutes: number, reason?: string): void {
+    super.advanceGameMinutes(minutes, reason);
+    this.advanceAllNpcPressuresToNow();
+  }
+
+  public override advanceRealTime(deltaRealSeconds: number): void {
+    super.advanceRealTime(deltaRealSeconds);
+    this.advanceAllNpcPressuresToNow();
+  }
+
+  public getNpcPressure(actorId: string): LifePressureView | null {
+    const entry = this.getOrCreateNpcLifeEntry(actorId);
+    if (!entry) return null;
+    return projectLifePressureView(entry.pressure, this.clock.getTotalMinutes());
   }
 
   public getPersonalGoals(actorId: string): PersonalGoal[] {
-    const buddy = this.social.getBuddy(actorId);
-    if (!buddy) return [];
-
-    let goals = this.npcGoalsCache.get(actorId);
-    if (!goals) {
-      const traits = this.social.getTraits(actorId);
-      const tier: FidelityTier = buddy.reach === 'remote' ? 'background_remote' : 'important_local';
-      const bonds = this.social
-        .getBuddies()
-        .filter((target) => target.id !== actorId)
-        .map((target) => ({ targetId: target.id, ...this.social.getNpcBond(actorId, target.id).dims }));
-      const events = this.world.getTriggeredEvents().map((e) => ({ ...e }));
-      const seed = `away_seed_${this.clock.getTime().day}`;
-
-      goals = initializeActorGoals(
-        actorId,
-        buddy.archetype || 'regular',
-        seed,
-        traits,
-        bonds,
-        events,
-        tier,
-      );
-      this.npcGoalsCache.set(actorId, goals);
-    }
-
-    return goals.map((g) => ({ ...g }));
+    const entry = this.getOrCreateNpcLifeEntry(actorId);
+    if (!entry) return [];
+    return entry.goals.map((g) => ({ ...g }));
   }
 
   public getFidelityTier(actorId: string): FidelityTier {
@@ -853,7 +956,14 @@ export class SimulationEngine extends SimulationEngineCore {
       };
     }
 
-    return super.dispatchAction(action);
+    // Sleep/rest jumps the clock without going through advanceGameMinutes.
+    // Any clock movement evolves coarse NPC pressure (idempotent at a minute).
+    const beforeMinute = this.clock.getTotalMinutes();
+    const result = super.dispatchAction(action);
+    if (this.clock.getTotalMinutes() !== beforeMinute) {
+      this.advanceAllNpcPressuresToNow();
+    }
+    return result;
   }
 
   public override loadSnapshot(snapshot: TransportSimulationState): void {
@@ -874,5 +984,9 @@ export class SimulationEngine extends SimulationEngineCore {
 
     super.loadSnapshot(compatSnapshot);
     this.software.loadState(snapshot.installedSoftware ?? []);
+    // Rehydrate canonical #43 state with normalization, then deterministically
+    // cover buddies missing from the slice (old saves, late joiners).
+    this.npcLivesCache = new Map(Object.entries(hydrateNpcLives(snapshot.npcLives ?? {})));
+    this.ensureAllNpcLifeEntries();
   }
 }

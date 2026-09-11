@@ -18,5 +18,8 @@ export {
   hydratePersonalGoals,
   serializeNpcPressure,
   hydrateNpcPressure,
+  emptyNpcLives,
+  serializeNpcLives,
+  hydrateNpcLives,
 } from './Persistence';
 
