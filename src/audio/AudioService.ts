@@ -21,6 +21,7 @@ export interface AudioServiceOptions {
 interface ActiveInstanceMeta {
   handle: string;
   eventId: string;
+  backend: AudioBackend;
   backendId: string;
   parameters: Map<string, number>;
   position?: AudioPosition3D;
@@ -37,12 +38,15 @@ export class AudioService {
   private primaryBackend: AudioBackend;
   private fallbackBackend?: AudioBackend;
   private activeBackend: AudioBackend;
+  private usedBackends: Set<AudioBackend> = new Set();
+  private busVolumes: Map<AudioBusCategory, number> = new Map();
 
   private activeInstances: Map<string, ActiveInstanceMeta> = new Map();
   private globalParameters: Map<string, number> = new Map();
   private currentAmbienceHandle?: string;
 
   private isPausedState = false;
+  private isDestroyedState = false;
   private listenerPos: AudioPosition3D = { x: 0, y: 0, z: 0 };
   private listenerOrient: ListenerOrientation = 'forward';
 
@@ -50,29 +54,60 @@ export class AudioService {
     this.primaryBackend = options?.primaryBackend ?? new WebAudioBackend();
     this.fallbackBackend = options?.fallbackBackend;
     this.activeBackend = this.primaryBackend;
+    this.usedBackends.add(this.primaryBackend);
 
     if (options?.masterVolume !== undefined) {
       this.setBusVolume('master', options.masterVolume);
     }
   }
 
+  private activateFallbackBackend(): void {
+    if (!this.fallbackBackend || this.fallbackBackend === this.activeBackend) return;
+    this.activeBackend = this.fallbackBackend;
+    this.usedBackends.add(this.fallbackBackend);
+
+    // Sync global parameters to fallback backend
+    for (const [k, v] of this.globalParameters.entries()) {
+      this.fallbackBackend.setParameter(k, v);
+    }
+
+    // Sync listener position & orientation to fallback backend
+    const vector = mapOrientationNameToVector(this.listenerOrient);
+    this.fallbackBackend.setListenerPosition(this.listenerPos, vector);
+
+    // Sync bus volumes to fallback backend
+    for (const [bus, vol] of this.busVolumes.entries()) {
+      this.fallbackBackend.setBusVolume(bus, vol);
+    }
+
+    // If service was paused, pause fallback backend as well
+    if (this.isPausedState) {
+      this.fallbackBackend.pause();
+    }
+  }
+
   public async init(): Promise<void> {
+    this.usedBackends.add(this.primaryBackend);
     try {
       await this.primaryBackend.init();
     } catch {
       if (this.fallbackBackend) {
-        this.activeBackend = this.fallbackBackend;
+        this.activateFallbackBackend();
         await this.fallbackBackend.init();
       }
     }
   }
 
   public async unlock(): Promise<void> {
-    try {
-      await this.activeBackend.unlock();
-    } catch {
-      // Ignored
+    const promises: (Promise<void> | void)[] = [];
+    for (const backend of this.usedBackends) {
+      try {
+        promises.push(backend.unlock());
+      } catch {
+        // Ignored
+      }
     }
+    await Promise.all(promises);
   }
 
   public play(eventId: string, options?: AudioPlayOptions): string {
@@ -80,20 +115,30 @@ export class AudioService {
     let usedBackend = this.activeBackend;
 
     try {
+      this.usedBackends.add(this.activeBackend);
       handle = this.activeBackend.play(eventId, options);
     } catch {
       if (this.fallbackBackend && this.fallbackBackend !== this.activeBackend) {
-        this.activeBackend = this.fallbackBackend;
+        this.activateFallbackBackend();
         usedBackend = this.fallbackBackend;
-        handle = this.fallbackBackend.play(eventId, options);
+        try {
+          handle = this.fallbackBackend.play(eventId, options);
+        } catch {
+          return '';
+        }
       } else {
         return '';
       }
     }
 
+    if (!handle) {
+      return '';
+    }
+
     const instanceMeta: ActiveInstanceMeta = {
       handle,
       eventId,
+      backend: usedBackend,
       backendId: usedBackend.id,
       parameters: new Map(Object.entries(options?.parameters ?? {})),
       position: options?.position,
@@ -112,8 +157,9 @@ export class AudioService {
   }
 
   public stop(handle: string, fadeOutSeconds = 0.05): void {
-    if (!this.activeInstances.has(handle)) return;
-    this.activeBackend.stop(handle, fadeOutSeconds);
+    const inst = this.activeInstances.get(handle);
+    if (!inst) return;
+    inst.backend.stop(handle, fadeOutSeconds);
     this.activeInstances.delete(handle);
     if (this.currentAmbienceHandle === handle) {
       this.currentAmbienceHandle = undefined;
@@ -121,7 +167,9 @@ export class AudioService {
   }
 
   public stopAll(fadeOutSeconds = 0.05): void {
-    this.activeBackend.stopAll(fadeOutSeconds);
+    for (const backend of this.usedBackends) {
+      backend.stopAll(fadeOutSeconds);
+    }
     this.activeInstances.clear();
     this.currentAmbienceHandle = undefined;
   }
@@ -135,7 +183,7 @@ export class AudioService {
       const inst = this.activeInstances.get(handle);
       if (inst) {
         inst.parameters.set(name, value);
-        this.activeBackend.setParameter(name, value, handle);
+        inst.backend.setParameter(name, value, handle);
       }
     } else {
       this.setGlobalParameter(name, value);
@@ -148,7 +196,9 @@ export class AudioService {
 
   public setGlobalParameter(name: string, value: number): void {
     this.globalParameters.set(name, value);
-    this.activeBackend.setParameter(name, value);
+    for (const backend of this.usedBackends) {
+      backend.setParameter(name, value);
+    }
     for (const inst of this.activeInstances.values()) {
       inst.parameters.set(name, value);
     }
@@ -184,7 +234,7 @@ export class AudioService {
     const inst = this.activeInstances.get(handle);
     if (!inst) return;
     inst.position = position;
-    this.activeBackend.setSourcePosition(handle, position, orientation);
+    inst.backend.setSourcePosition(handle, position, orientation);
   }
 
   public setListenerPosition(
@@ -192,13 +242,15 @@ export class AudioService {
     orientation?: AudioOrientation3D,
   ): void {
     this.listenerPos = position;
-    this.activeBackend.setListenerPosition(position, orientation);
+    for (const backend of this.usedBackends) {
+      backend.setListenerPosition(position, orientation);
+    }
   }
 
   public setListenerOrientation(orientation: ListenerOrientation): void {
     this.listenerOrient = orientation;
     const vector = mapOrientationNameToVector(orientation);
-    this.activeBackend.setListenerPosition(this.listenerPos, vector);
+    this.setListenerPosition(this.listenerPos, vector);
   }
 
   public getListenerOrientation(): ListenerOrientation {
@@ -206,7 +258,10 @@ export class AudioService {
   }
 
   public setBusVolume(bus: AudioBusCategory, volume: number): void {
-    this.activeBackend.setBusVolume(bus, volume);
+    this.busVolumes.set(bus, volume);
+    for (const backend of this.usedBackends) {
+      backend.setBusVolume(bus, volume);
+    }
   }
 
   public transitionAmbience(
@@ -233,17 +288,23 @@ export class AudioService {
   public pause(): void {
     if (this.isPausedState) return;
     this.isPausedState = true;
-    this.activeBackend.pause();
+    for (const backend of this.usedBackends) {
+      backend.pause();
+    }
   }
 
   public resume(): void {
     if (!this.isPausedState) return;
     this.isPausedState = false;
-    this.activeBackend.resume();
+    for (const backend of this.usedBackends) {
+      backend.resume();
+    }
   }
 
   public suspend(): void {
-    this.activeBackend.suspend();
+    for (const backend of this.usedBackends) {
+      backend.suspend();
+    }
   }
 
   public isPaused(): boolean {
@@ -251,11 +312,17 @@ export class AudioService {
   }
 
   public destroy(): void {
+    if (this.isDestroyedState) return;
+    this.isDestroyedState = true;
     this.stopAll(0);
-    this.activeBackend.destroy();
-    if (this.fallbackBackend && this.fallbackBackend !== this.activeBackend) {
-      this.fallbackBackend.destroy();
+    const destroyed = new Set<AudioBackend>();
+    for (const backend of this.usedBackends) {
+      if (!destroyed.has(backend)) {
+        destroyed.add(backend);
+        backend.destroy();
+      }
     }
+    this.usedBackends.clear();
   }
 
   public getActiveBackendId(): string {

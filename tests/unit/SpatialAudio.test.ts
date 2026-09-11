@@ -484,4 +484,262 @@ describe('Data-Driven Spatial Audio API & Architecture (#22)', () => {
       expect(windowSrc?.eventId).toBe('ambience.weather.rain');
     });
   });
+
+  // --------------------------------------------------------------------------
+  // 11. Backend Ownership and Resilient Fallback Transition
+  // --------------------------------------------------------------------------
+  describe('11. Backend Ownership & Fallback Transition Integrity', () => {
+    function createMockBackend(id: string) {
+      let counter = 0;
+      const mockPlay = vi.fn((eventId: string) => `${id}_handle_${++counter}_${eventId}`);
+      const mockStop = vi.fn();
+      const mockStopAll = vi.fn();
+      const mockSetParameter = vi.fn();
+      const mockSetSourcePosition = vi.fn();
+      const mockSetListenerPosition = vi.fn();
+      const mockSetBusVolume = vi.fn();
+      const mockPause = vi.fn();
+      const mockResume = vi.fn();
+      const mockSuspend = vi.fn();
+      const mockDestroy = vi.fn();
+      const mockInit = vi.fn();
+      const mockUnlock = vi.fn();
+
+      const backend: AudioBackend = {
+        id,
+        init: mockInit,
+        unlock: mockUnlock,
+        play: mockPlay,
+        stop: mockStop,
+        stopAll: mockStopAll,
+        setParameter: mockSetParameter,
+        setSourcePosition: mockSetSourcePosition,
+        setListenerPosition: mockSetListenerPosition,
+        setBusVolume: mockSetBusVolume,
+        pause: mockPause,
+        resume: mockResume,
+        suspend: mockSuspend,
+        destroy: mockDestroy,
+        isAvailable: vi.fn(() => true),
+        getActiveInstanceCount: vi.fn(() => counter),
+      };
+
+      return {
+        backend,
+        mockPlay,
+        mockStop,
+        mockStopAll,
+        mockSetParameter,
+        mockSetSourcePosition,
+        mockSetListenerPosition,
+        mockSetBusVolume,
+        mockPause,
+        mockResume,
+        mockSuspend,
+        mockDestroy,
+        mockInit,
+        mockUnlock,
+      };
+    }
+
+    it('proves a handle remains owned by the backend that created it across fallback transition', () => {
+      const primary = createMockBackend('primary_backend');
+      const fallback = createMockBackend('fallback_backend');
+      const service = new AudioService({
+        primaryBackend: primary.backend,
+        fallbackBackend: fallback.backend,
+      });
+
+      // 1. Play first sound on primary backend
+      const handle1 = service.play('sfx.door_open');
+      expect(handle1).toBe('primary_backend_handle_1_sfx.door_open');
+      expect(primary.mockPlay).toHaveBeenCalledTimes(1);
+      expect(fallback.mockPlay).not.toHaveBeenCalled();
+      expect(service.isInstanceActive(handle1)).toBe(true);
+
+      // 2. Primary backend fails on next play -> triggers fallback
+      primary.mockPlay.mockImplementationOnce(() => {
+        throw new Error('Primary device disconnected');
+      });
+
+      const handle2 = service.play('sfx.bell');
+      expect(handle2).toBe('fallback_backend_handle_1_sfx.bell');
+      expect(fallback.mockPlay).toHaveBeenCalledTimes(1);
+
+      // 3. Service now has activeBackend as fallback, but handle1 MUST still be active and owned by primary
+      expect(service.getActiveBackendId()).toBe('fallback_backend');
+      expect(service.isInstanceActive(handle1)).toBe(true);
+      expect(service.isInstanceActive(handle2)).toBe(true);
+    });
+
+    it('routes stop(handle) strictly to the backend that created the handle', () => {
+      const primary = createMockBackend('primary_backend');
+      const fallback = createMockBackend('fallback_backend');
+      const service = new AudioService({
+        primaryBackend: primary.backend,
+        fallbackBackend: fallback.backend,
+      });
+
+      const handle1 = service.play('sfx.door_open');
+      // Trigger fallback
+      primary.mockPlay.mockImplementationOnce(() => {
+        throw new Error('Primary failure');
+      });
+      const handle2 = service.play('sfx.bell');
+
+      // Stop handle1: MUST target primary backend, NOT fallback
+      service.stop(handle1, 0.1);
+      expect(primary.mockStop).toHaveBeenCalledWith(handle1, 0.1);
+      expect(fallback.mockStop).not.toHaveBeenCalled();
+      expect(service.isInstanceActive(handle1)).toBe(false);
+      expect(service.isInstanceActive(handle2)).toBe(true);
+
+      // Stop handle2: MUST target fallback backend
+      service.stop(handle2, 0.2);
+      expect(fallback.mockStop).toHaveBeenCalledWith(handle2, 0.2);
+      expect(service.isInstanceActive(handle2)).toBe(false);
+    });
+
+    it('routes setParameter(..., handle) strictly to the owning backend', () => {
+      const primary = createMockBackend('primary_backend');
+      const fallback = createMockBackend('fallback_backend');
+      const service = new AudioService({
+        primaryBackend: primary.backend,
+        fallbackBackend: fallback.backend,
+      });
+
+      const handle1 = service.play('sfx.engine');
+      primary.mockPlay.mockImplementationOnce(() => {
+        throw new Error('Primary failure');
+      });
+      const handle2 = service.play('sfx.radio');
+
+      // Set parameter on primary handle
+      service.setParameter('rpm', 3000, handle1);
+      expect(primary.mockSetParameter).toHaveBeenCalledWith('rpm', 3000, handle1);
+      expect(fallback.mockSetParameter).not.toHaveBeenCalledWith('rpm', 3000, handle1);
+
+      // Set parameter on fallback handle
+      service.setParameter('tuning', 104.5, handle2);
+      expect(fallback.mockSetParameter).toHaveBeenCalledWith('tuning', 104.5, handle2);
+      expect(primary.mockSetParameter).not.toHaveBeenCalledWith('tuning', 104.5, handle2);
+    });
+
+    it('routes setSourcePosition(handle, ...) strictly to the owning backend', () => {
+      const primary = createMockBackend('primary_backend');
+      const fallback = createMockBackend('fallback_backend');
+      const service = new AudioService({
+        primaryBackend: primary.backend,
+        fallbackBackend: fallback.backend,
+      });
+
+      const handle1 = service.play('device.clock_tick');
+      primary.mockPlay.mockImplementationOnce(() => {
+        throw new Error('Primary failure');
+      });
+      const handle2 = service.play('device.lamp_buzz');
+
+      const pos1 = { x: -0.5, y: 0.2, z: 0.1 };
+      const pos2 = { x: 0.8, y: -0.4, z: 0.0 };
+
+      service.setSourcePosition(handle1, pos1);
+      expect(primary.mockSetSourcePosition).toHaveBeenCalledWith(handle1, pos1, undefined);
+      expect(fallback.mockSetSourcePosition).not.toHaveBeenCalledWith(handle1, pos1, undefined);
+
+      service.setSourcePosition(handle2, pos2);
+      expect(fallback.mockSetSourcePosition).toHaveBeenCalledWith(handle2, pos2, undefined);
+      expect(primary.mockSetSourcePosition).not.toHaveBeenCalledWith(handle2, pos2, undefined);
+    });
+
+    it('stopAll cleans up all initialized/used backends without double-stopping', () => {
+      const primary = createMockBackend('primary_backend');
+      const fallback = createMockBackend('fallback_backend');
+      const service = new AudioService({
+        primaryBackend: primary.backend,
+        fallbackBackend: fallback.backend,
+      });
+
+      const handle1 = service.play('sfx.one');
+      primary.mockPlay.mockImplementationOnce(() => {
+        throw new Error('Primary failure');
+      });
+      const handle2 = service.play('sfx.two');
+
+      expect(service.isInstanceActive(handle1)).toBe(true);
+      expect(service.isInstanceActive(handle2)).toBe(true);
+
+      service.stopAll(0.05);
+
+      expect(primary.mockStopAll).toHaveBeenCalledTimes(1);
+      expect(fallback.mockStopAll).toHaveBeenCalledTimes(1);
+      expect(service.isInstanceActive(handle1)).toBe(false);
+      expect(service.isInstanceActive(handle2)).toBe(false);
+    });
+
+    it('destroy cleans up all initialized/used backends without double-destroying even when called repeatedly', () => {
+      const primary = createMockBackend('primary_backend');
+      const fallback = createMockBackend('fallback_backend');
+      const unusedFallback = createMockBackend('unused_fallback');
+
+      // Case A: Service with fallback that got activated
+      const serviceA = new AudioService({
+        primaryBackend: primary.backend,
+        fallbackBackend: fallback.backend,
+      });
+
+      serviceA.play('sfx.one');
+      primary.mockPlay.mockImplementationOnce(() => {
+        throw new Error('Primary failure');
+      });
+      serviceA.play('sfx.two');
+
+      serviceA.destroy();
+      serviceA.destroy(); // Repeated call must be idempotent
+
+      expect(primary.mockDestroy).toHaveBeenCalledTimes(1);
+      expect(fallback.mockDestroy).toHaveBeenCalledTimes(1);
+
+      // Case B: Service where fallback was never initialized or used
+      const serviceB = new AudioService({
+        primaryBackend: primary.backend,
+        fallbackBackend: unusedFallback.backend,
+      });
+
+      serviceB.play('sfx.only_primary');
+      serviceB.destroy();
+
+      expect(unusedFallback.mockDestroy).not.toHaveBeenCalled();
+    });
+
+    it('fallback transition remains deterministic and does not duplicate active instance state', () => {
+      const primary = createMockBackend('primary_backend');
+      const fallback = createMockBackend('fallback_backend');
+      const service = new AudioService({
+        primaryBackend: primary.backend,
+        fallbackBackend: fallback.backend,
+      });
+
+      const handle1 = service.play('sfx.step');
+      expect(service.isInstanceActive(handle1)).toBe(true);
+
+      // Primary fails, fallback succeeds
+      primary.mockPlay.mockImplementationOnce(() => {
+        throw new Error('Primary failure');
+      });
+      const handle2 = service.play('sfx.jump');
+      expect(service.isInstanceActive(handle2)).toBe(true);
+
+      // Now both fail -> returns empty string, must NOT create phantom active instances
+      fallback.mockPlay.mockImplementationOnce(() => {
+        throw new Error('Fallback also failed');
+      });
+      const handle3 = service.play('sfx.impossible');
+      expect(handle3).toBe('');
+      expect(service.isInstanceActive('')).toBe(false);
+
+      // Only handle1 and handle2 remain active
+      expect(service.isInstanceActive(handle1)).toBe(true);
+      expect(service.isInstanceActive(handle2)).toBe(true);
+    });
+  });
 });
