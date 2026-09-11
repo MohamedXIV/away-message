@@ -415,6 +415,7 @@ export class SimulationEngine extends LegacySimulationEngine {
         purposeRef: purposeRef ?? null,
       });
     } catch {}
+    this.notifySubscribers();
 
     return { success: true, data: cloneActiveTravel(committed) };
   }
