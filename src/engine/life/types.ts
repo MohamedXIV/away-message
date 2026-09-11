@@ -189,6 +189,50 @@ export interface CharacterObligation {
   status: ObligationStatus;
 }
 
+/**
+ * Bounded intent vocabulary (#44). Only the subset supportable by current
+ * snapshot data is ever emitted (stay/prepare/attend/perform/call/rest/
+ * pursue/shop); travel_to_place, visit_person, return_home, and use_computer
+ * are reserved for when presence/place/target projections exist (#45 and
+ * later) and must never be emitted with unknown targets.
+ */
+export type CharacterIntentKind =
+  | 'stay_current_activity'
+  | 'prepare_to_leave'
+  | 'travel_to_place'
+  | 'perform_work'
+  | 'attend_appointment'
+  | 'shop_for_need'
+  | 'visit_person'
+  | 'return_home'
+  | 'use_computer'
+  | 'call_or_message'
+  | 'rest_or_sleep'
+  | 'pursue_personal_goal';
+
+/**
+ * Selected next intent: WHAT the actor intends plus WHY. Pure orchestration
+ * output — it never executes routes, timing, attendance, wages, or any
+ * relationship/economy consequence (those owners decide outcomes).
+ */
+export interface CharacterIntent {
+  actorId: string;
+  kind: CharacterIntentKind;
+  sourceKind?: ObligationSourceKind;
+  sourceId?: string;
+  targetPlaceId?: string;
+  targetActorId?: string;
+  activity?: string;
+  priority: number;
+  /** Deterministic reason codes (e.g. 'due_now', 'needs_rest', 'loyal'). */
+  reasons: string[];
+  earliestAt?: number;
+  latestAt?: number;
+  /** Explainable blockers (e.g. 'unknown_destination') — never silent success. */
+  blockers: string[];
+  reevaluateAtMinute: number;
+}
+
 export interface LifeMatrixSnapshot {
   actorId: string;
   atMinute: number;

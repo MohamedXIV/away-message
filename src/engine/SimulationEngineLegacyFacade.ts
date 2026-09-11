@@ -13,11 +13,13 @@ import {
   buildLifeMatrixSnapshot,
   createSimulationLifeSources,
   buildCharacterObligations,
+  selectCharacterIntent,
   deriveDefaultNpcPressure,
   advanceNpcPressure,
   projectLifePressureView,
   initializeActorGoals,
   hydrateNpcLives,
+  type CharacterIntent,
   type CharacterObligation,
   type FidelityTier,
   type LifeMatrixSnapshot,
@@ -202,6 +204,19 @@ export class SimulationEngine extends SimulationEngineCore {
   public getCharacterObligations(actorId: string): CharacterObligation[] {
     const snapshot = this.getLifeSnapshot(actorId);
     return snapshot ? buildCharacterObligations(snapshot) : [];
+  }
+
+  /**
+   * On-demand character intent (#44): selects WHAT the actor currently
+   * intends plus WHY from a fresh snapshot. Pure read — no cache, no tick
+   * hook, no persisted ledger, no consequences. Missing actors yield null.
+   */
+  public getCharacterIntent(actorId: string): CharacterIntent | null {
+    const snapshot = this.getLifeSnapshot(actorId);
+    if (!snapshot) return null;
+    const intent = selectCharacterIntent(snapshot);
+    if (!intent) return null;
+    return { ...intent, reasons: [...intent.reasons], blockers: [...intent.blockers] };
   }
 
   /** Canonical #43 slice as plain snapshot data (deep copies, bounded). */
