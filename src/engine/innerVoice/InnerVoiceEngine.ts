@@ -47,9 +47,67 @@ const ALLOWED_KNOWLEDGE_KEYS: ReadonlySet<string> = new Set([
 /** Only these knowledge-ref namespaces may feed a ThoughtIntent. */
 const ALLOWED_REF_PREFIXES = ['visible:', 'learned:', 'memory:', 'player:'];
 
+function normalizeKnowledgeToken(value: string): string {
+  return value.trim().toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+}
+
+function listContainsKnowledgeToken(values: readonly string[] | undefined, token: string): boolean {
+  if (!values) return false;
+  const normalizedToken = normalizeKnowledgeToken(token);
+  return values.some((value) => {
+    const normalizedValue = normalizeKnowledgeToken(value);
+    return normalizedValue === normalizedToken || normalizedValue.endsWith(`_${normalizedToken}`);
+  });
+}
+
 function isAllowedRef(ref: string): boolean {
   if (typeof ref !== 'string' || ref.trim() === '') return false;
   return ALLOWED_REF_PREFIXES.some((prefix) => ref.startsWith(prefix));
+}
+
+/**
+ * A namespace alone is not proof of knowledge. Every ref must be backed by
+ * the caller-provided PlayerKnowledgeView so hidden facts cannot be disguised
+ * as learned:/visible:/memory:/player: references.
+ */
+function isRefBackedByKnowledge(ref: string, knowledge: PlayerKnowledgeView): boolean {
+  const parts = ref.split(':');
+  const namespace = parts[0];
+  const domain = parts[1];
+  const token = parts.slice(2).join(':');
+
+  if (namespace === 'visible') {
+    if (domain === 'place') {
+      return Boolean(token) && normalizeKnowledgeToken(knowledge.visiblePlaceId ?? '') === normalizeKnowledgeToken(token);
+    }
+    if (domain === 'object') {
+      return Boolean(token) && listContainsKnowledgeToken(knowledge.visibleObjects, token);
+    }
+    if (domain === 'weather') {
+      return Boolean(knowledge.weatherHint);
+    }
+    return false;
+  }
+
+  if (namespace === 'learned') {
+    const learnedToken = parts.slice(1).join(':');
+    return Boolean(learnedToken) && listContainsKnowledgeToken(knowledge.learnedFacts, learnedToken);
+  }
+
+  if (namespace === 'memory') {
+    const memoryToken = parts.slice(1).join(':');
+    return Boolean(memoryToken) && listContainsKnowledgeToken(knowledge.playerMemories, memoryToken);
+  }
+
+  if (namespace === 'player') {
+    if (domain === 'body') return Boolean(knowledge.bodyHint);
+    if (domain === 'economy') return Boolean(knowledge.economyHint);
+    if (domain === 'time') return Boolean(knowledge.timeHint);
+    if (domain === 'weather') return Boolean(knowledge.weatherHint);
+    return false;
+  }
+
+  return false;
 }
 
 /** Default priority when the trigger leaves it to the rules. */
@@ -125,6 +183,7 @@ export class InnerVoiceEngine {
       this.active = this.queue.shift() ?? null;
     }
   }
+
   /**
    * Explicit player Inspect/Think path. Bypasses ambient UI suppression
    * (the player asked), keeps knowledge/cooldown/dedupe governance, and
@@ -175,30 +234,26 @@ export class InnerVoiceEngine {
     const tone = trigger.tone ?? 'neutral';
     if (!(THOUGHT_TONES as readonly string[]).includes(tone)) return null;
 
-    // Knowledge safety: every ref must come from the allowlisted namespaces.
-    for (const ref of trigger.knowledgeRefs) {
-      if (!isAllowedRef(ref)) return null;
-    }
     // Knowledge safety: the view itself must carry no smuggled hidden fields.
     if (!this.isKnowledgeViewClean(trigger.knowledge)) return null;
+    // Every provenance ref must be both namespace-safe and actually backed by
+    // the supplied player knowledge view; allowed prefixes are not sufficient.
+    for (const ref of trigger.knowledgeRefs) {
+      if (!isAllowedRef(ref) || !isRefBackedByKnowledge(ref, trigger.knowledge)) return null;
+    }
 
     const priority = clampPriority(trigger.priority, defaultPriorityFor(presentation));
     const notable = presentation === 'urgent' || priority >= INNER_VOICE_NOTABLE_PRIORITY;
     const explicitKey = typeof trigger.cooldownKey === 'string' && trigger.cooldownKey.trim() !== ''
       ? trigger.cooldownKey
       : undefined;
-    // Notable thoughts must never spam: they always carry a cooldown identity,
-    // synthesized from source+topic when the caller did not provide one.
     const cooldownKey = explicitKey ?? (notable ? `${trigger.source}|${trigger.topic}` : undefined);
-    // A notable key stays warm for the extended window even if a later
-    // ordinary request reuses it; inspect requests keep the short window.
     const window = presentation === 'inspect'
       ? Math.min(cooldownWindow, INNER_VOICE_INSPECT_COOLDOWN_MINUTES)
       : notable || (cooldownKey !== undefined && this.notableIds.has(cooldownKey))
         ? Math.max(cooldownWindow, INNER_VOICE_NOTABLE_COOLDOWN_MINUTES)
         : cooldownWindow;
 
-    // Cooldown / notable replay guard (persisted across save/reload).
     if (cooldownKey) {
       const last = this.cooldowns.get(cooldownKey);
       if (last !== undefined && nowMinute - last < window) return null;
@@ -216,20 +271,14 @@ export class InnerVoiceEngine {
       presentation,
     };
 
-    // Dedupe: same semantic identity already active, queued, or recently shown.
     if (this.isDuplicate(intent)) return null;
-
-    // Ambient suppression: important UI keeps the channel quiet for chatter,
-    // but never swallows an urgent thought the player should not miss.
     if (!inspectBypass && this.isUiSuppressed(presentation, ui)) return null;
 
-    // Record cooldown/notable at approval time so reload cannot replay.
     if (cooldownKey) {
       this.cooldowns.set(cooldownKey, nowMinute);
       if (notable) this.notableIds.add(cooldownKey);
     }
 
-    // One active thought at a time; higher priority preempts.
     if (!this.active) {
       this.active = intent;
       return intent;
@@ -260,9 +309,6 @@ export class InnerVoiceEngine {
 
   private isDuplicate(intent: ThoughtIntent): boolean {
     const identity = intent.cooldownKey ?? intent.id;
-    // Live slots only. Time-based replay protection belongs to the cooldown
-    // windows (persisted); `recent` is a bounded history record, and treating
-    // it as a suppression list would permanently block re-eligible notes.
     const seen = new Set<string>();
     const collect = (entry: ThoughtIntent) => {
       seen.add(entry.cooldownKey ?? entry.id);
@@ -271,7 +317,6 @@ export class InnerVoiceEngine {
     if (this.active) collect(this.active);
     for (const queued of this.queue) collect(queued);
     if (seen.has(identity) || seen.has(intent.id)) return true;
-    // Same topic+source already waiting or showing: do not stack repeats.
     const semantic = `${intent.source}|${intent.topic}`;
     const hasSemantic = (entry: ThoughtIntent) => `${entry.source}|${entry.topic}` === semantic;
     if (this.active && hasSemantic(this.active)) return true;
