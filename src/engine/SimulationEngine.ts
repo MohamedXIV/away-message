@@ -27,6 +27,15 @@ import { parseActiveTravel } from './transit/ActiveTravel';
 import type { ActiveTravelState } from './transit/types';
 import type { SimulationState as TransportSimulationState } from './types';
 import { GENERATED_CONTAINERS, GENERATED_ITEMS } from './worldContent.generated';
+import {
+  InnerVoiceEngine,
+  emptyInnerVoicePersistedState,
+  type InnerVoicePersistedState,
+  type InnerVoiceUiState,
+  type InspectThoughtRequest,
+  type ThoughtIntent,
+  type ThoughtTrigger,
+} from './innerVoice/index';
 
 export * from './SimulationEngineLegacyFacade';
 
@@ -167,11 +176,16 @@ function cloneActiveTravel(state: ActiveTravelState): ActiveTravelState {
 export class SimulationEngine extends LegacySimulationEngine {
   private physicalWorldState: PhysicalWorldState | null = null;
   private activeTravelState: ActiveTravelState | null = null;
+  /** Player Inner Voice rules gate (#23). Owns cooldown/notable-history only. */
+  private readonly innerVoice: InnerVoiceEngine;
 
   public constructor(initialState?: InitialSimulationState) {
     super(initialState);
     this.physicalWorldState = this.hydratePhysicalWorld(initialState?.physicalWorld);
     this.activeTravelState = initialState?.activeTravel ? cloneActiveTravel(initialState.activeTravel) : null;
+    this.innerVoice = new InnerVoiceEngine(
+      (initialState as TransportSimulationState | undefined)?.innerVoice ?? null,
+    );
     this.delivery.setArrivalHandler((order) => this.materializeDeliveryParcel(order));
   }
 
@@ -183,8 +197,6 @@ export class SimulationEngine extends LegacySimulationEngine {
   }
 
   private currentPhysicalWorld(): PhysicalWorldState {
-    // Defensive only for superclass construction: once our constructor returns,
-    // physicalWorldState is always initialized through hydratePhysicalWorld().
     return this.physicalWorldState ?? emptyPhysicalWorld();
   }
 
@@ -239,8 +251,6 @@ export class SimulationEngine extends LegacySimulationEngine {
       'order-item',
     );
 
-    // Keep the established arrival traces, but they now mean parcel arrival,
-    // not pantry teleportation. These are best-effort after the physical commit.
     try { this.world.setFlag(`delivery_arrived_${order.id}`, true); } catch {}
     try {
       this.telemetry.logEvent('economy', 'order_delivered', this.clock.getTotalMinutes(), {
@@ -273,8 +283,6 @@ export class SimulationEngine extends LegacySimulationEngine {
       return { success: false, error: 'Too tired for a store run (need 20% energy).' };
     }
 
-    // The order ID is the stable purchase identity. All validation that can reject
-    // checkout happens before cash, order history, or physical ownership changes.
     const order = this.delivery.recordPickup(items, total, this.clock.getTotalMinutes());
     const bagId = `shopping-bag:${order.id}`;
     this.materializeGroceryContainer(
@@ -341,6 +349,7 @@ export class SimulationEngine extends LegacySimulationEngine {
       ...super.getState(),
       physicalWorld: clonePhysicalWorld(this.currentPhysicalWorld()),
       activeTravel: this.getActiveTravel(),
+      innerVoice: this.innerVoice.getPersistedState(),
     };
   }
 
@@ -349,6 +358,7 @@ export class SimulationEngine extends LegacySimulationEngine {
       ...super.exportSnapshot(),
       physicalWorld: clonePhysicalWorld(this.currentPhysicalWorld()),
       activeTravel: this.getActiveTravel(),
+      innerVoice: this.innerVoice.getPersistedState(),
     };
   }
 
@@ -362,10 +372,37 @@ export class SimulationEngine extends LegacySimulationEngine {
       ? null
       : parseActiveTravel(extendedSnapshot.activeTravel);
 
-    // Validate the transit extension before mutating any underlying simulation root.
     super.loadSnapshot(snapshot);
     this.physicalWorldState = this.hydratePhysicalWorld(persistedPhysicalWorld);
     this.activeTravelState = persistedActiveTravel;
+    this.innerVoice.hydrate(snapshot.innerVoice ?? emptyInnerVoicePersistedState());
     this.delivery.setArrivalHandler((order) => this.materializeDeliveryParcel(order));
+  }
+
+  public getInnerVoiceEngine(): InnerVoiceEngine {
+    return this.innerVoice;
+  }
+
+  public getInnerVoiceState(): InnerVoicePersistedState {
+    return this.innerVoice.getPersistedState();
+  }
+
+  public requestInnerThought(
+    trigger: ThoughtTrigger,
+    nowMinute?: number,
+    ui?: InnerVoiceUiState,
+  ): ThoughtIntent | null {
+    return this.innerVoice.request(trigger, nowMinute ?? this.clock.getTotalMinutes(), ui);
+  }
+
+  public requestInspectThought(
+    request: InspectThoughtRequest,
+    nowMinute?: number,
+  ): ThoughtIntent | null {
+    return this.innerVoice.requestInspect(request, nowMinute ?? this.clock.getTotalMinutes());
+  }
+
+  public dismissInnerThought(): void {
+    this.innerVoice.dismissActive();
   }
 }
