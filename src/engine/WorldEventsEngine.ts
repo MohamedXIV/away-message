@@ -6,6 +6,13 @@ import { Appointment, GlobalEvent, WorldState, BuddyAttitude, BuddyEventKnowledg
 import { normalizeBuddyId } from './SocialEngine';
 import { ARCHETYPE_ATTITUDES, resolveArchetype } from './characterTemplates';
 import { CORE_IDS, coreBuddyIds } from './coreBuddies';
+import { GENERATED_EVENT_MODIFIERS } from './worldContent.generated';
+import {
+  projectActiveModifiers,
+  toModifierSpecs,
+  type WorldModifier,
+  type WorldModifierFilter,
+} from './WorldModifiers';
 
 // Re-export for convenience
 export type { GlobalEvent, WorldState };
@@ -297,6 +304,29 @@ export class WorldEventsEngine {
 
   public getPendingEvents(): Omit<GlobalEvent, 'isTriggered' | 'triggeredAtMinute'>[] {
     return Array.from(this.pendingEvents.values());
+  }
+
+  /**
+   * Bounded active-modifier query (#46). Pure projection over authored specs
+   * × canonical triggered events × time: deterministic, idempotent, and
+   * mutation-free (fresh frozen copies per call). Owning domains decide how
+   * to apply the returned effects; this engine never touches consumer state.
+   *
+   * Time is explicit and must be finite: there is no "current time" inside
+   * this engine, and inferring it from event history would resurrect expired
+   * modifiers. Non-finite time yields no modifiers.
+   */
+  public queryActiveModifiers(
+    options: WorldModifierFilter & { atMinute: number },
+  ): WorldModifier[] {
+    const atMinute = options?.atMinute;
+    if (!Number.isFinite(atMinute)) return [];
+    return projectActiveModifiers(
+      toModifierSpecs(GENERATED_EVENT_MODIFIERS),
+      this.getTriggeredEvents(),
+      atMinute,
+      { domain: options.domain, kind: options.kind, targetId: options.targetId },
+    );
   }
 
   /** Global knowledge context (shared) */

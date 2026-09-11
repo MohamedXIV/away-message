@@ -1,6 +1,6 @@
 // GENERATED — do not edit by hand.
-// Source: content/store.json (content v7d8e3ed7). Regenerate: npm run content:pull.
-export const WORLD_CONTENT_VERSION = '7d8e3ed7';
+// Source: content/store.json (content v3bab254c). Regenerate: npm run content:pull.
+export const WORLD_CONTENT_VERSION = '3bab254c';
 
 export interface GeneratedDistrictDef {
   id: string;
@@ -321,5 +321,45 @@ export const GENERATED_AMBIENT_PROFILES: GeneratedAmbientProfileDef[] = [
     timeOfDay: "evening",
     density: 0.5,
     tags: [],
+  },
+];
+
+export interface GeneratedEventModifierDef {
+  id: string;
+  eventId: string;
+  domain: string;
+  kind: string;
+  durationMinutes: number;
+  targetIds: string[];
+  value?: number | string | boolean;
+}
+
+export const GENERATED_EVENT_MODIFIERS: GeneratedEventModifierDef[] = [
+  {
+    id: "festival_courier_backlog",
+    eventId: "city_canal_festival",
+    domain: "delivery",
+    kind: "courier_backlog",
+    durationMinutes: 2880,
+    targetIds: [],
+    value: 360,
+  },
+  {
+    id: "festival_night_opportunity",
+    eventId: "city_canal_festival",
+    domain: "life",
+    kind: "festival_opportunity",
+    durationMinutes: 2880,
+    targetIds: [],
+    value: 60,
+  },
+  {
+    id: "os7_upgrade_opportunity",
+    eventId: "orion_os_7_release",
+    domain: "life",
+    kind: "upgrade_opportunity",
+    durationMinutes: 4320,
+    targetIds: [],
+    value: 40,
   },
 ];
