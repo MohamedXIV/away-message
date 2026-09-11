@@ -76,6 +76,8 @@ export function buildLifeMatrixSnapshot(
     // second canonical copy of the event or its outcomes.
     eventEffects: (sources.getActiveModifiers?.(atMinute) ?? []).map((effect) => ({ ...effect })),
     presence: { ...sources.getPresence(actorId) },
-    pressure: {},
+    pressure: sources.getPressure ? { ...sources.getPressure(actorId, atMinute) } : {},
+    goals: sources.getGoals ? sources.getGoals(actorId).map((goal) => ({ ...goal })) : [],
+    ...(sources.getFidelityTier ? { fidelityTier: sources.getFidelityTier(actorId) } : {}),
   };
 }

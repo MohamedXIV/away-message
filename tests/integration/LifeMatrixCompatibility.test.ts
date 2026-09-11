@@ -366,4 +366,61 @@ describe('Life Matrix compatibility with existing Away authorities', () => {
       now.mockRestore();
     }
   });
+
+  it('exposes lightweight NPC pressure and bounded personal goals on SimulationEngine facade', () => {
+    const sim = new SimulationEngine();
+    const [actor] = sim.social.getBuddies();
+    expect(actor).toBeDefined();
+    if (!actor) throw new Error('Expected an existing Away character.');
+
+    const pressure = sim.getNpcPressure(actor.id);
+    expect(pressure).not.toBeNull();
+    expect(pressure?.fatigueBand).toBeDefined();
+    expect(pressure?.stressBand).toBeDefined();
+    expect(pressure?.mood).toBeDefined();
+    expect(pressure?.interruptionTolerance).toBeDefined();
+    expect(typeof pressure?.fatigue).toBe('number');
+    expect(typeof pressure?.stress).toBe('number');
+
+    const goals = sim.getPersonalGoals(actor.id);
+    expect(Array.isArray(goals)).toBe(true);
+    expect(goals.length).toBeGreaterThan(0);
+    expect(goals.length).toBeLessThanOrEqual(3);
+    for (const goal of goals) {
+      expect(goal.actorId).toBe(actor.id);
+      expect(goal.status).toBe('active');
+      expect(goal.priority).toBeGreaterThan(0);
+      expect('trust' in goal).toBe(false);
+      expect('familiarity' in goal).toBe(false);
+    }
+
+    const snapshot = sim.getLifeSnapshot(actor.id);
+    expect(snapshot).not.toBeNull();
+    expect(snapshot?.pressure.fatigueBand).toBe(pressure?.fatigueBand);
+    expect(snapshot?.goals).toHaveLength(goals.length);
+    expect(snapshot?.fidelityTier).toBe('important_local');
+
+    // Missing actor handling
+    expect(sim.getNpcPressure('ghost_actor')).toBeNull();
+    expect(sim.getPersonalGoals('ghost_actor')).toEqual([]);
+    expect(sim.getLifeSnapshot('ghost_actor')).toBeNull();
+  });
+
+  it('observing NPC pressure and goals produces zero mutation to exportSnapshot', () => {
+    const sim = new SimulationEngine();
+    const [actor] = sim.social.getBuddies();
+    expect(actor).toBeDefined();
+    if (!actor) throw new Error('Expected an existing Away character.');
+
+    const before = sim.exportSnapshot();
+
+    sim.getNpcPressure(actor.id);
+    sim.getPersonalGoals(actor.id);
+    sim.getLifeSnapshot(actor.id);
+    sim.getCharacterObligations(actor.id);
+
+    const after = sim.exportSnapshot();
+    expect(before).toEqual(after);
+  });
 });
+

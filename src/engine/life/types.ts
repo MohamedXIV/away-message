@@ -76,11 +76,86 @@ export interface LifePresenceView {
   awayMessage?: string;
 }
 
+export type FatigueBand = 'rested' | 'normal' | 'tired' | 'exhausted';
+export type StressBand = 'calm' | 'normal' | 'stressed' | 'overwhelmed';
+export type BroadMood =
+  | 'content'
+  | 'cheerful'
+  | 'melancholy'
+  | 'anxious'
+  | 'irritable'
+  | 'focused'
+  | 'neutral';
+export type InterruptionTolerance = 'open' | 'flexible' | 'busy' | 'do_not_disturb';
+export type MoneyBand = 'tight' | 'stable' | 'flush';
+export type NeedPressureKind = 'rest' | 'social' | 'quiet' | 'errand' | 'meal';
+export type FidelityTier = 'important_local' | 'local_offscreen' | 'background_remote';
+
 export interface LifePressureView {
   departure?: number;
   fatigue?: number;
   stress?: number;
+  fatigueBand?: FatigueBand;
+  stressBand?: StressBand;
+  mood?: BroadMood;
+  interruptionTolerance?: InterruptionTolerance;
+  moneyBand?: MoneyBand;
+  activeNeeds?: NeedPressureKind[];
 }
+
+export type GoalKind =
+  | 'save_purchase'
+  | 'find_work'
+  | 'improve_relationship'
+  | 'distance_relationship'
+  | 'spend_time'
+  | 'attend_event'
+  | 'practical_task'
+  | 'upgrade_gear'
+  | 'change_circumstance';
+
+export type GoalStatus = 'active' | 'completed' | 'paused' | 'abandoned';
+
+export interface PersonalGoal {
+  id: string;
+  actorId: string;
+  kind: GoalKind;
+  description: string;
+  targetId?: string;
+  priority: number;
+  status: GoalStatus;
+  progress: number;
+  createdDay: number;
+  targetDay?: number;
+  metadata?: Record<string, string | number | boolean>;
+}
+
+export interface NpcPressureState {
+  actorId: string;
+  fatigueBand: FatigueBand;
+  stressBand: StressBand;
+  mood: BroadMood;
+  interruptionTolerance: InterruptionTolerance;
+  moneyBand?: MoneyBand;
+  activeNeeds: NeedPressureKind[];
+  lastUpdatedMinute: number;
+  tier: FidelityTier;
+  cumulativeWorkMinutes?: number;
+}
+
+/**
+ * Canonical per-actor #43 slice: goals + irreducible pressure only.
+ * No relationship/economy/transit/event copies — those authorities stay
+ * external and are read, never stored here.
+ */
+export interface NpcLifeEntry {
+  goals: PersonalGoal[];
+  pressure: NpcPressureState;
+}
+
+/** Persisted #43 state: actor id → canonical entry. Additive and optional. */
+export type NpcLifePersistedState = Record<string, NpcLifeEntry>;
+
 
 export type ObligationSourceKind =
   | 'routine'
@@ -140,4 +215,7 @@ export interface LifeMatrixSnapshot {
   eventEffects?: LifeWorldModifierView[];
   presence: LifePresenceView;
   pressure: LifePressureView;
+  goals?: PersonalGoal[];
+  fidelityTier?: FidelityTier;
 }
+
