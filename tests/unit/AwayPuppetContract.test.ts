@@ -23,6 +23,12 @@ class FakeRawPuppet implements RawPuppetAdapter {
     return this.visibleNodes.has(id);
   }
 
+  getParameter(id: string): number {
+    const value = this.parameters.get(id);
+    if (value === undefined) throw new Error(`Unknown raw parameter: ${id}`);
+    return value;
+  }
+
   setParameter(id: string, value: number): void {
     this.parameters.set(id, value);
   }
