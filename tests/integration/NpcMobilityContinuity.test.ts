@@ -220,4 +220,44 @@ describe('NPC mobility continuity (#37)', () => {
     reloaded.advanceGameMinutes(30, 'later still');
     expect(countArrivals(reloaded)).toBe(1);
   });
+
+  it('B1b. an arrived actor re-plans on a later appointment (honest when unreachable)', () => {
+    const { sim, actor } = engineAtPlaceA();
+    schedulePlaceBAppointment(sim, actor);
+    sim.advanceGameMinutes(60, 'planning tick');
+    const first = sim.getNpcTrip(actor);
+    if (!first) throw new Error('Expected a planned trip.');
+    sim.advanceGameMinutes(first.expectedArrivalMinute - sim.clock.getTotalMinutes(), 'first arrival');
+    expect(sim.getNpcTrip(actor)?.status).toBe('arrived');
+    expect(sim.getNpcMobilityState().places[actor]).toBe('place_b1');
+
+    // Move past the first appointment window so its due-now intent stops
+    // winning; a later appointment back at the origin then drives fresh
+    // planning from the arrival place.
+    sim.advanceGameMinutes(1140 - sim.clock.getTotalMinutes() + 1, 'past first window');
+    const day = sim.clock.getTime().day;
+    const minuteOfDay = sim.clock.getTotalMinutes() % 1440;
+    sim.world.scheduleAppointment({
+      id: `trip_appt_return_${actor}`,
+      characterId: actor,
+      locationId: 'place_a1',
+      targetDay: day,
+      startMinute: minuteOfDay + 120,
+      endMinute: minuteOfDay + 180,
+      description: 'Return fixture meeting',
+      status: 'confirmed',
+      rsvp: 'yes',
+    });
+    sim.advanceGameMinutes(30, 'replanning tick');
+    const second = sim.getNpcTrip(actor);
+    expect(second).not.toBeNull();
+    // Generated content has no upstream/walk route back: honest failure that
+    // preserves origin truth — never a stall on the stale record, never teleport.
+    expect(second?.status).toBe('failed');
+    expect(second?.failureReason).toBe('no_route');
+    expect(second?.originPlaceId).toBe('place_b1');
+    expect(Object.keys(sim.getNpcMobilityState().trips)).toEqual([actor]);
+    expect(sim.getNpcMobilityState().places[actor]).toBe('place_b1');
+    expect(sim.getNpcPlaceState(actor)).toEqual({ status: 'at_place', placeId: 'place_b1' });
+  });
 });

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { buildTransitNetwork } from '../../src/engine/transit/TransitNetwork';
 import { planTravel } from '../../src/engine/transit/TravelPlanner';
 import { commitTravelPlan } from '../../src/engine/transit/ActiveTravel';
-import type { TransitServiceState, TravelPlan } from '../../src/engine/transit/types';
+import type { TransitServiceState, TravelLeg, TravelPlan } from '../../src/engine/transit/types';
 import {
   NPC_PREP_LEAD_MINUTES,
   buildPlaceAliases,
@@ -18,7 +18,7 @@ import {
 } from '../../src/engine/transit/NpcTrips';
 import { selectCharacterIntent } from '../../src/engine/life/Intent';
 import type { CharacterIntent } from '../../src/engine/life/types';
-import type { NpcMobilityState } from '../../src/engine/transit/NpcTrips';
+import type { NpcMobilityState, NpcTripRecord } from '../../src/engine/transit/NpcTrips';
 import { twoLineFixture } from './transitFixtures';
 
 const network = buildTransitNetwork(twoLineFixture());
@@ -396,5 +396,213 @@ describe('NPC trip planning (#37)', () => {
     expect(result.failed[0]).toMatchObject({ actorId: 'sam', reason: 'unknown_origin' });
     expect(result.state.trips['sam']?.status).toBe('failed');
     expect(result.state.places['sam']).toBeUndefined();
+  });
+
+  it('B1. an arrived actor travels again on a later intent (one record kept)', () => {
+    const first = planDueNpcTrips(
+      { ...emptyNpcMobility(), places: { sam: 'place_a1' } },
+      new Map([['sam', attendIntent()]]),
+      960,
+      { network, aliases },
+    );
+    expect(first.planned).toEqual(['sam']);
+    const arrivalMinute = first.state.trips['sam']?.expectedArrivalMinute;
+    if (arrivalMinute === undefined) throw new Error('Expected a planned trip.');
+    const arrived = progressNpcTrips(first.state, arrivalMinute);
+    expect(arrived.arrivals).toHaveLength(1);
+    expect(arrived.state.trips['sam']?.status).toBe('arrived');
+    expect(arrived.state.places['sam']).toBe('place_b1');
+
+    // Later, a new destination intent for the same actor plans a fresh trip
+    // from the arrival place — the arrived record does not block it.
+    // (place_b1 -> place_c1 runs downstream on line_bc; the reverse would
+    // be an honest no_route on this directed fixture network.)
+    const second = planDueNpcTrips(
+      arrived.state,
+      new Map([['sam', attendIntent({
+        sourceId: 'appt_2',
+        targetPlaceId: 'place_c1',
+        earliestAt: arrivalMinute + 180,
+        latestAt: arrivalMinute + 240,
+      })]]),
+      arrivalMinute + 5,
+      { network, aliases },
+    );
+    expect(second.planned).toEqual(['sam']);
+    expect(Object.keys(second.state.trips)).toEqual(['sam']);
+    expect(second.state.trips['sam']?.originPlaceId).toBe('place_b1');
+    expect(second.state.trips['sam']?.destinationPlaceId).toBe('place_c1');
+    expect(second.state.trips['sam']?.status).toBe('planned');
+
+    const arrival2 = second.state.trips['sam']?.expectedArrivalMinute;
+    if (arrival2 === undefined) throw new Error('Expected the second trip.');
+    const done = progressNpcTrips(second.state, arrival2);
+    expect(done.arrivals).toHaveLength(1);
+    expect(done.state.places['sam']).toBe('place_c1');
+  });
+
+  it('B1b. same intent after arrival does not replan', () => {
+    const first = planDueNpcTrips(
+      { ...emptyNpcMobility(), places: { sam: 'place_a1' } },
+      new Map([['sam', attendIntent()]]),
+      960,
+      { network, aliases },
+    );
+    const arrivalMinute = first.state.trips['sam']?.expectedArrivalMinute;
+    if (arrivalMinute === undefined) throw new Error('Expected a planned trip.');
+    const arrived = progressNpcTrips(first.state, arrivalMinute);
+    const again = planDueNpcTrips(arrived.state, new Map([['sam', attendIntent()]]), arrivalMinute + 5, { network, aliases });
+    expect(again.planned).toEqual([]);
+    expect(again.failed).toEqual([]);
+    expect(again.state).toEqual(arrived.state);
+  });
+
+  it('B2. aliased destinations keep planned trips stable across ticks', () => {
+    const aliased = attendIntent({ targetPlaceId: 'cafe' });
+    const first = planDueNpcTrips(
+      { ...emptyNpcMobility(), places: { sam: 'place_a1' } },
+      new Map([['sam', aliased]]),
+      960,
+      { network, aliases },
+    );
+    expect(first.planned).toEqual(['sam']);
+    expect(first.state.trips['sam']?.destinationPlaceId).toBe('place_b1');
+    // Same aliased intent on later pre-departure ticks: no reroll, no-op.
+    for (const minute of [961, 975, 990]) {
+      const next = planDueNpcTrips(first.state, new Map([['sam', aliased]]), minute, { network, aliases });
+      expect(next.planned).toEqual([]);
+      expect(next.failed).toEqual([]);
+      expect(next.state).toEqual(first.state);
+    }
+  });
+
+  it('B3. committed plans are always direct #35 quotes at their own departure', () => {
+    const origins = ['place_a1', 'place_b1', 'place_c1'];
+    const destinations = ['place_a1', 'place_b1', 'place_c1'];
+    for (const origin of origins) {
+      for (const destination of destinations) {
+        for (const earliestAt of [400, 700, 1080, 1300, 1400]) {
+          for (const nowMinute of [0, 480, 960, 1200]) {
+            const result = planNpcTrip({
+              actorId: 'sam',
+              intent: attendIntent({ targetPlaceId: destination, earliestAt, latestAt: earliestAt + 60 }),
+              originPlaceId: origin,
+              nowMinute,
+              network,
+              aliases,
+            });
+            if (!result.ok) continue;
+            const { record } = result;
+            // The stored itinerary must be exactly what the shared planner
+            // quotes at the stored departure — never a shifted fabrication.
+            const requote = planTravel(network, {
+              originPlaceId: origin,
+              destinationPlaceId: destination,
+              departAtMinute: record.plannedDepartureMinute,
+              policy: record.policy,
+            });
+            expect(requote.ok).toBe(true);
+            if (!requote.ok) throw new Error('Expected the planner to re-quote.');
+            expect(record.trip.plan).toEqual(requote.plan);
+          }
+        }
+      }
+    }
+  });
+
+  it('B4. arrival timestamps equal the authoritative boundary on jumps and steps', () => {
+    const planned = planNpcTrip({
+      actorId: 'sam', intent: attendIntent(), originPlaceId: 'place_a1',
+      nowMinute: 960, network, aliases,
+    });
+    expect(planned.ok).toBe(true);
+    if (!planned.ok) throw new Error('Expected a planned trip.');
+    const state = { ...emptyNpcMobility(), places: { sam: 'place_a1' }, trips: { sam: planned.record } };
+    const boundary = planned.record.expectedArrivalMinute;
+
+    const stepped = progressNpcTrips(state, boundary);
+    expect(stepped.arrivals).toHaveLength(1);
+    expect(stepped.state.trips['sam']?.completedAtMinute).toBe(boundary);
+
+    // A jump far past arrival records the same boundary, receipts, and state.
+    const jumped = progressNpcTrips(state, boundary + 500);
+    expect(jumped.arrivals).toHaveLength(1);
+    expect(jumped.state.trips['sam']?.completedAtMinute).toBe(boundary);
+    expect(jumped.arrivals).toEqual(stepped.arrivals);
+    expect(jumped.state).toEqual(stepped.state);
+  });
+
+  it('B5. failures with a known origin keep the actor physically there', () => {
+    const result = planDueNpcTrips(
+      { ...emptyNpcMobility(), places: { sam: 'place_a1' } },
+      new Map([['sam', attendIntent({ targetPlaceId: 'motel_lobby' })]]),
+      960,
+      { network, aliases },
+    );
+    expect(result.failed).toHaveLength(1);
+    expect(result.failed[0]?.reason).toBe('unknown_destination');
+    expect(result.state.trips['sam']?.originPlaceId).toBe('place_a1');
+    expect(getNpcPlaceState(result.state, 'sam', 960)).toEqual({
+      status: 'at_place',
+      placeId: 'place_a1',
+    });
+    // Unknown origin remains the honest exception.
+    const noOrigin = planDueNpcTrips(emptyNpcMobility(), new Map([['sam', attendIntent()]]), 960, { network, aliases });
+    expect(noOrigin.state.trips['sam']?.originPlaceId).toBe('');
+    expect(getNpcPlaceState(noOrigin.state, 'sam', 960).status).toBe('failed');
+  });
+
+  it('B6. bus co-location requires compatible overlapping segments', () => {
+    const fixture = {
+      districts: [{ id: 'district_x', name: 'X', mapX: 0, mapY: 0, tags: [] as string[] }],
+      places: [
+        { id: 'px_a', districtId: 'district_x', name: 'A', transitAccess: [{ stopId: 'sx_a', walkMinutes: 1 }] },
+        { id: 'px_b', districtId: 'district_x', name: 'B', transitAccess: [{ stopId: 'sx_b', walkMinutes: 1 }] },
+        { id: 'px_c', districtId: 'district_x', name: 'C', transitAccess: [{ stopId: 'sx_c', walkMinutes: 1 }] },
+      ],
+      stops: [
+        { id: 'sx_a', districtId: 'district_x', name: 'A', placeId: 'px_a', mapX: 0, mapY: 0 },
+        { id: 'sx_b', districtId: 'district_x', name: 'B', placeId: 'px_b', mapX: 1, mapY: 0 },
+        { id: 'sx_c', districtId: 'district_x', name: 'C', placeId: 'px_c', mapX: 2, mapY: 0 },
+      ],
+      lines: [{
+        id: 'line_abc', name: 'ABC', stopIds: ['sx_a', 'sx_b', 'sx_c'],
+        serviceStartMinute: 0, serviceEndMinute: 1439, headwayMinutes: 60,
+        segmentMinutes: [5, 5], fare: 2,
+      }],
+    };
+    const threeStop = buildTransitNetwork(fixture);
+    const busLeg = (from: string, to: string, board: number, alight: number): TravelLeg => ({
+      kind: 'bus', lineId: 'line_abc', fromStopId: from, toStopId: to,
+      boardAtMinute: board, alightAtMinute: alight, minutes: alight - board,
+    });
+    const tripFor = (actor: string, from: string, to: string, board: number): NpcTripRecord => ({
+      trip: commitTravelPlan(actor, {
+        originPlaceId: 'px_a', destinationPlaceId: 'px_c', departAtMinute: board, arriveAtMinute: board + 11,
+        legs: [busLeg(from, to, board, board + 5)],
+        walkMinutes: 0, waitMinutes: 0, rideMinutes: 5, totalMinutes: 11,
+        fare: 2, transferCount: 0, busLineIds: ['line_abc'],
+      }, board, 'appt'),
+      intentKind: 'attend_appointment',
+      sourceId: `appt_${actor}`,
+      originPlaceId: 'px_a',
+      destinationPlaceId: 'px_c',
+      plannedDepartureMinute: board,
+      expectedArrivalMinute: board + 11,
+      policy: 'fastest',
+      status: 'active',
+    });
+    // Same line, same direction, overlapping time — but DISJOINT segments.
+    const disjoint = findNpcCoLocation({
+      sam: tripFor('sam', 'sx_a', 'sx_b', 1000),
+      lee: tripFor('lee', 'sx_b', 'sx_c', 1002),
+    }, threeStop);
+    expect(disjoint.filter((f) => f.kind === 'bus_ride')).toEqual([]);
+    // Same line, same direction, OVERLAPPING segments — genuine co-location.
+    const shared = findNpcCoLocation({
+      sam: tripFor('sam', 'sx_a', 'sx_c', 1000),
+      lee: tripFor('lee', 'sx_a', 'sx_b', 1001),
+    }, threeStop);
+    expect(shared.some((f) => f.kind === 'bus_ride' && f.lineId === 'line_abc')).toBe(true);
   });
 });

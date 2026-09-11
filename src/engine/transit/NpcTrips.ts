@@ -270,27 +270,39 @@ export function planNpcTrip(args: PlanNpcTripArgs): PlanNpcTripResult {
   if (desired === undefined || !Number.isFinite(desired)) return { ok: false, reason: 'no_route' };
 
   const tryPolicies: TravelPolicy[] = ['fastest', 'walk_only'];
+  let lastReason: NpcTripFailureReason = 'no_route';
   for (const policy of tryPolicies) {
     const probe = quote(network, originPlaceId, destination, Math.max(nowMinute, desired - NPC_PREP_LEAD_MINUTES), policy, args.service);
-    if (!probe.ok) continue;
-    let departure = desired - NPC_PREP_LEAD_MINUTES - probe.plan.totalMinutes;
+    if (!probe.ok) {
+      lastReason = probe.reason;
+      continue;
+    }
+    const departure = desired - NPC_PREP_LEAD_MINUTES - probe.plan.totalMinutes;
     if (departure <= nowMinute) {
       const late = quote(network, originPlaceId, destination, nowMinute, policy, args.service);
-      if (!late.ok) continue;
+      if (!late.ok) {
+        lastReason = late.reason;
+        continue;
+      }
       return {
         ok: true,
         record: commitRecord(actorId, intent, originPlaceId, destination, late.plan, nowMinute, desired, policy, 'active'),
       };
     }
+    // The departure-time confirmation is authoritative. A failed confirm
+    // must NEVER fall back to the later probe shifted backward — that shift
+    // can move a bus itinerary into a window where it was never valid.
     const confirm = quote(network, originPlaceId, destination, departure, policy, args.service);
-    const plan = confirm.ok ? confirm.plan : probe.plan;
+    if (!confirm.ok) {
+      lastReason = confirm.reason;
+      continue;
+    }
     return {
       ok: true,
-      record: commitRecord(actorId, intent, originPlaceId, destination, plan, departure, desired, policy, 'planned'),
+      record: commitRecord(actorId, intent, originPlaceId, destination, confirm.plan, departure, desired, policy, 'planned'),
     };
   }
-  const first = quote(network, originPlaceId, destination, Math.max(nowMinute, desired - NPC_PREP_LEAD_MINUTES), 'fastest', args.service);
-  return { ok: false, reason: first.ok ? 'no_route' : first.reason };
+  return { ok: false, reason: lastReason };
 }
 
 function commitRecord(
@@ -347,8 +359,12 @@ export interface PlanDueResult {
 
 /**
  * Plan trips for actors holding destination intents. Pure and idempotent:
- * live records (same source + window) are kept, departed trips are never
- * replanned, superseded planned trips are replaced or cancelled.
+ * stable commitments (same source + resolved destination + window) are
+ * kept, departed trips are never replanned, arrived trips replan only for
+ * a NEW intent (same intent after arrival is a no-op), superseded planned
+ * trips are replaced or cancelled. Destination comparison always uses the
+ * resolved canonical place — never the raw (possibly aliased) intent id —
+ * so planned trips stay stable across ticks.
  */
 export function planDueNpcTrips(
   state: NpcMobilityState,
@@ -367,20 +383,24 @@ export function planDueNpcTrips(
 
   for (const [actorId, intent] of intents) {
     const existing = trips[actorId];
-    const departed = existing !== undefined &&
-      (existing.status === 'active' || existing.status === 'arrived') &&
+    const departedActive = existing !== undefined &&
+      existing.status === 'active' &&
       nowMinute >= existing.plannedDepartureMinute;
-    if (existing !== undefined && (departed || existing.status === 'arrived')) continue;
-    if (
-      existing !== undefined &&
+    // Resolve once for stability: raw intent ids may be legacy aliases.
+    const resolvedDestination = intent === null || deps.network === null
+      ? null
+      : resolveTransitPlaceId(intent.targetPlaceId ?? '', deps.network, deps.aliases);
+    const sameTrip = existing !== undefined &&
+      intent !== null &&
       existing.status !== 'failed' &&
       existing.status !== 'cancelled' &&
-      intent !== null &&
       existing.sourceId === intent.sourceId &&
-      existing.destinationPlaceId === (intent.targetPlaceId ?? existing.destinationPlaceId)
-    ) {
-      continue;
-    }
+      resolvedDestination !== null &&
+      existing.destinationPlaceId === resolvedDestination &&
+      existing.desiredArrivalMinute === intent.earliestAt;
+    // A departed trip is never rerolled. A stable commitment — including an
+    // arrived record for the same intent — is kept as is.
+    if (departedActive || sameTrip) continue;
 
     if (intent === null || !isTravelIntent(intent)) {
       if (existing !== undefined && existing.status === 'planned') {
@@ -403,7 +423,7 @@ export function planDueNpcTrips(
         existing.failureReason !== 'unknown_origin' ||
         existing.sourceId !== intent.sourceId
       ) {
-        trips[actorId] = failedRecord(actorId, intent, receipt.reason);
+        trips[actorId] = failedRecord(actorId, intent, receipt.reason, '');
         failed.push(receipt);
       }
       continue;
@@ -439,7 +459,9 @@ export function planDueNpcTrips(
         existing.failureReason !== plannedTrip.reason ||
         existing.sourceId !== intent.sourceId
       ) {
-        trips[actorId] = failedRecord(actorId, intent, plannedTrip.reason);
+        // Known origin is preserved: the actor never left, so physical
+        // place truth survives the failure for the #45 handoff.
+        trips[actorId] = failedRecord(actorId, intent, plannedTrip.reason, origin);
         failed.push(receipt);
       }
       continue;
@@ -455,6 +477,7 @@ function failedRecord(
   actorId: string,
   intent: CharacterIntent,
   reason: NpcTripFailureReason,
+  originPlaceId: string,
 ): NpcTripRecord {
   return {
     trip: commitTravelPlan(actorId, {
@@ -474,7 +497,7 @@ function failedRecord(
     intentKind: intent.kind,
     ...(intent.sourceKind === undefined ? {} : { sourceKind: intent.sourceKind }),
     ...(intent.sourceId === undefined ? {} : { sourceId: intent.sourceId }),
-    originPlaceId: '',
+    originPlaceId,
     destinationPlaceId: intent.targetPlaceId ?? '',
     plannedDepartureMinute: 0,
     expectedArrivalMinute: 0,
@@ -526,8 +549,11 @@ export function progressNpcTrips(state: NpcMobilityState, nowMinute: number): Pr
     const resolved = travelStateAtMinute(record.trip, nowMinute);
     record.trip = { ...record.trip, ...resolved };
     if (resolved.status === 'arrived') {
+      // Authoritative boundary from the committed itinerary — never the
+      // outer tick endpoint — so jumps and steps record identical times.
+      const boundary = Math.min(nowMinute, record.expectedArrivalMinute);
       record.status = 'arrived';
-      record.completedAtMinute = nowMinute;
+      record.completedAtMinute = boundary;
       places[actorId] = record.destinationPlaceId;
       arrivals.push({
         actorId,
@@ -536,10 +562,10 @@ export function progressNpcTrips(state: NpcMobilityState, nowMinute: number): Pr
         originPlaceId: record.originPlaceId,
         destinationPlaceId: record.destinationPlaceId,
         departedAtMinute: record.plannedDepartureMinute,
-        arrivedAtMinute: nowMinute,
+        arrivedAtMinute: boundary,
         lateByMinutes: record.desiredArrivalMinute === undefined
           ? 0
-          : Math.max(0, nowMinute - record.desiredArrivalMinute),
+          : Math.max(0, boundary - record.desiredArrivalMinute),
       });
     }
   }
@@ -572,6 +598,27 @@ function rideDirection(
   const toRefs = network.linesAtStop(toStopId).filter((ref) => ref.lineId === lineId);
   if (fromRefs.length === 0 || toRefs.length === 0) return 0;
   return Math.sign((toRefs[0]?.stopIndex ?? 0) - (fromRefs[0]?.stopIndex ?? 0));
+}
+
+/**
+ * Shared track interval of a ride along its line, as stop-index bounds.
+ * Null when either endpoint is not on the line. Two rides are compatible
+ * only when their intervals strictly overlap — same line and direction
+ * alone would falsely co-locate disjoint segments.
+ */
+function rideSegmentRange(
+  network: TransitNetwork,
+  lineId: string,
+  fromStopId: string,
+  toStopId: string,
+): { lo: number; hi: number } | null {
+  const fromRefs = network.linesAtStop(fromStopId).filter((ref) => ref.lineId === lineId);
+  const toRefs = network.linesAtStop(toStopId).filter((ref) => ref.lineId === lineId);
+  if (fromRefs.length === 0 || toRefs.length === 0) return null;
+  const fromIndex = fromRefs[0]?.stopIndex ?? 0;
+  const toIndex = toRefs[0]?.stopIndex ?? 0;
+  if (fromIndex === toIndex) return null;
+  return { lo: Math.min(fromIndex, toIndex), hi: Math.max(fromIndex, toIndex) };
 }
 
 /**
@@ -624,7 +671,11 @@ export function findNpcCoLocation(
           } else if (legA.kind === 'bus' && legB.kind === 'bus' && legA.lineId === legB.lineId) {
             const dirA = rideDirection(network, legA.lineId, legA.fromStopId, legA.toStopId);
             const dirB = rideDirection(network, legB.lineId, legB.fromStopId, legB.toStopId);
-            if (dirA !== 0 && dirA === dirB) {
+            const rangeA = rideSegmentRange(network, legA.lineId, legA.fromStopId, legA.toStopId);
+            const rangeB = rideSegmentRange(network, legB.lineId, legB.fromStopId, legB.toStopId);
+            const sharedTrack = rangeA !== null && rangeB !== null &&
+              Math.max(rangeA.lo, rangeB.lo) < Math.min(rangeA.hi, rangeB.hi);
+            if (dirA !== 0 && dirA === dirB && sharedTrack) {
               facts.push({
                 kind: 'bus_ride',
                 actors,
