@@ -12,6 +12,7 @@ export type AwayPuppetToolName =
   | 'away.inspect_contract'
   | 'away.validate_rig'
   | 'away.set_morph'
+  | 'away.assign_slot'
   | 'away.test_morph_extremes'
   | 'away.set_expression'
   | 'away.set_pose'
@@ -35,7 +36,7 @@ export interface AwayPuppetOpenLifecycle {
 
 const MODEL_FACING_TOOLS: readonly AwayPuppetToolName[] = [
   'puppet.open', 'puppet.inspect', 'puppet.validate', 'parameter.list', 'parameter.get', 'parameter.set',
-  'node.list', 'part.list', 'away.inspect_contract', 'away.validate_rig', 'away.set_morph', 'away.test_morph_extremes',
+  'node.list', 'part.list', 'away.inspect_contract', 'away.validate_rig', 'away.set_morph', 'away.assign_slot', 'away.test_morph_extremes',
   'away.set_expression', 'away.set_pose', 'part.set_visibility', 'part.set_tint',
 ];
 
@@ -101,6 +102,11 @@ export function createAwayPuppetToolService(
         case 'away.set_morph': {
           const args = requireRecord(rawArgs);
           current.puppet.setMorph(requireString(args, 'name'), requireNumber(args, 'value'));
+          return { ok: true };
+        }
+        case 'away.assign_slot': {
+          const args = requireRecord(rawArgs);
+          current.puppet.assignSlot(requireString(args, 'slot'), requireString(args, 'assetId'));
           return { ok: true };
         }
         case 'away.test_morph_extremes': {
