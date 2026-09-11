@@ -54,6 +54,18 @@ export function deliveryEtaMinutes(orderId: string): number {
   return 120 + (hashText(`courier:${orderId}`) % (22 * 60));
 }
 
+/** Bounded per-order backlog extra applied on top of the deterministic ETA. */
+export const DELIVERY_MAX_BACKLOG_EXTRA_MINUTES = 720;
+
+export interface PlaceDeliveryOptions {
+  /**
+   * Extra courier minutes from active world-event backlog modifiers (#46).
+   * Resolved and bounded by the caller; DeliveryEngine clamps again and owns
+   * the resulting readyMinute as single truth.
+   */
+  etaExtraMinutes?: number;
+}
+
 let orderCounter = 0;
 
 export class DeliveryEngine {
@@ -84,15 +96,23 @@ export class DeliveryEngine {
   }
 
   /** Create a delivery order (pickup trips complete inline — use placePickup instead). */
-  public placeDelivery(items: OrderItem[], total: number, nowMinute: number): DeliveryOrder {
+  public placeDelivery(
+    items: OrderItem[],
+    total: number,
+    nowMinute: number,
+    options?: PlaceDeliveryOptions,
+  ): DeliveryOrder {
     const id = `ord_${nowMinute.toString(36)}_${(orderCounter++).toString(36)}${hashText(items.map((i) => `${i.sku}x${i.qty}`).join(',')).toString(36)}`;
+    const backlogExtra = options?.etaExtraMinutes !== undefined && Number.isFinite(options.etaExtraMinutes)
+      ? Math.max(0, Math.min(DELIVERY_MAX_BACKLOG_EXTRA_MINUTES, Math.floor(options.etaExtraMinutes)))
+      : 0;
     const order: DeliveryOrder = {
       id,
       items: items.map((i) => ({ ...i })),
       total,
       fulfillment: 'delivery',
       placedMinute: nowMinute,
-      readyMinute: nowMinute + deliveryEtaMinutes(id),
+      readyMinute: nowMinute + deliveryEtaMinutes(id) + backlogExtra,
       status: 'transit',
     };
     this.orders.push(order);

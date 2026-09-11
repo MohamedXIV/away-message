@@ -72,6 +72,9 @@ export function buildLifeMatrixSnapshot(
       .filter((appointment) => appointment.characterId === actorId)
       .map((appointment) => ({ ...appointment })),
     worldEvents: sources.getTriggeredEvents().map((event) => ({ ...event })),
+    // Active event effects (#46): recomputed provenance views, never a
+    // second canonical copy of the event or its outcomes.
+    eventEffects: (sources.getActiveModifiers?.(atMinute) ?? []).map((effect) => ({ ...effect })),
     presence: { ...sources.getPresence(actorId) },
     pressure: {},
   };

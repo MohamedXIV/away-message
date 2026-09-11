@@ -7,6 +7,7 @@ import {
   GENERATED_BUS_LINES,
   GENERATED_CONTAINERS,
   GENERATED_DISTRICTS,
+  GENERATED_EVENT_MODIFIERS,
   GENERATED_INTERACTIONS,
   GENERATED_ITEMS,
   GENERATED_LIGHT_PROFILES,
@@ -126,6 +127,14 @@ export function worldTablesFromGenerated(): Tables {
       timeOfDay: optionalCell(profile.timeOfDay),
       density: profile.density,
       tags: JSON.stringify(profile.tags),
+    })),
+    eventModifiers: tableFrom(GENERATED_EVENT_MODIFIERS, (spec) => ({
+      eventId: spec.eventId,
+      domain: spec.domain,
+      kind: spec.kind,
+      durationMinutes: spec.durationMinutes,
+      targetIds: JSON.stringify(spec.targetIds),
+      value: spec.value === undefined ? '' : String(spec.value),
     })),
   };
 }
