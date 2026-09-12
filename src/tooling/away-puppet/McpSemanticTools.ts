@@ -22,6 +22,7 @@ export type AwayPuppetToolName =
 export interface AwayPuppetToolService {
   listTools(): AwayPuppetToolName[];
   call(name: string, args?: unknown): unknown;
+  dispose(): void;
 }
 
 export interface AwayPuppetSession {
@@ -68,10 +69,18 @@ export function createAwayPuppetToolService(
     puppet,
     dispose: lifecycle?.disposeInitial ?? (() => undefined),
   };
+  let disposed = false;
 
   return {
     listTools: () => [...MODEL_FACING_TOOLS],
+    dispose(): void {
+      if (disposed) return;
+      disposed = true;
+      current.dispose();
+    },
     call(name: string, rawArgs?: unknown): unknown {
+      if (disposed) throw new Error('Away Puppet tool service is disposed');
+
       switch (name) {
         case 'puppet.open': {
           const args = requireRecord(rawArgs);
