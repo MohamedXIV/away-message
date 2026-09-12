@@ -17,6 +17,19 @@ export interface WorldSceneInitData {
   onIntent?: (intent: WorldInteractionIntent) => void;
 }
 
+export function resolveProjectionCameraTarget(
+  projection: WorldSceneProjection,
+  width: number,
+  height: number,
+): { x: number; y: number; zoom: number } {
+  const focus = projection.focus ?? { x: 0.5, y: 0.5, zoom: 1 };
+  return {
+    x: focus.x <= 1 ? focus.x * width : focus.x,
+    y: focus.y <= 1 ? focus.y * height : focus.y,
+    zoom: focus.zoom,
+  };
+}
+
 export class WorldScene extends Phaser.Scene {
   public static readonly SCENE_KEY = 'WorldScene';
 
@@ -56,7 +69,6 @@ export class WorldScene extends Phaser.Scene {
 
   // Camera Focus
   private currentFocus: WorldCameraFocus = { x: 0.5, y: 0.5, zoom: 1.0 };
-  private isTransitioning = false;
 
   constructor() {
     super({ key: WorldScene.SCENE_KEY });
@@ -110,9 +122,15 @@ export class WorldScene extends Phaser.Scene {
     // 9. Setup Pointer Movement for Movable Light
     this.setupPointerTracking();
 
-    // 10. Initial Camera setup
-    this.cameras.main.setZoom(1.0);
-    this.cameras.main.centerOn(width / 2, height / 2);
+    // 10. Initial Camera setup from projection
+    const initialCamera = resolveProjectionCameraTarget(this.projection, width, height);
+    this.cameras.main.setZoom(initialCamera.zoom);
+    this.cameras.main.centerOn(initialCamera.x, initialCamera.y);
+    this.currentFocus = {
+      x: initialCamera.x / width,
+      y: initialCamera.y / height,
+      zoom: initialCamera.zoom,
+    };
 
     // 11. Setup Spatial Audio Subsystem
     this.setupSpatialAudio();
@@ -362,42 +380,13 @@ export class WorldScene extends Phaser.Scene {
   }
 
   /**
-   * Camera transition between authored views or focus regions
+   * Requests a view transition. The authoritative host supplies the next
+   * projection; camera movement follows that projection's focus.
    */
-  public transitionToView(targetViewId: string, duration = 800): void {
-    if (this.isTransitioning) return;
-    this.isTransitioning = true;
-
-    const width = this.scale.width;
-    const height = this.scale.height;
-
-    // View-specific target coordinates and zooms
-    let targetX = width / 2;
-    let targetY = height / 2;
-    let targetZoom = 1.0;
-
-    if (targetViewId === 'view_a2') {
-      // Focus on window & puddle
-      targetX = width * 0.3;
-      targetY = height * 0.45;
-      targetZoom = 1.45;
-    } else {
-      // Main overview
-      targetX = width / 2;
-      targetY = height / 2;
-      targetZoom = 1.0;
-    }
-
-    this.cameras.main.pan(targetX, targetY, duration, 'Power2');
-    this.cameras.main.zoomTo(targetZoom, duration, 'Power2', true, (_cam, progress) => {
-      if (progress === 1) {
-        this.isTransitioning = false;
-        this.currentFocus = { x: targetX / width, y: targetY / height, zoom: targetZoom };
-        this.onIntent?.({
-          type: 'VIEW_TRANSITION',
-          targetViewId,
-        });
-      }
+  public transitionToView(targetViewId: string): void {
+    this.onIntent?.({
+      type: 'VIEW_TRANSITION',
+      targetViewId,
     });
   }
 
@@ -430,13 +419,19 @@ export class WorldScene extends Phaser.Scene {
     // 3. Update hotspots if anchors changed
     this.setupHotspots(this.scale.width, this.scale.height);
 
-    // 4. Update focus if specified
-    if (newProjection.focus) {
-      const fx = newProjection.focus.x * this.scale.width;
-      const fy = newProjection.focus.y * this.scale.height;
-      this.cameras.main.pan(fx, fy, 600, 'Power2');
-      this.cameras.main.zoomTo(newProjection.focus.zoom, 600, 'Power2');
-    }
+    // 4. Camera follows projection focus, never a view-id special case
+    const cameraTarget = resolveProjectionCameraTarget(
+      newProjection,
+      this.scale.width,
+      this.scale.height,
+    );
+    this.cameras.main.pan(cameraTarget.x, cameraTarget.y, 600, 'Power2');
+    this.cameras.main.zoomTo(cameraTarget.zoom, 600, 'Power2');
+    this.currentFocus = {
+      x: cameraTarget.x / this.scale.width,
+      y: cameraTarget.y / this.scale.height,
+      zoom: cameraTarget.zoom,
+    };
 
     // 5. Update audio environment & listener
     if (newProjection.listenerOrientation) {
@@ -477,6 +472,15 @@ export class WorldScene extends Phaser.Scene {
       this.clockHandImage.setPosition(width * 0.68, height * 0.35);
       this.clockHandImage.setScale(Math.min(width / 1600, height / 900) * 1.15);
     }
+
+    const cameraTarget = resolveProjectionCameraTarget(this.projection, width, height);
+    this.cameras.main.centerOn(cameraTarget.x, cameraTarget.y);
+    this.cameras.main.setZoom(cameraTarget.zoom);
+    this.currentFocus = {
+      x: cameraTarget.x / width,
+      y: cameraTarget.y / height,
+      zoom: cameraTarget.zoom,
+    };
 
     this.setupHotspots(width, height);
     this.refreshRenderTextureReflection();
