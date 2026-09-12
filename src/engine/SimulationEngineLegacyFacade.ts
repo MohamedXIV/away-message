@@ -876,7 +876,7 @@ export class SimulationEngine extends SimulationEngineCore {
     if (primaryStorage.freeBytes < installSizeBytes) {
       return {
         success: false,
-        error: `Requires ${(installSizeBytes / 1_000_000_000).toFixed(1)}GB additional install space on the primary drive. Free some space.`,
+        error: `Requires ${(installSizeBytes / 1_000_000_000).toFixed(1)}GB additional install space on the primary drive.`,
       };
     }
 
