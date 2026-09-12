@@ -2,6 +2,11 @@
 import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
+import {
+  bootstrapInochiWebModule,
+  type InochiWebBootstrapExports,
+  type InochiWebScratchpad,
+} from '../src/tooling/away-puppet/InochiWebModuleBootstrap';
 
 const PINNED_UPSTREAM_COMMIT = 'ec702261dd6428141bfd0b174a015f8af872d3ed';
 const PINNED_ARTIFACT_DIGEST = '59b0c88dafb93be310c2a0f965ab07f2a50fc675b241bb521065d64db648a178';
@@ -28,12 +33,18 @@ interface AllocatingWasmApi {
   nu_malloc(size: number): number | bigint;
 }
 
-interface InochiWasmExports extends AllocatingWasmApi {
+interface LoadReadyWasmApi extends AllocatingWasmApi, InochiWebBootstrapExports {}
+
+interface InochiWasmExports extends LoadReadyWasmApi {
   memory: WebAssembly.Memory;
-  in_init(): void;
   nu_free(ptr: number): void;
   in_puppet_load_from_memory(data: number, length: number, ioSink: number): number | bigint;
   in_puppet_free(ptr: number): void;
+}
+
+export interface BootstrappedPuppetInput {
+  readonly sourcePointer: number;
+  readonly scratchpad: InochiWebScratchpad;
 }
 
 export function allocatePuppetInputOrThrow(api: AllocatingWasmApi, byteLength: number): number {
@@ -44,6 +55,23 @@ export function allocatePuppetInputOrThrow(api: AllocatingWasmApi, byteLength: n
     );
   }
   return pointer;
+}
+
+/**
+ * Applies the corrected two-phase Web bootstrap before asking the allocator for
+ * puppet input storage. Keeping both operations in one helper makes it harder
+ * for future probes/loaders to accidentally regress to upstream's broken
+ * one-phase scratchpad initialization order.
+ */
+export function bootstrapAndAllocatePuppetInput(
+  api: LoadReadyWasmApi,
+  byteLength: number,
+): BootstrappedPuppetInput {
+  const { scratchpad } = bootstrapInochiWebModule(api);
+  return {
+    sourcePointer: allocatePuppetInputOrThrow(api, byteLength),
+    scratchpad,
+  };
 }
 
 function sha256(bytes: Uint8Array): string {
@@ -91,7 +119,6 @@ async function main(): Promise<void> {
 
   const { instance } = await WebAssembly.instantiate(wasm, wasiImports());
   const api = instance.exports as unknown as InochiWasmExports;
-  api.in_init();
 
   const baseEvidence = {
     upstreamCommit: PINNED_UPSTREAM_COMMIT,
@@ -102,12 +129,15 @@ async function main(): Promise<void> {
   };
 
   let sourcePtr: number;
+  let scratchpad: InochiWebScratchpad;
   try {
-    sourcePtr = allocatePuppetInputOrThrow(api, puppetBytes.byteLength);
+    const prepared = bootstrapAndAllocatePuppetInput(api, puppetBytes.byteLength);
+    sourcePtr = prepared.sourcePointer;
+    scratchpad = prepared.scratchpad;
   } catch (error) {
     console.log(JSON.stringify({
       ...baseEvidence,
-      blockedAt: 'input-allocation',
+      blockedAt: 'bootstrap-or-input-allocation',
       requestedBytes: puppetBytes.byteLength,
       error: error instanceof Error ? error.message : String(error),
     }, null, 2));
@@ -123,7 +153,7 @@ async function main(): Promise<void> {
     api.nu_free(sourcePtr);
   }
 
-  console.log(JSON.stringify({ ...baseEvidence, puppetPtr }, null, 2));
+  console.log(JSON.stringify({ ...baseEvidence, scratchpad, puppetPtr }, null, 2));
 
   if (puppetPtr) {
     api.in_puppet_free(puppetPtr);
