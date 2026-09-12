@@ -8,6 +8,7 @@ import type {
   WorldFixtureCapabilityReport,
 } from './types';
 import { ensureFixtureTextures, createTechnicalFixtureProjection } from './technicalFixture';
+import { resolveProjectionVisual } from './projectionVisual';
 import { EnvironmentManager } from './environment/EnvironmentManager';
 import { audioService, type AudioService } from '../../audio/AudioService';
 import { mapViewCoordinatesToAudioPosition } from '../../audio/spatialMapping';
@@ -15,6 +16,15 @@ import { mapViewCoordinatesToAudioPosition } from '../../audio/spatialMapping';
 export interface WorldSceneInitData {
   projection: WorldSceneProjection;
   onIntent?: (intent: WorldInteractionIntent) => void;
+}
+
+export interface WorldSceneVisualPlan {
+  textureKey: string;
+  normalMapTextureKey: string | null;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
 }
 
 export function resolveProjectionCameraTarget(
@@ -27,6 +37,26 @@ export function resolveProjectionCameraTarget(
     x: focus.x <= 1 ? focus.x * width : focus.x,
     y: focus.y <= 1 ? focus.y * height : focus.y,
     zoom: focus.zoom,
+  };
+}
+
+export function resolveWorldSceneVisualPlan(
+  projection: WorldSceneProjection,
+  width: number,
+  height: number,
+): WorldSceneVisualPlan | null {
+  const visual = resolveProjectionVisual(projection);
+  if (!visual.usesAuthoredAsset || !visual.assetId) {
+    return null;
+  }
+
+  return {
+    textureKey: visual.assetId,
+    normalMapTextureKey: visual.normalMapAssetId,
+    x: width / 2,
+    y: height / 2,
+    width,
+    height,
   };
 }
 
@@ -44,12 +74,8 @@ export class WorldScene extends Phaser.Scene {
   private layerActors?: Phaser.GameObjects.Container;
   private layerForeground?: Phaser.GameObjects.Container;
 
-  // GameObjects
+  // Projection-owned view image
   private bgImage?: Phaser.GameObjects.Image;
-  private deskImage?: Phaser.GameObjects.Image;
-  private assetA1Image?: Phaser.GameObjects.Image;
-  private curtainImage?: Phaser.GameObjects.Image;
-  private clockHandImage?: Phaser.GameObjects.Image;
   private puddleRenderTexture?: Phaser.GameObjects.RenderTexture;
 
   // Lights
@@ -84,45 +110,29 @@ export class WorldScene extends Phaser.Scene {
   }
 
   public create(): void {
-    // 1. Ensure procedural/authored textures exist in TextureManager
+    // Technical fixture textures still provide the current procedural particle
+    // probes; scenery selection itself is projection-owned below.
     ensureFixtureTextures(this);
 
     const width = this.scale.width;
     const height = this.scale.height;
 
-    // 2. Initialize Visual Display Layers
     this.layerBackground = this.add.container(0, 0).setDepth(10);
     this.layerScenery = this.add.container(0, 0).setDepth(20);
     this.layerActors = this.add.container(0, 0).setDepth(30);
     this.layerForeground = this.add.container(0, 0).setDepth(40);
 
-    // 3. Setup WebGL Lighting
     this.setupLighting();
-
-    // 4. Setup Layered Images / Sprites & Normal Mapping
     this.setupSprites(width, height);
-
-    // 5. Setup Particles (Dust motes & Rain)
     this.setupParticles(width, height);
-
-    // 6. Setup Render-Texture / Filter Path for reflections/wetness
     this.setupRenderTexturePath(width, height);
 
-    // 7. Setup Living Environment Subsystem
     this.environmentManager = new EnvironmentManager(this, this.projection);
     this.environmentManager.init();
-    if (this.curtainImage) this.environmentManager.registerMotionTarget('fixture_curtain', this.curtainImage);
-    if (this.clockHandImage) this.environmentManager.registerMotionTarget('fixture_clock_hand', this.clockHandImage);
-    if (this.deskImage) this.environmentManager.registerMotionTarget('fixture_desk', this.deskImage);
-    if (this.assetA1Image) this.environmentManager.registerMotionTarget('asset_a1', this.assetA1Image);
 
-    // 8. Setup Authored Pointer Hotspots
     this.setupHotspots(width, height);
-
-    // 9. Setup Pointer Movement for Movable Light
     this.setupPointerTracking();
 
-    // 10. Initial Camera setup from projection
     const initialCamera = resolveProjectionCameraTarget(this.projection, width, height);
     this.cameras.main.setZoom(initialCamera.zoom);
     this.cameras.main.centerOn(initialCamera.x, initialCamera.y);
@@ -132,10 +142,8 @@ export class WorldScene extends Phaser.Scene {
       zoom: initialCamera.zoom,
     };
 
-    // 11. Setup Spatial Audio Subsystem
     this.setupSpatialAudio();
 
-    // Register scene cleanup hooks
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.handleShutdown, this);
     this.events.once(Phaser.Scenes.Events.DESTROY, this.handleDestroy, this);
   }
@@ -153,7 +161,6 @@ export class WorldScene extends Phaser.Scene {
     this.lights.enable();
     this.applyAmbientLighting();
 
-    // Add point lights from projection
     this.projection.lighting.pointLights.forEach((lightDef) => {
       const colorNum = parseInt(lightDef.color.replace('#', ''), 16) || 0xffffff;
       const lx = lightDef.x <= 1 ? lightDef.x * this.scale.width : lightDef.x;
@@ -173,7 +180,6 @@ export class WorldScene extends Phaser.Scene {
     const { ambientColor, ambientIntensity } = this.projection.lighting;
     const hex = parseInt(ambientColor.replace('#', ''), 16) || 0xffffff;
 
-    // Split RGB components scaled by intensity
     const r = Math.min(255, Math.round(((hex >> 16) & 0xff) * ambientIntensity));
     const g = Math.min(255, Math.round(((hex >> 8) & 0xff) * ambientIntensity));
     const b = Math.min(255, Math.round((hex & 0xff) * ambientIntensity));
@@ -182,57 +188,30 @@ export class WorldScene extends Phaser.Scene {
   }
 
   /**
-   * Sets up layered sprites with normal-map lighting
+   * Renders only the asset selected by the current projection. Assetless views
+   * intentionally remain without a scenery image instead of borrowing the
+   * technical fixture background, desk, clock, curtain, or asset identities.
    */
   private setupSprites(width: number, height: number): void {
-    // Layer 0: Background
-    this.bgImage = this.add.image(width / 2, height / 2, 'fixture_bg');
-    this.bgImage.setDisplaySize(width, height);
+    this.bgImage?.destroy();
+    this.bgImage = undefined;
+
+    const plan = resolveWorldSceneVisualPlan(this.projection, width, height);
+    if (!plan || !this.textures.exists(plan.textureKey)) {
+      return;
+    }
+
+    this.bgImage = this.add.image(plan.x, plan.y, plan.textureKey);
+    this.bgImage.setDisplaySize(plan.width, plan.height);
     this.layerBackground?.add(this.bgImage);
 
-    // Layer 1: Midground Scenery (Desk)
-    this.deskImage = this.add.image(width * 0.58, height * 0.72, 'fixture_desk');
-    this.deskImage.setScale(Math.min(width / 1600, height / 900) * 1.1);
-    this.layerScenery?.add(this.deskImage);
-
-    // Layer 2: Authors Asset A1 with Normal Map Lighting
-    const a1X = width * 0.68;
-    const a1Y = height * 0.35;
-    this.assetA1Image = this.add.image(a1X, a1Y, 'asset_a1');
-    const scaleFactor = Math.min(width / 1600, height / 900);
-    this.assetA1Image.setScale(scaleFactor * 1.15);
-    this.layerActors?.add(this.assetA1Image);
-
-    // Enable WebGL per-pixel normal map lighting & self-shadowing on Asset A1
-    const objWithLighting = this.assetA1Image as unknown as {
-      setLighting?: (enable: boolean) => void;
-      setSelfShadow?: (enable: boolean, penumbra?: number, diffuseFlatThreshold?: number) => void;
-      setPipeline?: (name: string) => void;
-    };
-
-    if (typeof objWithLighting.setLighting === 'function') {
-      objWithLighting.setLighting(true);
-    }
-    if (typeof objWithLighting.setSelfShadow === 'function') {
-      objWithLighting.setSelfShadow(true, 0.45, 0.25);
-    }
-
-    // Window curtain for ambient sway
-    if (this.textures.exists('fixture_curtain')) {
-      const curtainX = width * 0.28;
-      const curtainY = height * 0.12;
-      this.curtainImage = this.add.image(curtainX, curtainY, 'fixture_curtain');
-      this.curtainImage.setOrigin(0.5, 0); // Pin top for natural sway
-      this.curtainImage.setScale(scaleFactor * 1.1);
-      this.layerScenery?.add(this.curtainImage);
-    }
-
-    // Clock hand pointer for Asset A1 ambient rotation
-    if (this.textures.exists('fixture_clock_hand')) {
-      this.clockHandImage = this.add.image(a1X, a1Y, 'fixture_clock_hand');
-      this.clockHandImage.setOrigin(0.5, 0.875); // Pivot at center boss
-      this.clockHandImage.setScale(scaleFactor * 1.15);
-      this.layerActors?.add(this.clockHandImage);
+    if (plan.normalMapTextureKey) {
+      const litImage = this.bgImage as unknown as {
+        setLighting?: (enable: boolean) => void;
+        setSelfShadow?: (enable: boolean, penumbra?: number, diffuseFlatThreshold?: number) => void;
+      };
+      litImage.setLighting?.(true);
+      litImage.setSelfShadow?.(true, 0.45, 0.25);
     }
   }
 
@@ -240,7 +219,6 @@ export class WorldScene extends Phaser.Scene {
    * Sets up particles for dust motes and rainy weather
    */
   private setupParticles(width: number, height: number): void {
-    // Ambient dust motes
     if (this.textures.exists('fixture_mote')) {
       this.dustMoteEmitter = this.add.particles(0, 0, 'fixture_mote', {
         x: { min: 0, max: width },
@@ -259,7 +237,6 @@ export class WorldScene extends Phaser.Scene {
       }
     }
 
-    // Rain particles
     if (this.textures.exists('fixture_rain')) {
       this.rainEmitter = this.add.particles(0, 0, 'fixture_rain', {
         x: { min: 0, max: width + 200 },
@@ -291,20 +268,14 @@ export class WorldScene extends Phaser.Scene {
     this.puddleRenderTexture.setDepth(22);
     this.puddleRenderTexture.setAlpha(0.65);
 
-    // Draw reflection of window/desk into render texture (flipped vertically)
     this.refreshRenderTextureReflection();
   }
 
   public refreshRenderTextureReflection(): void {
     if (!this.puddleRenderTexture || !this.bgImage) return;
     this.puddleRenderTexture.clear();
-
-    // Draw a reflective wash into the render texture
     this.puddleRenderTexture.fill(0x334a60, 0.5);
-    // Draw inverted portion of scenery to prove dynamic render texture path
-    if (this.deskImage) {
-      this.puddleRenderTexture.draw(this.deskImage, 40, 20);
-    }
+    this.puddleRenderTexture.draw(this.bgImage, 40, 20);
   }
 
   /**
@@ -323,7 +294,6 @@ export class WorldScene extends Phaser.Scene {
    * Sets up authored pointer hotspots that emit semantic intents outward
    */
   private setupHotspots(width: number, height: number): void {
-    // Clear existing hotspots
     this.hotspotZones.forEach(({ zone, highlight }) => {
       zone.destroy();
       highlight.destroy();
@@ -335,12 +305,10 @@ export class WorldScene extends Phaser.Scene {
       const hy = anchor.y * height;
       const size = 64;
 
-      // Visual highlight marker
       const highlight = this.add.circle(hx, hy, size / 2, 0xffe680, 0);
       highlight.setStrokeStyle(2, 0xffdf78, 0);
       highlight.setDepth(35);
 
-      // Interactive zone
       const zone = this.add.zone(hx, hy, size, size)
         .setRectangleDropZone(size, size)
         .setInteractive({ cursor: 'pointer' });
@@ -397,10 +365,9 @@ export class WorldScene extends Phaser.Scene {
     this.projection = newProjection;
     this.environmentManager?.applyProjection(newProjection);
 
-    // 1. Update lighting
     this.applyAmbientLighting();
+    this.setupSprites(this.scale.width, this.scale.height);
 
-    // 2. Update particles
     if (this.dustMoteEmitter) {
       if (newProjection.particles.dustMotes) {
         this.dustMoteEmitter.start();
@@ -416,10 +383,8 @@ export class WorldScene extends Phaser.Scene {
       }
     }
 
-    // 3. Update hotspots if anchors changed
     this.setupHotspots(this.scale.width, this.scale.height);
 
-    // 4. Camera follows projection focus, never a view-id special case
     const cameraTarget = resolveProjectionCameraTarget(
       newProjection,
       this.scale.width,
@@ -433,7 +398,6 @@ export class WorldScene extends Phaser.Scene {
       zoom: cameraTarget.zoom,
     };
 
-    // 5. Update audio environment & listener
     if (newProjection.listenerOrientation) {
       audioService.setListenerOrientation(newProjection.listenerOrientation);
     }
@@ -455,22 +419,6 @@ export class WorldScene extends Phaser.Scene {
     if (this.bgImage) {
       this.bgImage.setPosition(width / 2, height / 2);
       this.bgImage.setDisplaySize(width, height);
-    }
-    if (this.deskImage) {
-      this.deskImage.setPosition(width * 0.58, height * 0.72);
-      this.deskImage.setScale(Math.min(width / 1600, height / 900) * 1.1);
-    }
-    if (this.assetA1Image) {
-      this.assetA1Image.setPosition(width * 0.68, height * 0.35);
-      this.assetA1Image.setScale(Math.min(width / 1600, height / 900) * 1.15);
-    }
-    if (this.curtainImage) {
-      this.curtainImage.setPosition(width * 0.28, height * 0.12);
-      this.curtainImage.setScale(Math.min(width / 1600, height / 900) * 1.1);
-    }
-    if (this.clockHandImage) {
-      this.clockHandImage.setPosition(width * 0.68, height * 0.35);
-      this.clockHandImage.setScale(Math.min(width / 1600, height / 900) * 1.15);
     }
 
     const cameraTarget = resolveProjectionCameraTarget(this.projection, width, height);
@@ -514,7 +462,7 @@ export class WorldScene extends Phaser.Scene {
       reactLifecycle: true,
       noDuplicateCanvas: true,
       layeredRendering: !!(this.layerBackground && this.layerScenery && this.layerActors && this.layerForeground),
-      normalMapLighting: !!(this.lights && this.assetA1Image),
+      normalMapLighting: !!(this.lights && this.bgImage && this.projection.normalMapAssetId),
       movablePointLight: !!(this.movableLight ?? this.environmentManager?.getMovableLight()),
       particles: !!(this.dustMoteEmitter && this.rainEmitter),
       renderTextureFilter: !!this.puddleRenderTexture,
