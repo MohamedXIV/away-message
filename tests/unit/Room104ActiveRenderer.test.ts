@@ -54,4 +54,11 @@ describe('Room 104 active renderer architecture (#26)', () => {
     expect(room).toContain('marker.itemCount');
     expect(room).toContain('inspectDeliveryAnchor');
   });
+
+  it('keeps desk/PC status contextual to the authored desk view instead of showing it in every room view', () => {
+    const room = source('src/world/Room104Scene.tsx');
+
+    expect(room).toContain('const showDeskStatus = currentViewId === ROOM104_VIEW_IDS.deskWindow;');
+    expect(room).toContain('{showDeskStatus && (');
+  });
 });
