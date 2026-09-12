@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { DesktopShell } from './desktop/DesktopShell';
 import { RoomScene } from './world/RoomScene';
+import { Room104Scene } from './world/Room104Scene';
 import { CafeScene } from './world/CafeScene';
 import { createTechnicalFixtureProjection } from './world/phaser/technicalFixture';
 
@@ -235,7 +236,7 @@ export const App: React.FC = () => {
                   onClick={() => setPhaserFixtureActive(false)}
                   className="px-3 py-1 bg-slate-900/90 hover:bg-slate-800 text-amber-300 border border-slate-700 text-xs font-mono shadow-md rounded flex items-center gap-1.5 cursor-pointer"
                 >
-                  ← Return to Room 104 (Canvas2D)
+                  ← Return to Room 104
                 </button>
               </div>
             }
@@ -266,7 +267,7 @@ export const App: React.FC = () => {
             <>
               {/* Top-Level View Router */}
               {activeView === 'pc' && <DesktopShell />}
-              {activeView === 'room' && <RoomScene />}
+              {activeView === 'room' && <Room104Scene />}
               {activeView === 'cafe' && <CafeScene />}
               {activeView === 'work' && <RoomScene />}
 
