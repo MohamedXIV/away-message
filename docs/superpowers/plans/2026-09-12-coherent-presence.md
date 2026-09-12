@@ -13,9 +13,9 @@ Add one derived semantic presence projection over existing Away authorities with
 3. `BuddyCharacter.reach` distinguishes local from remote actors when no local mobility/place fact exists.
 4. Renderer/view state is never an input.
 
-## First implementation slice
+## Implementation slice
 
-Add a pure `src/engine/life/Presence.ts` resolver and expose it through the SimulationEngine facade.
+Add a pure `src/engine/life/Presence.ts` resolver plus a narrow read-only simulation-source adapter. The adapter consumes the existing SimulationEngine surface (`social` + `getNpcPlaceState`) without making presence a new engine-owned state bucket.
 
 Rules:
 - `at_place` preserves the authoritative place id.
@@ -30,9 +30,21 @@ Rules:
 - `canInteractInPerson` requires `at_place`; when caller supplies `playerPlaceId`, the place ids must match.
 - no new presence projection is persisted.
 
+## Legacy migration seam
+
+Existing Pulse readers still understand `online | away | busy | offline`. Provide a loss-limited compatibility mapper while consumers migrate:
+
+- `online_active` → `online`
+- `online_idle` → `away`
+- `away` → `away`
+- `busy` → `busy`
+- `offline` → `offline`
+
+The mapper is read-only and never writes the derived result back into `SocialEngine`.
+
 ## TDD
 
-RED first through facade-level compatibility tests, then implement the minimum pure resolver and facade seam. Follow with save/reload and time-boundary regressions after the basic contract is green.
+RED first through compatibility tests, then implement the minimum pure resolver and simulation adapter. Follow with save/reload, large-jump equivalence, remote/lifecycle, explicit portable-device, unattended-away, and legacy-Pulse compatibility regressions.
 
 ## Non-goals
 
