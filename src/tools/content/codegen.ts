@@ -525,6 +525,15 @@ export function validateWorldContent(tables: ContentTables): string[] {
         }
       }
     }
+    const legacyIds = parseJsonArray('places', id, 'legacyIds', r['legacyIds']);
+    if (legacyIds) {
+      if (legacyIds.length > 8) errors.push(`places/${id}.legacyIds: max 8 legacy ids.`);
+      for (const [i, legacyId] of legacyIds.entries()) {
+        if (typeof legacyId !== 'string' || legacyId.trim() === '' || legacyId.length > 60) {
+          errors.push(`places/${id}.legacyIds[${i}]: must be a non-empty string <= 60 chars.`);
+        }
+      }
+    }
   }
 
   // Bus lines.
@@ -1392,6 +1401,7 @@ export function generateWorldRegistrySource(tables: ContentTables): string {
   lines.push('  districtId: string;');
   lines.push('  name: string;');
   lines.push('  transitAccess: GeneratedPlaceTransitAccess[];');
+  lines.push('  legacyIds?: string[];');
   lines.push('}');
   lines.push('');
   lines.push('export interface GeneratedTransitStopDef {');
@@ -1446,11 +1456,17 @@ export function generateWorldRegistrySource(tables: ContentTables): string {
           .map((e) => ({ stopId: String(e['stopId'] ?? ''), walkMinutes: Number(e['walkMinutes'] ?? 0) }));
       }
     } catch { access = []; }
+    let legacyIds: string[] = [];
+    try {
+      const parsed: unknown = JSON.parse(String(r['legacyIds'] ?? '[]'));
+      if (Array.isArray(parsed)) legacyIds = parsed.filter((x): x is string => typeof x === 'string');
+    } catch { legacyIds = []; }
     lines.push('  {');
     lines.push(`    id: ${tsString(id)},`);
     lines.push(`    districtId: ${tsString(String(r['districtId'] ?? ''))},`);
     lines.push(`    name: ${tsString(String(r['name'] ?? ''))},`);
     lines.push(`    transitAccess: [${access.map((a) => `{ stopId: ${tsString(a.stopId)}, walkMinutes: ${a.walkMinutes} }`).join(', ')}],`);
+    lines.push(`    legacyIds: [${legacyIds.map((t) => tsString(t)).join(', ')}],`);
     lines.push('  },');
   }
   lines.push('];');

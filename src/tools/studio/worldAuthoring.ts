@@ -24,5 +24,6 @@ export function buildPlaceRow(name: string, districtId: string, districtIds: rea
     districtId,
     name: name.trim(),
     transitAccess: '[]',
+    legacyIds: '[]',
   };
 }

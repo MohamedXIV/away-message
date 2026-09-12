@@ -35,6 +35,20 @@ import {
   createEmptyInventoryState,
   legacyModularToCanonical,
 } from './hardware/state';
+import {
+  emptyNpcMobility,
+  findNpcCoLocation,
+  getNpcPlaceState,
+  getSharedPlaceAliases,
+  getSharedTransitNetwork,
+  hydrateNpcMobility,
+  planDueNpcTrips,
+  progressNpcTrips,
+  type NpcCoLocation,
+  type NpcMobilityState,
+  type NpcPlaceQuery,
+  type NpcTripRecord,
+} from './transit/NpcTrips';
 import type {
   ActionResult,
   HardwareState as CanonicalHardwareState,
@@ -99,6 +113,13 @@ export class SimulationEngine extends SimulationEngineCore {
    * hydrate it back. No relationship/economy/transit/event copies here.
    */
   private npcLivesCache: Map<string, NpcLifeEntry> = new Map();
+  /**
+   * Canonical #37 runtime: one mobility record + current place per actor.
+   * Projected into the additive `npcMobility` snapshot slice; hydrated on
+   * ctor/load. Trip intervals come from #35 route truth; this cache only
+   * holds them. No relationship/economy/appointment copies here.
+   */
+  private npcMobility: NpcMobilityState = emptyNpcMobility();
 
 
   constructor(initialState?: Partial<TransportSimulationState>) {
@@ -137,6 +158,7 @@ export class SimulationEngine extends SimulationEngineCore {
     // Deterministic canonical defaults for every known buddy, advanced to
     // the authoritative minute — same-minute reads stay pure afterwards.
     this.ensureAllNpcLifeEntries();
+    this.npcMobility = hydrateNpcMobility(initialState?.npcMobility ?? {});
   }
 
   public override getState(): Readonly<LiveSimulationState> {
@@ -154,6 +176,7 @@ export class SimulationEngine extends SimulationEngineCore {
       os: this.os.getState(),
       installedSoftware: this.software.getInstalledSoftware(),
       npcLives: this.getNpcLivesState(),
+      npcMobility: this.getNpcMobilityState(),
     } as Readonly<LiveSimulationState>;
 
     this.v6CachedBase = base;
@@ -172,6 +195,7 @@ export class SimulationEngine extends SimulationEngineCore {
       os: this.os.getState(),
       installedSoftware: this.software.getInstalledSoftware(),
       npcLives: this.getNpcLivesState(),
+      npcMobility: this.getNpcMobilityState(),
     } as LiveSimulationState;
 
     this.v6CachedBase = null;
@@ -355,11 +379,13 @@ export class SimulationEngine extends SimulationEngineCore {
   public override advanceGameMinutes(minutes: number, reason?: string): void {
     super.advanceGameMinutes(minutes, reason);
     this.advanceAllNpcPressuresToNow();
+    this.progressNpcMobility();
   }
 
   public override advanceRealTime(deltaRealSeconds: number): void {
     super.advanceRealTime(deltaRealSeconds);
     this.advanceAllNpcPressuresToNow();
+    this.progressNpcMobility();
   }
 
   public getNpcPressure(actorId: string): LifePressureView | null {
@@ -378,6 +404,103 @@ export class SimulationEngine extends SimulationEngineCore {
     const buddy = this.social.getBuddy(actorId);
     if (!buddy) return 'background_remote';
     return buddy.reach === 'remote' ? 'background_remote' : 'important_local';
+  }
+
+  /** Canonical #37 slice as plain snapshot data (deep copies). */
+  public getNpcMobilityState(): NpcMobilityState {
+    return JSON.parse(JSON.stringify(this.npcMobility)) as NpcMobilityState;
+  }
+
+  /** Live trip record copy for one actor, or null when the actor holds none. */
+  public getNpcTrip(actorId: string): NpcTripRecord | null {
+    const record = this.npcMobility.trips[actorId];
+    if (!record) return null;
+    return JSON.parse(JSON.stringify(record)) as NpcTripRecord;
+  }
+
+  /**
+   * Authoritative place truth for #45 presence resolution (#37). Pure read:
+   * AtPlace / planned departure / InTransit / arrival-facts / failure facts.
+   * Never touches messenger presence.
+   */
+  public getNpcPlaceState(actorId: string, atMinute?: number): NpcPlaceQuery {
+    return getNpcPlaceState(
+      this.npcMobility,
+      actorId,
+      atMinute ?? this.clock.getTotalMinutes(),
+    );
+  }
+
+  /** Factual deterministic travel overlap for later consumers. Facts only. */
+  public getNpcCoLocation(): NpcCoLocation[] {
+    const network = getSharedTransitNetwork();
+    if (!network) return [];
+    return findNpcCoLocation(this.npcMobility.trips, network);
+  }
+
+  /**
+   * Tick-driven NPC mobility (#37). Plans trips from current #44 intents
+   * and progresses live trips on the authoritative clock. Idempotent at a
+   * fixed minute; departed trips are never replanned; arrivals emit once
+   * (status flags persist the completion identity).
+   *
+   * Note: this runs after the tick's subscriber notify, so arrival
+   * telemetry becomes visible via getState/exportSnapshot on the next
+   * state rebuild (exportSnapshot always rebuilds fresh). Arrival EVENTS
+   * fire synchronously to current listeners. Same lag profile as other
+   * post-tick engine writes.
+   */
+  private progressNpcMobility(): void {
+    const nowMinute = this.clock.getTotalMinutes();
+    const network = getSharedTransitNetwork();
+    if (!network) return;
+    const intents = new Map(
+      this.social.getBuddies().map((buddy) => [buddy.id, this.getCharacterIntent(buddy.id)]),
+    );
+    const due = planDueNpcTrips(this.npcMobility, intents, nowMinute, {
+      network,
+      aliases: getSharedPlaceAliases(),
+    });
+    this.npcMobility = due.state;
+    for (const failure of due.failed) {
+      try {
+        this.events.emit('npc:trip_failed', { ...failure, atMinute: nowMinute });
+      } catch {}
+    }
+    const progressed = progressNpcTrips(this.npcMobility, nowMinute);
+    this.npcMobility = progressed.state;
+    for (const actorId of progressed.departed) {
+      try {
+        const record = this.npcMobility.trips[actorId];
+        this.telemetry.logEvent('world', 'travel_departed', nowMinute, {
+          actorId,
+          originPlaceId: record?.originPlaceId ?? null,
+          destinationPlaceId: record?.destinationPlaceId ?? null,
+          sourceId: record?.sourceId ?? null,
+        });
+      } catch {}
+    }
+    for (const arrival of progressed.arrivals) {
+      try {
+        this.events.emit('npc:trip_arrived', { ...arrival });
+      } catch {}
+      try {
+        this.telemetry.logEvent('world', 'travel_arrived', nowMinute, {
+          actorId: arrival.actorId,
+          destinationPlaceId: arrival.destinationPlaceId,
+          sourceId: arrival.sourceId ?? null,
+        });
+      } catch {}
+    }
+    if (
+      due.planned.length > 0 ||
+      due.failed.length > 0 ||
+      due.cancelled.length > 0 ||
+      progressed.departed.length > 0 ||
+      progressed.arrivals.length > 0
+    ) {
+      this.invalidateV6Cache();
+    }
   }
 
 
@@ -977,6 +1100,7 @@ export class SimulationEngine extends SimulationEngineCore {
     const result = super.dispatchAction(action);
     if (this.clock.getTotalMinutes() !== beforeMinute) {
       this.advanceAllNpcPressuresToNow();
+      this.progressNpcMobility();
     }
     return result;
   }
@@ -1003,5 +1127,9 @@ export class SimulationEngine extends SimulationEngineCore {
     // cover buddies missing from the slice (old saves, late joiners).
     this.npcLivesCache = new Map(Object.entries(hydrateNpcLives(snapshot.npcLives ?? {})));
     this.ensureAllNpcLifeEntries();
+    // Canonical #37 state hydrates with validation; malformed entries drop.
+    // Missing slices (old saves) become empty defaults — planning resumes
+    // deterministically on the next tick.
+    this.npcMobility = hydrateNpcMobility(snapshot.npcMobility ?? {});
   }
 }
