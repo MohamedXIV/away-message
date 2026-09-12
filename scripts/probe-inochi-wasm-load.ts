@@ -46,7 +46,7 @@ export function allocatePuppetInputOrThrow(api: AllocatingWasmApi, byteLength: n
   return pointer;
 }
 
-function sha256(bytes: ArrayBufferView): string {
+function sha256(bytes: Uint8Array): string {
   return createHash('sha256').update(bytes).digest('hex');
 }
 
