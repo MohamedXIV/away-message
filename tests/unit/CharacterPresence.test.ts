@@ -212,12 +212,15 @@ describe('coherent character presence (#45)', () => {
     const base = {
       actorId: 'travelling-remote-test',
       legacyPresence: { status: 'away', awayMessage: 'travelling' } as BuddyPresence,
-      reach: 'remote' as const,
     };
 
-    const remoteBefore = resolveCharacterPresence({ ...base, place: { status: 'unknown' } });
-    const visiting = resolveCharacterPresence({ ...base, place: { status: 'at_place', placeId: 'place_visit' } });
-    const remoteAfter = resolveCharacterPresence({ ...base, place: { status: 'unknown' } });
+    const remoteBefore = resolveCharacterPresence({ ...base, reach: 'remote', place: { status: 'unknown' } });
+    const visiting = resolveCharacterPresence({
+      ...base,
+      reach: 'local',
+      place: { status: 'at_place', placeId: 'place_visit' },
+    });
+    const remoteAfter = resolveCharacterPresence({ ...base, reach: 'remote', place: { status: 'unknown' } });
 
     expect([remoteBefore.actorId, visiting.actorId, remoteAfter.actorId]).toEqual([
       base.actorId,
