@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { SimulationEngine } from '../../src/engine/SimulationEngine';
 import {
+  characterPresenceToLegacyBuddyPresence,
   resolveCharacterPresence,
   resolveCharacterPresenceFromSimulation,
+  resolveLegacyBuddyPresenceFromSimulation,
 } from '../../src/engine/life';
 import { commitTravelPlan } from '../../src/engine/transit/ActiveTravel';
 import type { BuddyPresence } from '../../src/engine/types';
@@ -106,6 +108,30 @@ describe('coherent character presence (#45)', () => {
     expect(projected!.availability.canCall).toBe(false);
     expect(projected!.availability.canInteractInPerson).toBe(false);
     expect(projected!.reasonCodes).toContain('transit_suppresses_active_device');
+  });
+
+  it('preserves an unattended away/login state while the actor is elsewhere', () => {
+    const first = new SimulationEngine();
+    const actor = localActor(first);
+    const sim = withCanonicalState(
+      first,
+      actor.id,
+      { status: 'away', awayMessage: 'afk - back later' },
+      {
+        trips: { [actor.id]: activeTrip(actor.id) },
+        places: { [actor.id]: 'place_a1' },
+      },
+    );
+
+    expect(resolveCharacterPresenceFromSimulation(sim, actor.id, { atMinute: 615 })).toMatchObject({
+      physical: { kind: 'in_transit' },
+      communication: {
+        status: 'away',
+        legacyStatus: 'away',
+        awayMessage: 'afk - back later',
+      },
+      availability: { canMessage: true, canCall: false, canInteractInPerson: false },
+    });
   });
 
   it('allows active online projection in transit only with explicit portable-device context', () => {
@@ -240,6 +266,54 @@ describe('coherent character presence (#45)', () => {
     const stepPresence = resolveCharacterPresenceFromSimulation(stepped, actor.id);
     expect(jumpPresence).toEqual(stepPresence);
     expect(jumpPresence?.physical).toEqual({ kind: 'at_place', placeId: 'place_b1' });
+  });
+
+  it('maps coherent status back to legacy Pulse presence without reviving active-home contradiction', () => {
+    const coherent = resolveCharacterPresence({
+      actorId: 'legacy-pulse-test',
+      place: {
+        status: 'in_transit',
+        originPlaceId: 'place_a1',
+        destinationPlaceId: 'place_b1',
+        legIndex: 0,
+        legKind: 'walk',
+      },
+      legacyPresence: {
+        status: 'online',
+        awayMessage: 'left this logged in',
+        customAwayMessage: 'brb',
+      },
+      reach: 'local',
+    });
+
+    expect(characterPresenceToLegacyBuddyPresence(coherent)).toEqual({
+      status: 'away',
+      awayMessage: 'left this logged in',
+      customAwayMessage: 'brb',
+    });
+  });
+
+  it('offers a one-call legacy migration seam for existing Pulse readers', () => {
+    const first = new SimulationEngine();
+    const actor = localActor(first);
+    const sim = withCanonicalState(
+      first,
+      actor.id,
+      { status: 'online', awayMessage: 'still logged in' },
+      {
+        trips: { [actor.id]: activeTrip(actor.id) },
+        places: { [actor.id]: 'place_a1' },
+      },
+    );
+
+    expect(resolveLegacyBuddyPresenceFromSimulation(sim, actor.id, { atMinute: 615 })).toEqual({
+      status: 'away',
+      awayMessage: 'still logged in',
+    });
+    expect(sim.social.getPresence(actor.id)).toEqual({
+      status: 'online',
+      awayMessage: 'still logged in',
+    });
   });
 
   it('does not persist the derived presence projection as a second source of truth', () => {
