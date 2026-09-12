@@ -1,5 +1,9 @@
 import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { resolvePcBootState } from '../engine/SimulationEngine';
+import {
+  getRoom104StorageContents,
+  type Room104StorageTarget,
+} from '../engine/Room104Physical';
 import type { CityNodeId, TravelMode } from '../engine/CityMap';
 import { buddyWithRole } from '../engine/coreBuddies';
 import { getWeatherForDay, isWetWeather } from '../engine/WeatherEngine';
@@ -102,18 +106,29 @@ export const Room104Scene: React.FC = () => {
     switchView('pc');
   }, [flashNotice, pcBootState, setupComputerAtHome, switchView]);
 
-  const inspectStorage = useCallback((storage: 'desk' | 'wardrobe' | 'bedside' | 'kitchen') => {
-    // #26 must eventually bind these authored surfaces to real #18 container
-    // identities. Until then inspection is deliberately read-only: the
-    // presentation layer never invents an inventory/container authority.
+  const inspectStorage = useCallback((storage: Room104StorageTarget) => {
     const labels = {
       desk: 'Desk storage',
       wardrobe: 'Wardrobe',
       bedside: 'Bedside storage',
       kitchen: 'Kitchen storage',
     } as const;
-    flashNotice(`${labels[storage]} is authored, but no canonical physical container is bound yet.`);
-  }, [flashNotice]);
+
+    try {
+      const items = getRoom104StorageContents(engine.getPhysicalWorldState(), storage);
+      if (items.length === 0) {
+        flashNotice(`${labels[storage]} is empty.`);
+        return;
+      }
+
+      const identities = items.map((item) => item.definitionId).join(', ');
+      flashNotice(
+        `${labels[storage]}: ${items.length} item${items.length === 1 ? '' : 's'} — ${identities}`,
+      );
+    } catch {
+      flashNotice(`${labels[storage]} could not be inspected.`);
+    }
+  }, [engine, flashNotice]);
 
   const inspectDeliveryAnchor = useCallback(() => {
     try {
