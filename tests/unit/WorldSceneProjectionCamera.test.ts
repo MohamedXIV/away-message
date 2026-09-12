@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import { describe, expect, it } from 'vitest';
 import { resolveProjectionCameraTarget } from '../../src/world/phaser/WorldScene';
 import type { WorldSceneProjection } from '../../src/world/phaser/types';
