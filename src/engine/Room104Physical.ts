@@ -1,7 +1,6 @@
 import type {
   ContainerInstance,
   ItemInstance,
-  PhysicalContainerDefinition,
   PhysicalWorldState,
 } from './PhysicalItemEngine';
 
@@ -13,29 +12,6 @@ export const ROOM104_STORAGE_INSTANCE_IDS: Readonly<Record<Room104StorageTarget,
   bedside: 'room104:bedside-storage',
   kitchen: 'room104:kitchen-storage',
 };
-
-export const ROOM104_STORAGE_DEFINITIONS = [
-  {
-    id: 'room104_storage_desk',
-    capacity: 12,
-    allowedItemKinds: [],
-  },
-  {
-    id: 'room104_storage_wardrobe',
-    capacity: 24,
-    allowedItemKinds: [],
-  },
-  {
-    id: 'room104_storage_bedside',
-    capacity: 8,
-    allowedItemKinds: [],
-  },
-  {
-    id: 'room104_storage_kitchen',
-    capacity: 24,
-    allowedItemKinds: [],
-  },
-] as const satisfies readonly PhysicalContainerDefinition[];
 
 export const ROOM104_STORAGE_INSTANCES = [
   {

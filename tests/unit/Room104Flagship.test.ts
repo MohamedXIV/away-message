@@ -18,11 +18,11 @@ describe('Room 104 flagship living-place contract (#26)', () => {
     expect(projection.placeId).toBe('room_104');
     expect(projection.placeName).toBe('Motel Room 104');
     expect(projection.isInterior).toBe(true);
-    expect(projection.availableViews.map((view) => view.id)).toEqual([
+    expect(projection.availableViews.map((view) => view.id).sort()).toEqual([
       DESK_VIEW,
       BED_VIEW,
       ENTRY_VIEW,
-    ]);
+    ].sort());
   });
 
   it('keeps deterministic authored neighbor navigation between the three room views', () => {

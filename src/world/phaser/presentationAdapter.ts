@@ -9,13 +9,6 @@ import {
   GENERATED_ASSETS,
   GENERATED_LIGHT_PROFILES,
 } from '../../engine/worldContent.generated';
-import {
-  ROOM104_ANCHORS,
-  ROOM104_INTERACTIONS,
-  ROOM104_PLACES,
-  ROOM104_SPACES,
-  ROOM104_VIEWS,
-} from '../data/room104AuthoredContent';
 import type { TimeOfDay, WeatherType } from '../types';
 import type {
   WorldSceneProjection,
@@ -33,12 +26,6 @@ import type { PuddleZoneDef } from './environment/puddles';
 import type { AmbientMotionDef } from './environment/ambientMotion';
 import type { AuthoredLightDef } from './environment/lightingEngine';
 import type { SpatialAudioSourceDef, ListenerOrientation } from '../../audio/types';
-
-const ALL_PLACES = [...GENERATED_PLACES, ...ROOM104_PLACES];
-const ALL_SPACES = [...GENERATED_SPACES, ...ROOM104_SPACES];
-const ALL_VIEWS = [...GENERATED_VIEWS, ...ROOM104_VIEWS];
-const ALL_ANCHORS = [...GENERATED_ANCHORS, ...ROOM104_ANCHORS];
-const ALL_INTERACTIONS = [...GENERATED_INTERACTIONS, ...ROOM104_INTERACTIONS];
 
 export interface CreateProjectionOptions {
   placeId: string;
@@ -154,10 +141,10 @@ export function createWorldSceneProjection(
     listenerOrientation,
   } = options;
 
-  const place = ALL_PLACES.find((p) => p.id === placeId);
-  const spaces = ALL_SPACES.filter((s) => s.placeId === placeId);
+  const place = GENERATED_PLACES.find((p) => p.id === placeId);
+  const spaces = GENERATED_SPACES.filter((s) => s.placeId === placeId);
   const spaceIds = new Set(spaces.map((s) => s.id));
-  const viewsInPlace = ALL_VIEWS.filter((v) => spaceIds.has(v.spaceId));
+  const viewsInPlace = GENERATED_VIEWS.filter((v) => spaceIds.has(v.spaceId));
 
   const activeView = viewId ? viewsInPlace.find((v) => v.id === viewId) : viewsInPlace[0];
 
@@ -172,7 +159,7 @@ export function createWorldSceneProjection(
   const isInterior = explicitIsInterior ?? (activeSpace ? !activeSpace.tags.includes('exterior') : true);
 
   // Asset resolution
-  const assetId: string | null = activeView?.assetId ?? null;
+  let assetId: string | null = activeView?.assetId ?? null;
   let normalMapAssetId: string | null = null;
   if (assetId) {
     const assetDef = GENERATED_ASSETS.find((a) => a.id === assetId);
@@ -183,11 +170,11 @@ export function createWorldSceneProjection(
 
   // Anchors for active view
   const anchorsForView = activeView
-    ? ALL_ANCHORS.filter((a) => a.viewId === activeView.id)
+    ? GENERATED_ANCHORS.filter((a) => a.viewId === activeView.id)
     : [];
 
   const anchorProjections: WorldAnchorProjection[] = anchorsForView.map((a) => {
-    const interactions = ALL_INTERACTIONS.filter((i) => i.anchorId === a.id);
+    const interactions = GENERATED_INTERACTIONS.filter((i) => i.anchorId === a.id);
     return {
       id: a.id,
       name: a.name,
