@@ -164,6 +164,34 @@ export function resolveCharacterPresence(
 }
 
 /**
+ * Lossy compatibility view for legacy Pulse readers while they migrate to the
+ * richer #45 contract. `online_idle` intentionally becomes legacy `away`:
+ * this preserves an unattended logged-in session without claiming the actor
+ * is actively at that device. No source state is mutated.
+ */
+export function characterPresenceToLegacyBuddyPresence(
+  projection: CharacterPresenceProjection,
+): BuddyPresence {
+  const status: BuddyPresenceStatus = (() => {
+    switch (projection.communication.status) {
+      case 'online_active': return 'online';
+      case 'online_idle': return 'away';
+      case 'away': return 'away';
+      case 'busy': return 'busy';
+      case 'offline': return 'offline';
+    }
+  })();
+
+  return {
+    status,
+    awayMessage: projection.communication.awayMessage,
+    ...(projection.communication.customAwayMessage !== undefined
+      ? { customAwayMessage: projection.communication.customAwayMessage }
+      : {}),
+  };
+}
+
+/**
  * Compatibility adapter over the real Away authorities. This is deliberately
  * a narrow read-only source contract rather than a new SimulationEngine-owned
  * presence state: #37 supplies physical truth and SocialEngine supplies the
@@ -193,4 +221,13 @@ export function resolveCharacterPresenceFromSimulation(
       ? { hasPortableMessagingDevice: options.hasPortableMessagingDevice }
       : {}),
   });
+}
+
+export function resolveLegacyBuddyPresenceFromSimulation(
+  source: CharacterPresenceSimulationSource,
+  actorId: string,
+  options: CharacterPresenceResolveOptions = {},
+): BuddyPresence | null {
+  const projection = resolveCharacterPresenceFromSimulation(source, actorId, options);
+  return projection ? characterPresenceToLegacyBuddyPresence(projection) : null;
 }
