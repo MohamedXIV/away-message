@@ -303,6 +303,12 @@ export class AudioService {
     this.isPausedState = false;
     for (const backend of this.usedBackends) {
       backend.resume();
+      // Backends may implement pause by muting or otherwise touching gain
+      // state. The service owns semantic bus volumes, so restore that truth
+      // after resume instead of allowing backend defaults to leak upward.
+      for (const [bus, volume] of this.busVolumes.entries()) {
+        backend.setBusVolume(bus, volume);
+      }
     }
   }
 
