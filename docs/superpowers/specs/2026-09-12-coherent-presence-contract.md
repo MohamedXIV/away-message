@@ -7,7 +7,8 @@ Presence is a read model, not a new authority.
 ```text
 NpcMobility / place truth ─┐
 SocialEngine presence ─────┼─→ CharacterPresenceProjection
-Buddy reach/lifecycle ─────┘
+Buddy reach/lifecycle ─────┤
+Device context ─────────────┘
 ```
 
 The projection may answer physical location mode, communication status and interaction availability, but it must never rewrite the source systems merely by being queried.
@@ -19,7 +20,7 @@ The projection may answer physical location mode, communication status and inter
 - `remote` — actor is a remote identity without local physical-world presence.
 - `unknown` — local actor has no authoritative physical fact yet; never invent a place to avoid this state.
 
-A `planned` #37 trip remains `at_place(origin)` until its actual departure boundary.
+A `planned` #37 trip remains `at_place(origin)` until its actual departure boundary. `BuddyCharacter.reach === 'remote'` is authoritative over stale local mobility/place snapshots; a temporary local visit requires the same identity to transition to local reach rather than pretending a remote-only actor occupies a local place.
 
 ## Communication semantics
 
@@ -33,13 +34,13 @@ Existing SocialEngine `online/away/busy/offline` values remain migration input. 
 
 For the 2005 baseline, active transit has no implicit mobile internet/device. If an unattended logged-in PC would otherwise be `online`, the coherent projection becomes `online_idle`, not an impossible actively-used home PC. A legacy `away` session may remain `away` while its person is elsewhere.
 
-An explicitly authored portable messaging device may permit `online_active` in transit. Merely being in transit never implies such a device.
+Optional semantic device context can identify `home_pc`, `work_pc`, `public_terminal`, `portable`, or `none`. During migration, absence of explicit device context preserves current legacy online behavior unless stronger physical truth such as transit contradicts it. An explicit `none` cannot produce `online_active` and instead projects `online_idle` with `no_active_device_context`. Fixed-device contexts never make transit active; an explicitly authored portable device may permit `online_active` in transit. The older portable-device boolean remains a compatibility alias while callers migrate.
 
 ## Availability semantics
 
 The projection exposes bounded capability booleans such as messaging, calls and in-person interaction. These are facts for consumers; the resolver does not perform communication or social consequences.
 
-`canInteractInPerson` requires physical `at_place`, and if the caller provides a player place it also requires exact place equality. In the baseline, transit disables calls and in-person interaction; messaging may still be delivered asynchronously to an idle/away account.
+`canInteractInPerson` requires physical `at_place`, an explicitly known `playerPlaceId`, and exact place equality. If player place is unknown, the resolver returns false and explains it with `player_place_unknown`; physical presence alone must not become player knowledge or interaction availability. In the baseline, transit disables calls and in-person interaction; messaging may still be delivered asynchronously to an idle/away account.
 
 ## Persistence
 

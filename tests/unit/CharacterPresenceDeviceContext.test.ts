@@ -9,7 +9,7 @@ describe('coherent character presence device context (#45)', () => {
       legacyPresence: { status: 'online', awayMessage: 'legacy online' },
       reach: 'local',
       messagingDeviceContext: 'none',
-    } as unknown as Parameters<typeof resolveCharacterPresence>[0]);
+    });
 
     expect(result.communication.status).toBe('online_idle');
     expect(result.reasonCodes).toContain('no_active_device_context');
