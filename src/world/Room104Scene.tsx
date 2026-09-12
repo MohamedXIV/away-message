@@ -298,6 +298,7 @@ export const Room104Scene: React.FC = () => {
   const formattedTime = `${String(time.hour).padStart(2, '0')}:${String(time.minute).padStart(2, '0')}`;
   const currentView = projection.availableViews.find((view) => view.id === currentViewId);
   const neighborIds = currentView?.neighbors ?? [];
+  const showDeskStatus = currentViewId === ROOM104_VIEW_IDS.deskWindow;
 
   return (
     <div className="relative h-full w-full overflow-hidden bg-black font-sans text-slate-100">
@@ -320,20 +321,22 @@ export const Room104Scene: React.FC = () => {
                 <div className="mt-1 text-slate-400">${player.cash.toFixed(2)} · Energy {player.energy}%</div>
               </div>
 
-              <div className="pointer-events-auto absolute right-3 top-3 max-w-xs rounded border border-slate-700/80 bg-slate-950/90 px-3 py-2 text-[11px] shadow-xl backdrop-blur-sm">
-                {deskPresentation === 'empty' && 'Desk: empty — no computer owned.'}
-                {deskPresentation === 'package' && (
-                  <button
-                    type="button"
-                    onClick={handleComputer}
-                    className="rounded bg-amber-500 px-2 py-1 font-bold text-slate-950"
-                  >
-                    Set up computer · 15 min
-                  </button>
-                )}
-                {deskPresentation === 'assembled_off' && 'Computer assembled — power off.'}
-                {deskPresentation === 'assembled_on' && 'Computer assembled — power on.'}
-              </div>
+              {showDeskStatus && (
+                <div className="pointer-events-auto absolute right-3 top-3 max-w-xs rounded border border-slate-700/80 bg-slate-950/90 px-3 py-2 text-[11px] shadow-xl backdrop-blur-sm">
+                  {deskPresentation === 'empty' && 'Desk: empty — no computer owned.'}
+                  {deskPresentation === 'package' && (
+                    <button
+                      type="button"
+                      onClick={handleComputer}
+                      className="rounded bg-amber-500 px-2 py-1 font-bold text-slate-950"
+                    >
+                      Set up computer · 15 min
+                    </button>
+                  )}
+                  {deskPresentation === 'assembled_off' && 'Computer assembled — power off.'}
+                  {deskPresentation === 'assembled_on' && 'Computer assembled — power on.'}
+                </div>
+              )}
 
               {storageMarkers.map((marker) => (
                 <button
@@ -382,7 +385,7 @@ export const Room104Scene: React.FC = () => {
                     </button>
                   );
                 })}
-                {(deskPresentation === 'assembled_off' || deskPresentation === 'assembled_on') && (
+                {showDeskStatus && (deskPresentation === 'assembled_off' || deskPresentation === 'assembled_on') && (
                   <button
                     type="button"
                     onClick={() => setActiveModal('hardware')}
