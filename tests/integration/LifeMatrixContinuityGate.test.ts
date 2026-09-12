@@ -20,6 +20,23 @@ function engineAtPlaceA(): { sim: SimulationEngine; actorId: string; peerId: str
   return { sim, actorId, peerId: peer.id };
 }
 
+function scheduleGateAppointment(sim: SimulationEngine, actorId: string, idSuffix = '') {
+  const day = sim.clock.getTime().day;
+  const appointment = sim.world.scheduleAppointment({
+    id: `life_gate_appt_${actorId}${idSuffix}`,
+    characterId: actorId,
+    locationId: 'place_b1',
+    targetDay: day,
+    startMinute: 1080,
+    endMinute: 1140,
+    description: 'Life Matrix continuity gate meeting',
+    status: 'confirmed',
+    rsvp: 'yes',
+  });
+  if (!appointment) throw new Error('Expected appointment owner to record the fixture.');
+  return appointment;
+}
+
 describe('Life Matrix end-to-end continuity gate (#48)', () => {
   it('keeps one actor coherent from source-backed obligation through departure and transit', () => {
     const { sim, actorId, peerId } = engineAtPlaceA();
@@ -36,18 +53,7 @@ describe('Life Matrix end-to-end continuity gate (#48)', () => {
     const bond = sim.social.applyNpcSocialAction(actorId, peerId, 'warm_chat', day);
     if (!bond) throw new Error('Expected SocialEngine to record the NPC bond action.');
 
-    const appointment = sim.world.scheduleAppointment({
-      id: `life_gate_appt_${actorId}`,
-      characterId: actorId,
-      locationId: 'place_b1',
-      targetDay: day,
-      startMinute: 1080,
-      endMinute: 1140,
-      description: 'Life Matrix continuity gate meeting',
-      status: 'confirmed',
-      rsvp: 'yes',
-    });
-    if (!appointment) throw new Error('Expected appointment owner to record the fixture.');
+    const appointment = scheduleGateAppointment(sim, actorId);
 
     const relationshipBefore = sim.social.getRelationships(actorId);
     const life = sim.getLifeSnapshot(actorId);
@@ -112,5 +118,45 @@ describe('Life Matrix end-to-end continuity gate (#48)', () => {
       status: 'open',
     }));
     expect(sim.social.getNpcBond(actorId, peerId).dims).toEqual(bond.dims);
+  });
+
+  it('lets mobility arrive without committing consequences, then follows the appointment owner outcome', () => {
+    const { sim, actorId } = engineAtPlaceA();
+    const appointment = scheduleGateAppointment(sim, actorId, '_owner');
+    const relationshipBefore = sim.social.getRelationships(actorId);
+    const cashBefore = sim.economy.getState().cash;
+
+    sim.advanceGameMinutes(60, 'life gate planning tick');
+    const planned = sim.getNpcTrip(actorId);
+    if (!planned) throw new Error('Expected a planned trip.');
+
+    sim.advanceGameMinutes(
+      planned.expectedArrivalMinute - sim.clock.getTotalMinutes(),
+      'life gate travel to arrival',
+    );
+
+    expect(sim.getNpcTrip(actorId)?.status).toBe('arrived');
+    expect(sim.getNpcPlaceState(actorId)).toEqual({
+      status: 'at_place',
+      placeId: 'place_b1',
+    });
+
+    const beforeOwnerDecision = sim.world.getAppointments().find((entry) => entry.id === appointment.id);
+    expect(beforeOwnerDecision?.status).toBe('confirmed');
+    expect(beforeOwnerDecision?.isCompleted).toBe(false);
+    expect(beforeOwnerDecision?.isMissed).toBe(false);
+    expect(sim.social.getRelationships(actorId)).toEqual(relationshipBefore);
+    expect(sim.economy.getState().cash).toBe(cashBefore);
+
+    const ownerResult = sim.world.updateAppointment(appointment.id, { status: 'happened' });
+    expect(ownerResult).not.toBeNull();
+    expect(sim.world.getAppointments().find((entry) => entry.id === appointment.id)?.status).toBe('happened');
+    expect(sim.getCharacterObligations(actorId).find((obligation) => obligation.sourceId === appointment.id))
+      .toMatchObject({ status: 'satisfied' });
+
+    const persisted = JSON.stringify(sim.exportSnapshot());
+    expect(persisted).not.toContain('"obligations"');
+    expect(persisted).not.toContain('"characterIntent"');
+    expect(persisted).not.toContain('"characterPresence"');
   });
 });
