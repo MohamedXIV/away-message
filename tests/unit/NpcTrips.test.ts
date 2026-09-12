@@ -572,14 +572,18 @@ describe('NPC trip planning (#37)', () => {
       }],
     };
     const threeStop = buildTransitNetwork(fixture);
-    const busLeg = (from: string, to: string, board: number, alight: number): TravelLeg => ({
-      kind: 'bus', lineId: 'line_abc', fromStopId: from, toStopId: to,
-      boardAtMinute: board, alightAtMinute: alight, minutes: alight - board,
-    });
+    const stopIndex: Record<string, number> = { sx_a: 0, sx_b: 1, sx_c: 2 };
+    const busLeg = (from: string, to: string, board: number): TravelLeg => {
+      const alight = board + 5 * ((stopIndex[to] ?? 0) - (stopIndex[from] ?? 0));
+      return {
+        kind: 'bus', lineId: 'line_abc', fromStopId: from, toStopId: to,
+        boardAtMinute: board, alightAtMinute: alight, minutes: alight - board,
+      };
+    };
     const tripFor = (actor: string, from: string, to: string, board: number): NpcTripRecord => ({
       trip: commitTravelPlan(actor, {
         originPlaceId: 'px_a', destinationPlaceId: 'px_c', departAtMinute: board, arriveAtMinute: board + 11,
-        legs: [busLeg(from, to, board, board + 5)],
+        legs: [busLeg(from, to, board)],
         walkMinutes: 0, waitMinutes: 0, rideMinutes: 5, totalMinutes: 11,
         fare: 2, transferCount: 0, busLineIds: ['line_abc'],
       }, board, 'appt'),
@@ -592,17 +596,121 @@ describe('NPC trip planning (#37)', () => {
       policy: 'fastest',
       status: 'active',
     });
-    // Same line, same direction, overlapping time — but DISJOINT segments.
+    // Same line, same direction — but DISJOINT segments on valid runs.
     const disjoint = findNpcCoLocation({
-      sam: tripFor('sam', 'sx_a', 'sx_b', 1000),
-      lee: tripFor('lee', 'sx_b', 'sx_c', 1002),
+      sam: tripFor('sam', 'sx_a', 'sx_b', 960),
+      lee: tripFor('lee', 'sx_b', 'sx_c', 965),
     }, threeStop);
     expect(disjoint.filter((f) => f.kind === 'bus_ride')).toEqual([]);
-    // Same line, same direction, OVERLAPPING segments — genuine co-location.
+    // Same run (960), OVERLAPPING segments — genuine co-location.
     const shared = findNpcCoLocation({
-      sam: tripFor('sam', 'sx_a', 'sx_c', 1000),
-      lee: tripFor('lee', 'sx_a', 'sx_b', 1001),
+      sam: tripFor('sam', 'sx_a', 'sx_c', 960),
+      lee: tripFor('lee', 'sx_a', 'sx_b', 960),
     }, threeStop);
     expect(shared.some((f) => f.kind === 'bus_ride' && f.lineId === 'line_abc')).toBe(true);
+  });
+
+  it('R1. due departure is never replanned when the intent changes on that tick', () => {
+    const planned = planNpcTrip({
+      actorId: 'sam', intent: attendIntent(), originPlaceId: 'place_a1',
+      nowMinute: 960, network, aliases,
+    });
+    expect(planned.ok).toBe(true);
+    if (!planned.ok) throw new Error('Expected a planned trip.');
+    const departure = planned.record.plannedDepartureMinute;
+    const state = { ...emptyNpcMobility(), places: { sam: 'place_a1' }, trips: { sam: planned.record } };
+
+    // At exactly the departure minute a different valid intent is selected.
+    const changed = planDueNpcTrips(
+      state,
+      new Map([['sam', attendIntent({
+        sourceId: 'appt_2',
+        targetPlaceId: 'place_c1',
+        earliestAt: departure + 200,
+        latestAt: departure + 260,
+      })]]),
+      departure,
+      { network, aliases },
+    );
+    expect(changed.planned).toEqual([]);
+    expect(changed.failed).toEqual([]);
+    expect(changed.cancelled).toEqual([]);
+    expect(changed.state.trips['sam']?.sourceId).toBe('appt_1');
+    expect(changed.state.trips['sam']?.status).toBe('planned');
+
+    // And jumping across departure with the changed intent still commits A.
+    const crossed = planDueNpcTrips(state, new Map([['sam', attendIntent({
+      sourceId: 'appt_2',
+      targetPlaceId: 'place_c1',
+      earliestAt: departure + 200,
+      latestAt: departure + 260,
+    })]]), departure + 30, { network, aliases });
+    expect(crossed.state.trips['sam']?.sourceId).toBe('appt_1');
+    const progressed = progressNpcTrips(crossed.state, departure + 30);
+    expect(progressed.state.trips['sam']?.status).toBe('active');
+    expect(progressed.arrivals).toEqual([]);
+  });
+
+  it('R2. overlapping windows on different runs are not co-located', () => {
+    // line_abcd: stops sx_a..sx_d, 10-minute segments, 10-minute headway.
+    const fixture = {
+      districts: [{ id: 'district_x', name: 'X', mapX: 0, mapY: 0, tags: [] as string[] }],
+      places: ['a', 'b', 'c', 'd'].map((suffix) => ({
+        id: `px_${suffix}`,
+        districtId: 'district_x',
+        name: suffix.toUpperCase(),
+        transitAccess: [{ stopId: `sx_${suffix}`, walkMinutes: 1 }],
+      })),
+      stops: ['a', 'b', 'c', 'd'].map((suffix) => ({
+        id: `sx_${suffix}`, districtId: 'district_x', name: suffix.toUpperCase(),
+        placeId: `px_${suffix}`, mapX: 0, mapY: 0,
+      })),
+      lines: [{
+        id: 'line_abcd', name: 'ABCD', stopIds: ['sx_a', 'sx_b', 'sx_c', 'sx_d'],
+        serviceStartMinute: 0, serviceEndMinute: 1439, headwayMinutes: 10,
+        segmentMinutes: [10, 10, 10], fare: 2,
+      }],
+    };
+    const longLine = buildTransitNetwork(fixture);
+    const busLeg = (from: string, to: string, board: number, alight: number): TravelLeg => ({
+      kind: 'bus', lineId: 'line_abcd', fromStopId: from, toStopId: to,
+      boardAtMinute: board, alightAtMinute: alight, minutes: alight - board,
+    });
+    const runTrip = (actor: string, from: string, to: string, board: number): NpcTripRecord => ({
+      trip: commitTravelPlan(actor, {
+        originPlaceId: 'px_a', destinationPlaceId: 'px_d', departAtMinute: board, arriveAtMinute: board + 30,
+        legs: [busLeg(from, to, board, board + (to === 'sx_d' ? 30 : to === 'sx_c' ? 20 : 10))],
+        walkMinutes: 0, waitMinutes: 0, rideMinutes: 10, totalMinutes: 30,
+        fare: 2, transferCount: 0, busLineIds: ['line_abcd'],
+      }, board, `appt_${actor}`),
+      intentKind: 'attend_appointment',
+      sourceId: `appt_${actor}`,
+      originPlaceId: 'px_a',
+      destinationPlaceId: 'px_d',
+      plannedDepartureMinute: board,
+      expectedArrivalMinute: board + 30,
+      policy: 'fastest',
+      status: 'active',
+    });
+    // Actor 1 rides A->D on the 600 run [600,630]; actor 2 rides B->C on the
+    // 610 run [620,630]. Whole windows overlap [620,630], route ranges
+    // overlap on B->C — but no shared segment-time, different runs.
+    const crossRun = findNpcCoLocation({
+      sam: runTrip('sam', 'sx_a', 'sx_d', 600),
+      lee: runTrip('lee', 'sx_b', 'sx_c', 620),
+    }, longLine);
+    expect(crossRun.filter((f) => f.kind === 'bus_ride')).toEqual([]);
+    // Same run, shared segment-time: genuine co-location with the interval.
+    const sameRun = findNpcCoLocation({
+      sam: runTrip('sam', 'sx_a', 'sx_d', 600),
+      lee: runTrip('lee', 'sx_b', 'sx_c', 610),
+    }, longLine);
+    const ride = sameRun.find((f) => f.kind === 'bus_ride');
+    expect(ride).toBeDefined();
+    expect(ride).toMatchObject({
+      lineId: 'line_abcd',
+      overlapStartMinute: 610,
+      overlapEndMinute: 620,
+    });
   });
 });

@@ -45,6 +45,35 @@ describe('NPC mobility continuity (#37)', () => {
     expect(sim.getNpcPlaceState(actor).status).not.toBe('in_transit');
   });
 
+  it('R1b. due departure commits even when the intent switches on that tick', () => {
+    const { sim, actor } = engineAtPlaceA();
+    const first = schedulePlaceBAppointment(sim, actor);
+    sim.advanceGameMinutes(60, 'planning tick');
+    const planned = sim.getNpcTrip(actor);
+    if (!planned) throw new Error('Expected a planned trip.');
+    const departure = planned.plannedDepartureMinute;
+
+    // A new due-now appointment appears right at departure with another
+    // source: the selector switches, but the due trip must still commit.
+    const day = sim.clock.getTime().day;
+    sim.world.scheduleAppointment({
+      id: `trip_appt_alt_${actor}`,
+      characterId: actor,
+      locationId: 'place_b1',
+      targetDay: day,
+      startMinute: departure - 5,
+      endMinute: departure + 55,
+      description: 'Alternative fixture meeting',
+      status: 'confirmed',
+      rsvp: 'yes',
+    });
+    sim.advanceGameMinutes(departure - sim.clock.getTotalMinutes(), 'to departure');
+    const committed = sim.getNpcTrip(actor);
+    expect(committed?.sourceId).toBe(first?.id);
+    expect(committed?.status).toBe('active');
+    expect(sim.getNpcMobilityState().places[actor]).toBe('place_a1');
+  });
+
   it('6/18. transit progresses leg by leg and arrives only after the duration', () => {
     const { sim, actor } = engineAtPlaceA();
     schedulePlaceBAppointment(sim, actor);

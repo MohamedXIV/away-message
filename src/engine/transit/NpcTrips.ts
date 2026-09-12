@@ -365,6 +365,11 @@ export interface PlanDueResult {
  * trips are replaced or cancelled. Destination comparison always uses the
  * resolved canonical place — never the raw (possibly aliased) intent id —
  * so planned trips stay stable across ticks.
+ *
+ * Departure protection is by authoritative time boundary, not the mutable
+ * status flag: once nowMinute reaches plannedDepartureMinute the commitment
+ * is due and can no longer be replaced, even if it still reads `planned`
+ * because progression runs after planning on the same tick.
  */
 export function planDueNpcTrips(
   state: NpcMobilityState,
@@ -383,8 +388,12 @@ export function planDueNpcTrips(
 
   for (const [actorId, intent] of intents) {
     const existing = trips[actorId];
-    const departedActive = existing !== undefined &&
-      existing.status === 'active' &&
+    // Due commitments are never replanned: once the authoritative clock
+    // reaches plannedDepartureMinute the trip is leaving, even if its
+    // stored status still reads `planned` (progression runs after planning
+    // on the same tick). Failed/cancelled records stay replannable below.
+    const dueByTime = existing !== undefined &&
+      (existing.status === 'planned' || existing.status === 'active') &&
       nowMinute >= existing.plannedDepartureMinute;
     // Resolve once for stability: raw intent ids may be legacy aliases.
     const resolvedDestination = intent === null || deps.network === null
@@ -398,9 +407,9 @@ export function planDueNpcTrips(
       resolvedDestination !== null &&
       existing.destinationPlaceId === resolvedDestination &&
       existing.desiredArrivalMinute === intent.earliestAt;
-    // A departed trip is never rerolled. A stable commitment — including an
-    // arrived record for the same intent — is kept as is.
-    if (departedActive || sameTrip) continue;
+    // A due/departed trip is never rerolled. A stable commitment — including
+    // an arrived record for the same intent — is kept as is.
+    if (dueByTime || sameTrip) continue;
 
     if (intent === null || !isTravelIntent(intent)) {
       if (existing !== undefined && existing.status === 'planned') {
@@ -588,44 +597,62 @@ function overlap(
   return start < end ? { start, end } : null;
 }
 
-function rideDirection(
-  network: TransitNetwork,
-  lineId: string,
-  fromStopId: string,
-  toStopId: string,
-): number {
-  const fromRefs = network.linesAtStop(fromStopId).filter((ref) => ref.lineId === lineId);
-  const toRefs = network.linesAtStop(toStopId).filter((ref) => ref.lineId === lineId);
-  if (fromRefs.length === 0 || toRefs.length === 0) return 0;
-  return Math.sign((toRefs[0]?.stopIndex ?? 0) - (fromRefs[0]?.stopIndex ?? 0));
+function cumulativeMinutes(segmentMinutes: number[]): number[] {
+  const cumulated: number[] = [0];
+  for (const minutes of segmentMinutes) {
+    cumulated.push((cumulated[cumulated.length - 1] ?? 0) + minutes);
+  }
+  return cumulated;
+}
+
+interface BusRideIdentity {
+  /** Terminus departure minute of the scheduled run (base-schedule authority). */
+  runStart: number;
+  /** Shared-track bounds as stop indices along the line. */
+  lo: number;
+  hi: number;
+  /** Cumulative ride minutes from the line start to each stop index. */
+  cum: number[];
 }
 
 /**
- * Shared track interval of a ride along its line, as stop-index bounds.
- * Null when either endpoint is not on the line. Two rides are compatible
- * only when their intervals strictly overlap — same line and direction
- * alone would falsely co-locate disjoint segments.
+ * Identify the scheduled service run a bus leg actually rides, from the
+ * authoritative line timetable (first-stop departures at
+ * serviceStartMinute + k * headwayMinutes). The boarding time is the leg's
+ * absolute window start, so commit lag resolves to the run truly caught.
+ * Returns null when the leg matches no scheduled run — including upstream
+ * legs, which the planner never quotes — so unmatched rides never
+ * co-locate. Base schedule only (no disruption state exists yet).
  */
-function rideSegmentRange(
+function busRideIdentity(
   network: TransitNetwork,
   lineId: string,
   fromStopId: string,
   toStopId: string,
-): { lo: number; hi: number } | null {
-  const fromRefs = network.linesAtStop(fromStopId).filter((ref) => ref.lineId === lineId);
-  const toRefs = network.linesAtStop(toStopId).filter((ref) => ref.lineId === lineId);
-  if (fromRefs.length === 0 || toRefs.length === 0) return null;
-  const fromIndex = fromRefs[0]?.stopIndex ?? 0;
-  const toIndex = toRefs[0]?.stopIndex ?? 0;
-  if (fromIndex === toIndex) return null;
-  return { lo: Math.min(fromIndex, toIndex), hi: Math.max(fromIndex, toIndex) };
+  boardMinute: number,
+): BusRideIdentity | null {
+  const line = network.lines.get(lineId);
+  if (!line) return null;
+  const fromIndex = line.stopIds.indexOf(fromStopId);
+  const toIndex = line.stopIds.indexOf(toStopId);
+  if (fromIndex < 0 || toIndex < 0 || toIndex <= fromIndex) return null;
+  if (!Number.isFinite(boardMinute)) return null;
+  const cum = cumulativeMinutes(line.segmentMinutes);
+  const total = cum[cum.length - 1] ?? 0;
+  const headway = line.headwayMinutes;
+  if (!Number.isInteger(headway) || headway <= 0) return null;
+  const runStart = boardMinute - (cum[fromIndex] ?? 0);
+  if (!Number.isInteger(runStart) || runStart < line.serviceStartMinute) return null;
+  if ((runStart - line.serviceStartMinute) % headway !== 0) return null;
+  if (runStart + total > line.serviceEndMinute) return null;
+  return { runStart, lo: fromIndex, hi: toIndex, cum };
 }
 
 /**
  * Factual co-location facts for later consumers (#47 decides surfacing).
- * Point-in-time pure query over committed trip intervals: shared stop
- * waits, same-line same-direction ride overlaps, shared arrived
- * destinations. Never invents encounters.
+ * Pure query over committed trip intervals: shared stop waits, same-run
+ * shared segment-time rides, shared arrived destinations. Never invents
+ * encounters.
  */
 export function findNpcCoLocation(
   trips: Record<string, NpcTripRecord>,
@@ -669,20 +696,39 @@ export function findNpcCoLocation(
               overlapEndMinute: window.end,
             });
           } else if (legA.kind === 'bus' && legB.kind === 'bus' && legA.lineId === legB.lineId) {
-            const dirA = rideDirection(network, legA.lineId, legA.fromStopId, legA.toStopId);
-            const dirB = rideDirection(network, legB.lineId, legB.fromStopId, legB.toStopId);
-            const rangeA = rideSegmentRange(network, legA.lineId, legA.fromStopId, legA.toStopId);
-            const rangeB = rideSegmentRange(network, legB.lineId, legB.fromStopId, legB.toStopId);
-            const sharedTrack = rangeA !== null && rangeB !== null &&
-              Math.max(rangeA.lo, rangeB.lo) < Math.min(rangeA.hi, rangeB.hi);
-            if (dirA !== 0 && dirA === dirB && sharedTrack) {
-              facts.push({
-                kind: 'bus_ride',
-                actors,
-                lineId: legA.lineId,
-                overlapStartMinute: window.start,
-                overlapEndMinute: window.end,
-              });
+            // Same run, same shared segment-time — or no fact. Whole-window
+            // plus whole-range overlap alone would falsely co-locate actors
+            // on different runs sharing only part of the route.
+            const rideA = busRideIdentity(
+              network, legA.lineId, legA.fromStopId, legA.toStopId,
+              windowsA[a]?.startMinute ?? NaN,
+            );
+            const rideB = busRideIdentity(
+              network, legB.lineId, legB.fromStopId, legB.toStopId,
+              windowsB[b]?.startMinute ?? NaN,
+            );
+            if (rideA !== null && rideB !== null && rideA.runStart === rideB.runStart) {
+              const lo = Math.max(rideA.lo, rideB.lo);
+              const hi = Math.min(rideA.hi, rideB.hi);
+              if (lo < hi) {
+                const start = Math.max(
+                  rideA.runStart + (rideA.cum[lo] ?? 0),
+                  rideB.runStart + (rideB.cum[lo] ?? 0),
+                );
+                const end = Math.min(
+                  rideA.runStart + (rideA.cum[hi] ?? 0),
+                  rideB.runStart + (rideB.cum[hi] ?? 0),
+                );
+                if (start < end && window.start < window.end) {
+                  facts.push({
+                    kind: 'bus_ride',
+                    actors,
+                    lineId: legA.lineId,
+                    overlapStartMinute: start,
+                    overlapEndMinute: end,
+                  });
+                }
+              }
             }
           }
         }
