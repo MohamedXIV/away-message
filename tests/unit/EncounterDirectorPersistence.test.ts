@@ -9,6 +9,11 @@ import {
   emptyEncounterDirectorState,
   hydrateEncounterDirectorState,
 } from '../../src/engine/encounters';
+import {
+  getSharedPlaceAliases,
+  getSharedTransitNetwork,
+  resolveTransitPlaceId,
+} from '../../src/engine/transit/NpcTrips';
 
 describe('EncounterDirector persistence (#47)', () => {
   it('1. hydrate drops malformed rows and bounds both collections', () => {
@@ -89,5 +94,53 @@ describe('EncounterDirector persistence (#47)', () => {
     const decision = sim.decideEncounter();
     expect(decision.kind).toBe('none');
     expect(sim.getEncounterDirectorState()).toEqual(emptyEncounterDirectorState());
+  });
+
+  it('7. constructor hydration preserves the director slice on the real reload path', () => {
+    const first = new SimulationEngine();
+    const snapshot = first.exportSnapshot() as unknown as Record<string, unknown>;
+    snapshot['encounters'] = {
+      cooldowns: { 'place:place_b1:sam': 1234 },
+      surfacedOneShots: ['obligation:appointment:sam:appt_ctor'],
+    };
+
+    const reloaded = new SimulationEngine(snapshot as never);
+    expect(reloaded.getEncounterDirectorState()).toEqual(snapshot['encounters']);
+    expect((reloaded.exportSnapshot() as unknown as Record<string, unknown>)['encounters']).toEqual(snapshot['encounters']);
+  });
+
+  it('8. deciding an encounter invalidates the live-state cache so getState sees the stamp', () => {
+    const sim = new SimulationEngine();
+    const network = getSharedTransitNetwork();
+    expect(network).not.toBeNull();
+    if (!network) throw new Error('Expected shared transit network.');
+
+    const playerPlaceId = resolveTransitPlaceId(
+      sim.economy.getLocation(),
+      network,
+      getSharedPlaceAliases(),
+    );
+    expect(playerPlaceId).not.toBeNull();
+    if (!playerPlaceId) throw new Error('Expected resolved player place.');
+
+    const knownBuddy = sim.social.getBuddies().find((buddy) => sim.social.isKnown(buddy.id));
+    expect(knownBuddy).toBeDefined();
+    if (!knownBuddy) throw new Error('Expected at least one known buddy.');
+
+    const snapshot = sim.exportSnapshot();
+    snapshot.npcMobility = {
+      trips: {},
+      places: { [knownBuddy.id]: playerPlaceId },
+    };
+    sim.loadSnapshot(snapshot);
+
+    const before = sim.getState();
+    expect(before.encounters).toEqual(emptyEncounterDirectorState());
+    const decision = sim.decideEncounter();
+    expect(decision.kind).toBe('encounter');
+
+    const after = sim.getState();
+    expect(after.encounters).not.toEqual(before.encounters);
+    expect(Object.keys(after.encounters?.cooldowns ?? {})).toHaveLength(1);
   });
 });
