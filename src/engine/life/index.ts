@@ -20,6 +20,7 @@ export {
   characterPresenceToLegacyBuddyPresence,
   resolveLegacyBuddyPresenceFromSimulation,
   type CharacterCommunicationStatus,
+  type CharacterMessagingDeviceContext,
   type CharacterPhysicalPresence,
   type CharacterPresenceInput,
   type CharacterPresenceProjection,
