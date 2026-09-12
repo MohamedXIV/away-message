@@ -31,18 +31,34 @@ A `planned` #37 trip remains `at_place(origin)` until its actual departure bound
 
 Existing SocialEngine `online/away/busy/offline` values remain migration input. `online_active` is only valid when current physical/device context does not contradict active use.
 
-For the 2005 baseline, active transit has no implicit mobile internet/device. If an unattended logged-in PC would otherwise be `online`, the coherent projection becomes `online_idle`, not an impossible actively-used home PC.
+For the 2005 baseline, active transit has no implicit mobile internet/device. If an unattended logged-in PC would otherwise be `online`, the coherent projection becomes `online_idle`, not an impossible actively-used home PC. A legacy `away` session may remain `away` while its person is elsewhere.
+
+An explicitly authored portable messaging device may permit `online_active` in transit. Merely being in transit never implies such a device.
 
 ## Availability semantics
 
 The projection exposes bounded capability booleans such as messaging, calls and in-person interaction. These are facts for consumers; the resolver does not perform communication or social consequences.
 
-`canInteractInPerson` requires physical `at_place`, and if the caller provides a player place it also requires exact place equality.
+`canInteractInPerson` requires physical `at_place`, and if the caller provides a player place it also requires exact place equality. In the baseline, transit disables calls and in-person interaction; messaging may still be delivered asynchronously to an idle/away account.
 
 ## Persistence
 
-No derived projection, reason code, or compatibility status is persisted. Save/reload reconstructs the same projection from canonical mobility/social/identity state.
+No derived projection, reason code, or compatibility status is persisted. Save/reload reconstructs the same projection from canonical mobility/social/identity state. Large time jumps and incremental progression must produce equivalent final projection when the canonical source systems do.
 
 ## Migration
 
-Legacy SocialEngine presence remains intact until downstream consumers have compatibility coverage. Initial #45 work adds the resolver/facade seam; it does not delete legacy state or rewrite Pulse wholesale.
+Legacy SocialEngine presence remains intact while downstream consumers migrate.
+
+A compatibility projection may map the richer communication state back to the legacy Pulse shape without mutation:
+
+```text
+online_active → online
+online_idle   → away
+away          → away
+busy          → busy
+offline       → offline
+```
+
+This mapping intentionally does not write back into `SocialEngine`: otherwise a temporary transit projection would become a second canonical state and could survive after the actor arrives.
+
+Initial #45 work therefore provides both the coherent resolver and a one-call legacy read adapter. It does not delete legacy presence state or rewrite Pulse wholesale.
