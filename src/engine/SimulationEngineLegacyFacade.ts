@@ -377,6 +377,11 @@ export class SimulationEngine extends SimulationEngineCore {
   }
 
   public override advanceGameMinutes(minutes: number, reason?: string): void {
+    // Prime source-backed mobility at the current authoritative boundary
+    // before a coarse jump. Otherwise a jump that crosses departure creates
+    // the trip only at the destination time, while incremental ticks commit
+    // the same known intent before departure.
+    this.progressNpcMobility();
     super.advanceGameMinutes(minutes, reason);
     this.advanceAllNpcPressuresToNow();
     this.progressNpcMobility();
