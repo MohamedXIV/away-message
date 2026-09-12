@@ -650,6 +650,28 @@ function busRideIdentity(
   return { runStart: boardMinute - fromOffset, lo: fromIndex, hi: toIndex, cum };
 }
 
+/** Public run identity for #47 player↔NPC ride overlap (same helper, no new truth). */
+export interface TransitRunIdentity {
+  runStartMinute: number;
+}
+
+/**
+ * Identify the service run a bus leg rides. Same line + same runStartMinute
+ * means the same physical bus; anything else (including unknown lines,
+ * stops, or times) returns null so unmatched rides never co-locate.
+ */
+export function transitRunIdentity(
+  network: TransitNetwork,
+  lineId: string,
+  fromStopId: string,
+  toStopId: string,
+  boardMinute: number,
+): TransitRunIdentity | null {
+  const identity = busRideIdentity(network, lineId, fromStopId, toStopId, boardMinute);
+  if (identity === null) return null;
+  return { runStartMinute: identity.runStart };
+}
+
 /**
  * Factual co-location facts for later consumers (#47 decides surfacing).
  * Pure query over committed trip intervals: shared stop waits, same-run

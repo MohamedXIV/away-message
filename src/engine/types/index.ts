@@ -5,6 +5,7 @@
 import type { InnerVoicePersistedState } from '../innerVoice/types';
 import type { NpcLifePersistedState } from '../life/types';
 import type { NpcMobilityState } from '../transit/NpcTrips';
+import type { EncounterDirectorState } from '../encounters/types';
 
 export type TimeOfDay = 'morning' | 'day' | 'evening' | 'night' | 'late_night';
 
@@ -748,6 +749,13 @@ export interface SimulationState {
    * Absent in older saves (empty defaults apply). No SAVE_FORMAT bump.
    */
   npcMobility?: NpcMobilityState;
+  /**
+   * Encounter Director cooldowns + surfaced one-shot identities (#47).
+   * Additive and optional: candidates are always recomputed from canonical
+   * authorities after reload, never restored from here. Absent in older
+   * saves (empty defaults apply). No SAVE_FORMAT bump required.
+   */
+  encounters?: EncounterDirectorState;
 }
 
 export interface StorePurchaseResultData {
