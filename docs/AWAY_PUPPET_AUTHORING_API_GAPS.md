@@ -19,7 +19,7 @@ This inventory is deliberately conservative. Absence from the inspected Web wrap
 
 ## Runtime surface already usable
 
-The current high-level TypeScript wrapper provides enough runtime primitives to justify the Away semantic adapter direction:
+The current high-level TypeScript wrapper intends to provide the runtime primitives needed by the Away semantic adapter direction:
 
 - load a puppet from bytes through `new Puppet(ArrayBufferLike)`;
 - inspect puppet name/author and enumerate parameters;
@@ -34,6 +34,27 @@ The current high-level TypeScript wrapper provides enough runtime primitives to 
 - inspect texture-cache/resource metadata through the lower-level wrapper surface.
 
 Away should continue hiding all raw IDs behind semantic rig metadata even where the upstream wrapper exposes them.
+
+## Verified upstream Web/WASM load blocker
+
+The real-puppet gate was re-checked against artifacts produced from the exact pinned commit, not against a fake adapter.
+
+Evidence used:
+
+- upstream commit: `ec702261dd6428141bfd0b174a015f8af872d3ed`;
+- nightly run `34665426390` from that exact head;
+- release WASM artifact `inochi2d-wasm-release`, artifact id `10289440605`, `inochi2d.wasm` SHA-256 `49dd528af9e58341513f363ca5b0639da80a20f1c6f1a95f47c0c67da788dd0a`;
+- debug WASM artifact `inochi2d-wasm-debug`, artifact id `10288529795`;
+- upstream real model `examples/ada-static.inx` from the matching Linux artifact, size `7,123,901` bytes, SHA-256 `8821f5d8de9f225cbafa3d496de93633d77c84dd95e6bc702a3d23739e238f93`.
+
+Two independent blockers are present in the inspected Web path:
+
+1. **High-level wrapper initialization order is broken at the pinned source.** `core.ts` evaluates `scratchpad: { size: 0, ptr: scrptr(128) }` while constructing the assignment to `__inochi2d`, but `scrptr()` immediately reads `__inochi2d.scratchpad`. Because the right-hand object is evaluated before `__inochi2d` receives it, the published high-level `in_init()` path cannot safely establish its first scratchpad from a fresh module instance as written.
+2. **The matching raw WASM allocator cannot accept the real Ada fixture in the tested Node/WASI path.** After `in_init()`, `nu_malloc(7_123_901)` returns `0` for both the release and debug artifacts. Manually growing exported WebAssembly memory is not a valid workaround: the subsequent load path traps inside `dlmalloc` with an out-of-bounds memory access. The allocator must own/understand heap growth; callers must not patch this by manipulating exported memory directly.
+
+This means #34 must **not** claim that actual production-sized puppet bytes have passed the current upstream high-level Web wrapper. The issue explicitly allows the upstream capability gate to be considered clearly blocked when supported by concrete evidence; this is that evidence.
+
+The appropriate next step is a small isolated Away/upstream Web adapter correction, not a fake fixture and not a model-facing raw-pointer API. The correction must establish allocator/scratchpad initialization and real model loading first, then re-run load → enumerate parameters/nodes → mutate at least two parameters → copied draw-data inspection → dispose/reload against a real model.
 
 ## Runtime blocker: draw-list bridge
 
@@ -51,8 +72,8 @@ For #34 this means:
 | --- | --- | --- |
 | Create parameter | Creator/native authoring path | No high-level parameter constructor/add-to-puppet API is exposed by the inspected Web/TS wrapper. Do not fake this by editing runtime arrays. |
 | Delete parameter | Creator/native authoring path | No supported Web/TS deletion API was found. Requires an authoring bridge before Studio/MCP exposes it. |
-| Read parameter metadata/value | Web/TS exposed | Name, active state, dimensions, bounds, and value are available. Safe to wrap semantically. |
-| Set parameter value | Web/TS exposed | Runtime mutation is available and already fits `AwayPuppet.setMorph` / expression / pose semantics. |
+| Read parameter metadata/value | Web/TS exposed | Name, active state, dimensions, bounds, and value are available after a working loader boundary exists. Safe to wrap semantically. |
+| Set parameter value | Web/TS exposed | Runtime mutation is present in the wrapper surface and fits `AwayPuppet.setMorph` / expression / pose semantics once real loading is restored. |
 | Create generic node | Web/TS exposed, limited | `Node` can construct a generic node. This is not yet proof that Away can create a fully authored Part/Composite/Deformer node with all required payloads. |
 | Reparent node | Web/TS exposed | Parent getter/setter exists. Future authoring tools still need transaction/validation semantics around hierarchy edits. |
 | Delete node | Not proven | No explicit supported high-level node removal/delete authoring operation was verified. Do not infer deletion from ref-count disposal. |
@@ -94,8 +115,8 @@ Normal model-facing MCP should operate on stable handles/names and semantic role
 
 ## Recommended implementation order after #34 runtime proof
 
-1. Finish real Web/WASM load → enumerate → mutate → draw-data → dispose/reload proof.
-2. Add `puppet.open`, `puppet.inspect`, `puppet.validate`, parameter/node inspection tools over that real adapter.
+1. Repair/isolate the Web loader initialization/allocator boundary, then repeat real load → enumerate → mutate → draw-data → dispose/reload proof.
+2. Wire `puppet.open`, `puppet.inspect`, `puppet.validate`, parameter/node inspection tools over that real adapter.
 3. Prove save/export before investing in destructive browser authoring. Without save/export, editor mutations are not a viable production workflow.
 4. Add a transaction layer before create/delete/reparent/binding/mesh MCP mutations.
 5. Bridge parameter + binding authoring first; it unlocks useful facial/body rig automation with much smaller blast radius than arbitrary mesh editing.
@@ -106,7 +127,7 @@ Normal model-facing MCP should operate on stable handles/names and semantic role
 - This does **not** justify an INP/INX format fork.
 - This does **not** require shipping Inochi Creator inside Away Message.
 - This does **not** make raw allocator/pointer calls acceptable MCP operations.
-- This does **not** claim browser rendering is complete; draw-list host consumption still needs the real-puppet proof.
+- This does **not** claim browser rendering is complete; draw-list host consumption still needs the real-puppet proof after the loader blocker is corrected.
 - This does **not** claim every missing Web API is absent from the D core; it records only what is safe to depend on from the inspected Web-facing surface.
 
 The architectural default remains: extend/wrap upstream behavior, keep standard puppet compatibility, store Away semantics in namespaced metadata, and make the shipped game depend only on the Away Puppet semantic runtime contract.
