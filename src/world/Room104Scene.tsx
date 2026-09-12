@@ -2,6 +2,7 @@ import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { resolvePcBootState } from '../engine/SimulationEngine';
 import {
   getRoom104StorageContents,
+  getRoom104StoragePresence,
   type Room104StorageTarget,
 } from '../engine/Room104Physical';
 import type { CityNodeId, TravelMode } from '../engine/CityMap';
@@ -22,6 +23,7 @@ import { ROOM104_VIEW_IDS } from './data/room104AuthoredContent';
 import { createWorldSceneProjection } from './phaser/presentationAdapter';
 import type { WorldInteractionIntent } from './phaser/types';
 import { routeRoom104Intent } from './room104IntentRouter';
+import { buildRoom104StorageMarkers } from './room104StoragePresentation';
 
 const PhysicalWorldHost = React.lazy(() =>
   import('./phaser/PhysicalWorldHost').then((module) => ({ default: module.PhysicalWorldHost })),
@@ -87,6 +89,9 @@ export const Room104Scene: React.FC = () => {
     isInterior: true,
     windIntensity: weather === 'rain' ? 0.15 : 0.05,
   }), [currentViewId, timeOfDay, time.hour, time.minute, weather]);
+
+  const storagePresence = getRoom104StoragePresence(engine.getPhysicalWorldState());
+  const storageMarkers = buildRoom104StorageMarkers(projection, storagePresence);
 
   const handleComputer = useCallback(() => {
     soundManager.play('click');
@@ -324,6 +329,22 @@ export const Room104Scene: React.FC = () => {
                 {deskPresentation === 'assembled_off' && 'Computer assembled — power off.'}
                 {deskPresentation === 'assembled_on' && 'Computer assembled — power on.'}
               </div>
+
+              {storageMarkers.map((marker) => (
+                <button
+                  key={marker.containerInstanceId ?? marker.anchorId}
+                  type="button"
+                  onClick={() => inspectStorage(marker.target)}
+                  className="pointer-events-auto absolute -translate-x-1/2 -translate-y-1/2 rounded-full border border-amber-400/60 bg-slate-950/85 px-2 py-1 text-[10px] font-semibold text-amber-100 shadow-lg backdrop-blur-sm hover:border-amber-300 hover:bg-slate-900"
+                  style={{
+                    left: `${marker.x * 100}%`,
+                    top: `${marker.y * 100}%`,
+                  }}
+                  title={marker.itemDefinitionIds.length > 0 ? marker.itemDefinitionIds.join(', ') : 'Empty storage'}
+                >
+                  {marker.itemCount}
+                </button>
+              ))}
 
               <div className="pointer-events-auto absolute bottom-3 left-1/2 flex -translate-x-1/2 items-center gap-2 rounded border border-slate-700/80 bg-slate-950/90 p-1.5 shadow-xl backdrop-blur-sm">
                 {neighborIds.map((viewId) => {
