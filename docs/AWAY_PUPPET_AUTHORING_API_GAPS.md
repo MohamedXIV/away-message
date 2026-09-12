@@ -50,11 +50,24 @@ Evidence used:
 Two independent blockers are present in the inspected Web path:
 
 1. **High-level wrapper initialization order is broken at the pinned source.** `core.ts` evaluates `scratchpad: { size: 0, ptr: scrptr(128) }` while constructing the assignment to `__inochi2d`, but `scrptr()` immediately reads `__inochi2d.scratchpad`. Because the right-hand object is evaluated before `__inochi2d` receives it, the published high-level `in_init()` path cannot safely establish its first scratchpad from a fresh module instance as written.
-2. **The matching raw WASM allocator cannot accept the real Ada fixture in the tested Node/WASI path.** After `in_init()`, `nu_malloc(7_123_901)` returns `0` for both the release and debug artifacts. Manually growing exported WebAssembly memory is not a valid workaround: the subsequent load path traps inside `dlmalloc` with an out-of-bounds memory access. The allocator must own/understand heap growth; callers must not patch this by manipulating exported memory directly.
+2. **The matching raw WASM allocator cannot accept real puppet input in the tested Node/WASI path.** The corrected two-phase bootstrap (`in_init()` then scratchpad allocation) succeeds, but `nu_malloc(702)` still returns `0` for upstream's own tiny `examples/empty08.inx` fixture. The same allocator also refuses the full Ada fixture. Manually growing exported WebAssembly memory is not a valid workaround: JS-visible memory grows, but allocator capacity does not, and forcing the load path after host growth can trap inside allocator internals. The allocator must own/understand heap growth; callers must not patch this by manipulating exported memory directly.
 
-This means #34 must **not** claim that actual production-sized puppet bytes have passed the current upstream high-level Web wrapper. The issue explicitly allows the upstream capability gate to be considered clearly blocked when supported by concrete evidence; this is that evidence.
+### Allocator hookset configuration gap
 
-The appropriate next step is a small isolated Away/upstream Web adapter correction, not a fake fixture and not a model-facing raw-pointer API. The correction must establish allocator/scratchpad initialization and real model loading first, then re-run load → enumerate parameters/nodes → mutate at least two parameters → copied draw-data inspection → dispose/reload against a real model.
+The pinned dependency graph exposes a much narrower build-level candidate than a custom Away allocator.
+
+- `Inochi2D/inochi2d` at the pinned commit depends on `numem >=1.6.5`, but its `configuration "wasm"` enables `nurt` and adds WASM linker flags only. It does **not** declare the `numem:hookset-wasm` subpackage.
+- Numem `v1.6.5` explicitly ships `modules/hookset-wasm` for `wasm-wasm32`/`wasm-wasm64` targets.
+- That hookset overrides the exported `nu_malloc` / `nu_realloc` / `nu_free` functions with Numem's WASM allocator (`walloc`).
+- Without an override hookset, Numem's weak default hooks forward `nu_malloc` / `nu_realloc` / `nu_free` to C `malloc` / `realloc` / `free`.
+
+This is strong evidence of a build-configuration mismatch at the published Web artifact boundary: the dedicated WASM allocator exists in the exact minimum Numem version accepted by the pinned Inochi build, but the pinned Inochi WASM configuration does not opt into it. That matches the observed symptom that the published allocator can satisfy the tiny scratchpad bootstrap yet cannot obtain a subsequent modest puppet-input allocation or benefit from host-side `memory.grow()`.
+
+This remains a **candidate root cause until a rebuilt artifact proves it**. The next upstream/Away experiment should therefore be minimal and binary: rebuild the same pinned Inochi commit with Numem's `hookset-wasm` linked for the WASM configuration, then rerun the existing exact `empty08.inx` probe. Do not change the INP/INX format, semantic API, MCP surface, or exported-memory policy to test this. If that rebuilt artifact allocates and loads the official fixture, continue immediately with enumerate → mutate at least two parameters → copied draw-data inspection → dispose/reload. If it still fails, the experiment has ruled out the hookset selection hypothesis without contaminating Away's runtime contract.
+
+This means #34 must **not** claim that actual puppet bytes have passed the current published upstream high-level Web wrapper. The issue explicitly allows the upstream capability gate to be considered clearly blocked when supported by concrete evidence; this is that evidence.
+
+The appropriate next step is a small isolated Away/upstream Web adapter/build correction, not a fake fixture and not a model-facing raw-pointer API. The correction must establish allocator/scratchpad initialization and real model loading first, then re-run load → enumerate parameters/nodes → mutate at least two parameters → copied draw-data inspection → dispose/reload against a real model.
 
 ## Runtime blocker: draw-list bridge
 
