@@ -184,6 +184,7 @@ export class SimulationEngine extends SimulationEngineCore {
     // the authoritative minute — same-minute reads stay pure afterwards.
     this.ensureAllNpcLifeEntries();
     this.npcMobility = hydrateNpcMobility(initialState?.npcMobility ?? {});
+    this.encounterDirector = hydrateEncounterDirectorState(initialState?.encounters ?? {});
   }
 
   public override getState(): Readonly<LiveSimulationState> {
@@ -564,6 +565,7 @@ export class SimulationEngine extends SimulationEngineCore {
       this.encounterDirector,
     );
     this.encounterDirector = nextState;
+    if (decision.kind === 'encounter') this.invalidateV6Cache();
     return decision;
   }
 
