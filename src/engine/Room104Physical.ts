@@ -6,6 +6,14 @@ import type {
 
 export type Room104StorageTarget = 'desk' | 'wardrobe' | 'bedside' | 'kitchen';
 
+export interface Room104StoragePresence {
+  target: Room104StorageTarget;
+  containerInstanceId: string;
+  itemCount: number;
+  itemInstanceIds: string[];
+  itemDefinitionIds: string[];
+}
+
 export const ROOM104_STORAGE_INSTANCE_IDS: Readonly<Record<Room104StorageTarget, string>> = {
   desk: 'room104:desk-storage',
   wardrobe: 'room104:wardrobe',
@@ -66,4 +74,23 @@ export function getRoom104StorageContents(
       && item.location.containerInstanceId === containerInstanceId
     )
     .map((item) => ({ ...item, location: { ...item.location } }));
+}
+
+/**
+ * Presentation-safe storage summary derived only from canonical physical state.
+ * It preserves exact instance identities so a renderer can update when an item
+ * moves without inventing a second room inventory or storage authority.
+ */
+export function getRoom104StoragePresence(state: PhysicalWorldState): Room104StoragePresence[] {
+  return (Object.keys(ROOM104_STORAGE_INSTANCE_IDS) as Room104StorageTarget[]).map((target) => {
+    const containerInstanceId = ROOM104_STORAGE_INSTANCE_IDS[target];
+    const contents = getRoom104StorageContents(state, target);
+    return {
+      target,
+      containerInstanceId,
+      itemCount: contents.length,
+      itemInstanceIds: contents.map((item) => item.instanceId),
+      itemDefinitionIds: contents.map((item) => item.definitionId),
+    };
+  });
 }
