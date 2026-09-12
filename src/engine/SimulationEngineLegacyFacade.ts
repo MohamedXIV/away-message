@@ -376,12 +376,43 @@ export class SimulationEngine extends SimulationEngineCore {
     }
   }
 
+  /**
+   * Before a coarse clock jump, commit only actors that do not already have
+   * a mobility record. Existing planned/active commitments must remain under
+   * normal #37 replacement/departure rules; re-running the selector here can
+   * otherwise replace a trip immediately before its protected departure.
+   * Failed/cancelled outcomes also stay endpoint-owned: this primer copies
+   * only successful new commitments and emits no receipts.
+   */
+  private primeMissingNpcMobility(): void {
+    const network = getSharedTransitNetwork();
+    if (!network) return;
+    const missingIntents = new Map(
+      this.social.getBuddies()
+        .filter((buddy) => this.npcMobility.trips[buddy.id] === undefined)
+        .map((buddy) => [buddy.id, this.getCharacterIntent(buddy.id)]),
+    );
+    if (missingIntents.size === 0) return;
+
+    const due = planDueNpcTrips(
+      this.npcMobility,
+      missingIntents,
+      this.clock.getTotalMinutes(),
+      { network, aliases: getSharedPlaceAliases() },
+    );
+    if (due.planned.length === 0) return;
+
+    const trips = { ...this.npcMobility.trips };
+    for (const actorId of due.planned) {
+      const record = due.state.trips[actorId];
+      if (record) trips[actorId] = record;
+    }
+    this.npcMobility = { trips, places: { ...this.npcMobility.places } };
+    this.invalidateV6Cache();
+  }
+
   public override advanceGameMinutes(minutes: number, reason?: string): void {
-    // Prime source-backed mobility at the current authoritative boundary
-    // before a coarse jump. Otherwise a jump that crosses departure creates
-    // the trip only at the destination time, while incremental ticks commit
-    // the same known intent before departure.
-    this.progressNpcMobility();
+    this.primeMissingNpcMobility();
     super.advanceGameMinutes(minutes, reason);
     this.advanceAllNpcPressuresToNow();
     this.progressNpcMobility();
@@ -845,7 +876,7 @@ export class SimulationEngine extends SimulationEngineCore {
     if (primaryStorage.freeBytes < installSizeBytes) {
       return {
         success: false,
-        error: `Requires ${(installSizeBytes / 1_000_000_000).toFixed(1)}GB additional install space on the primary drive.`,
+        error: `Requires ${(installSizeBytes / 1_000_000_000).toFixed(1)}GB additional install space on the primary drive. Free some space.`,
       };
     }
 
