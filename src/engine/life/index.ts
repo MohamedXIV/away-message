@@ -16,10 +16,13 @@ export {
 } from './Intent';
 export {
   resolveCharacterPresence,
+  resolveCharacterPresenceFromSimulation,
   type CharacterCommunicationStatus,
   type CharacterPhysicalPresence,
   type CharacterPresenceInput,
   type CharacterPresenceProjection,
+  type CharacterPresenceResolveOptions,
+  type CharacterPresenceSimulationSource,
 } from './Presence';
 export {
   deriveDefaultNpcPressure,
