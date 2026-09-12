@@ -5,15 +5,16 @@
 
 import { describe, expect, it } from 'vitest';
 import { SimulationEngine } from '../../src/engine/SimulationEngine';
+import { SimulationEngine as LegacySimulationEngine } from '../../src/engine/SimulationEngineLegacyFacade';
+import { activeTravelLegWindows } from '../../src/engine/transit/ActiveTravel';
+import {
+  getSharedTransitNetwork,
+  planNpcTrip,
+} from '../../src/engine/transit/NpcTrips';
 import {
   emptyEncounterDirectorState,
   hydrateEncounterDirectorState,
 } from '../../src/engine/encounters';
-import {
-  getSharedPlaceAliases,
-  getSharedTransitNetwork,
-  resolveTransitPlaceId,
-} from '../../src/engine/transit/NpcTrips';
 
 describe('EncounterDirector persistence (#47)', () => {
   it('1. hydrate drops malformed rows and bounds both collections', () => {
@@ -110,33 +111,62 @@ describe('EncounterDirector persistence (#47)', () => {
   });
 
   it('8. deciding an encounter invalidates the live-state cache so getState sees the stamp', () => {
-    const sim = new SimulationEngine();
+    const sim = new LegacySimulationEngine();
     const network = getSharedTransitNetwork();
     expect(network).not.toBeNull();
     if (!network) throw new Error('Expected shared transit network.');
-
-    const playerPlaceId = resolveTransitPlaceId(
-      sim.economy.getLocation(),
-      network,
-      getSharedPlaceAliases(),
-    );
-    expect(playerPlaceId).not.toBeNull();
-    if (!playerPlaceId) throw new Error('Expected resolved player place.');
 
     const knownBuddy = sim.social.getBuddies().find((buddy) => sim.social.isKnown(buddy.id));
     expect(knownBuddy).toBeDefined();
     if (!knownBuddy) throw new Error('Expected at least one known buddy.');
 
+    const startMinute = sim.clock.getTotalMinutes();
+    const planned = planNpcTrip({
+      actorId: knownBuddy.id,
+      intent: {
+        actorId: knownBuddy.id,
+        kind: 'attend_appointment',
+        targetPlaceId: 'place_b1',
+        priority: 80,
+        reasons: ['cache_regression'],
+        blockers: [],
+        earliestAt: startMinute + 120,
+        latestAt: startMinute + 180,
+        reevaluateAtMinute: startMinute + 180,
+      },
+      originPlaceId: 'place_a1',
+      nowMinute: startMinute,
+      network,
+      aliases: {},
+    });
+    expect(planned.ok).toBe(true);
+    if (!planned.ok) throw new Error('Expected a planned NPC trip.');
+
+    const legIndex = planned.record.trip.plan.legs.findIndex((leg) => leg.kind === 'wait');
+    expect(legIndex).toBeGreaterThanOrEqual(0);
+    const waitLeg = planned.record.trip.plan.legs[legIndex];
+    const waitWindow = activeTravelLegWindows(planned.record.trip)[legIndex];
+    if (!waitLeg || waitLeg.kind !== 'wait' || !waitWindow) {
+      throw new Error('Expected a wait leg with a time window.');
+    }
+
+    const decisionMinute = waitWindow.startMinute + 1;
+    sim.advanceGameMinutes(decisionMinute - sim.clock.getTotalMinutes(), 'encounter cache regression setup');
     const snapshot = sim.exportSnapshot();
     snapshot.npcMobility = {
-      trips: {},
-      places: { [knownBuddy.id]: playerPlaceId },
+      trips: { [knownBuddy.id]: planned.record },
+      places: { [knownBuddy.id]: 'place_a1' },
     };
     sim.loadSnapshot(snapshot);
 
     const before = sim.getState();
     expect(before.encounters).toEqual(emptyEncounterDirectorState());
-    const decision = sim.decideEncounter();
+    const decision = sim.decideEncounter({
+      kind: 'wait',
+      stopId: waitLeg.stopId,
+      windowStart: waitWindow.startMinute,
+      windowEnd: waitWindow.endMinute,
+    });
     expect(decision.kind).toBe('encounter');
 
     const after = sim.getState();
