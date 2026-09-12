@@ -1,8 +1,18 @@
 import type {
   ContainerInstance,
+  ItemInstance,
   PhysicalContainerDefinition,
   PhysicalWorldState,
 } from './PhysicalItemEngine';
+
+export type Room104StorageTarget = 'desk' | 'wardrobe' | 'bedside' | 'kitchen';
+
+export const ROOM104_STORAGE_INSTANCE_IDS: Readonly<Record<Room104StorageTarget, string>> = {
+  desk: 'room104:desk-storage',
+  wardrobe: 'room104:wardrobe',
+  bedside: 'room104:bedside-storage',
+  kitchen: 'room104:kitchen-storage',
+};
 
 export const ROOM104_STORAGE_DEFINITIONS = [
   {
@@ -29,19 +39,19 @@ export const ROOM104_STORAGE_DEFINITIONS = [
 
 export const ROOM104_STORAGE_INSTANCES = [
   {
-    instanceId: 'room104:desk-storage',
+    instanceId: ROOM104_STORAGE_INSTANCE_IDS.desk,
     definitionId: 'room104_storage_desk',
   },
   {
-    instanceId: 'room104:wardrobe',
+    instanceId: ROOM104_STORAGE_INSTANCE_IDS.wardrobe,
     definitionId: 'room104_storage_wardrobe',
   },
   {
-    instanceId: 'room104:bedside-storage',
+    instanceId: ROOM104_STORAGE_INSTANCE_IDS.bedside,
     definitionId: 'room104_storage_bedside',
   },
   {
-    instanceId: 'room104:kitchen-storage',
+    instanceId: ROOM104_STORAGE_INSTANCE_IDS.kitchen,
     definitionId: 'room104_storage_kitchen',
   },
 ] as const satisfies readonly ContainerInstance[];
@@ -66,4 +76,18 @@ export function ensureRoom104StorageContainers(state: PhysicalWorldState): Physi
     items: state.items,
     containers,
   };
+}
+
+/** Read-only projection of the exact physical items currently stored in one Room 104 container. */
+export function getRoom104StorageContents(
+  state: PhysicalWorldState,
+  target: Room104StorageTarget,
+): ItemInstance[] {
+  const containerInstanceId = ROOM104_STORAGE_INSTANCE_IDS[target];
+  return Object.values(state.items)
+    .filter((item) =>
+      item.location.kind === 'container'
+      && item.location.containerInstanceId === containerInstanceId
+    )
+    .map((item) => ({ ...item, location: { ...item.location } }));
 }
