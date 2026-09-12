@@ -14,12 +14,21 @@ export interface Room104StoragePresence {
   itemDefinitionIds: string[];
 }
 
+export interface Room104WorldAnchorPresence {
+  physicalAnchorId: string;
+  itemCount: number;
+  itemInstanceIds: string[];
+  itemDefinitionIds: string[];
+}
+
 export const ROOM104_STORAGE_INSTANCE_IDS: Readonly<Record<Room104StorageTarget, string>> = {
   desk: 'room104:desk-storage',
   wardrobe: 'room104:wardrobe',
   bedside: 'room104:bedside-storage',
   kitchen: 'room104:kitchen-storage',
 };
+
+export const ROOM104_DELIVERY_PHYSICAL_ANCHOR_ID = 'room104:delivery';
 
 export const ROOM104_STORAGE_INSTANCES = [
   {
@@ -93,4 +102,26 @@ export function getRoom104StoragePresence(state: PhysicalWorldState): Room104Sto
       itemDefinitionIds: contents.map((item) => item.definitionId),
     };
   });
+}
+
+/**
+ * Presentation-safe Room 104 world-anchor summary derived only from canonical
+ * physical state. Today the room owns the delivery floor anchor; keeping this
+ * as a read model means future authored surfaces can join the same state without
+ * creating a second placement authority.
+ */
+export function getRoom104WorldAnchorPresence(state: PhysicalWorldState): Room104WorldAnchorPresence[] {
+  const items = Object.values(state.items).filter((item) =>
+    item.location.kind === 'worldAnchor'
+    && item.location.anchorId === ROOM104_DELIVERY_PHYSICAL_ANCHOR_ID
+  );
+
+  if (items.length === 0) return [];
+
+  return [{
+    physicalAnchorId: ROOM104_DELIVERY_PHYSICAL_ANCHOR_ID,
+    itemCount: items.length,
+    itemInstanceIds: items.map((item) => item.instanceId),
+    itemDefinitionIds: items.map((item) => item.definitionId),
+  }];
 }
