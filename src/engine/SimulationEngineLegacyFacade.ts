@@ -9,16 +9,65 @@ import { InventoryEngine, type HardwareInstallSlot } from './InventoryEngine';
 import { HARDWARE_STORE_INVENTORY, PHYSICAL_ITEM_CATALOG } from './hardware/catalog';
 import { getReleaseById } from './OsCatalog';
 import { SimulationEngine as SimulationEngineCore } from './SimulationEngineCore';
-import { buildLifeMatrixSnapshot } from './life/LifeSnapshot';
-import { createSimulationLifeSources } from './life/LifeSources';
-import { buildCharacterObligations } from './life/Obligations';
-import type { CharacterObligation, LifeMatrixSnapshot } from './life/types';
+import {
+  buildLifeMatrixSnapshot,
+  createSimulationLifeSources,
+  buildCharacterObligations,
+  selectCharacterIntent,
+  deriveDefaultNpcPressure,
+  advanceNpcPressure,
+  projectLifePressureView,
+  initializeActorGoals,
+  hydrateNpcLives,
+  type CharacterIntent,
+  type CharacterObligation,
+  type FidelityTier,
+  type LifeMatrixSnapshot,
+  type LifePressureView,
+  type NpcLifeEntry,
+  type NpcLifePersistedState,
+  type NpcPressureState,
+  type PersonalGoal,
+} from './life';
 import {
   createEmptyComputerSetup,
   createEmptyDisplaySetup,
   createEmptyInventoryState,
   legacyModularToCanonical,
 } from './hardware/state';
+import {
+  emptyNpcMobility,
+  findNpcCoLocation,
+  getNpcPlaceState,
+  getSharedPlaceAliases,
+  getSharedTransitNetwork,
+  hydrateNpcMobility,
+  planDueNpcTrips,
+  progressNpcTrips,
+  resolveTransitPlaceId,
+  type NpcCoLocation,
+  type NpcMobilityState,
+  type NpcPlaceQuery,
+  type NpcTripRecord,
+} from './transit/NpcTrips';
+import {
+  collectEncounterCandidates,
+  decideEncounter as decideEncounterPure,
+  emptyEncounterDirectorState,
+  hydrateEncounterDirectorState,
+  type EncounterCandidate,
+  type EncounterDecision,
+  type EncounterDecisionInput,
+  type EncounterDirectorState,
+  type EncounterPlayerTransitRead,
+} from './encounters';
+export type {
+  EncounterCandidate,
+  EncounterDecision,
+  EncounterDecisionInput,
+  EncounterDirectorState,
+  EncounterPlayerTransitRead,
+} from './encounters';
 import type {
   ActionResult,
   HardwareState as CanonicalHardwareState,
@@ -76,6 +125,27 @@ export class SimulationEngine extends SimulationEngineCore {
 
   private v6CachedBase: Readonly<TransportSimulationState> | null = null;
   private v6CachedState: Readonly<LiveSimulationState> | null = null;
+  /**
+   * Canonical #43 runtime: per-actor goals + irreducible pressure. This is
+   * the only mutable home for that state — getState/exportSnapshot project
+   * it into the additive `npcLives` snapshot slice, loadSnapshot/ctor
+   * hydrate it back. No relationship/economy/transit/event copies here.
+   */
+  private npcLivesCache: Map<string, NpcLifeEntry> = new Map();
+  /**
+   * Canonical #37 runtime: one mobility record + current place per actor.
+   * Projected into the additive `npcMobility` snapshot slice; hydrated on
+   * ctor/load. Trip intervals come from #35 route truth; this cache only
+   * holds them. No relationship/economy/appointment copies here.
+   */
+  private npcMobility: NpcMobilityState = emptyNpcMobility();
+  /**
+   * Encounter Director cooldowns + surfaced one-shot identities (#47). The
+   * only mutable home for that state — candidates are recomputed from
+   * canonical systems on every decision, never stored here.
+   */
+  private encounterDirector: EncounterDirectorState = emptyEncounterDirectorState();
+
 
   constructor(initialState?: Partial<TransportSimulationState>) {
     const computer = initialState?.computer ?? createEmptyComputerSetup();
@@ -109,6 +179,12 @@ export class SimulationEngine extends SimulationEngineCore {
     }
 
     this.inventory = new InventoryEngine(initialState?.inventory ?? createEmptyInventoryState());
+    this.npcLivesCache = new Map(Object.entries(hydrateNpcLives(initialState?.npcLives ?? {})));
+    // Deterministic canonical defaults for every known buddy, advanced to
+    // the authoritative minute — same-minute reads stay pure afterwards.
+    this.ensureAllNpcLifeEntries();
+    this.npcMobility = hydrateNpcMobility(initialState?.npcMobility ?? {});
+    this.encounterDirector = hydrateEncounterDirectorState(initialState?.encounters ?? {});
   }
 
   public override getState(): Readonly<LiveSimulationState> {
@@ -125,6 +201,9 @@ export class SimulationEngine extends SimulationEngineCore {
       inventory: this.inventory.getState(),
       os: this.os.getState(),
       installedSoftware: this.software.getInstalledSoftware(),
+      npcLives: this.getNpcLivesState(),
+      npcMobility: this.getNpcMobilityState(),
+      encounters: this.getEncounterDirectorState(),
     } as Readonly<LiveSimulationState>;
 
     this.v6CachedBase = base;
@@ -142,6 +221,9 @@ export class SimulationEngine extends SimulationEngineCore {
       inventory: this.inventory.getState(),
       os: this.os.getState(),
       installedSoftware: this.software.getInstalledSoftware(),
+      npcLives: this.getNpcLivesState(),
+      npcMobility: this.getNpcMobilityState(),
+      encounters: this.getEncounterDirectorState(),
     } as LiveSimulationState;
 
     this.v6CachedBase = null;
@@ -175,6 +257,383 @@ export class SimulationEngine extends SimulationEngineCore {
     const snapshot = this.getLifeSnapshot(actorId);
     return snapshot ? buildCharacterObligations(snapshot) : [];
   }
+
+  /**
+   * On-demand character intent (#44): selects WHAT the actor currently
+   * intends plus WHY from a fresh snapshot. Pure read — no cache, no tick
+   * hook, no persisted ledger, no consequences. Missing actors yield null.
+   */
+  public getCharacterIntent(actorId: string): CharacterIntent | null {
+    const snapshot = this.getLifeSnapshot(actorId);
+    if (!snapshot) return null;
+    const intent = selectCharacterIntent(snapshot);
+    if (!intent) return null;
+    return { ...intent, reasons: [...intent.reasons], blockers: [...intent.blockers] };
+  }
+
+  /** Canonical #43 slice as plain snapshot data (deep copies, bounded). */
+  public getNpcLivesState(): NpcLifePersistedState {
+    const out: NpcLifePersistedState = {};
+    for (const [actorId, entry] of this.npcLivesCache) {
+      out[actorId] = {
+        goals: entry.goals.map((goal) => ({
+          ...goal,
+          ...(goal.metadata ? { metadata: { ...goal.metadata } } : {}),
+        })),
+        pressure: {
+          ...entry.pressure,
+          activeNeeds: [...entry.pressure.activeNeeds],
+        },
+      };
+    }
+    return out;
+  }
+
+  private deriveEntryPressure(actorId: string, day: number): NpcPressureState {
+    const buddy = this.social.getBuddy(actorId);
+    const routine = buddy?.schedule[day] ?? buddy?.schedule[1] ?? [];
+    const traits = this.social.getTraits(actorId);
+    const tier: FidelityTier = buddy?.reach === 'remote' ? 'background_remote' : 'important_local';
+    return deriveDefaultNpcPressure(actorId, traits, routine as never, tier);
+  }
+
+  private initializeEntryGoals(actorId: string, day: number): PersonalGoal[] {
+    const buddy = this.social.getBuddy(actorId);
+    if (!buddy) return [];
+    const traits = this.social.getTraits(actorId);
+    const tier: FidelityTier = buddy.reach === 'remote' ? 'background_remote' : 'important_local';
+    const bonds = this.social
+      .getBuddies()
+      .filter((target) => target.id !== actorId)
+      .map((target) => ({ targetId: target.id, ...this.social.getNpcBond(actorId, target.id).dims }));
+    const events = this.world.getTriggeredEvents().map((e) => ({ ...e }));
+    return initializeActorGoals(
+      actorId,
+      buddy.archetype || 'regular',
+      `away_seed_${day}`,
+      traits,
+      bonds,
+      events,
+      tier,
+    );
+  }
+
+  /**
+   * Canonical entry, created deterministically when missing. Creation stamps
+   * the authoritative minute WITHOUT simulating elapsed history — there is
+   * no fake past to replay (old saves, late joiners). Never advances here;
+   * time evolution happens only on explicit reads below. Returns null for
+   * unknown actors (callers keep their null/[] contract).
+   */
+  private getOrCreateNpcLifeEntry(actorId: string): NpcLifeEntry | null {
+    const buddy = this.social.getBuddy(actorId);
+    if (!buddy) return null;
+    const atMinute = this.clock.getTotalMinutes();
+    const day = this.clock.getTime().day;
+
+    const existing = this.npcLivesCache.get(actorId);
+    if (existing) return existing;
+
+    const entry: NpcLifeEntry = {
+      goals: this.initializeEntryGoals(actorId, day),
+      pressure: {
+        ...this.deriveEntryPressure(actorId, day),
+        lastUpdatedMinute: atMinute,
+      },
+    };
+    this.npcLivesCache.set(actorId, entry);
+    this.invalidateV6Cache();
+    return entry;
+  }
+
+  /**
+   * Coarse/event-driven time evolution for one entry. Pure function of the
+   * persisted entry plus current schedule/appointment context — identical
+   * reads at identical minutes always agree.
+   */
+  private advanceNpcLifeEntryToNow(actorId: string, entry: NpcLifeEntry): NpcLifeEntry {
+    const buddy = this.social.getBuddy(actorId);
+    if (!buddy) return entry;
+    const atMinute = this.clock.getTotalMinutes();
+    const day = this.clock.getTime().day;
+    if (entry.pressure.lastUpdatedMinute >= atMinute) return entry;
+
+    const scheduleBlocks = (buddy.schedule[day] ?? []) as Array<{
+      status?: string;
+      startMinuteOfDay?: number;
+      endMinuteOfDay?: number;
+    }>;
+    const minuteOfDay = ((atMinute % 1440) + 1440) % 1440;
+    const isAtWork = scheduleBlocks.some((b) =>
+      b.status === 'away'
+      && (b.startMinuteOfDay ?? 0) <= minuteOfDay
+      && minuteOfDay < (b.endMinuteOfDay ?? 0)
+    );
+    const inAppointment = this.world.getAppointments().some((a) =>
+      a.characterId === actorId && a.targetDay === day && minuteOfDay >= a.startMinute && minuteOfDay < (a.endMinute ?? a.startMinute + 60)
+    );
+    const updated: NpcLifeEntry = {
+      goals: entry.goals,
+      pressure: advanceNpcPressure(entry.pressure, entry.pressure.lastUpdatedMinute, atMinute, {
+        day,
+        isAtWork,
+        inAppointment,
+      }),
+    };
+    this.npcLivesCache.set(actorId, updated);
+    this.invalidateV6Cache();
+    return updated;
+  }
+
+  /** Materialize canonical entries for every known buddy (ctor/load deterministic defaults). */
+  private ensureAllNpcLifeEntries(): void {
+    for (const buddy of this.social.getBuddies()) {
+      this.getOrCreateNpcLifeEntry(buddy.id);
+    }
+  }
+
+  /**
+   * Coarse tick-driven time evolution (#43 fidelity law). Runs after every
+   * clock movement so reads stay pure: observed and control sims evolve
+   * identically whether or not anyone looked. Idempotent at a fixed minute.
+   */
+  private advanceAllNpcPressuresToNow(): void {
+    for (const buddy of this.social.getBuddies()) {
+      const entry = this.getOrCreateNpcLifeEntry(buddy.id);
+      if (entry) this.advanceNpcLifeEntryToNow(buddy.id, entry);
+    }
+  }
+
+  /**
+   * Before a coarse clock jump, commit only actors that do not already have
+   * a mobility record. Existing planned/active commitments must remain under
+   * normal #37 replacement/departure rules; re-running the selector here can
+   * otherwise replace a trip immediately before its protected departure.
+   * Failed/cancelled outcomes also stay endpoint-owned: this primer copies
+   * only successful new commitments and emits no receipts.
+   */
+  private primeMissingNpcMobility(): void {
+    const network = getSharedTransitNetwork();
+    if (!network) return;
+    const missingIntents = new Map(
+      this.social.getBuddies()
+        .filter((buddy) => this.npcMobility.trips[buddy.id] === undefined)
+        .map((buddy) => [buddy.id, this.getCharacterIntent(buddy.id)]),
+    );
+    if (missingIntents.size === 0) return;
+
+    const due = planDueNpcTrips(
+      this.npcMobility,
+      missingIntents,
+      this.clock.getTotalMinutes(),
+      { network, aliases: getSharedPlaceAliases() },
+    );
+    if (due.planned.length === 0) return;
+
+    const trips = { ...this.npcMobility.trips };
+    for (const actorId of due.planned) {
+      const record = due.state.trips[actorId];
+      if (record) trips[actorId] = record;
+    }
+    this.npcMobility = { trips, places: { ...this.npcMobility.places } };
+    this.invalidateV6Cache();
+  }
+
+  public override advanceGameMinutes(minutes: number, reason?: string): void {
+    this.primeMissingNpcMobility();
+    super.advanceGameMinutes(minutes, reason);
+    this.advanceAllNpcPressuresToNow();
+    this.progressNpcMobility();
+  }
+
+  public override advanceRealTime(deltaRealSeconds: number): void {
+    super.advanceRealTime(deltaRealSeconds);
+    this.advanceAllNpcPressuresToNow();
+    this.progressNpcMobility();
+  }
+
+  public getNpcPressure(actorId: string): LifePressureView | null {
+    const entry = this.getOrCreateNpcLifeEntry(actorId);
+    if (!entry) return null;
+    return projectLifePressureView(entry.pressure, this.clock.getTotalMinutes());
+  }
+
+  public getPersonalGoals(actorId: string): PersonalGoal[] {
+    const entry = this.getOrCreateNpcLifeEntry(actorId);
+    if (!entry) return [];
+    return entry.goals.map((g) => ({ ...g }));
+  }
+
+  public getFidelityTier(actorId: string): FidelityTier {
+    const buddy = this.social.getBuddy(actorId);
+    if (!buddy) return 'background_remote';
+    return buddy.reach === 'remote' ? 'background_remote' : 'important_local';
+  }
+
+  /** Canonical #37 slice as plain snapshot data (deep copies). */
+  public getNpcMobilityState(): NpcMobilityState {
+    return JSON.parse(JSON.stringify(this.npcMobility)) as NpcMobilityState;
+  }
+
+  /** Live trip record copy for one actor, or null when the actor holds none. */
+  public getNpcTrip(actorId: string): NpcTripRecord | null {
+    const record = this.npcMobility.trips[actorId];
+    if (!record) return null;
+    return JSON.parse(JSON.stringify(record)) as NpcTripRecord;
+  }
+
+  /**
+   * Authoritative place truth for #45 presence resolution (#37). Pure read:
+   * AtPlace / planned departure / InTransit / arrival-facts / failure facts.
+   * Never touches messenger presence.
+   */
+  public getNpcPlaceState(actorId: string, atMinute?: number): NpcPlaceQuery {
+    return getNpcPlaceState(
+      this.npcMobility,
+      actorId,
+      atMinute ?? this.clock.getTotalMinutes(),
+    );
+  }
+
+  /** Factual deterministic travel overlap for later consumers. Facts only. */
+  public getNpcCoLocation(): NpcCoLocation[] {
+    const network = getSharedTransitNetwork();
+    if (!network) return [];
+    return findNpcCoLocation(this.npcMobility.trips, network);
+  }
+
+  /** Encounter Director slice as plain snapshot data (deep copy, bounded). */
+  public getEncounterDirectorState(): EncounterDirectorState {
+    return JSON.parse(JSON.stringify(this.encounterDirector)) as EncounterDirectorState;
+  }
+
+  /**
+   * Assemble the read-only Encounter Director input from canonical systems
+   * (#47). Pure reads — no NPC, transit, relationship, event, or economy
+   * writes. Subclasses may supply live player transit; the default (null)
+   * settles the player at their authoritative location.
+   */
+  protected buildEncounterInput(playerTransit: EncounterPlayerTransitRead | null = null): EncounterDecisionInput {
+    const nowMinute = this.clock.getTotalMinutes();
+    const network = getSharedTransitNetwork();
+    const aliases = getSharedPlaceAliases();
+    const playerPlaceId =
+      playerTransit !== null || !network
+        ? null
+        : resolveTransitPlaceId(this.economy.getLocation(), network, aliases);
+    const mobility = this.getNpcMobilityState();
+    const actors = this.social.getBuddies().map((buddy) => ({
+      actorId: buddy.id,
+      place: getNpcPlaceState(mobility, buddy.id, nowMinute),
+      intent: this.getCharacterIntent(buddy.id),
+      obligations: this.getCharacterObligations(buddy.id),
+      relationship: this.social.getRelationships(buddy.id) ?? null,
+      knownToPlayer: this.social.isKnown(buddy.id),
+      eventEffects: this.getLifeSnapshot(buddy.id)?.eventEffects ?? [],
+    }));
+    return {
+      nowMinute,
+      playerPlaceId,
+      playerTransit,
+      actors,
+      trips: mobility.trips,
+      network,
+      activeModifiers: this.world.queryActiveModifiers({ atMinute: nowMinute }),
+    };
+  }
+
+  /**
+   * Renderer-safe candidate collection (#47): pure surfacing read, marks
+   * nothing, so opening a view can never create an encounter.
+   */
+  public collectEncounterCandidates(
+    playerTransit: EncounterPlayerTransitRead | null = null,
+  ): EncounterCandidate[] {
+    return collectEncounterCandidates(this.buildEncounterInput(playerTransit));
+  }
+
+  /**
+   * Decide the encounter worth surfacing right now (#47). Records cooldown /
+   * one-shot marks in the director's own slice only — source authorities
+   * (mobility, obligations, events, relationships) are never written.
+   */
+  public decideEncounter(
+    playerTransit: EncounterPlayerTransitRead | null = null,
+  ): EncounterDecision {
+    const { decision, nextState } = decideEncounterPure(
+      this.buildEncounterInput(playerTransit),
+      this.encounterDirector,
+    );
+    this.encounterDirector = nextState;
+    if (decision.kind === 'encounter') this.invalidateV6Cache();
+    return decision;
+  }
+
+  /**
+   * Tick-driven NPC mobility (#37). Plans trips from current #44 intents
+   * and progresses live trips on the authoritative clock. Idempotent at a
+   * fixed minute; departed trips are never replanned; arrivals emit once
+   * (status flags persist the completion identity).
+   *
+   * Note: this runs after the tick's subscriber notify, so arrival
+   * telemetry becomes visible via getState/exportSnapshot on the next
+   * state rebuild (exportSnapshot always rebuilds fresh). Arrival EVENTS
+   * fire synchronously to current listeners. Same lag profile as other
+   * post-tick engine writes.
+   */
+  private progressNpcMobility(): void {
+    const nowMinute = this.clock.getTotalMinutes();
+    const network = getSharedTransitNetwork();
+    if (!network) return;
+    const intents = new Map(
+      this.social.getBuddies().map((buddy) => [buddy.id, this.getCharacterIntent(buddy.id)]),
+    );
+    const due = planDueNpcTrips(this.npcMobility, intents, nowMinute, {
+      network,
+      aliases: getSharedPlaceAliases(),
+    });
+    this.npcMobility = due.state;
+    for (const failure of due.failed) {
+      try {
+        this.events.emit('npc:trip_failed', { ...failure, atMinute: nowMinute });
+      } catch {}
+    }
+    const progressed = progressNpcTrips(this.npcMobility, nowMinute);
+    this.npcMobility = progressed.state;
+    for (const actorId of progressed.departed) {
+      try {
+        const record = this.npcMobility.trips[actorId];
+        this.telemetry.logEvent('world', 'travel_departed', nowMinute, {
+          actorId,
+          originPlaceId: record?.originPlaceId ?? null,
+          destinationPlaceId: record?.destinationPlaceId ?? null,
+          sourceId: record?.sourceId ?? null,
+        });
+      } catch {}
+    }
+    for (const arrival of progressed.arrivals) {
+      try {
+        this.events.emit('npc:trip_arrived', { ...arrival });
+      } catch {}
+      try {
+        this.telemetry.logEvent('world', 'travel_arrived', nowMinute, {
+          actorId: arrival.actorId,
+          destinationPlaceId: arrival.destinationPlaceId,
+          sourceId: arrival.sourceId ?? null,
+        });
+      } catch {}
+    }
+    if (
+      due.planned.length > 0 ||
+      due.failed.length > 0 ||
+      due.cancelled.length > 0 ||
+      progressed.departed.length > 0 ||
+      progressed.arrivals.length > 0
+    ) {
+      this.invalidateV6Cache();
+    }
+  }
+
 
   public setComputerPower(poweredOn: boolean): ActionResult {
     if (!this.hardware.getComputerState().assembled) {
@@ -766,7 +1225,15 @@ export class SimulationEngine extends SimulationEngineCore {
       };
     }
 
-    return super.dispatchAction(action);
+    // Sleep/rest jumps the clock without going through advanceGameMinutes.
+    // Any clock movement evolves coarse NPC pressure (idempotent at a minute).
+    const beforeMinute = this.clock.getTotalMinutes();
+    const result = super.dispatchAction(action);
+    if (this.clock.getTotalMinutes() !== beforeMinute) {
+      this.advanceAllNpcPressuresToNow();
+      this.progressNpcMobility();
+    }
+    return result;
   }
 
   public override loadSnapshot(snapshot: TransportSimulationState): void {
@@ -787,5 +1254,14 @@ export class SimulationEngine extends SimulationEngineCore {
 
     super.loadSnapshot(compatSnapshot);
     this.software.loadState(snapshot.installedSoftware ?? []);
+    // Rehydrate canonical #43 state with normalization, then deterministically
+    // cover buddies missing from the slice (old saves, late joiners).
+    this.npcLivesCache = new Map(Object.entries(hydrateNpcLives(snapshot.npcLives ?? {})));
+    this.ensureAllNpcLifeEntries();
+    // Canonical #37 state hydrates with validation; malformed entries drop.
+    // Missing slices (old saves) become empty defaults — planning resumes
+    // deterministically on the next tick.
+    this.npcMobility = hydrateNpcMobility(snapshot.npcMobility ?? {});
+    this.encounterDirector = hydrateEncounterDirectorState(snapshot.encounters ?? {});
   }
 }

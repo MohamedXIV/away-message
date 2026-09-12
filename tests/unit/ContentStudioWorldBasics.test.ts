@@ -25,6 +25,7 @@ describe('Content Studio world basics authoring', () => {
       districtId: 'district_a',
       name: 'Corner Cafe',
       transitAccess: '[]',
+      legacyIds: '[]',
     });
 
     expect(() => buildPlaceRow('Lost Cafe', 'missing', ['district_a'])).toThrow(

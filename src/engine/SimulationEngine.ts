@@ -7,6 +7,9 @@
 
 import {
   SimulationEngine as LegacySimulationEngine,
+  type EncounterCandidate,
+  type EncounterDecision,
+  type EncounterPlayerTransitRead,
   type LiveSimulationState as LegacyLiveSimulationState,
 } from './SimulationEngineLegacyFacade';
 import {
@@ -25,6 +28,7 @@ import { GROCERY_SKUS, type DeliveryOrder, type Fulfillment } from './DeliveryEn
 import { PHYSICAL_ITEM_CATALOG } from './hardware/catalog';
 import {
   commitTravelPlan as createActiveTravel,
+  activeTravelLegWindows,
   parseActiveTravel,
   travelStateAtMinute,
 } from './transit/ActiveTravel';
@@ -377,6 +381,41 @@ export class SimulationEngine extends LegacySimulationEngine {
 
   public getActiveTravel(): ActiveTravelState | null {
     return this.activeTravelState ? cloneActiveTravel(this.activeTravelState) : null;
+  }
+
+  /**
+   * Live player wait/ride leg for #47 transit overlap, derived from the
+   * player's own committed journey. Walk legs and settled/arrived travel
+   * yield null (no transit candidacy). Pure read.
+   */
+  private currentPlayerTransit(): EncounterPlayerTransitRead | null {
+    const travel = this.getActiveTravel();
+    if (!travel || travel.status !== 'active') return null;
+    const resolved = travelStateAtMinute(travel, this.clock.getTotalMinutes());
+    if (resolved.status !== 'active') return null;
+    const window = activeTravelLegWindows(travel)[resolved.currentLegIndex];
+    const leg = travel.plan.legs[resolved.currentLegIndex];
+    if (!window || !leg || leg.kind === 'walk') return null;
+    if (leg.kind === 'wait') {
+      return { kind: 'wait', stopId: leg.stopId, windowStart: window.startMinute, windowEnd: window.endMinute };
+    }
+    return {
+      kind: 'bus',
+      lineId: leg.lineId,
+      fromStopId: leg.fromStopId,
+      toStopId: leg.toStopId,
+      boardMinute: window.startMinute,
+      windowStart: window.startMinute,
+      windowEnd: window.endMinute,
+    };
+  }
+
+  public override collectEncounterCandidates(): EncounterCandidate[] {
+    return super.collectEncounterCandidates(this.currentPlayerTransit());
+  }
+
+  public override decideEncounter(): EncounterDecision {
+    return super.decideEncounter(this.currentPlayerTransit());
   }
 
   public startTravel(

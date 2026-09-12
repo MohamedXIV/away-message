@@ -3,6 +3,9 @@
 // ==========================================
 
 import type { InnerVoicePersistedState } from '../innerVoice/types';
+import type { NpcLifePersistedState } from '../life/types';
+import type { NpcMobilityState } from '../transit/NpcTrips';
+import type { EncounterDirectorState } from '../encounters/types';
 
 export type TimeOfDay = 'morning' | 'day' | 'evening' | 'night' | 'late_night';
 
@@ -732,6 +735,27 @@ export interface SimulationState {
    * No SAVE_FORMAT bump required.
    */
   innerVoice?: InnerVoicePersistedState;
+  /**
+   * Canonical NPC pressure + personal goals (#43). Additive and optional:
+   * goals and irreducible pressure only — relationships, economy, transit,
+   * appointments, and events stay with their owners. Absent in older saves
+   * (deterministic defaults apply). No SAVE_FORMAT bump required.
+   */
+  npcLives?: NpcLifePersistedState;
+  /**
+   * Canonical NPC mobility (#37): one trip record + current place per
+   * actor, additive and optional. Trip intervals derive from #35 route
+   * truth; receipts are facts for source owners, never consequences.
+   * Absent in older saves (empty defaults apply). No SAVE_FORMAT bump.
+   */
+  npcMobility?: NpcMobilityState;
+  /**
+   * Encounter Director cooldowns + surfaced one-shot identities (#47).
+   * Additive and optional: candidates are always recomputed from canonical
+   * authorities after reload, never restored from here. Absent in older
+   * saves (empty defaults apply). No SAVE_FORMAT bump required.
+   */
+  encounters?: EncounterDirectorState;
 }
 
 export interface StorePurchaseResultData {
@@ -843,4 +867,8 @@ export interface SimulationEventMap {
   'narrative:tag_emitted': { tag: InkSemanticTag };
   'narrative:beat_triggered': { beatId: string };
   'telemetry:event_logged': { record: TelemetryRecord };
+  // NPC mobility facts (#37): arrival/failure receipts for source owners.
+  // Reports only — owners decide all consequences.
+  'npc:trip_arrived': import('../transit/NpcTrips').NpcArrivalReceipt;
+  'npc:trip_failed': import('../transit/NpcTrips').NpcFailureReceipt & { atMinute: number };
 }

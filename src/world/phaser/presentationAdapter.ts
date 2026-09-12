@@ -25,6 +25,7 @@ import { interpolateDayPhase, CANONICAL_DAY_PHASES } from './environment/dayPhas
 import type { PuddleZoneDef } from './environment/puddles';
 import type { AmbientMotionDef } from './environment/ambientMotion';
 import type { AuthoredLightDef } from './environment/lightingEngine';
+import type { SpatialAudioSourceDef, ListenerOrientation } from '../../audio/types';
 
 export interface CreateProjectionOptions {
   placeId: string;
@@ -39,6 +40,8 @@ export interface CreateProjectionOptions {
   windIntensity?: number;
   isInterior?: boolean;
   focus?: WorldCameraFocus | null;
+  spatialAudioSources?: SpatialAudioSourceDef[];
+  listenerOrientation?: ListenerOrientation;
 }
 
 export function getMinuteForTimeOfDay(timeOfDay: TimeOfDay): number {
@@ -134,6 +137,8 @@ export function createWorldSceneProjection(
     ambientMotions,
     windIntensity = 0,
     isInterior: explicitIsInterior,
+    spatialAudioSources,
+    listenerOrientation,
   } = options;
 
   const place = GENERATED_PLACES.find((p) => p.id === placeId);
@@ -219,6 +224,8 @@ export function createWorldSceneProjection(
     puddleZones,
     ambientMotions,
     authoredLights,
+    spatialAudioSources,
+    listenerOrientation,
   };
 }
 

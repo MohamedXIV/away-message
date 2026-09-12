@@ -29,8 +29,12 @@ interface LegWindow {
   endMinute: number;
 }
 
-/** Absolute time windows per leg, shifted when commit lags the quote. */
-function legWindows(state: ActiveTravelState): LegWindow[] {
+/**
+ * Absolute time windows per leg, shifted when commit lags the quote.
+ * Exported for read-only consumers (e.g. NPC co-location facts); the
+ * position resolver below remains the single progression authority.
+ */
+export function activeTravelLegWindows(state: ActiveTravelState): LegWindow[] {
   const shift = state.committedAtMinute - state.plan.departAtMinute;
   const windows: LegWindow[] = [];
   let cursor = state.committedAtMinute;
@@ -68,7 +72,7 @@ export function travelStateAtMinute(
   if (state.plan.legs.length === 0 || minute < state.committedAtMinute) {
     return { status: 'active', currentLegIndex: 0 };
   }
-  const windows = legWindows(state);
+  const windows = activeTravelLegWindows(state);
   for (let index = 0; index < windows.length; index++) {
     if (minute < windows[index]!.endMinute) {
       return { status: 'active', currentLegIndex: index };

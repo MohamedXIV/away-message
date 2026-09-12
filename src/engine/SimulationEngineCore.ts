@@ -1973,6 +1973,10 @@ export class SimulationEngine {
           this.economy.rechargeSocialBattery(2);
         }
         this.telemetry.logEvent('room', `interact_${action.activity}`, currentMinutes);
+        // Room mutations land after advanceGameMinutes() already notified once
+        // (rebuilding the getState cache mid-handler). Notify again so reads
+        // and subscribers observe the final tea/meal/shower/window state.
+        this.notifySubscribers();
         return { success: true };
       }
 
