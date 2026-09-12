@@ -67,4 +67,46 @@ describe('Room 104 flagship living-place contract (#26)', () => {
     expect(rainy.weather).toBe('rain');
     expect(rainy.particles.rain).toBe(true);
   });
+
+  it('drives Room 104 lighting continuously by minute instead of freezing within a coarse day label', () => {
+    const noon = createWorldSceneProjection({
+      placeId: 'room_104',
+      viewId: DESK_VIEW,
+      timeOfDay: 'day',
+      minuteOfDay: 720,
+      weather: 'clear',
+    });
+    const lateAfternoon = createWorldSceneProjection({
+      placeId: 'room_104',
+      viewId: DESK_VIEW,
+      timeOfDay: 'day',
+      minuteOfDay: 990,
+      weather: 'clear',
+    });
+
+    expect(lateAfternoon.lighting.ambientColor).not.toBe(noon.lighting.ambientColor);
+    expect(lateAfternoon.lighting.ambientIntensity).not.toBe(noon.lighting.ambientIntensity);
+  });
+
+  it('changes generic weather particles without replacing the minute-driven lighting state', () => {
+    const clear = createWorldSceneProjection({
+      placeId: 'room_104',
+      viewId: DESK_VIEW,
+      timeOfDay: 'evening',
+      minuteOfDay: 1170,
+      weather: 'clear',
+    });
+    const rain = createWorldSceneProjection({
+      placeId: 'room_104',
+      viewId: DESK_VIEW,
+      timeOfDay: 'evening',
+      minuteOfDay: 1170,
+      weather: 'rain',
+    });
+
+    expect(clear.particles.rain).toBe(false);
+    expect(rain.particles.rain).toBe(true);
+    expect(rain.particles.density).toBeGreaterThan(clear.particles.density);
+    expect(rain.lighting).toEqual(clear.lighting);
+  });
 });
