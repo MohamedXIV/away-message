@@ -15,6 +15,19 @@ export {
   INTENT_ROUTINE_FLOW_PRIORITY,
 } from './Intent';
 export {
+  resolveCharacterPresence,
+  resolveCharacterPresenceFromSimulation,
+  characterPresenceToLegacyBuddyPresence,
+  resolveLegacyBuddyPresenceFromSimulation,
+  type CharacterCommunicationStatus,
+  type CharacterMessagingDeviceContext,
+  type CharacterPhysicalPresence,
+  type CharacterPresenceInput,
+  type CharacterPresenceProjection,
+  type CharacterPresenceResolveOptions,
+  type CharacterPresenceSimulationSource,
+} from './Presence';
+export {
   deriveDefaultNpcPressure,
   advanceNpcPressure,
   projectLifePressureView,
