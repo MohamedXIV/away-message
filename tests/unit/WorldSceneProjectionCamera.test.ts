@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from 'vitest';
-import { resolveProjectionCameraTarget } from '../../src/world/phaser/WorldScene';
+import { resolveProjectionCameraTarget, resolveWorldSceneVisualPlan } from '../../src/world/phaser/WorldScene';
 import { resolveProjectionVisual } from '../../src/world/phaser/projectionVisual';
 import type { WorldSceneProjection } from '../../src/world/phaser/types';
 
@@ -61,5 +61,20 @@ describe('WorldScene projection-driven visual selection', () => {
       normalMapAssetId: null,
       usesAuthoredAsset: false,
     });
+  });
+
+  it('builds the renderer plan from projection data without fixture identities', () => {
+    expect(resolveWorldSceneVisualPlan(projection(null, 'room104_desk_art', 'room104_desk_normal'), 1200, 800)).toEqual({
+      textureKey: 'room104_desk_art',
+      normalMapTextureKey: 'room104_desk_normal',
+      x: 600,
+      y: 400,
+      width: 1200,
+      height: 800,
+    });
+  });
+
+  it('renders no scenery image when the projection has no authored asset', () => {
+    expect(resolveWorldSceneVisualPlan(projection(null), 1200, 800)).toBeNull();
   });
 });
