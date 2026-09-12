@@ -17,6 +17,8 @@ export {
 export {
   resolveCharacterPresence,
   resolveCharacterPresenceFromSimulation,
+  characterPresenceToLegacyBuddyPresence,
+  resolveLegacyBuddyPresenceFromSimulation,
   type CharacterCommunicationStatus,
   type CharacterPhysicalPresence,
   type CharacterPresenceInput,
