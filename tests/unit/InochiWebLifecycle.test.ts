@@ -112,4 +112,22 @@ describe('Inochi Web production lifecycle bridge (#34)', () => {
     expect(() => lifecycle.open('broken.inp')).toThrow(/MissingParameter/);
     expect(FakePuppet.freeCount).toBe(1);
   });
+
+  it('disposes the current raw puppet exactly once when the tool service shuts down', () => {
+    FakePuppet.freeCount = 0;
+    const lifecycle = createInochiWebLifecycle(module, (id) => source(id));
+    const first = lifecycle.open('first.inp');
+    const service = createAwayPuppetToolService(first.puppet, {
+      disposeInitial: first.dispose,
+      open: lifecycle.open,
+    });
+
+    service.call('puppet.open', { source: 'second.inp' });
+    expect(FakePuppet.freeCount).toBe(1);
+
+    service.dispose();
+    service.dispose();
+    expect(FakePuppet.freeCount).toBe(2);
+    expect(() => service.call('puppet.inspect')).toThrow(/disposed/i);
+  });
 });
