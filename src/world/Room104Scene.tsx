@@ -332,7 +332,7 @@ export const Room104Scene: React.FC = () => {
 
               {storageMarkers.map((marker) => (
                 <button
-                  key={marker.containerInstanceId ?? marker.anchorId}
+                  key={marker.anchorId}
                   type="button"
                   onClick={() => inspectStorage(marker.target)}
                   className="pointer-events-auto absolute -translate-x-1/2 -translate-y-1/2 rounded-full border border-amber-400/60 bg-slate-950/85 px-2 py-1 text-[10px] font-semibold text-amber-100 shadow-lg backdrop-blur-sm hover:border-amber-300 hover:bg-slate-900"
