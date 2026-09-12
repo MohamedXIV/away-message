@@ -138,10 +138,16 @@ export function resolveCharacterPresence(
     !lifecycleUnavailable &&
     status !== 'offline' &&
     physical.kind !== 'in_transit';
+  const playerPlaceKnown = input.playerPlaceId !== undefined;
   const canInteractInPerson =
     !lifecycleUnavailable &&
     physical.kind === 'at_place' &&
-    (input.playerPlaceId === undefined || input.playerPlaceId === physical.placeId);
+    playerPlaceKnown &&
+    input.playerPlaceId === physical.placeId;
+
+  if (physical.kind === 'at_place' && !playerPlaceKnown) {
+    reasonCodes.push('player_place_unknown');
+  }
 
   return {
     actorId: input.actorId,
