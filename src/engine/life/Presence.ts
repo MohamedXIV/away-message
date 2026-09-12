@@ -13,6 +13,13 @@ export type CharacterCommunicationStatus =
   | 'busy'
   | 'offline';
 
+export type CharacterMessagingDeviceContext =
+  | 'home_pc'
+  | 'work_pc'
+  | 'public_terminal'
+  | 'portable'
+  | 'none';
+
 export type CharacterPhysicalPresence =
   | { kind: 'at_place'; placeId: string }
   | {
@@ -49,12 +56,14 @@ export interface CharacterPresenceInput {
   reach: 'local' | 'remote';
   lifecycleStatus?: BuddyLifecycleStatus;
   playerPlaceId?: string;
+  messagingDeviceContext?: CharacterMessagingDeviceContext;
   hasPortableMessagingDevice?: boolean;
 }
 
 export interface CharacterPresenceResolveOptions {
   atMinute?: number;
   playerPlaceId?: string;
+  messagingDeviceContext?: CharacterMessagingDeviceContext;
   hasPortableMessagingDevice?: boolean;
 }
 
@@ -119,12 +128,22 @@ function projectCommunication(
       return 'away';
     case 'busy':
       return 'busy';
-    case 'online':
-      if (physical.kind === 'in_transit' && !input.hasPortableMessagingDevice) {
+    case 'online': {
+      if (input.messagingDeviceContext === 'none') {
+        reasonCodes.push('no_active_device_context');
+        return 'online_idle';
+      }
+
+      const hasPortableMessagingDevice =
+        input.messagingDeviceContext === 'portable' ||
+        input.hasPortableMessagingDevice === true;
+
+      if (physical.kind === 'in_transit' && !hasPortableMessagingDevice) {
         reasonCodes.push('transit_suppresses_active_device');
         return 'online_idle';
       }
       return 'online_active';
+    }
   }
 }
 
@@ -226,6 +245,9 @@ export function resolveCharacterPresenceFromSimulation(
     reach: buddy.reach === 'remote' ? 'remote' : 'local',
     ...(buddy.status !== undefined ? { lifecycleStatus: buddy.status } : {}),
     ...(options.playerPlaceId !== undefined ? { playerPlaceId: options.playerPlaceId } : {}),
+    ...(options.messagingDeviceContext !== undefined
+      ? { messagingDeviceContext: options.messagingDeviceContext }
+      : {}),
     ...(options.hasPortableMessagingDevice !== undefined
       ? { hasPortableMessagingDevice: options.hasPortableMessagingDevice }
       : {}),
