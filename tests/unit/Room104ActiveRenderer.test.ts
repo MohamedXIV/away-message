@@ -31,4 +31,15 @@ describe('Room 104 active renderer architecture (#26)', () => {
     expect(room).toContain('engine.getPhysicalWorldState()');
     expect(room).not.toContain('no canonical physical container is bound yet');
   });
+
+  it('renders canonical storage presence at authored anchor coordinates instead of a separate room inventory UI', () => {
+    const room = source('src/world/Room104Scene.tsx');
+
+    expect(room).toContain('getRoom104StoragePresence');
+    expect(room).toContain('buildRoom104StorageMarkers');
+    expect(room).toContain('storageMarkers.map');
+    expect(room).toContain('marker.x * 100');
+    expect(room).toContain('marker.y * 100');
+    expect(room).toContain('marker.itemCount');
+  });
 });
