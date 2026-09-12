@@ -182,6 +182,53 @@ describe('coherent character presence (#45)', () => {
     });
   });
 
+  it('keeps actor identity and social history stable across local → transit → local projection', () => {
+    const first = new SimulationEngine();
+    const actor = localActor(first);
+    const startMinute = first.clock.getTotalMinutes() + 10;
+    const sim = withCanonicalState(
+      first,
+      actor.id,
+      { status: 'away', awayMessage: 'out for a while' },
+      {
+        trips: { [actor.id]: activeTrip(actor.id, startMinute) },
+        places: { [actor.id]: 'place_a1' },
+      },
+    );
+    const relationshipBefore = sim.social.getRelationships(actor.id);
+
+    const before = resolveCharacterPresenceFromSimulation(sim, actor.id, { atMinute: startMinute - 1 });
+    const during = resolveCharacterPresenceFromSimulation(sim, actor.id, { atMinute: startMinute + 15 });
+    const after = resolveCharacterPresenceFromSimulation(sim, actor.id, { atMinute: startMinute + 30 });
+
+    expect([before?.actorId, during?.actorId, after?.actorId]).toEqual([actor.id, actor.id, actor.id]);
+    expect(before?.physical).toEqual({ kind: 'at_place', placeId: 'place_a1' });
+    expect(during?.physical.kind).toBe('in_transit');
+    expect(after?.physical).toEqual({ kind: 'at_place', placeId: 'place_b1' });
+    expect(sim.social.getRelationships(actor.id)).toEqual(relationshipBefore);
+  });
+
+  it('projects remote → local → remote without forking identity', () => {
+    const base = {
+      actorId: 'travelling-remote-test',
+      legacyPresence: { status: 'away', awayMessage: 'travelling' } as BuddyPresence,
+      reach: 'remote' as const,
+    };
+
+    const remoteBefore = resolveCharacterPresence({ ...base, place: { status: 'unknown' } });
+    const visiting = resolveCharacterPresence({ ...base, place: { status: 'at_place', placeId: 'place_visit' } });
+    const remoteAfter = resolveCharacterPresence({ ...base, place: { status: 'unknown' } });
+
+    expect([remoteBefore.actorId, visiting.actorId, remoteAfter.actorId]).toEqual([
+      base.actorId,
+      base.actorId,
+      base.actorId,
+    ]);
+    expect(remoteBefore.physical).toEqual({ kind: 'remote' });
+    expect(visiting.physical).toEqual({ kind: 'at_place', placeId: 'place_visit' });
+    expect(remoteAfter.physical).toEqual({ kind: 'remote' });
+  });
+
   it('projects remote identity without inventing a local place', () => {
     expect(resolveCharacterPresence({
       actorId: 'remote-test',
@@ -266,6 +313,26 @@ describe('coherent character presence (#45)', () => {
     const stepPresence = resolveCharacterPresenceFromSimulation(stepped, actor.id);
     expect(jumpPresence).toEqual(stepPresence);
     expect(jumpPresence?.physical).toEqual({ kind: 'at_place', placeId: 'place_b1' });
+  });
+
+  it('ignores renderer/view changes when resolving presence truth', () => {
+    const first = new SimulationEngine();
+    const actor = localActor(first);
+    const sim = withCanonicalState(
+      first,
+      actor.id,
+      { status: 'away', awayMessage: 'reading' },
+      { trips: {}, places: { [actor.id]: 'place_a1' } },
+    );
+    const before = resolveCharacterPresenceFromSimulation(sim, actor.id, { playerPlaceId: 'place_a1' });
+
+    expect(sim.dispatchAction({ type: 'VIEW_SWITCH', view: 'room' }).success).toBe(true);
+    const afterRoom = resolveCharacterPresenceFromSimulation(sim, actor.id, { playerPlaceId: 'place_a1' });
+    expect(sim.dispatchAction({ type: 'VIEW_SWITCH', view: 'pc' }).success).toBe(true);
+    const afterPc = resolveCharacterPresenceFromSimulation(sim, actor.id, { playerPlaceId: 'place_a1' });
+
+    expect(afterRoom).toEqual(before);
+    expect(afterPc).toEqual(before);
   });
 
   it('maps coherent status back to legacy Pulse presence without reviving active-home contradiction', () => {
