@@ -1,14 +1,18 @@
 import { describe, expect, it } from 'vitest';
-import { resolveCharacterPresence } from '../../src/engine/life';
+import {
+  resolveCharacterPresence,
+  type CharacterMessagingDeviceContext,
+} from '../../src/engine/life';
 
 describe('coherent character presence device context (#45)', () => {
   it('does not claim online_active when authoritative device context says none', () => {
+    const noDeviceContext: CharacterMessagingDeviceContext = 'none';
     const result = resolveCharacterPresence({
       actorId: 'no-device-npc',
       place: { status: 'at_place', placeId: 'cafe' },
       legacyPresence: { status: 'online', awayMessage: 'legacy online' },
       reach: 'local',
-      messagingDeviceContext: 'none',
+      messagingDeviceContext: noDeviceContext,
     });
 
     expect(result.communication.status).toBe('online_idle');
