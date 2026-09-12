@@ -42,4 +42,16 @@ describe('Room 104 active renderer architecture (#26)', () => {
     expect(room).toContain('marker.y * 100');
     expect(room).toContain('marker.itemCount');
   });
+
+  it('renders canonical delivered world-anchor items at the authored delivery anchor', () => {
+    const room = source('src/world/Room104Scene.tsx');
+
+    expect(room).toContain('getRoom104WorldAnchorPresence');
+    expect(room).toContain('buildRoom104WorldAnchorMarkers');
+    expect(room).toContain('worldAnchorMarkers.map');
+    expect(room).toContain('marker.x * 100');
+    expect(room).toContain('marker.y * 100');
+    expect(room).toContain('marker.itemCount');
+    expect(room).toContain('inspectDeliveryAnchor');
+  });
 });
