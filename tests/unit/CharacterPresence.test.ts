@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { SimulationEngine } from '../../src/engine/SimulationEngine';
+import { resolveCharacterPresenceFromSimulation } from '../../src/engine/life';
 import { commitTravelPlan } from '../../src/engine/transit/ActiveTravel';
 import type { BuddyPresence } from '../../src/engine/types';
 import type { TravelPlan } from '../../src/engine/transit/types';
@@ -23,24 +24,6 @@ function withCanonicalState(
   snapshot.social.presence[actorId] = presence;
   snapshot.npcMobility = npcMobility;
   return new SimulationEngine(snapshot as never);
-}
-
-function resolvePresence(
-  sim: SimulationEngine,
-  actorId: string,
-  options?: { atMinute?: number; playerPlaceId?: string },
-) {
-  const resolver = (sim as unknown as {
-    resolveCharacterPresence?: (id: string, opts?: { atMinute?: number; playerPlaceId?: string }) => unknown;
-  }).resolveCharacterPresence;
-  expect(typeof resolver).toBe('function');
-  return resolver!.call(sim, actorId, options) as {
-    actorId: string;
-    physical: { kind: string; placeId?: string; originPlaceId?: string; destinationPlaceId?: string };
-    communication: { status: string; legacyStatus: string; awayMessage: string };
-    availability: { canMessage: boolean; canCall: boolean; canInteractInPerson: boolean };
-    reasonCodes: string[];
-  } | null;
 }
 
 function activeTrip(actorId: string) {
@@ -81,7 +64,10 @@ describe('coherent character presence (#45)', () => {
       { trips: {}, places: { [actor.id]: 'place_a1' } },
     );
 
-    expect(resolvePresence(sim, actor.id, { atMinute: 600, playerPlaceId: 'place_a1' })).toMatchObject({
+    expect(resolveCharacterPresenceFromSimulation(sim, actor.id, {
+      atMinute: 600,
+      playerPlaceId: 'place_a1',
+    })).toMatchObject({
       actorId: actor.id,
       physical: { kind: 'at_place', placeId: 'place_a1' },
       communication: { status: 'online_active', legacyStatus: 'online', awayMessage: 'around' },
@@ -102,7 +88,10 @@ describe('coherent character presence (#45)', () => {
       },
     );
 
-    const projected = resolvePresence(sim, actor.id, { atMinute: 615, playerPlaceId: 'place_a1' });
+    const projected = resolveCharacterPresenceFromSimulation(sim, actor.id, {
+      atMinute: 615,
+      playerPlaceId: 'place_a1',
+    });
     expect(projected).not.toBeNull();
     expect(projected!.physical).toMatchObject({
       kind: 'in_transit',
@@ -129,7 +118,10 @@ describe('coherent character presence (#45)', () => {
       },
     );
 
-    expect(resolvePresence(sim, actor.id, { atMinute: 590, playerPlaceId: 'place_a1' })).toMatchObject({
+    expect(resolveCharacterPresenceFromSimulation(sim, actor.id, {
+      atMinute: 590,
+      playerPlaceId: 'place_a1',
+    })).toMatchObject({
       physical: { kind: 'at_place', placeId: 'place_a1' },
       communication: { status: 'away', legacyStatus: 'away' },
       availability: { canInteractInPerson: true },
@@ -147,7 +139,7 @@ describe('coherent character presence (#45)', () => {
       legacy,
       { trips: {}, places: { [actor.id]: 'place_a1' } },
     );
-    resolvePresence(sim, actor.id, { atMinute: 600 });
+    resolveCharacterPresenceFromSimulation(sim, actor.id, { atMinute: 600 });
 
     const snapshotJson = JSON.stringify(sim.exportSnapshot());
     expect(snapshotJson).not.toContain('characterPresence');
