@@ -73,6 +73,11 @@ const isLifecycleUnavailable = (status?: BuddyLifecycleStatus): boolean =>
   status === 'distant' || status === 'gone' || status === 'blocked';
 
 function projectPhysical(input: CharacterPresenceInput, reasonCodes: string[]): CharacterPhysicalPresence {
+  if (input.reach === 'remote') {
+    reasonCodes.push('remote_reach');
+    return { kind: 'remote' };
+  }
+
   switch (input.place.status) {
     case 'at_place':
       return { kind: 'at_place', placeId: input.place.placeId };
@@ -90,12 +95,10 @@ function projectPhysical(input: CharacterPresenceInput, reasonCodes: string[]): 
       };
     case 'failed':
       reasonCodes.push('mobility_failed');
-      return input.reach === 'remote'
-        ? { kind: 'remote' }
-        : { kind: 'unknown', failureReason: input.place.failureReason };
+      return { kind: 'unknown', failureReason: input.place.failureReason };
     case 'unknown':
     default:
-      return input.reach === 'remote' ? { kind: 'remote' } : { kind: 'unknown' };
+      return { kind: 'unknown' };
   }
 }
 
