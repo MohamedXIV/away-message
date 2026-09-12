@@ -90,12 +90,17 @@ export class AudioService {
     this.usedBackends.add(this.primaryBackend);
     try {
       await this.primaryBackend.init();
+      if (this.primaryBackend.isAvailable() || !this.fallbackBackend) return;
     } catch {
-      if (this.fallbackBackend) {
-        this.activateFallbackBackend();
-        await this.fallbackBackend.init();
-      }
+      if (!this.fallbackBackend) return;
     }
+
+    // An adapter may fail gracefully by reporting unavailable instead of
+    // throwing (the FMOD HTML5 spike deliberately does this). Initialize the
+    // fallback before synchronizing service state into it.
+    this.usedBackends.add(this.fallbackBackend);
+    await this.fallbackBackend.init();
+    this.activateFallbackBackend();
   }
 
   public async unlock(): Promise<void> {
