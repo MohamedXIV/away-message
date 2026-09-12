@@ -616,13 +616,20 @@ interface BusRideIdentity {
 }
 
 /**
- * Identify the scheduled service run a bus leg actually rides, from the
- * authoritative line timetable (first-stop departures at
- * serviceStartMinute + k * headwayMinutes). The boarding time is the leg's
- * absolute window start, so commit lag resolves to the run truly caught.
- * Returns null when the leg matches no scheduled run — including upstream
- * legs, which the planner never quotes — so unmatched rides never
- * co-locate. Base schedule only (no disruption state exists yet).
+ * Identify the service run a bus leg actually rides, from the committed
+ * itinerary times: actual run-origin timestamp = absolute boarding time
+ * minus the cumulative segment offset of the boarding stop. The boarding
+ * time is the leg's absolute window start, so commit lag resolves to the
+ * run truly caught.
+ *
+ * Deliberately NOT validated against the unmodified base timetable:
+ * #35 service modifiers (lineDelayMinutes, headwayMultiplier) shift real
+ * boardings off base multiples — e.g. base 600 + delay 3 boards stop A at
+ * 603 — and two actors on that same delayed bus must still co-locate.
+ * Under a uniform per-line delay, equal run-origins mean the same run
+ * exactly; different runs always differ. Returns null for unknown lines,
+ * unknown stops, upstream legs (which the planner never quotes), and
+ * non-finite times, so unmatched rides never co-locate.
  */
 function busRideIdentity(
   network: TransitNetwork,
@@ -638,14 +645,9 @@ function busRideIdentity(
   if (fromIndex < 0 || toIndex < 0 || toIndex <= fromIndex) return null;
   if (!Number.isFinite(boardMinute)) return null;
   const cum = cumulativeMinutes(line.segmentMinutes);
-  const total = cum[cum.length - 1] ?? 0;
-  const headway = line.headwayMinutes;
-  if (!Number.isInteger(headway) || headway <= 0) return null;
-  const runStart = boardMinute - (cum[fromIndex] ?? 0);
-  if (!Number.isInteger(runStart) || runStart < line.serviceStartMinute) return null;
-  if ((runStart - line.serviceStartMinute) % headway !== 0) return null;
-  if (runStart + total > line.serviceEndMinute) return null;
-  return { runStart, lo: fromIndex, hi: toIndex, cum };
+  const fromOffset = cum[fromIndex] ?? 0;
+  if (!Number.isFinite(fromOffset)) return null;
+  return { runStart: boardMinute - fromOffset, lo: fromIndex, hi: toIndex, cum };
 }
 
 /**

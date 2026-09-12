@@ -713,4 +713,67 @@ describe('NPC trip planning (#37)', () => {
       overlapEndMinute: 620,
     });
   });
+
+  it('R3. delayed runs co-locate on shared segment-time (non-headway boarding)', () => {
+    // Same 10-minute-headway line under a +3 lineDelayMinutes service state:
+    // base-600 run boards sx_a at 603 and sx_b at 613 — neither is a base
+    // multiple, but both ride the same delayed bus.
+    const fixture = {
+      districts: [{ id: 'district_x', name: 'X', mapX: 0, mapY: 0, tags: [] as string[] }],
+      places: ['a', 'b', 'c', 'd'].map((suffix) => ({
+        id: `px_${suffix}`,
+        districtId: 'district_x',
+        name: suffix.toUpperCase(),
+        transitAccess: [{ stopId: `sx_${suffix}`, walkMinutes: 1 }],
+      })),
+      stops: ['a', 'b', 'c', 'd'].map((suffix) => ({
+        id: `sx_${suffix}`, districtId: 'district_x', name: suffix.toUpperCase(),
+        placeId: `px_${suffix}`, mapX: 0, mapY: 0,
+      })),
+      lines: [{
+        id: 'line_abcd', name: 'ABCD', stopIds: ['sx_a', 'sx_b', 'sx_c', 'sx_d'],
+        serviceStartMinute: 0, serviceEndMinute: 1439, headwayMinutes: 10,
+        segmentMinutes: [10, 10, 10], fare: 2,
+      }],
+    };
+    const delayedLine = buildTransitNetwork(fixture);
+    const delayedTrip = (actor: string, from: string, to: string, board: number, alight: number): NpcTripRecord => ({
+      trip: commitTravelPlan(actor, {
+        originPlaceId: 'px_a', destinationPlaceId: 'px_d', departAtMinute: board, arriveAtMinute: alight,
+        legs: [{
+          kind: 'bus', lineId: 'line_abcd', fromStopId: from, toStopId: to,
+          boardAtMinute: board, alightAtMinute: alight, minutes: alight - board,
+        }],
+        walkMinutes: 0, waitMinutes: 0, rideMinutes: alight - board, totalMinutes: alight - board,
+        fare: 2, transferCount: 0, busLineIds: ['line_abcd'],
+      }, board, `appt_${actor}`),
+      intentKind: 'attend_appointment',
+      sourceId: `appt_${actor}`,
+      originPlaceId: 'px_a',
+      destinationPlaceId: 'px_d',
+      plannedDepartureMinute: board,
+      expectedArrivalMinute: alight,
+      policy: 'fastest',
+      status: 'active',
+    });
+    // Same delayed run (base 600 + 3): shared B->C segment-time [613,623].
+    const sameDelayedRun = findNpcCoLocation({
+      sam: delayedTrip('sam', 'sx_a', 'sx_d', 603, 633),
+      lee: delayedTrip('lee', 'sx_b', 'sx_c', 613, 623),
+    }, delayedLine);
+    const ride = sameDelayedRun.find((f) => f.kind === 'bus_ride');
+    expect(ride).toBeDefined();
+    expect(ride).toMatchObject({
+      lineId: 'line_abcd',
+      overlapStartMinute: 613,
+      overlapEndMinute: 623,
+    });
+    // Next delayed run (base 610 + 3): same line and overlapping windows
+    // with sam, but a different bus — no co-location.
+    const nextDelayedRun = findNpcCoLocation({
+      sam: delayedTrip('sam', 'sx_a', 'sx_d', 603, 633),
+      kim: delayedTrip('kim', 'sx_b', 'sx_c', 623, 633),
+    }, delayedLine);
+    expect(nextDelayedRun.filter((f) => f.kind === 'bus_ride')).toEqual([]);
+  });
 });
