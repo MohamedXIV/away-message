@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { deliveryEtaMinutes } from '../../src/engine/DeliveryEngine';
 import { SimulationEngine } from '../../src/engine/SimulationEngine';
 import { resolveCharacterPresenceFromSimulation } from '../../src/engine/life';
 
@@ -158,5 +159,41 @@ describe('Life Matrix end-to-end continuity gate (#48)', () => {
     expect(persisted).not.toContain('"obligations"');
     expect(persisted).not.toContain('"characterIntent"');
     expect(persisted).not.toContain('"characterPresence"');
+  });
+
+  it('lets a real WorldEvent modifier affect DeliveryEngine without owning delivery or knowledge', () => {
+    const sim = new SimulationEngine();
+    const atMinute = sim.clock.getTotalMinutes();
+    const triggered = sim.world.triggerEventById('city_canal_festival', atMinute);
+    expect(triggered).not.toBeNull();
+
+    const knowledgeBefore = sim.world.getBuddyKnowledgeMap();
+    const modifiers = sim.world.queryActiveModifiers({ domain: 'delivery', atMinute });
+    expect(modifiers).toHaveLength(1);
+    expect(modifiers[0]).toMatchObject({
+      sourceEventId: 'city_canal_festival',
+      kind: 'courier_backlog',
+      value: 360,
+    });
+
+    const orderResult = sim.placeGroceryOrder(
+      [{ sku: 'noodles_cup', qty: 1 }],
+      'delivery',
+      atMinute,
+    );
+    expect(orderResult.success).toBe(true);
+    if (!orderResult.data) throw new Error('Expected a delivery order result.');
+
+    const order = sim.delivery.getState().orders.find((entry) => entry.id === orderResult.data?.orderId);
+    if (!order) throw new Error('Expected DeliveryEngine to own the created order.');
+
+    expect(order.readyMinute - order.placedMinute - deliveryEtaMinutes(order.id)).toBe(360);
+    expect(sim.world.getBuddyKnowledgeMap()).toEqual(knowledgeBefore);
+    expect(JSON.stringify(sim.world.getState())).not.toContain(order.id);
+    expect(sim.delivery.getState().orders).toContainEqual(expect.objectContaining({
+      id: order.id,
+      readyMinute: order.readyMinute,
+      status: 'transit',
+    }));
   });
 });
