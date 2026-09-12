@@ -140,10 +140,11 @@ describe('coherent character presence (#45)', () => {
   it('does not persist the derived presence projection as a second source of truth', () => {
     const first = new SimulationEngine();
     const actor = localActor(first);
+    const legacy = first.social.getPresence(actor.id) ?? { status: 'offline', awayMessage: 'offline' };
     const sim = withCanonicalState(
       first,
       actor.id,
-      first.social.getPresence(actor.id),
+      legacy,
       { trips: {}, places: { [actor.id]: 'place_a1' } },
     );
     resolvePresence(sim, actor.id, { atMinute: 600 });
