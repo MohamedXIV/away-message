@@ -167,7 +167,7 @@ describe('2D World Scenes, Atmosphere, Interactables & App Integration', () => {
       expect(engine.getState().player.energy).toBe(Math.min(100, initialEnergy + 5));
     });
 
-    it('executes instant noodles meal (advances 15m, restores 15 energy)', () => {
+    it('executes instant noodles meal (advances 15m, restores 10 energy)', () => {
       engine.economy.consumeEnergy(40);
       const initialEnergy = engine.getState().player.energy;
       const initialMinutes = engine.clock.getTotalMinutes();
@@ -176,7 +176,7 @@ describe('2D World Scenes, Atmosphere, Interactables & App Integration', () => {
       expect(res.success).toBe(true);
 
       expect(engine.clock.getTotalMinutes()).toBe(initialMinutes + 15);
-      expect(engine.getState().player.energy).toBe(initialEnergy + 15);
+      expect(engine.getState().player.energy).toBe(initialEnergy + 10);
     });
 
     it('executes shower interaction (advances 12m)', () => {

@@ -19,11 +19,8 @@ The approved living-character direction is a **Life Matrix orchestration layer o
 - `npm run build` (tsc + vite), `npm run test` (full vitest suite), `npx tsc --noEmit`
 - `npm run content:pull` regenerates runtime content from `content/store.json`; `npm run content:check` must detect zero generated drift.
 - `npm run build:itch` → `itch/away-message-demo.zip` (index.html at zip root, relative `./` base)
-- Full suite currently has exactly **3 pre-existing failures**, all in `tests/unit/WorldScenes.test.ts` under `4. Simulation Engine Room Action Integration`:
-  - `executes tea interaction (advances 6m, restores 5 energy)`
-  - `executes instant noodles meal (advances 15m, restores 15 energy)`
-  - `executes window observation (advances 4m, logs telemetry)`
-- Repository CI uses `scripts/verify-vitest-baseline.mjs` to accept only those exact three identities. Any additional, missing, or unexpectedly fixed baseline failure makes CI fail until this documentation and guard are intentionally updated.
+- Full suite is fully green (zero known failures). The former 3 `tests/unit/WorldScenes.test.ts` room-action baselines (tea/meal/window) were fixed by the trailing-`notifySubscribers()` correction in the `PLAYER_INTERACT_ROOM` handler plus the noodles `+10` expectation fix.
+- Repository CI uses `scripts/verify-vitest-baseline.mjs` to accept only a fully green suite. Any failure makes CI fail until the code is fixed or this documentation and guard are intentionally updated.
 
 ## Non-negotiable workflow
 1. **One feature = one branch** (`feat/<name>`, `fix/<name>`, `chore/<name>`, `docs/<name>`). `main` stays green/releasable.
@@ -34,7 +31,7 @@ The approved living-character direction is a **Life Matrix orchestration layer o
 
 ## Verification before every push
 `npm run content:check` when generated content is touched → `npx tsc --noEmit` clean → `npm run build` succeeds → full `npm run test` with zero new failures.
-For exact repository CI policy, run `node scripts/verify-vitest-baseline.mjs --self-test` then `node scripts/verify-vitest-baseline.mjs`; the latter is green only for the exact documented WorldScenes baseline and rejects any regression outside it.
+For exact repository CI policy, run `node scripts/verify-vitest-baseline.mjs --self-test` then `node scripts/verify-vitest-baseline.mjs`; the latter is green only for a fully green suite and rejects any failure.
 Verify fixes by execution (run the code/tests), not by reading. Trust evidence over speculation; state discrepancies plainly.
 
 ## Canonical design docs
