@@ -24,6 +24,7 @@ import {
   type PhysicalItemLocation,
   type PhysicalWorldState,
 } from './PhysicalItemEngine';
+import { ensureRoom104StorageContainers } from './Room104Physical';
 import { GROCERY_SKUS, type DeliveryOrder, type Fulfillment } from './DeliveryEngine';
 import { PHYSICAL_ITEM_CATALOG } from './hardware/catalog';
 import {
@@ -200,10 +201,11 @@ export class SimulationEngine extends LegacySimulationEngine {
   }
 
   private hydratePhysicalWorld(persisted?: PhysicalWorldState): PhysicalWorldState {
-    return bridgeOwnedInventoryIntoPhysicalWorld(
+    const bridged = bridgeOwnedInventoryIntoPhysicalWorld(
       persisted ? clonePhysicalWorld(persisted) : emptyPhysicalWorld(),
       this.inventory.getState(),
     );
+    return ensureRoom104StorageContainers(bridged);
   }
 
   private currentPhysicalWorld(): PhysicalWorldState {

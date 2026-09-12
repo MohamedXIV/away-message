@@ -90,11 +90,11 @@ export class PhaserWorldRuntime {
     }
   }
 
-  public transitionToView(targetViewId: string, duration?: number): void {
+  public transitionToView(targetViewId: string, _duration?: number): void {
     if (this.isDestroyed) return;
     const scene = this.getScene();
     if (scene && typeof scene.transitionToView === 'function') {
-      scene.transitionToView(targetViewId, duration);
+      scene.transitionToView(targetViewId);
     }
   }
 
