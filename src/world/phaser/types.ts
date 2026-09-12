@@ -5,6 +5,7 @@ import type { TimeOfDay, WeatherType } from '../types';
 import type { PuddleZoneDef } from './environment/puddles';
 import type { AmbientMotionDef } from './environment/ambientMotion';
 import type { AuthoredLightDef } from './environment/lightingEngine';
+import type { SpatialAudioSourceDef, ListenerOrientation } from '../../audio/types';
 
 export interface WorldPointLightDef {
   id: string;
@@ -79,6 +80,8 @@ export interface WorldSceneProjection {
   puddleZones?: PuddleZoneDef[];
   ambientMotions?: AmbientMotionDef[];
   authoredLights?: AuthoredLightDef[];
+  spatialAudioSources?: SpatialAudioSourceDef[];
+  listenerOrientation?: ListenerOrientation;
 }
 
 export type WorldInteractionIntentType =
@@ -119,4 +122,5 @@ export interface WorldFixtureCapabilityReport {
   ambientMotion: boolean;
   weatherOcclusion: boolean;
   puddleZones: boolean;
+  spatialAudio: boolean;
 }
