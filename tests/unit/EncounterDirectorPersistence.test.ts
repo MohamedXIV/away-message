@@ -116,9 +116,11 @@ describe('EncounterDirector persistence (#47)', () => {
     expect(network).not.toBeNull();
     if (!network) throw new Error('Expected shared transit network.');
 
-    const knownBuddy = sim.social.getBuddies().find((buddy) => sim.social.isKnown(buddy.id));
+    const knownBuddy = sim.social.getBuddies()[0];
     expect(knownBuddy).toBeDefined();
-    if (!knownBuddy) throw new Error('Expected at least one known buddy.');
+    if (!knownBuddy) throw new Error('Expected at least one buddy.');
+    expect(sim.social.learnHandle(knownBuddy.id, knownBuddy.handle)).toBe(true);
+    expect(sim.social.isKnown(knownBuddy.id)).toBe(true);
 
     const startMinute = sim.clock.getTotalMinutes();
     const planned = planNpcTrip({
