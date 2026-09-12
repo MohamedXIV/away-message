@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { SimulationEngine } from '../../src/engine/SimulationEngine';
-import { resolveCharacterPresenceFromSimulation } from '../../src/engine/life';
+import {
+  resolveCharacterPresence,
+  resolveCharacterPresenceFromSimulation,
+} from '../../src/engine/life';
 import { commitTravelPlan } from '../../src/engine/transit/ActiveTravel';
 import type { BuddyPresence } from '../../src/engine/types';
 import type { TravelPlan } from '../../src/engine/transit/types';
@@ -26,12 +29,13 @@ function withCanonicalState(
   return new SimulationEngine(snapshot as never);
 }
 
-function activeTrip(actorId: string) {
+function activeTrip(actorId: string, departAtMinute = 600) {
+  const arriveAtMinute = departAtMinute + 30;
   const plan: TravelPlan = {
     originPlaceId: 'place_a1',
     destinationPlaceId: 'place_b1',
-    departAtMinute: 600,
-    arriveAtMinute: 630,
+    departAtMinute,
+    arriveAtMinute,
     legs: [{ kind: 'walk', fromPlaceId: 'place_a1', toPlaceId: 'place_b1', minutes: 30 }],
     walkMinutes: 30,
     waitMinutes: 0,
@@ -42,12 +46,12 @@ function activeTrip(actorId: string) {
     busLineIds: [],
   };
   return {
-    trip: commitTravelPlan(actorId, plan, 600, 'presence-test'),
+    trip: commitTravelPlan(actorId, plan, departAtMinute, 'presence-test'),
     intentKind: 'travel_to_place',
     originPlaceId: 'place_a1',
     destinationPlaceId: 'place_b1',
-    plannedDepartureMinute: 600,
-    expectedArrivalMinute: 630,
+    plannedDepartureMinute: departAtMinute,
+    expectedArrivalMinute: arriveAtMinute,
     policy: 'fastest',
     status: 'active',
   };
@@ -104,6 +108,29 @@ describe('coherent character presence (#45)', () => {
     expect(projected!.reasonCodes).toContain('transit_suppresses_active_device');
   });
 
+  it('allows active online projection in transit only with explicit portable-device context', () => {
+    const first = new SimulationEngine();
+    const actor = localActor(first);
+    const sim = withCanonicalState(
+      first,
+      actor.id,
+      { status: 'online', awayMessage: 'online' },
+      {
+        trips: { [actor.id]: activeTrip(actor.id) },
+        places: { [actor.id]: 'place_a1' },
+      },
+    );
+
+    expect(resolveCharacterPresenceFromSimulation(sim, actor.id, {
+      atMinute: 615,
+      hasPortableMessagingDevice: true,
+    })).toMatchObject({
+      physical: { kind: 'in_transit' },
+      communication: { status: 'online_active' },
+      availability: { canMessage: true, canCall: false, canInteractInPerson: false },
+    });
+  });
+
   it('treats a planned trip as still physically at its origin before departure', () => {
     const first = new SimulationEngine();
     const actor = localActor(first);
@@ -127,6 +154,92 @@ describe('coherent character presence (#45)', () => {
       availability: { canInteractInPerson: true },
       reasonCodes: expect.arrayContaining(['departure_planned']),
     });
+  });
+
+  it('projects remote identity without inventing a local place', () => {
+    expect(resolveCharacterPresence({
+      actorId: 'remote-test',
+      place: { status: 'unknown' },
+      legacyPresence: { status: 'online', awayMessage: 'online from elsewhere' },
+      reach: 'remote',
+    })).toMatchObject({
+      actorId: 'remote-test',
+      physical: { kind: 'remote' },
+      communication: { status: 'online_active' },
+      availability: { canMessage: true, canInteractInPerson: false },
+    });
+  });
+
+  it('makes unavailable lifecycle states offline without mutating their legacy presence', () => {
+    const result = resolveCharacterPresence({
+      actorId: 'blocked-test',
+      place: { status: 'at_place', placeId: 'place_a1' },
+      legacyPresence: { status: 'online', awayMessage: 'legacy online' },
+      reach: 'local',
+      lifecycleStatus: 'blocked',
+      playerPlaceId: 'place_a1',
+    });
+
+    expect(result.communication).toMatchObject({
+      status: 'offline',
+      legacyStatus: 'online',
+      awayMessage: 'legacy online',
+    });
+    expect(result.availability).toEqual({
+      canMessage: false,
+      canCall: false,
+      canInteractInPerson: false,
+    });
+    expect(result.reasonCodes).toContain('lifecycle_unavailable');
+  });
+
+  it('reconstructs the same mid-transit projection after save/reload', () => {
+    const first = new SimulationEngine();
+    const actor = localActor(first);
+    const startMinute = first.clock.getTotalMinutes();
+    const sim = withCanonicalState(
+      first,
+      actor.id,
+      { status: 'online', awayMessage: 'logged in' },
+      {
+        trips: { [actor.id]: activeTrip(actor.id, startMinute) },
+        places: { [actor.id]: 'place_a1' },
+      },
+    );
+
+    sim.advanceGameMinutes(15, 'presence mid-transit save');
+    const before = resolveCharacterPresenceFromSimulation(sim, actor.id);
+    const restored = new SimulationEngine(sim.exportSnapshot());
+    const after = resolveCharacterPresenceFromSimulation(restored, actor.id);
+
+    expect(before).toEqual(after);
+    expect(after?.physical.kind).toBe('in_transit');
+  });
+
+  it('large time jump and minute-by-minute progression end with equivalent presence', () => {
+    const first = new SimulationEngine();
+    const actor = localActor(first);
+    const startMinute = first.clock.getTotalMinutes();
+    const seeded = withCanonicalState(
+      first,
+      actor.id,
+      { status: 'away', awayMessage: 'out' },
+      {
+        trips: { [actor.id]: activeTrip(actor.id, startMinute) },
+        places: { [actor.id]: 'place_a1' },
+      },
+    );
+    const snapshot = seeded.exportSnapshot();
+    const jumped = new SimulationEngine(snapshot);
+    const stepped = new SimulationEngine(snapshot);
+
+    jumped.advanceGameMinutes(30, 'presence large jump');
+    for (let i = 0; i < 30; i += 1) stepped.advanceGameMinutes(1, 'presence stepped');
+
+    const jumpPresence = resolveCharacterPresenceFromSimulation(jumped, actor.id);
+    const stepPresence = resolveCharacterPresenceFromSimulation(stepped, actor.id);
+    expect(jumpPresence).toEqual(stepPresence);
+    expect(jumpPresence?.physical).toEqual({ kind: 'at_place', placeId: 'place_b1' });
   });
 
   it('does not persist the derived presence projection as a second source of truth', () => {
