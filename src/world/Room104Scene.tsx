@@ -1,6 +1,6 @@
 import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { resolvePcBootState } from '../engine/SimulationEngine';
-import { CITY_NODES, type CityNodeId, type TravelMode } from '../engine/CityMap';
+import type { CityNodeId, TravelMode } from '../engine/CityMap';
 import { buddyWithRole } from '../engine/coreBuddies';
 import { getWeatherForDay, isWetWeather } from '../engine/WeatherEngine';
 import { soundManager } from '../audio/SoundManager';
@@ -14,10 +14,7 @@ import { DoorActionModal } from './modals/DoorActionModal';
 import { SleepTransitionModal } from './modals/SleepTransitionModal';
 import { HardwareWorkbenchModal } from './modals/HardwareWorkbenchModal';
 import { getContextualWindowThought, getStreetSighting } from './data/windowThoughts';
-import {
-  ROOM104_VIEW_IDS,
-  ROOM104_PLACE_ID,
-} from './data/room104AuthoredContent';
+import { ROOM104_VIEW_IDS } from './data/room104AuthoredContent';
 import { createWorldSceneProjection } from './phaser/presentationAdapter';
 import type { WorldInteractionIntent } from './phaser/types';
 import { routeRoom104Intent } from './room104IntentRouter';
@@ -41,10 +38,6 @@ function roomWeather(day: number): WeatherType {
   if (condition === 'rain' || condition === 'drizzle' || condition === 'storm') return 'rain';
   if (condition === 'overcast' || condition === 'fog') return 'cloudy';
   return 'clear';
-}
-
-function playerLocationLabel(location: CityNodeId): string {
-  return CITY_NODES[location]?.name ?? location;
 }
 
 export const Room104Scene: React.FC = () => {
