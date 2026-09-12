@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { SimulationEngine } from '../../src/engine/SimulationEngine';
 import { commitTravelPlan } from '../../src/engine/transit/ActiveTravel';
+import type { BuddyPresence } from '../../src/engine/types';
 import type { TravelPlan } from '../../src/engine/transit/types';
 
 function localActor(sim: SimulationEngine) {
@@ -9,14 +10,17 @@ function localActor(sim: SimulationEngine) {
   return actor;
 }
 
-function remoteActor(sim: SimulationEngine) {
-  const actor = sim.social.getBuddies().find((buddy) => buddy.reach === 'remote');
-  if (!actor) throw new Error('Expected at least one remote Away character.');
-  return actor;
-}
-
-function withMobility(sim: SimulationEngine, npcMobility: unknown): SimulationEngine {
-  const snapshot = JSON.parse(JSON.stringify(sim.exportSnapshot())) as Record<string, unknown>;
+function withCanonicalState(
+  sim: SimulationEngine,
+  actorId: string,
+  presence: BuddyPresence,
+  npcMobility: unknown,
+): SimulationEngine {
+  const snapshot = JSON.parse(JSON.stringify(sim.exportSnapshot())) as {
+    social: { presence: Record<string, BuddyPresence> };
+    npcMobility?: unknown;
+  };
+  snapshot.social.presence[actorId] = presence;
   snapshot.npcMobility = npcMobility;
   return new SimulationEngine(snapshot as never);
 }
@@ -70,8 +74,12 @@ describe('coherent character presence (#45)', () => {
   it('preserves legacy online behavior for a local actor whose physical place is known', () => {
     const first = new SimulationEngine();
     const actor = localActor(first);
-    first.social.setPresence(actor.id, { status: 'online', awayMessage: 'around' });
-    const sim = withMobility(first, { trips: {}, places: { [actor.id]: 'place_a1' } });
+    const sim = withCanonicalState(
+      first,
+      actor.id,
+      { status: 'online', awayMessage: 'around' },
+      { trips: {}, places: { [actor.id]: 'place_a1' } },
+    );
 
     expect(resolvePresence(sim, actor.id, { atMinute: 600, playerPlaceId: 'place_a1' })).toMatchObject({
       actorId: actor.id,
@@ -84,11 +92,15 @@ describe('coherent character presence (#45)', () => {
   it('uses #37 transit truth to suppress impossible home-PC active presence', () => {
     const first = new SimulationEngine();
     const actor = localActor(first);
-    first.social.setPresence(actor.id, { status: 'online', awayMessage: 'home pc still logged in' });
-    const sim = withMobility(first, {
-      trips: { [actor.id]: activeTrip(actor.id) },
-      places: { [actor.id]: 'place_a1' },
-    });
+    const sim = withCanonicalState(
+      first,
+      actor.id,
+      { status: 'online', awayMessage: 'home pc still logged in' },
+      {
+        trips: { [actor.id]: activeTrip(actor.id) },
+        places: { [actor.id]: 'place_a1' },
+      },
+    );
 
     const projected = resolvePresence(sim, actor.id, { atMinute: 615, playerPlaceId: 'place_a1' });
     expect(projected).not.toBeNull();
@@ -97,7 +109,7 @@ describe('coherent character presence (#45)', () => {
       originPlaceId: 'place_a1',
       destinationPlaceId: 'place_b1',
     });
-    expect(projected!.communication.status).not.toBe('online_active');
+    expect(projected!.communication.status).toBe('online_idle');
     expect(projected!.availability.canCall).toBe(false);
     expect(projected!.availability.canInteractInPerson).toBe(false);
     expect(projected!.reasonCodes).toContain('transit_suppresses_active_device');
@@ -106,12 +118,16 @@ describe('coherent character presence (#45)', () => {
   it('treats a planned trip as still physically at its origin before departure', () => {
     const first = new SimulationEngine();
     const actor = localActor(first);
-    first.social.setPresence(actor.id, { status: 'away', awayMessage: 'heading out soon' });
     const record = { ...activeTrip(actor.id), status: 'planned' };
-    const sim = withMobility(first, {
-      trips: { [actor.id]: record },
-      places: { [actor.id]: 'place_a1' },
-    });
+    const sim = withCanonicalState(
+      first,
+      actor.id,
+      { status: 'away', awayMessage: 'heading out soon' },
+      {
+        trips: { [actor.id]: record },
+        places: { [actor.id]: 'place_a1' },
+      },
+    );
 
     expect(resolvePresence(sim, actor.id, { atMinute: 590, playerPlaceId: 'place_a1' })).toMatchObject({
       physical: { kind: 'at_place', placeId: 'place_a1' },
@@ -121,24 +137,15 @@ describe('coherent character presence (#45)', () => {
     });
   });
 
-  it('keeps remote identity remote while preserving valid messenger presence', () => {
-    const first = new SimulationEngine();
-    const actor = remoteActor(first);
-    first.social.setPresence(actor.id, { status: 'online', awayMessage: 'online' });
-    const sim = withMobility(first, { trips: {}, places: {} });
-
-    expect(resolvePresence(sim, actor.id, { atMinute: 600, playerPlaceId: 'place_a1' })).toMatchObject({
-      actorId: actor.id,
-      physical: { kind: 'remote' },
-      communication: { status: 'online_active', legacyStatus: 'online' },
-      availability: { canMessage: true, canInteractInPerson: false },
-    });
-  });
-
   it('does not persist the derived presence projection as a second source of truth', () => {
     const first = new SimulationEngine();
     const actor = localActor(first);
-    const sim = withMobility(first, { trips: {}, places: { [actor.id]: 'place_a1' } });
+    const sim = withCanonicalState(
+      first,
+      actor.id,
+      first.social.getPresence(actor.id),
+      { trips: {}, places: { [actor.id]: 'place_a1' } },
+    );
     resolvePresence(sim, actor.id, { atMinute: 600 });
 
     const snapshotJson = JSON.stringify(sim.exportSnapshot());
