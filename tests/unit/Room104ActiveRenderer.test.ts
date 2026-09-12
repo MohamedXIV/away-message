@@ -23,4 +23,12 @@ describe('Room 104 active renderer architecture (#26)', () => {
     expect(room).not.toContain('RoomCanvasRenderer');
     expect(room).not.toContain('<canvas');
   });
+
+  it('reads authored storage surfaces from canonical PhysicalWorldState instead of a placeholder inventory path', () => {
+    const room = source('src/world/Room104Scene.tsx');
+
+    expect(room).toContain('getRoom104StorageContents');
+    expect(room).toContain('engine.getPhysicalWorldState()');
+    expect(room).not.toContain('no canonical physical container is bound yet');
+  });
 });
