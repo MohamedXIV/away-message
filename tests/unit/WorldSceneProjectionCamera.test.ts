@@ -1,9 +1,13 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from 'vitest';
-import { resolveProjectionCameraTarget } from '../../src/world/phaser/WorldScene';
+import { resolveProjectionCameraTarget, resolveProjectionVisual } from '../../src/world/phaser/WorldScene';
 import type { WorldSceneProjection } from '../../src/world/phaser/types';
 
-function projection(focus: WorldSceneProjection['focus']): WorldSceneProjection {
+function projection(
+  focus: WorldSceneProjection['focus'],
+  assetId: string | null = null,
+  normalMapAssetId: string | null = null,
+): WorldSceneProjection {
   return {
     placeId: 'room_104',
     placeName: 'Motel Room 104',
@@ -11,8 +15,8 @@ function projection(focus: WorldSceneProjection['focus']): WorldSceneProjection 
     spaceName: 'Room 104',
     viewId: 'room104_desk_window',
     viewName: 'Desk & Window',
-    assetId: null,
-    normalMapAssetId: null,
+    assetId,
+    normalMapAssetId,
     timeOfDay: 'day',
     weather: 'clear',
     lighting: { ambientColor: '#ffffff', ambientIntensity: 1, pointLights: [] },
@@ -37,6 +41,24 @@ describe('WorldScene projection-driven camera target', () => {
       x: 600,
       y: 400,
       zoom: 1,
+    });
+  });
+});
+
+describe('WorldScene projection-driven visual selection', () => {
+  it('uses the authored projected asset and normal map when present', () => {
+    expect(resolveProjectionVisual(projection(null, 'asset_a1', 'asset_a1_n'))).toEqual({
+      assetId: 'asset_a1',
+      normalMapAssetId: 'asset_a1_n',
+      usesAuthoredAsset: true,
+    });
+  });
+
+  it('does not substitute fixture-specific scenery when a view has no authored asset', () => {
+    expect(resolveProjectionVisual(projection(null))).toEqual({
+      assetId: null,
+      normalMapAssetId: null,
+      usesAuthoredAsset: false,
     });
   });
 });
