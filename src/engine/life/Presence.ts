@@ -52,6 +52,23 @@ export interface CharacterPresenceInput {
   hasPortableMessagingDevice?: boolean;
 }
 
+export interface CharacterPresenceResolveOptions {
+  atMinute?: number;
+  playerPlaceId?: string;
+  hasPortableMessagingDevice?: boolean;
+}
+
+export interface CharacterPresenceSimulationSource {
+  social: {
+    getBuddy(actorId: string): {
+      reach?: 'local' | 'remote';
+      status?: BuddyLifecycleStatus;
+    } | undefined;
+    getPresence(actorId: string): BuddyPresence | undefined;
+  };
+  getNpcPlaceState(actorId: string, atMinute?: number): NpcPlaceQuery;
+}
+
 const isLifecycleUnavailable = (status?: BuddyLifecycleStatus): boolean =>
   status === 'distant' || status === 'gone' || status === 'blocked';
 
@@ -144,4 +161,36 @@ export function resolveCharacterPresence(
     },
     reasonCodes,
   };
+}
+
+/**
+ * Compatibility adapter over the real Away authorities. This is deliberately
+ * a narrow read-only source contract rather than a new SimulationEngine-owned
+ * presence state: #37 supplies physical truth and SocialEngine supplies the
+ * legacy messenger input while consumers migrate to the coherent projection.
+ */
+export function resolveCharacterPresenceFromSimulation(
+  source: CharacterPresenceSimulationSource,
+  actorId: string,
+  options: CharacterPresenceResolveOptions = {},
+): CharacterPresenceProjection | null {
+  const buddy = source.social.getBuddy(actorId);
+  if (!buddy) return null;
+
+  const legacyPresence = source.social.getPresence(actorId) ?? {
+    status: 'offline',
+    awayMessage: '',
+  };
+
+  return resolveCharacterPresence({
+    actorId,
+    place: source.getNpcPlaceState(actorId, options.atMinute),
+    legacyPresence,
+    reach: buddy.reach === 'remote' ? 'remote' : 'local',
+    ...(buddy.status !== undefined ? { lifecycleStatus: buddy.status } : {}),
+    ...(options.playerPlaceId !== undefined ? { playerPlaceId: options.playerPlaceId } : {}),
+    ...(options.hasPortableMessagingDevice !== undefined
+      ? { hasPortableMessagingDevice: options.hasPortableMessagingDevice }
+      : {}),
+  });
 }
