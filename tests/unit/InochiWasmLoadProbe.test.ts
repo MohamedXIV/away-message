@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { allocatePuppetInputOrThrow } from '../../scripts/probe-inochi-wasm-load';
+import {
+  allocatePuppetInputOrThrow,
+  bootstrapAndAllocatePuppetInput,
+} from '../../scripts/probe-inochi-wasm-load';
 
 describe('Inochi WASM real-byte probe safety (#34)', () => {
   it('fails closed before writing puppet bytes when the upstream allocator returns null', () => {
@@ -26,5 +29,28 @@ describe('Inochi WASM real-byte probe safety (#34)', () => {
     };
 
     expect(allocatePuppetInputOrThrow(api, 128)).toBe(4096);
+  });
+
+  it('bootstraps Inochi scratch memory before allocating real puppet input', () => {
+    const calls: string[] = [];
+    const api = {
+      in_init(): void {
+        calls.push('init');
+      },
+      nu_realloc(pointer: number, bytes: number): number {
+        calls.push(`scratch:${pointer}:${bytes}`);
+        return 2048;
+      },
+      nu_malloc(size: number): number {
+        calls.push(`input:${size}`);
+        return 4096;
+      },
+    };
+
+    expect(bootstrapAndAllocatePuppetInput(api, 512)).toEqual({
+      sourcePointer: 4096,
+      scratchpad: { pointer: 2048, size: 128 },
+    });
+    expect(calls).toEqual(['init', 'scratch:0:128', 'input:512']);
   });
 });
