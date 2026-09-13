@@ -15,20 +15,21 @@ const UPSTREAM_EMPTY08_SHA256 = 'b56a0377034fed6bf658820b1a009252605c1c47ffbb581
 const EMPTY08_LABEL = 'Inochi2D/inochi2d examples/empty08.inx';
 const EMPTY08_BASE64 = `VFJOU1JUUwAAAAKmeyJtZXRhIjp7Im5hbWUiOiJUZXN0IFB1cHBldCIsInZl
 cnNpb24iOiJ2MC44LjYiLCJyaWdnZXIiOiIiLCJhcnRpc3QiOiJJbm9jaGky
-RCBQcm9qZWN0IiwicmlnaHRzIjpudWxsLCJjb3B5cmlnaHQiOiIiLCJsaWNl
-bnNlVVJMIjoiIiwiY29udGFjdCI6IiIsInJlZmVyZW5jZSI6IiIsInRodW1i
-bmFpbElkIjo0Mjk0OTY3Mjk1LCJwcmVzZXJ2ZVBpeGVscyI6ZmFsc2V9LCJw
-aHlzaWNzIjp7InBpeGVsc1Blck1ldGVyIjoxMDAwLjAsImdyYXZpdHkiOjku
-OH0sIm5vZGVzIjp7InV1aWQiOjM3NjA0Nzk3MjEsIm5hbWUiOiJSb290Iiwi
-dHlwZSI6Ik5vZGUiLCJlbmFibGVkIjp0cnVlLCJ6c29ydCI6MC4wLCJ0cmFu
-c2Zvcm0iOnsidHJhbnMiOlswLjAsMC4wLDAuMF0sInJvdCI6WzAuMCwwLjAs
-MC4wXSwic2NhbGUiOlsxLjAsMS4wXX0sImxvY2tUb1Jvb3QiOmZhbHNlLCJj
-aGlsZHJlbiI6W3sidXVpZCI6MTg3MjM3Mjk5LCJuYW1lIjoiTm9kZSIsInR5
-cGUiOiJOb2RlIiwiZW5hYmxlZCI6dHJ1ZSwienNvcnQiOjAuMCwidHJhbnNm
-b3JtIjp7InRyYW5zIjpbMC4wLDAuMCwwLjBdLCJyb3QiOlswLjAsMC4wLDAu
-MF0sInNjYWxlIjpbMS4wLDEuMF19LCJsb2NrVG9Sb290IjpmYWxzZX1dfSwi
-cGFyYW0iOm51bGwsImF1dG9tYXRpb24iOm51bGwsImFuaW1hdGlvbnMiOm51
-bGwsImdyb3VwcyI6W119VEVYX1NFQ1QAAAAA`;
+RCBQcm9qZWN0IiwicmlnaHRzIjpudWxsLCJhcnRpc3QiOiJJbm9jaGkyRCBQ
+cm9qZWN0IiwicmlnaHRzIjpudWxsLCJjb3B5cmlnaHQiOiIiLCJsaWNlbnNl
+VVJMIjoiIiwiY29udGFjdCI6IiIsInJlZmVyZW5jZSI6IiIsInRodW1ibmFp
+bElkIjo0Mjk0OTY3Mjk1LCJwcmVzZXJ2ZVBpeGVscyI6ZmFsc2V9LCJwaHlz
+aWNzIjp7InBpeGVsc1Blck1ldGVyIjoxMDAwLjAsImdyYXZpdHkiOjkuOH0s
+Im5vZGVzIjp7InV1aWQiOjM3NjA0Nzk3MjEsIm5hbWUiOiJSb290IiwidHlw
+ZSI6Ik5vZGUiLCJlbmFibGVkIjp0cnVlLCJ6c29ydCI6MC4wLCJ0cmFuc2Zv
+cm0iOnsidHJhbnMiOlswLjAsMC4wLDAuMF0sInJvdCI6WzAuMCwwLjAsMC4w
+XSwic2NhbGUiOlsxLjAsMS4wXX0sImxvY2tUb1Jvb3QiOmZhbHNlLCJjaGls
+ZHJlbiI6W3sidXVpZCI6MTg3MjM3Mjk5LCJuYW1lIjoiTm9kZSIsInR5cGUi
+OiJOb2RlIiwiZW5hYmxlZCI6dHJ1ZSwienNvcnQiOjAuMCwidHJhbnNmb3Jt
+Ijp7InRyYW5zIjpbMC4wLDAuMCwwLjBdLCJyb3QiOlswLjAsMC4wLDAuMF0s
+InNjYWxlIjpbMS4wLDEuMF19LCJsb2NrVG9Sb290IjpmYWxzZX1dfSwicGFy
+YW0iOm51bGwsImF1dG9tYXRpb24iOm51bGwsImFuaW1hdGlvbnMiOm51bGws
+Imdyb3VwcyI6W119VEVYX1NFQ1QAAAAA`;
 
 interface AllocatingWasmApi {
   nu_malloc(size: number): number | bigint;
@@ -66,7 +67,7 @@ export interface ProbeFixture {
   readonly label: string;
 }
 
-export type ProbeMode = 'load' | 'inventory' | 'runtime';
+export type ProbeMode = 'load' | 'inventory' | 'mutation' | 'runtime';
 
 interface InventoryProof {
   readonly name: string;
@@ -77,8 +78,11 @@ interface InventoryProof {
   readonly rootNode: string;
 }
 
-interface RuntimeProof extends InventoryProof {
+interface MutationProof extends InventoryProof {
   readonly mutatedParameters: readonly string[];
+}
+
+interface RuntimeProof extends MutationProof {
   readonly reloadMatched: boolean;
 }
 
@@ -112,7 +116,8 @@ export function resolveProbeFixture(args: readonly string[]): ProbeFixture {
 
 export function resolveProbeMode(args: readonly string[]): ProbeMode {
   if (args.includes('--runtime-proof')) return 'runtime';
-  if (args.includes('--fixture')) return 'inventory';
+  if (args.includes('--inventory-proof')) return 'inventory';
+  if (args.includes('--fixture')) return 'mutation';
   return 'load';
 }
 
@@ -261,6 +266,11 @@ function mutateTwoParameters(api: InochiWasmExports, puppetPtr: number): string[
   return mutated;
 }
 
+function proveMutation(api: InochiWasmExports, puppetPtr: number): MutationProof {
+  const inventory = proveInventory(api, puppetPtr);
+  return { ...inventory, mutatedParameters: mutateTwoParameters(api, puppetPtr) };
+}
+
 function loadPuppetBytes(api: InochiWasmExports, puppetBytes: Uint8Array): number {
   const sourcePtr = allocatePuppetInputOrThrow(api, puppetBytes.byteLength);
   try {
@@ -272,8 +282,7 @@ function loadPuppetBytes(api: InochiWasmExports, puppetBytes: Uint8Array): numbe
 }
 
 function proveRuntime(api: InochiWasmExports, puppetPtr: number, puppetBytes: Uint8Array): RuntimeProof {
-  const inventory = proveInventory(api, puppetPtr);
-  const mutated = mutateTwoParameters(api, puppetPtr);
+  const mutationProof = proveMutation(api, puppetPtr);
   api.in_puppet_free(puppetPtr);
   const reloadPtr = loadPuppetBytes(api, puppetBytes);
   if (!reloadPtr) throw new Error('real puppet failed deterministic reload after dispose');
@@ -281,12 +290,12 @@ function proveRuntime(api: InochiWasmExports, puppetPtr: number, puppetBytes: Ui
   try {
     const reloadedName = readWasmCString(api.memory, Number(api.in_puppet_get_name(reloadPtr)));
     const { count: reloadParameterCount } = withCountPointer(api, (countPtr) => Number(api.in_puppet_get_parameters(reloadPtr, countPtr)));
-    reloadMatched = reloadedName === inventory.name && reloadParameterCount === inventory.parameterCount;
+    reloadMatched = reloadedName === mutationProof.name && reloadParameterCount === mutationProof.parameterCount;
     if (!reloadMatched) throw new Error('reloaded puppet metadata/parameter inventory changed');
   } finally {
     api.in_puppet_free(reloadPtr);
   }
-  return { ...inventory, mutatedParameters: mutated, reloadMatched };
+  return { ...mutationProof, reloadMatched };
 }
 
 async function main(): Promise<void> {
@@ -296,7 +305,7 @@ async function main(): Promise<void> {
   const allowCandidate = args.includes('--allow-candidate-wasm');
   const proofMode = resolveProbeMode(args);
   if (!wasmPath || wasmPath.startsWith('--')) {
-    throw new Error('usage: npx tsx scripts/probe-inochi-wasm-load.ts <inochi2d.wasm> [--fixture <puppet.inx>] [--runtime-proof] [--expect-blocked] [--allow-candidate-wasm]');
+    throw new Error('usage: npx tsx scripts/probe-inochi-wasm-load.ts <inochi2d.wasm> [--fixture <puppet.inx>] [--inventory-proof] [--runtime-proof] [--expect-blocked] [--allow-candidate-wasm]');
   }
   const fixture = resolveProbeFixture(args);
   const wasm = await readFile(wasmPath);
@@ -337,6 +346,15 @@ async function main(): Promise<void> {
     try {
       const inventoryProof = proveInventory(api, puppetPtr);
       console.log(JSON.stringify({ ...baseEvidence, scratchpad, puppetPtr, inventoryProof }, null, 2));
+    } finally {
+      api.in_puppet_free(puppetPtr);
+    }
+    return;
+  }
+  if (proofMode === 'mutation') {
+    try {
+      const mutationProof = proveMutation(api, puppetPtr);
+      console.log(JSON.stringify({ ...baseEvidence, scratchpad, puppetPtr, mutationProof }, null, 2));
     } finally {
       api.in_puppet_free(puppetPtr);
     }
