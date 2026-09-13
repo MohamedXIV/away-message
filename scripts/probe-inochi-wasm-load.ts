@@ -57,6 +57,14 @@ export function allocatePuppetInputOrThrow(api: AllocatingWasmApi, byteLength: n
   return pointer;
 }
 
+export function assertAcceptedWasmHash(actualHash: string, allowCandidate: boolean): void {
+  if (!allowCandidate && actualHash !== PINNED_WASM_SHA256) {
+    throw new Error(
+      `unexpected wasm sha256 ${actualHash}; expected ${PINNED_WASM_SHA256} from ${PINNED_UPSTREAM_COMMIT}`,
+    );
+  }
+}
+
 /**
  * Applies the corrected two-phase Web bootstrap before asking the allocator for
  * puppet input storage. Keeping both operations in one helper makes it harder
@@ -97,20 +105,19 @@ function wasiImports(): WebAssembly.Imports {
 }
 
 async function main(): Promise<void> {
-  const [wasmPath, expectation] = process.argv.slice(2);
+  const args = process.argv.slice(2);
+  const wasmPath = args.find((arg) => !arg.startsWith('--'));
+  const expectBlocked = args.includes('--expect-blocked');
+  const allowCandidate = args.includes('--allow-candidate-wasm');
   if (!wasmPath) {
     throw new Error(
-      'usage: npx tsx scripts/probe-inochi-wasm-load.ts <inochi2d.wasm> [--expect-blocked]',
+      'usage: npx tsx scripts/probe-inochi-wasm-load.ts <inochi2d.wasm> [--expect-blocked] [--allow-candidate-wasm]',
     );
   }
 
   const wasm = await readFile(wasmPath);
   const wasmHash = sha256(wasm);
-  if (wasmHash !== PINNED_WASM_SHA256) {
-    throw new Error(
-      `unexpected wasm sha256 ${wasmHash}; expected ${PINNED_WASM_SHA256} from ${PINNED_UPSTREAM_COMMIT}`,
-    );
-  }
+  assertAcceptedWasmHash(wasmHash, allowCandidate);
 
   const puppetBytes = Buffer.from(EMPTY08_BASE64.replace(/\s+/g, ''), 'base64');
   if (sha256(puppetBytes) !== UPSTREAM_EMPTY08_SHA256) {
@@ -122,7 +129,8 @@ async function main(): Promise<void> {
 
   const baseEvidence = {
     upstreamCommit: PINNED_UPSTREAM_COMMIT,
-    artifactDigest: `sha256:${PINNED_ARTIFACT_DIGEST}`,
+    artifactDigest: allowCandidate ? undefined : `sha256:${PINNED_ARTIFACT_DIGEST}`,
+    candidateWasm: allowCandidate,
     wasmSha256: wasmHash,
     fixture: 'Inochi2D/inochi2d examples/empty08.inx',
     fixtureSha256: UPSTREAM_EMPTY08_SHA256,
@@ -141,7 +149,7 @@ async function main(): Promise<void> {
       requestedBytes: puppetBytes.byteLength,
       error: error instanceof Error ? error.message : String(error),
     }, null, 2));
-    if (expectation === '--expect-blocked') return;
+    if (expectBlocked) return;
     throw error;
   }
 
@@ -157,13 +165,13 @@ async function main(): Promise<void> {
 
   if (puppetPtr) {
     api.in_puppet_free(puppetPtr);
-    if (expectation === '--expect-blocked') {
+    if (expectBlocked) {
       throw new Error('upstream WASM load unexpectedly succeeded; re-evaluate the documented blocker');
     }
     return;
   }
 
-  if (expectation === '--expect-blocked') return;
+  if (expectBlocked) return;
   throw new Error('upstream WASM in_puppet_load_from_memory returned null for its own empty08 fixture');
 }
 
