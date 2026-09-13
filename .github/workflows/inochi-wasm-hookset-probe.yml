@@ -28,6 +28,14 @@ jobs:
           ref: ec702261dd6428141bfd0b174a015f8af872d3ed
           path: .tmp/inochi2d
 
+      - name: Checkout official Inochi2D example models
+        uses: actions/checkout@v4
+        with:
+          repository: Inochi2D/example-models
+          ref: cd95dd00ddff63b1f7d2b84a19914c3c70d05945
+          path: .tmp/example-models
+          lfs: true
+
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
@@ -75,39 +83,11 @@ jobs:
       - name: Probe tiny upstream fixture through candidate allocator
         run: npx tsx scripts/probe-inochi-wasm-load.ts '${{ steps.wasm.outputs.path }}' --allow-candidate-wasm
 
-      - name: Instrument parameter-count stability by inventory stage
-        shell: bash
-        run: |
-          python3 - <<'PY'
-          from pathlib import Path
-          path = Path('scripts/probe-inochi-wasm-load.ts')
-          text = path.read_text()
-          start = text.index('function proveParameterReads(api: InochiWasmExports, puppetPtr: number): ParameterReadProof {')
-          end = text.index('\nfunction mutateTwoParameters', start)
-          diagnostic = '''function proveParameterReads(api: InochiWasmExports, puppetPtr: number): ParameterReadProof {
-            const counts: Array<{ stage: string; count: number }> = [];
-            const capture = (stage: string): { count: number; pointers: number[] } => {
-              const current = parameterPointers(api, puppetPtr);
-              counts.push({ stage, count: current.count });
-              return current;
-            };
-            const initial = capture('initial');
-            readWasmCString(api.memory, Number(api.in_puppet_get_name(puppetPtr)));
-            readWasmCString(api.memory, Number(api.in_puppet_get_author(puppetPtr)));
-            capture('after-metadata');
-            initial.pointers.forEach((parameterPtr) => readWasmCString(api.memory, Number(api.in_parameter_get_name(parameterPtr))));
-            capture('after-parameter-names');
-            const rootPtr = Number(api.in_puppet_get_root_node(puppetPtr));
-            capture('after-root-lookup');
-            if (!rootPtr) throw new Error(`parameter stability diagnostic: ${JSON.stringify(counts)}; null root`);
-            enumerateNodes(api, rootPtr);
-            capture('after-node-traversal');
-            throw new Error(`parameter stability diagnostic: ${JSON.stringify(counts)}`);
-          }
-          '''.replace('          ', '')
-          path.write_text(text[:start] + diagnostic + text[end:])
-          PY
-          git diff -- scripts/probe-inochi-wasm-load.ts
+      - name: Probe full upstream Ada inventory
+        run: npx tsx scripts/probe-inochi-wasm-load.ts '${{ steps.wasm.outputs.path }}' --fixture .tmp/inochi2d/examples/ada-static.inx --allow-candidate-wasm
 
-      - name: Diagnose full upstream Ada parameter inventory stability
-        run: npx tsx scripts/probe-inochi-wasm-load.ts '${{ steps.wasm.outputs.path }}' --fixture .tmp/inochi2d/examples/ada-static.inx --parameter-read-proof --allow-candidate-wasm
+      - name: Prove parameters on official Aka rigged example
+        run: |
+          test $(wc -c < .tmp/example-models/Aka.inx) -gt 1000
+          sha256sum .tmp/example-models/Aka.inx
+          npx tsx scripts/probe-inochi-wasm-load.ts '${{ steps.wasm.outputs.path }}' --fixture .tmp/example-models/Aka.inx --parameter-read-proof --allow-candidate-wasm
