@@ -478,18 +478,21 @@
       "spaceId": "room104_main",
       "name": "Desk & Window",
       "neighbors": "[\"room104_bed_wardrobe\",\"room104_entrance_kitchenette\"]",
+      "assetId": "room104_desk_window_art",
       "tags": "[\"room104\",\"main-view\",\"desk\",\"window\"]"
     },
     "room104_bed_wardrobe": {
       "spaceId": "room104_main",
       "name": "Bed & Wardrobe",
       "neighbors": "[\"room104_desk_window\",\"room104_entrance_kitchenette\"]",
+      "assetId": "room104_bed_wardrobe_art",
       "tags": "[\"room104\",\"main-view\",\"bed\",\"storage\"]"
     },
     "room104_entrance_kitchenette": {
       "spaceId": "room104_main",
       "name": "Entrance & Kitchenette",
       "neighbors": "[\"room104_desk_window\",\"room104_bed_wardrobe\"]",
+      "assetId": "room104_entrance_kitchenette_art",
       "tags": "[\"room104\",\"main-view\",\"entrance\",\"kitchenette\"]"
     }
   },
@@ -661,6 +664,34 @@
       "uri": "assets/world/a2.mp3",
       "normalMapAssetId": "",
       "tags": "[]"
+    },
+    "room104_desk_window_art": {
+      "name": "Room 104 Desk And Window",
+      "kind": "image",
+      "uri": "assets/world/room104/room104-desk-window.png",
+      "normalMapAssetId": "room104_flat_normal",
+      "tags": "[\"production\",\"room104\"]"
+    },
+    "room104_bed_wardrobe_art": {
+      "name": "Room 104 Bed And Wardrobe",
+      "kind": "image",
+      "uri": "assets/world/room104/room104-bed-wardrobe.png",
+      "normalMapAssetId": "room104_flat_normal",
+      "tags": "[\"production\",\"room104\"]"
+    },
+    "room104_entrance_kitchenette_art": {
+      "name": "Room 104 Entrance And Kitchenette",
+      "kind": "image",
+      "uri": "assets/world/room104/room104-entrance-kitchenette.png",
+      "normalMapAssetId": "room104_flat_normal",
+      "tags": "[\"production\",\"room104\"]"
+    },
+    "room104_flat_normal": {
+      "name": "Room 104 Flat Normal",
+      "kind": "image",
+      "uri": "assets/world/room104/room104-flat-normal.png",
+      "normalMapAssetId": "",
+      "tags": "[\"production\"]"
     }
   },
   "lightProfiles": {

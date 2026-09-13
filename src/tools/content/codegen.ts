@@ -1027,7 +1027,13 @@ export function validateWorldAssets(tables: ContentTables): string[] {
   }
   for (const [id, row] of Object.entries(views)) {
     if (!row || typeof row !== 'object') continue;
-    checkAssetId('views', id, (row as Record<string, unknown>)['assetId']);
+    const value = (row as Record<string, unknown>)['assetId'];
+    if (value === undefined || value === null || value === '') continue;
+    if (typeof value !== 'string' || !assets[String(value)]) {
+      errors.push(`views/${id}.assetId: unknown asset '${String(value)}'.`);
+    } else if ((assets[String(value)] as Record<string, unknown>)?.['kind'] !== 'image') {
+      errors.push(`views/${id}.assetId: asset '${String(value)}' must be an image asset to back a view.`);
+    }
   }
 
   return errors;

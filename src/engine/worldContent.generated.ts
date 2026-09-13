@@ -1,6 +1,6 @@
 // GENERATED — do not edit by hand.
-// Source: content/store.json (content v59b86490). Regenerate: npm run content:pull.
-export const WORLD_CONTENT_VERSION = '59b86490';
+// Source: content/store.json (content vfa5406d6). Regenerate: npm run content:pull.
+export const WORLD_CONTENT_VERSION = 'fa5406d6';
 
 export interface GeneratedDistrictDef {
   id: string;
@@ -221,7 +221,7 @@ export const GENERATED_VIEWS: GeneratedViewDef[] = [
     spaceId: "room104_main",
     name: "Bed & Wardrobe",
     neighbors: ["room104_desk_window", "room104_entrance_kitchenette"],
-    assetId: null,
+    assetId: "room104_bed_wardrobe_art",
     tags: ["room104", "main-view", "bed", "storage"],
   },
   {
@@ -229,7 +229,7 @@ export const GENERATED_VIEWS: GeneratedViewDef[] = [
     spaceId: "room104_main",
     name: "Desk & Window",
     neighbors: ["room104_bed_wardrobe", "room104_entrance_kitchenette"],
-    assetId: null,
+    assetId: "room104_desk_window_art",
     tags: ["room104", "main-view", "desk", "window"],
   },
   {
@@ -237,7 +237,7 @@ export const GENERATED_VIEWS: GeneratedViewDef[] = [
     spaceId: "room104_main",
     name: "Entrance & Kitchenette",
     neighbors: ["room104_desk_window", "room104_bed_wardrobe"],
-    assetId: null,
+    assetId: "room104_entrance_kitchenette_art",
     tags: ["room104", "main-view", "entrance", "kitchenette"],
   },
   {
@@ -479,6 +479,38 @@ export const GENERATED_ASSETS: GeneratedAssetDef[] = [
     uri: "assets/world/a2.mp3",
     normalMapAssetId: null,
     tags: [],
+  },
+  {
+    id: "room104_bed_wardrobe_art",
+    name: "Room 104 Bed And Wardrobe",
+    kind: "image",
+    uri: "assets/world/room104/room104-bed-wardrobe.png",
+    normalMapAssetId: "room104_flat_normal",
+    tags: ["production", "room104"],
+  },
+  {
+    id: "room104_desk_window_art",
+    name: "Room 104 Desk And Window",
+    kind: "image",
+    uri: "assets/world/room104/room104-desk-window.png",
+    normalMapAssetId: "room104_flat_normal",
+    tags: ["production", "room104"],
+  },
+  {
+    id: "room104_entrance_kitchenette_art",
+    name: "Room 104 Entrance And Kitchenette",
+    kind: "image",
+    uri: "assets/world/room104/room104-entrance-kitchenette.png",
+    normalMapAssetId: "room104_flat_normal",
+    tags: ["production", "room104"],
+  },
+  {
+    id: "room104_flat_normal",
+    name: "Room 104 Flat Normal",
+    kind: "image",
+    uri: "assets/world/room104/room104-flat-normal.png",
+    normalMapAssetId: null,
+    tags: ["production"],
   },
 ];
 

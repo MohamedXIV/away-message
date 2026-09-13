@@ -9,6 +9,15 @@ import type {
 } from './types';
 import { ensureFixtureTextures, createTechnicalFixtureProjection } from './technicalFixture';
 import { resolveProjectionVisual } from './projectionVisual';
+import {
+  buildProjectionAssetLoadPlan,
+  queueProjectionAssetLoads,
+  formatProjectionAssetLoadError,
+  textureHasLinkedNormalMap,
+  queueMissingProjectionAssetsForUpdate,
+  type ProjectionAssetLoadErrorFile,
+  type RefreshableProjectionLoadScene,
+} from './projectionAssets';
 import { EnvironmentManager } from './environment/EnvironmentManager';
 import { audioService, type AudioService } from '../../audio/AudioService';
 import { mapViewCoordinatesToAudioPosition } from '../../audio/spatialMapping';
@@ -109,10 +118,40 @@ export class WorldScene extends Phaser.Scene {
     }
   }
 
+  /**
+   * Queues the projection-selected production diffuse images and their
+   * linked normal maps (active view plus authored siblings) with relative
+   * Vite/itch-compatible URLs. Invalid references are reported by the load
+   * plan and queued nowhere; the projection stays assetless for those
+   * slots instead of borrowing another visual.
+   *
+   * The loaderror listener is registered BEFORE queueing so initial preload
+   * failures are reported loudly with the Phaser file key/URL. It is
+   * removed again on shutdown (see handleShutdown).
+   */
+  public preload(): void {
+    try {
+      this.load.off('loaderror', this.handleAssetLoadError, this);
+    } catch {
+      // Headless/test loaders may not implement off(); registration below still applies.
+    }
+    this.load.on('loaderror', this.handleAssetLoadError, this);
+    queueProjectionAssetLoads(this, buildProjectionAssetLoadPlan(this.projection));
+  }
+
   public create(): void {
     // Technical fixture textures still provide the current procedural particle
     // probes; scenery selection itself is projection-owned below.
     ensureFixtureTextures(this);
+    // preload() already registered this listener before the boot queue ran.
+    // Re-assert it here (off-then-on) so scenes created without preload
+    // (tests, direct boots) still report failures loudly without doubling.
+    try {
+      this.load.off('loaderror', this.handleAssetLoadError, this);
+    } catch {
+      // Ignore headless/test loader differences.
+    }
+    this.load.on('loaderror', this.handleAssetLoadError, this);
 
     const width = this.scale.width;
     const height = this.scale.height;
@@ -191,13 +230,21 @@ export class WorldScene extends Phaser.Scene {
    * Renders only the asset selected by the current projection. Assetless views
    * intentionally remain without a scenery image instead of borrowing the
    * technical fixture background, desk, clock, curtain, or asset identities.
+   * A projection that names an asset which failed to load is reported loudly
+   * and likewise left assetless — never silently substituted.
    */
   private setupSprites(width: number, height: number): void {
     this.bgImage?.destroy();
     this.bgImage = undefined;
 
     const plan = resolveWorldSceneVisualPlan(this.projection, width, height);
-    if (!plan || !this.textures.exists(plan.textureKey)) {
+    if (!plan) {
+      return;
+    }
+    if (!this.textures.exists(plan.textureKey)) {
+      console.error(
+        `[projection-assets] Production asset '${plan.textureKey}' is not loaded; leaving the projection assetless rather than substituting another visual.`,
+      );
       return;
     }
 
@@ -205,7 +252,13 @@ export class WorldScene extends Phaser.Scene {
     this.bgImage.setDisplaySize(plan.width, plan.height);
     this.layerBackground?.add(this.bgImage);
 
-    if (plan.normalMapTextureKey) {
+    // Normal-map lighting only when the diffuse texture actually carries a
+    // linked normal map in texture state (Phaser 4 dataSource). A projection
+    // that names a normal map which failed to load (missing key or no linked
+    // data source) renders unlit — it is never reported as lit.
+    // The valid array-linked form (load.image(key, [diffuse, normal])) still
+    // lights, as does the procedural fixture path (setDataSource).
+    if (plan.normalMapTextureKey && textureHasLinkedNormalMap(this.textures, plan.textureKey)) {
       const litImage = this.bgImage as unknown as {
         setLighting?: (enable: boolean) => void;
         setSelfShadow?: (enable: boolean, penumbra?: number, diffuseFlatThreshold?: number) => void;
@@ -359,13 +412,29 @@ export class WorldScene extends Phaser.Scene {
   }
 
   /**
-   * Updates the scene projection from simulation state
+   * Updates the scene projection from simulation state.
+   *
+   * Boot loading is preload()-owned (active view plus authored siblings).
+   * A later projection may name a production asset that was never part of
+   * the boot set; in that case the missing assets are queued generically
+   * and the sprite refreshes once Phaser's loader completes. Repeated view
+   * updates coalesce into one pending refresh and never force-restart an
+   * in-flight load. Failures stay loud and assetless via the loaderror path.
    */
   public updateProjection(newProjection: WorldSceneProjection): void {
     this.projection = newProjection;
     this.environmentManager?.applyProjection(newProjection);
 
     this.applyAmbientLighting();
+    try {
+      queueMissingProjectionAssetsForUpdate(
+        this as unknown as RefreshableProjectionLoadScene,
+        newProjection,
+        this.handleDynamicProjectionAssetsComplete,
+      );
+    } catch {
+      // Loader bookkeeping must never break a view update.
+    }
     this.setupSprites(this.scale.width, this.scale.height);
 
     if (this.dustMoteEmitter) {
@@ -458,11 +527,24 @@ export class WorldScene extends Phaser.Scene {
   }
 
   public getCapabilityReport(): WorldFixtureCapabilityReport {
+    const visualPlan = resolveWorldSceneVisualPlan(
+      this.projection,
+      this.scale?.width ?? 0,
+      this.scale?.height ?? 0,
+    );
     return {
       reactLifecycle: true,
       noDuplicateCanvas: true,
       layeredRendering: !!(this.layerBackground && this.layerScenery && this.layerActors && this.layerForeground),
-      normalMapLighting: !!(this.lights && this.bgImage && this.projection.normalMapAssetId),
+      // True only when a scenery image is showing AND its diffuse texture
+      // actually carries a linked normal map. A named-but-failed normal map
+      // (missing key or no dataSource) never reports success.
+      normalMapLighting: !!(
+        this.lights &&
+        this.bgImage &&
+        visualPlan?.normalMapTextureKey &&
+        textureHasLinkedNormalMap(this.textures, visualPlan.textureKey)
+      ),
       movablePointLight: !!(this.movableLight ?? this.environmentManager?.getMovableLight()),
       particles: !!(this.dustMoteEmitter && this.rainEmitter),
       renderTextureFilter: !!this.puddleRenderTexture,
@@ -506,6 +588,25 @@ export class WorldScene extends Phaser.Scene {
   }
 
   private handleShutdown(): void {
+    try {
+      this.load.off('loaderror', this.handleAssetLoadError, this);
+    } catch {
+      // Headless/test loaders may not implement off().
+    }
+    // Dynamic refresh is registered without a context (see
+    // queueMissingProjectionAssetsForUpdate); remove both forms so a pending
+    // refresh never fires after shutdown. Phaser's own loader shutdown also
+    // clears all listeners, this is belt-and-braces for restarts.
+    try {
+      this.load.off('complete', this.handleDynamicProjectionAssetsComplete);
+    } catch {
+      // No pending dynamic refresh in most shutdowns; ignore listener edge cases.
+    }
+    try {
+      this.load.off('complete', this.handleDynamicProjectionAssetsComplete, this);
+    } catch {
+      // Ignore listener edge cases.
+    }
     for (const handle of this.audioHandles) {
       audioService.stop(handle, 0);
     }
@@ -514,6 +615,32 @@ export class WorldScene extends Phaser.Scene {
 
   private handleDestroy(): void {
     this.handleShutdown();
+  }
+
+  /**
+   * One-shot refresh after a post-boot dynamic asset load completes. Renders
+   * the current projection (which may have advanced past the projection that
+   * triggered the load — setupSprites always uses the latest), so a later
+   * projection is never left stale behind a completed download.
+   */
+  private handleDynamicProjectionAssetsComplete = (): void => {
+    try {
+      if (!this.textures) return;
+      this.setupSprites(this.scale.width, this.scale.height);
+      this.refreshRenderTextureReflection();
+    } catch {
+      // Refresh is best-effort; the next view update re-renders anyway.
+    }
+  };
+
+  /**
+   * Reports a failed production asset download loudly, including the Phaser
+   * file key and resolved URL when provided. The render path stays
+   * assetless for that projection (see setupSprites) — it never substitutes
+   * another visual.
+   */
+  private handleAssetLoadError(file: ProjectionAssetLoadErrorFile): void {
+    console.error(formatProjectionAssetLoadError(file));
   }
 
   public getAudioService(): AudioService {

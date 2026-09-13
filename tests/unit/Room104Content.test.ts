@@ -9,6 +9,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   GENERATED_ANCHORS,
+  GENERATED_ASSETS,
   GENERATED_CONTAINERS,
   GENERATED_INTERACTIONS,
   GENERATED_PLACES,
@@ -49,9 +50,32 @@ describe('Room 104 canonical content (#82)', () => {
     const spaceIds = new Set(spaces.map((s) => s.id));
     const views = GENERATED_VIEWS.filter((v) => spaceIds.has(v.spaceId));
     expect(views.map((v) => v.id).sort()).toEqual([BED_VIEW, DESK_VIEW, ENTRY_VIEW].sort());
-    for (const view of views) {
-      expect(view.assetId).toBeNull();
+    // PR #80: every Room 104 view carries a unique non-null production image
+    // assetId from the content pipeline (never a null assetless view, never
+    // the technical fixture asset_a1). Each diffuse is a production-tagged
+    // image under assets/world/room104/ sharing one flat normal map.
+    const generatedAssets = new Map(GENERATED_ASSETS.map((asset) => [asset.id, asset]));
+    const roomAssetIds = views.map((view) => view.assetId);
+    for (const assetId of roomAssetIds) {
+      expect(typeof assetId).toBe('string');
+      expect(assetId).toBeTruthy();
     }
+    expect(new Set(roomAssetIds).size).toBe(3);
+    expect(roomAssetIds).not.toContain('asset_a1');
+    const normalIds = new Set<string>();
+    for (const view of views) {
+      const asset = generatedAssets.get(view.assetId!);
+      expect(asset, `no generated asset for view ${view.id}`).toBeDefined();
+      expect(asset!.kind).toBe('image');
+      expect(asset!.uri).toMatch(/^assets\/world\/room104\/room104-.*\.png$/);
+      expect(asset!.tags).toContain('production');
+      expect(asset!.normalMapAssetId).toBeTruthy();
+      normalIds.add(asset!.normalMapAssetId!);
+    }
+    expect(normalIds.size).toBe(1);
+    const sharedNormal = generatedAssets.get([...normalIds][0]!);
+    expect(sharedNormal!.kind).toBe('image');
+    expect(sharedNormal!.uri).toBe('assets/world/room104/room104-flat-normal.png');
 
     const viewIds = new Set(views.map((v) => v.id));
     const anchors = GENERATED_ANCHORS.filter((a) => viewIds.has(a.viewId));
