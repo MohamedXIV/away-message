@@ -149,11 +149,17 @@ export function readWasmPointerArray(memory: WebAssembly.Memory, pointer: number
 
 function readWasmFloatArray(memory: WebAssembly.Memory, pointer: number, count: number): number[] {
   if (!pointer || count === 0) return [];
-  return Array.from(new Float32Array(memory.buffer, pointer, count));
+  const view = new DataView(memory.buffer, pointer);
+  const values: number[] = [];
+  for (let index = 0; index < count; index += 1) {
+    values.push(view.getFloat32(index * 4, true));
+  }
+  return values;
 }
 
 export function writeWasmFloatArray(memory: WebAssembly.Memory, pointer: number, values: readonly number[]): void {
-  new Float32Array(memory.buffer, pointer, values.length).set(values);
+  const view = new DataView(memory.buffer, pointer);
+  values.forEach((value, index) => view.setFloat32(index * 4, value, true));
 }
 
 export function bootstrapAndAllocatePuppetInput(api: LoadReadyWasmApi, byteLength: number): BootstrappedPuppetInput {
