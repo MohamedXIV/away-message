@@ -75,5 +75,5 @@ jobs:
       - name: Probe tiny upstream fixture through candidate allocator
         run: npx tsx scripts/probe-inochi-wasm-load.ts '${{ steps.wasm.outputs.path }}' --allow-candidate-wasm
 
-      - name: Probe full upstream Ada puppet through candidate allocator
-        run: npx tsx scripts/probe-inochi-wasm-load.ts '${{ steps.wasm.outputs.path }}' --fixture .tmp/inochi2d/examples/ada-static.inx --allow-candidate-wasm
+      - name: Prove full upstream Ada parameter reads
+        run: npx tsx scripts/probe-inochi-wasm-load.ts '${{ steps.wasm.outputs.path }}' --fixture .tmp/inochi2d/examples/ada-static.inx --parameter-read-proof --allow-candidate-wasm
