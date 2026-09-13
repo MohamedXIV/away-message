@@ -1,0 +1,104 @@
+name: Inochi WASM Hookset Probe
+
+on:
+  push:
+    branches:
+      - feat/away-puppet-tooling
+    paths:
+      - '.github/workflows/inochi-wasm-hookset-probe.yml'
+      - 'scripts/probe-inochi-wasm-load.ts'
+      - 'src/tooling/away-puppet/InochiWebModuleBootstrap.ts'
+      - 'src/tooling/away-puppet/InochiWasmDiagnostics.ts'
+      - 'tests/unit/InochiWasmLoadProbe.test.ts'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  hookset-candidate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Away Message
+        uses: actions/checkout@v4
+
+      - name: Checkout pinned Inochi2D
+        uses: actions/checkout@v4
+        with:
+          repository: Inochi2D/inochi2d
+          ref: ec702261dd6428141bfd0b174a015f8af872d3ed
+          path: .tmp/inochi2d
+
+      - name: Checkout official Inochi2D example models
+        uses: actions/checkout@v4
+        with:
+          repository: Inochi2D/example-models
+          ref: cd95dd00ddff63b1f7d2b84a19914c3c70d05945
+          path: .tmp/example-models
+          lfs: true
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install Away dependencies
+        run: npm ci
+
+      - name: Setup pinned upstream WASI D toolchain
+        uses: Inochi2D/get-sdk-action@v1
+        with:
+          tag: v0.9.0-testing
+          sdk: ldc2-wasm32-wasi
+
+      - name: Add Numem WASM hookset only
+        working-directory: .tmp/inochi2d
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('dub.sdl')
+          text = path.read_text()
+          needle = 'dependency "numem" version=">=1.6.5"\n'
+          replacement = needle + 'dependency "numem:hookset-wasm" version="*"\n'
+          if needle not in text:
+              raise SystemExit('pinned numem dependency line not found')
+          path.write_text(text.replace(needle, replacement, 1))
+          PY
+          git diff -- dub.sdl
+
+      - name: Build candidate WASM
+        working-directory: .tmp/inochi2d
+        run: dub build --compiler=ldc2 --config=wasm --arch=wasm32-wasip2 --build=release
+
+      - name: Locate candidate WASM
+        id: wasm
+        shell: bash
+        run: |
+          WASM="$(find .tmp/inochi2d/out -type f -name '*.wasm' -print -quit)"
+          test -n "$WASM"
+          echo "path=$WASM" >> "$GITHUB_OUTPUT"
+          sha256sum "$WASM"
+
+      - name: Retain exact candidate and Aka fixture for ABI diagnosis
+        uses: actions/upload-artifact@v4
+        with:
+          name: inochi2d-hookset-diagnostic-${{ github.sha }}
+          path: |
+            ${{ steps.wasm.outputs.path }}
+            .tmp/example-models/Aka.inx
+          if-no-files-found: error
+          retention-days: 3
+
+      - name: Probe tiny upstream fixture through candidate allocator
+        run: npx tsx scripts/probe-inochi-wasm-load.ts '${{ steps.wasm.outputs.path }}' --allow-candidate-wasm
+
+      - name: Probe full upstream Ada inventory
+        run: npx tsx scripts/probe-inochi-wasm-load.ts '${{ steps.wasm.outputs.path }}' --fixture .tmp/inochi2d/examples/ada-static.inx --allow-candidate-wasm
+
+      - name: Prove parameters on official Aka rigged example
+        run: |
+          test $(wc -c < .tmp/example-models/Aka.inx) -gt 1000
+          sha256sum .tmp/example-models/Aka.inx
+          npx tsx scripts/probe-inochi-wasm-load.ts '${{ steps.wasm.outputs.path }}' --fixture .tmp/example-models/Aka.inx --parameter-read-proof --allow-candidate-wasm
