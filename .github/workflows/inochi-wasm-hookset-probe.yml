@@ -81,11 +81,13 @@ jobs:
           echo "path=$WASM" >> "$GITHUB_OUTPUT"
           sha256sum "$WASM"
 
-      - name: Retain exact candidate WASM for ABI diagnosis
+      - name: Retain exact candidate and Aka fixture for ABI diagnosis
         uses: actions/upload-artifact@v4
         with:
-          name: inochi2d-hookset-candidate-${{ github.sha }}
-          path: ${{ steps.wasm.outputs.path }}
+          name: inochi2d-hookset-diagnostic-${{ github.sha }}
+          path: |
+            ${{ steps.wasm.outputs.path }}
+            .tmp/example-models/Aka.inx
           if-no-files-found: error
           retention-days: 3
 
