@@ -3,6 +3,7 @@ import {
   allocatePuppetInputOrThrow,
   assertAcceptedWasmHash,
   bootstrapAndAllocatePuppetInput,
+  resolveProbeFixture,
 } from '../../scripts/probe-inochi-wasm-load';
 
 describe('Inochi WASM real-byte probe safety (#34)', () => {
@@ -58,5 +59,13 @@ describe('Inochi WASM real-byte probe safety (#34)', () => {
   it('keeps the published artifact hash pinned unless candidate mode is explicit', () => {
     expect(() => assertAcceptedWasmHash('candidate-hash', false)).toThrow(/unexpected wasm sha256/i);
     expect(() => assertAcceptedWasmHash('candidate-hash', true)).not.toThrow();
+  });
+
+  it('accepts an explicit upstream fixture path without weakening the embedded fallback', () => {
+    expect(resolveProbeFixture(['candidate.wasm'])).toEqual({ path: undefined, label: 'Inochi2D/inochi2d examples/empty08.inx' });
+    expect(resolveProbeFixture(['candidate.wasm', '--fixture', '.tmp/inochi2d/examples/ada-static.inx'])).toEqual({
+      path: '.tmp/inochi2d/examples/ada-static.inx',
+      label: '.tmp/inochi2d/examples/ada-static.inx',
+    });
   });
 });
