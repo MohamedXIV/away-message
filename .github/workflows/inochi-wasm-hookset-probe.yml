@@ -8,6 +8,7 @@ on:
       - '.github/workflows/inochi-wasm-hookset-probe.yml'
       - 'scripts/probe-inochi-wasm-load.ts'
       - 'src/tooling/away-puppet/InochiWebModuleBootstrap.ts'
+      - 'src/tooling/away-puppet/InochiWasmDiagnostics.ts'
       - 'tests/unit/InochiWasmLoadProbe.test.ts'
   workflow_dispatch:
 
@@ -79,6 +80,14 @@ jobs:
           test -n "$WASM"
           echo "path=$WASM" >> "$GITHUB_OUTPUT"
           sha256sum "$WASM"
+
+      - name: Retain exact candidate WASM for ABI diagnosis
+        uses: actions/upload-artifact@v4
+        with:
+          name: inochi2d-hookset-candidate-${{ github.sha }}
+          path: ${{ steps.wasm.outputs.path }}
+          if-no-files-found: error
+          retention-days: 3
 
       - name: Probe tiny upstream fixture through candidate allocator
         run: npx tsx scripts/probe-inochi-wasm-load.ts '${{ steps.wasm.outputs.path }}' --allow-candidate-wasm
