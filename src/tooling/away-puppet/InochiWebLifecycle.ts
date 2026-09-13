@@ -20,6 +20,7 @@ export interface InochiWebRuntimeNode {
 export interface InochiWebRuntimePuppet {
   readonly parameters: readonly InochiWebRuntimeParameter[];
   readonly root: InochiWebRuntimeNode | null;
+  assignPartTexture?(nodeName: string, textureIndex: number, attachment: number): void;
   free(): void;
 }
 
@@ -54,8 +55,12 @@ function indexNodes(root: InochiWebRuntimeNode | null): Map<string, InochiWebRun
 class InochiWebRawPuppetAdapter implements RawPuppetAdapter {
   private readonly parameters: Map<string, InochiWebRuntimeParameter>;
   private readonly nodes: Map<string, InochiWebRuntimeNode>;
+  private readonly slotsByNode: Map<string, AwayRigMetadata['slots'][string]>;
 
-  constructor(puppet: InochiWebRuntimePuppet) {
+  constructor(
+    private readonly puppet: InochiWebRuntimePuppet,
+    metadata: AwayRigMetadata,
+  ) {
     this.parameters = new Map();
     for (const parameter of puppet.parameters) {
       if (this.parameters.has(parameter.name)) {
@@ -64,6 +69,13 @@ class InochiWebRawPuppetAdapter implements RawPuppetAdapter {
       this.parameters.set(parameter.name, parameter);
     }
     this.nodes = indexNodes(puppet.root);
+    this.slotsByNode = new Map();
+    for (const slot of Object.values(metadata.slots)) {
+      if (this.slotsByNode.has(slot.nodeId)) {
+        throw new Error(`Duplicate Away slot node mapping is ambiguous: ${slot.nodeId}`);
+      }
+      this.slotsByNode.set(slot.nodeId, slot);
+    }
   }
 
   hasParameter(id: string): boolean { return this.parameters.has(id); }
@@ -94,17 +106,23 @@ class InochiWebRawPuppetAdapter implements RawPuppetAdapter {
     if (!this.nodes.has(id)) throw new Error(`Unknown Inochi node: ${id}`);
     throw new Error('Node tint is unavailable through the pinned Inochi Web runtime adapter');
   }
+
+  assignSlot(nodeId: string, assetId: string): void {
+    if (!this.nodes.has(nodeId)) throw new Error(`Unknown Inochi node: ${nodeId}`);
+    if (typeof this.puppet.assignPartTexture !== 'function') {
+      throw new Error('Slot assignment is unavailable through the pinned Inochi Web runtime adapter');
+    }
+    const slot = this.slotsByNode.get(nodeId);
+    const asset = slot?.assets?.[assetId];
+    if (!asset) throw new Error(`Unknown slot asset ${assetId} for node ${nodeId}`);
+    this.puppet.assignPartTexture(nodeId, asset.textureIndex, asset.attachment ?? 0);
+  }
 }
 
 /**
  * Concrete lifecycle bridge from the pinned upstream Web wrapper shape into
  * Away's semantic runtime. The source loader owns bytes + Away metadata;
  * this adapter owns the raw Puppet lifetime after construction.
- *
- * Deliberately absent: `assignSlot`. The pinned upstream high-level Web API
- * has no real modular part/texture replacement operation, so SemanticPuppet
- * must continue to reject `away.assign_slot` rather than faking it with node
- * visibility.
  */
 export function createInochiWebLifecycle(
   module: InochiWebRuntimeModule,
@@ -116,7 +134,7 @@ export function createInochiWebLifecycle(
       const rawPuppet = new module.Puppet(loaded.bytes);
 
       try {
-        const raw = new InochiWebRawPuppetAdapter(rawPuppet);
+        const raw = new InochiWebRawPuppetAdapter(rawPuppet, loaded.metadata);
         const metadata = validateAwayRigMetadata(loaded.metadata, raw);
         const puppet = new SemanticPuppet(raw, metadata);
         let disposed = false;
