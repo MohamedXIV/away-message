@@ -17,6 +17,7 @@ export interface InochiWasmRuntimeExports extends InochiWebBootstrapExports {
   in_puppet_free(pointer: number): void;
   in_puppet_get_parameters(pointer: number, countPointer: number): number | bigint;
   in_puppet_get_root_node(pointer: number): number | bigint;
+  in_puppet_get_texture_cache?(pointer: number): number | bigint;
   in_parameter_get_name(pointer: number): number | bigint;
   in_parameter_get_dimensions(pointer: number): number;
   in_parameter_get_value(pointer: number): number | bigint;
@@ -25,6 +26,9 @@ export interface InochiWasmRuntimeExports extends InochiWebBootstrapExports {
   in_node_get_enabled(pointer: number): boolean;
   in_node_set_enabled(pointer: number, value: boolean): void;
   in_node_get_children(pointer: number, countPointer: number): number | bigint;
+  in_as_part?(pointer: number): number | bigint;
+  in_texture_cache_get_texture?(pointer: number, slot: number): number | bigint;
+  in_part_set_texture?(pointer: number, attachment: number, texturePointer: number): boolean;
 }
 
 function requirePointer(pointer: number | bigint, operation: string): number {
@@ -75,6 +79,19 @@ function readFloatArray(exports: InochiWasmRuntimeExports, pointer: number | big
   if (!Number.isSafeInteger(start) || start <= 0) throw new Error('Inochi WASM float array is null');
   const view = new DataView(exports.memory.buffer);
   return Array.from({ length: count }, (_, index) => view.getFloat32(start + index * 4, true));
+}
+
+function findNodePointer(exports: InochiWasmRuntimeExports, pointer: number, name: string): number {
+  if (readCString(exports, exports.in_node_get_name(pointer)) === name) return pointer;
+  const { value, count } = withCountPointer(
+    exports,
+    (countPointer) => exports.in_node_get_children(pointer, countPointer),
+  );
+  for (const childPointer of readPointerArray(exports, value, count)) {
+    const found = findNodePointer(exports, childPointer, name);
+    if (found > 0) return found;
+  }
+  return 0;
 }
 
 class WasmParameter implements InochiWebRuntimeParameter {
@@ -178,6 +195,28 @@ export function createInochiWasmRuntimeModule(exports: InochiWasmRuntimeExports)
           exports.in_puppet_free(this.pointer);
           this.disposed = true;
           throw error;
+        }
+      }
+
+      assignPartTexture(nodeName: string, textureIndex: number, attachment: number): void {
+        if (this.disposed) throw new Error('Inochi WASM puppet is disposed');
+        if (
+          typeof exports.in_as_part !== 'function'
+          || typeof exports.in_puppet_get_texture_cache !== 'function'
+          || typeof exports.in_texture_cache_get_texture !== 'function'
+          || typeof exports.in_part_set_texture !== 'function'
+        ) {
+          throw new Error('Slot assignment is unavailable through this Inochi WASM build');
+        }
+
+        const rootPointer = requirePointer(exports.in_puppet_get_root_node(this.pointer), 'root node lookup');
+        const nodePointer = findNodePointer(exports, rootPointer, nodeName);
+        if (nodePointer <= 0) throw new Error(`Unknown Inochi node: ${nodeName}`);
+        const partPointer = requirePointer(exports.in_as_part(nodePointer), `part cast for ${nodeName}`);
+        const cachePointer = requirePointer(exports.in_puppet_get_texture_cache(this.pointer), 'texture cache lookup');
+        const texturePointer = requirePointer(exports.in_texture_cache_get_texture(cachePointer, textureIndex), `texture ${textureIndex} lookup`);
+        if (!exports.in_part_set_texture(partPointer, attachment, texturePointer)) {
+          throw new Error(`Inochi WASM part texture assignment failed for ${nodeName}`);
         }
       }
 
