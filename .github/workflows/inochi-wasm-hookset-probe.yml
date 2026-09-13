@@ -7,6 +7,8 @@ on:
     paths:
       - '.github/workflows/inochi-wasm-hookset-probe.yml'
       - 'scripts/probe-inochi-wasm-load.ts'
+      - 'scripts/probe-inochi-wasm-draw-list.ts'
+      - 'src/tooling/away-puppet/InochiDrawListBridge.ts'
       - 'src/tooling/away-puppet/InochiWebModuleBootstrap.ts'
       - 'src/tooling/away-puppet/InochiWasmDiagnostics.ts'
       - 'tests/unit/InochiWasmLoadProbe.test.ts'
@@ -96,6 +98,9 @@ jobs:
 
       - name: Probe full upstream Ada inventory
         run: npx tsx scripts/probe-inochi-wasm-load.ts '${{ steps.wasm.outputs.path }}' --fixture .tmp/inochi2d/examples/ada-static.inx --allow-candidate-wasm
+
+      - name: Prove copied renderer draw-list data on upstream Ada
+        run: npx tsx scripts/probe-inochi-wasm-draw-list.ts '${{ steps.wasm.outputs.path }}' .tmp/inochi2d/examples/ada-static.inx
 
       - name: Prove parameters on official Aka rigged example
         run: |
