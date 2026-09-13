@@ -15,8 +15,14 @@ export interface AwayMorphDefinition {
   readonly default: number;
 }
 
+export interface AwaySlotAssetDefinition {
+  readonly textureIndex: number;
+  readonly attachment?: number;
+}
+
 export interface AwaySlotDefinition {
   readonly nodeId: string;
+  readonly assets?: Readonly<Record<string, AwaySlotAssetDefinition>>;
 }
 
 export interface AwayTintDefinition {
@@ -72,7 +78,18 @@ export function validateAwayRigMetadata(metadata: AwayRigMetadata, raw: RawPuppe
     if (morph.default < morph.min || morph.default > morph.max) throw new Error(`Default for morph ${name} is outside its bounds`);
     if (!raw.hasParameter(morph.parameterId)) throw new Error(`Mapped parameter ${morph.parameterId} for morph ${name} does not exist`);
   }
-  for (const [name, slot] of Object.entries(metadata.slots)) if (!raw.hasNode(slot.nodeId)) throw new Error(`Mapped node ${slot.nodeId} for slot ${name} does not exist`);
+  for (const [name, slot] of Object.entries(metadata.slots)) {
+    if (!raw.hasNode(slot.nodeId)) throw new Error(`Mapped node ${slot.nodeId} for slot ${name} does not exist`);
+    for (const [assetId, asset] of Object.entries(slot.assets ?? {})) {
+      if (!Number.isInteger(asset.textureIndex) || asset.textureIndex < 0) {
+        throw new Error(`Slot asset ${assetId} for ${name} has invalid texture index`);
+      }
+      const attachment = asset.attachment ?? 0;
+      if (!Number.isInteger(attachment) || attachment < 0 || attachment >= 8) {
+        throw new Error(`Slot asset ${assetId} for ${name} has invalid attachment index`);
+      }
+    }
+  }
   for (const [name, tint] of Object.entries(metadata.tints)) {
     if (tint.nodeIds.length === 0) throw new Error(`Tint ${name} must map at least one node`);
     for (const nodeId of tint.nodeIds) if (!raw.hasNode(nodeId)) throw new Error(`Mapped node ${nodeId} for tint ${name} does not exist`);
@@ -111,6 +128,7 @@ export class SemanticPuppet {
   assignSlot(slotName: string, assetId: string): void {
     const slot = this.metadata.slots[slotName];
     if (!slot) throw new Error(`Unknown slot: ${slotName}`);
+    if (slot.assets && !slot.assets[assetId]) throw new Error(`Unknown slot asset ${assetId} for ${slotName}`);
     if (typeof this.raw.assignSlot !== 'function') throw new Error('Slot assignment is unavailable for this puppet adapter');
     this.raw.assignSlot(slot.nodeId, assetId);
   }
