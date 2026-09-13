@@ -56,21 +56,57 @@ jobs:
           tag: v0.9.0-testing
           sdk: ldc2-wasm32-wasi
 
-      - name: Add Numem WASM hookset only
+      - name: Apply isolated Away WASM build deltas
         working-directory: .tmp/inochi2d
         shell: bash
         run: |
           python3 - <<'PY'
           from pathlib import Path
-          path = Path('dub.sdl')
-          text = path.read_text()
+
+          dub = Path('dub.sdl')
+          text = dub.read_text()
           needle = 'dependency "numem" version=">=1.6.5"\n'
           replacement = needle + 'dependency "numem:hookset-wasm" version="*"\n'
           if needle not in text:
               raise SystemExit('pinned numem dependency line not found')
-          path.write_text(text.replace(needle, replacement, 1))
+          dub.write_text(text.replace(needle, replacement, 1))
+
+          cffi = Path('source/inochi2d/cffi.d')
+          text = cffi.read_text()
+          needle = '''in_mesh_t* in_part_get_mesh(in_part_t* self) {
+              if (auto n_self = cast(Part)self)
+                  return cast(in_mesh_t*)n_self.mesh;
+              return null;
+          }
+          '''
+          replacement = needle + '''
+          /**
+              Replaces one texture attachment on a part with an existing texture.
+              Ownership follows normal Part semantics: the replacement is retained
+              before the previous attachment is released.
+          */
+          bool in_part_set_texture(in_part_t* self, uint attachment, in_texture_t* texture) {
+              if (attachment >= IN_MAX_ATTACHMENTS)
+                  return false;
+              if (auto n_self = cast(Part)self) {
+                  auto next = cast(Texture)texture;
+                  if (n_self.textures[attachment] is next)
+                      return true;
+                  if (next)
+                      next.retain();
+                  if (n_self.textures[attachment])
+                      n_self.textures[attachment].release();
+                  n_self.textures[attachment] = next;
+                  return true;
+              }
+              return false;
+          }
+          '''
+          if needle not in text:
+              raise SystemExit('pinned in_part_get_mesh block not found')
+          cffi.write_text(text.replace(needle, replacement, 1))
           PY
-          git diff -- dub.sdl
+          git diff -- dub.sdl source/inochi2d/cffi.d
 
       - name: Build candidate WASM
         working-directory: .tmp/inochi2d
