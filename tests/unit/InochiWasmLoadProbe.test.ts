@@ -73,9 +73,10 @@ describe('Inochi WASM real-byte probe safety (#34)', () => {
     });
   });
 
-  it('separates mutation proof from reload proof for systematic debugging', () => {
+  it('separates parameter reads from mutation and reload for systematic debugging', () => {
     expect(resolveProbeMode(['candidate.wasm'])).toBe('load');
-    expect(resolveProbeMode(['candidate.wasm', '--fixture', 'ada.inx'])).toBe('mutation');
+    expect(resolveProbeMode(['candidate.wasm', '--fixture', 'ada.inx'])).toBe('parameter-read');
+    expect(resolveProbeMode(['candidate.wasm', '--fixture', 'ada.inx', '--mutation-proof'])).toBe('mutation');
     expect(resolveProbeMode(['candidate.wasm', '--fixture', 'ada.inx', '--runtime-proof'])).toBe('runtime');
   });
 
