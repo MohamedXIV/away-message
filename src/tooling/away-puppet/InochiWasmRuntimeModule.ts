@@ -1,10 +1,13 @@
 import { bootstrapInochiWebModule, type InochiWebBootstrapExports } from './InochiWebModuleBootstrap';
-import type {
-  InochiWebRuntimeModule,
-  InochiWebRuntimeNode,
-  InochiWebRuntimeParameter,
-  InochiWebRuntimePuppet,
+import {
+  createInochiWebLifecycle,
+  type InochiWebRuntimeModule,
+  type InochiWebRuntimeNode,
+  type InochiWebRuntimeParameter,
+  type InochiWebRuntimePuppet,
+  type InochiWebSourceLoader,
 } from './InochiWebLifecycle';
+import { createAwayPuppetToolService, type AwayPuppetToolService } from './McpSemanticTools';
 
 export interface InochiWasmRuntimeExports extends InochiWebBootstrapExports {
   readonly memory: WebAssembly.Memory;
@@ -185,4 +188,23 @@ export function createInochiWasmRuntimeModule(exports: InochiWasmRuntimeExports)
       }
     },
   };
+}
+
+/**
+ * Production composition for the MCP semantic service over the corrected
+ * low-level WASM loader. `puppet.open` always resolves bytes + Away metadata
+ * through `loadSource`, then loads those bytes through the real CFFI adapter.
+ * Raw Inochi pointers/allocator functions remain confined to this module.
+ */
+export function createInochiWasmPuppetToolService(
+  exports: InochiWasmRuntimeExports,
+  loadSource: InochiWebSourceLoader,
+  initialSource: string,
+): AwayPuppetToolService {
+  const lifecycle = createInochiWebLifecycle(createInochiWasmRuntimeModule(exports), loadSource);
+  const initial = lifecycle.open(initialSource);
+  return createAwayPuppetToolService(initial.puppet, {
+    disposeInitial: initial.dispose,
+    open: lifecycle.open,
+  });
 }
