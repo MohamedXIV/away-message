@@ -12,6 +12,7 @@ const PINNED_UPSTREAM_COMMIT = 'ec702261dd6428141bfd0b174a015f8af872d3ed';
 const PINNED_ARTIFACT_DIGEST = '59b0c88dafb93be310c2a0f965ab07f2a50fc675b241bb521065d64db648a178';
 const PINNED_WASM_SHA256 = '49dd528af9e58341513f363ca5b0639da80a20f1c6f1a95f47c0c67da788dd0a';
 const UPSTREAM_EMPTY08_SHA256 = 'b56a0377034fed6bf658820b1a009252605c1c47ffbb58168d011dc129d330fd';
+const EMPTY08_LABEL = 'Inochi2D/inochi2d examples/empty08.inx';
 const EMPTY08_BASE64 = `VFJOU1JUUwAAAAKmeyJtZXRhIjp7Im5hbWUiOiJUZXN0IFB1cHBldCIsInZl
 cnNpb24iOiJ2MC44LjYiLCJyaWdnZXIiOiIiLCJhcnRpc3QiOiJJbm9jaGky
 RCBQcm9qZWN0IiwicmlnaHRzIjpudWxsLCJjb3B5cmlnaHQiOiIiLCJsaWNl
@@ -47,6 +48,11 @@ export interface BootstrappedPuppetInput {
   readonly scratchpad: InochiWebScratchpad;
 }
 
+export interface ProbeFixture {
+  readonly path: string | undefined;
+  readonly label: string;
+}
+
 export function allocatePuppetInputOrThrow(api: AllocatingWasmApi, byteLength: number): number {
   const pointer = Number(api.nu_malloc(byteLength));
   if (!Number.isSafeInteger(pointer) || pointer <= 0) {
@@ -63,6 +69,16 @@ export function assertAcceptedWasmHash(actualHash: string, allowCandidate: boole
       `unexpected wasm sha256 ${actualHash}; expected ${PINNED_WASM_SHA256} from ${PINNED_UPSTREAM_COMMIT}`,
     );
   }
+}
+
+export function resolveProbeFixture(args: readonly string[]): ProbeFixture {
+  const fixtureFlagIndex = args.indexOf('--fixture');
+  if (fixtureFlagIndex < 0) return { path: undefined, label: EMPTY08_LABEL };
+  const fixturePath = args[fixtureFlagIndex + 1];
+  if (!fixturePath || fixturePath.startsWith('--')) {
+    throw new Error('--fixture requires a puppet file path');
+  }
+  return { path: fixturePath, label: fixturePath };
 }
 
 /**
@@ -106,21 +122,25 @@ function wasiImports(): WebAssembly.Imports {
 
 async function main(): Promise<void> {
   const args = process.argv.slice(2);
-  const wasmPath = args.find((arg) => !arg.startsWith('--'));
+  const wasmPath = args[0];
   const expectBlocked = args.includes('--expect-blocked');
   const allowCandidate = args.includes('--allow-candidate-wasm');
-  if (!wasmPath) {
+  if (!wasmPath || wasmPath.startsWith('--')) {
     throw new Error(
-      'usage: npx tsx scripts/probe-inochi-wasm-load.ts <inochi2d.wasm> [--expect-blocked] [--allow-candidate-wasm]',
+      'usage: npx tsx scripts/probe-inochi-wasm-load.ts <inochi2d.wasm> [--fixture <puppet.inx>] [--expect-blocked] [--allow-candidate-wasm]',
     );
   }
 
+  const fixture = resolveProbeFixture(args);
   const wasm = await readFile(wasmPath);
   const wasmHash = sha256(wasm);
   assertAcceptedWasmHash(wasmHash, allowCandidate);
 
-  const puppetBytes = Buffer.from(EMPTY08_BASE64.replace(/\s+/g, ''), 'base64');
-  if (sha256(puppetBytes) !== UPSTREAM_EMPTY08_SHA256) {
+  const puppetBytes = fixture.path
+    ? await readFile(fixture.path)
+    : Buffer.from(EMPTY08_BASE64.replace(/\s+/g, ''), 'base64');
+  const puppetHash = sha256(puppetBytes);
+  if (!fixture.path && puppetHash !== UPSTREAM_EMPTY08_SHA256) {
     throw new Error('embedded upstream empty08.inx fixture digest mismatch');
   }
 
@@ -132,8 +152,9 @@ async function main(): Promise<void> {
     artifactDigest: allowCandidate ? undefined : `sha256:${PINNED_ARTIFACT_DIGEST}`,
     candidateWasm: allowCandidate,
     wasmSha256: wasmHash,
-    fixture: 'Inochi2D/inochi2d examples/empty08.inx',
-    fixtureSha256: UPSTREAM_EMPTY08_SHA256,
+    fixture: fixture.label,
+    fixtureSha256: puppetHash,
+    fixtureBytes: puppetBytes.byteLength,
   };
 
   let sourcePtr: number;
@@ -172,7 +193,7 @@ async function main(): Promise<void> {
   }
 
   if (expectBlocked) return;
-  throw new Error('upstream WASM in_puppet_load_from_memory returned null for its own empty08 fixture');
+  throw new Error(`upstream WASM in_puppet_load_from_memory returned null for ${fixture.label}`);
 }
 
 const argvEntry = process.argv[1];
