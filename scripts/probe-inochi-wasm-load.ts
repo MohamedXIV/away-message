@@ -66,13 +66,19 @@ export interface ProbeFixture {
   readonly label: string;
 }
 
-interface RuntimeProof {
+export type ProbeMode = 'load' | 'inventory' | 'runtime';
+
+interface InventoryProof {
   readonly name: string;
   readonly author: string;
   readonly parameterCount: number;
-  readonly mutatedParameters: readonly string[];
+  readonly parameterNames: readonly string[];
   readonly nodeCount: number;
   readonly rootNode: string;
+}
+
+interface RuntimeProof extends InventoryProof {
+  readonly mutatedParameters: readonly string[];
   readonly reloadMatched: boolean;
 }
 
@@ -102,6 +108,12 @@ export function resolveProbeFixture(args: readonly string[]): ProbeFixture {
     throw new Error('--fixture requires a puppet file path');
   }
   return { path: fixturePath, label: fixturePath };
+}
+
+export function resolveProbeMode(args: readonly string[]): ProbeMode {
+  if (args.includes('--runtime-proof')) return 'runtime';
+  if (args.includes('--fixture')) return 'inventory';
+  return 'load';
 }
 
 export function readWasmCString(memory: WebAssembly.Memory, pointer: number): string {
@@ -185,7 +197,33 @@ function enumerateNodes(api: InochiWasmExports, rootPtr: number): { count: numbe
   return { count: seen.size, rootName };
 }
 
-function mutateTwoParameters(api: InochiWasmExports, puppetPtr: number): { count: number; mutated: string[] } {
+function inspectParameterInventory(api: InochiWasmExports, puppetPtr: number): { count: number; names: string[] } {
+  const { value: parameterArrayPtr, count } = withCountPointer(api, (countPtr) => Number(api.in_puppet_get_parameters(puppetPtr, countPtr)));
+  const parameterPtrs = readWasmPointerArray(api.memory, parameterArrayPtr, count);
+  return {
+    count,
+    names: parameterPtrs.map((parameterPtr) => readWasmCString(api.memory, Number(api.in_parameter_get_name(parameterPtr)))),
+  };
+}
+
+function proveInventory(api: InochiWasmExports, puppetPtr: number): InventoryProof {
+  const name = readWasmCString(api.memory, Number(api.in_puppet_get_name(puppetPtr)));
+  const author = readWasmCString(api.memory, Number(api.in_puppet_get_author(puppetPtr)));
+  const parameters = inspectParameterInventory(api, puppetPtr);
+  const rootPtr = Number(api.in_puppet_get_root_node(puppetPtr));
+  if (!rootPtr) throw new Error('real puppet returned null root node');
+  const nodes = enumerateNodes(api, rootPtr);
+  return {
+    name,
+    author,
+    parameterCount: parameters.count,
+    parameterNames: parameters.names,
+    nodeCount: nodes.count,
+    rootNode: nodes.rootName,
+  };
+}
+
+function mutateTwoParameters(api: InochiWasmExports, puppetPtr: number): string[] {
   const { value: parameterArrayPtr, count } = withCountPointer(api, (countPtr) => Number(api.in_puppet_get_parameters(puppetPtr, countPtr)));
   const parameterPtrs = readWasmPointerArray(api.memory, parameterArrayPtr, count);
   const mutated: string[] = [];
@@ -220,7 +258,7 @@ function mutateTwoParameters(api: InochiWasmExports, puppetPtr: number): { count
     mutated.push(readWasmCString(api.memory, Number(api.in_parameter_get_name(parameterPtr))));
   }
   if (mutated.length < 2) throw new Error(`real puppet exposed ${count} parameters but fewer than two mutable parameters`);
-  return { count, mutated };
+  return mutated;
 }
 
 function loadPuppetBytes(api: InochiWasmExports, puppetBytes: Uint8Array): number {
@@ -234,12 +272,8 @@ function loadPuppetBytes(api: InochiWasmExports, puppetBytes: Uint8Array): numbe
 }
 
 function proveRuntime(api: InochiWasmExports, puppetPtr: number, puppetBytes: Uint8Array): RuntimeProof {
-  const name = readWasmCString(api.memory, Number(api.in_puppet_get_name(puppetPtr)));
-  const author = readWasmCString(api.memory, Number(api.in_puppet_get_author(puppetPtr)));
-  const { count: parameterCount, mutated } = mutateTwoParameters(api, puppetPtr);
-  const rootPtr = Number(api.in_puppet_get_root_node(puppetPtr));
-  if (!rootPtr) throw new Error('real puppet returned null root node');
-  const nodes = enumerateNodes(api, rootPtr);
+  const inventory = proveInventory(api, puppetPtr);
+  const mutated = mutateTwoParameters(api, puppetPtr);
   api.in_puppet_free(puppetPtr);
   const reloadPtr = loadPuppetBytes(api, puppetBytes);
   if (!reloadPtr) throw new Error('real puppet failed deterministic reload after dispose');
@@ -247,12 +281,12 @@ function proveRuntime(api: InochiWasmExports, puppetPtr: number, puppetBytes: Ui
   try {
     const reloadedName = readWasmCString(api.memory, Number(api.in_puppet_get_name(reloadPtr)));
     const { count: reloadParameterCount } = withCountPointer(api, (countPtr) => Number(api.in_puppet_get_parameters(reloadPtr, countPtr)));
-    reloadMatched = reloadedName === name && reloadParameterCount === parameterCount;
+    reloadMatched = reloadedName === inventory.name && reloadParameterCount === inventory.parameterCount;
     if (!reloadMatched) throw new Error('reloaded puppet metadata/parameter inventory changed');
   } finally {
     api.in_puppet_free(reloadPtr);
   }
-  return { name, author, parameterCount, mutatedParameters: mutated, nodeCount: nodes.count, rootNode: nodes.rootName, reloadMatched };
+  return { ...inventory, mutatedParameters: mutated, reloadMatched };
 }
 
 async function main(): Promise<void> {
@@ -260,7 +294,7 @@ async function main(): Promise<void> {
   const wasmPath = args[0];
   const expectBlocked = args.includes('--expect-blocked');
   const allowCandidate = args.includes('--allow-candidate-wasm');
-  const runtimeProof = args.includes('--runtime-proof') || args.includes('--fixture');
+  const proofMode = resolveProbeMode(args);
   if (!wasmPath || wasmPath.startsWith('--')) {
     throw new Error('usage: npx tsx scripts/probe-inochi-wasm-load.ts <inochi2d.wasm> [--fixture <puppet.inx>] [--runtime-proof] [--expect-blocked] [--allow-candidate-wasm]');
   }
@@ -299,9 +333,18 @@ async function main(): Promise<void> {
     api.in_puppet_free(puppetPtr);
     throw new Error('upstream WASM load unexpectedly succeeded; re-evaluate the documented blocker');
   }
-  if (runtimeProof) {
-    const proof = proveRuntime(api, puppetPtr, puppetBytes);
-    console.log(JSON.stringify({ ...baseEvidence, scratchpad, puppetPtr, runtimeProof: proof }, null, 2));
+  if (proofMode === 'inventory') {
+    try {
+      const inventoryProof = proveInventory(api, puppetPtr);
+      console.log(JSON.stringify({ ...baseEvidence, scratchpad, puppetPtr, inventoryProof }, null, 2));
+    } finally {
+      api.in_puppet_free(puppetPtr);
+    }
+    return;
+  }
+  if (proofMode === 'runtime') {
+    const runtimeProof = proveRuntime(api, puppetPtr, puppetBytes);
+    console.log(JSON.stringify({ ...baseEvidence, scratchpad, puppetPtr, runtimeProof }, null, 2));
     return;
   }
   console.log(JSON.stringify({ ...baseEvidence, scratchpad, puppetPtr }, null, 2));
