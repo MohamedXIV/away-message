@@ -76,9 +76,10 @@ describe('Inochi WASM real-byte probe safety (#34)', () => {
     });
   });
 
-  it('keeps the proven Ada inventory gate green while deeper parameter modes remain explicit', () => {
+  it('keeps proven Ada gates independent while deeper parameter modes remain explicit', () => {
     expect(resolveProbeMode(['candidate.wasm'])).toBe('load');
     expect(resolveProbeMode(['candidate.wasm', '--fixture', 'ada.inx'])).toBe('inventory');
+    expect(resolveProbeMode(['candidate.wasm', '--fixture', 'ada.inx', '--lifecycle-proof'])).toBe('lifecycle');
     expect(resolveProbeMode(['candidate.wasm', '--fixture', 'ada.inx', '--parameter-read-proof'])).toBe('parameter-read');
     expect(resolveProbeMode(['candidate.wasm', '--fixture', 'ada.inx', '--mutation-proof'])).toBe('mutation');
     expect(resolveProbeMode(['candidate.wasm', '--fixture', 'ada.inx', '--runtime-proof'])).toBe('runtime');
