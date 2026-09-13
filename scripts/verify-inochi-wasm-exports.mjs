@@ -14,6 +14,7 @@ const REQUIRED_EXPORTS = [
   'in_puppet_get_texture_cache',
   'in_texture_cache_get_texture',
   'in_as_part',
+  'in_part_get_texture',
   'in_part_set_texture',
   'in_drawlist_get_commands',
   'in_drawlist_get_vertex_data',
