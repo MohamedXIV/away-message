@@ -99,6 +99,9 @@ jobs:
       - name: Probe full upstream Ada inventory
         run: npx tsx scripts/probe-inochi-wasm-load.ts '${{ steps.wasm.outputs.path }}' --fixture .tmp/inochi2d/examples/ada-static.inx --allow-candidate-wasm
 
+      - name: Prove deterministic dispose/reload on upstream Ada
+        run: npx tsx scripts/probe-inochi-wasm-load.ts '${{ steps.wasm.outputs.path }}' --fixture .tmp/inochi2d/examples/ada-static.inx --lifecycle-proof --allow-candidate-wasm
+
       - name: Prove copied renderer draw-list data on upstream Ada
         run: npx tsx scripts/probe-inochi-wasm-draw-list.ts '${{ steps.wasm.outputs.path }}' .tmp/inochi2d/examples/ada-static.inx
 
