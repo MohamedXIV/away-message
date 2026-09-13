@@ -6,6 +6,7 @@ import {
   readWasmCString,
   readWasmPointerArray,
   resolveProbeFixture,
+  resolveProbeMode,
   writeWasmFloatArray,
 } from '../../scripts/probe-inochi-wasm-load';
 
@@ -70,6 +71,12 @@ describe('Inochi WASM real-byte probe safety (#34)', () => {
       path: '.tmp/inochi2d/examples/ada-static.inx',
       label: '.tmp/inochi2d/examples/ada-static.inx',
     });
+  });
+
+  it('separates real inventory proof from mutation/reload proof for systematic debugging', () => {
+    expect(resolveProbeMode(['candidate.wasm'])).toBe('load');
+    expect(resolveProbeMode(['candidate.wasm', '--fixture', 'ada.inx'])).toBe('inventory');
+    expect(resolveProbeMode(['candidate.wasm', '--fixture', 'ada.inx', '--runtime-proof'])).toBe('runtime');
   });
 
   it('decodes detached C strings and wasm32 pointer arrays without exposing raw memory to callers', () => {
