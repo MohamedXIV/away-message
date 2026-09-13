@@ -29,6 +29,15 @@ The approved living-character direction is a **Life Matrix orchestration layer o
 4. **Version bumps on release batches only.** `package.json` SemVer (`src/version.ts` mirrors it) is independent from the save-FORMAT version.
 5. **Save-compat rule (absolute):** any breaking save change = bump `SAVE_FORMAT_VERSION` in `src/persistence/slots.ts` + migration path in `checkSaveCompatibility` + one CHANGELOG line. Newer-than-current saves are ALWAYS refused (silent corruption is worse than an honest error). Same discipline for Pulse `localStorage` version stamps (lenient there: warn, never refuse).
 
+## External agent workflow
+
+- OpenCode and Antigravity CLI (`agy`) may run outside the Codex sandbox when the user explicitly requests delegation or the task plan calls for it. Use the operating-system approval flow when required; never use a dangerous permission bypass automatically.
+- Prefer the newest Gemini Flash model exposed by `agy models`. At the time of writing this is `gemini-3.8-flash-high` for implementation and UI work; use the newest available Flash variant for review when appropriate. Do not silently switch to a different model family.
+- Before launching `agy`, check its quota when the CLI exposes a reliable percentage. Warn below 20%; if no reliable percentage is available, say so rather than inventing one.
+- Every external-agent prompt must bound the objective, allowed paths, out-of-scope areas, assumptions, acceptance criteria, verification commands, and deliverable. Workers must stop on material ambiguity and must not invent APIs, assets, requirements, architecture, or test results.
+- Prefer an isolated branch or worktree for edits. Codex reviews the actual diff and command output before accepting changes, and retains final scope, visual, interaction, and release-signoff responsibility.
+- This repository is a React/Vite/Tailwind/Zustand/Dexie/Phaser web game. Do not configure or use Unity MCP for `away-message`.
+
 ## Verification before every push
 `npm run content:check` when generated content is touched → `npx tsc --noEmit` clean → `npm run build` succeeds → full `npm run test` with zero new failures.
 For exact repository CI policy, run `node scripts/verify-vitest-baseline.mjs --self-test` then `node scripts/verify-vitest-baseline.mjs`; the latter is green only for a fully green suite and rejects any failure.
