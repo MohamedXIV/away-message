@@ -7,6 +7,7 @@ import {
   readWasmPointerArray,
   resolveProbeFixture,
   resolveProbeMode,
+  validateParameterSample,
   writeWasmFloatArray,
 } from '../../scripts/probe-inochi-wasm-load';
 
@@ -96,5 +97,11 @@ describe('Inochi WASM real-byte probe safety (#34)', () => {
     const view = new DataView(memory.buffer);
     expect(view.getFloat32(97, true)).toBe(0.25);
     expect(view.getFloat32(101, true)).toBe(-0.5);
+  });
+
+  it('rejects non-finite or inverted real parameter samples instead of reporting a false-positive proof', () => {
+    expect(() => validateParameterSample('Head:: Roll', 1, [-1], [1], [Number.NaN])).toThrow(/non-finite/i);
+    expect(() => validateParameterSample('Head:: Roll', 1, [1], [-1], [0])).toThrow(/lower bound.*upper bound/i);
+    expect(() => validateParameterSample('Head:: Roll', 1, [-1], [1], [0])).not.toThrow();
   });
 });
