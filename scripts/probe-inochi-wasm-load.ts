@@ -39,8 +39,9 @@ interface InochiWasmExports extends LoadReadyWasmApi {
 
 export interface BootstrappedPuppetInput { readonly sourcePointer: number; readonly scratchpad: InochiWebScratchpad; }
 export interface ProbeFixture { readonly path: string | undefined; readonly label: string; }
-export type ProbeMode = 'load' | 'inventory' | 'parameter-read' | 'mutation' | 'runtime';
+export type ProbeMode = 'load' | 'inventory' | 'lifecycle' | 'parameter-read' | 'mutation' | 'runtime';
 interface InventoryProof { readonly name: string; readonly author: string; readonly parameterCount: number; readonly parameterNames: readonly string[]; readonly nodeCount: number; readonly rootNode: string; }
+interface LifecycleProof extends InventoryProof { readonly reloadMatched: boolean; readonly reloadCount: number; }
 interface ParameterSample { readonly name: string; readonly dimensions: number; readonly lower: readonly number[]; readonly upper: readonly number[]; readonly value: readonly number[]; }
 interface ParameterReadProof extends InventoryProof { readonly samples: readonly ParameterSample[]; }
 interface MutationProof extends ParameterReadProof { readonly mutatedParameters: readonly string[]; }
@@ -65,6 +66,7 @@ export function resolveProbeMode(args: readonly string[]): ProbeMode {
   if (args.includes('--runtime-proof')) return 'runtime';
   if (args.includes('--mutation-proof')) return 'mutation';
   if (args.includes('--parameter-read-proof')) return 'parameter-read';
+  if (args.includes('--lifecycle-proof')) return 'lifecycle';
   if (args.includes('--inventory-proof') || args.includes('--fixture')) return 'inventory';
   return 'load';
 }
@@ -129,6 +131,33 @@ function proveInventory(api: InochiWasmExports, puppetPtr: number): InventoryPro
   const rootPtr = Number(api.in_puppet_get_root_node(puppetPtr)); if (!rootPtr) throw new Error('real puppet returned null root node'); const nodes = enumerateNodes(api, rootPtr);
   return { name, author, parameterCount: parameters.count, parameterNames: parameters.pointers.map((parameterPtr) => readWasmCString(api.memory, Number(api.in_parameter_get_name(parameterPtr)))), nodeCount: nodes.count, rootNode: nodes.rootName };
 }
+function inventoryMatches(expected: InventoryProof, actual: InventoryProof): boolean {
+  return actual.name === expected.name
+    && actual.author === expected.author
+    && actual.parameterCount === expected.parameterCount
+    && actual.nodeCount === expected.nodeCount
+    && actual.rootNode === expected.rootNode
+    && actual.parameterNames.length === expected.parameterNames.length
+    && actual.parameterNames.every((name, index) => name === expected.parameterNames[index]);
+}
+function proveLifecycle(api: InochiWasmExports, puppetPtr: number, puppetBytes: Uint8Array): LifecycleProof {
+  let initial: InventoryProof;
+  try { initial = proveInventory(api, puppetPtr); }
+  finally { api.in_puppet_free(puppetPtr); }
+
+  let reloadCount = 0;
+  for (let iteration = 0; iteration < 2; iteration += 1) {
+    const reloadPtr = loadPuppetBytes(api, puppetBytes);
+    if (!reloadPtr) throw new Error(`real puppet failed deterministic reload ${iteration + 1} after dispose`);
+    try {
+      const reloaded = proveInventory(api, reloadPtr);
+      if (!inventoryMatches(initial, reloaded)) throw new Error(`reloaded puppet inventory changed on deterministic reload ${iteration + 1}`);
+      reloadCount += 1;
+    } finally { api.in_puppet_free(reloadPtr); }
+  }
+
+  return { ...initial, reloadMatched: true, reloadCount };
+}
 function proveParameterReads(api: InochiWasmExports, puppetPtr: number): ParameterReadProof {
   const inventory = proveInventory(api, puppetPtr); const parameters = parameterPointers(api, puppetPtr); const samples: ParameterSample[] = [];
   for (const parameterPtr of parameters.pointers) {
@@ -171,7 +200,7 @@ function proveRuntime(api: InochiWasmExports, puppetPtr: number, puppetBytes: Ui
 }
 async function main(): Promise<void> {
   const args = process.argv.slice(2); const wasmPath = args[0]; const expectBlocked = args.includes('--expect-blocked'); const allowCandidate = args.includes('--allow-candidate-wasm'); const proofMode = resolveProbeMode(args);
-  if (!wasmPath || wasmPath.startsWith('--')) throw new Error('usage: npx tsx scripts/probe-inochi-wasm-load.ts <inochi2d.wasm> [--fixture <puppet.inx>] [--inventory-proof] [--parameter-read-proof] [--mutation-proof] [--runtime-proof] [--expect-blocked] [--allow-candidate-wasm]');
+  if (!wasmPath || wasmPath.startsWith('--')) throw new Error('usage: npx tsx scripts/probe-inochi-wasm-load.ts <inochi2d.wasm> [--fixture <puppet.inx>] [--inventory-proof] [--lifecycle-proof] [--parameter-read-proof] [--mutation-proof] [--runtime-proof] [--expect-blocked] [--allow-candidate-wasm]');
   const fixture = resolveProbeFixture(args); const wasm = await readFile(wasmPath); const wasmHash = sha256(wasm); assertAcceptedWasmHash(wasmHash, allowCandidate); const puppetBytes = fixture.path ? await readFile(fixture.path) : Buffer.from(EMPTY08_BASE64.replace(/\s+/g, ''), 'base64'); const puppetHash = sha256(puppetBytes); if (!fixture.path && puppetHash !== UPSTREAM_EMPTY08_SHA256) throw new Error('embedded upstream empty08.inx fixture digest mismatch');
   const { instance } = await WebAssembly.instantiate(wasm, wasiImports()); const api = instance.exports as unknown as InochiWasmExports; const baseEvidence = { upstreamCommit: PINNED_UPSTREAM_COMMIT, artifactDigest: allowCandidate ? undefined : `sha256:${PINNED_ARTIFACT_DIGEST}`, candidateWasm: allowCandidate, wasmSha256: wasmHash, fixture: fixture.label, fixtureSha256: puppetHash, fixtureBytes: puppetBytes.byteLength };
   let scratchpad: InochiWebScratchpad;
@@ -181,6 +210,7 @@ async function main(): Promise<void> {
   if (!puppetPtr) { console.log(JSON.stringify({ ...baseEvidence, scratchpad, puppetPtr }, null, 2)); if (expectBlocked) return; throw new Error(`upstream WASM in_puppet_load_from_memory returned null for ${fixture.label}`); }
   if (expectBlocked) { api.in_puppet_free(puppetPtr); throw new Error('upstream WASM load unexpectedly succeeded; re-evaluate the documented blocker'); }
   if (proofMode === 'inventory') { try { console.log(JSON.stringify({ ...baseEvidence, scratchpad, puppetPtr, inventoryProof: proveInventory(api, puppetPtr) }, null, 2)); } finally { api.in_puppet_free(puppetPtr); } return; }
+  if (proofMode === 'lifecycle') { console.log(JSON.stringify({ ...baseEvidence, scratchpad, puppetPtr, lifecycleProof: proveLifecycle(api, puppetPtr, puppetBytes) }, null, 2)); return; }
   if (proofMode === 'parameter-read') { try { console.log(JSON.stringify({ ...baseEvidence, scratchpad, puppetPtr, parameterReadProof: proveParameterReads(api, puppetPtr) }, null, 2)); } finally { api.in_puppet_free(puppetPtr); } return; }
   if (proofMode === 'mutation') { try { console.log(JSON.stringify({ ...baseEvidence, scratchpad, puppetPtr, mutationProof: proveMutation(api, puppetPtr) }, null, 2)); } finally { api.in_puppet_free(puppetPtr); } return; }
   if (proofMode === 'runtime') { console.log(JSON.stringify({ ...baseEvidence, scratchpad, puppetPtr, runtimeProof: proveRuntime(api, puppetPtr, puppetBytes) }, null, 2)); return; }
