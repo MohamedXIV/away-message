@@ -41,6 +41,19 @@ interface InochiWasmExports extends LoadReadyWasmApi {
   nu_free(ptr: number): void;
   in_puppet_load_from_memory(data: number, length: number, ioSink: number): number | bigint;
   in_puppet_free(ptr: number): void;
+  in_puppet_get_name(ptr: number): number | bigint;
+  in_puppet_get_author(ptr: number): number | bigint;
+  in_puppet_get_parameters(ptr: number, countPtr: number): number | bigint;
+  in_puppet_get_root_node(ptr: number): number | bigint;
+  in_parameter_get_name(ptr: number): number | bigint;
+  in_parameter_get_dimensions(ptr: number): number;
+  in_parameter_get_lower_bounds(ptr: number): number | bigint;
+  in_parameter_get_upper_bounds(ptr: number): number | bigint;
+  in_parameter_get_value(ptr: number): number | bigint;
+  in_parameter_set_value(ptr: number, valuesPtr: number): void;
+  in_node_get_name(ptr: number): number | bigint;
+  in_node_get_type(ptr: number): number | bigint;
+  in_node_get_children(ptr: number, countPtr: number): number | bigint;
 }
 
 export interface BootstrappedPuppetInput {
@@ -51,6 +64,16 @@ export interface BootstrappedPuppetInput {
 export interface ProbeFixture {
   readonly path: string | undefined;
   readonly label: string;
+}
+
+interface RuntimeProof {
+  readonly name: string;
+  readonly author: string;
+  readonly parameterCount: number;
+  readonly mutatedParameters: readonly string[];
+  readonly nodeCount: number;
+  readonly rootNode: string;
+  readonly reloadMatched: boolean;
 }
 
 export function allocatePuppetInputOrThrow(api: AllocatingWasmApi, byteLength: number): number {
@@ -79,6 +102,37 @@ export function resolveProbeFixture(args: readonly string[]): ProbeFixture {
     throw new Error('--fixture requires a puppet file path');
   }
   return { path: fixturePath, label: fixturePath };
+}
+
+export function readWasmCString(memory: WebAssembly.Memory, pointer: number): string {
+  if (!pointer) return '';
+  const bytes = new Uint8Array(memory.buffer);
+  let end = pointer;
+  while (end < bytes.byteLength && bytes[end] !== 0) end += 1;
+  if (end >= bytes.byteLength) throw new Error(`unterminated WASM string at ${pointer}`);
+  return new TextDecoder().decode(bytes.subarray(pointer, end));
+}
+
+export function readWasmPointerArray(
+  memory: WebAssembly.Memory,
+  pointer: number,
+  count: number,
+): number[] {
+  if (!pointer || count === 0) return [];
+  return Array.from(new Uint32Array(memory.buffer, pointer, count));
+}
+
+function readWasmFloatArray(memory: WebAssembly.Memory, pointer: number, count: number): number[] {
+  if (!pointer || count === 0) return [];
+  return Array.from(new Float32Array(memory.buffer, pointer, count));
+}
+
+export function writeWasmFloatArray(
+  memory: WebAssembly.Memory,
+  pointer: number,
+  values: readonly number[],
+): void {
+  new Float32Array(memory.buffer, pointer, values.length).set(values);
 }
 
 /**
@@ -120,14 +174,144 @@ function wasiImports(): WebAssembly.Imports {
   };
 }
 
+function withCountPointer<T>(api: InochiWasmExports, read: (countPtr: number) => T): { value: T; count: number } {
+  const countPtr = allocatePuppetInputOrThrow(api, 4);
+  try {
+    new DataView(api.memory.buffer).setUint32(countPtr, 0, true);
+    const value = read(countPtr);
+    return { value, count: new DataView(api.memory.buffer).getUint32(countPtr, true) };
+  } finally {
+    api.nu_free(countPtr);
+  }
+}
+
+function enumerateNodes(api: InochiWasmExports, rootPtr: number): { count: number; rootName: string } {
+  const pending = [rootPtr];
+  const seen = new Set<number>();
+  let rootName = '';
+
+  while (pending.length > 0) {
+    const nodePtr = pending.pop() as number;
+    if (!nodePtr || seen.has(nodePtr)) continue;
+    seen.add(nodePtr);
+    const name = readWasmCString(api.memory, Number(api.in_node_get_name(nodePtr)));
+    readWasmCString(api.memory, Number(api.in_node_get_type(nodePtr)));
+    if (nodePtr === rootPtr) rootName = name;
+
+    const { value: childrenPtr, count } = withCountPointer(api, (countPtr) =>
+      Number(api.in_node_get_children(nodePtr, countPtr)),
+    );
+    pending.push(...readWasmPointerArray(api.memory, childrenPtr, count));
+  }
+
+  return { count: seen.size, rootName };
+}
+
+function mutateTwoParameters(api: InochiWasmExports, puppetPtr: number): { count: number; mutated: string[] } {
+  const { value: parameterArrayPtr, count } = withCountPointer(api, (countPtr) =>
+    Number(api.in_puppet_get_parameters(puppetPtr, countPtr)),
+  );
+  const parameterPtrs = readWasmPointerArray(api.memory, parameterArrayPtr, count);
+  const mutated: string[] = [];
+
+  for (const parameterPtr of parameterPtrs) {
+    if (mutated.length >= 2) break;
+    const dimensions = api.in_parameter_get_dimensions(parameterPtr);
+    if (dimensions <= 0) continue;
+
+    const original = readWasmFloatArray(api.memory, Number(api.in_parameter_get_value(parameterPtr)), dimensions);
+    const lower = readWasmFloatArray(api.memory, Number(api.in_parameter_get_lower_bounds(parameterPtr)), dimensions);
+    const upper = readWasmFloatArray(api.memory, Number(api.in_parameter_get_upper_bounds(parameterPtr)), dimensions);
+    const target = original.map((value, index) => {
+      const low = lower[index] ?? value;
+      const high = upper[index] ?? value;
+      if (Math.abs(value - low) > 1e-5) return low;
+      if (Math.abs(value - high) > 1e-5) return high;
+      return value;
+    });
+    if (target.every((value, index) => Math.abs(value - (original[index] ?? value)) <= 1e-5)) continue;
+
+    const valuesPtr = allocatePuppetInputOrThrow(api, dimensions * 4);
+    try {
+      writeWasmFloatArray(api.memory, valuesPtr, target);
+      api.in_parameter_set_value(parameterPtr, valuesPtr);
+      const observed = readWasmFloatArray(api.memory, Number(api.in_parameter_get_value(parameterPtr)), dimensions);
+      if (!observed.some((value, index) => Math.abs(value - (original[index] ?? value)) > 1e-5)) {
+        throw new Error('parameter mutation did not change real WASM state');
+      }
+
+      writeWasmFloatArray(api.memory, valuesPtr, original);
+      api.in_parameter_set_value(parameterPtr, valuesPtr);
+      const restored = readWasmFloatArray(api.memory, Number(api.in_parameter_get_value(parameterPtr)), dimensions);
+      if (restored.some((value, index) => Math.abs(value - (original[index] ?? value)) > 1e-5)) {
+        throw new Error('parameter restore did not recover original real WASM state');
+      }
+    } finally {
+      api.nu_free(valuesPtr);
+    }
+
+    mutated.push(readWasmCString(api.memory, Number(api.in_parameter_get_name(parameterPtr))));
+  }
+
+  if (mutated.length < 2) {
+    throw new Error(`real puppet exposed ${count} parameters but fewer than two mutable parameters`);
+  }
+  return { count, mutated };
+}
+
+function loadPuppetBytes(api: InochiWasmExports, puppetBytes: Uint8Array): number {
+  const sourcePtr = allocatePuppetInputOrThrow(api, puppetBytes.byteLength);
+  try {
+    new Uint8Array(api.memory.buffer, sourcePtr, puppetBytes.byteLength).set(puppetBytes);
+    return Number(api.in_puppet_load_from_memory(sourcePtr, puppetBytes.byteLength, 0));
+  } finally {
+    api.nu_free(sourcePtr);
+  }
+}
+
+function proveRuntime(api: InochiWasmExports, puppetPtr: number, puppetBytes: Uint8Array): RuntimeProof {
+  const name = readWasmCString(api.memory, Number(api.in_puppet_get_name(puppetPtr)));
+  const author = readWasmCString(api.memory, Number(api.in_puppet_get_author(puppetPtr)));
+  const { count: parameterCount, mutated } = mutateTwoParameters(api, puppetPtr);
+  const rootPtr = Number(api.in_puppet_get_root_node(puppetPtr));
+  if (!rootPtr) throw new Error('real puppet returned null root node');
+  const nodes = enumerateNodes(api, rootPtr);
+
+  api.in_puppet_free(puppetPtr);
+  const reloadPtr = loadPuppetBytes(api, puppetBytes);
+  if (!reloadPtr) throw new Error('real puppet failed deterministic reload after dispose');
+  let reloadMatched = false;
+  try {
+    const reloadedName = readWasmCString(api.memory, Number(api.in_puppet_get_name(reloadPtr)));
+    const { count: reloadParameterCount } = withCountPointer(api, (countPtr) =>
+      Number(api.in_puppet_get_parameters(reloadPtr, countPtr)),
+    );
+    reloadMatched = reloadedName === name && reloadParameterCount === parameterCount;
+    if (!reloadMatched) throw new Error('reloaded puppet metadata/parameter inventory changed');
+  } finally {
+    api.in_puppet_free(reloadPtr);
+  }
+
+  return {
+    name,
+    author,
+    parameterCount,
+    mutatedParameters: mutated,
+    nodeCount: nodes.count,
+    rootNode: nodes.rootName,
+    reloadMatched,
+  };
+}
+
 async function main(): Promise<void> {
   const args = process.argv.slice(2);
   const wasmPath = args[0];
   const expectBlocked = args.includes('--expect-blocked');
   const allowCandidate = args.includes('--allow-candidate-wasm');
+  const runtimeProof = args.includes('--runtime-proof');
   if (!wasmPath || wasmPath.startsWith('--')) {
     throw new Error(
-      'usage: npx tsx scripts/probe-inochi-wasm-load.ts <inochi2d.wasm> [--fixture <puppet.inx>] [--expect-blocked] [--allow-candidate-wasm]',
+      'usage: npx tsx scripts/probe-inochi-wasm-load.ts <inochi2d.wasm> [--fixture <puppet.inx>] [--runtime-proof] [--expect-blocked] [--allow-candidate-wasm]',
     );
   }
 
@@ -157,16 +341,13 @@ async function main(): Promise<void> {
     fixtureBytes: puppetBytes.byteLength,
   };
 
-  let sourcePtr: number;
   let scratchpad: InochiWebScratchpad;
   try {
-    const prepared = bootstrapAndAllocatePuppetInput(api, puppetBytes.byteLength);
-    sourcePtr = prepared.sourcePointer;
-    scratchpad = prepared.scratchpad;
+    scratchpad = bootstrapInochiWebModule(api).scratchpad;
   } catch (error) {
     console.log(JSON.stringify({
       ...baseEvidence,
-      blockedAt: 'bootstrap-or-input-allocation',
+      blockedAt: 'bootstrap',
       requestedBytes: puppetBytes.byteLength,
       error: error instanceof Error ? error.message : String(error),
     }, null, 2));
@@ -176,24 +357,37 @@ async function main(): Promise<void> {
 
   let puppetPtr = 0;
   try {
-    new Uint8Array(api.memory.buffer, sourcePtr, puppetBytes.byteLength).set(puppetBytes);
-    puppetPtr = Number(api.in_puppet_load_from_memory(sourcePtr, puppetBytes.byteLength, 0));
-  } finally {
-    api.nu_free(sourcePtr);
+    puppetPtr = loadPuppetBytes(api, puppetBytes);
+  } catch (error) {
+    console.log(JSON.stringify({
+      ...baseEvidence,
+      blockedAt: 'input-allocation',
+      requestedBytes: puppetBytes.byteLength,
+      error: error instanceof Error ? error.message : String(error),
+    }, null, 2));
+    if (expectBlocked) return;
+    throw error;
   }
 
-  console.log(JSON.stringify({ ...baseEvidence, scratchpad, puppetPtr }, null, 2));
+  if (!puppetPtr) {
+    console.log(JSON.stringify({ ...baseEvidence, scratchpad, puppetPtr }, null, 2));
+    if (expectBlocked) return;
+    throw new Error(`upstream WASM in_puppet_load_from_memory returned null for ${fixture.label}`);
+  }
 
-  if (puppetPtr) {
+  if (expectBlocked) {
     api.in_puppet_free(puppetPtr);
-    if (expectBlocked) {
-      throw new Error('upstream WASM load unexpectedly succeeded; re-evaluate the documented blocker');
-    }
+    throw new Error('upstream WASM load unexpectedly succeeded; re-evaluate the documented blocker');
+  }
+
+  if (runtimeProof) {
+    const proof = proveRuntime(api, puppetPtr, puppetBytes);
+    console.log(JSON.stringify({ ...baseEvidence, scratchpad, puppetPtr, runtimeProof: proof }, null, 2));
     return;
   }
 
-  if (expectBlocked) return;
-  throw new Error(`upstream WASM in_puppet_load_from_memory returned null for ${fixture.label}`);
+  console.log(JSON.stringify({ ...baseEvidence, scratchpad, puppetPtr }, null, 2));
+  api.in_puppet_free(puppetPtr);
 }
 
 const argvEntry = process.argv[1];
