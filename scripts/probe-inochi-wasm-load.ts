@@ -66,7 +66,7 @@ export interface ProbeFixture {
   readonly label: string;
 }
 
-export type ProbeMode = 'load' | 'inventory' | 'mutation' | 'runtime';
+export type ProbeMode = 'load' | 'inventory' | 'parameter-read' | 'mutation' | 'runtime';
 
 interface InventoryProof {
   readonly name: string;
@@ -77,7 +77,19 @@ interface InventoryProof {
   readonly rootNode: string;
 }
 
-interface MutationProof extends InventoryProof {
+interface ParameterSample {
+  readonly name: string;
+  readonly dimensions: number;
+  readonly lower: readonly number[];
+  readonly upper: readonly number[];
+  readonly value: readonly number[];
+}
+
+interface ParameterReadProof extends InventoryProof {
+  readonly samples: readonly ParameterSample[];
+}
+
+interface MutationProof extends ParameterReadProof {
   readonly mutatedParameters: readonly string[];
 }
 
@@ -115,8 +127,9 @@ export function resolveProbeFixture(args: readonly string[]): ProbeFixture {
 
 export function resolveProbeMode(args: readonly string[]): ProbeMode {
   if (args.includes('--runtime-proof')) return 'runtime';
+  if (args.includes('--mutation-proof')) return 'mutation';
   if (args.includes('--inventory-proof')) return 'inventory';
-  if (args.includes('--fixture')) return 'mutation';
+  if (args.includes('--fixture')) return 'parameter-read';
   return 'load';
 }
 
@@ -201,19 +214,15 @@ function enumerateNodes(api: InochiWasmExports, rootPtr: number): { count: numbe
   return { count: seen.size, rootName };
 }
 
-function inspectParameterInventory(api: InochiWasmExports, puppetPtr: number): { count: number; names: string[] } {
+function parameterPointers(api: InochiWasmExports, puppetPtr: number): { count: number; pointers: number[] } {
   const { value: parameterArrayPtr, count } = withCountPointer(api, (countPtr) => Number(api.in_puppet_get_parameters(puppetPtr, countPtr)));
-  const parameterPtrs = readWasmPointerArray(api.memory, parameterArrayPtr, count);
-  return {
-    count,
-    names: parameterPtrs.map((parameterPtr) => readWasmCString(api.memory, Number(api.in_parameter_get_name(parameterPtr)))),
-  };
+  return { count, pointers: readWasmPointerArray(api.memory, parameterArrayPtr, count) };
 }
 
 function proveInventory(api: InochiWasmExports, puppetPtr: number): InventoryProof {
   const name = readWasmCString(api.memory, Number(api.in_puppet_get_name(puppetPtr)));
   const author = readWasmCString(api.memory, Number(api.in_puppet_get_author(puppetPtr)));
-  const parameters = inspectParameterInventory(api, puppetPtr);
+  const parameters = parameterPointers(api, puppetPtr);
   const rootPtr = Number(api.in_puppet_get_root_node(puppetPtr));
   if (!rootPtr) throw new Error('real puppet returned null root node');
   const nodes = enumerateNodes(api, rootPtr);
@@ -221,17 +230,42 @@ function proveInventory(api: InochiWasmExports, puppetPtr: number): InventoryPro
     name,
     author,
     parameterCount: parameters.count,
-    parameterNames: parameters.names,
+    parameterNames: parameters.pointers.map((parameterPtr) => readWasmCString(api.memory, Number(api.in_parameter_get_name(parameterPtr)))),
     nodeCount: nodes.count,
     rootNode: nodes.rootName,
   };
 }
 
+function proveParameterReads(api: InochiWasmExports, puppetPtr: number): ParameterReadProof {
+  const inventory = proveInventory(api, puppetPtr);
+  const parameters = parameterPointers(api, puppetPtr);
+  const samples: ParameterSample[] = [];
+  for (const parameterPtr of parameters.pointers) {
+    if (samples.length >= 2) break;
+    const dimensions = api.in_parameter_get_dimensions(parameterPtr);
+    if (dimensions <= 0) continue;
+    const lower = readWasmFloatArray(api.memory, Number(api.in_parameter_get_lower_bounds(parameterPtr)), dimensions);
+    const upper = readWasmFloatArray(api.memory, Number(api.in_parameter_get_upper_bounds(parameterPtr)), dimensions);
+    const value = readWasmFloatArray(api.memory, Number(api.in_parameter_get_value(parameterPtr)), dimensions);
+    if (lower.length !== dimensions || upper.length !== dimensions || value.length !== dimensions) {
+      throw new Error('real parameter arrays did not match reported dimensionality');
+    }
+    samples.push({
+      name: readWasmCString(api.memory, Number(api.in_parameter_get_name(parameterPtr))),
+      dimensions,
+      lower,
+      upper,
+      value,
+    });
+  }
+  if (samples.length < 2) throw new Error(`real puppet exposed ${parameters.count} parameters but fewer than two readable parameters`);
+  return { ...inventory, samples };
+}
+
 function mutateTwoParameters(api: InochiWasmExports, puppetPtr: number): string[] {
-  const { value: parameterArrayPtr, count } = withCountPointer(api, (countPtr) => Number(api.in_puppet_get_parameters(puppetPtr, countPtr)));
-  const parameterPtrs = readWasmPointerArray(api.memory, parameterArrayPtr, count);
+  const parameters = parameterPointers(api, puppetPtr);
   const mutated: string[] = [];
-  for (const parameterPtr of parameterPtrs) {
+  for (const parameterPtr of parameters.pointers) {
     if (mutated.length >= 2) break;
     const dimensions = api.in_parameter_get_dimensions(parameterPtr);
     if (dimensions <= 0) continue;
@@ -261,13 +295,13 @@ function mutateTwoParameters(api: InochiWasmExports, puppetPtr: number): string[
     }
     mutated.push(readWasmCString(api.memory, Number(api.in_parameter_get_name(parameterPtr))));
   }
-  if (mutated.length < 2) throw new Error(`real puppet exposed ${count} parameters but fewer than two mutable parameters`);
+  if (mutated.length < 2) throw new Error(`real puppet exposed ${parameters.count} parameters but fewer than two mutable parameters`);
   return mutated;
 }
 
 function proveMutation(api: InochiWasmExports, puppetPtr: number): MutationProof {
-  const inventory = proveInventory(api, puppetPtr);
-  return { ...inventory, mutatedParameters: mutateTwoParameters(api, puppetPtr) };
+  const parameterReadProof = proveParameterReads(api, puppetPtr);
+  return { ...parameterReadProof, mutatedParameters: mutateTwoParameters(api, puppetPtr) };
 }
 
 function loadPuppetBytes(api: InochiWasmExports, puppetBytes: Uint8Array): number {
@@ -304,7 +338,7 @@ async function main(): Promise<void> {
   const allowCandidate = args.includes('--allow-candidate-wasm');
   const proofMode = resolveProbeMode(args);
   if (!wasmPath || wasmPath.startsWith('--')) {
-    throw new Error('usage: npx tsx scripts/probe-inochi-wasm-load.ts <inochi2d.wasm> [--fixture <puppet.inx>] [--inventory-proof] [--runtime-proof] [--expect-blocked] [--allow-candidate-wasm]');
+    throw new Error('usage: npx tsx scripts/probe-inochi-wasm-load.ts <inochi2d.wasm> [--fixture <puppet.inx>] [--inventory-proof] [--mutation-proof] [--runtime-proof] [--expect-blocked] [--allow-candidate-wasm]');
   }
   const fixture = resolveProbeFixture(args);
   const wasm = await readFile(wasmPath);
@@ -343,8 +377,15 @@ async function main(): Promise<void> {
   }
   if (proofMode === 'inventory') {
     try {
-      const inventoryProof = proveInventory(api, puppetPtr);
-      console.log(JSON.stringify({ ...baseEvidence, scratchpad, puppetPtr, inventoryProof }, null, 2));
+      console.log(JSON.stringify({ ...baseEvidence, scratchpad, puppetPtr, inventoryProof: proveInventory(api, puppetPtr) }, null, 2));
+    } finally {
+      api.in_puppet_free(puppetPtr);
+    }
+    return;
+  }
+  if (proofMode === 'parameter-read') {
+    try {
+      console.log(JSON.stringify({ ...baseEvidence, scratchpad, puppetPtr, parameterReadProof: proveParameterReads(api, puppetPtr) }, null, 2));
     } finally {
       api.in_puppet_free(puppetPtr);
     }
@@ -352,16 +393,14 @@ async function main(): Promise<void> {
   }
   if (proofMode === 'mutation') {
     try {
-      const mutationProof = proveMutation(api, puppetPtr);
-      console.log(JSON.stringify({ ...baseEvidence, scratchpad, puppetPtr, mutationProof }, null, 2));
+      console.log(JSON.stringify({ ...baseEvidence, scratchpad, puppetPtr, mutationProof: proveMutation(api, puppetPtr) }, null, 2));
     } finally {
       api.in_puppet_free(puppetPtr);
     }
     return;
   }
   if (proofMode === 'runtime') {
-    const runtimeProof = proveRuntime(api, puppetPtr, puppetBytes);
-    console.log(JSON.stringify({ ...baseEvidence, scratchpad, puppetPtr, runtimeProof }, null, 2));
+    console.log(JSON.stringify({ ...baseEvidence, scratchpad, puppetPtr, runtimeProof: proveRuntime(api, puppetPtr, puppetBytes) }, null, 2));
     return;
   }
   console.log(JSON.stringify({ ...baseEvidence, scratchpad, puppetPtr }, null, 2));
