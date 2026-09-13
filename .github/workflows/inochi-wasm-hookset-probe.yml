@@ -72,5 +72,8 @@ jobs:
           echo "path=$WASM" >> "$GITHUB_OUTPUT"
           sha256sum "$WASM"
 
-      - name: Probe real upstream fixture through candidate allocator
+      - name: Probe tiny upstream fixture through candidate allocator
         run: npx tsx scripts/probe-inochi-wasm-load.ts '${{ steps.wasm.outputs.path }}' --allow-candidate-wasm
+
+      - name: Probe full upstream Ada puppet through candidate allocator
+        run: npx tsx scripts/probe-inochi-wasm-load.ts '${{ steps.wasm.outputs.path }}' --fixture .tmp/inochi2d/examples/ada-static.inx --allow-candidate-wasm
