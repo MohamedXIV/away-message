@@ -3,7 +3,6 @@ import {
   allocatePuppetInputOrThrow,
   assertAcceptedWasmHash,
   bootstrapAndAllocatePuppetInput,
-  inspectWasmFloatPointer,
   readWasmCString,
   readWasmPointerArray,
   resolveProbeFixture,
@@ -11,6 +10,7 @@ import {
   validateParameterSample,
   writeWasmFloatArray,
 } from '../../scripts/probe-inochi-wasm-load';
+import { inspectWasmFloatPointer } from '../../src/tooling/away-puppet/InochiWasmDiagnostics';
 
 describe('Inochi WASM real-byte probe safety (#34)', () => {
   it('fails closed before writing puppet bytes when the upstream allocator returns null', () => {
