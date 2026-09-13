@@ -75,45 +75,39 @@ jobs:
       - name: Probe tiny upstream fixture through candidate allocator
         run: npx tsx scripts/probe-inochi-wasm-load.ts '${{ steps.wasm.outputs.path }}' --allow-candidate-wasm
 
-      - name: Apply scratchpad-count diagnostic only
+      - name: Instrument parameter-count stability by inventory stage
         shell: bash
         run: |
           python3 - <<'PY'
           from pathlib import Path
           path = Path('scripts/probe-inochi-wasm-load.ts')
           text = path.read_text()
-          old = '''function withCountPointer<T>(api: InochiWasmExports, read: (countPtr: number) => T): { value: T; count: number } {
-            const countPtr = allocatePuppetInputOrThrow(api, 4);
-            try {
-              new DataView(api.memory.buffer).setUint32(countPtr, 0, true);
-              const value = read(countPtr);
-              return { value, count: new DataView(api.memory.buffer).getUint32(countPtr, true) };
-            } finally {
-              api.nu_free(countPtr);
-            }
-          }'''.replace('          ', '')
-          new = '''function withCountPointer<T>(api: InochiWasmExports, read: (countPtr: number) => T): { value: T; count: number } {
-            const sharedCountPtr = Number((globalThis as { __inochiProbeScratchpadPointer?: number }).__inochiProbeScratchpadPointer ?? 0);
-            const countPtr = sharedCountPtr || allocatePuppetInputOrThrow(api, 4);
-            const ownsCountPtr = sharedCountPtr === 0;
-            try {
-              new DataView(api.memory.buffer).setUint32(countPtr, 0, true);
-              const value = read(countPtr);
-              return { value, count: new DataView(api.memory.buffer).getUint32(countPtr, true) };
-            } finally {
-              if (ownsCountPtr) api.nu_free(countPtr);
-            }
-          }'''.replace('          ', '')
-          if old not in text:
-              raise SystemExit('withCountPointer block not found')
-          text = text.replace(old, new, 1)
-          needle = '    scratchpad = bootstrapInochiWebModule(api).scratchpad;\n'
-          replacement = needle + '    (globalThis as { __inochiProbeScratchpadPointer?: number }).__inochiProbeScratchpadPointer = scratchpad.pointer;\n'
-          if needle not in text:
-              raise SystemExit('bootstrap assignment not found')
-          path.write_text(text.replace(needle, replacement, 1))
+          start = text.index('function proveParameterReads(api: InochiWasmExports, puppetPtr: number): ParameterReadProof {')
+          end = text.index('\nfunction mutateTwoParameters', start)
+          diagnostic = '''function proveParameterReads(api: InochiWasmExports, puppetPtr: number): ParameterReadProof {
+            const counts: Array<{ stage: string; count: number }> = [];
+            const capture = (stage: string): { count: number; pointers: number[] } => {
+              const current = parameterPointers(api, puppetPtr);
+              counts.push({ stage, count: current.count });
+              return current;
+            };
+            const initial = capture('initial');
+            readWasmCString(api.memory, Number(api.in_puppet_get_name(puppetPtr)));
+            readWasmCString(api.memory, Number(api.in_puppet_get_author(puppetPtr)));
+            capture('after-metadata');
+            initial.pointers.forEach((parameterPtr) => readWasmCString(api.memory, Number(api.in_parameter_get_name(parameterPtr))));
+            capture('after-parameter-names');
+            const rootPtr = Number(api.in_puppet_get_root_node(puppetPtr));
+            capture('after-root-lookup');
+            if (!rootPtr) throw new Error(`parameter stability diagnostic: ${JSON.stringify(counts)}; null root`);
+            enumerateNodes(api, rootPtr);
+            capture('after-node-traversal');
+            throw new Error(`parameter stability diagnostic: ${JSON.stringify(counts)}`);
+          }
+          '''.replace('          ', '')
+          path.write_text(text[:start] + diagnostic + text[end:])
           PY
           git diff -- scripts/probe-inochi-wasm-load.ts
 
-      - name: Test full upstream Ada parameter reads with shared scratchpad
+      - name: Diagnose full upstream Ada parameter inventory stability
         run: npx tsx scripts/probe-inochi-wasm-load.ts '${{ steps.wasm.outputs.path }}' --fixture .tmp/inochi2d/examples/ada-static.inx --parameter-read-proof --allow-candidate-wasm
