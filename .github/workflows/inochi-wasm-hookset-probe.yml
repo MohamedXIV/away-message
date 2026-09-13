@@ -8,6 +8,7 @@ on:
       - '.github/workflows/inochi-wasm-hookset-probe.yml'
       - 'scripts/probe-inochi-wasm-load.ts'
       - 'scripts/probe-inochi-wasm-draw-list.ts'
+      - 'scripts/probe-inochi-wasm-slot.ts'
       - 'scripts/verify-inochi-wasm-exports.mjs'
       - 'src/tooling/away-puppet/InochiDrawListBridge.ts'
       - 'src/tooling/away-puppet/InochiWebModuleBootstrap.ts'
@@ -157,6 +158,9 @@ jobs:
 
       - name: Prove copied renderer draw-list data on upstream Ada
         run: npx tsx scripts/probe-inochi-wasm-draw-list.ts '${{ steps.wasm.outputs.path }}' .tmp/inochi2d/examples/ada-static.inx
+
+      - name: Prove real part texture swap and restore on upstream Ada
+        run: npx tsx scripts/probe-inochi-wasm-slot.ts '${{ steps.wasm.outputs.path }}' .tmp/inochi2d/examples/ada-static.inx
 
       - name: Prove current-format runtime mutations on official Midori rig
         run: |
