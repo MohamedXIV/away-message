@@ -3,7 +3,10 @@ import {
   allocatePuppetInputOrThrow,
   assertAcceptedWasmHash,
   bootstrapAndAllocatePuppetInput,
+  readWasmCString,
+  readWasmPointerArray,
   resolveProbeFixture,
+  writeWasmFloatArray,
 } from '../../scripts/probe-inochi-wasm-load';
 
 describe('Inochi WASM real-byte probe safety (#34)', () => {
@@ -67,5 +70,20 @@ describe('Inochi WASM real-byte probe safety (#34)', () => {
       path: '.tmp/inochi2d/examples/ada-static.inx',
       label: '.tmp/inochi2d/examples/ada-static.inx',
     });
+  });
+
+  it('decodes detached C strings and wasm32 pointer arrays without exposing raw memory to callers', () => {
+    const memory = new WebAssembly.Memory({ initial: 1 });
+    new Uint8Array(memory.buffer, 32, 4).set([65, 100, 97, 0]);
+    new Uint32Array(memory.buffer, 64, 3).set([128, 256, 512]);
+
+    expect(readWasmCString(memory, 32)).toBe('Ada');
+    expect(readWasmPointerArray(memory, 64, 3)).toEqual([128, 256, 512]);
+  });
+
+  it('writes deterministic float payloads for real parameter mutation', () => {
+    const memory = new WebAssembly.Memory({ initial: 1 });
+    writeWasmFloatArray(memory, 96, [0.25, -0.5]);
+    expect(Array.from(new Float32Array(memory.buffer, 96, 2))).toEqual([0.25, -0.5]);
   });
 });
