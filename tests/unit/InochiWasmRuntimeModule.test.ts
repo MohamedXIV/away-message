@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { createInochiWasmRuntimeModule } from '../../src/tooling/away-puppet/InochiWasmRuntimeModule';
+import {
+  createInochiWasmPuppetToolService,
+  createInochiWasmRuntimeModule,
+} from '../../src/tooling/away-puppet/InochiWasmRuntimeModule';
+import type { AwayRigMetadata } from '../../src/tooling/away-puppet/SemanticPuppet';
 
 class FakeWasmExports {
   readonly memory = new WebAssembly.Memory({ initial: 1 });
@@ -72,6 +76,20 @@ class FakeWasmExports {
   }
 }
 
+const metadata: AwayRigMetadata = {
+  namespace: 'away-message/puppet',
+  contractVersion: 1,
+  morphs: {
+    'body.mass': { parameterId: 'Body Mass', min: -1, max: 1, default: 0 },
+  },
+  slots: {
+    'hair.front': { nodeId: 'Hair' },
+  },
+  tints: {},
+  expressions: {},
+  poses: {},
+};
+
 describe('corrected low-level Inochi WASM runtime module (#34)', () => {
   it('loads real bytes through CFFI shape and exposes semantic wrapper-compatible parameters/nodes', () => {
     const exports = new FakeWasmExports();
@@ -103,5 +121,33 @@ describe('corrected low-level Inochi WASM runtime module (#34)', () => {
     const module = createInochiWasmRuntimeModule(exports);
 
     expect(() => new module.Puppet(new Uint8Array([1]).buffer)).toThrow(/load.*failed/i);
+  });
+
+  it('wires puppet.open directly through the corrected WASM loader without exposing raw ids', () => {
+    const exports = new FakeWasmExports();
+    const sources = new Map<string, number[]>([
+      ['first.inp', [1, 2, 3]],
+      ['second.inp', [9, 8, 7]],
+    ]);
+    const service = createInochiWasmPuppetToolService(
+      exports,
+      (source) => {
+        const bytes = sources.get(source);
+        if (!bytes) throw new Error(`Unknown fixture: ${source}`);
+        return { source, bytes: new Uint8Array(bytes).buffer, metadata };
+      },
+      'first.inp',
+    );
+
+    expect(exports.loadedBytes).toEqual([[1, 2, 3]]);
+    expect(service.call('parameter.get', { name: 'body.mass' })).toEqual({ name: 'body.mass', value: 0 });
+    expect(service.call('puppet.open', { source: 'second.inp' })).toMatchObject({ ok: true, source: 'second.inp' });
+    expect(exports.loadedBytes).toEqual([[1, 2, 3], [9, 8, 7]]);
+    expect(exports.freedPuppets).toEqual([200]);
+
+    expect(service.listTools()).not.toContain('nu_malloc');
+    expect(service.listTools()).not.toContain('in_puppet_load_from_memory');
+    service.dispose();
+    expect(exports.freedPuppets).toEqual([200, 200]);
   });
 });
