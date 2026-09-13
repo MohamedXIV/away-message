@@ -128,8 +128,8 @@ export function resolveProbeFixture(args: readonly string[]): ProbeFixture {
 export function resolveProbeMode(args: readonly string[]): ProbeMode {
   if (args.includes('--runtime-proof')) return 'runtime';
   if (args.includes('--mutation-proof')) return 'mutation';
-  if (args.includes('--inventory-proof')) return 'inventory';
-  if (args.includes('--fixture')) return 'parameter-read';
+  if (args.includes('--parameter-read-proof')) return 'parameter-read';
+  if (args.includes('--inventory-proof') || args.includes('--fixture')) return 'inventory';
   return 'load';
 }
 
@@ -344,7 +344,7 @@ async function main(): Promise<void> {
   const allowCandidate = args.includes('--allow-candidate-wasm');
   const proofMode = resolveProbeMode(args);
   if (!wasmPath || wasmPath.startsWith('--')) {
-    throw new Error('usage: npx tsx scripts/probe-inochi-wasm-load.ts <inochi2d.wasm> [--fixture <puppet.inx>] [--inventory-proof] [--mutation-proof] [--runtime-proof] [--expect-blocked] [--allow-candidate-wasm]');
+    throw new Error('usage: npx tsx scripts/probe-inochi-wasm-load.ts <inochi2d.wasm> [--fixture <puppet.inx>] [--inventory-proof] [--parameter-read-proof] [--mutation-proof] [--runtime-proof] [--expect-blocked] [--allow-candidate-wasm]');
   }
   const fixture = resolveProbeFixture(args);
   const wasm = await readFile(wasmPath);
