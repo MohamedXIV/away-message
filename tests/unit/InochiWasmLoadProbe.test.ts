@@ -89,9 +89,11 @@ describe('Inochi WASM real-byte probe safety (#34)', () => {
     expect(readWasmPointerArray(memory, 64, 3)).toEqual([128, 256, 512]);
   });
 
-  it('writes deterministic float payloads for real parameter mutation', () => {
+  it('writes deterministic float payloads without assuming WASM pointer alignment', () => {
     const memory = new WebAssembly.Memory({ initial: 1 });
-    writeWasmFloatArray(memory, 96, [0.25, -0.5]);
-    expect(Array.from(new Float32Array(memory.buffer, 96, 2))).toEqual([0.25, -0.5]);
+    writeWasmFloatArray(memory, 97, [0.25, -0.5]);
+    const view = new DataView(memory.buffer);
+    expect(view.getFloat32(97, true)).toBe(0.25);
+    expect(view.getFloat32(101, true)).toBe(-0.5);
   });
 });
