@@ -81,6 +81,18 @@ jobs:
           '''
           replacement = needle + '''
           /**
+              Gets one borrowed texture attachment from a part.
+              The returned pointer remains Part-owned and is for tooling proof/readback.
+          */
+          in_texture_t* in_part_get_texture(in_part_t* self, uint attachment) {
+              if (attachment >= IN_MAX_ATTACHMENTS)
+                  return null;
+              if (auto n_self = cast(Part)self)
+                  return cast(in_texture_t*)n_self.textures[attachment];
+              return null;
+          }
+
+          /**
               Replaces one texture attachment on a part with an existing texture.
               Ownership follows normal Part semantics: the replacement is retained
               before the previous attachment is released.
