@@ -83,13 +83,13 @@ jobs:
           echo "path=$WASM" >> "$GITHUB_OUTPUT"
           sha256sum "$WASM"
 
-      - name: Retain exact candidate and Aka fixture for ABI diagnosis
+      - name: Retain exact candidate and Midori fixture for runtime diagnosis
         uses: actions/upload-artifact@v4
         with:
           name: inochi2d-hookset-diagnostic-${{ github.sha }}
           path: |
             ${{ steps.wasm.outputs.path }}
-            .tmp/example-models/Aka.inx
+            .tmp/example-models/Midori.inx
           if-no-files-found: error
           retention-days: 3
 
@@ -105,8 +105,8 @@ jobs:
       - name: Prove copied renderer draw-list data on upstream Ada
         run: npx tsx scripts/probe-inochi-wasm-draw-list.ts '${{ steps.wasm.outputs.path }}' .tmp/inochi2d/examples/ada-static.inx
 
-      - name: Prove parameters on official Aka rigged example
+      - name: Prove current-format runtime mutations on official Midori rig
         run: |
-          test $(wc -c < .tmp/example-models/Aka.inx) -gt 1000
-          sha256sum .tmp/example-models/Aka.inx
-          npx tsx scripts/probe-inochi-wasm-load.ts '${{ steps.wasm.outputs.path }}' --fixture .tmp/example-models/Aka.inx --parameter-read-proof --allow-candidate-wasm
+          test $(wc -c < .tmp/example-models/Midori.inx) -gt 1000
+          sha256sum .tmp/example-models/Midori.inx
+          npx tsx scripts/probe-inochi-wasm-load.ts '${{ steps.wasm.outputs.path }}' --fixture .tmp/example-models/Midori.inx --runtime-proof --allow-candidate-wasm
