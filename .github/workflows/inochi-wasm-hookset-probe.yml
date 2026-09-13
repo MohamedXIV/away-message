@@ -37,6 +37,13 @@ jobs:
           path: .tmp/example-models
           lfs: true
 
+      - name: Checkout pinned Arch Chan runtime puppet
+        uses: actions/checkout@v4
+        with:
+          repository: Speykious/arch-chan
+          ref: ed43dcf7e88d56f79d2e42fecb084bf6923f44e0
+          path: .tmp/arch-chan
+
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
@@ -81,13 +88,14 @@ jobs:
           echo "path=$WASM" >> "$GITHUB_OUTPUT"
           sha256sum "$WASM"
 
-      - name: Retain exact candidate and Aka fixture for ABI diagnosis
+      - name: Retain exact candidate and diagnostic puppets
         uses: actions/upload-artifact@v4
         with:
           name: inochi2d-hookset-diagnostic-${{ github.sha }}
           path: |
             ${{ steps.wasm.outputs.path }}
             .tmp/example-models/Aka.inx
+            .tmp/arch-chan/Inochi2D/Arch Chan Model.inp
           if-no-files-found: error
           retention-days: 3
 
@@ -96,6 +104,12 @@ jobs:
 
       - name: Probe full upstream Ada inventory
         run: npx tsx scripts/probe-inochi-wasm-load.ts '${{ steps.wasm.outputs.path }}' --fixture .tmp/inochi2d/examples/ada-static.inx --allow-candidate-wasm
+
+      - name: Prove parameters on pinned Arch Chan INP runtime puppet
+        run: |
+          test $(wc -c < '.tmp/arch-chan/Inochi2D/Arch Chan Model.inp') -gt 1000
+          sha256sum '.tmp/arch-chan/Inochi2D/Arch Chan Model.inp'
+          npx tsx scripts/probe-inochi-wasm-load.ts '${{ steps.wasm.outputs.path }}' --fixture '.tmp/arch-chan/Inochi2D/Arch Chan Model.inp' --parameter-read-proof --allow-candidate-wasm
 
       - name: Prove parameters on official Aka rigged example
         run: |
