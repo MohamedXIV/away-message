@@ -14,7 +14,12 @@ const metadata: AwayRigMetadata = {
     'body.mass': { parameterId: 'ParamBodyMass', min: -1, max: 1, default: 0 },
   },
   slots: {
-    'hair.front': { nodeId: 'NodeHairFront' },
+    'hair.front': {
+      nodeId: 'NodeHairFront',
+      assets: {
+        'hair.bob': { textureIndex: 3, attachment: 0 },
+      },
+    },
   },
   tints: {},
   expressions: {},
@@ -41,6 +46,7 @@ class FakeNode {
 
 class FakePuppet {
   static freeCount = 0;
+  static slotAssignments: Array<{ nodeName: string; textureIndex: number; attachment: number }> = [];
   readonly parameters = [new FakeParameter('ParamBodyMass', 0)];
   readonly root = new FakeNode('Root', [new FakeNode('NodeHairFront')]);
   readonly name = 'Fixture';
@@ -49,6 +55,9 @@ class FakePuppet {
   constructor(readonly bytes: ArrayBufferLike) {}
   update(): void {}
   draw(): void {}
+  assignPartTexture(nodeName: string, textureIndex: number, attachment: number): void {
+    FakePuppet.slotAssignments.push({ nodeName, textureIndex, attachment });
+  }
   free(): void { FakePuppet.freeCount += 1; }
 }
 
@@ -82,7 +91,8 @@ describe('Inochi Web production lifecycle bridge (#34)', () => {
     expect(FakePuppet.freeCount).toBe(1);
   });
 
-  it('maps node visibility but refuses to fake unsupported tint or slot replacement', () => {
+  it('maps semantic slot assets to runtime part-texture assignment without exposing raw ids', () => {
+    FakePuppet.slotAssignments = [];
     const lifecycle = createInochiWebLifecycle(module, (id) => source(id));
     const session = lifecycle.open('fixture.inp');
     const service = createAwayPuppetToolService(session.puppet, {
@@ -91,8 +101,12 @@ describe('Inochi Web production lifecycle bridge (#34)', () => {
     });
 
     expect(service.call('part.set_visibility', { slot: 'hair.front', visible: false })).toEqual({ ok: true });
+    expect(service.call('away.assign_slot', { slot: 'hair.front', assetId: 'hair.bob' })).toEqual({ ok: true });
+    expect(FakePuppet.slotAssignments).toEqual([
+      { nodeName: 'NodeHairFront', textureIndex: 3, attachment: 0 },
+    ]);
+    expect(() => service.call('away.assign_slot', { slot: 'hair.front', assetId: 'hair.unknown' })).toThrow(/unknown slot asset/i);
     expect(() => service.call('part.set_tint', { channel: 'hair', color: '#fff' })).toThrow();
-    expect(() => service.call('away.assign_slot', { slot: 'hair.front', assetId: 'hair.bob' })).toThrow(/unavailable/i);
   });
 
   it('frees a newly loaded raw puppet when metadata validation fails', () => {
