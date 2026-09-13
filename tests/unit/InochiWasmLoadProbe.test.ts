@@ -3,6 +3,7 @@ import {
   allocatePuppetInputOrThrow,
   assertAcceptedWasmHash,
   bootstrapAndAllocatePuppetInput,
+  inspectWasmFloatPointer,
   readWasmCString,
   readWasmPointerArray,
   resolveProbeFixture,
@@ -97,6 +98,20 @@ describe('Inochi WASM real-byte probe safety (#34)', () => {
     const view = new DataView(memory.buffer);
     expect(view.getFloat32(97, true)).toBe(0.25);
     expect(view.getFloat32(101, true)).toBe(-0.5);
+  });
+
+  it('captures float pointer address, raw bytes and decoded values for ABI diagnosis', () => {
+    const memory = new WebAssembly.Memory({ initial: 1 });
+    const view = new DataView(memory.buffer);
+    view.setFloat32(97, -1, true);
+    view.setFloat32(101, 0.5, true);
+
+    expect(inspectWasmFloatPointer(memory, 97, 2)).toEqual({
+      pointer: 97,
+      byteLength: 8,
+      rawHex: '000080bf0000003f',
+      values: [-1, 0.5],
+    });
   });
 
   it('rejects non-finite or inverted real parameter samples instead of reporting a false-positive proof', () => {
