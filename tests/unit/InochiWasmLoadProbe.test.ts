@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   allocatePuppetInputOrThrow,
+  assertAcceptedWasmHash,
   bootstrapAndAllocatePuppetInput,
 } from '../../scripts/probe-inochi-wasm-load';
 
@@ -52,5 +53,10 @@ describe('Inochi WASM real-byte probe safety (#34)', () => {
       scratchpad: { pointer: 2048, size: 128 },
     });
     expect(calls).toEqual(['init', 'scratch:0:128', 'input:512']);
+  });
+
+  it('keeps the published artifact hash pinned unless candidate mode is explicit', () => {
+    expect(() => assertAcceptedWasmHash('candidate-hash', false)).toThrow(/unexpected wasm sha256/i);
+    expect(() => assertAcceptedWasmHash('candidate-hash', true)).not.toThrow();
   });
 });
