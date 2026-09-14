@@ -29,6 +29,11 @@ The approved living-character direction is a **Life Matrix orchestration layer o
 4. **Version bumps on release batches only.** `package.json` SemVer (`src/version.ts` mirrors it) is independent from the save-FORMAT version.
 5. **Save-compat rule (absolute):** any breaking save change = bump `SAVE_FORMAT_VERSION` in `src/persistence/slots.ts` + migration path in `checkSaveCompatibility` + one CHANGELOG line. Newer-than-current saves are ALWAYS refused (silent corruption is worse than an honest error). Same discipline for Pulse `localStorage` version stamps (lenient there: warn, never refuse).
 
+## External agent orchestration
+- For non-trivial work that benefits from delegation, use the `orchestrating-external-agents` skill. The user has approved proactive use of OpenCode/Muse and Antigravity CLI (`agy`) without asking again, subject to the skill's scope and safety gates.
+- Away Message is a React/Vite/Phaser web-stack game. Do not use or configure Unity MCP for this repository. UI delegation requires browser-capable tooling; never claim visual or audio QA from a text-only worker.
+- For GitHub remote operations such as PRs, issues, comments, checks, reviews, and merge status, always use the `@GitHub` plugin. Use local Git only for local working-tree, diff, staging, and commit operations.
+
 ## Verification before every push
 `npm run content:check` when generated content is touched → `npx tsc --noEmit` clean → `npm run build` succeeds → full `npm run test` with zero new failures.
 For exact repository CI policy, run `node scripts/verify-vitest-baseline.mjs --self-test` then `node scripts/verify-vitest-baseline.mjs`; the latter is green only for a fully green suite and rejects any failure.
@@ -76,3 +81,4 @@ If a useful Orion concept overlaps an existing Away system, follow the salvage d
 - Windows + PowerShell: quote spaced paths, use `workdir` param (never `cd`), `Select-Object -First` for truncating (never `head`).
 - Keep edits minimal and local; preserve exact indentation; re-read edited regions before finalizing.
 - Short, factual communication. Reference code as `file_path:line_number`. Never emit emojis unless asked.
+
