@@ -7,7 +7,7 @@
 The game loop is:
 
 ```text
-Wake / return to room
+Wake / return to current residence
 → check what changed
 → decide what matters today
 → work / spend / browse / talk / wait
@@ -29,12 +29,12 @@ Examples:
 
 - start a large download,
 - leave the PC,
-- make tea,
+- make tea if the current residence/facility allows it,
 - return because Pulse chimed,
-- reply to Maya,
+- reply to a contact,
 - notice disk space is low,
 - delete an old installer,
-- read a classified listing,
+- read a classified or housing listing,
 - realize work begins soon,
 - take the shift.
 
@@ -48,17 +48,27 @@ The game should rarely force one activity for a long uninterrupted period.
 
 `broke → getting by → stable → some disposable income`
 
-Money should remain meaningful throughout the 14 days.
+Money should remain meaningful throughout the evaluation arc.
 
-### Room
+### Housing / residence
 
-`temporary motel room → recognizably personal space`
+```text
+cheap temporary motel room
+→ recognizably personal space
+→ better motel room / better supplied fixtures
+→ tiny apartment or other better residence
+```
 
-The evaluation build needs only a few visible changes:
-- better desk/monitor arrangement,
-- speakers,
-- small decorative item,
-- maybe a better chair or lamp.
+Housing is one of the strongest forms of visible lifestyle progression.
+
+The player should begin with constrained affordable choice rather than one sacred room number. A cheapest-valid starting room may have no private bathroom and no kitchenette. Better facilities, better supplied furniture, more privacy/storage, and a better location can justify higher recurring rent.
+
+Separate:
+
+- **residence-owned / landlord-owned fixtures and facilities** — may affect rent and remain with the property;
+- **player-owned belongings** — physical items such as rugs, lamps, posters, books, electronics and later movable furniture; these can move with the player and normally do not raise rent merely by being owned.
+
+See `10-RESIDENCE-HOUSING-AND-SPACE-PROGRESSION.md` and #85–#88.
 
 ### Computer
 
@@ -78,7 +88,7 @@ This can be light in the evaluation build.
 
 ### Knowledge
 
-`outsider → notices relationships between names, sites, physical places, and repeated details`
+`outsider → notices relationships between names, sites, physical places, housing, and repeated details`
 
 ---
 
@@ -91,8 +101,9 @@ Do not add:
 - generic skill points
 - visible social XP
 - computer level number
+- housing level number
 
-Progression should be represented by owned things, known things, unlocked things, and changed behavior.
+Progression should be represented by owned things, known things, unlocked things, changed behavior, and changed living circumstances.
 
 ---
 
@@ -110,6 +121,8 @@ Examples:
 
 - work overtime for money but miss someone's online window,
 - spend cash on RAM but make rent tighter,
+- choose a better room and accept higher recurring rent,
+- delay moving so there is money for hardware,
 - meet someone after work but arrive tired,
 - wait for a cheaper classified listing but remain stuck on old OS,
 - stay up late talking and start the next day with less energy.
@@ -141,6 +154,8 @@ Some actions perform authored time jumps:
 | Work shift | several hours |
 | Café meeting | 45–90 min |
 | Sleep | jump to chosen/required wake time |
+
+These are action defaults, not guarantees that every residence provides every action. A room without a kitchenette or private bathroom must use another valid facility path rather than exposing fake local actions.
 
 All time jumps must use the same simulation advancement path as ordinary ticking.
 
@@ -181,10 +196,13 @@ Food is an expense and a time activity, not a nutrition simulator.
 Keep it light.
 
 A daily food cost can be represented through:
-- motel food,
+- motel/common-facility food,
 - convenience-store food,
+- simple food prepared where facilities permit,
 - work meal,
 - café purchase.
+
+A poor room with no kitchenette should make outside/shared food options more relevant without becoming punitive.
 
 No calorie system.
 
@@ -220,6 +238,16 @@ Good:
 - newer software versions,
 - quality-of-life features.
 
+Bad:
+`Room Level 2`
+
+Good:
+- supplied bed/desk/storage changes visibly,
+- private bathroom or kitchenette becomes available,
+- recurring rent changes,
+- the new room/apartment changes commute/privacy/storage/social possibilities,
+- player-owned belongings remain visible and movable.
+
 ---
 
 ## 10. Systemic stories
@@ -229,12 +257,14 @@ The simulation should produce small stories without authored scenes.
 Examples:
 
 - player spends rent money on RAM and has to work an extra shift,
+- player chooses a nicer room and has less cash buffer that week,
 - a long download fails before FlashFetch is installed,
 - a friend comes online while player is at work,
 - player installs bundled toolbar by rushing through setup,
 - player finds a used upgrade just before buying new,
 - player misses a café appointment because of bad time management,
-- player schedules a download overnight and wakes to it completed.
+- player schedules a download overnight and wakes to it completed,
+- a housing listing becomes available in a district that would make work/social travel easier.
 
 These are desirable outcomes.
 
@@ -268,6 +298,7 @@ The ending must tolerate:
 - old OS still installed but upgrade path clearly available,
 - lower cash,
 - different software choices,
+- different reasonable housing choices,
 - weaker relationship with one contact,
 - skipped optional internet arc.
 
@@ -287,6 +318,7 @@ The player should frequently think:
 - Should I wait?
 - Do I need another shift?
 - Is the upgrade worth delaying something else?
+- Is the nicer room worth higher recurring rent?
 - Do I buy reliable new hardware or gamble on used?
 
 The evaluation build must not become a poverty punishment simulator.
@@ -295,7 +327,7 @@ The evaluation build must not become a poverty punishment simulator.
 
 ## 2. Canonical default values
 
-These are tuning defaults for the evaluation build.
+These are tuning defaults for the evaluation build and are subject to rebalance as the new housing system lands.
 
 Starting cash:
 `$38`
@@ -303,8 +335,8 @@ Starting cash:
 Primary work shift:
 `+$62`
 
-Weekly motel payment:
-approximately `$140–$160`
+Budget motel payment target:
+approximately `$140–$160` per week for a baseline cheap room, with cheaper/more expensive room terms allowed by authored content.
 
 Internet payment:
 approximately `$20–$30`
@@ -328,7 +360,7 @@ Values may be tuned for pacing, but the player should not afford every upgrade i
 
 ---
 
-## 3. Rent
+## 3. Rent and housing cost
 
 Rent/motel payment is the strongest recurring obligation.
 
@@ -336,9 +368,21 @@ Evaluation schedule:
 - first meaningful due point around Day 7
 - second due point around Day 14
 
+Housing cost should come from the current tenancy/residence terms, not one global motel constant.
+
+Residence-owned features that may justify higher rent include:
+- larger/better room;
+- better supplied bed/desk/storage package;
+- private bathroom;
+- kitchenette/mini-fridge;
+- better location/view/position;
+- included services.
+
+Player-owned rugs, lamps, posters, books, electronics and other movable belongings normally do not raise rent by themselves.
+
 Possible consequences of late payment:
 - fee,
-- awkward motel interaction,
+- awkward motel/landlord interaction,
 - reduced cash buffer.
 
 Do not hard fail the whole evaluation build for one missed payment.
@@ -364,7 +408,7 @@ The starting job is mundane food-service / cart work.
 
 First shift:
 - more explicit scene,
-- introduces Ryan,
+- establishes recurring coworkers/roles,
 - establishes routine.
 
 Later:
@@ -394,13 +438,14 @@ Do not create a complex career system.
 
 ## 7. Classifieds
 
-Used hardware can be cheaper but less certain.
+Used hardware and later housing opportunities can be cheaper/better but less certain.
 
-Evaluation choices:
+Evaluation choices may include:
 - buy reliable new RAM,
 - buy cheaper used RAM,
 - wait for a listing,
-- meet seller / pickup.
+- meet seller / pickup,
+- delay a housing move until a better affordable room appears.
 
 A listing can disappear if the player waits too long.
 
@@ -433,20 +478,23 @@ Do not build:
 
 ## 9. Daily activities
 
-Small room activities:
-- tea
-- coffee
-- noodles/meal
-- shower
-- bed/rest
-- window
-- TV/radio optional
-- clean/organize optional
+Residence/daily-life activities are capability-driven rather than guaranteed by one room template.
+
+Possible activities:
+- tea / coffee where a valid preparation facility exists;
+- noodles/simple meal where food-prep capability exists;
+- shower through private or shared valid facilities;
+- bed/rest;
+- window/observation where authored;
+- TV/radio optional;
+- clean/organize optional;
+- move/place personal belongings.
 
 They exist primarily to:
 - consume believable time,
 - create space between digital events,
-- let background simulation show itself.
+- let background simulation show itself,
+- make housing differences materially felt.
 
 They are not minigames.
 
@@ -470,12 +518,14 @@ Do not punish the player severely for choosing either life or money.
 
 ## 11. Purchases should change the world
 
-Buying:
+Buying or choosing:
 - RAM,
 - speakers,
 - monitor,
 - internet plan,
 - OS,
+- a better residence/fixture package,
+- player-owned decor,
 should visibly or behaviorally change something.
 
 Avoid purely numerical upgrades.
@@ -495,4 +545,4 @@ broke
 Not:
 `$38 → millionaire`
 
-Even successful risky play should not destroy the meaning of ordinary costs.
+Even successful risky play should not destroy the meaning of ordinary costs or housing pressure.
