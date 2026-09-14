@@ -10,15 +10,16 @@ The town is organized into geographic/social **districts**. Districts help the p
 
 The player experiences the town through:
 
-- motel room,
+- the current motel room/apartment or other residence,
 - window/street views,
+- shared motel/building facilities where applicable,
 - work,
 - bus stops / street corners,
 - buses when a ride is worth presenting,
 - cafés and diners,
 - used electronics / small shops,
 - library, laundromat, parks/canal and other local services,
-- browser/news/forums/classifieds,
+- browser/news/forums/classifieds/housing listings,
 - messages from people in other districts or parts of town.
 
 This creates the impression of a large, lived-in place without requiring open-world walking.
@@ -39,7 +40,7 @@ authored living scenes
 
 A district is not a game level, separate save, separate world clock, or Phaser scene authority. All districts share the same simulation.
 
-See `08-DISTRICTS-TRANSIT-AND-LIVING-TOWN.md` for the full town/transit direction.
+See `08-DISTRICTS-TRANSIT-AND-LIVING-TOWN.md` for the full town/transit direction and `10-RESIDENCE-HOUSING-AND-SPACE-PROGRESSION.md` for the residence/housing direction.
 
 ---
 
@@ -70,74 +71,84 @@ Outside the in-game computer, interaction should begin from the physical place r
 
 ## 3. Place production depth
 
-Not every location needs Room 104 production cost.
+Not every location needs the same production cost or view count.
 
 Use variable depth:
 
-### Flagship places
-Examples: Room 104, a deeply important home.
+### Deep living / personal places
+Examples: the player's current residence, a later apartment, a deeply important home.
 
-- several authored main views where useful,
-- deep physical-object/container state,
-- replaceable objects,
+- one or several authored main views where useful;
+- deep physical-object/container state;
+- replaceable fixtures/equipment where gameplay requires it;
+- player-owned belongings/decor;
 - strong lighting/weather/audio response.
+
+No specific room number is the flagship authority. Room 104 may remain an ordinary reference/content fixture only.
 
 ### Major places
 Examples: recurring café/work/social place.
 
-- one or two strong living views,
-- meaningful character/object anchors,
+- one or two strong living views;
+- meaningful character/object anchors;
 - focus views only where useful.
 
 ### Normal places
 Examples: convenience store, diner, library, laundromat, electronics store.
 
-- one strong hero view,
-- several meaningful hotspots/focuses,
+- one strong hero view;
+- several meaningful hotspots/focuses;
 - persistent state where gameplay benefits.
 
 ### Light/ambient places
 Examples: bus stop, canal, alley, street corner.
 
-- one authored composition,
-- weather/time/audio/ambient actors,
+- one authored composition;
+- weather/time/audio/ambient actors;
 - a few meaningful interactions.
 
 ### Contextual places
 Examples: obscure office, service, temporary/private address.
 
-- one simple view when needed,
+- one simple view when needed;
 - may later be promoted without changing canonical `placeId`.
 
 The long-term world may contain dozens of stable place definitions while only a smaller number are production-heavy at once.
 
 ---
 
-## 4. Motel room
+## 4. Current residence / motel rooms
 
-The room is the player's anchor.
+The player's residence is an important daily-life anchor, but it is **dynamic state**, not a fixed Room 104 law.
 
-Required interactables:
+A starting room may be very cheap and may lack:
 
-- PC desk
-- bed
-- kettle / drink area
-- window
-- door / work / travel action
-- optional TV/radio
-- visible room-upgrade slots
+- private bathroom;
+- kitchenette;
+- mini-fridge;
+- strong storage;
+- high-quality supplied furniture.
 
-The room should feel slightly depressing at the beginning but not horror-coded.
+A residence exposes only the capabilities it actually has. A room without a private bathroom does not receive a fake shower hotspot; a room without a kitchenette does not receive magical tea/noodle/fridge actions. Shared motel/building facilities may supply those functions elsewhere.
 
-Important:
-- old computer,
-- cheap furniture,
-- practical lighting,
-- visible signs of temporary living.
+Common residence capabilities/slots may include, where authored:
 
-Over the evaluation build it should become subtly more personal.
+- sleeping/bed fixture;
+- PC-capable desk/work surface;
+- chair;
+- window/observation;
+- storage/wardrobe;
+- rug/decor surfaces;
+- lamp/light source;
+- door/travel interaction;
+- delivery anchor/reception policy;
+- optional private bathroom;
+- optional kitchenette/mini-fridge;
+- optional TV/radio.
 
-The richer living-world direction may use several authored views of the same room rather than one flattened panorama.
+The room should feel temporary/cheap at the beginning without horror coding. Over time the current residence can become more personal, the player can choose better supplied room terms, and eventually move to another authored residence.
+
+Multi-view remains useful, but the number of views follows spatial need. A tiny room may need one or two strong views; a larger apartment may need several.
 
 ---
 
@@ -146,9 +157,9 @@ The richer living-world direction may use several authored views of the same roo
 The window is an observational surface, not a stat button.
 
 Interaction:
-- opens a dedicated wide view or focused scene,
-- advances a small amount of time,
-- presents contextual thought text,
+- opens a dedicated wide view or focused scene when the current place provides one;
+- advances a small amount of time;
+- presents contextual thought text;
 - can show persistent and ambient elements.
 
 Thought examples:
@@ -192,11 +203,10 @@ These can be spawned procedurally or by simple authored patterns.
 ### Persistent
 
 A small set with schedules/history:
-- repeated man outside,
-- motel staff,
-- old woman with dog,
-- delivery person,
-- recurring parked car,
+- repeated local figures,
+- motel/building staff,
+- delivery people,
+- recurring parked vehicles,
 - known NPCs genuinely present at a stop or street place.
 
 Only persistent entities need saved identity/state.
@@ -262,7 +272,7 @@ The evaluation build may represent it through:
 - quick-shift action after the first full introduction.
 
 The first time should establish:
-- where Ryan works,
+- where the work is,
 - what the player does,
 - why the job is boring,
 - that work consumes a large block of the day.
@@ -278,10 +288,10 @@ Travel to/from work should ultimately use the same authoritative town/transit ti
 The café is an important physical social location, but it is one place in a larger town rather than the universal meeting point for everyone.
 
 Required:
-- at least day/evening presentation,
-- one or two staging positions,
-- enough room for a meaningful conversation,
-- ambient people/noise,
+- at least day/evening presentation;
+- one or two staging positions;
+- enough room for a meaningful conversation;
+- ambient people/noise;
 - time passing.
 
 It should feel grounded and cheap enough to be plausible for the protagonist.
@@ -296,12 +306,12 @@ A bus stop is a **real light-weight living place**, not merely transitional text
 
 A typical stop needs only one authored hero view, but may include:
 
-- stop sign / shelter / bench,
-- route board or timetable hotspot,
-- posters/signage/local ads,
-- day/night/weather treatment,
-- traffic and street ambience,
-- current waiting riders,
+- stop sign / shelter / bench;
+- route board or timetable hotspot;
+- posters/signage/local ads;
+- day/night/weather treatment;
+- traffic and street ambience;
+- current waiting riders;
 - known NPCs only when simulation says they are physically there.
 
 The player may inspect route information, wait, talk to someone present, or leave through ordinary physical interaction.
@@ -316,20 +326,20 @@ Bus travel is authoritative simulation state, but an optional reusable bus-inter
 
 Default target:
 
-- one strong interior composition,
-- reusable rider/seat anchors,
-- moving exterior/window layers,
-- district/route-dependent exterior treatment,
-- day/night/weather lighting,
-- engine/road/rain/interior audio,
+- one strong interior composition;
+- reusable rider/seat anchors;
+- moving exterior/window layers;
+- district/route-dependent exterior treatment;
+- day/night/weather lighting;
+- engine/road/rain/interior audio;
 - persistent NPC riders only when transit co-location says they overlap the ride.
 
 The player does not need to watch the full simulated duration.
 
 A 21-minute authoritative trip may be shown as:
 
-- a short living scene,
-- an abbreviated montage,
+- a short living scene;
+- an abbreviated montage;
 - or an immediate skip after boarding.
 
 All variants advance exactly the same authoritative 21 game minutes once. The renderer never determines the fare, service, route, wait, or arrival time.
@@ -339,8 +349,8 @@ All variants advance exactly the same authoritative 21 game minutes once. The re
 ## 13. Used electronics / TechMart
 
 This can be:
-- physical shop,
-- online site,
+- physical shop;
+- online site;
 - or both.
 
 The evaluation build should demonstrate that a product seen online can have a physical-world consequence or vice versa.
@@ -349,7 +359,7 @@ The mature physical-world architecture should allow the store to belong to a dis
 
 ---
 
-## 14. Town and district navigation
+## 14. Town, district, and housing navigation
 
 As the world grows, avoid a giant flat cloud of every location icon.
 
@@ -367,9 +377,11 @@ Living Place
 
 Town-level navigation can emphasize districts and major transit connections. District-level navigation can emphasize local places, stops, and walking relationships.
 
+Housing listings/availability may reveal specific residence Places without exposing every hidden address in the town.
+
 This hierarchy is presentation only. It never changes canonical place identity or divides simulation state.
 
-Places/routes may physically exist before the player knows about them. The map should expose only knowledge-safe destinations learned through people, websites, jobs, email, signs, or travel.
+Places/routes/residences may physically exist before the player knows about them. The map should expose only knowledge-safe destinations learned through people, websites, jobs, email, signs, housing listings, or travel.
 
 ---
 
@@ -388,6 +400,8 @@ The simulation owns all route/timing/fare calculations. UI may present alternati
 
 Walking can remain available when plausible, including across adjacent districts. The bus is infrastructure, not an arbitrary gate.
 
+Moving residence can therefore materially change commute/social convenience without requiring an open world.
+
 ---
 
 ## 16. Continuous simulation rule
@@ -395,15 +409,16 @@ Walking can remain available when plausible, including across adjacent districts
 Physical scenes are views over world state.
 
 They must not own:
-- the master clock,
-- download state,
-- contact state,
-- event truth,
-- money,
-- district/place identity,
-- bus service,
-- travel timing,
-- fares,
+- the master clock;
+- download state;
+- contact state;
+- event truth;
+- money;
+- district/place identity;
+- current Residence/Tenancy truth;
+- bus service;
+- travel timing;
+- fares;
 - NPC transit/presence truth.
 
 Phaser scenes read from the simulation and send player intents/actions back to it.
@@ -431,11 +446,11 @@ This keeps the evaluation deterministic and testable.
 **Final art style is intentionally not frozen for the evaluation build.**
 
 The evaluation may use:
-- pixel art,
-- low-resolution raster art,
-- illustrated 2D,
-- hybrid presentation,
-- generated temporary backgrounds,
+- pixel art;
+- low-resolution raster art;
+- illustrated 2D;
+- hybrid presentation;
+- generated temporary backgrounds;
 - provisional portraits.
 
 The purpose is to discover what feels right through play.
@@ -452,90 +467,151 @@ The presentation system should support:
 
 ```text
 Place / View
-├── Background / architecture
-├── Midground
-├── Foreground
-├── Interactive props
+├── Background / static architecture
+├── Structural / built-in fixtures
+├── Replaceable fixture slots
+├── Player-owned props / decor
+├── Temporary world objects
 ├── Character layer
-├── Ambient animated layers
-├── Lighting/color overlays
-└── Time/weather variants
+├── Foreground / ambient animated layers
+├── Lighting / color overlays
+└── Time / weather variants
 ```
 
-Not every evaluation asset needs to be physically separated into all layers, but the runtime/content model must allow it.
+Not every evaluation asset needs to be physically separated into all layers. Separate an element when the game needs to replace, move, hide, transfer, animate, recolor, or otherwise vary it independently.
+
+A beautiful flattened image is not a valid reason to bake a stateful bed, desk, rug, PC, parcel, curtain, or other gameplay object into the architecture forever.
 
 ---
 
-## 3. Time variants
+## 3. 3D blockout → authored 2D pipeline
+
+Important interiors/exteriors should normally use a simple 3D blockout as spatial production reference:
+
+```text
+simple 3D blockout
+  ↓
+lock architecture / proportions / object placement
+  ↓
+choose authored cameras / views
+  ↓
+render reference shots / masks / IDs where useful
+  ↓
+Gen-AI visual generation / paint pass
+  ↓
+separate stateful / replaceable layers
+  ↓
+author per-view assets + anchors
+  ↓
+Phaser 4 runtime composition
+```
+
+The blockout exists to keep:
+- perspective consistent;
+- multiple views spatially coherent;
+- exterior/interior relationships believable;
+- upgrade/fixture variants aligned;
+- Gen-AI generations grounded to known composition.
+
+The blockout is **not** the shipped runtime, not canonical game state, and not a reason to move to realtime 3D/free walking.
+
+---
+
+## 4. Multi-view asset mapping
+
+One semantic object/fixture may need different art in different authored camera views.
+
+Example:
+
+```text
+one bed assignment
+  ├── bed asset for view A
+  ├── bed asset for view B
+  └── no asset in view C when not visible
+```
+
+Do not duplicate gameplay identity merely because presentation needs multiple angles.
+
+This is especially important for:
+- bed/desk/chair variants;
+- rugs;
+- curtains;
+- PC/monitor;
+- large decor;
+- characters when staging requires view-specific scale/position.
+
+---
+
+## 5. Time variants
 
 Support at least these semantic variants:
 
-- morning
-- day
-- evening
-- night
-- late night
+- morning;
+- day;
+- evening;
+- night;
+- late night.
 
 A location may implement them through:
-- separate images,
-- color overlays,
-- light layers,
-- alternate windows,
-- changed ambient sprites,
+- separate images;
+- color overlays;
+- light layers;
+- alternate windows;
+- changed ambient sprites;
 - combinations.
 
 Do not require five fully generated paintings for every location.
 
 ---
 
-## 4. Ambient motion
+## 6. Ambient motion
 
 A static scene should gain life from small independent elements.
 
 Examples:
-- curtains,
-- traffic,
-- neon sign,
-- fan,
-- steam,
-- TV flicker,
-- rain,
-- reflections,
-- pedestrians,
-- smoke,
-- lights switching,
-- distant silhouettes,
+- curtains;
+- traffic;
+- neon sign;
+- fan;
+- steam;
+- TV flicker;
+- rain;
+- reflections;
+- pedestrians;
+- smoke;
+- lights switching;
+- distant silhouettes;
 - bus-window exterior movement.
 
 Prefer:
-- sprite movement,
-- tween,
-- opacity,
-- parallax,
-- particles,
-- short loops,
+- sprite movement;
+- tween;
+- opacity;
+- parallax;
+- particles;
+- short loops;
 before using a full video.
 
 ---
 
-## 5. Parallax
+## 7. Parallax
 
 Locations can use:
-- background slow movement,
-- midground medium,
+- background slow movement;
+- midground medium;
 - foreground faster.
 
-Small camera pans can create depth without 3D.
+Small camera pans can create depth without realtime 3D.
 
 Phaser owns this physical presentation.
 
 ---
 
-## 6. Wide views and panoramas
+## 8. Wide views and panoramas
 
 Important rooms/locations may use:
-- wide illustrated scene,
-- gentle horizontal pan,
+- wide illustrated scene;
+- gentle horizontal pan;
 - multiple fixed viewpoints.
 
 True 360° rendering is not required.
@@ -544,7 +620,7 @@ The build should prefer the simplest authored method that creates a sense of pla
 
 ---
 
-## 7. Character asset slots
+## 9. Character asset slots
 
 Character presentation must be replaceable.
 
@@ -565,123 +641,126 @@ The same character can look different through different media while retaining id
 
 ---
 
-## 8. Evaluation character art
+## 10. Evaluation character art
 
 Temporary character images are allowed.
 
 They must not become architectural dependencies.
 
 Do not hardcode:
-- one fixed portrait size,
-- one character rendering style,
+- one fixed portrait size;
+- one character rendering style;
 - one assumption that every character always has a portrait.
 
 Some contacts may exist as username/avatar only for a long time.
 
 ---
 
-## 9. Period authenticity
+## 11. Period authenticity
 
 Whatever final style is eventually chosen, the **content design** should communicate the era through:
 
-- electronics,
-- clothing,
-- hair,
-- cars,
-- store signage,
-- public-transit signage/interiors,
-- PC hardware,
-- CRT/LCD proportions,
-- phones,
-- MP3 players,
-- webcams,
-- CDs/DVDs,
-- advertising,
-- web design,
+- electronics;
+- clothing;
+- hair;
+- cars;
+- store signage;
+- public-transit signage/interiors;
+- PC hardware;
+- CRT/LCD proportions;
+- phones;
+- MP3 players;
+- webcams;
+- CDs/DVDs;
+- advertising;
+- web design;
 - furniture.
 
-Pixel art alone does not make something 2006. Period detail must exist in the design.
+Pixel art alone does not make something 2005/2006. Period detail must exist in the design.
 
 ---
 
-## 10. Fake OS visual generations
+## 12. Fake OS visual generations
 
 ### Older OS
 Inspired by:
-- Windows 98 / ME / 2000 era
+- Windows 98 / ME / 2000 era.
 
 Characteristics:
-- compact,
-- beveled,
-- denser,
-- older icons,
+- compact;
+- beveled;
+- denser;
+- older icons;
 - modest animation.
 
 ### Newer OS
 Inspired by:
-- Windows XP era
+- Windows XP era.
 
 Characteristics:
-- warmer,
-- cleaner,
-- friendlier,
-- richer icons,
-- controlled gradients,
+- warmer;
+- cleaner;
+- friendlier;
+- richer icons;
+- controlled gradients;
 - slightly softer geometry.
 
 Avoid:
-- exact copies,
-- copyrighted logos,
+- exact copies;
+- copyrighted logos;
 - modern flat UI disguised with a retro wallpaper.
 
 ---
 
-## 11. Websites
+## 13. Websites
 
 Websites should intentionally vary.
 
 The fake internet can look inconsistent in a good way.
 
 However:
-- body text stays readable,
-- navigation remains usable,
+- body text stays readable;
+- navigation remains usable;
 - essential actions remain obvious enough.
 
 ---
 
-## 12. Color/lighting bridge
+## 14. Color/lighting bridge
 
 Even while style is provisional, a build should try to maintain internal cohesion through:
-- warm tungsten interiors,
-- cooler night exteriors,
-- controlled bright accents,
-- slightly dirty neutrals,
+- warm tungsten interiors;
+- cooler night exteriors;
+- controlled bright accents;
+- slightly dirty neutrals;
 - CRT glow where relevant.
 
-Districts may develop distinct material/signage/ambient identities without breaking the broader visual language.
+Districts and residences may develop distinct material/signage/ambient identities without breaking the broader visual language.
 
 This is guidance, not a final palette bible.
 
 ---
 
-## 13. Final-art protections
+## 15. Final-art protections
 
 A future final-art pass should be able to replace:
-- backgrounds,
-- portraits,
-- sprites,
-- icons,
-- wallpapers,
-- website images,
-- district-map art,
-- bus stop/interior presentation,
+- backgrounds;
+- architecture layers;
+- fixture variants;
+- player decor assets;
+- portraits;
+- sprites;
+- icons;
+- wallpapers;
+- website images;
+- district-map art;
+- bus stop/interior presentation;
 without rewriting simulation or narrative logic.
 
 Art asset identifiers belong in content definitions, not game rules.
 
 ---
 
-## 14. Evaluation priority
+## 16. Evaluation priority
 
 For this build:
 
@@ -692,4 +771,4 @@ For this build:
 5. consistency
 6. final polish
 
-A beautiful image that blocks modular time/weather/interaction changes is less valuable than a slightly rougher scene that supports the game's life.
+A beautiful image that blocks modular time/weather/interaction/furniture changes is less valuable than a slightly rougher scene that supports the game's life.
