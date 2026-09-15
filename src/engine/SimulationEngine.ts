@@ -103,7 +103,7 @@ const PHYSICAL_ITEM_DEFINITIONS: Readonly<Record<string, PhysicalItemDefinition>
         portable: true,
         volume: 1,
       } satisfies PhysicalItemDefinition,
-    ] as const),
+    ] as const,
     [
       SHOPPING_BAG_DEFINITION_ID,
       {
@@ -112,7 +112,7 @@ const PHYSICAL_ITEM_DEFINITIONS: Readonly<Record<string, PhysicalItemDefinition>
         portable: true,
         volume: 1,
       } satisfies PhysicalItemDefinition,
-    ] as const),
+    ] as const,
     ...Object.keys(GROCERY_SKUS).map((sku) => [
       groceryDefinitionId(sku),
       {
@@ -141,7 +141,7 @@ const PHYSICAL_CONTAINER_DEFINITIONS: Readonly<Record<string, PhysicalContainerD
         capacity: Number.MAX_SAFE_INTEGER,
         allowedItemKinds: [],
       } satisfies PhysicalContainerDefinition,
-    ] as const),
+    ] as const,
     [
       DELIVERY_PARCEL_DEFINITION_ID,
       {
@@ -149,7 +149,7 @@ const PHYSICAL_CONTAINER_DEFINITIONS: Readonly<Record<string, PhysicalContainerD
         capacity: 64,
         allowedItemKinds: [CORNER_MART_ITEM_KIND],
       } satisfies PhysicalContainerDefinition,
-    ] as const),
+    ] as const,
     [
       SHOPPING_BAG_DEFINITION_ID,
       {
@@ -157,7 +157,7 @@ const PHYSICAL_CONTAINER_DEFINITIONS: Readonly<Record<string, PhysicalContainerD
         capacity: 64,
         allowedItemKinds: [CORNER_MART_ITEM_KIND],
       } satisfies PhysicalContainerDefinition,
-    ] as const),
+    ] as const,
   ]);
 
 function emptyPhysicalWorld(): PhysicalWorldState {
