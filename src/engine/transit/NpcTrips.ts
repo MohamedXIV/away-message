@@ -167,7 +167,12 @@ export function buildPlaceAliases(places: GeneratedPlaceDef[]): Record<string, s
   for (const place of places) {
     if (!place || typeof place.id !== 'string') continue;
     for (const legacyId of place.legacyIds ?? []) {
-      if (typeof legacyId === 'string' && legacyId !== '' && aliases[legacyId] === undefined) {
+      if (
+        typeof legacyId === 'string' &&
+        legacyId !== '' &&
+        legacyId !== 'home' &&
+        aliases[legacyId] === undefined
+      ) {
         aliases[legacyId] = place.id;
       }
     }
