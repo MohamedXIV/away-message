@@ -1,6 +1,7 @@
 // src/world/phaser/WorldScene.ts
 
 import Phaser from 'phaser';
+import type { GeneratedAssetDef } from '../../engine/worldContent.generated';
 import type {
   WorldSceneProjection,
   WorldInteractionIntent,
@@ -26,6 +27,17 @@ import type { SpatialAudioSourceDef } from '../../audio/types';
 export interface WorldSceneInitData {
   projection: WorldSceneProjection;
   onIntent?: (intent: WorldInteractionIntent) => void;
+  visualMode?: 'production' | 'technical-fixture';
+}
+
+export function resolveSceneBackgroundTexture(
+  projection: WorldSceneProjection,
+  visualMode: 'production' | 'technical-fixture',
+  assets?: readonly GeneratedAssetDef[],
+): string | null {
+  return visualMode === 'technical-fixture'
+    ? 'fixture_bg'
+    : resolveProjectionVisual(projection, assets).assetId;
 }
 
 export interface WorldSceneVisualPlan {
@@ -54,8 +66,9 @@ export function resolveWorldSceneVisualPlan(
   projection: WorldSceneProjection,
   width: number,
   height: number,
+  assets?: readonly GeneratedAssetDef[],
 ): WorldSceneVisualPlan | null {
-  const visual = resolveProjectionVisual(projection);
+  const visual = resolveProjectionVisual(projection, assets);
   if (!visual.usesAuthoredAsset || !visual.assetId) {
     return null;
   }
@@ -75,6 +88,7 @@ export class WorldScene extends Phaser.Scene {
 
   public projection: WorldSceneProjection = createTechnicalFixtureProjection();
   private onIntent?: (intent: WorldInteractionIntent) => void;
+  private visualMode: 'production' | 'technical-fixture' = 'production';
   private environmentManager?: EnvironmentManager;
   private audioHandles: Map<string, { handle: string; eventId: string }> = new Map();
 
@@ -86,6 +100,10 @@ export class WorldScene extends Phaser.Scene {
 
   // Projection-owned view image
   private bgImage?: Phaser.GameObjects.Image;
+  private deskImage?: Phaser.GameObjects.Image;
+  private assetA1Image?: Phaser.GameObjects.Image;
+  private curtainImage?: Phaser.GameObjects.Image;
+  private clockHandImage?: Phaser.GameObjects.Image;
   private puddleRenderTexture?: Phaser.GameObjects.RenderTexture;
 
   // Lights
@@ -117,6 +135,9 @@ export class WorldScene extends Phaser.Scene {
     if (data?.onIntent) {
       this.onIntent = data.onIntent;
     }
+    if (data?.visualMode) {
+      this.visualMode = data.visualMode;
+    }
   }
 
   /**
@@ -137,7 +158,9 @@ export class WorldScene extends Phaser.Scene {
       // Headless/test loaders may not implement off(); registration below still applies.
     }
     this.load.on('loaderror', this.handleAssetLoadError, this);
-    queueProjectionAssetLoads(this, buildProjectionAssetLoadPlan(this.projection));
+    if (this.visualMode === 'production') {
+      queueProjectionAssetLoads(this, buildProjectionAssetLoadPlan(this.projection));
+    }
   }
 
   public create(): void {
@@ -167,8 +190,13 @@ export class WorldScene extends Phaser.Scene {
     this.setupParticles(width, height);
     this.setupRenderTexturePath(width, height);
 
-    this.environmentManager = new EnvironmentManager(this, this.projection);
+    this.environmentManager = new EnvironmentManager(
+      this,
+      this.projection,
+      this.visualMode === 'technical-fixture',
+    );
     this.environmentManager.init();
+    this.registerFixtureMotionTargets();
 
     this.setupHotspots(width, height);
     this.setupPointerTracking();
@@ -237,6 +265,16 @@ export class WorldScene extends Phaser.Scene {
   private setupSprites(width: number, height: number): void {
     this.bgImage?.destroy();
     this.bgImage = undefined;
+    this.deskImage?.destroy();
+    this.assetA1Image?.destroy();
+    this.curtainImage?.destroy();
+    this.clockHandImage?.destroy();
+    this.deskImage = this.assetA1Image = this.curtainImage = this.clockHandImage = undefined;
+
+    if (resolveSceneBackgroundTexture(this.projection, this.visualMode) === 'fixture_bg') {
+      this.setupFixtureSprites(width, height);
+      return;
+    }
 
     const plan = resolveWorldSceneVisualPlan(this.projection, width, height);
     if (!plan) {
@@ -267,6 +305,50 @@ export class WorldScene extends Phaser.Scene {
       litImage.setLighting?.(true);
       litImage.setSelfShadow?.(true, 0.45, 0.25);
     }
+  }
+
+  private setupFixtureSprites(width: number, height: number): void {
+    this.bgImage = this.add.image(width / 2, height / 2, 'fixture_bg');
+    this.bgImage.setDisplaySize(width, height);
+    this.layerBackground?.add(this.bgImage);
+
+    const scaleFactor = Math.min(width / 1600, height / 900);
+    this.deskImage = this.add.image(width * 0.58, height * 0.72, 'fixture_desk');
+    this.deskImage.setScale(scaleFactor * 1.1);
+    this.layerScenery?.add(this.deskImage);
+
+    const a1X = width * 0.68;
+    const a1Y = height * 0.35;
+    this.assetA1Image = this.add.image(a1X, a1Y, 'asset_a1');
+    this.assetA1Image.setScale(scaleFactor * 1.15);
+    this.layerActors?.add(this.assetA1Image);
+    const litAsset = this.assetA1Image as unknown as {
+      setLighting?: (enable: boolean) => void;
+      setSelfShadow?: (enable: boolean, penumbra?: number, diffuseFlatThreshold?: number) => void;
+    };
+    litAsset.setLighting?.(true);
+    litAsset.setSelfShadow?.(true, 0.45, 0.25);
+
+    if (this.textures.exists('fixture_curtain')) {
+      this.curtainImage = this.add.image(width * 0.28, height * 0.12, 'fixture_curtain');
+      this.curtainImage.setOrigin(0.5, 0);
+      this.curtainImage.setScale(scaleFactor * 1.1);
+      this.layerScenery?.add(this.curtainImage);
+    }
+    if (this.textures.exists('fixture_clock_hand')) {
+      this.clockHandImage = this.add.image(a1X, a1Y, 'fixture_clock_hand');
+      this.clockHandImage.setOrigin(0.5, 0.875);
+      this.clockHandImage.setScale(scaleFactor * 1.15);
+      this.layerActors?.add(this.clockHandImage);
+    }
+  }
+
+  private registerFixtureMotionTargets(): void {
+    if (this.visualMode !== 'technical-fixture' || !this.environmentManager) return;
+    if (this.curtainImage) this.environmentManager.registerMotionTarget('fixture_curtain', this.curtainImage);
+    if (this.clockHandImage) this.environmentManager.registerMotionTarget('fixture_clock_hand', this.clockHandImage);
+    if (this.deskImage) this.environmentManager.registerMotionTarget('fixture_desk', this.deskImage);
+    if (this.assetA1Image) this.environmentManager.registerMotionTarget('asset_a1', this.assetA1Image);
   }
 
   /**
@@ -329,7 +411,7 @@ export class WorldScene extends Phaser.Scene {
     if (!this.puddleRenderTexture || !this.bgImage) return;
     this.puddleRenderTexture.clear();
     this.puddleRenderTexture.fill(0x334a60, 0.5);
-    this.puddleRenderTexture.draw(this.bgImage, 40, 20);
+    this.puddleRenderTexture.draw(this.deskImage ?? this.bgImage, 40, 20);
   }
 
   /**
@@ -427,16 +509,19 @@ export class WorldScene extends Phaser.Scene {
     this.environmentManager?.applyProjection(newProjection);
 
     this.applyAmbientLighting();
-    try {
-      queueMissingProjectionAssetsForUpdate(
-        this as unknown as RefreshableProjectionLoadScene,
-        newProjection,
-        this.handleDynamicProjectionAssetsComplete,
-      );
-    } catch {
-      // Loader bookkeeping must never break a view update.
+    if (this.visualMode === 'production') {
+      try {
+        queueMissingProjectionAssetsForUpdate(
+          this as unknown as RefreshableProjectionLoadScene,
+          newProjection,
+          this.handleDynamicProjectionAssetsComplete,
+        );
+      } catch {
+        // Loader bookkeeping must never break a view update.
+      }
     }
     this.setupSprites(this.scale.width, this.scale.height);
+    this.registerFixtureMotionTargets();
 
     if (this.dustMoteEmitter) {
       if (newProjection.particles.dustMotes) {
@@ -482,6 +567,13 @@ export class WorldScene extends Phaser.Scene {
     if (this.bgImage) {
       this.bgImage.setPosition(width / 2, height / 2);
       this.bgImage.setDisplaySize(width, height);
+    }
+    if (this.visualMode === 'technical-fixture') {
+      const scaleFactor = Math.min(width / 1600, height / 900);
+      this.deskImage?.setPosition(width * 0.58, height * 0.72).setScale(scaleFactor * 1.1);
+      this.assetA1Image?.setPosition(width * 0.68, height * 0.35).setScale(scaleFactor * 1.15);
+      this.curtainImage?.setPosition(width * 0.28, height * 0.12).setScale(scaleFactor * 1.1);
+      this.clockHandImage?.setPosition(width * 0.68, height * 0.35).setScale(scaleFactor * 1.15);
     }
 
     const cameraTarget = resolveProjectionCameraTarget(this.projection, width, height);
@@ -533,12 +625,10 @@ export class WorldScene extends Phaser.Scene {
       // True only when a scenery image is showing AND its diffuse texture
       // actually carries a linked normal map. A named-but-failed normal map
       // (missing key or no dataSource) never reports success.
-      normalMapLighting: !!(
-        this.lights &&
-        this.bgImage &&
-        visualPlan?.normalMapTextureKey &&
-        textureHasLinkedNormalMap(this.textures, visualPlan.textureKey)
-      ),
+      normalMapLighting: this.visualMode === 'technical-fixture'
+        ? !!(this.lights && this.assetA1Image && textureHasLinkedNormalMap(this.textures, 'asset_a1'))
+        : !!(this.lights && this.bgImage && visualPlan?.normalMapTextureKey
+          && textureHasLinkedNormalMap(this.textures, visualPlan.textureKey)),
       movablePointLight: !!(this.movableLight ?? this.environmentManager?.getMovableLight()),
       particles: !!(this.dustMoteEmitter && this.rainEmitter),
       renderTextureFilter: !!this.puddleRenderTexture,

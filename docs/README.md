@@ -1,6 +1,6 @@
 # Mid-2000s Internet Life Sim — Evaluation Build Docs
 
-**This package contains exactly 11 core files.**
+**This package contains exactly 12 core files.**
 
 It defines a complete playable evaluation version of the game, not a commercial shipping build and not a small vertical slice.
 
@@ -16,8 +16,9 @@ It defines a complete playable evaluation version of the game, not a commercial 
 8. `07-IMPLEMENTATION-AND-ACCEPTANCE.md`
 9. `08-DISTRICTS-TRANSIT-AND-LIVING-TOWN.md`
 10. `09-MANUS-RUN-CONSTRAINTS.md`
+11. `10-RESIDENCE-HOUSING-AND-SPACE-PROGRESSION.md`
 
-This README is the eleventh core file.
+This README is the twelfth core file.
 
 Detailed implementation specs/plans under `docs/superpowers/` supplement these core documents and may grow independently.
 
@@ -78,6 +79,7 @@ The pure TypeScript simulation owns:
 - world events and character knowledge,
 - Life Matrix projections, source-backed obligations and semantic CharacterIntents,
 - world state,
+- current Residence/Tenancy state,
 - district/place geography,
 - transit service state,
 - player/NPC travel plans and active trips,
@@ -85,6 +87,34 @@ The pure TypeScript simulation owns:
 - coherent physical/transit/device/online presence projections.
 
 React, Phaser, and Ink present or interact with that truth.
+
+## Canonical residence model
+
+> **The player's home is the current residence, not a sacred room ID.**
+
+This means:
+- Room 104 may remain an authored/reference motel room, but is not the guaranteed starting or permanent home;
+- `home` resolves from Residence/Tenancy state to a canonical Place;
+- the player may start from a small set of affordable rooms with real trade-offs;
+- a cheapest-valid room may have no private bathroom and no kitchenette;
+- landlord/motel-owned fixtures may affect rent and remain with the property;
+- player-owned belongings are physical item instances that can move with the player;
+- later progression may move the player to a better motel room or a small authored apartment elsewhere in town;
+- residences reuse the same generic `Place → Space → View → Focus → Anchor` runtime as other physical locations.
+
+Important living-space art should normally use:
+
+```text
+3D blockout / spatial reference
+→ authored camera views
+→ Gen-AI generation / paint pass
+→ separate stateful/replaceable layers where needed
+→ Phaser 4 composition
+```
+
+The blockout is production reference, not a realtime-3D runtime decision.
+
+See `10-RESIDENCE-HOUSING-AND-SPACE-PROGRESSION.md` and #85–#88.
 
 ## Canonical town model
 
@@ -137,6 +167,18 @@ Do **not** import Orion's continuous isometric village, WASD city traversal, per
 
 See `docs/superpowers/specs/2026-09-10-orion-salvage-life-matrix-design.md` for the salvage matrix and `docs/superpowers/plans/2026-09-10-orion-salvage-roadmap.md` for sequencing.
 
+## Pre-release save policy
+
+Until the project explicitly declares a save-compatibility freeze for a content-complete Alpha/Beta/release milestone, **historical development saves are disposable**.
+
+Breaking persisted-state changes may invalidate/reset old dev saves instead of preserving obsolete fields, aliases, dual authorities, or migration chains.
+
+The current save version still needs to validate and round-trip correctly, and incompatible/newer saves must be refused cleanly rather than silently corrupted.
+
+After an explicit future freeze, migrations become mandatory from the supported baseline forward.
+
+`AGENTS.md` is the workflow authority for this policy.
+
 ## Cross-project rules
 
 ### Provider neutrality
@@ -166,6 +208,7 @@ Examples:
 - contacts change status with Messenger closed,
 - messages can arrive while the player is away,
 - street state changes while the player uses the computer,
+- residence/tenancy truth remains stable regardless of which view is rendered,
 - NPCs can be traveling between districts while no physical scene shows them,
 - an NPC may be preparing for or executing a real obligation while the player is elsewhere,
 - sleep/work/time-jumps advance all systems through the same authoritative simulation path.
@@ -181,20 +224,22 @@ Examples:
 - terminal
 - file manager
 - town/district navigation and readable travel choices
+- housing/listing/tenancy presentation where appropriate
 - menus
 
 **Phaser**
-- motel room
+- current residence
 - window/street
 - café
 - work/physical locations
 - bus stops and optional bus-interior presentation
-- layered 2D presentation
+- layered 2D/2.5D presentation
 - ambient motion and effects
 
 **Pure TypeScript simulation**
 - relationships/social consequences through existing social authority
 - Life Matrix projection, obligations and CharacterIntent
+- Residence/Tenancy truth
 - district/place/transit definitions projected from generated content
 - route planning
 - walking/bus timing
@@ -213,7 +258,7 @@ Examples:
 
 Ink may read approved simulation context and emit validated semantic effects.
 
-Do not duplicate authoritative money, time, hardware, download, schedule, relationship, obligation, character intent, district, route, travel, appointment, job, event, item, or presence truth inside Ink.
+Do not duplicate authoritative money, time, hardware, download, schedule, relationship, obligation, character intent, residence, district, route, travel, appointment, job, event, item, or presence truth inside Ink.
 
 ### Art style remains provisional
 
@@ -227,9 +272,11 @@ Do lock:
 - layered location architecture,
 - time-of-day support,
 - modular ambient elements,
+- replaceable/stateful residence visual layers where gameplay requires them,
 - replaceable character presentation slots,
 - data-driven art references,
-- authored-place presentation instead of open-world traversal.
+- authored-place presentation instead of open-world traversal,
+- 3D-blockout-as-reference rather than runtime 3D for the current art pipeline.
 
 ### Do not fake core systems
 
@@ -240,6 +287,9 @@ Bad examples:
 - fake RAM label that changes nothing,
 - installer animation with no compatibility/install state,
 - contact that only goes online when Messenger opens,
+- a hard-coded `home -> room_104` alias treated as permanent product truth,
+- a kitchenette/shower hotspot appearing in a room that does not actually provide that facility,
+- a rug/PC/parcel baked into a full-room image while domain state says it moved,
 - bus animation whose fare/time/arrival is invented by the renderer,
 - NPC appearing in another district because a UI screen changed,
 - Life Matrix declaring a meeting successful instead of the appointment owner,
@@ -247,9 +297,9 @@ Bad examples:
 
 ### Prefer data-driven content
 
-New software, characters, routine definitions, websites, districts, locations, transit stops/lines, life-policy definitions, goals/templates, and observations should be addable through focused definitions without rewriting unrelated systems where the data is authorable.
+New software, characters, routine definitions, websites, districts, locations, residence-capable places, fixture/capability definitions, transit stops/lines, life-policy definitions, goals/templates, and observations should be addable through focused definitions without rewriting unrelated systems where the data is authorable.
 
-Per-save mutable state — current relationships, active goals/obligations when irreducible, active travel, item instances, event state — remains simulation/save truth, not content-table truth.
+Per-save mutable state — current relationships, current Residence/Tenancy, active goals/obligations when irreducible, active travel, item instances, event state — remains simulation/save truth, not content-table truth.
 
 ### Keep architecture simple
 
@@ -265,16 +315,17 @@ Do not introduce without proven need:
 - vehicle physics,
 - GTFS-scale transit infrastructure,
 - GOAP/general-purpose planner,
-- monolithic LifeMatrixEngine owning unrelated domains.
+- monolithic LifeMatrixEngine owning unrelated domains,
+- realtime 3D world/residence runtime merely because 3D blockouts are used for visual production.
 
 ### Breadth before polish
 
-Reach an end-to-end playable beginning-to-ending build before deeply polishing one app or location.
+Reach an end-to-end playable beginning-to-ending build before deeply polishing one app, one room, or one location.
 
 The final implementation phase is for:
 - bug fixing,
 - pacing,
-- persistence reliability,
+- current-format persistence reliability,
 - content validation,
 - test completion,
 - cleanup.

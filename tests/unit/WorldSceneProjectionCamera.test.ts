@@ -2,6 +2,7 @@
 import { describe, expect, it } from 'vitest';
 import { resolveProjectionCameraTarget, resolveWorldSceneVisualPlan } from '../../src/world/phaser/WorldScene';
 import { resolveProjectionVisual } from '../../src/world/phaser/projectionVisual';
+import type { GeneratedAssetDef } from '../../src/engine/worldContent.generated';
 import type { WorldSceneProjection } from '../../src/world/phaser/types';
 
 function projection(
@@ -10,12 +11,12 @@ function projection(
   normalMapAssetId: string | null = null,
 ): WorldSceneProjection {
   return {
-    placeId: 'room_104',
-    placeName: 'Motel Room 104',
-    spaceId: 'room104_main',
-    spaceName: 'Room 104',
-    viewId: 'room104_desk_window',
-    viewName: 'Desk & Window',
+    placeId: 'lodge',
+    placeName: 'Lodge',
+    spaceId: 'suite',
+    spaceName: 'Suite',
+    viewId: 'window',
+    viewName: 'Window',
     assetId,
     normalMapAssetId,
     timeOfDay: 'day',
@@ -27,6 +28,11 @@ function projection(
     focus,
   };
 }
+
+const productionAssets: GeneratedAssetDef[] = [
+  { id: 'lodge_window_art', name: 'Window', kind: 'image', uri: 'assets/lodge/window.png', normalMapAssetId: 'lodge_window_normal', tags: ['production'] },
+  { id: 'lodge_window_normal', name: 'Normal', kind: 'image', uri: 'assets/lodge/normal.png', normalMapAssetId: null, tags: ['production'] },
+];
 
 describe('WorldScene projection-driven camera target', () => {
   it('uses authored projection focus rather than a hardcoded view id', () => {
@@ -48,9 +54,9 @@ describe('WorldScene projection-driven camera target', () => {
 
 describe('WorldScene projection-driven visual selection', () => {
   it('uses the authored projected asset and normal map when present', () => {
-    expect(resolveProjectionVisual(projection(null, 'asset_a1', 'asset_a1_n'))).toEqual({
-      assetId: 'asset_a1',
-      normalMapAssetId: 'asset_a1_n',
+    expect(resolveProjectionVisual(projection(null, 'lodge_window_art', 'lodge_window_normal'), productionAssets)).toEqual({
+      assetId: 'lodge_window_art',
+      normalMapAssetId: 'lodge_window_normal',
       usesAuthoredAsset: true,
     });
   });
@@ -64,9 +70,9 @@ describe('WorldScene projection-driven visual selection', () => {
   });
 
   it('builds the renderer plan from projection data without fixture identities', () => {
-    expect(resolveWorldSceneVisualPlan(projection(null, 'room104_desk_art', 'room104_desk_normal'), 1200, 800)).toEqual({
-      textureKey: 'room104_desk_art',
-      normalMapTextureKey: 'room104_desk_normal',
+    expect(resolveWorldSceneVisualPlan(projection(null, 'lodge_window_art', 'lodge_window_normal'), 1200, 800, productionAssets)).toEqual({
+      textureKey: 'lodge_window_art',
+      normalMapTextureKey: 'lodge_window_normal',
       x: 600,
       y: 400,
       width: 1200,

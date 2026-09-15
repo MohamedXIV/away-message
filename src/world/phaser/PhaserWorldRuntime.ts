@@ -12,6 +12,7 @@ export interface PhaserWorldRuntimeOptions {
   projection: WorldSceneProjection;
   onIntent?: (intent: WorldInteractionIntent) => void;
   renderType?: number;
+  visualMode?: 'production' | 'technical-fixture';
 }
 
 export class PhaserWorldRuntime {
@@ -21,12 +22,14 @@ export class PhaserWorldRuntime {
   private onIntent?: (intent: WorldInteractionIntent) => void;
   private currentProjection: WorldSceneProjection;
   private renderType?: number;
+  private visualMode: 'production' | 'technical-fixture';
 
   constructor(options: PhaserWorldRuntimeOptions) {
     this.parent = options.parent;
     this.onIntent = options.onIntent;
     this.currentProjection = options.projection;
     this.renderType = options.renderType;
+    this.visualMode = options.visualMode ?? 'production';
 
     this.initGame();
   }
@@ -40,6 +43,7 @@ export class PhaserWorldRuntime {
     const sceneData: WorldSceneInitData = {
       projection: this.currentProjection,
       onIntent: (intent) => this.onIntent?.(intent),
+      visualMode: this.visualMode,
     };
 
     const sceneInstance = new WorldScene();

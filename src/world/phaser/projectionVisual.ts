@@ -1,3 +1,4 @@
+import { GENERATED_ASSETS, type GeneratedAssetDef } from '../../engine/worldContent.generated';
 import type { WorldSceneProjection } from './types';
 
 export interface ProjectionVisualSelection {
@@ -15,6 +16,7 @@ export interface ProjectionVisualSelection {
  */
 export function resolveProjectionVisual(
   projection: WorldSceneProjection,
+  assets: readonly GeneratedAssetDef[] = GENERATED_ASSETS,
 ): ProjectionVisualSelection {
   if (!projection.assetId) {
     return {
@@ -24,9 +26,14 @@ export function resolveProjectionVisual(
     };
   }
 
+  const asset = assets.find((candidate) => candidate.id === projection.assetId);
+  if (!asset || asset.kind !== 'image' || !asset.tags.includes('production')) {
+    return { assetId: null, normalMapAssetId: null, usesAuthoredAsset: false };
+  }
+
   return {
-    assetId: projection.assetId,
-    normalMapAssetId: projection.normalMapAssetId,
+    assetId: asset.id,
+    normalMapAssetId: asset.normalMapAssetId,
     usesAuthoredAsset: true,
   };
 }

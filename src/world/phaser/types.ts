@@ -105,6 +105,7 @@ export interface PhysicalWorldHostProps {
   overlaySlot?: React.ReactNode;
   className?: string;
   debug?: boolean;
+  visualMode?: 'production' | 'technical-fixture';
 }
 
 export interface WorldFixtureCapabilityReport {

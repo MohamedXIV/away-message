@@ -15,7 +15,7 @@
 // for their placeholder URIs. The fixture's own canvas textures remain the
 // sole source for those keys (see technicalFixture.ensureFixtureTextures).
 
-import { GENERATED_ASSETS } from '../../engine/worldContent.generated';
+import { GENERATED_ASSETS, type GeneratedAssetDef } from '../../engine/worldContent.generated';
 import type { WorldSceneProjection } from './types';
 
 export interface ProjectionAssetLoadEntry {
@@ -49,8 +49,8 @@ export function resolveProductionAssetUrl(uri: string): string {
   return `./${clean}`;
 }
 
-function findGeneratedAsset(id: string) {
-  return GENERATED_ASSETS.find((asset) => asset.id === id) ?? null;
+function findGeneratedAsset(id: string, assets: readonly GeneratedAssetDef[]) {
+  return assets.find((asset) => asset.id === id) ?? null;
 }
 
 /**
@@ -72,6 +72,7 @@ function isProductionTagged(tags: unknown): boolean {
  */
 export function buildProjectionAssetLoadPlan(
   projection: WorldSceneProjection,
+  assets: readonly GeneratedAssetDef[] = GENERATED_ASSETS,
 ): ProjectionAssetLoadPlan {
   const errors: string[] = [];
   const entries: ProjectionAssetLoadEntry[] = [];
@@ -89,7 +90,7 @@ export function buildProjectionAssetLoadPlan(
     if (seenDiffuse.has(assetId)) continue;
     seenDiffuse.add(assetId);
 
-    const def = findGeneratedAsset(assetId);
+    const def = findGeneratedAsset(assetId, assets);
     if (!def) {
       errors.push(
         `Projection asset '${assetId}' is not a known generated asset; leaving the projection assetless rather than substituting another visual.`,
@@ -112,7 +113,7 @@ export function buildProjectionAssetLoadPlan(
     let normalMapKey: string | null = null;
     let normalMapUrl: string | null = null;
     if (def.normalMapAssetId) {
-      const normalDef = findGeneratedAsset(def.normalMapAssetId);
+      const normalDef = findGeneratedAsset(def.normalMapAssetId, assets);
       if (!normalDef) {
         errors.push(
           `Normal map '${def.normalMapAssetId}' for asset '${assetId}' is not a known generated asset; loading '${assetId}' without a normal map.`,

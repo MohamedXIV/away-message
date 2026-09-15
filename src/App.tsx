@@ -3,7 +3,6 @@
 import React, { useEffect, useState } from 'react';
 import { DesktopShell } from './desktop/DesktopShell';
 import { RoomScene } from './world/RoomScene';
-import { Room104Scene } from './world/Room104Scene';
 import { CafeScene } from './world/CafeScene';
 import { createTechnicalFixtureProjection } from './world/phaser/technicalFixture';
 
@@ -221,6 +220,7 @@ export const App: React.FC = () => {
           <PhysicalWorldHost
             projection={fixtureProjection}
             debug={true}
+            visualMode="technical-fixture"
             onIntent={(intent) => {
               if (intent.type === 'VIEW_TRANSITION' && intent.targetViewId) {
                 setFixtureProjection((prev) => ({
@@ -236,7 +236,7 @@ export const App: React.FC = () => {
                   onClick={() => setPhaserFixtureActive(false)}
                   className="px-3 py-1 bg-slate-900/90 hover:bg-slate-800 text-amber-300 border border-slate-700 text-xs font-mono shadow-md rounded flex items-center gap-1.5 cursor-pointer"
                 >
-                  ← Return to Room 104
+                  ← Return to Room 104 (Canvas2D)
                 </button>
               </div>
             }
@@ -267,7 +267,7 @@ export const App: React.FC = () => {
             <>
               {/* Top-Level View Router */}
               {activeView === 'pc' && <DesktopShell />}
-              {activeView === 'room' && <Room104Scene />}
+              {activeView === 'room' && <RoomScene />}
               {activeView === 'cafe' && <CafeScene />}
               {activeView === 'work' && <RoomScene />}
 

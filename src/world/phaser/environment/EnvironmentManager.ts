@@ -44,7 +44,11 @@ export class EnvironmentManager {
   private puddleRippleGraphics?: Phaser.GameObjects.Graphics;
   private rippleTime = 0;
 
-  constructor(scene: Phaser.Scene, projection: WorldSceneProjection) {
+  constructor(
+    scene: Phaser.Scene,
+    projection: WorldSceneProjection,
+    private readonly allowFixtureWindowRain = false,
+  ) {
     this.scene = scene;
     this.projection = projection;
     this.currentMinuteOfDay = projection.minuteOfDay ?? 720;
@@ -358,7 +362,7 @@ export class EnvironmentManager {
       // Authored production backgrounds are opaque until a view-specific
       // window mask/shader is supplied. Technical fixture projections have no
       // assetId and retain the older window-rain probe behavior.
-      allowUnmaskedInteriorRain: !this.projection.assetId,
+      allowUnmaskedInteriorRain: this.allowFixtureWindowRain || !this.projection.assetId,
     });
 
     if (this.dustMoteEmitter) {
