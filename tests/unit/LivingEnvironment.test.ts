@@ -213,6 +213,20 @@ describe('Living Environment Subsystem', () => {
       expect(indoorLayers.dustMotes).toBe(false);
     });
 
+    it('suppresses unmasked indoor rain until a window mask is available', () => {
+      const unmaskedIndoorLayers = resolveWeatherLayers({
+        weather: 'rain',
+        isInterior: true,
+        allowUnmaskedInteriorRain: false,
+      });
+
+      expect(unmaskedIndoorLayers.backgroundRain).toBe(false);
+      expect(unmaskedIndoorLayers.foregroundRain).toBe(false);
+      expect(unmaskedIndoorLayers.windowDroplets).toBe(false);
+      expect(unmaskedIndoorLayers.surfaceSplashes).toBe(false);
+      expect(unmaskedIndoorLayers.rainIntensity).toBe(1);
+    });
+
     it('enables full foreground streaks and surface splashes in outdoor spaces', () => {
       const outdoorLayers = resolveWeatherLayers({
         weather: 'rain',

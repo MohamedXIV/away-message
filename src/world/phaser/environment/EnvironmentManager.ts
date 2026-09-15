@@ -355,6 +355,10 @@ export class EnvironmentManager {
     const resolution: WeatherLayerResolution = resolveWeatherLayers({
       weather: this.projection.weather,
       isInterior,
+      // Authored production backgrounds are opaque until a view-specific
+      // window mask/shader is supplied. Technical fixture projections have no
+      // assetId and retain the older window-rain probe behavior.
+      allowUnmaskedInteriorRain: !this.projection.assetId,
     });
 
     if (this.dustMoteEmitter) {

@@ -21,6 +21,7 @@ import {
 import { EnvironmentManager } from './environment/EnvironmentManager';
 import { audioService, type AudioService } from '../../audio/AudioService';
 import { mapViewCoordinatesToAudioPosition } from '../../audio/spatialMapping';
+import type { SpatialAudioSourceDef } from '../../audio/types';
 
 export interface WorldSceneInitData {
   projection: WorldSceneProjection;
@@ -75,7 +76,7 @@ export class WorldScene extends Phaser.Scene {
   public projection: WorldSceneProjection = createTechnicalFixtureProjection();
   private onIntent?: (intent: WorldInteractionIntent) => void;
   private environmentManager?: EnvironmentManager;
-  private audioHandles: string[] = [];
+  private audioHandles: Map<string, { handle: string; eventId: string }> = new Map();
 
   // Visual Display Layers
   private layerBackground?: Phaser.GameObjects.Container;
@@ -302,7 +303,7 @@ export class WorldScene extends Phaser.Scene {
         quantity: 2,
       });
       this.rainEmitter.setDepth(46);
-      if (!this.projection.particles.rain) {
+      if (!this.projection.particles.rain || this.projection.isInterior) {
         this.rainEmitter.stop();
       }
     }
@@ -445,7 +446,7 @@ export class WorldScene extends Phaser.Scene {
       }
     }
     if (this.rainEmitter) {
-      if (newProjection.particles.rain) {
+      if (newProjection.particles.rain && !newProjection.isInterior) {
         this.rainEmitter.start();
       } else {
         this.rainEmitter.stop();
@@ -467,15 +468,8 @@ export class WorldScene extends Phaser.Scene {
       zoom: cameraTarget.zoom,
     };
 
-    if (newProjection.listenerOrientation) {
-      audioService.setListenerOrientation(newProjection.listenerOrientation);
-    }
-    audioService.updateEnvironment({
-      rainIntensity: newProjection.weather === 'rain' ? 1.0 : 0.0,
-      windIntensity: newProjection.windIntensity ?? 0,
-      isInterior: newProjection.isInterior ?? true,
-      timeOfDay: newProjection.timeOfDay,
-    });
+    this.updateSpatialAudioEnvironment();
+    this.syncSpatialAudioSources();
   }
 
   /**
@@ -559,7 +553,7 @@ export class WorldScene extends Phaser.Scene {
     };
   }
 
-  private setupSpatialAudio(): void {
+  private updateSpatialAudioEnvironment(): void {
     if (this.projection.listenerOrientation) {
       audioService.setListenerOrientation(this.projection.listenerOrientation);
     }
@@ -569,22 +563,71 @@ export class WorldScene extends Phaser.Scene {
       isInterior: this.projection.isInterior ?? true,
       timeOfDay: this.projection.timeOfDay,
     });
+  }
 
-    if (this.projection.spatialAudioSources) {
-      for (const src of this.projection.spatialAudioSources) {
-        const audioPos = mapViewCoordinatesToAudioPosition(src.x, src.y, src.z ?? 0);
-        const handle = audioService.play(src.eventId, {
-          loop: src.loop ?? true,
-          volume: src.volume ?? 1.0,
-          bus: src.bus ?? 'ambience',
-          position: audioPos,
-          parameters: src.parameters,
-        });
-        if (handle) {
-          this.audioHandles.push(handle);
+  /**
+   * Keeps projection-owned sources stable across view/weather updates. A
+   * source ID is the lifecycle identity; changing its event or removing it
+   * stops the old handle before a replacement is created.
+   */
+  private syncSpatialAudioSources(): void {
+    const sourceDefs = this.projection.spatialAudioSources ?? [];
+    const sourceById = new Map(sourceDefs.map((source) => [source.id, source]));
+
+    for (const [sourceId, active] of this.audioHandles) {
+      const next = sourceById.get(sourceId);
+      if (
+        !next
+        || next.eventId !== active.eventId
+        || !audioService.isInstanceActive(active.handle)
+      ) {
+        if (audioService.isInstanceActive(active.handle)) {
+          audioService.stop(active.handle, 0.15);
         }
+        this.audioHandles.delete(sourceId);
       }
     }
+
+    for (const src of sourceDefs) {
+      const audioPos = mapViewCoordinatesToAudioPosition(src.x, src.y, src.z ?? 0);
+      const active = this.audioHandles.get(src.id);
+
+      if (active && active.eventId === src.eventId) {
+        audioService.setSourcePosition(active.handle, audioPos);
+        for (const [name, value] of Object.entries(src.parameters ?? {})) {
+          audioService.setParameter(name, value, active.handle);
+        }
+        continue;
+      }
+
+      if (active) {
+        audioService.stop(active.handle, 0.15);
+        this.audioHandles.delete(src.id);
+      }
+
+      const handle = this.playSpatialAudioSource(src, audioPos);
+      if (handle) {
+        this.audioHandles.set(src.id, { handle, eventId: src.eventId });
+      }
+    }
+  }
+
+  private playSpatialAudioSource(
+    src: SpatialAudioSourceDef,
+    audioPos: ReturnType<typeof mapViewCoordinatesToAudioPosition>,
+  ): string {
+    return audioService.play(src.eventId, {
+      loop: src.loop ?? true,
+      volume: src.volume ?? 1.0,
+      bus: src.bus ?? 'ambience',
+      position: audioPos,
+      parameters: src.parameters,
+    });
+  }
+
+  private setupSpatialAudio(): void {
+    this.updateSpatialAudioEnvironment();
+    this.syncSpatialAudioSources();
   }
 
   private handleShutdown(): void {
@@ -607,10 +650,10 @@ export class WorldScene extends Phaser.Scene {
     } catch {
       // Ignore listener edge cases.
     }
-    for (const handle of this.audioHandles) {
+    for (const { handle } of this.audioHandles.values()) {
       audioService.stop(handle, 0);
     }
-    this.audioHandles = [];
+    this.audioHandles.clear();
   }
 
   private handleDestroy(): void {

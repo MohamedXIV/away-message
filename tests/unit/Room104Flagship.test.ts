@@ -65,7 +65,45 @@ describe('Room 104 flagship living-place contract (#26)', () => {
 
     expect(rainy.isInterior).toBe(true);
     expect(rainy.weather).toBe('rain');
-    expect(rainy.particles.rain).toBe(true);
+    expect(rainy.particles.rain).toBe(false);
+  });
+
+  it('provides generic room ambience and exterior rain audio sources for authored projections', () => {
+    const clear = createWorldSceneProjection({
+      placeId: 'room_104',
+      viewId: DESK_VIEW,
+      weather: 'clear',
+    });
+    const rain = createWorldSceneProjection({
+      placeId: 'room_104',
+      viewId: DESK_VIEW,
+      weather: 'rain',
+    });
+
+    expect(clear.spatialAudioSources).toEqual([
+      expect.objectContaining({
+        id: 'environment_room_tone',
+        eventId: 'ambience.room_tone',
+        loop: true,
+        bus: 'ambience',
+      }),
+    ]);
+    expect(rain.spatialAudioSources).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        id: 'environment_room_tone',
+        eventId: 'ambience.room_tone',
+      }),
+      expect.objectContaining({
+        id: 'environment_window_rain',
+        eventId: 'ambience.weather.rain',
+        bus: 'ambience',
+        loop: true,
+        parameters: expect.objectContaining({
+          rainIntensity: expect.any(Number),
+          muffled: 1,
+        }),
+      }),
+    ]));
   });
 
   it('drives Room 104 lighting continuously by minute instead of freezing within a coarse day label', () => {
@@ -105,7 +143,7 @@ describe('Room 104 flagship living-place contract (#26)', () => {
     });
 
     expect(clear.particles.rain).toBe(false);
-    expect(rain.particles.rain).toBe(true);
+    expect(rain.particles.rain).toBe(false);
     expect(rain.particles.density).toBeGreaterThan(clear.particles.density);
     expect(rain.lighting).toEqual(clear.lighting);
   });
