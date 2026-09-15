@@ -1,10 +1,7 @@
 // tests/unit/Room104Content.test.ts
-// #82 — Room 104 canonical content proof. Room 104 must come from the
-// canonical content pipeline (content/store.json -> generated registries),
-// never from a handwritten bridge: place room_104 with the legacy home
-// alias, one main space, three views with the flagship neighbor graph,
-// anchors/interactions carrying the flagship capabilities, and the four
-// storage container definitions owned by this lane (instances belong to #80).
+// #82 — Room 104 canonical content proof. Room 104 remains an authored/reference
+// fixture from the canonical content pipeline, but #85/#86 reserve semantic
+// `home` for dynamic Residence/Tenancy authority rather than an authored alias.
 
 import { describe, expect, it } from 'vitest';
 import {
@@ -33,11 +30,13 @@ function capabilities(viewId: string): string[] {
 }
 
 describe('Room 104 canonical content (#82)', () => {
-  it('1. generates the room_104 place with the legacy home alias', () => {
+  it('1. generates room_104 as an ordinary canonical place/reference fixture', () => {
     const place = GENERATED_PLACES.find((p) => p.id === 'room_104');
     expect(place).toBeDefined();
     expect(place!.name).toBe('Motel Room 104');
     expect(place!.districtId).toBe('district_a');
+    // Historical authored metadata may remain while pre-freeze content is being
+    // cleaned up, but the runtime alias registry must not grant it authority.
     expect(place!.legacyIds ?? []).toContain('home');
     expect(place!.transitAccess).toEqual([]);
   });
@@ -76,9 +75,6 @@ describe('Room 104 canonical content (#82)', () => {
     expect(desk.placeId).toBe('room_104');
     expect(desk.placeName).toBe('Motel Room 104');
     expect(desk.isInterior).toBe(true);
-    // Set-compared on purpose: generated registries emit in deterministic
-    // alphabetical id order (bed, desk, entry); the flagship runtime selects
-    // views by explicit id/neighbor links, never by list position.
     expect(desk.availableViews.map((view) => view.id).sort()).toEqual([BED_VIEW, DESK_VIEW, ENTRY_VIEW].sort());
 
     const bed = createWorldSceneProjection({ placeId: 'room_104', viewId: BED_VIEW });
@@ -105,14 +101,14 @@ describe('Room 104 canonical content (#82)', () => {
     ]));
   });
 
-  it('4. exposes home -> room_104 from generated authored content', () => {
-    expect(getSharedPlaceAliases()['home']).toBe('room_104');
+  it('4. does not expose Room 104 as the permanent semantic home alias', () => {
+    expect(getSharedPlaceAliases()).not.toHaveProperty('home');
   });
 
-  it('5. resolves home to room_104 through the existing resolver with no hardcode', () => {
+  it('5. leaves semantic home unresolved by the authored transit alias resolver', () => {
     const network = getSharedTransitNetwork();
     expect(network).not.toBeNull();
-    expect(resolveTransitPlaceId('home', network!, getSharedPlaceAliases())).toBe('room_104');
+    expect(resolveTransitPlaceId('home', network!, getSharedPlaceAliases())).toBeNull();
   });
 
   it('6. authors the four Room 104 storage container definitions (no instances)', () => {
