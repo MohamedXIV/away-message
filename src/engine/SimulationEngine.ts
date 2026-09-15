@@ -199,11 +199,10 @@ export class SimulationEngine extends LegacySimulationEngine {
 
   public constructor(initialState?: InitialSimulationState) {
     super(initialState);
-    const legacyState = super.getState();
     this.residenceState = hydrateResidenceState(
       initialState?.residence,
-      legacyState.player.rentAmount,
-      legacyState.time.totalMinutes,
+      this.economy.getState().rentAmount,
+      this.clock.getTotalMinutes(),
     );
     this.physicalWorldState = this.hydratePhysicalWorld(initialState?.physicalWorld);
     this.activeTravelState = initialState?.activeTravel ? cloneActiveTravel(initialState.activeTravel) : null;
@@ -523,11 +522,10 @@ export class SimulationEngine extends LegacySimulationEngine {
     const persistedResidence = extendedSnapshot.residence;
 
     super.loadSnapshot(snapshot);
-    const legacyState = super.getState();
     this.residenceState = hydrateResidenceState(
       persistedResidence,
-      legacyState.player.rentAmount,
-      legacyState.time.totalMinutes,
+      this.economy.getState().rentAmount,
+      this.clock.getTotalMinutes(),
     );
     this.physicalWorldState = this.hydratePhysicalWorld(persistedPhysicalWorld);
     this.activeTravelState = persistedActiveTravel;
