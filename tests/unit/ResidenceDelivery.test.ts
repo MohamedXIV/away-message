@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import { SimulationEngine } from '../../src/engine/SimulationEngine';
-import { deliveryEtaMinutes } from '../../src/engine/DeliveryEngine';
 
 describe('Residence delivery routing (#86)', () => {
   it('does not materialize a home parcel at Room 104 when the current residence has no delivery capability', () => {
@@ -18,9 +17,9 @@ describe('Residence delivery routing (#86)', () => {
     const placed = engine.placeGroceryOrder([{ sku: 'noodles_cup', qty: 1 }], 'delivery', now) as any;
     expect(placed.success).toBe(true);
 
-    const order = engine.getState().delivery.orders.at(-1)!;
-    const dueMinute = order.placedMinute + deliveryEtaMinutes(order.id);
-    engine.advanceTime(Math.max(0, dueMinute - now));
+    const orders = engine.getState().delivery.orders;
+    const order = orders[orders.length - 1]!;
+    engine.advanceTime(Math.max(0, order.readyMinute - now));
 
     const state = engine.getState() as any;
     const parcel = Object.values(state.physicalWorld.items).find(
