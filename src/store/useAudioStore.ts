@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { subscribeWithSelector } from 'zustand/middleware';
 import { soundManager, SoundSettings } from '../audio/SoundManager';
+import { audioService } from '../audio/AudioService';
 
 export type SoundEffectName =
   | 'click'
@@ -61,6 +62,9 @@ export const useAudioStore = create<AudioStore>()(
 
       unlockAudio: () => {
         soundManager.unlockAudio();
+        // Room ambience is owned by the renderer-neutral service, whose
+        // WebAudio context must be resumed from the same user gesture too.
+        void audioService.unlock();
         set({ isAudioUnlocked: true });
       },
 

@@ -75,6 +75,17 @@ describe('World content assets (#51 slice 5)', () => {
     const errors = validateContent(tables);
     expect(errors.some((e) => e.includes('views/view_a1') && e.includes('assetId'))).toBe(true);
   });
+
+  it('rejects an audio asset as a view background', () => {
+    const tables = clone(validAssetTables());
+    (tables['assets']!['voice'] as unknown) = {
+      name: 'Voice', kind: 'audio', uri: 'assets/voice.mp3', normalMapAssetId: '', tags: '[]',
+    };
+    (tables['views']!['view_a1']! as Record<string, unknown>)['assetId'] = 'voice';
+    expect(validateContent(tables)).toEqual(expect.arrayContaining([
+      expect.stringContaining("views/view_a1.assetId: asset 'voice' must be an image asset"),
+    ]));
+  });
 });
 
 describe('World asset codegen (#51 slice 5)', () => {

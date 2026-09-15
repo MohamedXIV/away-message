@@ -66,11 +66,16 @@ export function getLightingForTimeOfDay(
   customLights: WorldPointLightDef[] = [],
   minuteOfDay?: number
 ): WorldLightingProjection {
+  const hasPreciseMinute = minuteOfDay !== undefined;
   const minute = minuteOfDay ?? getMinuteForTimeOfDay(timeOfDay);
   const phaseParams = interpolateDayPhase(minute);
 
-  // Check generated light profiles for explicit overrides
-  const profile = GENERATED_LIGHT_PROFILES.find((p) => p.timeOfDay === timeOfDay);
+  // Coarse callers may opt into authored time-of-day profile overrides. When
+  // an exact minute is supplied, preserve the generic continuous day-phase
+  // interpolation instead of freezing an entire coarse label to one profile.
+  const profile = hasPreciseMinute
+    ? undefined
+    : GENERATED_LIGHT_PROFILES.find((p) => p.timeOfDay === timeOfDay);
 
   const ambientColor = profile?.colorTint ?? phaseParams.ambientColor;
   const ambientIntensity = profile ? profile.intensity : phaseParams.ambientIntensity;
@@ -97,12 +102,18 @@ export function getLightingForTimeOfDay(
   };
 }
 
-export function getParticlesForWeather(weather: WeatherType): WorldParticleProjection {
+export function getParticlesForWeather(
+  weather: WeatherType,
+  isInterior = false,
+): WorldParticleProjection {
   switch (weather) {
     case 'rain':
       return {
         dustMotes: false,
-        rain: true,
+        // `rain` is the full-screen/foreground particle layer. Interior
+        // projections keep the weather state but leave this layer to the
+        // EnvironmentManager's occlusion-aware background/window paths.
+        rain: !isInterior,
         density: 1.0,
       };
     case 'cloudy':
@@ -119,6 +130,49 @@ export function getParticlesForWeather(weather: WeatherType): WorldParticleProje
         density: 0.6,
       };
   }
+}
+
+/**
+ * Supplies a small generic ambience bed for authored projections without
+ * requiring each place to invent renderer-specific audio wiring. Explicit
+ * source definitions still win, which keeps technical fixtures and future
+ * authored place-specific audio data intact.
+ */
+export function getDefaultSpatialAudioSources(
+  weather: WeatherType,
+  isInterior: boolean,
+): SpatialAudioSourceDef[] {
+  const sources: SpatialAudioSourceDef[] = [
+    {
+      id: 'environment_room_tone',
+      eventId: 'ambience.room_tone',
+      x: 0.5,
+      y: 0.65,
+      z: -0.35,
+      loop: true,
+      volume: 0.12,
+      bus: 'ambience',
+    },
+  ];
+
+  if (weather === 'rain') {
+    sources.push({
+      id: isInterior ? 'environment_window_rain' : 'environment_rain',
+      eventId: 'ambience.weather.rain',
+      x: isInterior ? 0.78 : 0.5,
+      y: 0.25,
+      z: 0.8,
+      loop: true,
+      volume: isInterior ? 0.25 : 0.55,
+      bus: 'ambience',
+      parameters: {
+        rainIntensity: isInterior ? 0.35 : 1,
+        muffled: isInterior ? 1 : 0,
+      },
+    });
+  }
+
+  return sources;
 }
 
 export function createWorldSceneProjection(
@@ -199,8 +253,10 @@ export function createWorldSceneProjection(
   }));
 
   const effectiveMinute = minuteOfDay ?? getMinuteForTimeOfDay(timeOfDay);
-  const lighting = getLightingForTimeOfDay(timeOfDay, customLights, effectiveMinute);
-  const particles = getParticlesForWeather(weather);
+  const lighting = getLightingForTimeOfDay(timeOfDay, customLights, minuteOfDay);
+  const particles = getParticlesForWeather(weather, isInterior);
+  const resolvedSpatialAudioSources = spatialAudioSources
+    ?? (activeView ? getDefaultSpatialAudioSources(weather, isInterior) : undefined);
 
   return {
     placeId,
@@ -224,7 +280,7 @@ export function createWorldSceneProjection(
     puddleZones,
     ambientMotions,
     authoredLights,
-    spatialAudioSources,
+    spatialAudioSources: resolvedSpatialAudioSources,
     listenerOrientation,
   };
 }

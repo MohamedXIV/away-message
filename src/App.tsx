@@ -220,6 +220,7 @@ export const App: React.FC = () => {
           <PhysicalWorldHost
             projection={fixtureProjection}
             debug={true}
+            visualMode="technical-fixture"
             onIntent={(intent) => {
               if (intent.type === 'VIEW_TRANSITION' && intent.targetViewId) {
                 setFixtureProjection((prev) => ({
