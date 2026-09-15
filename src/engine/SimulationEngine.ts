@@ -36,6 +36,12 @@ import type { ActiveTravelState, TravelPlan } from './transit/types';
 import type { SimulationState as TransportSimulationState } from './types';
 import { GENERATED_CONTAINERS, GENERATED_ITEMS } from './worldContent.generated';
 import {
+  cloneResidenceState,
+  hydrateResidenceState,
+  resolveCurrentHomePlaceId,
+  type ResidenceState,
+} from './residence/ResidenceAuthority';
+import {
   InnerVoiceEngine,
   emptyInnerVoicePersistedState,
   type InnerVoicePersistedState,
@@ -46,15 +52,18 @@ import {
 } from './innerVoice/index';
 
 export * from './SimulationEngineLegacyFacade';
+export type { ResidenceState } from './residence/ResidenceAuthority';
 
 export type LiveSimulationState = LegacyLiveSimulationState & {
   physicalWorld: PhysicalWorldState;
   activeTravel: ActiveTravelState | null;
+  residence: ResidenceState;
 };
 
 type InitialSimulationState = Partial<TransportSimulationState> & {
   physicalWorld?: PhysicalWorldState;
   activeTravel?: ActiveTravelState | null;
+  residence?: ResidenceState;
 };
 
 const DELIVERY_PARCEL_DEFINITION_ID = 'delivery_parcel';
@@ -94,7 +103,7 @@ const PHYSICAL_ITEM_DEFINITIONS: Readonly<Record<string, PhysicalItemDefinition>
         portable: true,
         volume: 1,
       } satisfies PhysicalItemDefinition,
-    ] as const,
+    ] as const),
     [
       SHOPPING_BAG_DEFINITION_ID,
       {
@@ -103,7 +112,7 @@ const PHYSICAL_ITEM_DEFINITIONS: Readonly<Record<string, PhysicalItemDefinition>
         portable: true,
         volume: 1,
       } satisfies PhysicalItemDefinition,
-    ] as const,
+    ] as const),
     ...Object.keys(GROCERY_SKUS).map((sku) => [
       groceryDefinitionId(sku),
       {
@@ -132,7 +141,7 @@ const PHYSICAL_CONTAINER_DEFINITIONS: Readonly<Record<string, PhysicalContainerD
         capacity: Number.MAX_SAFE_INTEGER,
         allowedItemKinds: [],
       } satisfies PhysicalContainerDefinition,
-    ] as const,
+    ] as const),
     [
       DELIVERY_PARCEL_DEFINITION_ID,
       {
@@ -140,7 +149,7 @@ const PHYSICAL_CONTAINER_DEFINITIONS: Readonly<Record<string, PhysicalContainerD
         capacity: 64,
         allowedItemKinds: [CORNER_MART_ITEM_KIND],
       } satisfies PhysicalContainerDefinition,
-    ] as const,
+    ] as const),
     [
       SHOPPING_BAG_DEFINITION_ID,
       {
@@ -148,7 +157,7 @@ const PHYSICAL_CONTAINER_DEFINITIONS: Readonly<Record<string, PhysicalContainerD
         capacity: 64,
         allowedItemKinds: [CORNER_MART_ITEM_KIND],
       } satisfies PhysicalContainerDefinition,
-    ] as const,
+    ] as const),
   ]);
 
 function emptyPhysicalWorld(): PhysicalWorldState {
@@ -184,11 +193,18 @@ function cloneActiveTravel(state: ActiveTravelState): ActiveTravelState {
 export class SimulationEngine extends LegacySimulationEngine {
   private physicalWorldState: PhysicalWorldState | null = null;
   private activeTravelState: ActiveTravelState | null = null;
+  private residenceState: ResidenceState;
   /** Player Inner Voice rules gate (#23). Owns cooldown/notable-history only. */
   private readonly innerVoice: InnerVoiceEngine;
 
   public constructor(initialState?: InitialSimulationState) {
     super(initialState);
+    const legacyState = super.getState();
+    this.residenceState = hydrateResidenceState(
+      initialState?.residence,
+      legacyState.player.rentAmount,
+      legacyState.time.totalMinutes,
+    );
     this.physicalWorldState = this.hydratePhysicalWorld(initialState?.physicalWorld);
     this.activeTravelState = initialState?.activeTravel ? cloneActiveTravel(initialState.activeTravel) : null;
     this.innerVoice = new InnerVoiceEngine(
@@ -216,6 +232,14 @@ export class SimulationEngine extends LegacySimulationEngine {
       PHYSICAL_ITEM_DEFINITIONS,
       PHYSICAL_CONTAINER_DEFINITIONS,
     );
+  }
+
+  public getResidenceState(): ResidenceState {
+    return cloneResidenceState(this.residenceState);
+  }
+
+  public resolveCurrentHomePlaceId(): string {
+    return resolveCurrentHomePlaceId(this.residenceState);
   }
 
   private synchronizeActiveTravel(): void {
@@ -471,6 +495,7 @@ export class SimulationEngine extends LegacySimulationEngine {
       ...super.getState(),
       physicalWorld: clonePhysicalWorld(this.currentPhysicalWorld()),
       activeTravel: this.getActiveTravel(),
+      residence: this.getResidenceState(),
       innerVoice: this.innerVoice.getPersistedState(),
     };
   }
@@ -480,6 +505,7 @@ export class SimulationEngine extends LegacySimulationEngine {
       ...super.exportSnapshot(),
       physicalWorld: clonePhysicalWorld(this.currentPhysicalWorld()),
       activeTravel: this.getActiveTravel(),
+      residence: this.getResidenceState(),
       innerVoice: this.innerVoice.getPersistedState(),
     };
   }
@@ -488,13 +514,21 @@ export class SimulationEngine extends LegacySimulationEngine {
     const extendedSnapshot = snapshot as TransportSimulationState & {
       physicalWorld?: PhysicalWorldState;
       activeTravel?: unknown;
+      residence?: unknown;
     };
     const persistedPhysicalWorld = extendedSnapshot.physicalWorld;
     const persistedActiveTravel = extendedSnapshot.activeTravel == null
       ? null
       : parseActiveTravel(extendedSnapshot.activeTravel);
+    const persistedResidence = extendedSnapshot.residence;
 
     super.loadSnapshot(snapshot);
+    const legacyState = super.getState();
+    this.residenceState = hydrateResidenceState(
+      persistedResidence,
+      legacyState.player.rentAmount,
+      legacyState.time.totalMinutes,
+    );
     this.physicalWorldState = this.hydratePhysicalWorld(persistedPhysicalWorld);
     this.activeTravelState = persistedActiveTravel;
     this.innerVoice.hydrate(snapshot.innerVoice ?? emptyInnerVoicePersistedState());
