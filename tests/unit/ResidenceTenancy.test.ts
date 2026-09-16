@@ -134,6 +134,10 @@ describe('Residence/Tenancy authority', () => {
     expect(drink.success).toBe(false);
     expect(sparse.clock.getTotalMinutes()).toBe(minuteBefore);
 
+    const meal = sparse.dispatchAction({ type: 'PLAYER_INTERACT_ROOM', activity: 'meal' } as any);
+    expect(meal.success).toBe(false);
+    expect(sparse.clock.getTotalMinutes()).toBe(minuteBefore);
+
     const sleep = sparse.dispatchAction({ type: 'PLAYER_REST_OR_SLEEP', wakeHour: 8, wakeMinute: 0 } as any);
     expect(sleep.success).toBe(false);
     expect(sparse.clock.getTotalMinutes()).toBe(minuteBefore);
