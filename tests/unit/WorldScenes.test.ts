@@ -179,13 +179,13 @@ describe('2D World Scenes, Atmosphere, Interactables & App Integration', () => {
       expect(engine.getState().player.energy).toBe(initialEnergy + 10);
     });
 
-    it('executes shower interaction (advances 12m)', () => {
+    it('keeps shower unavailable when the authored residence has no shower capability', () => {
       const initialMinutes = engine.clock.getTotalMinutes();
 
       const res = engine.dispatchAction({ type: 'PLAYER_INTERACT_ROOM', activity: 'shower' });
-      expect(res.success).toBe(true);
-
-      expect(engine.clock.getTotalMinutes()).toBe(initialMinutes + 12);
+      expect(res.success).toBe(false);
+      expect(res.error).toContain('no shower capability');
+      expect(engine.clock.getTotalMinutes()).toBe(initialMinutes);
     });
 
     it('executes window observation (advances 4m, logs telemetry)', () => {
