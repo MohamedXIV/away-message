@@ -52,7 +52,7 @@ export const DoorActionModal: React.FC<DoorActionModalProps> = ({
   onTravel,
   onClose,
 }) => {
-  const currentResidencePlaceId = useSimulationStore((state) => state.state.residence.currentResidencePlaceId);
+  const currentResidencePlaceId = useSimulationStore((state) => state.engine.resolveCurrentHomePlaceId());
   const homeNode = resolveResidenceHomeNode(currentResidencePlaceId);
 
   return (
