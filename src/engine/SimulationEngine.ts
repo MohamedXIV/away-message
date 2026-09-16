@@ -25,6 +25,7 @@ import {
   type PhysicalWorldState,
 } from './PhysicalItemEngine';
 import { GROCERY_SKUS, type DeliveryOrder, type Fulfillment } from './DeliveryEngine';
+import type { HardwareInstallSlot } from './InventoryEngine';
 import { PHYSICAL_ITEM_CATALOG } from './hardware/catalog';
 import {
   commitTravelPlan as createActiveTravel,
@@ -33,7 +34,7 @@ import {
   travelStateAtMinute,
 } from './transit/ActiveTravel';
 import type { ActiveTravelState, TravelPlan } from './transit/types';
-import type { SimulationState as TransportSimulationState } from './types';
+import type { SimulationAction, SimulationState as TransportSimulationState } from './types';
 import { GENERATED_CONTAINERS, GENERATED_ITEMS } from './worldContent.generated';
 import {
   cloneResidenceState,
@@ -241,6 +242,42 @@ export class SimulationEngine extends LegacySimulationEngine {
     return resolveCurrentHomePlaceId(this.residenceState);
   }
 
+  private currentResidenceCapabilityAnchor(capability: string): string | null {
+    return resolvePlaceCapabilityAnchor(this.residenceState.currentResidencePlaceId, capability);
+  }
+
+  private canUseCurrentResidenceCapability(capability: string): boolean {
+    return this.getState().player.location === 'home' && this.currentResidenceCapabilityAnchor(capability) !== null;
+  }
+
+  public override setupComputerAtHome() {
+    if (!this.canUseCurrentResidenceCapability('use_computer')) {
+      return { success: false, error: 'Computer setup requires a computer-capable current residence.' };
+    }
+    return super.setupComputerAtHome();
+  }
+
+  public override installOwnedHardwareAtHome(instanceId: string, slot: HardwareInstallSlot) {
+    if (!this.canUseCurrentResidenceCapability('use_computer')) {
+      return { success: false, error: 'Hardware installation requires a computer-capable current residence.' };
+    }
+    return super.installOwnedHardwareAtHome(instanceId, slot);
+  }
+
+  public override dispatchAction(action: SimulationAction) {
+    if (action.type === 'PLAYER_REST_OR_SLEEP' && !this.canUseCurrentResidenceCapability('sleep')) {
+      return { success: false, error: 'The current residence has no sleeping capability.' };
+    }
+    if (
+      action.type === 'PLAYER_INTERACT_ROOM' &&
+      (action.activity === 'tea' || action.activity === 'coffee') &&
+      !this.canUseCurrentResidenceCapability('prepare_drink')
+    ) {
+      return { success: false, error: 'The current residence has no drink-preparation capability.' };
+    }
+    return super.dispatchAction(action);
+  }
+
   private synchronizeActiveTravel(): void {
     const current = this.activeTravelState;
     if (!current || current.status !== 'active') return;
@@ -304,11 +341,10 @@ export class SimulationEngine extends LegacySimulationEngine {
   }
 
   private materializeDeliveryParcel(order: DeliveryOrder): boolean {
-    const deliveryAnchorId = resolvePlaceCapabilityAnchor(
-      this.residenceState.currentResidencePlaceId,
-      'inspect_delivery_anchor',
-    );
-    if (!deliveryAnchorId) return false;
+    const deliveryAnchorId = this.currentResidenceCapabilityAnchor('inspect_delivery_anchor');
+    if (!deliveryAnchorId) {
+      throw new Error('Current residence has no delivery capability.');
+    }
 
     const parcelId = `parcel:${order.id}`;
     this.materializeGroceryContainer(
