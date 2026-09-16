@@ -108,7 +108,7 @@ describe('physical delivery arrival', () => {
       expect.objectContaining({
         instanceId: parcelId,
         definitionId: 'delivery_parcel',
-        location: { kind: 'worldAnchor', anchorId: 'room104:delivery' },
+        location: { kind: 'worldAnchor', anchorId: 'room104_delivery_anchor' },
       }),
     );
     expect(physical.containers[parcelId]).toEqual({ instanceId: parcelId, definitionId: 'delivery_parcel' });
@@ -144,7 +144,7 @@ describe('physical delivery arrival', () => {
     expect(restored.delivery.getState().orders.find((candidate) => candidate.id === orderId)?.status).toBe('done');
     expect(restored.getPhysicalWorldState().items[`parcel:${orderId}`]?.location).toEqual({
       kind: 'worldAnchor',
-      anchorId: 'room104:delivery',
+      anchorId: 'room104_delivery_anchor',
     });
     expect(Object.values(restored.getPhysicalWorldState().items)
       .filter((item) => item.location.kind === 'container' && item.location.containerInstanceId === `parcel:${orderId}`)
