@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { SimulationEngine } from '../../src/engine/SimulationEngine';
+import { resolveResidenceHomeNode } from '../../src/engine/CityMap';
 import {
   currentResidenceHasCapability,
   resolvePlaceCapabilityAnchor,
@@ -37,6 +38,18 @@ describe('Residence/Tenancy authority', () => {
 
   it('does not expose home as a permanent authored place alias', () => {
     expect(getSharedPlaceAliases()).not.toHaveProperty('home');
+  });
+
+  it('resolves map home presentation from the current canonical residence place', () => {
+    expect(resolveResidenceHomeNode('room_104')).toMatchObject({
+      id: 'home',
+      name: 'Motel Room 104',
+    });
+    expect(resolveResidenceHomeNode('place_a1')).toMatchObject({
+      id: 'home',
+      name: 'Place A1',
+    });
+    expect(resolveResidenceHomeNode('place_a1').blurb).not.toContain('motel room');
   });
 
   it('resolves home facilities from authored place capabilities rather than room number', () => {
@@ -123,6 +136,23 @@ describe('Residence/Tenancy authority', () => {
 
     const sleep = sparse.dispatchAction({ type: 'PLAYER_REST_OR_SLEEP', wakeHour: 8, wakeMinute: 0 } as any);
     expect(sleep.success).toBe(false);
+    expect(sparse.clock.getTotalMinutes()).toBe(minuteBefore);
+  });
+
+  it('does not grant shower access to a residence without an authored shower capability', () => {
+    const seed = new SimulationEngine();
+    const snapshot = seed.exportSnapshot() as any;
+    snapshot.residence = {
+      currentResidencePlaceId: 'place_a1',
+      tenancyId: 'tenancy:test-a1',
+      moveInMinute: snapshot.time.totalMinutes,
+      currentRent: 125,
+    };
+    const sparse = new SimulationEngine(snapshot);
+    const minuteBefore = sparse.clock.getTotalMinutes();
+
+    const shower = sparse.dispatchAction({ type: 'PLAYER_INTERACT_ROOM', activity: 'shower' } as any);
+    expect(shower.success).toBe(false);
     expect(sparse.clock.getTotalMinutes()).toBe(minuteBefore);
   });
 });
