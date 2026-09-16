@@ -9,7 +9,7 @@ The player's residence is dynamic simulation/economy state. It selects which can
 The implementation backlog is tracked by:
 
 - #85 — residence/housing progression epic;
-- #86 — Residence/Tenancy authority plus contextual object-capability resolution;
+- #86 — Residence/Tenancy authority plus contextual physical-interaction resolution;
 - #87 — modular residence visuals and fixture-slot/blockout-to-Phaser production contract;
 - #88 — housing choice, rent/upgrades, and moving.
 
@@ -17,11 +17,11 @@ The implementation backlog is tracked by:
 
 ## 2. Core design laws
 
-> **A place is topology and containment, not a capability bag.**
+> **A place owns location-wide policy; it is not a bag of object actions.**
 
-> **Gameplay capability comes from concrete objects/components that actually exist in the reachable local graph.**
+> **Direct physical actions belong to the concrete objects that expose them.**
 
-> **Recipes/interactions declare requirements; the runtime resolves those requirements from the player's current context.**
+> **Recipes/composed interactions declare requirements; the runtime resolves those requirements from the player's current context.**
 
 A residence uses the same canonical world model as every other physical place:
 
@@ -40,24 +40,94 @@ Installed Object
   ↓
 Nested Slots + Components
   ↓
-Capability Providers / Containers / Resources
+Affordances / Tool Capabilities / Containers / Resources
 ```
 
-Residence/Tenancy state says **which valid Place currently functions as the player's home** and what the occupancy/economic terms are. It does not create a second location system and it does not own derived facilities such as "can cook", "can use a computer", or "can shower".
+Residence/Tenancy state says **which valid Place currently functions as the player's home** and what the occupancy/economic terms are. It does not create a second location system and it does not own derived object actions such as "can use a computer", "can sleep", or "can bathe".
 
 Do not implement rules equivalent to:
 
 ```ts
 residence.canUseComputer
-place.hasKitchenette
+place.canBathe
 place.canPrepareFood
 ```
 
-when those facts can be derived from the concrete object graph.
+when those actions naturally come from concrete reachable objects or contextual requirements.
+
+Some facts legitimately remain place-level because they describe a destination/service policy rather than an object action. Examples include whether a place accepts deliveries, visitor/access policy, opening/access rules, or other location-wide service contracts.
 
 ---
 
-## 3. Placement graph
+## 3. Three interaction layers
+
+Keep these three concepts distinct.
+
+### 3.1 Place / service policy
+
+Place-level state answers questions about the location as a destination or service boundary.
+
+Examples:
+
+- `canReceiveDelivery` / delivery acceptance policy;
+- reception/door/parcel handling policy;
+- visitor access policy;
+- opening/access restrictions;
+- mail/service handling where relevant.
+
+A place-level policy may decide whether an operation is permitted or how it should be routed. It should **not** manufacture object affordances that are absent from the physical graph.
+
+For delivery, for example:
+
+```text
+Place delivery policy allows delivery
+        +
+valid target/route exists
+        ↓
+parcel can be delivered
+```
+
+The policy and the concrete target are separate concerns.
+
+### 3.2 Object affordances
+
+A concrete accessible object directly exposes the user actions that make sense on that object.
+
+Examples:
+
+```text
+Bathtub  → Bathe
+Bed      → Sleep
+Computer → Use / Power / Inspect
+Fridge   → Open
+Wardrobe → Open Storage
+```
+
+If an accessible bathtub exists, its context menu may expose `Bathe`. There is no need for a separate `canBathe(place)` check.
+
+If the object is absent, inaccessible, locked, broken, or otherwise unusable, the affordance is absent or disabled according to the object's own conditions.
+
+A planner may later search the world for a semantic affordance such as `bathe`, but that is an index/query over concrete object affordances; it is not a stored Place capability.
+
+### 3.3 Context-composed requirements
+
+Some actions are not owned by one object. They combine items, resources, and tool capabilities from multiple reachable sources.
+
+Example:
+
+```text
+instant noodles item
++ water
++ any provider capable of heating water
+        ↓
+prepare instant noodles
+```
+
+This is where the contextual requirement resolver is authoritative.
+
+---
+
+## 4. Placement graph
 
 `Place`, `Space`, and `Anchor` define spatial identity, containment, presentation, and legal placement.
 
@@ -73,8 +143,8 @@ Desk
 work-surface slot
   ↓ accepts
 Computer
-  ↓ provides
-use_computer
+  ↓ exposes
+Use / Power / Inspect affordances
 ```
 
 Another chain may be:
@@ -89,7 +159,7 @@ Kitchenette fixture
        ↓ accepts
      Kettle
        ↓ provides
-     heat_water
+     heat_water tool capability
 ```
 
 The parent place never needs to know that a computer or kettle exists. It only owns/reaches the spatial graph in which those objects are installed.
@@ -98,23 +168,26 @@ Placement compatibility should be data-driven through practical categories/tags/
 
 ---
 
-## 4. Objects and components
+## 5. Objects and components
 
 Concrete runtime objects may provide one or more orthogonal components:
 
 - **Placement** — what slot/category can contain the object;
 - **Slots** — child placement locations exposed by the object;
+- **Affordances** — direct user-facing actions exposed by the object, such as `bathe`, `sleep`, `use`, `open`, or `inspect`;
 - **Container** — physical items stored inside the object;
-- **Capability provider** — semantic actions/tools the object can perform, such as `use_computer`, `sleep`, `heat_water`, or `bathe`;
+- **Tool capability provider** — semantic tool abilities used by composed requirements, such as `heat_water`, `cook`, or another bounded capability needed by recipes/systems;
 - **Resource provider** — environmental/resource access such as water or power where the design needs it;
 - **Presentation mapping** — view-specific art/layers for the same semantic object instance.
 
-Object identity and capability identity are intentionally separate.
+Object identity, affordance identity, and tool-capability identity are intentionally separate.
 
-For example, an interaction should prefer a requirement like:
+A direct object action should stay direct when no abstraction is needed. For example, a bathtub can simply expose `bathe`; it does not need to provide an abstract `can_bathe` capability just so the player can use it.
+
+For composed interactions, prefer a semantic requirement like:
 
 ```text
-requires capability: heat_water
+requires tool capability: heat_water
 ```
 
 over:
@@ -127,18 +200,19 @@ when multiple valid tools can satisfy the same need.
 
 ---
 
-## 5. Contextual interaction resolution
+## 6. Contextual interaction resolution
 
-When the player requests an interaction, build a local `InteractionContext` from authoritative physical state.
+Use contextual resolution only where an action needs to combine multiple sources or search semantically across reachable state.
 
-The context may include:
+Build a local `InteractionContext` from authoritative physical state. The context may include:
 
 ```text
 player inventory
 + equipped/carried items
 + current Place/Space object graph
 + accessible containers in that graph
-+ installed capability/resource providers
++ installed tool/resource providers
++ reachable object affordances when a semantic query needs them
 ```
 
 This is a **virtual resolution scope**, not an inventory merge. Items keep their exact identity, owner, and physical location.
@@ -147,27 +221,30 @@ The resolver should:
 
 1. determine the player's authoritative current location;
 2. traverse reachable installed objects/slots for that context;
-3. collect accessible capability/resource providers;
-4. expose items from player inventory and accessible local containers;
-5. evaluate the interaction/recipe requirements;
-6. execute only after the requirements are satisfied;
-7. consume/mutate the exact source items/providers required by the action.
+3. expose accessible object affordances when queried;
+4. collect reachable tool/resource providers;
+5. expose items from player inventory and accessible local containers;
+6. evaluate composed interaction/recipe requirements;
+7. execute only after the requirements are satisfied;
+8. consume/mutate the exact source items/providers required by the action.
 
 Accessibility matters. A locked container, inaccessible room, remote object, or object in another place does not enter the context merely because it exists in simulation.
 
-The same resolver must work outside residences. Shared facilities, workplaces, shops, or other living places use the same rule.
+Do not force every simple object interaction through the requirement resolver. Clicking an accessible bathtub and choosing `Bathe` is already sufficient unless that action itself has additional requirements.
+
+The same rules must work outside residences. Shared facilities, workplaces, shops, or other living places use the same object/policy/context model.
 
 ---
 
-## 6. Requirement and recipe model
+## 7. Requirement and recipe model
 
-Interactions and item recipes describe what they need. They should not encode a specific residence, room, or fixture arrangement when a semantic requirement is enough.
+Composed interactions and item recipes describe what they need. They should not encode a specific residence, room, or fixture arrangement when a semantic requirement is enough.
 
 A bounded requirement vocabulary may support concepts equivalent to:
 
 ```text
 item / quantity
-capability
+tool capability
 resource
 allOf(...)
 anyOf(...)
@@ -185,35 +262,41 @@ The noodles may come from the player's inventory or from an accessible cupboard/
 
 The recipe does **not** require a hard-coded "kitchenette" boolean on the place. A kitchenette is a useful authored fixture/arrangement because it can contain/provide tools, storage, water, and slots; it is not magical capability authority.
 
-This pattern should extend naturally to future recipes and interactions without adding place-specific booleans.
+This pattern should extend naturally to future recipes and composed interactions without adding place-specific booleans.
 
 ---
 
-## 7. Interaction examples
+## 8. Interaction examples
 
 ### Computer use and hardware setup
 
-A valid furniture slot may accept a desk. The desk may expose a work-surface slot. A computer installed on a compatible surface provides the computer interaction capability.
+A valid furniture slot may accept a desk. The desk may expose a work-surface slot. A computer installed on a compatible surface exposes its own direct interactions.
 
-The runtime resolves the actual computer/provider reachable from the current context. The residence itself does not provide `use_computer`.
+The player uses the actual reachable computer object. The residence itself does not provide `use_computer`.
+
+A higher-level planner may query for a usable computer affordance/provider, but the source remains the concrete computer instance.
 
 ### Sleep
 
-A bed or other valid sleeping object provides the sleep capability. If no reachable object provides it, sleep is unavailable in that context.
+A bed or other sleeping object exposes `Sleep` when usable. If no reachable sleeping object exists, there is no local sleep interaction.
 
 ### Hygiene
 
-A shower/bath facility provides the relevant hygiene capability. A shared facility in another canonical place works through exactly the same resolver once the player is physically there.
+A bathtub/shower object exposes its own `Bathe`/`Shower` action. A shared facility in another canonical place works identically once the player is physically there.
+
+Do not add `place.canBathe` merely to decide whether the bathtub context menu should exist.
 
 ### Food preparation
 
-Food availability is derived from the recipe requirements plus accessible items/resources/tools. The room does not gain food-preparation powers from a flag.
+Food preparation is usually a composed action: recipe requirements plus accessible items/resources/tool providers. The place does not gain food-preparation powers from a flag.
 
 ### Delivery
 
-`home` resolves the current residence Place. Within that place graph, a valid delivery provider/target such as a door, reception point, parcel container, or authored delivery anchor determines where a parcel may materialize.
+Delivery is different because accepting a delivery is legitimately a **place/service policy**.
 
-If no valid provider exists, the system must follow an explicit alternative policy or fail/defer; it must not silently invent a hidden delivery target.
+`home` resolves the current residence Place. The place's delivery policy determines whether/how the destination accepts delivery. A concrete target/route such as reception, front door, parcel shelf/container, or another authored target then determines where the parcel materializes or is handed off.
+
+If delivery is not accepted, or an allowed policy requires a target that cannot be resolved, the system must follow an explicit alternative policy or fail/defer. It must not silently invent a hidden target.
 
 ### Storage
 
@@ -221,7 +304,7 @@ Storage comes from actual `Container` components. Capacity and contents belong t
 
 ---
 
-## 8. Residence/Tenancy authority
+## 9. Residence/Tenancy authority
 
 Mutable residence truth belongs in simulation/save state.
 
@@ -259,11 +342,11 @@ ResidenceState.currentResidencePlaceId
 canonical Place + runtime object graph
 ```
 
-The Residence authority selects the root context. The object graph and requirement resolver determine what can actually be done there.
+The Residence authority selects the root context. Place-level policy, concrete object affordances, and contextual requirement resolution determine what can actually happen there.
 
 ---
 
-## 9. Ownership domains and fixture packages
+## 10. Ownership domains and fixture packages
 
 Housing progression depends on a strict distinction between property-owned fixtures and player-owned belongings.
 
@@ -285,7 +368,7 @@ Property-owned and player-owned objects obey the same placement compatibility ru
 
 ---
 
-## 10. Housing progression
+## 11. Housing progression
 
 Housing is a material/lifestyle progression axis, not a visible level system.
 
@@ -313,7 +396,7 @@ The changed physical world is the progression UI. Do not add Housing XP or a gen
 
 ---
 
-## 11. Rent and moving
+## 12. Rent and moving
 
 Housing cost may reflect tenancy terms and the supplied property fixture/service package.
 
@@ -334,7 +417,7 @@ A practical assisted moving action is acceptable; the domain model does not need
 
 ---
 
-## 12. Modular visual architecture
+## 13. Modular visual architecture
 
 A physical place must not be one permanently flattened image when gameplay state requires objects to change.
 
@@ -366,11 +449,11 @@ simple 3D blockout / spatial reference
 → Phaser 4 composition
 ```
 
-The blockout is production reference, not runtime authority. Phaser presents projections of canonical simulation/content state; it does not own tenancy, placement, inventory, capability, or recipe truth.
+The blockout is production reference, not runtime authority. Phaser presents projections of canonical simulation/content state; it does not own tenancy, placement, inventory, policy, affordance, tool-capability, or recipe truth.
 
 ---
 
-## 13. Soft-lock rule
+## 14. Soft-lock rule
 
 The cheapest valid starting path must still have a feasible route to required core systems.
 
@@ -381,14 +464,14 @@ Valid alternatives include:
 - use a shared hygiene facility elsewhere;
 - buy ready-to-eat food or use another place's preparation tools;
 - acquire/install a compatible desk or work surface later;
-- route deliveries through an authored reception/door/parcel provider;
+- route deliveries through an authored reception/door/parcel policy/target;
 - carry a portable tool when the item and placement rules allow it.
 
 Design alternatives, not hidden freebies.
 
 ---
 
-## 14. Pre-release save policy
+## 15. Pre-release save policy
 
 Historical development saves do not constrain this architecture.
 
@@ -405,23 +488,32 @@ Do not add historical dev-save migrations, aliases, obsolete fields, dual author
 
 ---
 
-## 15. Evaluation / acceptance direction
+## 16. Evaluation / acceptance direction
 
 The residence/housing foundation should prove at least:
 
 1. `home` resolves to the current Residence/Tenancy Place;
 2. changing residence changes the root context without changing canonical place identity;
-3. no core at-home action depends on a specific place ID;
-4. a placement slot can accept a compatible object and that object can expose nested slots;
-5. an installed provider makes its capability available through contextual resolution;
-6. removing/moving that provider removes the capability without changing the Place definition;
-7. an interaction recipe can combine an item from player inventory with a provider/resource from the current place;
+3. location-wide service rules such as delivery acceptance may remain legitimate Place policy;
+4. a concrete accessible object exposes its own direct affordance without requiring a duplicate `Place.canX` flag;
+5. removing/moving that object removes/moves the affordance without changing the Place definition;
+6. a placement slot can accept a compatible object and that object can expose nested slots;
+7. a composed recipe can combine an item from player inventory with a tool/resource provider from the current place;
 8. the same recipe can source an item from an accessible local container instead;
-9. missing required providers/resources/items leave the interaction unavailable rather than inventing a place-level capability;
-10. delivery resolution follows a valid provider/target in the current home graph;
-11. shared facilities use the same resolver outside the home context;
-12. moving preserves exact player-owned object/item identity and placement legality;
-13. visual projection can swap/move stateful objects without changing semantic identity;
-14. content check, typecheck, build, baseline guard, focused tests, and full tests are green.
+9. missing required providers/resources/items leave the composed interaction unavailable rather than inventing a place-level capability;
+10. delivery requires the appropriate Place/service policy and resolves the concrete route/target required by that policy;
+11. a bathtub/shower proves the direct-object-affordance path: `Bathe`/`Shower` comes from the object, not `place.canBathe`;
+12. shared facilities use the same object/policy/context rules outside the home context;
+13. moving preserves exact player-owned object/item identity and placement legality;
+14. visual projection can swap/move stateful objects without changing semantic identity;
+15. content check, typecheck, build, baseline guard, focused tests, and full tests are green.
 
-This object/component chain is the canonical direction for physical interactions. Residence/Tenancy chooses the home root; concrete world state determines what the player can do.
+This three-layer model is the canonical direction for physical interactions:
+
+```text
+Place policy          → location/service rules
+Object affordance     → direct action on a concrete object
+Context requirements  → composed action from items/resources/tools
+```
+
+Residence/Tenancy chooses the home root; concrete world state and legitimate place policy determine what the player can do.
