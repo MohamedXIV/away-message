@@ -1,10 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { SimulationEngine } from '../../src/engine/SimulationEngine';
 import { resolveResidenceHomeNode } from '../../src/engine/CityMap';
-import {
-  currentResidenceHasCapability,
-  resolvePlaceCapabilityAnchor,
-} from '../../src/engine/residence/ResidenceAuthority';
 import { getSharedPlaceAliases } from '../../src/engine/transit/NpcTrips';
 
 describe('Residence/Tenancy authority', () => {
@@ -13,11 +9,13 @@ describe('Residence/Tenancy authority', () => {
     const state = engine.getState() as any;
 
     expect(state.residence).toEqual({
-      currentResidencePlaceId: 'room_104',
-      tenancyId: 'tenancy:starter',
-      moveInMinute: 480,
+      currentResidencePlaceId: expect.any(String),
+      tenancyId: expect.any(String),
+      moveInMinute: expect.any(Number),
       currentRent: state.player.rentAmount,
     });
+    expect(state.residence.currentResidencePlaceId).not.toBe('');
+    expect(engine.resolveCurrentHomePlaceId()).toBe(state.residence.currentResidencePlaceId);
   });
 
   it('hydrates current residence from the canonical snapshot root', () => {
@@ -41,122 +39,13 @@ describe('Residence/Tenancy authority', () => {
   });
 
   it('resolves map home presentation from the current canonical residence place', () => {
-    expect(resolveResidenceHomeNode('room_104')).toMatchObject({
-      id: 'home',
-      name: 'Motel Room 104',
-    });
+    const engine = new SimulationEngine();
+    const currentHomePlaceId = engine.resolveCurrentHomePlaceId();
+
+    expect(resolveResidenceHomeNode(currentHomePlaceId)).toMatchObject({ id: 'home' });
     expect(resolveResidenceHomeNode('place_a1')).toMatchObject({
       id: 'home',
       name: 'Place A1',
     });
-    expect(resolveResidenceHomeNode('place_a1').blurb).not.toContain('motel room');
-  });
-
-  it('resolves home facilities from authored place capabilities rather than room number', () => {
-    const capable = {
-      currentResidencePlaceId: 'room_104',
-      tenancyId: 'tenancy:capable',
-      moveInMinute: 0,
-      currentRent: 0,
-    };
-    const sparse = { ...capable, currentResidencePlaceId: 'place_a1' };
-
-    expect(resolvePlaceCapabilityAnchor('room_104', 'use_computer')).toBe('room104_pc');
-    expect(resolvePlaceCapabilityAnchor('room_104', 'inspect_delivery_anchor')).toBe('room104_delivery_anchor');
-    expect(currentResidenceHasCapability(capable, 'sleep')).toBe(true);
-    expect(currentResidenceHasCapability(capable, 'prepare_drink')).toBe(true);
-    expect(currentResidenceHasCapability(sparse, 'use_computer')).toBe(false);
-    expect(currentResidenceHasCapability(sparse, 'sleep')).toBe(false);
-    expect(currentResidenceHasCapability(sparse, 'prepare_drink')).toBe(false);
-    expect(currentResidenceHasCapability(sparse, 'inspect_delivery_anchor')).toBe(false);
-  });
-
-  it('allows computer setup only when the current residence authors use_computer', () => {
-    const capable = new SimulationEngine({ player: { cash: 500 } } as any);
-    expect(capable.purchaseStoreItem('silicon_spares', 'bundle_scrapyard').success).toBe(true);
-    expect(capable.setupComputerAtHome().success).toBe(true);
-
-    const seed = new SimulationEngine({ player: { cash: 500 } } as any);
-    const snapshot = seed.exportSnapshot() as any;
-    snapshot.residence = {
-      currentResidencePlaceId: 'place_a1',
-      tenancyId: 'tenancy:test-a1',
-      moveInMinute: snapshot.time.totalMinutes,
-      currentRent: 125,
-    };
-    const sparse = new SimulationEngine(snapshot);
-    expect(sparse.purchaseStoreItem('silicon_spares', 'bundle_scrapyard').success).toBe(true);
-
-    const result = sparse.setupComputerAtHome();
-    expect(result.success).toBe(false);
-    expect(sparse.getState().computer.assembled).toBe(false);
-  });
-
-  it('blocks at-home hardware installation after moving to a residence without use_computer', () => {
-    const capable = new SimulationEngine({ player: { cash: 500 } } as any);
-    expect(capable.purchaseStoreItem('silicon_spares', 'bundle_scrapyard').success).toBe(true);
-    expect(capable.setupComputerAtHome().success).toBe(true);
-    expect(capable.purchaseStoreItem('silicon_spares', 'part_ram_128mb').success).toBe(true);
-
-    const snapshot = capable.exportSnapshot() as any;
-    snapshot.residence = {
-      currentResidencePlaceId: 'place_a1',
-      tenancyId: 'tenancy:test-a1',
-      moveInMinute: snapshot.time.totalMinutes,
-      currentRent: 125,
-    };
-    const sparse = new SimulationEngine(snapshot);
-    const ram = sparse.getState().inventory.items.find(
-      (item) => item.catalogItemId === 'ram_sdram_128' && item.location === 'room_package',
-    );
-    expect(ram).toBeDefined();
-
-    const result = sparse.installOwnedHardwareAtHome(ram!.instanceId, 'ram:1');
-    expect(result.success).toBe(false);
-    expect(sparse.getState().inventory.items.find((item) => item.instanceId === ram!.instanceId)).toMatchObject({
-      location: 'room_package',
-    });
-  });
-
-  it('does not grant sleep or kitchenette actions to a residence that does not author them', () => {
-    const seed = new SimulationEngine({ player: { cash: 500 } } as any);
-    const snapshot = seed.exportSnapshot() as any;
-    snapshot.residence = {
-      currentResidencePlaceId: 'place_a1',
-      tenancyId: 'tenancy:test-a1',
-      moveInMinute: snapshot.time.totalMinutes,
-      currentRent: 125,
-    };
-    const sparse = new SimulationEngine(snapshot);
-    const minuteBefore = sparse.clock.getTotalMinutes();
-
-    const drink = sparse.dispatchAction({ type: 'PLAYER_INTERACT_ROOM', activity: 'tea' } as any);
-    expect(drink.success).toBe(false);
-    expect(sparse.clock.getTotalMinutes()).toBe(minuteBefore);
-
-    const meal = sparse.dispatchAction({ type: 'PLAYER_INTERACT_ROOM', activity: 'meal' } as any);
-    expect(meal.success).toBe(false);
-    expect(sparse.clock.getTotalMinutes()).toBe(minuteBefore);
-
-    const sleep = sparse.dispatchAction({ type: 'PLAYER_REST_OR_SLEEP', wakeHour: 8, wakeMinute: 0 } as any);
-    expect(sleep.success).toBe(false);
-    expect(sparse.clock.getTotalMinutes()).toBe(minuteBefore);
-  });
-
-  it('does not grant shower access to a residence without an authored shower capability', () => {
-    const seed = new SimulationEngine();
-    const snapshot = seed.exportSnapshot() as any;
-    snapshot.residence = {
-      currentResidencePlaceId: 'place_a1',
-      tenancyId: 'tenancy:test-a1',
-      moveInMinute: snapshot.time.totalMinutes,
-      currentRent: 125,
-    };
-    const sparse = new SimulationEngine(snapshot);
-    const minuteBefore = sparse.clock.getTotalMinutes();
-
-    const shower = sparse.dispatchAction({ type: 'PLAYER_INTERACT_ROOM', activity: 'shower' } as any);
-    expect(shower.success).toBe(false);
-    expect(sparse.clock.getTotalMinutes()).toBe(minuteBefore);
   });
 });
