@@ -4,7 +4,8 @@ import React from 'react';
 import { soundManager } from '../../audio/SoundManager';
 import { DoorOpen, X, Briefcase } from 'lucide-react';
 import { CityMapView } from '../components/CityMapView';
-import type { CityNodeId, TravelMode } from '../../engine/CityMap';
+import { resolveResidenceHomeNode, type CityNodeId, type TravelMode } from '../../engine/CityMap';
+import { useSimulationStore } from '../../store/useSimulationStore';
 
 export interface JobBoardEntry {
   gigId: string;
@@ -51,6 +52,8 @@ export const DoorActionModal: React.FC<DoorActionModalProps> = ({
   onTravel,
   onClose,
 }) => {
+  const currentResidencePlaceId = useSimulationStore((state) => state.state.residence.currentResidencePlaceId);
+  const homeNode = resolveResidenceHomeNode(currentResidencePlaceId);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 select-none animate-in fade-in duration-200">
@@ -59,7 +62,7 @@ export const DoorActionModal: React.FC<DoorActionModalProps> = ({
         <div className="bg-slate-800 px-4 py-2.5 border-b border-slate-700 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-2">
             <DoorOpen className="w-4 h-4 text-amber-400" />
-            <span className="font-bold text-sm text-slate-100">Leave Room 104</span>
+            <span className="font-bold text-sm text-slate-100">Leave {homeNode.name}</span>
           </div>
           <button
             onClick={() => {
@@ -148,7 +151,7 @@ export const DoorActionModal: React.FC<DoorActionModalProps> = ({
             }}
             className="px-3 py-1 text-slate-300 hover:text-white cursor-pointer"
           >
-            Stay in Room
+            Stay at {homeNode.name}
           </button>
         </div>
       </div>
