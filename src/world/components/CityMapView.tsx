@@ -10,11 +10,13 @@ import {
   streetSegments,
   isNodeOpen,
   quoteTravel,
+  resolveResidenceHomeNode,
   BUS_FARE,
   type CityNodeId,
   type TravelMode,
 } from '../../engine/CityMap';
 import { soundManager } from '../../audio/SoundManager';
+import { useSimulationStore } from '../../store/useSimulationStore';
 
 interface CityMapViewProps {
   currentNode: CityNodeId;
@@ -37,6 +39,11 @@ export const CityMapView: React.FC<CityMapViewProps> = ({
 }) => {
   const [selected, setSelected] = useState<CityNodeId | null>(null);
   const [mode, setMode] = useState<TravelMode>('walk');
+  const currentResidencePlaceId = useSimulationStore((state) => state.state.residence.currentResidencePlaceId);
+  const cityNodes = {
+    ...CITY_NODES,
+    home: resolveResidenceHomeNode(currentResidencePlaceId),
+  };
 
   const pick = (id: CityNodeId) => {
     soundManager.play('click');
@@ -46,7 +53,7 @@ export const CityMapView: React.FC<CityMapViewProps> = ({
   const quote = selected && selected !== currentNode
     ? quoteTravel(currentNode, selected, mode, raining)
     : null;
-  const selectedNode = selected ? CITY_NODES[selected] : null;
+  const selectedNode = selected ? cityNodes[selected] : null;
   const selectedOpen = selectedNode ? isNodeOpen(selectedNode, hour) : true;
   const canAffordBus = cash >= BUS_FARE;
   const goDisabled =
@@ -70,8 +77,8 @@ export const CityMapView: React.FC<CityMapViewProps> = ({
         <path d="M 8 18 Q 30 12 52 20 T 96 14" fill="none" stroke="#3f6ea5" strokeWidth={1} strokeDasharray="2 2" />
         {/* Streets */}
         {streetSegments().map((s) => {
-          const a = CITY_NODES[s.a];
-          const b = CITY_NODES[s.b];
+          const a = cityNodes[s.a];
+          const b = cityNodes[s.b];
           return (
             <g key={`${s.a}-${s.b}`}>
               <line x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke="#33415e" strokeWidth={1.6} strokeLinecap="round" />
@@ -83,7 +90,7 @@ export const CityMapView: React.FC<CityMapViewProps> = ({
         })}
         {/* Nodes */}
         {CITY_NODE_IDS.map((id) => {
-          const node = CITY_NODES[id];
+          const node = cityNodes[id];
           const isHere = id === currentNode;
           const isSel = id === selected;
           const open = isNodeOpen(node, hour);
