@@ -67,7 +67,7 @@ describe('P6 grocery orders (SimulationEngine)', () => {
     expect(sim.getState().player.pantry.groceries).toBe(0);
     expect(sim.getPhysicalWorldState().items[`parcel:${orderId}`]?.location).toEqual({
       kind: 'worldAnchor',
-      anchorId: 'room104:delivery',
+      anchorId: 'room104_delivery_anchor',
     });
   });
 
