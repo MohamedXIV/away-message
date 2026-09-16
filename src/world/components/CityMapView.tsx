@@ -39,7 +39,7 @@ export const CityMapView: React.FC<CityMapViewProps> = ({
 }) => {
   const [selected, setSelected] = useState<CityNodeId | null>(null);
   const [mode, setMode] = useState<TravelMode>('walk');
-  const currentResidencePlaceId = useSimulationStore((state) => state.state.residence.currentResidencePlaceId);
+  const currentResidencePlaceId = useSimulationStore((state) => state.engine.resolveCurrentHomePlaceId());
   const cityNodes = {
     ...CITY_NODES,
     home: resolveResidenceHomeNode(currentResidencePlaceId),
