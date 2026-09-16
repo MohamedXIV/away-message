@@ -39,6 +39,7 @@ import {
   cloneResidenceState,
   hydrateResidenceState,
   resolveCurrentHomePlaceId,
+  resolvePlaceCapabilityAnchor,
   type ResidenceState,
 } from './residence/ResidenceAuthority';
 import {
@@ -68,7 +69,6 @@ type InitialSimulationState = Partial<TransportSimulationState> & {
 
 const DELIVERY_PARCEL_DEFINITION_ID = 'delivery_parcel';
 const SHOPPING_BAG_DEFINITION_ID = 'corner_mart_shopping_bag';
-const DELIVERY_ANCHOR_ID = 'room104:delivery';
 const CORNER_MART_ITEM_KIND = 'corner-mart-item';
 
 function groceryDefinitionId(sku: string): string {
@@ -157,7 +157,7 @@ const PHYSICAL_CONTAINER_DEFINITIONS: Readonly<Record<string, PhysicalContainerD
         capacity: 64,
         allowedItemKinds: [CORNER_MART_ITEM_KIND],
       } satisfies PhysicalContainerDefinition,
-    ] as const,
+    ] as const),
   ]);
 
 function emptyPhysicalWorld(): PhysicalWorldState {
@@ -304,12 +304,18 @@ export class SimulationEngine extends LegacySimulationEngine {
   }
 
   private materializeDeliveryParcel(order: DeliveryOrder): boolean {
+    const deliveryAnchorId = resolvePlaceCapabilityAnchor(
+      this.residenceState.currentResidencePlaceId,
+      'inspect_delivery_anchor',
+    );
+    if (!deliveryAnchorId) return false;
+
     const parcelId = `parcel:${order.id}`;
     this.materializeGroceryContainer(
       order,
       parcelId,
       DELIVERY_PARCEL_DEFINITION_ID,
-      { kind: 'worldAnchor', anchorId: DELIVERY_ANCHOR_ID },
+      { kind: 'worldAnchor', anchorId: deliveryAnchorId },
       'order-item',
     );
 
@@ -397,7 +403,6 @@ export class SimulationEngine extends LegacySimulationEngine {
     this.physicalWorldState = physicalItems.getState();
     return moved;
   }
-
   public setActiveTravel(state: ActiveTravelState | null): void {
     this.activeTravelState = state ? cloneActiveTravel(state) : null;
   }
