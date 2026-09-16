@@ -275,6 +275,13 @@ export class SimulationEngine extends LegacySimulationEngine {
     ) {
       return { success: false, error: 'The current residence has no drink-preparation capability.' };
     }
+    if (
+      action.type === 'PLAYER_INTERACT_ROOM' &&
+      action.activity === 'shower' &&
+      !this.canUseCurrentResidenceCapability('shower')
+    ) {
+      return { success: false, error: 'The current residence has no shower capability.' };
+    }
     return super.dispatchAction(action);
   }
 
@@ -517,7 +524,6 @@ export class SimulationEngine extends LegacySimulationEngine {
         return { success: false, error: fareResult.error ?? `Cannot afford $${plan.fare.toFixed(2)} travel fare.` };
       }
     }
-
     try {
       this.telemetry.logEvent('world', 'travel_departed', this.clock.getTotalMinutes(), {
         actorId,
