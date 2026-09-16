@@ -654,8 +654,10 @@ describe('Adversarial Stress Test Suite — Milestone 1 Engine', () => {
 
       const home1 = sim.dispatchAction({ type: 'TRAVEL_TO', to: 'home', mode: 'walk' });
       expect(home1.success).toBe(true);
-      sim.dispatchAction({ type: 'PLAYER_INTERACT_ROOM', activity: 'tea' });
-      sim.dispatchAction({ type: 'PLAYER_REST_OR_SLEEP', wakeHour: 8 });
+      const tea1 = sim.dispatchAction({ type: 'PLAYER_INTERACT_ROOM', activity: 'tea' });
+      expect(tea1.success).toBe(true);
+      const sleep1 = sim.dispatchAction({ type: 'PLAYER_REST_OR_SLEEP', wakeHour: 8 });
+      expect(sleep1.success).toBe(true);
       expect(sim.getState().time.day).toBe(2);
       expect(sim.getState().player.energy).toBe(100);
 
@@ -664,21 +666,30 @@ describe('Adversarial Stress Test Suite — Milestone 1 Engine', () => {
       expect(sim.getState().vfs.files['C:/Downloads/PulseSetup.exe']).toBeDefined();
 
       for (let day = 2; day <= 6; day++) {
-        sim.dispatchAction({ type: 'PLAYER_WORK_SHIFT', durationMinutes: 240, wage: 62.0 });
-        sim.dispatchAction({ type: 'PLAYER_REST_OR_SLEEP', wakeHour: 8 });
-      }      expect(sim.getState().time.day).toBe(7);
+        const toCart = sim.dispatchAction({ type: 'TRAVEL_TO', to: 'cart', mode: 'walk' });
+        expect(toCart.success).toBe(true);
+        const shift = sim.dispatchAction({ type: 'PLAYER_WORK_SHIFT', durationMinutes: 240, wage: 62.0 });
+        expect(shift.success).toBe(true);
+        const toHome = sim.dispatchAction({ type: 'TRAVEL_TO', to: 'home', mode: 'walk' });
+        expect(toHome.success).toBe(true);
+        const sleep = sim.dispatchAction({ type: 'PLAYER_REST_OR_SLEEP', wakeHour: 8 });
+        expect(sleep.success).toBe(true);
+      }
+      expect(sim.getState().time.day).toBe(7);
       expect(sim.getState().player.cash).toBeGreaterThan(300);
 
       const rentPay = sim.dispatchAction({ type: 'PLAYER_PAY_RENT' });
       expect(rentPay.success).toBe(true);
 
-      sim.dispatchAction({ type: 'PLAYER_REST_OR_SLEEP', wakeHour: 8 });
+      const sleepAfterRent = sim.dispatchAction({ type: 'PLAYER_REST_OR_SLEEP', wakeHour: 8 });
+      expect(sleepAfterRent.success).toBe(true);
       expect(sim.getState().time.day).toBe(8);
       expect(sim.getState().player.rentDueDay).toBe(14);
       expect(sim.getState().player.rentAmount).toBe(140.0);
 
       while (sim.getState().time.day < 14) {
-        sim.dispatchAction({ type: 'PLAYER_REST_OR_SLEEP', wakeHour: 8 });
+        const sleep = sim.dispatchAction({ type: 'PLAYER_REST_OR_SLEEP', wakeHour: 8 });
+        expect(sleep.success).toBe(true);
       }
 
       expect(sim.getState().time.day).toBe(14);
