@@ -1,8 +1,9 @@
 // src/engine/CityMap.ts
 // P7 Oakhaven city map — pure graph of places + travel rules.
-// Nodes: motel room (home), lobby, food cart, cafe, diner, canal, laundry.
-// Travel is walk (free, slow, rain ×1.25, encounters) or bus ($2, ~half time).
-// No state, no AI: the engine owns player.location and calls these helpers.
+// The semantic `home` node is a routing identity; its presentation resolves from
+// the current canonical residence rather than naming a particular room.
+
+import { GENERATED_PLACES } from './worldContent.generated';
 
 export type CityNodeId = 'home' | 'lobby' | 'cart' | 'cafe' | 'diner' | 'canal' | 'laundry' | 'techmart';
 
@@ -21,7 +22,7 @@ export interface CityNode {
 }
 
 export const CITY_NODES: Record<CityNodeId, CityNode> = {
-  home: { id: 'home', name: 'Room 104', blurb: 'Your motel room. Bed, kettle, desk.', x: 50, y: 78, icon: '🛏️', hint: 'You live here.' },
+  home: { id: 'home', name: 'Home', blurb: 'Your current residence.', x: 50, y: 78, icon: '🛏️', hint: 'You live here.' },
   lobby: { id: 'lobby', name: 'Motel Lobby', blurb: 'Henderson’s front desk. Keys, ledgers, notices.', x: 50, y: 62, icon: '🛎️', hours: [8, 20], hint: 'Henderson holds court 8–20.' },
   cart: { id: 'cart', name: 'Food Cart', blurb: 'Ryan’s corner stand. Tacos, rush hours, overtime.', x: 22, y: 45, icon: '🚚', hours: [9, 23], hint: 'Ryan grills days, rush at night.' },
   cafe: { id: 'cafe', name: 'Starlight Café', blurb: 'Warm coffee across town. Maya’s orbit.', x: 78, y: 40, icon: '☕', hours: [8, 23], hint: 'Maya drifts through most days.' },
@@ -30,6 +31,21 @@ export const CITY_NODES: Record<CityNodeId, CityNode> = {
   laundry: { id: 'laundry', name: 'Suds & Spin', blurb: 'Warm dryers and the bulletin board of town gossip.', x: 50, y: 38, icon: '🧺', hours: [7, 23], hint: 'Gossip never closes. Almost.' },
   techmart: { id: 'techmart', name: 'Silicon & Spares', blurb: 'Used beige towers, CRT monitors, surplus electronics, and software CDs.', x: 38, y: 55, icon: '🖥️', hours: [9, 20], hint: 'Milo sells refurbished rigs, components, and OS upgrade CDs 9–20.' },
 };
+
+/**
+ * Resolve the map/navigation presentation for semantic `home` from a canonical
+ * residence Place. Routing remains on the stable `home` node; presentation does
+ * not leak a particular starter-room ID into the city graph.
+ */
+export function resolveResidenceHomeNode(placeId: string): CityNode {
+  const place = GENERATED_PLACES.find((candidate) => candidate.id === placeId);
+  if (!place) return { ...CITY_NODES.home };
+  return {
+    ...CITY_NODES.home,
+    name: place.name,
+    blurb: `Your current residence: ${place.name}.`,
+  };
+}
 
 /** Display-hours check (same wrap logic as place hours). */
 export function isNodeOpen(node: CityNode, hour: number): boolean {
