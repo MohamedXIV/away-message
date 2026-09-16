@@ -157,7 +157,7 @@ const PHYSICAL_CONTAINER_DEFINITIONS: Readonly<Record<string, PhysicalContainerD
         capacity: 64,
         allowedItemKinds: [CORNER_MART_ITEM_KIND],
       } satisfies PhysicalContainerDefinition,
-    ] as const),
+    ] as const,
   ]);
 
 function emptyPhysicalWorld(): PhysicalWorldState {
@@ -403,6 +403,7 @@ export class SimulationEngine extends LegacySimulationEngine {
     this.physicalWorldState = physicalItems.getState();
     return moved;
   }
+
   public setActiveTravel(state: ActiveTravelState | null): void {
     this.activeTravelState = state ? cloneActiveTravel(state) : null;
   }
