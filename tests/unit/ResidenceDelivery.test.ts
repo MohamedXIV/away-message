@@ -17,9 +17,9 @@ describe('Residence delivery routing (#86)', () => {
     const placed = engine.placeGroceryOrder([{ sku: 'noodles_cup', qty: 1 }], 'delivery', now) as any;
     expect(placed.success).toBe(true);
 
-    const orders = engine.getState().delivery.orders;
+    const orders = engine.delivery.getState().orders;
     const order = orders[orders.length - 1]!;
-    engine.advanceTime(Math.max(0, order.readyMinute - now));
+    engine.advanceGameMinutes(Math.max(0, order.readyMinute - now));
 
     const state = engine.getState() as any;
     const parcel = Object.values(state.physicalWorld.items).find(
