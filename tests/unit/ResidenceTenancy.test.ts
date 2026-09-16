@@ -50,8 +50,10 @@ describe('Residence/Tenancy authority', () => {
 
     expect(resolvePlaceCapabilityAnchor('room_104', 'use_computer')).toBe('room104_pc');
     expect(resolvePlaceCapabilityAnchor('room_104', 'inspect_delivery_anchor')).toBe('room104_delivery_anchor');
+    expect(currentResidenceHasCapability(capable, 'sleep')).toBe(true);
     expect(currentResidenceHasCapability(capable, 'prepare_drink')).toBe(true);
     expect(currentResidenceHasCapability(sparse, 'use_computer')).toBe(false);
+    expect(currentResidenceHasCapability(sparse, 'sleep')).toBe(false);
     expect(currentResidenceHasCapability(sparse, 'prepare_drink')).toBe(false);
     expect(currentResidenceHasCapability(sparse, 'inspect_delivery_anchor')).toBe(false);
   });
@@ -101,5 +103,26 @@ describe('Residence/Tenancy authority', () => {
     expect(sparse.getState().inventory.items.find((item) => item.instanceId === ram!.instanceId)).toMatchObject({
       location: 'room_package',
     });
+  });
+
+  it('does not grant sleep or kitchenette actions to a residence that does not author them', () => {
+    const seed = new SimulationEngine({ player: { cash: 500 } } as any);
+    const snapshot = seed.exportSnapshot() as any;
+    snapshot.residence = {
+      currentResidencePlaceId: 'place_a1',
+      tenancyId: 'tenancy:test-a1',
+      moveInMinute: snapshot.time.totalMinutes,
+      currentRent: 125,
+    };
+    const sparse = new SimulationEngine(snapshot);
+    const minuteBefore = sparse.clock.getTotalMinutes();
+
+    const drink = sparse.dispatchAction({ type: 'PLAYER_INTERACT_ROOM', activity: 'tea' } as any);
+    expect(drink.success).toBe(false);
+    expect(sparse.clock.getTotalMinutes()).toBe(minuteBefore);
+
+    const sleep = sparse.dispatchAction({ type: 'PLAYER_REST_OR_SLEEP', wakeHour: 8, wakeMinute: 0 } as any);
+    expect(sleep.success).toBe(false);
+    expect(sparse.clock.getTotalMinutes()).toBe(minuteBefore);
   });
 });
