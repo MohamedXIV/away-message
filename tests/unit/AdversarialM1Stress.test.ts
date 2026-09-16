@@ -652,6 +652,8 @@ describe('Adversarial Stress Test Suite — Milestone 1 Engine', () => {
       expect(shift1b.success).toBe(true);
       expect(sim.getState().player.cash).toBe(100.0);
 
+      const home1 = sim.dispatchAction({ type: 'TRAVEL_TO', to: 'home', mode: 'walk' });
+      expect(home1.success).toBe(true);
       sim.dispatchAction({ type: 'PLAYER_INTERACT_ROOM', activity: 'tea' });
       sim.dispatchAction({ type: 'PLAYER_REST_OR_SLEEP', wakeHour: 8 });
       expect(sim.getState().time.day).toBe(2);
