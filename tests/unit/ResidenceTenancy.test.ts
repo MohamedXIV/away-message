@@ -55,4 +55,51 @@ describe('Residence/Tenancy authority', () => {
     expect(currentResidenceHasCapability(sparse, 'prepare_drink')).toBe(false);
     expect(currentResidenceHasCapability(sparse, 'inspect_delivery_anchor')).toBe(false);
   });
+
+  it('allows computer setup only when the current residence authors use_computer', () => {
+    const capable = new SimulationEngine({ player: { cash: 500 } } as any);
+    expect(capable.purchaseStoreItem('silicon_spares', 'bundle_scrapyard').success).toBe(true);
+    expect(capable.setupComputerAtHome().success).toBe(true);
+
+    const seed = new SimulationEngine({ player: { cash: 500 } } as any);
+    const snapshot = seed.exportSnapshot() as any;
+    snapshot.residence = {
+      currentResidencePlaceId: 'place_a1',
+      tenancyId: 'tenancy:test-a1',
+      moveInMinute: snapshot.time.totalMinutes,
+      currentRent: 125,
+    };
+    const sparse = new SimulationEngine(snapshot);
+    expect(sparse.purchaseStoreItem('silicon_spares', 'bundle_scrapyard').success).toBe(true);
+
+    const result = sparse.setupComputerAtHome();
+    expect(result.success).toBe(false);
+    expect(sparse.getState().computer.assembled).toBe(false);
+  });
+
+  it('blocks at-home hardware installation after moving to a residence without use_computer', () => {
+    const capable = new SimulationEngine({ player: { cash: 500 } } as any);
+    expect(capable.purchaseStoreItem('silicon_spares', 'bundle_scrapyard').success).toBe(true);
+    expect(capable.setupComputerAtHome().success).toBe(true);
+    expect(capable.purchaseStoreItem('silicon_spares', 'part_ram_128mb').success).toBe(true);
+
+    const snapshot = capable.exportSnapshot() as any;
+    snapshot.residence = {
+      currentResidencePlaceId: 'place_a1',
+      tenancyId: 'tenancy:test-a1',
+      moveInMinute: snapshot.time.totalMinutes,
+      currentRent: 125,
+    };
+    const sparse = new SimulationEngine(snapshot);
+    const ram = sparse.getState().inventory.items.find(
+      (item) => item.catalogItemId === 'ram_sdram_128' && item.location === 'room_package',
+    );
+    expect(ram).toBeDefined();
+
+    const result = sparse.installOwnedHardwareAtHome(ram!.instanceId, 'ram:1');
+    expect(result.success).toBe(false);
+    expect(sparse.getState().inventory.items.find((item) => item.instanceId === ram!.instanceId)).toMatchObject({
+      location: 'room_package',
+    });
+  });
 });
