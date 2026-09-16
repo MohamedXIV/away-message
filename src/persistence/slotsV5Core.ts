@@ -31,7 +31,7 @@ import {
 // - v5 adds Modular Hardware & Retail OS CDs: hasComputer state, component
 //   swaps (CPU, RAM sticks, HDD, Optical, Sound, Modem, Monitor), and retro OS setup.
 
-export const SAVE_FORMAT_VERSION = 5;
+export const SAVE_FORMAT_VERSION = 6;
 export const SAVE_FORMAT_MIN_SUPPORTED = 2;
 
 export type SaveCompatibility =
@@ -192,6 +192,9 @@ export async function loadSlotSnapshot(slotId: string): Promise<SimulationState 
       if (version < 5) {
         upgraded = migrateSnapshotToV5(upgraded, version);
       }
+      if (version < 6) {
+        upgraded = migrateSnapshotToV6(upgraded, version);
+      }
       return upgraded;
     }
     return snapshot as SimulationState;
@@ -254,6 +257,24 @@ export function migrateSnapshotToV4(snapshot: SimulationState, fromVersion: numb
       npcSocialLog: Array.isArray(social.npcSocialLog) ? [...social.npcSocialLog] : [],
       playerReads: { ...(social.playerReads ?? {}) },
     },
+  } as SimulationState;
+}
+
+/**
+ * Upgrade a pre-v6 engine snapshot to the v6 shape (pure).
+ * Ensures residence authority state is populated cleanly.
+ */
+export function migrateSnapshotToV6(snapshot: SimulationState, fromVersion: number): SimulationState {
+  void fromVersion;
+  const residence = (snapshot as SimulationState).residence ?? {
+    currentResidencePlaceId: 'room_104',
+    tenancyId: 'tenancy_room_104',
+    moveInMinute: 480,
+    currentRent: 140.0,
+  };
+  return {
+    ...(snapshot as object),
+    residence,
   } as SimulationState;
 }
 

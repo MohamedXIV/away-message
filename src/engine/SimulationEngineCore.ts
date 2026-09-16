@@ -43,11 +43,15 @@ import {
 import { CITY_NODES, isCityNodeId, quoteTravel, walkEnergyCost, rollStreetEncounter, BUS_FARE, type CityNodeId, type TravelMode } from './CityMap';
 import { pulseHasFeature, getAllPulseReleases } from './PulseCatalog';
 import { CORE_BY_ID, CORE_IDS, buddyWithRole, isRegistryBuddy } from './coreBuddies';
+import { ResidenceEngine } from './ResidenceEngine';
+import { PhysicalInteractionEngine, type InstalledObject } from './PhysicalInteractionEngine';
 
 export class SimulationEngine {
   public readonly clock!: GameClock;
   public readonly events!: EventBus;
   public readonly economy!: EconomyEngine;
+  public readonly residence!: ResidenceEngine;
+  public readonly physicalInteractions!: PhysicalInteractionEngine;
   public readonly hardware!: HardwareEngine;
   public readonly os!: OsEngine;
   public readonly pulse!: PulseEngine;
@@ -76,6 +80,9 @@ export class SimulationEngine {
       initialMinute: initialState?.time?.minute ?? 0,
     });
     this.economy = new EconomyEngine(this.events, initialState?.player);
+    this.residence = new ResidenceEngine((initialState as any)?.residence);
+    this.physicalInteractions = new PhysicalInteractionEngine();
+    this.registerDefaultPhysicalGraph();
     this.hardware = new HardwareEngine(this.events, initialState?.hardware);
     this.vfs = new FileSystemEngine(this.events, initialState?.vfs);
     // World before OS so Os can sync from world
@@ -129,6 +136,139 @@ export class SimulationEngine {
     this.activeView = initialState?.activeView ?? (this.hardware.getState().hasComputer ? 'pc' : 'room');
 
     this.registerInternalEventHandlers();
+  }
+
+  private registerDefaultPhysicalGraph(): void {
+    const room104Objects: InstalledObject[] = [
+      {
+        instanceId: 'obj_room104_bed',
+        definitionId: 'bed_standard',
+        name: 'Bed',
+        placeId: 'room_104',
+        spaceId: 'room104_main',
+        anchorId: 'room104_bed',
+        owner: 'landlord',
+        affordances: ['sleep', 'rest'],
+        toolCapabilities: [],
+        providedResources: [],
+      },
+      {
+        instanceId: 'obj_room104_pc',
+        definitionId: 'desk_computer_surface',
+        name: 'Computer Desk',
+        placeId: 'room_104',
+        spaceId: 'room104_main',
+        anchorId: 'room104_pc',
+        owner: 'landlord',
+        affordances: ['use_computer', 'inspect'],
+        toolCapabilities: ['pc_surface'],
+        providedResources: [],
+      },
+      {
+        instanceId: 'obj_room104_kettle',
+        definitionId: 'kettle_appliance',
+        name: 'Electric Kettle',
+        placeId: 'room_104',
+        spaceId: 'room104_main',
+        anchorId: 'room104_kettle',
+        owner: 'landlord',
+        affordances: ['prepare_drink'],
+        toolCapabilities: ['water_heating'],
+        providedResources: ['water'],
+      },
+      {
+        instanceId: 'obj_room104_delivery_anchor',
+        definitionId: 'delivery_spot',
+        name: 'Delivery Spot',
+        placeId: 'room_104',
+        spaceId: 'room104_main',
+        anchorId: 'room104_delivery_anchor',
+        owner: 'landlord',
+        affordances: ['inspect_delivery', 'delivery'],
+        toolCapabilities: [],
+        providedResources: [],
+      },
+      {
+        instanceId: 'obj_room104_wardrobe',
+        definitionId: 'wardrobe_storage',
+        name: 'Wardrobe',
+        placeId: 'room_104',
+        spaceId: 'room104_main',
+        anchorId: 'room104_wardrobe',
+        owner: 'landlord',
+        affordances: ['open_storage'],
+        containerInstanceId: 'room104_storage_wardrobe',
+        toolCapabilities: [],
+        providedResources: [],
+      },
+      {
+        instanceId: 'obj_room104_bedside',
+        definitionId: 'bedside_storage',
+        name: 'Bedside Storage',
+        placeId: 'room_104',
+        spaceId: 'room104_main',
+        anchorId: 'room104_bedside_storage',
+        owner: 'landlord',
+        affordances: ['open_storage'],
+        containerInstanceId: 'room104_storage_bedside',
+        toolCapabilities: [],
+        providedResources: [],
+      },
+      {
+        instanceId: 'obj_room104_desk_storage',
+        definitionId: 'desk_storage',
+        name: 'Desk Storage',
+        placeId: 'room_104',
+        spaceId: 'room104_main',
+        anchorId: 'room104_desk_storage',
+        owner: 'landlord',
+        affordances: ['open_storage'],
+        containerInstanceId: 'room104_storage_desk',
+        toolCapabilities: [],
+        providedResources: [],
+      },
+      {
+        instanceId: 'obj_room104_kitchen_storage',
+        definitionId: 'kitchen_storage',
+        name: 'Kitchen Storage',
+        placeId: 'room_104',
+        spaceId: 'room104_main',
+        anchorId: 'room104_kitchen_storage',
+        owner: 'landlord',
+        affordances: ['open_storage'],
+        containerInstanceId: 'room104_storage_kitchen',
+        toolCapabilities: [],
+        providedResources: [],
+      },
+      {
+        instanceId: 'obj_room104_shower',
+        definitionId: 'motel_shower_unit',
+        name: 'Shower Unit',
+        placeId: 'room_104',
+        spaceId: 'room104_main',
+        anchorId: 'room104_shower_anchor',
+        owner: 'landlord',
+        affordances: ['shower', 'bathe'],
+        toolCapabilities: [],
+        providedResources: ['water'],
+      },
+      {
+        instanceId: 'obj_shared_motel_bath',
+        definitionId: 'motel_bathtub_shower',
+        name: 'Shared Motel Bathtub/Shower',
+        placeId: 'motel_bathroom',
+        spaceId: 'motel_bathroom_main',
+        anchorId: 'motel_bathroom_anchor',
+        owner: 'landlord',
+        affordances: ['bathe', 'shower'],
+        toolCapabilities: [],
+        providedResources: ['water'],
+      },
+    ];
+
+    for (const obj of room104Objects) {
+      this.physicalInteractions.installObject(obj);
+    }
   }
 
   private registerInternalEventHandlers(): void {
@@ -233,6 +373,7 @@ export class SimulationEngine {
       version: 1,
       time: this.clock.getTime(),
       player: this.economy.getState(),
+      residence: this.residence.getState(),
       hardware: this.hardware.getState(),
       os: osState,
       pulse: pulseState,
@@ -1489,6 +1630,12 @@ export class SimulationEngine {
         this.notifySubscribers();
         return { success: true, data: { orderId: order.id, etaMinute: this.clock.getTotalMinutes(), summary: 'Picked up from CornerMart — pantry stocked.' } };
       }
+      const homePlaceId = this.residence.getCurrentResidencePlaceId();
+      const deliveryTarget = this.physicalInteractions.resolveDeliveryTarget(homePlaceId);
+      if (!deliveryTarget.ok) {
+        return { success: false, error: deliveryTarget.error };
+      }
+
       this.economy.spendCash(total, 'CornerMart delivery');
       // World-event courier backlog (#46): the event engine only publishes the
       // semantic effect; DeliveryEngine owns readyMinute via placeDelivery.
@@ -1937,9 +2084,10 @@ export class SimulationEngine {
       }
 
       case 'PLAYER_INTERACT_ROOM': {
-        // P7 gating: room comforts live in Room 104
+        // P7 gating: room comforts live in Room 104 / current residence
         const roomErr = SimulationEngine.requireLocation(this.economy.getLocation(), 'home');
         if (roomErr) return { success: false, error: roomErr };
+        const currentPlaceId = this.residence.getCurrentResidencePlaceId();
         const durations: Record<string, number> = {
           tea: 6,
           coffee: 5,
@@ -1949,11 +2097,41 @@ export class SimulationEngine {
           window: 4,
         };
         const dur = durations[action.activity] ?? 10;
-        // P6.1 noodles cost pantry money now (broke → honest failure, not free food)
+
+        // Physical Interaction Layer 2 & 3 checks
+        if (action.activity === 'shower') {
+          if (
+            !this.physicalInteractions.hasDirectAffordance(currentPlaceId, 'shower') &&
+            !this.physicalInteractions.hasDirectAffordance(currentPlaceId, 'bathe')
+          ) {
+            return { success: false, error: `No shower or bathtub installed at ${currentPlaceId}.` };
+          }
+        }
+
         if (action.activity === 'meal') {
+          const pantryNoodles = this.economy.getState().pantry.noodles;
+          const playerItems = pantryNoodles > 0 ? [{ instanceId: 'pantry_noodles', definitionId: 'noodles', kind: 'noodles' }] : [];
+          const composed = this.physicalInteractions.resolveComposedRequirements(
+            {
+              placeId: currentPlaceId,
+              playerInventoryItems: playerItems,
+            },
+            {
+              itemKindsOrTags: ['noodles'],
+              requiredTools: ['water_heating'],
+              requiredResources: ['water'],
+            },
+          );
+          if (!composed.satisfied) {
+            return {
+              success: false,
+              error: `Cannot prepare meal: missing ${[...composed.missingItems, ...composed.missingTools, ...composed.missingResources].join(', ')}.`,
+            };
+          }
           const res = this.economy.eatMeal('noodles');
           if (!res.success) return { success: false, error: res.error };
         }
+
         if (action.activity === 'groceries') {
           const res = this.economy.eatMeal('groceries');
           if (!res.success) return { success: false, error: res.error };
@@ -2534,6 +2712,9 @@ export class SimulationEngine {
   public loadSnapshot(snapshot: SimulationState): void {
     this.clock.setTotalMinutes(snapshot.time.totalMinutes);
     this.economy.loadState(snapshot.player);
+    if ((snapshot as any).residence) {
+      this.residence.loadState((snapshot as any).residence);
+    }
     this.hardware.loadState(snapshot.hardware);
     // OsEngine — load from dedicated os field or fallback to hardware osVersion
     const osSrc = (snapshot as any).os ?? { currentOsId: (snapshot as any).hardware?.osVersion };

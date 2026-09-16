@@ -708,7 +708,9 @@ export interface TelemetryStats {
 
 export interface SimulationState {
   version: number;
-  time: GameTime;  player: PlayerState;
+  time: GameTime;
+  player: PlayerState;
+  residence: import('../ResidenceEngine').ResidenceState;
   hardware: HardwareState;
   computer: ComputerSetupState;
   display: DisplaySetupState;
