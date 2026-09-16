@@ -2,38 +2,28 @@
 
 ## 1. Purpose
 
-This document defines Away Message's canonical residence/housing direction.
+This document defines Away Message's canonical residence, housing, and living-space direction.
 
-It supersedes any older design assumption that Room 104 is the guaranteed starting room, permanent player home, delivery target, PC-setup location, or flagship place that must be finished at production quality before the residence system can evolve.
-
-Room 104 may remain in content as an ordinary motel room or reference fixture. It is not sacred.
+The player's residence is dynamic simulation/economy state. It selects which canonical `Place` currently functions as home, but it does **not** grant gameplay abilities by itself.
 
 The implementation backlog is tracked by:
 
 - #85 — residence/housing progression epic;
-- #86 — Residence/Tenancy authority and dynamic home resolution;
-- #87 — modular residence visuals and blockout-to-Phaser production contract;
+- #86 — Residence/Tenancy authority plus contextual object-capability resolution;
+- #87 — modular residence visuals and fixture-slot/blockout-to-Phaser production contract;
 - #88 — housing choice, rent/upgrades, and moving.
 
 ---
 
-## 2. Core design law
+## 2. Core design laws
 
-> **The player's home is a current residence, not a room number.**
+> **A place is topology and containment, not a capability bag.**
 
-No core system may assume:
+> **Gameplay capability comes from concrete objects/components that actually exist in the reachable local graph.**
 
-- the player starts in Room 104;
-- the player permanently lives in Room 104;
-- `home` means `room_104`;
-- deliveries always target Room 104;
-- PC setup/hardware management is tied to Room 104;
-- every starter room has a kitchenette;
-- every starter room has a private bathroom;
-- every residence has the same storage/furniture capabilities;
-- the same authored view count is required for every home.
+> **Recipes/interactions declare requirements; the runtime resolves those requirements from the player's current context.**
 
-A residence uses the same canonical world model as any other physical place:
+A residence uses the same canonical world model as every other physical place:
 
 ```text
 Town
@@ -44,83 +34,194 @@ Place
   ↓
 Space
   ↓
-View / Focus
+Anchor / Placement Slot
   ↓
-Anchors + interactions + capabilities
+Installed Object
+  ↓
+Nested Slots + Components
+  ↓
+Capability Providers / Containers / Resources
 ```
 
-Residence/Tenancy state says **which valid Place currently functions as the player's home** and what the current occupancy/economic terms are. It does not create a second location system.
+Residence/Tenancy state says **which valid Place currently functions as the player's home** and what the occupancy/economic terms are. It does not create a second location system and it does not own derived facilities such as "can cook", "can use a computer", or "can shower".
+
+Do not implement rules equivalent to:
+
+```ts
+residence.canUseComputer
+place.hasKitchenette
+place.canPrepareFood
+```
+
+when those facts can be derived from the concrete object graph.
 
 ---
 
-## 3. Intended housing progression
+## 3. Placement graph
 
-Housing is a material/lifestyle progression axis, not a visible level system.
+`Place`, `Space`, and `Anchor` define spatial identity, containment, presentation, and legal placement.
 
-Representative arc:
+An anchor/slot declares what category of object it accepts. An installed object may expose additional child slots.
+
+Representative chain:
 
 ```text
-very cheap motel room
-        ↓
-personalized cheap room
-        ↓
-better supplied room / different motel room
-        ↓
-larger or better-equipped motel room
-        ↓
-tiny apartment at a specific town address
-        ↓
-future residences if the game later needs them
+floor furniture slot
+  ↓ accepts
+Desk
+  ↓ provides
+work-surface slot
+  ↓ accepts
+Computer
+  ↓ provides
+use_computer
 ```
 
-The player should feel that their living situation improves because the actual space, costs, facilities, privacy, storage, commute, and possessions change.
+Another chain may be:
 
-Do not add:
+```text
+fixture slot
+  ↓ accepts
+Kitchenette fixture
+  ├─ cabinet container
+  ├─ water source
+  └─ appliance slot
+       ↓ accepts
+     Kettle
+       ↓ provides
+     heat_water
+```
 
-- Housing Level;
-- room XP;
-- arbitrary prestige score;
-- numerical home-quality stat as the primary expression of progression.
+The parent place never needs to know that a computer or kettle exists. It only owns/reaches the spatial graph in which those objects are installed.
 
-The changed world is the progression UI.
-
----
-
-## 4. Starting residence choice
-
-Do not force one canonical starting room solely because the previous implementation began with Room 104.
-
-The preferred opening is constrained choice:
-
-- the player has little money;
-- only a small set of currently available rooms are realistic options;
-- normally 2–3 cheap motel rooms are enough;
-- the rooms have meaningful trade-offs rather than obvious tier-number upgrades.
-
-Possible starting differences:
-
-- lowest rent but no private bathroom;
-- slightly higher rent for a better window/view;
-- better desk/work surface but weak storage;
-- different supplied bed/desk package;
-- closer to shared bathroom/laundry/stairs;
-- noisier/quieter position;
-- different delivery/storage convenience.
-
-The cheapest valid starting room may have:
-
-- no private bathroom;
-- no kitchenette;
-- minimal supplied furniture;
-- shared motel facilities instead.
-
-This is desirable. It creates real progression and makes later facilities meaningful.
-
-The player should receive agency without being able to skip the early economic arc merely by selecting an expensive home they cannot reasonably support.
+Placement compatibility should be data-driven through practical categories/tags/components rather than one-off IDs. Keep the taxonomy bounded; this is a gameplay object graph, not a universal furniture simulator.
 
 ---
 
-## 5. Residence/Tenancy authority
+## 4. Objects and components
+
+Concrete runtime objects may provide one or more orthogonal components:
+
+- **Placement** — what slot/category can contain the object;
+- **Slots** — child placement locations exposed by the object;
+- **Container** — physical items stored inside the object;
+- **Capability provider** — semantic actions/tools the object can perform, such as `use_computer`, `sleep`, `heat_water`, or `bathe`;
+- **Resource provider** — environmental/resource access such as water or power where the design needs it;
+- **Presentation mapping** — view-specific art/layers for the same semantic object instance.
+
+Object identity and capability identity are intentionally separate.
+
+For example, an interaction should prefer a requirement like:
+
+```text
+requires capability: heat_water
+```
+
+over:
+
+```text
+requires object id: kettle
+```
+
+when multiple valid tools can satisfy the same need.
+
+---
+
+## 5. Contextual interaction resolution
+
+When the player requests an interaction, build a local `InteractionContext` from authoritative physical state.
+
+The context may include:
+
+```text
+player inventory
++ equipped/carried items
++ current Place/Space object graph
++ accessible containers in that graph
++ installed capability/resource providers
+```
+
+This is a **virtual resolution scope**, not an inventory merge. Items keep their exact identity, owner, and physical location.
+
+The resolver should:
+
+1. determine the player's authoritative current location;
+2. traverse reachable installed objects/slots for that context;
+3. collect accessible capability/resource providers;
+4. expose items from player inventory and accessible local containers;
+5. evaluate the interaction/recipe requirements;
+6. execute only after the requirements are satisfied;
+7. consume/mutate the exact source items/providers required by the action.
+
+Accessibility matters. A locked container, inaccessible room, remote object, or object in another place does not enter the context merely because it exists in simulation.
+
+The same resolver must work outside residences. Shared facilities, workplaces, shops, or other living places use the same rule.
+
+---
+
+## 6. Requirement and recipe model
+
+Interactions and item recipes describe what they need. They should not encode a specific residence, room, or fixture arrangement when a semantic requirement is enough.
+
+A bounded requirement vocabulary may support concepts equivalent to:
+
+```text
+item / quantity
+capability
+resource
+allOf(...)
+anyOf(...)
+```
+
+Example for an instant-food item:
+
+```text
+required item: instant_noodles
++ required resource: water
++ any valid way to heat water
+```
+
+The noodles may come from the player's inventory or from an accessible cupboard/container in the current place. The heat source may come from any reachable provider that satisfies the recipe requirement.
+
+The recipe does **not** require a hard-coded "kitchenette" boolean on the place. A kitchenette is a useful authored fixture/arrangement because it can contain/provide tools, storage, water, and slots; it is not magical capability authority.
+
+This pattern should extend naturally to future recipes and interactions without adding place-specific booleans.
+
+---
+
+## 7. Interaction examples
+
+### Computer use and hardware setup
+
+A valid furniture slot may accept a desk. The desk may expose a work-surface slot. A computer installed on a compatible surface provides the computer interaction capability.
+
+The runtime resolves the actual computer/provider reachable from the current context. The residence itself does not provide `use_computer`.
+
+### Sleep
+
+A bed or other valid sleeping object provides the sleep capability. If no reachable object provides it, sleep is unavailable in that context.
+
+### Hygiene
+
+A shower/bath facility provides the relevant hygiene capability. A shared facility in another canonical place works through exactly the same resolver once the player is physically there.
+
+### Food preparation
+
+Food availability is derived from the recipe requirements plus accessible items/resources/tools. The room does not gain food-preparation powers from a flag.
+
+### Delivery
+
+`home` resolves the current residence Place. Within that place graph, a valid delivery provider/target such as a door, reception point, parcel container, or authored delivery anchor determines where a parcel may materialize.
+
+If no valid provider exists, the system must follow an explicit alternative policy or fail/defer; it must not silently invent a hidden delivery target.
+
+### Storage
+
+Storage comes from actual `Container` components. Capacity and contents belong to the concrete container/object instances, not to a residence-wide storage number unless a later UI projection intentionally summarizes them.
+
+---
+
+## 8. Residence/Tenancy authority
 
 Mutable residence truth belongs in simulation/save state.
 
@@ -140,12 +241,13 @@ Exact names and nesting should follow implementation conventions.
 The residence system must not duplicate:
 
 - canonical Place definitions;
-- district/transit geography;
+- installed-object/fixture state;
 - physical item ownership/location;
+- object containers or recipe inputs;
 - economy cash truth;
 - delivery order truth;
-- PC/hardware truth;
-- landlord-owned fixture definitions.
+- computer/hardware truth;
+- transit truth.
 
 `home` is a semantic resolver:
 
@@ -154,490 +256,172 @@ home
   ↓
 ResidenceState.currentResidencePlaceId
   ↓
-canonical Place definition + current runtime state
+canonical Place + runtime object graph
 ```
 
-It is not a permanent generated alias to `room_104`.
+The Residence authority selects the root context. The object graph and requirement resolver determine what can actually be done there.
 
 ---
 
-## 6. Capabilities, not room-number checks
+## 9. Ownership domains and fixture packages
 
-At-home actions must resolve from the current residence and its actual capabilities.
+Housing progression depends on a strict distinction between property-owned fixtures and player-owned belongings.
 
-Examples:
+### Property-owned fixtures
 
-### PC setup
-Requires a valid current-residence work/desk surface or equivalent authored capability. It does not require Room 104.
+Examples include supplied beds/desks/chairs, built-in storage, bathroom fixtures, kitchenette fixtures, windows, and included service equipment.
 
-### Sleep
-Requires an available sleeping capability/fixture.
+They may affect rent or tenancy terms and remain with the property when the player leaves.
 
-### Hygiene
-A cheap room with no private bathroom must not expose a fake shower action. The player may need to use a shared motel bathroom or another valid facility.
+They should still exist as concrete fixture/object assignments in the place graph when gameplay needs to interact with them. A rent package may summarize them, but the summary is not interaction authority.
 
-### Food preparation
-A room with no kitchenette must not magically provide kettle/fridge/noodle preparation because an old room script expected those actions.
+### Player-owned belongings
 
-### Delivery
-Delivery resolves an appropriate current-residence delivery anchor/reception/door policy. Changing residence changes the home delivery target.
+Examples include decor, portable electronics, books/media, bags, personal bedding, purchased hardware, and movable furniture where the tenancy allows it.
 
-### Storage
-Storage exists only where the residence/fixtures/owned containers actually provide it.
+These are concrete physical item/object instances. When moved or installed, the same instance changes location/placement; do not delete/recreate it as decorative state.
 
-This capability-driven rule is more important than preserving old room UI behavior.
+Property-owned and player-owned objects obey the same placement compatibility rules. Ownership affects transfer/economy permissions, not the fundamental object graph.
 
 ---
 
-## 7. Two ownership domains
+## 10. Housing progression
 
-Housing progression depends on a strict distinction between what belongs to the property and what belongs to the player.
+Housing is a material/lifestyle progression axis, not a visible level system.
 
-### 7.1 Residence-owned / landlord-owned fixtures
-
-Examples:
-
-- supplied bed;
-- supplied desk;
-- supplied chair;
-- built-in wardrobe;
-- private bathroom;
-- kitchenette;
-- mini-fridge supplied with the room;
-- built-in shelves/cabinets;
-- window/view/room position;
-- room size;
-- included utilities/services.
-
-These may affect rent or room category.
-
-They stay with the residence when the player moves unless a specific contract says otherwise.
-
-### 7.2 Player-owned belongings
-
-Examples:
-
-- rug;
-- desk lamp;
-- posters;
-- books/CDs;
-- bags;
-- portable electronics;
-- personal bedding/decor;
-- later movable furniture where a tenancy allows it;
-- the player's PC/hardware and other purchased items.
-
-These are concrete physical item instances under the universal physical-item/location model.
-
-They normally do not increase rent merely because the player owns or places them.
-
-When the player moves, these exact instances may move with them. Do not delete/recreate them as decorative state.
-
----
-
-## 8. Rent and residence upgrades
-
-Housing cost should reflect the actual tenancy and supplied property features rather than an abstract room level.
-
-Representative inputs may include:
-
-- base room/apartment rent;
-- room size/tier;
-- supplied fixture package;
-- private bathroom;
-- kitchenette/mini-fridge;
-- better position/window/view;
-- included services/amenities.
-
-A motel may offer changes that function as service/package upgrades:
+Representative arc:
 
 ```text
-cheap supplied bed
-→ better supplied bed
-
-small supplied desk
-→ better/larger supplied desk
-
-basic room
-→ room with mini-fridge
-
-shared bathroom
-→ private bathroom room
+very cheap lodging
+        ↓
+personalized cheap space
+        ↓
+better supplied room / different room
+        ↓
+larger or better-equipped lodging
+        ↓
+tiny apartment at a specific town address
+        ↓
+future residences if needed
 ```
 
-These are not automatically player-owned purchases. They may instead raise recurring rent because the property is supplying a better room/fixture package.
+Starting options should normally be a small set of affordable residences with meaningful trade-offs.
 
-Player-owned decor is separate.
+A cheap residence may have no private hygiene fixture, no food-preparation fixture set, weak storage, or only a minimal furniture layout. That is valid as long as the game provides a feasible world path to required core systems.
 
-Do not simulate real-world hotel/motel law in excessive detail. The game needs a coherent economic/ownership rule, not a tenancy-law simulator.
+The changed physical world is the progression UI. Do not add Housing XP or a generic home-quality score as the primary expression of progression.
 
 ---
 
-## 9. Moving
+## 11. Rent and moving
 
-The game should support changing residence without changing world architecture.
+Housing cost may reflect tenancy terms and the supplied property fixture/service package.
 
-A representative flow is:
+Changing residence should:
 
 ```text
-learn/find available residence
-→ inspect location, capabilities and terms
-→ commit tenancy/move-in cost
-→ current residence changes
-→ move eligible owned belongings
-→ old property keeps landlord-owned fixtures
-→ home/navigation/deliveries now resolve the new residence
+select/commit tenancy
+→ change currentResidencePlaceId
+→ preserve old property's fixtures
+→ move eligible player-owned objects/items through physical transfer rules
+→ install them only into compatible target slots
+→ update home/navigation/delivery context
 ```
 
-The player does not need to carry every box manually.
+Moving must preserve exact owned-item identity with no duplication or silent deletion.
 
-A practical assisted moving action is acceptable, but the domain result must still preserve:
-
-- exact player-owned item identity;
-- no duplication;
-- no silent deletion;
-- old-residence fixture ownership;
-- new current residence truth;
-- correct delivery/home routing.
-
-Moving can consume time and money later if it improves pacing, but it should not become a moving-company simulator.
-
----
-
-## 10. Apartments and housing availability
-
-Later housing should use specific canonical authored Places in the town.
-
-Examples:
-
-- tiny studio over a shop;
-- cheap apartment in another district;
-- small basement/attic unit;
-- other bounded authored residences if needed.
-
-Availability may change through simulation/content state:
-
-- vacant;
-- occupied;
-- not yet known to the player;
-- unavailable;
-- available after a listing/conversation/event.
-
-Do not create infinite abstract apartments that exist only in a housing menu if the rest of the town uses stable Place identities.
-
-Housing geography matters because moving can change:
-
-- commute/walk/bus convenience;
-- district identity;
-- access to shops/work/social places;
-- delivery behavior;
-- neighborhood atmosphere;
-- recurring encounters.
-
----
-
-## 11. Multi-view residences
-
-Multi-view remains valid and useful.
-
-A residence may use:
-
-- one excellent hero view;
-- multiple authored main views;
-- focus views;
-- any combination justified by spatial memory and interaction.
-
-The rule is still:
-
-> **Multi-view is not a quality tier.**
-
-A tiny cheap room may need only one or two strong compositions. A larger apartment may need several. The runtime must not require every residence to look like the old Room 104 three-view contract.
+A practical assisted moving action is acceptable; the domain model does not need box-by-box simulation.
 
 ---
 
 ## 12. Modular visual architecture
 
-A physical place must not be one permanently flattened image when gameplay state requires pieces to change.
+A physical place must not be one permanently flattened image when gameplay state requires objects to change.
 
-Use layers/categories equivalent to:
+Use presentation categories equivalent to:
 
 ```text
-Residence View
+Place View
 ├── static architecture/background
-├── structural/built-in fixtures
-├── replaceable residence-owned fixture slots
-├── player-owned movable props/decor
+├── structural fixtures
+├── installed replaceable objects
+├── player-owned movable objects/decor
 ├── temporary world state
 ├── characters
 ├── foreground/ambient layers
-├── lighting/weather treatment
-└── optional normal maps / effect masks
+└── lighting/weather/effect layers
 ```
 
-Not every object needs its own sprite/layer.
+One semantic object instance may map to different authored art in different views. Do not duplicate gameplay identity merely because multiple camera compositions require different sprites/assets.
 
-Separate an element when the game needs to:
-
-- replace it;
-- move it;
-- hide/show it;
-- transfer ownership/location;
-- animate it independently;
-- change it without regenerating every room permutation.
-
-Examples that should normally remain modular when stateful:
-
-- bed variant;
-- desk/chair variant;
-- rug;
-- lamp;
-- curtains;
-- PC/monitor;
-- parcels/bags;
-- visible clothing/clutter;
-- selected small decor.
-
----
-
-## 13. Multi-view asset mapping
-
-One semantic object/fixture may require different art for different camera compositions.
-
-Example:
+The default production workflow remains:
 
 ```text
-bed fixture instance / assignment
-        ↓
-view A asset variant
-view B asset variant
-(no asset in view C because it is not visible)
+simple 3D blockout / spatial reference
+→ lock proportions and authored cameras
+→ render references/masks as useful
+→ Gen-AI generation / paint pass
+→ separate gameplay-stateful layers
+→ author per-view mappings + placement anchors
+→ Phaser 4 composition
 ```
 
-Do not duplicate the bed as three gameplay objects merely because three images are needed.
-
-State identity remains one thing; presentation mapping is view-specific.
-
-This applies to:
-
-- furniture;
-- curtains;
-- rugs;
-- PC/monitor;
-- larger decor;
-- characters when staging requires view-specific scale/position.
+The blockout is production reference, not runtime authority. Phaser presents projections of canonical simulation/content state; it does not own tenancy, placement, inventory, capability, or recipe truth.
 
 ---
 
-## 14. 3D blockout → Gen-AI → Phaser production pipeline
+## 13. Soft-lock rule
 
-The default production workflow for important interiors/exteriors should be:
+The cheapest valid starting path must still have a feasible route to required core systems.
 
-```text
-1. SIMPLE 3D BLOCKOUT
-        ↓
-2. LOCK SPATIAL RELATIONSHIPS
-        ↓
-3. CHOOSE AUTHORED CAMERAS / VIEWS
-        ↓
-4. RENDER REFERENCE SHOTS / MASKS AS USEFUL
-        ↓
-5. GEN-AI VISUAL GENERATION / PAINT PASS
-        ↓
-6. SEPARATE STATEFUL / REPLACEABLE ELEMENTS
-        ↓
-7. AUTHOR VIEW-SPECIFIC ASSETS + ANCHORS
-        ↓
-8. PHASER 4 RUNTIME COMPOSITION
-```
+This does **not** mean every residence receives invisible facilities.
 
-### Why use the blockout
+Valid alternatives include:
 
-The blockout provides:
+- use a shared hygiene facility elsewhere;
+- buy ready-to-eat food or use another place's preparation tools;
+- acquire/install a compatible desk or work surface later;
+- route deliveries through an authored reception/door/parcel provider;
+- carry a portable tool when the item and placement rules allow it.
 
-- consistent room dimensions;
-- consistent furniture placement;
-- camera/perspective reference;
-- agreement between multiple views;
-- exterior/interior spatial consistency;
-- repeatable references when generating variants/upgrades;
-- easier masks/object IDs/depth references where useful.
-
-### What the blockout is not
-
-It is not:
-
-- the shipped realtime environment;
-- a reason to switch to a 3D engine/runtime;
-- a requirement for free walking;
-- the canonical gameplay state.
-
-Phaser remains the active physical-world renderer under the current architecture.
+Design alternatives, not hidden freebies.
 
 ---
 
-## 15. Gen-AI asset rule
-
-Gen-AI is a first-class production tool, but it should not decide spatial truth independently every time an image is generated.
-
-Prefer:
-
-- known blockout composition;
-- fixed camera reference;
-- stable architectural dimensions;
-- consistent material/era references;
-- separate generation of important stateful furniture/props where needed;
-- controlled per-view variants.
-
-Avoid generating every possible home state as one full-room image such as:
-
-```text
-room + bed A + desk A + rug A
-room + bed A + desk A + rug B
-room + bed B + desk A + rug A
-room + bed B + desk B + rug C
-...
-```
-
-That combinatorial approach destroys the value of the modular system.
-
----
-
-## 16. Phaser 4 responsibilities
-
-Phaser composes the active residence/view from projections of canonical state.
-
-It may own:
-
-- image/sprite layers;
-- normal-map lighting;
-- particles;
-- ambient motion;
-- camera/view transitions;
-- pointer hit regions;
-- presentation depth;
-- visual interpolation;
-- weather/window effects.
-
-It does not own:
-
-- tenancy truth;
-- rent payment authority;
-- physical item ownership;
-- current home identity;
-- delivery order truth;
-- PC ownership/OS state;
-- the decision that a fixture upgrade was purchased/accepted.
-
-Those come from simulation/content authorities.
-
----
-
-## 17. Interaction consequences of a poor starter room
-
-Starting with a worse room is useful only if it changes behavior, not just background art.
-
-Examples:
-
-### No private bathroom
-The player uses a shared motel facility. Hygiene consumes different time/convenience and can create small social/ambient opportunities.
-
-### No kitchenette
-The player relies more on motel/common facilities, convenience-store food, café/work food, or cheap no-cook items.
-
-### Poor desk
-PC setup may still be possible if the desk is capable, but space/storage/comfort presentation is worse. Do not introduce a soft lock if the cheapest valid starter path requires a PC later.
-
-### Weak storage
-The player has fewer supplied storage anchors/containers and may rely on bags/owned storage.
-
-### Better room later
-A better room should visibly and behaviorally improve daily life rather than grant a generic percentage bonus.
-
----
-
-## 18. Soft-lock rule
-
-Housing progression must never accidentally make the canonical game impossible.
-
-The cheapest valid starting choice must still have a feasible path to required core systems.
-
-This does **not** mean every room must directly contain every facility.
-
-For example:
-
-- no private shower is fine if a shared bathroom exists;
-- no kitchenette is fine if affordable food routes exist;
-- a minimal room can still support or later gain access to a PC-capable surface;
-- deliveries may go to reception/door if the room itself lacks a suitable parcel anchor.
-
-Design alternatives, not invisible freebies.
-
----
-
-## 19. Pre-release save policy
+## 14. Pre-release save policy
 
 Historical development saves do not constrain this architecture.
 
-Until the project explicitly declares a save-compatibility freeze for a content-complete Alpha/Beta/release milestone:
+Until the project explicitly declares a save-compatibility freeze:
 
 ```text
 breaking persisted-state change
-        ↓
-increment/invalidate development save compatibility as needed
-        ↓
-refuse/reset incompatible old dev save cleanly
-        ↓
-start from canonical new-game state
+→ increment/invalidate development save compatibility as needed
+→ refuse/reset incompatible old dev save cleanly
+→ start from canonical new-game state
 ```
 
-Do not add:
-
-- historical dev-save migrations;
-- permanent aliases;
-- obsolete fields;
-- dual authorities;
-- architecture shims;
-
-solely to keep old experimental saves alive.
-
-After an explicit future save-compatibility freeze, migration/backward-compatibility policy becomes mandatory from that point forward.
+Do not add historical dev-save migrations, aliases, obsolete fields, dual authorities, or architecture shims solely to keep experimental saves alive.
 
 ---
 
-## 20. Room 104 status
+## 15. Evaluation / acceptance direction
 
-Room 104 is now one of three things only:
+The residence/housing foundation should prove at least:
 
-1. an ordinary motel-room content definition;
-2. a useful reference/test fixture for generic living-place behavior;
-3. a possible residence in a playthrough if availability/economy permits.
+1. `home` resolves to the current Residence/Tenancy Place;
+2. changing residence changes the root context without changing canonical place identity;
+3. no core at-home action depends on a specific place ID;
+4. a placement slot can accept a compatible object and that object can expose nested slots;
+5. an installed provider makes its capability available through contextual resolution;
+6. removing/moving that provider removes the capability without changing the Place definition;
+7. an interaction recipe can combine an item from player inventory with a provider/resource from the current place;
+8. the same recipe can source an item from an accessible local container instead;
+9. missing required providers/resources/items leave the interaction unavailable rather than inventing a place-level capability;
+10. delivery resolution follows a valid provider/target in the current home graph;
+11. shared facilities use the same resolver outside the home context;
+12. moving preserves exact player-owned object/item identity and placement legality;
+13. visual projection can swap/move stateful objects without changing semantic identity;
+14. content check, typecheck, build, baseline guard, focused tests, and full tests are green.
 
-It is **not**:
-
-- the player's identity;
-- the permanent home alias;
-- the required starting room;
-- the only PC setup location;
-- the only delivery destination;
-- the required final-art vertical slice.
-
-Reusable generic work from the former #26 / PR #80 should be preserved. Room-104-only production polish should not continue unless required to de-specialize/prove the generic system.
-
----
-
-## 21. Evaluation / acceptance direction
-
-A future housing/residence gate should prove at least:
-
-1. a new player can choose among a few affordable available rooms;
-2. the selected residence becomes dynamic `home` truth;
-3. the cheapest room can lack private bathroom/kitchenette without fake local actions;
-4. at least one player-owned decor item can be placed and moved;
-5. at least one residence-owned fixture/package can change rent without becoming player property;
-6. a better motel room can become available and be selected;
-7. moving preserves exact owned belongings with no duplicates/loss;
-8. home navigation/deliveries/PC actions follow the new residence;
-9. one tiny apartment at a canonical town address can use the same generic residence/place runtime;
-10. the visual pipeline can swap bed/desk/rug state across relevant views without full-room permutation art.
-
-That is a stronger proof of the game's living-world architecture than permanently polishing one sacred Room 104.
+This object/component chain is the canonical direction for physical interactions. Residence/Tenancy chooses the home root; concrete world state determines what the player can do.
