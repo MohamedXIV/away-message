@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { SimulationEngine } from '../../src/engine/SimulationEngine';
 
 describe('Residence delivery routing (#86)', () => {
-  it('does not materialize a home parcel at Room 104 when the current residence has no delivery capability', () => {
+  it('keeps a due home delivery in transit when the current residence has no delivery capability', () => {
     const seed = new SimulationEngine({ player: { cash: 500 } } as any);
     const snapshot = seed.exportSnapshot() as any;
     snapshot.residence = {
@@ -14,6 +14,7 @@ describe('Residence delivery routing (#86)', () => {
 
     const engine = new SimulationEngine(snapshot);
     const now = engine.getState().time.totalMinutes;
+    const pantryBefore = engine.getState().player.pantry.noodles;
     const placed = engine.placeGroceryOrder([{ sku: 'noodles_cup', qty: 1 }], 'delivery', now) as any;
     expect(placed.success).toBe(true);
 
@@ -28,5 +29,7 @@ describe('Residence delivery routing (#86)', () => {
 
     expect(engine.resolveCurrentHomePlaceId()).toBe('place_a1');
     expect(parcel).toBeUndefined();
+    expect(engine.getState().player.pantry.noodles).toBe(pantryBefore);
+    expect(engine.delivery.getState().orders.find((candidate) => candidate.id === order.id)?.status).toBe('transit');
   });
 });
