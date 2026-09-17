@@ -79,8 +79,6 @@ function pointInPolygon(point: SpatialPoint2D, polygon: SpatialPoint2D[]): boole
 }
 
 function containsPosition(position: SpatialPosition, bounds: SpatialBounds): boolean {
-  if (bounds.minZ !== undefined && position.z < bounds.minZ) return false;
-  if (bounds.maxZ !== undefined && position.z > bounds.maxZ) return false;
   return pointInPolygon(position, bounds.polygon);
 }
 
