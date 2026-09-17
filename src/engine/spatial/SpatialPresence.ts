@@ -48,6 +48,23 @@ export interface SpatialMembership {
   spaceId?: string;
 }
 
+export type SpatialTransition =
+  | {
+      type: 'DistrictEntered' | 'DistrictExited';
+      districtId: string;
+    }
+  | {
+      type: 'PlaceEntered' | 'PlaceExited';
+      districtId: string;
+      placeId: string;
+    }
+  | {
+      type: 'SpaceEntered' | 'SpaceExited';
+      districtId: string;
+      placeId: string;
+      spaceId: string;
+    };
+
 function pointOnSegment(point: SpatialPoint2D, a: SpatialPoint2D, b: SpatialPoint2D): boolean {
   const cross = (point.y - a.y) * (b.x - a.x) - (point.x - a.x) * (b.y - a.y);
   if (Math.abs(cross) > Number.EPSILON) return false;
@@ -137,4 +154,64 @@ export function resolveSpatialMembership(
     placeId: place.placeId,
     ...(space ? { spaceId: space.spaceId } : {}),
   };
+}
+
+export function deriveSpatialTransitions(
+  previous: SpatialMembership,
+  next: SpatialMembership,
+): SpatialTransition[] {
+  const districtChanged = previous.districtId !== next.districtId;
+  const placeChanged = districtChanged || previous.placeId !== next.placeId;
+  const spaceChanged = placeChanged || previous.spaceId !== next.spaceId;
+  const transitions: SpatialTransition[] = [];
+
+  if (spaceChanged && previous.districtId && previous.placeId && previous.spaceId) {
+    transitions.push({
+      type: 'SpaceExited',
+      districtId: previous.districtId,
+      placeId: previous.placeId,
+      spaceId: previous.spaceId,
+    });
+  }
+
+  if (placeChanged && previous.districtId && previous.placeId) {
+    transitions.push({
+      type: 'PlaceExited',
+      districtId: previous.districtId,
+      placeId: previous.placeId,
+    });
+  }
+
+  if (districtChanged && previous.districtId) {
+    transitions.push({
+      type: 'DistrictExited',
+      districtId: previous.districtId,
+    });
+  }
+
+  if (districtChanged && next.districtId) {
+    transitions.push({
+      type: 'DistrictEntered',
+      districtId: next.districtId,
+    });
+  }
+
+  if (placeChanged && next.districtId && next.placeId) {
+    transitions.push({
+      type: 'PlaceEntered',
+      districtId: next.districtId,
+      placeId: next.placeId,
+    });
+  }
+
+  if (spaceChanged && next.districtId && next.placeId && next.spaceId) {
+    transitions.push({
+      type: 'SpaceEntered',
+      districtId: next.districtId,
+      placeId: next.placeId,
+      spaceId: next.spaceId,
+    });
+  }
+
+  return transitions;
 }
