@@ -84,24 +84,40 @@ function containsPosition(position: SpatialPosition, bounds: SpatialBounds): boo
   return pointInPolygon(position, bounds.polygon);
 }
 
+function selectUnambiguousMatch<T>(matches: T[], level: string): T | undefined {
+  if (matches.length > 1) {
+    throw new Error(`Ambiguous spatial containment at ${level}: ${matches.length} matches.`);
+  }
+  return matches[0];
+}
+
 export function resolveSpatialMembership(
   position: SpatialPosition,
   world: SpatialWorldDefinition,
 ): SpatialMembership {
-  const district = world.districts.find((candidate) => containsPosition(position, candidate.bounds));
+  const district = selectUnambiguousMatch(
+    world.districts.filter((candidate) => containsPosition(position, candidate.bounds)),
+    'district',
+  );
   if (!district) return {};
 
-  const place = world.places.find(
-    (candidate) =>
-      candidate.districtId === district.districtId && containsPosition(position, candidate.bounds),
+  const place = selectUnambiguousMatch(
+    world.places.filter(
+      (candidate) =>
+        candidate.districtId === district.districtId && containsPosition(position, candidate.bounds),
+    ),
+    'place',
   );
   if (!place) return { districtId: district.districtId };
 
-  const space = world.spaces.find(
-    (candidate) =>
-      candidate.districtId === district.districtId &&
-      candidate.placeId === place.placeId &&
-      containsPosition(position, candidate.bounds),
+  const space = selectUnambiguousMatch(
+    world.spaces.filter(
+      (candidate) =>
+        candidate.districtId === district.districtId &&
+        candidate.placeId === place.placeId &&
+        containsPosition(position, candidate.bounds),
+    ),
+    'space',
   );
 
   return {
