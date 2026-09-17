@@ -2,8 +2,17 @@ import { describe, expect, it } from 'vitest';
 import {
   deriveSpatialTransitions,
   resolveSpatialMembership,
+  type SpatialPosition,
   type SpatialWorldDefinition,
 } from '../../src/engine/spatial/SpatialPresence';
+
+const cafePosition: SpatialPosition = { x: 58.4, y: 73.1, z: 0 };
+
+const cafeMembership = {
+  districtId: 'old_commercial',
+  placeId: 'silver_cup',
+  spaceId: 'main_floor',
+};
 
 const world: SpatialWorldDefinition = {
   districts: [
@@ -52,11 +61,7 @@ const world: SpatialWorldDefinition = {
 
 describe('SpatialPresence (#93)', () => {
   it('resolves district, place, and space from one canonical XYZ position', () => {
-    expect(resolveSpatialMembership({ x: 58.4, y: 73.1, z: 0 }, world)).toEqual({
-      districtId: 'old_commercial',
-      placeId: 'silver_cup',
-      spaceId: 'main_floor',
-    });
+    expect(resolveSpatialMembership(cafePosition, world)).toEqual(cafeMembership);
   });
 
   it('uses authored z ranges without requiring floors in current content', () => {
@@ -77,6 +82,12 @@ describe('SpatialPresence (#93)', () => {
     });
   });
 
+  it('resolves an exterior coordinate without inventing an interior place', () => {
+    expect(resolveSpatialMembership({ x: 10, y: 10, z: 0 }, world)).toEqual({
+      districtId: 'old_commercial',
+    });
+  });
+
   it('rejects equal-priority overlapping places instead of using array order as truth', () => {
     const ambiguousWorld: SpatialWorldDefinition = {
       ...world,
@@ -89,7 +100,7 @@ describe('SpatialPresence (#93)', () => {
       ],
     };
 
-    expect(() => resolveSpatialMembership({ x: 58.4, y: 73.1, z: 0 }, ambiguousWorld)).toThrow(
+    expect(() => resolveSpatialMembership(cafePosition, ambiguousWorld)).toThrow(
       /Ambiguous spatial containment/,
     );
   });
@@ -108,7 +119,7 @@ describe('SpatialPresence (#93)', () => {
       spaces: [],
     };
 
-    expect(resolveSpatialMembership({ x: 58.4, y: 73.1, z: 0 }, prioritizedWorld)).toEqual({
+    expect(resolveSpatialMembership(cafePosition, prioritizedWorld)).toEqual({
       districtId: 'old_commercial',
       placeId: 'copy_shop',
     });
@@ -116,18 +127,11 @@ describe('SpatialPresence (#93)', () => {
 
   it('derives one deterministic exit/enter sequence when membership changes', () => {
     expect(
-      deriveSpatialTransitions(
-        {
-          districtId: 'old_commercial',
-          placeId: 'silver_cup',
-          spaceId: 'main_floor',
-        },
-        {
-          districtId: 'old_commercial',
-          placeId: 'copy_shop',
-          spaceId: 'front_room',
-        },
-      ),
+      deriveSpatialTransitions(cafeMembership, {
+        districtId: 'old_commercial',
+        placeId: 'copy_shop',
+        spaceId: 'front_room',
+      }),
     ).toEqual([
       {
         type: 'SpaceExited',
@@ -152,5 +156,83 @@ describe('SpatialPresence (#93)', () => {
         spaceId: 'front_room',
       },
     ]);
+  });
+
+  it('derives district exits before district entries when the district changes', () => {
+    expect(
+      deriveSpatialTransitions(
+        { districtId: 'old_commercial' },
+        { districtId: 'residential_east' },
+      ),
+    ).toEqual([
+      { type: 'DistrictExited', districtId: 'old_commercial' },
+      { type: 'DistrictEntered', districtId: 'residential_east' },
+    ]);
+  });
+
+  it('is idempotent when authoritative membership is unchanged', () => {
+    expect(deriveSpatialTransitions(cafeMembership, cafeMembership)).toEqual([]);
+  });
+
+  it('keeps membership independent from actor activity or purpose', () => {
+    const actorContexts = [
+      { purpose: 'work', position: cafePosition },
+      { purpose: 'leisure', position: cafePosition },
+    ];
+
+    expect(
+      actorContexts.map(({ position }) => resolveSpatialMembership(position, world)),
+    ).toEqual([cafeMembership, cafeMembership]);
+  });
+
+  it('does not let renderer or view changes become location authority', () => {
+    const projections = [
+      { viewId: 'town_overview', position: cafePosition },
+      { viewId: 'cafe_closeup', position: cafePosition },
+    ];
+
+    expect(projections.map(({ position }) => resolveSpatialMembership(position, world))).toEqual([
+      cafeMembership,
+      cafeMembership,
+    ]);
+  });
+
+  it('uses the same spatial resolver contract for player and NPC actors', () => {
+    const actors = [
+      { kind: 'player', position: cafePosition },
+      { kind: 'npc', position: cafePosition },
+    ];
+
+    expect(actors.map(({ position }) => resolveSpatialMembership(position, world))).toEqual([
+      cafeMembership,
+      cafeMembership,
+    ]);
+  });
+
+  it('resolves a transit arrival position without duplicating transit timing truth', () => {
+    const completedTrip = {
+      durationMinutes: 18,
+      destinationPosition: cafePosition,
+    };
+
+    const arrivalMembership = resolveSpatialMembership(completedTrip.destinationPosition, world);
+
+    expect(arrivalMembership).toEqual(cafeMembership);
+    expect(arrivalMembership).not.toHaveProperty('durationMinutes');
+    expect(completedTrip.durationMinutes).toBe(18);
+  });
+
+  it('reconstructs coherent membership from persisted XYZ after reload or a time jump', () => {
+    const savePayload = JSON.stringify({
+      position: cafePosition,
+      elapsedMinutes: 8 * 60,
+    });
+    const reloaded = JSON.parse(savePayload) as {
+      position: SpatialPosition;
+      elapsedMinutes: number;
+    };
+
+    expect(reloaded.elapsedMinutes).toBe(8 * 60);
+    expect(resolveSpatialMembership(reloaded.position, world)).toEqual(cafeMembership);
   });
 });
