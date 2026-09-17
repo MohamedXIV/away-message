@@ -54,4 +54,22 @@ describe('SpatialPresence (#93)', () => {
       spaceId: 'main_floor',
     });
   });
+
+  it('uses authored z ranges without requiring floors in current content', () => {
+    const elevatedWorld: SpatialWorldDefinition = {
+      ...world,
+      places: world.places.map((place) => ({
+        ...place,
+        bounds: { ...place.bounds, minZ: -1, maxZ: 1 },
+      })),
+      spaces: world.spaces.map((space) => ({
+        ...space,
+        bounds: { ...space.bounds, minZ: -1, maxZ: 1 },
+      })),
+    };
+
+    expect(resolveSpatialMembership({ x: 58.4, y: 73.1, z: 2 }, elevatedWorld)).toEqual({
+      districtId: 'old_commercial',
+    });
+  });
 });
