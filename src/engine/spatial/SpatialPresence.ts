@@ -64,8 +64,8 @@ function pointInPolygon(point: SpatialPoint2D, polygon: SpatialPoint2D[]): boole
 
   let inside = false;
   for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
-    const a = polygon[j];
-    const b = polygon[i];
+    const a = polygon[j]!;
+    const b = polygon[i]!;
 
     if (pointOnSegment(point, a, b)) return true;
 
