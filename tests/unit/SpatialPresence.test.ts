@@ -72,4 +72,21 @@ describe('SpatialPresence (#93)', () => {
       districtId: 'old_commercial',
     });
   });
+
+  it('rejects equal-priority overlapping places instead of using array order as truth', () => {
+    const ambiguousWorld: SpatialWorldDefinition = {
+      ...world,
+      places: [
+        world.places[0]!,
+        {
+          ...world.places[0]!,
+          placeId: 'copy_shop',
+        },
+      ],
+    };
+
+    expect(() => resolveSpatialMembership({ x: 58.4, y: 73.1, z: 0 }, ambiguousWorld)).toThrow(
+      /Ambiguous spatial containment/,
+    );
+  });
 });
