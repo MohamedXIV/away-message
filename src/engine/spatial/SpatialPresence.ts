@@ -84,11 +84,23 @@ function containsPosition(position: SpatialPosition, bounds: SpatialBounds): boo
   return pointInPolygon(position, bounds.polygon);
 }
 
-function selectUnambiguousMatch<T>(matches: T[], level: string): T | undefined {
-  if (matches.length > 1) {
-    throw new Error(`Ambiguous spatial containment at ${level}: ${matches.length} matches.`);
+function selectUnambiguousMatch<T extends { priority?: number }>(
+  matches: T[],
+  level: string,
+): T | undefined {
+  if (matches.length === 0) return undefined;
+
+  let highestPriority = Number.NEGATIVE_INFINITY;
+  for (const match of matches) {
+    highestPriority = Math.max(highestPriority, match.priority ?? 0);
   }
-  return matches[0];
+
+  const highestMatches = matches.filter((match) => (match.priority ?? 0) === highestPriority);
+  if (highestMatches.length > 1) {
+    throw new Error(`Ambiguous spatial containment at ${level}: ${highestMatches.length} matches.`);
+  }
+
+  return highestMatches[0];
 }
 
 export function resolveSpatialMembership(
