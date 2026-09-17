@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { resolveSpatialMembership, type SpatialWorldDefinition } from '../../src/engine/spatial/SpatialPresence';
+import {
+  deriveSpatialTransitions,
+  resolveSpatialMembership,
+  type SpatialWorldDefinition,
+} from '../../src/engine/spatial/SpatialPresence';
 
 const world: SpatialWorldDefinition = {
   districts: [
@@ -108,5 +112,45 @@ describe('SpatialPresence (#93)', () => {
       districtId: 'old_commercial',
       placeId: 'copy_shop',
     });
+  });
+
+  it('derives one deterministic exit/enter sequence when membership changes', () => {
+    expect(
+      deriveSpatialTransitions(
+        {
+          districtId: 'old_commercial',
+          placeId: 'silver_cup',
+          spaceId: 'main_floor',
+        },
+        {
+          districtId: 'old_commercial',
+          placeId: 'copy_shop',
+          spaceId: 'front_room',
+        },
+      ),
+    ).toEqual([
+      {
+        type: 'SpaceExited',
+        districtId: 'old_commercial',
+        placeId: 'silver_cup',
+        spaceId: 'main_floor',
+      },
+      {
+        type: 'PlaceExited',
+        districtId: 'old_commercial',
+        placeId: 'silver_cup',
+      },
+      {
+        type: 'PlaceEntered',
+        districtId: 'old_commercial',
+        placeId: 'copy_shop',
+      },
+      {
+        type: 'SpaceEntered',
+        districtId: 'old_commercial',
+        placeId: 'copy_shop',
+        spaceId: 'front_room',
+      },
+    ]);
   });
 });
