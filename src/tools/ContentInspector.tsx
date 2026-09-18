@@ -92,12 +92,14 @@ export function exportStoreJson(tables: Tables): string {
 
 /** Baseline tables from the generated registry (Inspector hydration). */
 export function tablesFromGenerated(): Tables {
-  const characters: Record<string, Record<string, string | number | boolean>> = {};
-  const temperaments: Record<string, Record<string, number>> = {};
-  const initialAffinities: Record<string, Record<string, number>> = {};
-  const routines: Record<string, Record<string, string | number>> = {};
-  const artProfiles: Record<string, Record<string, string>> = {};
-  const backstories: Record<string, Record<string, string | number | boolean>> = {};
+  type StudioRow = Tables[string][string];
+  type StudioTable = Record<string, StudioRow>;
+  const characters: StudioTable = {};
+  const temperaments: StudioTable = {};
+  const initialAffinities: StudioTable = {};
+  const routines: StudioTable = {};
+  const artProfiles: StudioTable = {};
+  const backstories: StudioTable = {};
 
   for (const c of GENERATED_CHARACTERS) {
     characters[c.id] = {
@@ -110,8 +112,8 @@ export function tablesFromGenerated(): Tables {
       chatColor: c.chatColor,
       bio: c.bio,
       typingSpeedWpm: c.typingSpeedWpm,
-      languages: JSON.stringify(c.languages),
-      roles: JSON.stringify(c.roles),
+      languages: c.languages.map((entry) => ({ ...entry })),
+      roles: [...c.roles],
     };
     temperaments[c.id] = { ...c.temperament };
     initialAffinities[c.id] = { ...c.initialAffinity };
@@ -119,7 +121,7 @@ export function tablesFromGenerated(): Tables {
     artProfiles[c.id] = {
       engine: c.art.engine,
       modelPath: c.art.modelPath,
-      expressions: JSON.stringify(c.art.expressions),
+      expressions: { ...c.art.expressions },
       defaultOutfit: c.art.defaultOutfit,
     };
     if (c.backstory) {
@@ -128,26 +130,26 @@ export function tablesFromGenerated(): Tables {
         label: c.backstory.label,
         lapseDays: c.backstory.lapseDays,
         knowsAccounts: c.backstory.knowsAccounts,
-        candidates: JSON.stringify(c.backstory.candidates),
+        candidates: c.backstory.candidates.map((entry) => ({ ...entry })),
         bioSeed: c.backstory.bioSeed,
       };
     }
   }
 
-  const archetypes: Record<string, Record<string, string | number>> = {};
+  const archetypes: StudioTable = {};
   for (const a of GENERATED_ARCHETYPES) {
     archetypes[a.id] = {
       label: a.label,
       description: a.description,
       personaHint: a.personaHint,
-      vocabulary: JSON.stringify(a.vocabulary),
-      defaultInterests: JSON.stringify(a.defaultInterests),
+      vocabulary: [...a.vocabulary],
+      defaultInterests: [...a.defaultInterests],
       defaultSong: a.defaultSong,
       typingSpeedWpm: a.typingSpeedWpm,
     };
   }
 
-  const affinitySeeds: Record<string, Record<string, string | number>> = {};
+  const affinitySeeds: StudioTable = {};
   for (const s of GENERATED_AFFINITY_SEEDS) {
     affinitySeeds[`${s.roleA}__${s.roleB}`] = {
       roleA: s.roleA,
@@ -156,10 +158,10 @@ export function tablesFromGenerated(): Tables {
     };
   }
 
-  const dialoguePools: Record<string, Record<string, string | number>> = {};
+  const dialoguePools: StudioTable = {};
   for (const p of GENERATED_DIALOGUE_POOLS) {
     dialoguePools[p.key] = {
-      lines: JSON.stringify(p.lines),
+      lines: [...p.lines],
       version: p.version,
     };
   }
