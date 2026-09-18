@@ -139,6 +139,11 @@ export const CONTENT_ROW_SCHEMAS = {
     objectDefId: stringCell(),
     slotId: stringCell(),
   }),
+  placeServicePolicies: z.object({
+    placeId: stringCell(),
+    acceptsDelivery: booleanCell(false),
+    deliveryTargetSlotId: stringCell(),
+  }),
   districts: z.object({
     name: stringCell(),
     mapX: numberCell(0),
