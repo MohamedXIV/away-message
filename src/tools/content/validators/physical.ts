@@ -63,9 +63,11 @@ export function validatePhysicalGraph(tables: ContentTables): string[] {
   const spaces = tables['spaces'] ?? {};
   const views = tables['views'] ?? {};
   const anchors = tables['anchors'] ?? {};
+  const places = tables['places'] ?? {};
   const objectDefs = tables['physicalObjectDefs'] ?? {};
   const slots = tables['placementSlots'] ?? {};
   const placements = tables['objectPlacements'] ?? {};
+  const policies = tables['placeServicePolicies'] ?? {};
 
   for (const [id, row] of Object.entries(objectDefs)) {
     if (!row || typeof row !== 'object') {
@@ -236,6 +238,81 @@ export function validatePhysicalGraph(tables: ContentTables): string[] {
           `objectPlacements/${id}.objectDefId: kind '${String(objectKind)}' is not allowed by slot '${String(slotId)}'.`,
         );
       }
+    }
+  }
+
+  const policyPlaces = new Set<string>();
+  for (const [id, row] of Object.entries(policies)) {
+    if (!row || typeof row !== 'object') {
+      errors.push(`placeServicePolicies/${id}: must be an object.`);
+      continue;
+    }
+
+    const idCheck = validateWorldId(id);
+    if (!idCheck.ok) errors.push(`placeServicePolicies/${id}: ${idCheck.error}`);
+
+    const record = row as Record<string, unknown>;
+    const placeId = record['placeId'];
+    if (typeof placeId !== 'string' || !places[placeId]) {
+      errors.push(
+        `placeServicePolicies/${id}.placeId: unknown place '${String(placeId)}'.`,
+      );
+      continue;
+    }
+    if (policyPlaces.has(placeId)) {
+      errors.push(
+        `placeServicePolicies/${id}.placeId: place '${placeId}' already has a service policy.`,
+      );
+    }
+    policyPlaces.add(placeId);
+
+    const acceptsDelivery = record['acceptsDelivery'];
+    if (typeof acceptsDelivery !== 'boolean') {
+      errors.push(`placeServicePolicies/${id}.acceptsDelivery: must be a boolean.`);
+    }
+
+    const targetSlotId =
+      typeof record['deliveryTargetSlotId'] === 'string'
+        ? record['deliveryTargetSlotId']
+        : '';
+
+    if (acceptsDelivery === true && !targetSlotId) {
+      errors.push(
+        `placeServicePolicies/${id}.deliveryTargetSlotId: delivery acceptance requires an explicit target slot.`,
+      );
+      continue;
+    }
+    if (!targetSlotId) continue;
+
+    const targetSlot = slots[targetSlotId] as Record<string, unknown> | undefined;
+    if (!targetSlot) {
+      errors.push(
+        `placeServicePolicies/${id}.deliveryTargetSlotId: unknown placement slot '${targetSlotId}'.`,
+      );
+      continue;
+    }
+
+    const spaceId = targetSlot['spaceId'];
+    const parentPlacementId = targetSlot['parentPlacementId'];
+    if (typeof spaceId !== 'string' || !spaceId || (typeof parentPlacementId === 'string' && parentPlacementId)) {
+      errors.push(
+        `placeServicePolicies/${id}.deliveryTargetSlotId: delivery target must be a root slot in a canonical Space.`,
+      );
+      continue;
+    }
+
+    const space = spaces[spaceId] as Record<string, unknown> | undefined;
+    if (!space || space['placeId'] !== placeId) {
+      errors.push(
+        `placeServicePolicies/${id}.deliveryTargetSlotId: target slot must belong to place '${placeId}'.`,
+      );
+    }
+
+    const anchorId = targetSlot['anchorId'];
+    if (typeof anchorId !== 'string' || !anchorId || !anchors[anchorId]) {
+      errors.push(
+        `placeServicePolicies/${id}.deliveryTargetSlotId: target slot requires an explicit authored anchor.`,
+      );
     }
   }
 
