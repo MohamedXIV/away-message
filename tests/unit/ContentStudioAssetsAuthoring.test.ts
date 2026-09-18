@@ -15,7 +15,7 @@ describe('Content Studio assets authoring', () => {
       kind: 'image',
       uri: 'assets/world/cafe.png',
       normalMapAssetId: 'asset_a1_n',
-      tags: '[]',
+      tags: [],
     });
   });
 
@@ -27,7 +27,7 @@ describe('Content Studio assets authoring', () => {
       kind: 'audio',
       uri: 'assets/audio/cafe.mp3',
       normalMapAssetId: '',
-      tags: '[]',
+      tags: [],
     });
   });
 
