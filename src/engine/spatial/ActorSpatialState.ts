@@ -82,6 +82,28 @@ export function getActorSpatialProjection(
   };
 }
 
+export function clearActorSpatialPosition(
+  positions: ActorSpatialPositions,
+  actorId: string,
+  world: SpatialWorldDefinition,
+): ActorSpatialRelocation {
+  if (!actorId) throw new Error('Actor spatial clear requires a non-empty actor id.');
+
+  const previousPosition = positions[actorId];
+  const previousMembership = previousPosition
+    ? resolveSpatialMembership(previousPosition, world)
+    : {};
+  const nextPositions = cloneActorSpatialPositions(positions);
+  delete nextPositions[actorId];
+
+  return {
+    positions: nextPositions,
+    previousMembership,
+    membership: {},
+    transitions: deriveSpatialTransitions(previousMembership, {}),
+  };
+}
+
 export function relocateActorSpatialPosition(
   positions: ActorSpatialPositions,
   actorId: string,
