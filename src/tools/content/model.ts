@@ -187,7 +187,7 @@ export function createContentModel(store: ContentStore = createContentStore()): 
       select('slotKind');
       select('allowedObjectKinds');
       select('tags');
-      where('spaceId', param('spaceId'));
+      where('spaceId', String(param('spaceId') ?? ''));
     },
     { spaceId: '' },
   );
