@@ -95,6 +95,24 @@ describe('SimulationEngine venue integration (#94)', () => {
     });
   });
 
+  it('renderer/view changes alone do not create or cancel canonical activities', () => {
+    const sim = new SimulationEngine();
+    assignCafeWorker(sim);
+    sim.relocateActorSpatially('player', { x: 20, y: 60, z: 0 });
+
+    expect(sim.getActiveVenueActivity('player')).toBeNull();
+    sim.dispatchAction({ type: 'VIEW_SWITCH', view: 'pc' });
+    expect(sim.getActiveVenueActivity('player')).toBeNull();
+
+    const started = sim.startVenueActivityFromIntent(cafeIntent());
+    expect(started.ok).toBe(true);
+    const before = sim.getActiveVenueActivity('player');
+
+    sim.dispatchAction({ type: 'VIEW_SWITCH', view: 'city' });
+
+    expect(sim.getActiveVenueActivity('player')).toEqual(before);
+  });
+
   it('persists a mid-activity phase and completes exactly once after reload', () => {
     const sim = new SimulationEngine();
     assignCafeWorker(sim);
