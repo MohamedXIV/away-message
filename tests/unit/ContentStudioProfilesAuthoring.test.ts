@@ -14,7 +14,7 @@ describe('Content Studio environmental profile authoring', () => {
       timeOfDay: 'evening',
       colorTint: '#ff8844',
       intensity: 1.2,
-      tags: '[]',
+      tags: [],
     });
   });
 
@@ -24,7 +24,7 @@ describe('Content Studio environmental profile authoring', () => {
       kind: 'ambience',
       assetId: 'asset_audio_1',
       volume: 0.75,
-      tags: '[]',
+      tags: [],
     });
 
     expect(() => buildAudioProfileRow('Bad Audio', 'ambience', 'missing_asset', 0.5, assetIds)).toThrow(
@@ -38,7 +38,7 @@ describe('Content Studio environmental profile authoring', () => {
       weather: 'rain',
       timeOfDay: 'night',
       density: 0.3,
-      tags: '[]',
+      tags: [],
     });
   });
 });
