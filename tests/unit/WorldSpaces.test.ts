@@ -49,19 +49,19 @@ describe('World content spaces/views (#51 slice 3)', () => {
 
   it('rejects a view neighbor referencing a missing view', () => {
     const tables = clone(validSpaceTables());
-    (tables['views']!['view_a1']! as Record<string, unknown>)['neighbors'] = '["view_ghost"]';
+    (tables['views']!['view_a1']! as Record<string, unknown>)['neighbors'] = ['view_ghost'];
     const errors = validateContent(tables);
     expect(errors.some((e) => e.includes('views/view_a1') && e.includes('view_ghost'))).toBe(true);
   });
 
   it('rejects a view neighboring itself', () => {
     const tables = clone(validSpaceTables());
-    (tables['views']!['view_a1']! as Record<string, unknown>)['neighbors'] = '["view_a1"]';
+    (tables['views']!['view_a1']! as Record<string, unknown>)['neighbors'] = ['view_a1'];
     const errors = validateContent(tables);
     expect(errors.some((e) => e.includes('views/view_a1') && e.includes('neighbors'))).toBe(true);
   });
 
-  it('rejects malformed neighbors JSON', () => {
+  it('rejects a non-array neighbors cell', () => {
     const tables = clone(validSpaceTables());
     (tables['views']!['view_a1']! as Record<string, unknown>)['neighbors'] = 'not-json';
     const errors = validateContent(tables);
