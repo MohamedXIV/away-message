@@ -17,21 +17,21 @@ export const CONTENT_ROW_SCHEMAS = {
     role: stringCell(),
     displayName: stringCell(),
     archetypeId: stringCell('regular'),
-    roles: stringCell('[]'),
+    roles: z.array(z.string()).default([]),
     reach: stringCell('local'),
     hair: stringCell('brown'),
     eyes: stringCell('brown'),
     chatColor: stringCell('#6a3fa0'),
     bio: stringCell(),
     typingSpeedWpm: numberCell(60),
-    languages: stringCell('[{"lang":"en","level":5}]'),
+    languages: z.array(z.object({ lang: z.string(), level: z.number() })).default([{ lang: 'en', level: 5 }]),
   }),
   archetypes: z.object({
     label: stringCell(),
     description: stringCell(),
     personaHint: stringCell(),
-    vocabulary: stringCell('[]'),
-    defaultInterests: stringCell('[]'),
+    vocabulary: z.array(z.string()).default([]),
+    defaultInterests: z.array(z.string()).default([]),
     defaultSong: stringCell(),
     typingSpeedWpm: numberCell(70),
   }),
@@ -58,7 +58,7 @@ export const CONTENT_ROW_SCHEMAS = {
     label: stringCell(),
     lapseDays: numberCell(0),
     knowsAccounts: booleanCell(false),
-    candidates: stringCell('[]'),
+    candidates: z.array(z.object({ handle: z.string(), status: z.string(), note: z.string().optional() })).default([]),
     bioSeed: stringCell(),
   }),
   routines: z.object({
@@ -70,7 +70,7 @@ export const CONTENT_ROW_SCHEMAS = {
   artProfiles: z.object({
     engine: stringCell('none'),
     modelPath: stringCell(),
-    expressions: stringCell('{}'),
+    expressions: z.record(z.string(), z.string()).default({}),
     defaultOutfit: stringCell('default'),
   }),
   affinitySeeds: z.object({
@@ -79,7 +79,7 @@ export const CONTENT_ROW_SCHEMAS = {
     value: numberCell(0),
   }),
   dialoguePools: z.object({
-    lines: stringCell('[]'),
+    lines: z.array(z.string()).default([]),
     version: numberCell(1),
   }),
   items: z.object({
