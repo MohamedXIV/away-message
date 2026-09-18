@@ -14,7 +14,7 @@ describe('Content Studio physical-definition authoring', () => {
       portable: true,
       volume: 1,
       assetId: '',
-      tags: '[]',
+      tags: [],
     });
   });
 
@@ -22,8 +22,8 @@ describe('Content Studio physical-definition authoring', () => {
     expect(buildContainerRow('Diner Shelf')).toEqual({
       name: 'Diner Shelf',
       capacity: 1,
-      allowedItemKinds: '[]',
-      tags: '[]',
+      allowedItemKinds: [],
+      tags: [],
     });
   });
 
