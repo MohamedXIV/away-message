@@ -102,6 +102,35 @@ describe('generated spatial content integration (#93)', () => {
     expect(errors.some((error) => error.includes('places/place_test.spatialBounds') && error.includes('district_test'))).toBe(true);
   });
 
+  it('rejects child geometry that escapes its canonical parent bounds', () => {
+    const tables = spatialTables();
+    (tables['places']!['place_test']! as Record<string, unknown>)['spatialBounds'] = {
+      polygon: [
+        { x: 90, y: 20 },
+        { x: 110, y: 20 },
+        { x: 110, y: 40 },
+        { x: 90, y: 40 },
+      ],
+      minZ: 0,
+      maxZ: 0,
+      priority: 0,
+    };
+    (tables['places']!['place_test']! as Record<string, unknown>)['entryPosition'] = {
+      x: 95,
+      y: 22,
+      z: 0,
+    };
+
+    const errors = validateWorldSpatialContent(tables);
+    expect(
+      errors.some(
+        (error) =>
+          error.includes('places/place_test.spatialBounds') &&
+          error.includes("parent district 'district_test'"),
+      ),
+    ).toBe(true);
+  });
+
   it('requires an authored entry position to resolve inside its own place/space bounds', () => {
     const tables = spatialTables();
     (tables['places']!['place_test']! as Record<string, unknown>)['entryPosition'] = {
