@@ -32,15 +32,15 @@ export function validItemTables(): ContentTables {
         kind: 'food',
         portable: true,
         volume: 1,
-        tags: '["food","perishable"]',
+        tags: ['food', 'perishable'],
       },
     },
     containers: {
       container_a: {
         name: 'Container A',
         capacity: 10,
-        allowedItemKinds: '["food"]',
-        tags: '["storage"]',
+        allowedItemKinds: ['food'],
+        tags: ['storage'],
       },
     },
   };
@@ -57,7 +57,7 @@ describe('World content items/containers (#51 slice 2)', () => {
 
   it('rejects invalid item IDs', () => {
     const tables = clone(validItemTables());
-    (tables['items']!['BAD ID'] as unknown) = { name: 'Bad', kind: 'food', portable: true, volume: 1, tags: '[]' };
+    (tables['items']!['BAD ID'] as unknown) = { name: 'Bad', kind: 'food', portable: true, volume: 1, tags: [] };
     const errors = validateContent(tables);
     expect(errors.some((e) => e.includes('items/BAD ID'))).toBe(true);
   });
@@ -92,7 +92,7 @@ describe('World content items/containers (#51 slice 2)', () => {
 
   it('rejects invalid container IDs', () => {
     const tables = clone(validItemTables());
-    (tables['containers']!['BAD ID'] as unknown) = { name: 'Bad', capacity: 5, allowedItemKinds: '[]', tags: '[]' };
+    (tables['containers']!['BAD ID'] as unknown) = { name: 'Bad', capacity: 5, allowedItemKinds: [], tags: [] };
     const errors = validateContent(tables);
     expect(errors.some((e) => e.includes('containers/BAD ID'))).toBe(true);
   });
