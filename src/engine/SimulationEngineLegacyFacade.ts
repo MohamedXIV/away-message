@@ -520,6 +520,24 @@ export class SimulationEngine extends SimulationEngineCore {
     position: SpatialPosition | null,
   ): void {
     this.actorSpatialPositions = relocation.positions;
+
+    // #37's places map remains a transit-planning cache only. Once an actor
+    // is settled (or has no trip), keep that cache derived from #93 spatial
+    // membership so it cannot drift into a second physical authority.
+    const trip = this.npcMobility.trips[actorId];
+    if (
+      actorId !== 'player' &&
+      (!trip || trip.status === 'arrived' || trip.status === 'failed' || trip.status === 'cancelled')
+    ) {
+      const places = { ...this.npcMobility.places };
+      if (relocation.membership.placeId) {
+        places[actorId] = relocation.membership.placeId;
+      } else {
+        delete places[actorId];
+      }
+      this.npcMobility = { ...this.npcMobility, places };
+    }
+
     this.invalidateV6Cache();
     for (const transition of relocation.transitions) {
       this.events.emit('spatial:transition', {
@@ -588,16 +606,25 @@ export class SimulationEngine extends SimulationEngineCore {
   }
 
   /**
-   * Authoritative place truth for #45 presence resolution (#37). Pure read:
-   * AtPlace / planned departure / InTransit / arrival-facts / failure facts.
-   * Never touches messenger presence.
+   * Combined mobility/spatial read. Transit owns whether an actor is currently
+   * travelling; once locally settled, #93 XYZ containment owns physical place.
+   * Un-authored actors fall back to the #37 place cache during migration.
    */
   public getNpcPlaceState(actorId: string, atMinute?: number): NpcPlaceQuery {
-    return getNpcPlaceState(
+    const mobility = getNpcPlaceState(
       this.npcMobility,
       actorId,
       atMinute ?? this.clock.getTotalMinutes(),
     );
+    if (mobility.status === 'in_transit' || mobility.status === 'planned') {
+      return mobility;
+    }
+
+    const spatial = this.getActorSpatialProjection(actorId);
+    if (!spatial) return mobility;
+    return spatial.membership.placeId
+      ? { status: 'at_place', placeId: spatial.membership.placeId }
+      : { status: 'unknown' };
   }
 
   /** Factual deterministic travel overlap for later consumers. Facts only. */
@@ -629,7 +656,7 @@ export class SimulationEngine extends SimulationEngineCore {
     const mobility = this.getNpcMobilityState();
     const actors = this.social.getBuddies().map((buddy) => ({
       actorId: buddy.id,
-      place: getNpcPlaceState(mobility, buddy.id, nowMinute),
+      place: this.getNpcPlaceState(buddy.id, nowMinute),
       intent: this.getCharacterIntent(buddy.id),
       obligations: this.getCharacterObligations(buddy.id),
       relationship: this.social.getRelationships(buddy.id) ?? null,
