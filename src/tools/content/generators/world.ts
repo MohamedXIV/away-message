@@ -10,6 +10,35 @@ import type { ContentTables } from '../shared';
 import { contentHash, tsString } from '../shared';
 import { generatePhysicalWorldSource } from './physical';
 
+function spatialBoundsLiteral(value: unknown): string | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const record = value as Record<string, unknown>;
+  if (!Array.isArray(record['polygon'])) return null;
+
+  const polygon = record['polygon']
+    .filter((point): point is Record<string, unknown> => Boolean(point && typeof point === 'object' && !Array.isArray(point)))
+    .map((point) => `{ x: ${Number(point['x'])}, y: ${Number(point['y'])} }`);
+
+  const fields = [`polygon: [${polygon.join(', ')}]`];
+  if (typeof record['minZ'] === 'number') fields.push(`minZ: ${record['minZ']}`);
+  if (typeof record['maxZ'] === 'number') fields.push(`maxZ: ${record['maxZ']}`);
+  if (typeof record['priority'] === 'number') fields.push(`priority: ${record['priority']}`);
+  return `{ ${fields.join(', ')} }`;
+}
+
+function spatialPositionLiteral(value: unknown): string | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const record = value as Record<string, unknown>;
+  if (
+    typeof record['x'] !== 'number' ||
+    typeof record['y'] !== 'number' ||
+    typeof record['z'] !== 'number'
+  ) {
+    return null;
+  }
+  return `{ x: ${record['x']}, y: ${record['y']}, z: ${record['z']} }`;
+}
+
 /**
  * Emit the world registry TypeScript source (#51 slice 1).
  * Goes to its own generated file (src/engine/worldContent.generated.ts) so
@@ -39,12 +68,31 @@ export function generateWorldRegistrySource(tables: ContentTables): string {
   lines.push(`// Source: content/store.json (content v${version}). Regenerate: npm run content:pull.`);
   lines.push(`export const WORLD_CONTENT_VERSION = '${version}';`);
   lines.push('');
+  lines.push('export interface GeneratedSpatialPoint {');
+  lines.push('  x: number;');
+  lines.push('  y: number;');
+  lines.push('}');
+  lines.push('');
+  lines.push('export interface GeneratedSpatialPosition {');
+  lines.push('  x: number;');
+  lines.push('  y: number;');
+  lines.push('  z: number;');
+  lines.push('}');
+  lines.push('');
+  lines.push('export interface GeneratedSpatialBounds {');
+  lines.push('  polygon: GeneratedSpatialPoint[];');
+  lines.push('  minZ?: number;');
+  lines.push('  maxZ?: number;');
+  lines.push('  priority?: number;');
+  lines.push('}');
+  lines.push('');
   lines.push('export interface GeneratedDistrictDef {');
   lines.push('  id: string;');
   lines.push('  name: string;');
   lines.push('  mapX: number;');
   lines.push('  mapY: number;');
   lines.push('  tags: string[];');
+  lines.push('  spatialBounds?: GeneratedSpatialBounds;');
   lines.push('}');
   lines.push('');
   lines.push('export interface GeneratedPlaceTransitAccess {');
@@ -58,6 +106,8 @@ export function generateWorldRegistrySource(tables: ContentTables): string {
   lines.push('  name: string;');
   lines.push('  transitAccess: GeneratedPlaceTransitAccess[];');
   lines.push('  legacyIds?: string[];');
+  lines.push('  spatialBounds?: GeneratedSpatialBounds;');
+  lines.push('  entryPosition?: GeneratedSpatialPosition;');
   lines.push('}');
   lines.push('');
   lines.push('export interface GeneratedTransitStopDef {');
@@ -93,6 +143,8 @@ export function generateWorldRegistrySource(tables: ContentTables): string {
     lines.push(`    mapX: ${Number(r['mapX'] ?? 0)},`);
     lines.push(`    mapY: ${Number(r['mapY'] ?? 0)},`);
     lines.push(`    tags: [${tags.map((t) => tsString(t)).join(', ')}],`);
+    const spatialBounds = spatialBoundsLiteral(r['spatialBounds']);
+    if (spatialBounds) lines.push(`    spatialBounds: ${spatialBounds},`);
     lines.push('  },');
   }
   lines.push('];');
@@ -115,6 +167,10 @@ export function generateWorldRegistrySource(tables: ContentTables): string {
     lines.push(`    name: ${tsString(String(r['name'] ?? ''))},`);
     lines.push(`    transitAccess: [${access.map((a) => `{ stopId: ${tsString(a.stopId)}, walkMinutes: ${a.walkMinutes} }`).join(', ')}],`);
     lines.push(`    legacyIds: [${legacyIds.map((t) => tsString(t)).join(', ')}],`);
+    const spatialBounds = spatialBoundsLiteral(r['spatialBounds']);
+    const entryPosition = spatialPositionLiteral(r['entryPosition']);
+    if (spatialBounds) lines.push(`    spatialBounds: ${spatialBounds},`);
+    if (entryPosition) lines.push(`    entryPosition: ${entryPosition},`);
     lines.push('  },');
   }
   lines.push('];');
@@ -216,6 +272,8 @@ export function generateWorldRegistrySource(tables: ContentTables): string {
   lines.push('  placeId: string;');
   lines.push('  name: string;');
   lines.push('  tags: string[];');
+  lines.push('  spatialBounds?: GeneratedSpatialBounds;');
+  lines.push('  entryPosition?: GeneratedSpatialPosition;');
   lines.push('}');
   lines.push('');
   lines.push('export interface GeneratedViewDef {');
@@ -236,6 +294,10 @@ export function generateWorldRegistrySource(tables: ContentTables): string {
     lines.push(`    placeId: ${tsString(String(r['placeId'] ?? ''))},`);
     lines.push(`    name: ${tsString(String(r['name'] ?? ''))},`);
     lines.push(`    tags: [${strArr(r['tags']).map((t) => tsString(t)).join(', ')}],`);
+    const spatialBounds = spatialBoundsLiteral(r['spatialBounds']);
+    const entryPosition = spatialPositionLiteral(r['entryPosition']);
+    if (spatialBounds) lines.push(`    spatialBounds: ${spatialBounds},`);
+    if (entryPosition) lines.push(`    entryPosition: ${entryPosition},`);
     lines.push('  },');
   }
   lines.push('];');
