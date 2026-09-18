@@ -22,6 +22,28 @@ const spatialBoundsSchema = z.object({
   priority: z.number().optional(),
 });
 
+const venueContextRequirementSchema = z.union([
+  z.object({
+    kind: z.literal('item'),
+    itemKind: z.string(),
+    quantity: z.number(),
+  }),
+  z.object({
+    kind: z.literal('tool'),
+    capability: z.string(),
+  }),
+  z.object({
+    kind: z.literal('resource'),
+    capability: z.string(),
+  }),
+]);
+
+const venueActivityPhaseSchema = z.object({
+  id: z.string(),
+  durationMinutes: z.number(),
+  stationId: z.string().default(''),
+});
+
 /**
  * Single authored-content row-shape catalog.
  *
@@ -143,6 +165,43 @@ export const CONTENT_ROW_SCHEMAS = {
     placeId: stringCell(),
     acceptsDelivery: booleanCell(false),
     deliveryTargetSlotId: stringCell(),
+  }),
+  venueRoles: z.object({
+    placeId: stringCell(),
+    name: stringCell(),
+    roleKind: stringCell('worker'),
+    stationIds: z.array(z.string()).default([]),
+    tags: z.array(z.string()).default([]),
+  }),
+  venueStations: z.object({
+    placeId: stringCell(),
+    spaceId: stringCell(),
+    anchorId: stringCell(),
+    name: stringCell(),
+    capacity: numberCell(1),
+    roleKinds: z.array(z.string()).default([]),
+    tags: z.array(z.string()).default([]),
+  }),
+  venueServices: z.object({
+    placeId: stringCell(),
+    spaceId: stringCell(),
+    name: stringCell(),
+    intentKinds: z.array(z.string()).default([]),
+    activityTemplateId: stringCell(),
+    requiredRoleKinds: z.array(z.string()).default([]),
+    requiredStationIds: z.array(z.string()).default([]),
+    contextRequirements: z.array(venueContextRequirementSchema).default([]),
+    tags: z.array(z.string()).default([]),
+  }),
+  activityTemplates: z.object({
+    placeId: stringCell(),
+    name: stringCell(),
+    purpose: stringCell('activity'),
+    activityKind: stringCell('activity'),
+    phases: z.array(venueActivityPhaseSchema).default([]),
+    completionOwner: stringCell('none'),
+    completionKind: stringCell('completed'),
+    tags: z.array(z.string()).default([]),
   }),
   districts: z.object({
     name: stringCell(),
