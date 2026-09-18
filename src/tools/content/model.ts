@@ -17,6 +17,12 @@ export const CONTENT_RELATIONSHIP_IDS = {
   viewAsset: 'viewAsset',
   audioProfileAsset: 'audioProfileAsset',
   assetNormalMap: 'assetNormalMap',
+  physicalObjectContainer: 'physicalObjectContainer',
+  placementSlotSpace: 'placementSlotSpace',
+  placementSlotAnchor: 'placementSlotAnchor',
+  placementSlotParentPlacement: 'placementSlotParentPlacement',
+  objectPlacementSlot: 'objectPlacementSlot',
+  objectPlacementDefinition: 'objectPlacementDefinition',
 } as const;
 
 export const CONTENT_INDEX_IDS = {
@@ -27,6 +33,15 @@ export const CONTENT_INDEX_IDS = {
   interactionsByAnchor: 'interactionsByAnchor',
   transitStopsByDistrict: 'transitStopsByDistrict',
   transitStopsByPlace: 'transitStopsByPlace',
+  physicalObjectsByKind: 'physicalObjectsByKind',
+  placementSlotsBySpace: 'placementSlotsBySpace',
+  placementSlotsByParentPlacement: 'placementSlotsByParentPlacement',
+  objectPlacementsBySlot: 'objectPlacementsBySlot',
+  objectPlacementsByDefinition: 'objectPlacementsByDefinition',
+} as const;
+
+export const CONTENT_QUERY_IDS = {
+  placementSlotsInSpace: 'placementSlotsInSpace',
 } as const;
 
 export interface ContentModel {
@@ -109,6 +124,42 @@ export function createContentModel(store: ContentStore = createContentStore()): 
       'assets',
       'assets',
       'normalMapAssetId',
+    )
+    .setRelationshipDefinition(
+      CONTENT_RELATIONSHIP_IDS.physicalObjectContainer,
+      'physicalObjectDefs',
+      'containers',
+      'containerId',
+    )
+    .setRelationshipDefinition(
+      CONTENT_RELATIONSHIP_IDS.placementSlotSpace,
+      'placementSlots',
+      'spaces',
+      'spaceId',
+    )
+    .setRelationshipDefinition(
+      CONTENT_RELATIONSHIP_IDS.placementSlotAnchor,
+      'placementSlots',
+      'anchors',
+      'anchorId',
+    )
+    .setRelationshipDefinition(
+      CONTENT_RELATIONSHIP_IDS.placementSlotParentPlacement,
+      'placementSlots',
+      'objectPlacements',
+      'parentPlacementId',
+    )
+    .setRelationshipDefinition(
+      CONTENT_RELATIONSHIP_IDS.objectPlacementSlot,
+      'objectPlacements',
+      'placementSlots',
+      'slotId',
+    )
+    .setRelationshipDefinition(
+      CONTENT_RELATIONSHIP_IDS.objectPlacementDefinition,
+      'objectPlacements',
+      'physicalObjectDefs',
+      'objectDefId',
     );
 
   const indexes = createIndexes(store)
@@ -118,9 +169,28 @@ export function createContentModel(store: ContentStore = createContentStore()): 
     .setIndexDefinition(CONTENT_INDEX_IDS.anchorsByView, 'anchors', 'viewId')
     .setIndexDefinition(CONTENT_INDEX_IDS.interactionsByAnchor, 'interactions', 'anchorId')
     .setIndexDefinition(CONTENT_INDEX_IDS.transitStopsByDistrict, 'transitStops', 'districtId')
-    .setIndexDefinition(CONTENT_INDEX_IDS.transitStopsByPlace, 'transitStops', 'placeId');
+    .setIndexDefinition(CONTENT_INDEX_IDS.transitStopsByPlace, 'transitStops', 'placeId')
+    .setIndexDefinition(CONTENT_INDEX_IDS.physicalObjectsByKind, 'physicalObjectDefs', 'kind')
+    .setIndexDefinition(CONTENT_INDEX_IDS.placementSlotsBySpace, 'placementSlots', 'spaceId')
+    .setIndexDefinition(CONTENT_INDEX_IDS.placementSlotsByParentPlacement, 'placementSlots', 'parentPlacementId')
+    .setIndexDefinition(CONTENT_INDEX_IDS.objectPlacementsBySlot, 'objectPlacements', 'slotId')
+    .setIndexDefinition(CONTENT_INDEX_IDS.objectPlacementsByDefinition, 'objectPlacements', 'objectDefId');
 
-  const queries = createQueries(store);
+  const queries = createQueries(store).setQueryDefinition(
+    CONTENT_QUERY_IDS.placementSlotsInSpace,
+    'placementSlots',
+    ({ select, where, param }) => {
+      select('name');
+      select('spaceId');
+      select('anchorId');
+      select('parentPlacementId');
+      select('slotKind');
+      select('allowedObjectKinds');
+      select('tags');
+      where('spaceId', param('spaceId'));
+    },
+    { spaceId: '' },
+  );
 
   return { store, relationships, indexes, queries };
 }
