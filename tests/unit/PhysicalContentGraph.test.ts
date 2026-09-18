@@ -174,11 +174,20 @@ describe('authored physical graph (#100)', () => {
 
   it('rejects delivery policy targets outside their canonical place', () => {
     const tables = clone(validPhysicalTables());
+    tables['placementSlots']!['delivery_slot_b'] = {
+      name: 'Delivery Slot B',
+      spaceId: 'space_b',
+      anchorId: 'anchor_b',
+      parentPlacementId: '',
+      slotKind: 'delivery',
+      allowedObjectKinds: [],
+      tags: ['delivery'],
+    };
     tables['placeServicePolicies'] = {
       policy_a: {
         placeId: 'place_a',
         acceptsDelivery: true,
-        deliveryTargetSlotId: 'bench_slot_b',
+        deliveryTargetSlotId: 'delivery_slot_b',
       },
     };
 
