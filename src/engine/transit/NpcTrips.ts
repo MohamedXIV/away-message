@@ -60,7 +60,11 @@ export interface NpcTripRecord {
 
 export interface NpcMobilityState {
   trips: Record<string, NpcTripRecord>;
-  /** Canonical current place per actor. Written only on authoritative arrival. */
+  /**
+   * Settled-place cache used by transit planning and pre-#93 callers.
+   * #93 XYZ containment is physical authority whenever authored spatial truth
+   * exists; this cache is synchronized from settled spatial relocations.
+   */
   places: Record<string, string>;
 }
 
@@ -787,9 +791,9 @@ export function findNpcCoLocation(
 }
 
 /**
- * Authoritative place truth for #45 presence resolution. While a trip is
- * live the actor is NOT at either endpoint — callers must reject
- * contradictory physical presence from this answer.
+ * Transit-local place view for #45 compatibility and route planning.
+ * While a trip is live the actor is NOT at either endpoint. Once #93 spatial
+ * truth exists, SimulationEngine's facade projection is the physical authority.
  */
 export function getNpcPlaceState(
   state: NpcMobilityState,
