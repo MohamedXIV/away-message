@@ -581,3 +581,40 @@ export const GENERATED_EVENT_MODIFIERS: GeneratedEventModifierDef[] = [
     value: 40,
   },
 ];
+
+export interface GeneratedPhysicalObjectDef {
+  id: string;
+  name: string;
+  kind: string;
+  containerId: string | null;
+  affordances: string[];
+  toolCapabilities: string[];
+  resourceCapabilities: string[];
+  tags: string[];
+}
+
+export interface GeneratedPlacementSlotDef {
+  id: string;
+  name: string;
+  spaceId: string | null;
+  anchorId: string | null;
+  parentPlacementId: string | null;
+  slotKind: string;
+  allowedObjectKinds: string[];
+  tags: string[];
+}
+
+export interface GeneratedObjectPlacementDef {
+  id: string;
+  objectDefId: string;
+  slotId: string;
+}
+
+export const GENERATED_PHYSICAL_OBJECT_DEFS: GeneratedPhysicalObjectDef[] = [
+];
+
+export const GENERATED_PLACEMENT_SLOTS: GeneratedPlacementSlotDef[] = [
+];
+
+export const GENERATED_OBJECT_PLACEMENTS: GeneratedObjectPlacementDef[] = [
+];
