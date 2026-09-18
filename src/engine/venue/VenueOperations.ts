@@ -327,7 +327,7 @@ function stationOccupants(
 
   for (const assignment of Object.values(state.roleAssignments)) {
     if (
-      assignment.status !== 'inactive' &&
+      assignment.status === 'active' &&
       assignment.stationId === stationId &&
       assignment.actorId !== excludeActorId
     ) {
