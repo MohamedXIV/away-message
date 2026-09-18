@@ -755,6 +755,13 @@
         "home",
         "room104"
       ]
+    },
+    "space_b1": {
+      "placeId": "place_b1",
+      "name": "Space B1",
+      "tags": [
+        "interior"
+      ]
     }
   },
   "views": {
@@ -815,6 +822,15 @@
         "main-view",
         "entrance",
         "kitchenette"
+      ]
+    },
+    "view_b1": {
+      "spaceId": "space_b1",
+      "name": "View B1",
+      "neighbors": [],
+      "assetId": "",
+      "tags": [
+        "fixture"
       ]
     }
   },
@@ -937,6 +953,46 @@
         "hotspot",
         "delivery",
         "world-anchor"
+      ]
+    },
+    "fixture_cafe_staff_anchor": {
+      "viewId": "view_a1",
+      "name": "Fixture Cafe Staff",
+      "x": 0.35,
+      "y": 0.5,
+      "tags": [
+        "fixture",
+        "staff"
+      ]
+    },
+    "fixture_cafe_customer_anchor": {
+      "viewId": "view_a1",
+      "name": "Fixture Cafe Customer",
+      "x": 0.65,
+      "y": 0.5,
+      "tags": [
+        "fixture",
+        "customer"
+      ]
+    },
+    "fixture_shop_staff_anchor": {
+      "viewId": "view_b1",
+      "name": "Fixture Shop Staff",
+      "x": 0.35,
+      "y": 0.5,
+      "tags": [
+        "fixture",
+        "staff"
+      ]
+    },
+    "fixture_shop_customer_anchor": {
+      "viewId": "view_b1",
+      "name": "Fixture Shop Customer",
+      "x": 0.65,
+      "y": 0.5,
+      "tags": [
+        "fixture",
+        "customer"
       ]
     }
   },
@@ -1166,6 +1222,186 @@
     "fixture_drawer_placement": {
       "objectDefId": "fixture_drawer_def",
       "slotId": "fixture_drawer_slot"
+    }
+  },
+  "venueRoles": {
+    "fixture_barista_role": {
+      "placeId": "place_a1",
+      "name": "Fixture Barista",
+      "roleKind": "barista",
+      "stationIds": [
+        "fixture_cafe_staff_station"
+      ],
+      "tags": [
+        "fixture"
+      ]
+    },
+    "fixture_cashier_role": {
+      "placeId": "place_b1",
+      "name": "Fixture Cashier",
+      "roleKind": "cashier",
+      "stationIds": [
+        "fixture_shop_staff_station"
+      ],
+      "tags": [
+        "fixture"
+      ]
+    }
+  },
+  "venueStations": {
+    "fixture_cafe_staff_station": {
+      "placeId": "place_a1",
+      "spaceId": "space_a1",
+      "anchorId": "fixture_cafe_staff_anchor",
+      "name": "Fixture Cafe Staff Station",
+      "capacity": 1,
+      "roleKinds": [
+        "barista"
+      ],
+      "tags": [
+        "fixture",
+        "staff"
+      ]
+    },
+    "fixture_cafe_customer_station": {
+      "placeId": "place_a1",
+      "spaceId": "space_a1",
+      "anchorId": "fixture_cafe_customer_anchor",
+      "name": "Fixture Cafe Customer Station",
+      "capacity": 1,
+      "roleKinds": [
+        "customer"
+      ],
+      "tags": [
+        "fixture",
+        "customer"
+      ]
+    },
+    "fixture_shop_staff_station": {
+      "placeId": "place_b1",
+      "spaceId": "space_b1",
+      "anchorId": "fixture_shop_staff_anchor",
+      "name": "Fixture Shop Staff Station",
+      "capacity": 1,
+      "roleKinds": [
+        "cashier"
+      ],
+      "tags": [
+        "fixture",
+        "staff"
+      ]
+    },
+    "fixture_shop_customer_station": {
+      "placeId": "place_b1",
+      "spaceId": "space_b1",
+      "anchorId": "fixture_shop_customer_anchor",
+      "name": "Fixture Shop Customer Station",
+      "capacity": 1,
+      "roleKinds": [
+        "customer"
+      ],
+      "tags": [
+        "fixture",
+        "customer"
+      ]
+    }
+  },
+  "venueServices": {
+    "fixture_cafe_service": {
+      "placeId": "place_a1",
+      "spaceId": "space_a1",
+      "name": "Fixture Cafe Service",
+      "intentKinds": [
+        "shop_for_need"
+      ],
+      "activityTemplateId": "fixture_cafe_customer_activity",
+      "requiredRoleKinds": [
+        "barista"
+      ],
+      "requiredStationIds": [
+        "fixture_cafe_staff_station",
+        "fixture_cafe_customer_station"
+      ],
+      "contextRequirements": [
+        {
+          "kind": "tool",
+          "capability": "work_surface"
+        },
+        {
+          "kind": "resource",
+          "capability": "power"
+        }
+      ],
+      "tags": [
+        "fixture",
+        "cafe"
+      ]
+    },
+    "fixture_shop_service": {
+      "placeId": "place_b1",
+      "spaceId": "space_b1",
+      "name": "Fixture Shop Service",
+      "intentKinds": [
+        "shop_for_need"
+      ],
+      "activityTemplateId": "fixture_shop_customer_activity",
+      "requiredRoleKinds": [
+        "cashier"
+      ],
+      "requiredStationIds": [
+        "fixture_shop_staff_station",
+        "fixture_shop_customer_station"
+      ],
+      "contextRequirements": [],
+      "tags": [
+        "fixture",
+        "shop"
+      ]
+    }
+  },
+  "activityTemplates": {
+    "fixture_cafe_customer_activity": {
+      "placeId": "place_a1",
+      "name": "Fixture Cafe Order",
+      "purpose": "shop",
+      "activityKind": "ordering",
+      "phases": [
+        {
+          "id": "order",
+          "durationMinutes": 2,
+          "stationId": "fixture_cafe_customer_station"
+        },
+        {
+          "id": "receive",
+          "durationMinutes": 2,
+          "stationId": "fixture_cafe_customer_station"
+        }
+      ],
+      "completionOwner": "shop",
+      "completionKind": "order_ready",
+      "tags": [
+        "fixture",
+        "cafe"
+      ]
+    },
+    "fixture_shop_customer_activity": {
+      "placeId": "place_b1",
+      "name": "Fixture Shop Checkout",
+      "purpose": "shop",
+      "activityKind": "checkout",
+      "phases": [
+        {
+          "id": "checkout",
+          "durationMinutes": 3,
+          "stationId": "fixture_shop_customer_station"
+        }
+      ],
+      "completionOwner": "shop",
+      "completionKind": "checkout_ready",
+      "tags": [
+        "fixture",
+        "shop"
+      ]
     }
   }
 }
