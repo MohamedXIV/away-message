@@ -29,11 +29,11 @@ describe('Content event modifiers (#46)', () => {
       ...base,
       eventModifiers: {
         ...(base['eventModifiers'] as Record<string, unknown>),
-        bad_domain: { eventId: 'x', domain: 'weather', kind: 'storm', durationMinutes: 60, targetIds: '[]', value: '' },
-        bad_kind: { eventId: 'x', domain: 'delivery', kind: 'teleport', durationMinutes: 60, targetIds: '[]', value: '' },
-        bad_value: { eventId: 'x', domain: 'delivery', kind: 'courier_backlog', durationMinutes: 60, targetIds: '[]', value: '9999' },
-        bad_target: { eventId: 'x', domain: 'place', kind: 'reduced_desirability', durationMinutes: 60, targetIds: '["nope_nowhere"]', value: '' },
-        bad_window: { eventId: 'x', domain: 'network', kind: 'slow_mirrors', durationMinutes: 99999, targetIds: '[]', value: '' },
+        bad_domain: { eventId: 'x', domain: 'weather', kind: 'storm', durationMinutes: 60, targetIds: [], value: '' },
+        bad_kind: { eventId: 'x', domain: 'delivery', kind: 'teleport', durationMinutes: 60, targetIds: [], value: '' },
+        bad_value: { eventId: 'x', domain: 'delivery', kind: 'courier_backlog', durationMinutes: 60, targetIds: [], value: '9999' },
+        bad_target: { eventId: 'x', domain: 'place', kind: 'reduced_desirability', durationMinutes: 60, targetIds: ['nope_nowhere'], value: '' },
+        bad_window: { eventId: 'x', domain: 'network', kind: 'slow_mirrors', durationMinutes: 99999, targetIds: [], value: '' },
       },
     };
     const errors = validateContent(tables);
@@ -51,7 +51,7 @@ describe('Content event modifiers (#46)', () => {
       domain: 'delivery',
       kind: 'courier_backlog',
       durationMinutes: 2880,
-      targetIds: '[]',
+      targetIds: [],
       value: '360',
     });
     expect(() => buildEventModifierRow('x', 'weather', 'storm', 60, [], '')).toThrow();
