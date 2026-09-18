@@ -10,7 +10,12 @@ import { EconomyEngine } from './EconomyEngine';
 import { HardwareEngine } from './HardwareEngine';
 import { FileSystemEngine } from './FileSystemEngine';
 import { DownloadManager } from './DownloadManager';
-import { DeliveryEngine, GROCERY_SKUS, type Fulfillment } from './DeliveryEngine';
+import {
+  DeliveryEngine,
+  GROCERY_SKUS,
+  type Fulfillment,
+  type PlaceDeliveryOptions,
+} from './DeliveryEngine';
 import { SoftwareRegistry } from './SoftwareRegistry';
 import { SocialEngine } from './SocialEngine';
 import { TelemetryEngine } from './TelemetryEngine';
@@ -1462,7 +1467,8 @@ export class SimulationEngine {
   public placeGroceryOrder(
     rawItems: Array<{ sku: string; qty: number }>,
     fulfillment: Fulfillment,
-    nowMinute: number
+    nowMinute: number,
+    deliveryOptions?: PlaceDeliveryOptions,
   ): ActionResult & { data?: { orderId: string; etaMinute: number; summary: string } } {
     try {
       const items = (rawItems || [])
