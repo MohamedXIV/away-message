@@ -23,6 +23,8 @@ export const CONTENT_RELATIONSHIP_IDS = {
   placementSlotParentPlacement: 'placementSlotParentPlacement',
   objectPlacementSlot: 'objectPlacementSlot',
   objectPlacementDefinition: 'objectPlacementDefinition',
+  placeServicePolicyPlace: 'placeServicePolicyPlace',
+  placeServicePolicyDeliverySlot: 'placeServicePolicyDeliverySlot',
 } as const;
 
 export const CONTENT_INDEX_IDS = {
@@ -38,6 +40,7 @@ export const CONTENT_INDEX_IDS = {
   placementSlotsByParentPlacement: 'placementSlotsByParentPlacement',
   objectPlacementsBySlot: 'objectPlacementsBySlot',
   objectPlacementsByDefinition: 'objectPlacementsByDefinition',
+  placeServicePoliciesByPlace: 'placeServicePoliciesByPlace',
 } as const;
 
 export const CONTENT_QUERY_IDS = {
@@ -160,6 +163,18 @@ export function createContentModel(store: ContentStore = createContentStore()): 
       'objectPlacements',
       'physicalObjectDefs',
       'objectDefId',
+    )
+    .setRelationshipDefinition(
+      CONTENT_RELATIONSHIP_IDS.placeServicePolicyPlace,
+      'placeServicePolicies',
+      'places',
+      'placeId',
+    )
+    .setRelationshipDefinition(
+      CONTENT_RELATIONSHIP_IDS.placeServicePolicyDeliverySlot,
+      'placeServicePolicies',
+      'placementSlots',
+      'deliveryTargetSlotId',
     );
 
   const indexes = createIndexes(store)
@@ -174,7 +189,8 @@ export function createContentModel(store: ContentStore = createContentStore()): 
     .setIndexDefinition(CONTENT_INDEX_IDS.placementSlotsBySpace, 'placementSlots', 'spaceId')
     .setIndexDefinition(CONTENT_INDEX_IDS.placementSlotsByParentPlacement, 'placementSlots', 'parentPlacementId')
     .setIndexDefinition(CONTENT_INDEX_IDS.objectPlacementsBySlot, 'objectPlacements', 'slotId')
-    .setIndexDefinition(CONTENT_INDEX_IDS.objectPlacementsByDefinition, 'objectPlacements', 'objectDefId');
+    .setIndexDefinition(CONTENT_INDEX_IDS.objectPlacementsByDefinition, 'objectPlacements', 'objectDefId')
+    .setIndexDefinition(CONTENT_INDEX_IDS.placeServicePoliciesByPlace, 'placeServicePolicies', 'placeId');
 
   const queries = createQueries(store).setQueryDefinition(
     CONTENT_QUERY_IDS.placementSlotsInSpace,

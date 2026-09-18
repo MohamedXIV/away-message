@@ -5,10 +5,28 @@ import {
   CONTENT_RELATIONSHIP_IDS,
   createContentModel,
 } from '../../src/tools/content/model';
-import { validatePhysicalGraph, type ContentTables } from '../../src/tools/content/codegen';
+import {
+  generateWorldRegistrySource,
+  validatePhysicalGraph,
+  type ContentTables,
+} from '../../src/tools/content/codegen';
 
 function validPhysicalTables(): ContentTables {
   return {
+    places: {
+      place_a: {
+        districtId: 'district_a',
+        name: 'Place A',
+        transitAccess: [],
+        legacyIds: [],
+      },
+      place_b: {
+        districtId: 'district_b',
+        name: 'Place B',
+        transitAccess: [],
+        legacyIds: [],
+      },
+    },
     spaces: {
       space_a: { placeId: 'place_a', name: 'Space A', tags: [] },
       space_b: { placeId: 'place_b', name: 'Space B', tags: [] },
@@ -126,6 +144,81 @@ describe('authored physical graph (#100)', () => {
 
     const errors = validatePhysicalGraph(tables);
     expect(errors.some((error) => error.includes('cycle'))).toBe(true);
+  });
+
+  it('accepts an explicit delivery policy targeting an anchored root slot in the same place', () => {
+    const tables = clone(validPhysicalTables());
+    tables['placementSlots']!['delivery_slot'] = {
+      name: 'Delivery Slot',
+      spaceId: 'space_a',
+      anchorId: 'anchor_a',
+      parentPlacementId: '',
+      slotKind: 'delivery',
+      allowedObjectKinds: [],
+      tags: ['delivery'],
+    };
+    tables['placeServicePolicies'] = {
+      policy_a: {
+        placeId: 'place_a',
+        acceptsDelivery: true,
+        deliveryTargetSlotId: 'delivery_slot',
+      },
+    };
+
+    expect(validatePhysicalGraph(tables)).toEqual([]);
+    const source = generateWorldRegistrySource(tables);
+    expect(source).toContain('GeneratedPlaceServicePolicy');
+    expect(source).toContain('GENERATED_PLACE_SERVICE_POLICIES');
+    expect(source).toContain('deliveryTargetSlotId: "delivery_slot"');
+  });
+
+  it('rejects delivery policy targets outside their canonical place', () => {
+    const tables = clone(validPhysicalTables());
+    tables['placementSlots']!['delivery_slot_b'] = {
+      name: 'Delivery Slot B',
+      spaceId: 'space_b',
+      anchorId: 'anchor_b',
+      parentPlacementId: '',
+      slotKind: 'delivery',
+      allowedObjectKinds: [],
+      tags: ['delivery'],
+    };
+    tables['placeServicePolicies'] = {
+      policy_a: {
+        placeId: 'place_a',
+        acceptsDelivery: true,
+        deliveryTargetSlotId: 'delivery_slot_b',
+      },
+    };
+
+    const errors = validatePhysicalGraph(tables);
+    expect(
+      errors.some(
+        (error) =>
+          error.includes('placeServicePolicies/policy_a.deliveryTargetSlotId') &&
+          error.includes("place 'place_a'"),
+      ),
+    ).toBe(true);
+  });
+
+  it('rejects delivery acceptance without an explicit target', () => {
+    const tables = clone(validPhysicalTables());
+    tables['placeServicePolicies'] = {
+      policy_a: {
+        placeId: 'place_a',
+        acceptsDelivery: true,
+        deliveryTargetSlotId: '',
+      },
+    };
+
+    const errors = validatePhysicalGraph(tables);
+    expect(
+      errors.some(
+        (error) =>
+          error.includes('placeServicePolicies/policy_a.deliveryTargetSlotId') &&
+          error.includes('explicit target'),
+      ),
+    ).toBe(true);
   });
 
   it('exposes relationships, indexes, and a reusable per-space slot query', () => {

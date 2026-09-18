@@ -1077,5 +1077,95 @@
       "density": 0.5,
       "tags": []
     }
+  },
+  "placementSlots": {
+    "delivery_target_primary": {
+      "name": "Primary Delivery Target",
+      "spaceId": "room104_main",
+      "anchorId": "room104_delivery_anchor",
+      "parentPlacementId": "",
+      "slotKind": "delivery",
+      "allowedObjectKinds": [],
+      "tags": [
+        "delivery"
+      ]
+    },
+    "fixture_workbench_slot": {
+      "name": "Fixture Workbench Slot",
+      "spaceId": "space_a1",
+      "anchorId": "anchor_a1",
+      "parentPlacementId": "",
+      "slotKind": "floor",
+      "allowedObjectKinds": [
+        "furniture"
+      ],
+      "tags": [
+        "fixture"
+      ]
+    },
+    "fixture_drawer_slot": {
+      "name": "Fixture Drawer Slot",
+      "spaceId": "",
+      "anchorId": "",
+      "parentPlacementId": "fixture_workbench_placement",
+      "slotKind": "nested",
+      "allowedObjectKinds": [
+        "storage"
+      ],
+      "tags": [
+        "fixture"
+      ]
+    }
+  },
+  "placeServicePolicies": {
+    "primary_delivery_policy": {
+      "placeId": "room_104",
+      "acceptsDelivery": true,
+      "deliveryTargetSlotId": "delivery_target_primary"
+    }
+  },
+  "physicalObjectDefs": {
+    "fixture_workbench_def": {
+      "name": "Fixture Workbench",
+      "kind": "furniture",
+      "containerId": "",
+      "affordances": [
+        "inspect"
+      ],
+      "toolCapabilities": [
+        "work_surface"
+      ],
+      "resourceCapabilities": [
+        "power"
+      ],
+      "tags": [
+        "fixture",
+        "work"
+      ]
+    },
+    "fixture_drawer_def": {
+      "name": "Fixture Drawer",
+      "kind": "storage",
+      "containerId": "container_a",
+      "affordances": [
+        "open"
+      ],
+      "toolCapabilities": [],
+      "resourceCapabilities": [],
+      "tags": [
+        "fixture",
+        "storage"
+      ]
+    }
+  },
+  "objectPlacements": {
+    "fixture_workbench_placement": {
+      "objectDefId": "fixture_workbench_def",
+      "slotId": "fixture_workbench_slot"
+    },
+    "fixture_drawer_placement": {
+      "objectDefId": "fixture_drawer_def",
+      "slotId": "fixture_drawer_slot"
+    }
   }
 }

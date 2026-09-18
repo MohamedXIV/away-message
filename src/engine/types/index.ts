@@ -7,6 +7,7 @@ import type { NpcLifePersistedState } from '../life/types';
 import type { NpcMobilityState } from '../transit/NpcTrips';
 import type { EncounterDirectorState } from '../encounters/types';
 import type { ActorSpatialPositions } from '../spatial/ActorSpatialState';
+import type { PhysicalObjectRuntimeState } from '../physical/PhysicalContextRuntime';
 
 export type TimeOfDay = 'morning' | 'day' | 'evening' | 'night' | 'late_night';
 
@@ -757,6 +758,12 @@ export interface SimulationState {
    * intentionally have no local XYZ row.
    */
   actorSpatialPositions?: ActorSpatialPositions;
+  /**
+   * Canonical mutable physical-object placement state (#103). Definitions,
+   * slots, affordances, capabilities, and service policy remain authored
+   * content; this slice stores only exact runtime object identities/locations.
+   */
+  physicalObjects?: PhysicalObjectRuntimeState;
   /**
    * Encounter Director cooldowns + surfaced one-shot identities (#47).
    * Additive and optional: candidates are always recomputed from canonical

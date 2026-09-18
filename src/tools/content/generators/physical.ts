@@ -16,6 +16,7 @@ export function generatePhysicalWorldSource(tables: ContentTables): string {
   const objectDefs = tables['physicalObjectDefs'] ?? {};
   const slots = tables['placementSlots'] ?? {};
   const placements = tables['objectPlacements'] ?? {};
+  const policies = tables['placeServicePolicies'] ?? {};
   const lines: string[] = [];
 
   lines.push('export interface GeneratedPhysicalObjectDef {');
@@ -46,6 +47,13 @@ export function generatePhysicalWorldSource(tables: ContentTables): string {
   lines.push('  id: string;');
   lines.push('  objectDefId: string;');
   lines.push('  slotId: string;');
+  lines.push('}');
+  lines.push('');
+  lines.push('export interface GeneratedPlaceServicePolicy {');
+  lines.push('  id: string;');
+  lines.push('  placeId: string;');
+  lines.push('  acceptsDelivery: boolean;');
+  lines.push('  deliveryTargetSlotId: string | null;');
   lines.push('}');
   lines.push('');
 
@@ -90,6 +98,19 @@ export function generatePhysicalWorldSource(tables: ContentTables): string {
     lines.push(`    id: ${tsString(id)},`);
     lines.push(`    objectDefId: ${tsString(String(row['objectDefId'] ?? ''))},`);
     lines.push(`    slotId: ${tsString(String(row['slotId'] ?? ''))},`);
+    lines.push('  },');
+  }
+  lines.push('];');
+  lines.push('');
+
+  lines.push('export const GENERATED_PLACE_SERVICE_POLICIES: GeneratedPlaceServicePolicy[] = [');
+  for (const id of Object.keys(policies).sort()) {
+    const row = policies[id] as Record<string, unknown>;
+    lines.push('  {');
+    lines.push(`    id: ${tsString(id)},`);
+    lines.push(`    placeId: ${tsString(String(row['placeId'] ?? ''))},`);
+    lines.push(`    acceptsDelivery: ${row['acceptsDelivery'] === true ? 'true' : 'false'},`);
+    lines.push(`    deliveryTargetSlotId: ${optionalId(row['deliveryTargetSlotId'])},`);
     lines.push('  },');
   }
   lines.push('];');
