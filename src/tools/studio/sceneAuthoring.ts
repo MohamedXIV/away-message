@@ -9,7 +9,7 @@ export function buildSpaceRow(
   return {
     placeId,
     name: name.trim(),
-    tags: '[]',
+    tags: [],
   };
 }
 
@@ -29,9 +29,9 @@ export function buildViewRow(
   return {
     spaceId,
     name: name.trim(),
-    neighbors: '[]',
+    neighbors: [],
     assetId,
-    tags: '[]',
+    tags: [],
   };
 }
 
@@ -53,7 +53,7 @@ export function buildAnchorRow(
     name: name.trim(),
     x,
     y,
-    tags: '[]',
+    tags: [],
   };
 }
 
@@ -73,6 +73,6 @@ export function buildInteractionRow(
     anchorId,
     capability: capability.trim(),
     name: name.trim(),
-    tags: '[]',
+    tags: [],
   };
 }
