@@ -44,7 +44,7 @@ export function worldTablesFromGenerated(): Tables {
       districtId: place.districtId,
       name: place.name,
       transitAccess: [...place.transitAccess],
-      legacyIds: [...place.legacyIds],
+      legacyIds: [...(place.legacyIds ?? [])],
     })),
     transitStops: tableFrom(GENERATED_TRANSIT_STOPS, (stop) => ({
       districtId: stop.districtId,
