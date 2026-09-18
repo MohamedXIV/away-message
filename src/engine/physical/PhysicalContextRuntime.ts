@@ -189,6 +189,114 @@ function validateTargetSlotForObject(
   }
 }
 
+export function hydratePhysicalObjectRuntimeState(
+  data: unknown,
+  graph: PhysicalRuntimeGraph,
+): PhysicalObjectRuntimeState {
+  if (!data || typeof data !== 'object' || Array.isArray(data)) {
+    return materializeAuthoredPhysicalObjects(graph);
+  }
+
+  const rawObjects = (data as Record<string, unknown>)['objects'];
+  if (!rawObjects || typeof rawObjects !== 'object' || Array.isArray(rawObjects)) {
+    return materializeAuthoredPhysicalObjects(graph);
+  }
+
+  const definitions = new Set(graph.objectDefs.map((definition) => definition.id));
+  const slots = new Set(graph.slots.map((slot) => slot.id));
+  const placements = new Set(graph.placements.map((placement) => placement.id));
+  const objects: Record<string, PhysicalObjectInstance> = {};
+
+  for (const [instanceId, value] of Object.entries(rawObjects as Record<string, unknown>)) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) continue;
+    const record = value as Record<string, unknown>;
+    if (record['instanceId'] !== instanceId) continue;
+    if (typeof record['objectDefId'] !== 'string' || !definitions.has(record['objectDefId'])) continue;
+
+    const authoredPlacementId =
+      typeof record['authoredPlacementId'] === 'string' &&
+      placements.has(record['authoredPlacementId'])
+        ? record['authoredPlacementId']
+        : undefined;
+    const location = record['location'];
+    if (!location || typeof location !== 'object' || Array.isArray(location)) continue;
+    const locationRecord = location as Record<string, unknown>;
+
+    if (locationRecord['kind'] === 'detached') {
+      objects[instanceId] = {
+        instanceId,
+        objectDefId: record['objectDefId'],
+        ...(authoredPlacementId ? { authoredPlacementId } : {}),
+        location: { kind: 'detached' },
+      };
+      continue;
+    }
+
+    if (
+      locationRecord['kind'] === 'slot' &&
+      typeof locationRecord['slotId'] === 'string' &&
+      slots.has(locationRecord['slotId'])
+    ) {
+      objects[instanceId] = {
+        instanceId,
+        objectDefId: record['objectDefId'],
+        ...(authoredPlacementId ? { authoredPlacementId } : {}),
+        location: { kind: 'slot', slotId: locationRecord['slotId'] },
+      };
+    }
+  }
+
+  const state = { objects };
+  for (const object of Object.values(state.objects)) {
+    if (object.location.kind === 'slot') {
+      validateTargetSlotForObject(state, object.instanceId, object.location.slotId, graph);
+    }
+  }
+  return state;
+}
+
+export function bridgePhysicalObjectContainers(
+  physicalWorld: PhysicalWorldState,
+  objectState: PhysicalObjectRuntimeState,
+  graph: PhysicalRuntimeGraph,
+): PhysicalWorldState {
+  const definitions = new Map(
+    graph.objectDefs.map((definition) => [definition.id, definition] as const),
+  );
+  const next: PhysicalWorldState = {
+    items: Object.fromEntries(
+      Object.entries(physicalWorld.items).map(([id, item]) => [
+        id,
+        { ...item, location: { ...item.location } },
+      ]),
+    ),
+    containers: Object.fromEntries(
+      Object.entries(physicalWorld.containers).map(([id, container]) => [
+        id,
+        { ...container },
+      ]),
+    ),
+  };
+
+  for (const object of Object.values(objectState.objects)) {
+    const definition = definitions.get(object.objectDefId);
+    if (!definition?.containerId) continue;
+
+    const existing = next.containers[object.instanceId];
+    if (existing && existing.definitionId !== definition.containerId) {
+      throw new Error(
+        `Physical object container identity conflict for ${object.instanceId}: ${existing.definitionId} != ${definition.containerId}.`,
+      );
+    }
+    next.containers[object.instanceId] = {
+      instanceId: object.instanceId,
+      definitionId: definition.containerId,
+    };
+  }
+
+  return next;
+}
+
 export function materializeAuthoredPhysicalObjects(
   graph: PhysicalRuntimeGraph,
 ): PhysicalObjectRuntimeState {
