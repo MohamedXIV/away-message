@@ -39,12 +39,21 @@ export function worldTablesFromGenerated(): Tables {
       mapX: district.mapX,
       mapY: district.mapY,
       tags: [...district.tags],
+      ...(district.spatialBounds
+        ? { spatialBounds: structuredClone(district.spatialBounds) }
+        : {}),
     })),
     places: tableFrom(GENERATED_PLACES, (place) => ({
       districtId: place.districtId,
       name: place.name,
       transitAccess: [...place.transitAccess],
       legacyIds: [...(place.legacyIds ?? [])],
+      ...(place.spatialBounds
+        ? { spatialBounds: structuredClone(place.spatialBounds) }
+        : {}),
+      ...(place.entryPosition
+        ? { entryPosition: { ...place.entryPosition } }
+        : {}),
     })),
     transitStops: tableFrom(GENERATED_TRANSIT_STOPS, (stop) => ({
       districtId: stop.districtId,
@@ -80,6 +89,12 @@ export function worldTablesFromGenerated(): Tables {
       placeId: space.placeId,
       name: space.name,
       tags: [...space.tags],
+      ...(space.spatialBounds
+        ? { spatialBounds: structuredClone(space.spatialBounds) }
+        : {}),
+      ...(space.entryPosition
+        ? { entryPosition: { ...space.entryPosition } }
+        : {}),
     })),
     views: tableFrom(GENERATED_VIEWS, (view) => ({
       spaceId: view.spaceId,
