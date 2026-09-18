@@ -108,7 +108,7 @@ describe('physical delivery arrival', () => {
       expect.objectContaining({
         instanceId: parcelId,
         definitionId: 'delivery_parcel',
-        location: { kind: 'worldAnchor', anchorId: 'room104:delivery' },
+        location: { kind: 'worldAnchor', anchorId: 'room104_delivery_anchor' },
       }),
     );
     expect(physical.containers[parcelId]).toEqual({ instanceId: parcelId, definitionId: 'delivery_parcel' });
@@ -134,6 +134,11 @@ describe('physical delivery arrival', () => {
     const orderId = (placed.data as { orderId: string }).orderId;
     const beforeSave = sim.delivery.getState().orders.find((candidate) => candidate.id === orderId)!;
     expect(beforeSave.status).toBe('transit');
+    expect(beforeSave.deliveryTarget).toEqual({
+      placeId: 'room_104',
+      slotId: 'delivery_target_primary',
+      anchorId: 'room104_delivery_anchor',
+    });
     expect(sim.getPhysicalWorldState().items[`parcel:${orderId}`]).toBeUndefined();
 
     const restored = new SimulationEngine(sim.exportSnapshot());
@@ -144,7 +149,7 @@ describe('physical delivery arrival', () => {
     expect(restored.delivery.getState().orders.find((candidate) => candidate.id === orderId)?.status).toBe('done');
     expect(restored.getPhysicalWorldState().items[`parcel:${orderId}`]?.location).toEqual({
       kind: 'worldAnchor',
-      anchorId: 'room104:delivery',
+      anchorId: 'room104_delivery_anchor',
     });
     expect(Object.values(restored.getPhysicalWorldState().items)
       .filter((item) => item.location.kind === 'container' && item.location.containerInstanceId === `parcel:${orderId}`)
@@ -153,6 +158,33 @@ describe('physical delivery arrival', () => {
         `order-item:${orderId}:noodles_cup:0`,
         `order-item:${orderId}:noodles_cup:1`,
       ]);
+  });
+
+  it('fails closed when a persisted courier order has no explicit target', () => {
+    const sim = new SimulationEngine();
+    sim.economy.earnCash(100, 'missing target test');
+    const placed = sim.dispatchAction({
+      type: 'PLAYER_PLACE_ORDER',
+      items: [{ sku: 'noodles_cup', qty: 1 }],
+      fulfillment: 'delivery',
+    });
+    const orderId = (placed.data as { orderId: string }).orderId;
+    const snapshot = sim.exportSnapshot();
+    const order = snapshot.deliveries.orders.find((candidate) => candidate.id === orderId)!;
+    delete order.deliveryTarget;
+
+    const restored = new SimulationEngine(snapshot);
+    const due = restored.delivery.getState().orders.find((candidate) => candidate.id === orderId)!;
+    restored.advanceGameMinutes(
+      due.readyMinute - restored.clock.getTotalMinutes() + 1,
+      'missing target should not fall back',
+    );
+
+    expect(
+      restored.delivery.getState().orders.find((candidate) => candidate.id === orderId)?.status,
+    ).toBe('transit');
+    expect(restored.getPhysicalWorldState().items[`parcel:${orderId}`]).toBeUndefined();
+    expect(restored.getState().player.pantry.noodles).toBe(2);
   });
 
   it('persists an arrived parcel and exact contents across save/reload without duplicating arrival', () => {
