@@ -20,8 +20,8 @@ export function validItemTables(): ContentTables {
         label: 'Regular',
         description: 'Item fixture scaffold.',
         personaHint: 'Steady.',
-        vocabulary: '[]',
-        defaultInterests: '[]',
+        vocabulary: [],
+        defaultInterests: [],
         defaultSong: '',
         typingSpeedWpm: 70,
       },
@@ -106,14 +106,14 @@ describe('World content items/containers (#51 slice 2)', () => {
 
   it('rejects a container with malformed allowedItemKinds', () => {
     const tables = clone(validItemTables());
-    (tables['containers']!['container_a']! as Record<string, unknown>)['allowedItemKinds'] = '["OK","BAD KIND"]';
+    (tables['containers']!['container_a']! as Record<string, unknown>)['allowedItemKinds'] = ['OK', 'BAD KIND'];
     const errors = validateContent(tables);
     expect(errors.some((e) => e.includes('containers/container_a') && e.includes('allowedItemKinds'))).toBe(true);
   });
 
   it('accepts an unrestricted container (empty allowedItemKinds)', () => {
     const tables = clone(validItemTables());
-    (tables['containers']!['container_a']! as Record<string, unknown>)['allowedItemKinds'] = '[]';
+    (tables['containers']!['container_a']! as Record<string, unknown>)['allowedItemKinds'] = [];
     expect(validateContent(tables)).toEqual([]);
   });
 });
