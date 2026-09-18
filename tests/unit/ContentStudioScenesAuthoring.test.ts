@@ -17,7 +17,7 @@ describe('Content Studio scenes and hierarchy authoring', () => {
     expect(buildSpaceRow('Cafe Interior', 'place_a1', placeIds)).toEqual({
       placeId: 'place_a1',
       name: 'Cafe Interior',
-      tags: '[]',
+      tags: [],
     });
 
     expect(() => buildSpaceRow('Lost Space', 'unknown_place', placeIds)).toThrow(
@@ -29,9 +29,9 @@ describe('Content Studio scenes and hierarchy authoring', () => {
     expect(buildViewRow('Counter View', 'space_a1', spaceIds, 'asset_a1', assetIds)).toEqual({
       spaceId: 'space_a1',
       name: 'Counter View',
-      neighbors: '[]',
+      neighbors: [],
       assetId: 'asset_a1',
-      tags: '[]',
+      tags: [],
     });
 
     expect(() => buildViewRow('Bad View', 'missing_space', spaceIds, '', assetIds)).toThrow(
@@ -48,7 +48,7 @@ describe('Content Studio scenes and hierarchy authoring', () => {
       name: 'Cash Register',
       x: 0.4,
       y: 0.6,
-      tags: '[]',
+      tags: [],
     });
 
     expect(() => buildAnchorRow('Bad Anchor', 'missing_view', viewIds, 0.5, 0.5)).toThrow(
@@ -64,7 +64,7 @@ describe('Content Studio scenes and hierarchy authoring', () => {
       anchorId: 'anchor_a1',
       capability: 'inspect',
       name: 'Inspect Register',
-      tags: '[]',
+      tags: [],
     });
 
     expect(() => buildInteractionRow('Bad Interaction', 'missing_anchor', anchorIds, 'talk')).toThrow(
