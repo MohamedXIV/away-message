@@ -6,6 +6,7 @@ import type { ContentTables } from './shared';
 import { validateCharacterContent } from './validators/characters';
 import { validatePhysicalGraph } from './validators/physical';
 import { validateWorldSpatialContent } from './validators/spatial';
+import { validateVenueContent } from './validators/venue';
 import {
   validateEventModifiers,
   validateWorldAnchors,
@@ -31,6 +32,7 @@ export { generateRegistrySource } from './generators/characters';
 export { generateWorldRegistrySource } from './generators/world';
 export { validatePhysicalGraph } from './validators/physical';
 export { validateWorldSpatialContent } from './validators/spatial';
+export { validateVenueContent } from './validators/venue';
 
 /** Semantic validation against engine rules. Returns error list (empty = valid). */
 export function validateContent(tables: ContentTables): string[] {
@@ -45,5 +47,6 @@ export function validateContent(tables: ContentTables): string[] {
     ...validateEventModifiers(tables),
     ...validatePhysicalGraph(tables),
     ...validateWorldSpatialContent(tables),
+    ...validateVenueContent(tables),
   ];
 }
