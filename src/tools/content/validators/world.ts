@@ -43,19 +43,12 @@ export function validateWorldContent(tables: ContentTables): string[] {
       if (!num(row[key])) errors.push(`${table}/${id}.${key}: must be a finite number.`);
     }
   };
-  const parseJsonArray = (table: string, id: string, field: string, raw: unknown): unknown[] | null => {
-    let parsed: unknown = null;
-    try {
-      parsed = JSON.parse(String(raw ?? '[]'));
-    } catch {
-      errors.push(`${table}/${id}.${field}: invalid JSON array.`);
+  const readArray = (table: string, id: string, field: string, raw: unknown): unknown[] | null => {
+    if (!Array.isArray(raw)) {
+      errors.push(`${table}/${id}.${field}: must be an array.`);
       return null;
     }
-    if (!Array.isArray(parsed)) {
-      errors.push(`${table}/${id}.${field}: must be a JSON array.`);
-      return null;
-    }
-    return parsed;
+    return raw;
   };
 
   // Districts.
@@ -68,7 +61,7 @@ export function validateWorldContent(tables: ContentTables): string[] {
     const r = row as Record<string, unknown>;
     checkName('districts', id, r);
     checkMapPoint('districts', id, r);
-    const tags = parseJsonArray('districts', id, 'tags', r['tags']);
+    const tags = readArray('districts', id, 'tags', r['tags']);
     if (tags) {
       if (tags.length > 12) errors.push(`districts/${id}.tags: max 12 tags.`);
       for (const tag of tags) {
@@ -115,7 +108,7 @@ export function validateWorldContent(tables: ContentTables): string[] {
       errors.push(`places/${id}.districtId: unknown district '${String(districtId)}'.`);
     }
     checkName('places', id, r);
-    const access = parseJsonArray('places', id, 'transitAccess', r['transitAccess']);
+    const access = readArray('places', id, 'transitAccess', r['transitAccess']);
     if (access) {
       if (access.length > 8) errors.push(`places/${id}.transitAccess: max 8 access links.`);
       for (const [i, entry] of access.entries()) {
@@ -129,7 +122,7 @@ export function validateWorldContent(tables: ContentTables): string[] {
         }
       }
     }
-    const legacyIds = parseJsonArray('places', id, 'legacyIds', r['legacyIds']);
+    const legacyIds = readArray('places', id, 'legacyIds', r['legacyIds']);
     if (legacyIds) {
       if (legacyIds.length > 8) errors.push(`places/${id}.legacyIds: max 8 legacy ids.`);
       for (const [i, legacyId] of legacyIds.entries()) {
@@ -149,7 +142,7 @@ export function validateWorldContent(tables: ContentTables): string[] {
     checkId('busLines', id);
     const r = row as Record<string, unknown>;
     checkName('busLines', id, r);
-    const stopIds = parseJsonArray('busLines', id, 'stopIds', r['stopIds']);
+    const stopIds = readArray('busLines', id, 'stopIds', r['stopIds']);
     if (stopIds) {
       if (stopIds.length < 2) {
         errors.push(`busLines/${id}.stopIds: a line needs at least 2 stops (found ${stopIds.length}).`);
@@ -163,7 +156,7 @@ export function validateWorldContent(tables: ContentTables): string[] {
         }
       }
     }
-    const segments = parseJsonArray('busLines', id, 'segmentMinutes', r['segmentMinutes']);
+    const segments = readArray('busLines', id, 'segmentMinutes', r['segmentMinutes']);
     if (stopIds && segments && stopIds.length >= 2 && segments.length !== stopIds.length - 1) {
       errors.push(
         `busLines/${id}.segmentMinutes: length ${segments.length} must equal stops - 1 (${stopIds.length - 1}).`
@@ -243,15 +236,9 @@ export function validateEventModifiers(tables: ContentTables): string[] {
         `eventModifiers/${id}.durationMinutes: must be an int 0..${WORLD_MODIFIER_MAX_DURATION_MINUTES}.`
       );
     }
-    let targets: unknown = null;
-    try {
-      targets = JSON.parse(String(r['targetIds'] ?? '[]'));
-    } catch {
-      errors.push(`eventModifiers/${id}.targetIds: invalid JSON array.`);
-      continue;
-    }
+    const targets = r['targetIds'];
     if (!Array.isArray(targets)) {
-      errors.push(`eventModifiers/${id}.targetIds: must be a JSON array.`);
+      errors.push(`eventModifiers/${id}.targetIds: must be an array.`);
     } else {
       if (targets.length > 16) errors.push(`eventModifiers/${id}.targetIds: max 16 targets.`);
       for (const [i, target] of targets.entries()) {
@@ -306,15 +293,9 @@ export function validateWorldItems(tables: ContentTables): string[] {
     }
   };
   const checkTags = (table: string, id: string, row: Record<string, unknown>): void => {
-    let tags: unknown = null;
-    try {
-      tags = JSON.parse(String(row['tags'] ?? '[]'));
-    } catch {
-      errors.push(`${table}/${id}.tags: invalid JSON array.`);
-      return;
-    }
+    const tags = row['tags'];
     if (!Array.isArray(tags)) {
-      errors.push(`${table}/${id}.tags: must be a JSON array.`);
+      errors.push(`${table}/${id}.tags: must be an array.`);
       return;
     }
     if (tags.length > 12) errors.push(`${table}/${id}.tags: max 12 tags.`);
@@ -358,18 +339,12 @@ export function validateWorldItems(tables: ContentTables): string[] {
     if (!num(r['capacity']) || (r['capacity'] as number) <= 0) {
       errors.push(`containers/${id}.capacity: must be a positive number of capacity units.`);
     }
-    let kinds: unknown = null;
-    try {
-      kinds = JSON.parse(String(r['allowedItemKinds'] ?? '[]'));
-    } catch {
-      errors.push(`containers/${id}.allowedItemKinds: invalid JSON array.`);
-      kinds = null;
-    }
+    const kinds = r['allowedItemKinds'];
     if (Array.isArray(kinds)) {
       if (kinds.length > 24) errors.push(`containers/${id}.allowedItemKinds: max 24 kinds.`);
       for (const kind of kinds) checkTag('containers', id, 'allowedItemKinds', kind);
-    } else if (kinds !== null) {
-      errors.push(`containers/${id}.allowedItemKinds: must be a JSON array ([] = unrestricted).`);
+    } else {
+      errors.push(`containers/${id}.allowedItemKinds: must be an array ([] = unrestricted).`);
     }
     checkTags('containers', id, r);
   }
@@ -395,15 +370,9 @@ export function validateWorldSpaces(tables: ContentTables): string[] {
     }
   };
   const checkTags = (table: string, id: string, row: Record<string, unknown>): void => {
-    let tags: unknown = null;
-    try {
-      tags = JSON.parse(String(row['tags'] ?? '[]'));
-    } catch {
-      errors.push(`${table}/${id}.tags: invalid JSON array.`);
-      return;
-    }
+    const tags = row['tags'];
     if (!Array.isArray(tags)) {
-      errors.push(`${table}/${id}.tags: must be a JSON array.`);
+      errors.push(`${table}/${id}.tags: must be an array.`);
       return;
     }
     if (tags.length > 12) errors.push(`${table}/${id}.tags: max 12 tags.`);
@@ -443,13 +412,7 @@ export function validateWorldSpaces(tables: ContentTables): string[] {
       errors.push(`views/${id}.spaceId: unknown space '${String(spaceId)}'.`);
     }
     checkName('views', id, r);
-    let neighbors: unknown = null;
-    try {
-      neighbors = JSON.parse(String(r['neighbors'] ?? '[]'));
-    } catch {
-      errors.push(`views/${id}.neighbors: invalid JSON array.`);
-      neighbors = null;
-    }
+    const neighbors = r['neighbors'];
     if (Array.isArray(neighbors)) {
       if (neighbors.length > 12) errors.push(`views/${id}.neighbors: max 12 neighbors.`);
       for (const [i, neighbor] of neighbors.entries()) {
@@ -459,8 +422,8 @@ export function validateWorldSpaces(tables: ContentTables): string[] {
           errors.push(`views/${id}.neighbors[${i}]: a view cannot neighbor itself.`);
         }
       }
-    } else if (neighbors !== null) {
-      errors.push(`views/${id}.neighbors: must be a JSON array of view ids.`);
+    } else {
+      errors.push(`views/${id}.neighbors: must be an array of view ids.`);
     }
     checkTags('views', id, r);
   }
@@ -487,15 +450,9 @@ export function validateWorldAnchors(tables: ContentTables): string[] {
     }
   };
   const checkTags = (table: string, id: string, row: Record<string, unknown>): void => {
-    let tags: unknown = null;
-    try {
-      tags = JSON.parse(String(row['tags'] ?? '[]'));
-    } catch {
-      errors.push(`${table}/${id}.tags: invalid JSON array.`);
-      return;
-    }
+    const tags = row['tags'];
     if (!Array.isArray(tags)) {
-      errors.push(`${table}/${id}.tags: must be a JSON array.`);
+      errors.push(`${table}/${id}.tags: must be an array.`);
       return;
     }
     if (tags.length > 12) errors.push(`${table}/${id}.tags: max 12 tags.`);
@@ -570,15 +527,9 @@ export function validateWorldAssets(tables: ContentTables): string[] {
     }
   };
   const checkTags = (table: string, id: string, row: Record<string, unknown>): void => {
-    let tags: unknown = null;
-    try {
-      tags = JSON.parse(String(row['tags'] ?? '[]'));
-    } catch {
-      errors.push(`${table}/${id}.tags: invalid JSON array.`);
-      return;
-    }
+    const tags = row['tags'];
     if (!Array.isArray(tags)) {
-      errors.push(`${table}/${id}.tags: must be a JSON array.`);
+      errors.push(`${table}/${id}.tags: must be an array.`);
       return;
     }
     if (tags.length > 12) errors.push(`${table}/${id}.tags: max 12 tags.`);
@@ -669,15 +620,9 @@ export function validateWorldProfiles(tables: ContentTables): string[] {
     }
   };
   const checkTags = (table: string, id: string, row: Record<string, unknown>): void => {
-    let tags: unknown = null;
-    try {
-      tags = JSON.parse(String(row['tags'] ?? '[]'));
-    } catch {
-      errors.push(`${table}/${id}.tags: invalid JSON array.`);
-      return;
-    }
+    const tags = row['tags'];
     if (!Array.isArray(tags)) {
-      errors.push(`${table}/${id}.tags: must be a JSON array.`);
+      errors.push(`${table}/${id}.tags: must be an array.`);
       return;
     }
     if (tags.length > 12) errors.push(`${table}/${id}.tags: max 12 tags.`);
