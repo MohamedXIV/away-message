@@ -95,7 +95,7 @@ function pointInPolygon(point: SpatialPoint2D, polygon: SpatialPoint2D[]): boole
   return inside;
 }
 
-function containsPosition(position: SpatialPosition, bounds: SpatialBounds): boolean {
+export function containsSpatialPosition(position: SpatialPosition, bounds: SpatialBounds): boolean {
   if (bounds.minZ !== undefined && position.z < bounds.minZ) return false;
   if (bounds.maxZ !== undefined && position.z > bounds.maxZ) return false;
   return pointInPolygon(position, bounds.polygon);
@@ -125,7 +125,7 @@ export function resolveSpatialMembership(
   world: SpatialWorldDefinition,
 ): SpatialMembership {
   const district = selectUnambiguousMatch(
-    world.districts.filter((candidate) => containsPosition(position, candidate.bounds)),
+    world.districts.filter((candidate) => containsSpatialPosition(position, candidate.bounds)),
     'district',
   );
   if (!district) return {};
@@ -133,7 +133,7 @@ export function resolveSpatialMembership(
   const place = selectUnambiguousMatch(
     world.places.filter(
       (candidate) =>
-        candidate.districtId === district.districtId && containsPosition(position, candidate.bounds),
+        candidate.districtId === district.districtId && containsSpatialPosition(position, candidate.bounds),
     ),
     'place',
   );
@@ -144,7 +144,7 @@ export function resolveSpatialMembership(
       (candidate) =>
         candidate.districtId === district.districtId &&
         candidate.placeId === place.placeId &&
-        containsPosition(position, candidate.bounds),
+        containsSpatialPosition(position, candidate.bounds),
     ),
     'space',
   );

@@ -451,7 +451,30 @@
       "mapY": 60,
       "tags": [
         "residential"
-      ]
+      ],
+      "spatialBounds": {
+        "polygon": [
+          {
+            "x": 0,
+            "y": 0
+          },
+          {
+            "x": 50,
+            "y": 0
+          },
+          {
+            "x": 50,
+            "y": 100
+          },
+          {
+            "x": 0,
+            "y": 100
+          }
+        ],
+        "minZ": 0,
+        "maxZ": 0,
+        "priority": 0
+      }
     },
     "district_b": {
       "name": "District B",
@@ -459,7 +482,30 @@
       "mapY": 40,
       "tags": [
         "downtown"
-      ]
+      ],
+      "spatialBounds": {
+        "polygon": [
+          {
+            "x": 50,
+            "y": 0
+          },
+          {
+            "x": 100,
+            "y": 0
+          },
+          {
+            "x": 100,
+            "y": 100
+          },
+          {
+            "x": 50,
+            "y": 100
+          }
+        ],
+        "minZ": 0,
+        "maxZ": 0,
+        "priority": 0
+      }
     }
   },
   "places": {
@@ -472,7 +518,35 @@
           "walkMinutes": 4
         }
       ],
-      "legacyIds": []
+      "legacyIds": [],
+      "spatialBounds": {
+        "polygon": [
+          {
+            "x": 15,
+            "y": 55
+          },
+          {
+            "x": 25,
+            "y": 55
+          },
+          {
+            "x": 25,
+            "y": 65
+          },
+          {
+            "x": 15,
+            "y": 65
+          }
+        ],
+        "minZ": 0,
+        "maxZ": 0,
+        "priority": 0
+      },
+      "entryPosition": {
+        "x": 20,
+        "y": 60,
+        "z": 0
+      }
     },
     "place_b1": {
       "districtId": "district_b",
@@ -483,7 +557,35 @@
           "walkMinutes": 5
         }
       ],
-      "legacyIds": []
+      "legacyIds": [],
+      "spatialBounds": {
+        "polygon": [
+          {
+            "x": 75,
+            "y": 35
+          },
+          {
+            "x": 85,
+            "y": 35
+          },
+          {
+            "x": 85,
+            "y": 45
+          },
+          {
+            "x": 75,
+            "y": 45
+          }
+        ],
+        "minZ": 0,
+        "maxZ": 0,
+        "priority": 0
+      },
+      "entryPosition": {
+        "x": 80,
+        "y": 40,
+        "z": 0
+      }
     },
     "room_104": {
       "districtId": "district_a",
@@ -615,7 +717,35 @@
       "name": "Space A1",
       "tags": [
         "interior"
-      ]
+      ],
+      "spatialBounds": {
+        "polygon": [
+          {
+            "x": 17,
+            "y": 57
+          },
+          {
+            "x": 23,
+            "y": 57
+          },
+          {
+            "x": 23,
+            "y": 63
+          },
+          {
+            "x": 17,
+            "y": 63
+          }
+        ],
+        "minZ": 0,
+        "maxZ": 0,
+        "priority": 0
+      },
+      "entryPosition": {
+        "x": 20,
+        "y": 60,
+        "z": 0
+      }
     },
     "room104_main": {
       "placeId": "room_104",

@@ -4,6 +4,24 @@ const stringCell = (defaultValue = '') => z.string().default(defaultValue);
 const numberCell = (defaultValue: number) => z.number().default(defaultValue);
 const booleanCell = (defaultValue: boolean) => z.boolean().default(defaultValue);
 
+const spatialPointSchema = z.object({
+  x: z.number(),
+  y: z.number(),
+});
+
+const spatialPositionSchema = z.object({
+  x: z.number(),
+  y: z.number(),
+  z: z.number(),
+});
+
+const spatialBoundsSchema = z.object({
+  polygon: z.array(spatialPointSchema),
+  minZ: z.number().optional(),
+  maxZ: z.number().optional(),
+  priority: z.number().optional(),
+});
+
 /**
  * Single authored-content row-shape catalog.
  *
@@ -126,17 +144,22 @@ export const CONTENT_ROW_SCHEMAS = {
     mapX: numberCell(0),
     mapY: numberCell(0),
     tags: z.array(z.string()).default([]),
+    spatialBounds: spatialBoundsSchema.optional(),
   }),
   places: z.object({
     districtId: stringCell(),
     name: stringCell(),
     transitAccess: z.array(z.object({ stopId: z.string(), walkMinutes: z.number() })).default([]),
     legacyIds: z.array(z.string()).default([]),
+    spatialBounds: spatialBoundsSchema.optional(),
+    entryPosition: spatialPositionSchema.optional(),
   }),
   spaces: z.object({
     placeId: stringCell(),
     name: stringCell(),
     tags: z.array(z.string()).default([]),
+    spatialBounds: spatialBoundsSchema.optional(),
+    entryPosition: spatialPositionSchema.optional(),
   }),
   views: z.object({
     spaceId: stringCell(),

@@ -237,6 +237,7 @@ export class SimulationEngine extends LegacySimulationEngine {
     };
 
     if (arrivedNow) {
+      this.relocateActorToGeneratedPlaceEntry(current.actorId, current.plan.destinationPlaceId);
       try {
         this.telemetry.logEvent('world', 'travel_arrived', this.clock.getTotalMinutes(), {
           actorId: current.actorId,
@@ -452,6 +453,8 @@ export class SimulationEngine extends LegacySimulationEngine {
         return { success: false, error: fareResult.error ?? `Cannot afford $${plan.fare.toFixed(2)} travel fare.` };
       }
     }
+
+    this.clearActorSpatialForTravel(actorId);
 
     try {
       this.telemetry.logEvent('world', 'travel_departed', this.clock.getTotalMinutes(), {

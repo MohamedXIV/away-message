@@ -1,4 +1,4 @@
-import type { Tables } from 'tinybase';
+import type { Cell, Tables } from 'tinybase';
 import {
   GENERATED_AMBIENT_PROFILES,
   GENERATED_ANCHORS,
@@ -31,6 +31,24 @@ function optionalCell(value: string | null): string {
   return value ?? '';
 }
 
+function spatialBoundsCell(bounds: {
+  polygon: readonly { x: number; y: number }[];
+  minZ?: number;
+  maxZ?: number;
+  priority?: number;
+}): Cell {
+  return {
+    polygon: bounds.polygon.map((point) => ({ x: point.x, y: point.y })),
+    ...(bounds.minZ === undefined ? {} : { minZ: bounds.minZ }),
+    ...(bounds.maxZ === undefined ? {} : { maxZ: bounds.maxZ }),
+    ...(bounds.priority === undefined ? {} : { priority: bounds.priority }),
+  };
+}
+
+function spatialPositionCell(position: { x: number; y: number; z: number }): Cell {
+  return { x: position.x, y: position.y, z: position.z };
+}
+
 /** Reconstruct the authoring-store shape from generated runtime definitions. */
 export function worldTablesFromGenerated(): Tables {
   return {
@@ -39,12 +57,21 @@ export function worldTablesFromGenerated(): Tables {
       mapX: district.mapX,
       mapY: district.mapY,
       tags: [...district.tags],
+      ...(district.spatialBounds
+        ? { spatialBounds: spatialBoundsCell(district.spatialBounds) }
+        : {}),
     })),
     places: tableFrom(GENERATED_PLACES, (place) => ({
       districtId: place.districtId,
       name: place.name,
       transitAccess: [...place.transitAccess],
       legacyIds: [...(place.legacyIds ?? [])],
+      ...(place.spatialBounds
+        ? { spatialBounds: spatialBoundsCell(place.spatialBounds) }
+        : {}),
+      ...(place.entryPosition
+        ? { entryPosition: spatialPositionCell(place.entryPosition) }
+        : {}),
     })),
     transitStops: tableFrom(GENERATED_TRANSIT_STOPS, (stop) => ({
       districtId: stop.districtId,
@@ -80,6 +107,12 @@ export function worldTablesFromGenerated(): Tables {
       placeId: space.placeId,
       name: space.name,
       tags: [...space.tags],
+      ...(space.spatialBounds
+        ? { spatialBounds: spatialBoundsCell(space.spatialBounds) }
+        : {}),
+      ...(space.entryPosition
+        ? { entryPosition: spatialPositionCell(space.entryPosition) }
+        : {}),
     })),
     views: tableFrom(GENERATED_VIEWS, (view) => ({
       spaceId: view.spaceId,

@@ -1,6 +1,24 @@
 // GENERATED — do not edit by hand.
-// Source: content/store.json (content v8c64c86f). Regenerate: npm run content:pull.
-export const WORLD_CONTENT_VERSION = '8c64c86f';
+// Source: content/store.json (content vcfa8e2ef). Regenerate: npm run content:pull.
+export const WORLD_CONTENT_VERSION = 'cfa8e2ef';
+
+export interface GeneratedSpatialPoint {
+  x: number;
+  y: number;
+}
+
+export interface GeneratedSpatialPosition {
+  x: number;
+  y: number;
+  z: number;
+}
+
+export interface GeneratedSpatialBounds {
+  polygon: GeneratedSpatialPoint[];
+  minZ?: number;
+  maxZ?: number;
+  priority?: number;
+}
 
 export interface GeneratedDistrictDef {
   id: string;
@@ -8,6 +26,7 @@ export interface GeneratedDistrictDef {
   mapX: number;
   mapY: number;
   tags: string[];
+  spatialBounds?: GeneratedSpatialBounds;
 }
 
 export interface GeneratedPlaceTransitAccess {
@@ -21,6 +40,8 @@ export interface GeneratedPlaceDef {
   name: string;
   transitAccess: GeneratedPlaceTransitAccess[];
   legacyIds?: string[];
+  spatialBounds?: GeneratedSpatialBounds;
+  entryPosition?: GeneratedSpatialPosition;
 }
 
 export interface GeneratedTransitStopDef {
@@ -50,6 +71,7 @@ export const GENERATED_DISTRICTS: GeneratedDistrictDef[] = [
     mapX: 20,
     mapY: 60,
     tags: ["residential"],
+    spatialBounds: { polygon: [{ x: 0, y: 0 }, { x: 50, y: 0 }, { x: 50, y: 100 }, { x: 0, y: 100 }], minZ: 0, maxZ: 0, priority: 0 },
   },
   {
     id: "district_b",
@@ -57,6 +79,7 @@ export const GENERATED_DISTRICTS: GeneratedDistrictDef[] = [
     mapX: 80,
     mapY: 40,
     tags: ["downtown"],
+    spatialBounds: { polygon: [{ x: 50, y: 0 }, { x: 100, y: 0 }, { x: 100, y: 100 }, { x: 50, y: 100 }], minZ: 0, maxZ: 0, priority: 0 },
   },
 ];
 
@@ -67,6 +90,8 @@ export const GENERATED_PLACES: GeneratedPlaceDef[] = [
     name: "Place A1",
     transitAccess: [{ stopId: "stop_a", walkMinutes: 4 }],
     legacyIds: [],
+    spatialBounds: { polygon: [{ x: 15, y: 55 }, { x: 25, y: 55 }, { x: 25, y: 65 }, { x: 15, y: 65 }], minZ: 0, maxZ: 0, priority: 0 },
+    entryPosition: { x: 20, y: 60, z: 0 },
   },
   {
     id: "place_b1",
@@ -74,6 +99,8 @@ export const GENERATED_PLACES: GeneratedPlaceDef[] = [
     name: "Place B1",
     transitAccess: [{ stopId: "stop_b", walkMinutes: 5 }],
     legacyIds: [],
+    spatialBounds: { polygon: [{ x: 75, y: 35 }, { x: 85, y: 35 }, { x: 85, y: 45 }, { x: 75, y: 45 }], minZ: 0, maxZ: 0, priority: 0 },
+    entryPosition: { x: 80, y: 40, z: 0 },
   },
   {
     id: "room_104",
@@ -189,6 +216,8 @@ export interface GeneratedSpaceDef {
   placeId: string;
   name: string;
   tags: string[];
+  spatialBounds?: GeneratedSpatialBounds;
+  entryPosition?: GeneratedSpatialPosition;
 }
 
 export interface GeneratedViewDef {
@@ -212,6 +241,8 @@ export const GENERATED_SPACES: GeneratedSpaceDef[] = [
     placeId: "place_a1",
     name: "Space A1",
     tags: ["interior"],
+    spatialBounds: { polygon: [{ x: 17, y: 57 }, { x: 23, y: 57 }, { x: 23, y: 63 }, { x: 17, y: 63 }], minZ: 0, maxZ: 0, priority: 0 },
+    entryPosition: { x: 20, y: 60, z: 0 },
   },
 ];
 
