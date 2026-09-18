@@ -1,6 +1,6 @@
 // GENERATED — do not edit by hand.
-// Source: content/store.json (content v7920d1c0). Regenerate: npm run content:pull.
-export const WORLD_CONTENT_VERSION = '7920d1c0';
+// Source: content/store.json (content v662f7f1f). Regenerate: npm run content:pull.
+export const WORLD_CONTENT_VERSION = '662f7f1f';
 
 export interface GeneratedSpatialPoint {
   x: number;
@@ -649,6 +649,26 @@ export interface GeneratedPlaceServicePolicy {
 }
 
 export const GENERATED_PHYSICAL_OBJECT_DEFS: GeneratedPhysicalObjectDef[] = [
+  {
+    id: "fixture_drawer_def",
+    name: "Fixture Drawer",
+    kind: "storage",
+    containerId: "container_a",
+    affordances: ["open"],
+    toolCapabilities: [],
+    resourceCapabilities: [],
+    tags: ["fixture", "storage"],
+  },
+  {
+    id: "fixture_workbench_def",
+    name: "Fixture Workbench",
+    kind: "furniture",
+    containerId: null,
+    affordances: ["inspect"],
+    toolCapabilities: ["work_surface"],
+    resourceCapabilities: ["power"],
+    tags: ["fixture", "work"],
+  },
 ];
 
 export const GENERATED_PLACEMENT_SLOTS: GeneratedPlacementSlotDef[] = [
@@ -662,9 +682,39 @@ export const GENERATED_PLACEMENT_SLOTS: GeneratedPlacementSlotDef[] = [
     allowedObjectKinds: [],
     tags: ["delivery"],
   },
+  {
+    id: "fixture_drawer_slot",
+    name: "Fixture Drawer Slot",
+    spaceId: null,
+    anchorId: null,
+    parentPlacementId: "fixture_workbench_placement",
+    slotKind: "nested",
+    allowedObjectKinds: ["storage"],
+    tags: ["fixture"],
+  },
+  {
+    id: "fixture_workbench_slot",
+    name: "Fixture Workbench Slot",
+    spaceId: "space_a1",
+    anchorId: "anchor_a1",
+    parentPlacementId: null,
+    slotKind: "floor",
+    allowedObjectKinds: ["furniture"],
+    tags: ["fixture"],
+  },
 ];
 
 export const GENERATED_OBJECT_PLACEMENTS: GeneratedObjectPlacementDef[] = [
+  {
+    id: "fixture_drawer_placement",
+    objectDefId: "fixture_drawer_def",
+    slotId: "fixture_drawer_slot",
+  },
+  {
+    id: "fixture_workbench_placement",
+    objectDefId: "fixture_workbench_def",
+    slotId: "fixture_workbench_slot",
+  },
 ];
 
 export const GENERATED_PLACE_SERVICE_POLICIES: GeneratedPlaceServicePolicy[] = [
