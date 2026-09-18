@@ -6,6 +6,7 @@ import type { InnerVoicePersistedState } from '../innerVoice/types';
 import type { NpcLifePersistedState } from '../life/types';
 import type { NpcMobilityState } from '../transit/NpcTrips';
 import type { EncounterDirectorState } from '../encounters/types';
+import type { ActorSpatialPositions } from '../spatial/ActorSpatialState';
 
 export type TimeOfDay = 'morning' | 'day' | 'evening' | 'night' | 'late_night';
 
@@ -750,6 +751,13 @@ export interface SimulationState {
    */
   npcMobility?: NpcMobilityState;
   /**
+   * Canonical renderer-neutral XYZ per local actor (#93). This slice stores
+   * irreducible positions only; district/place/space membership is always
+   * derived from authored spatial content after load. Actors in transit may
+   * intentionally have no local XYZ row.
+   */
+  actorSpatialPositions?: ActorSpatialPositions;
+  /**
    * Encounter Director cooldowns + surfaced one-shot identities (#47).
    * Additive and optional: candidates are always recomputed from canonical
    * authorities after reload, never restored from here. Absent in older
@@ -871,4 +879,10 @@ export interface SimulationEventMap {
   // Reports only — owners decide all consequences.
   'npc:trip_arrived': import('../transit/NpcTrips').NpcArrivalReceipt;
   'npc:trip_failed': import('../transit/NpcTrips').NpcFailureReceipt & { atMinute: number };
+  // Derived spatial consequence (#93). Renderer/view state never emits this.
+  'spatial:transition': {
+    actorId: string;
+    transition: import('../spatial/SpatialPresence').SpatialTransition;
+    position: import('../spatial/SpatialPresence').SpatialPosition | null;
+  };
 }
