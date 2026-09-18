@@ -10,9 +10,11 @@ import type {
 } from '../../src/engine/PhysicalItemEngine';
 import {
   authoredObjectInstanceId,
+  bridgePhysicalObjectContainers,
   detachPhysicalObject,
   getReachableAffordances,
   getReachablePhysicalObjects,
+  hydratePhysicalObjectRuntimeState,
   materializeAuthoredPhysicalObjects,
   movePhysicalObject,
   resolveContextRequirements,
@@ -157,6 +159,29 @@ describe('generic physical context runtime (#103)', () => {
         authoredObjectInstanceId('bench_placement'),
         authoredObjectInstanceId('drawer_placement'),
       ]);
+  });
+
+  it('round-trips exact object placement state and uses the same identity for container boundaries', () => {
+    const initial = materializeAuthoredPhysicalObjects(graph);
+    const moved = movePhysicalObject(
+      initial,
+      authoredObjectInstanceId('bench_placement'),
+      'bench_slot_b',
+      graph,
+    );
+    const restored = hydratePhysicalObjectRuntimeState(structuredClone(moved), graph);
+
+    expect(restored).toEqual(moved);
+
+    const bridged = bridgePhysicalObjectContainers(
+      { items: {}, containers: {} },
+      restored,
+      graph,
+    );
+    expect(bridged.containers[authoredObjectInstanceId('drawer_placement')]).toEqual({
+      instanceId: authoredObjectInstanceId('drawer_placement'),
+      definitionId: 'storage_def',
+    });
   });
 
   it('exposes direct affordances from concrete reachable objects only', () => {
