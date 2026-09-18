@@ -27,9 +27,9 @@ describe('Content Studio physical-definition authoring', () => {
     });
   });
 
-  it('round-trips semantic kind/tag lists as trimmed unique JSON arrays', () => {
-    expect(serializeSemanticList([' food ', 'fragile', 'food', ''])).toBe('["food","fragile"]');
-    expect(parseSemanticList('["food","fragile"]')).toEqual(['food', 'fragile']);
-    expect(parseSemanticList('not-json')).toEqual([]);
+  it('normalizes semantic kind/tag arrays without JSON-string cells', () => {
+    expect(serializeSemanticList([' food ', 'fragile', 'food', ''])).toEqual(['food', 'fragile']);
+    expect(parseSemanticList(['food', 'fragile'])).toEqual(['food', 'fragile']);
+    expect(parseSemanticList('not-an-array')).toEqual([]);
   });
 });
