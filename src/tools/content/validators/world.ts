@@ -6,7 +6,6 @@ import {
   WORLD_MODIFIER_KINDS,
   WORLD_MODIFIER_MAX_DELIVERY_EXTRA_MINUTES,
   WORLD_MODIFIER_MAX_DURATION_MINUTES,
-  parseModifierValue,
   type WorldModifierDomain,
 } from '../../../engine/WorldModifiers';
 import type { ContentTables } from '../shared';
