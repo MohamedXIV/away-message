@@ -85,7 +85,9 @@ function cloneObject(instance: PhysicalObjectInstance): PhysicalObjectInstance {
   };
 }
 
-function cloneState(state: PhysicalObjectRuntimeState): PhysicalObjectRuntimeState {
+export function clonePhysicalObjectRuntimeState(
+  state: PhysicalObjectRuntimeState,
+): PhysicalObjectRuntimeState {
   return {
     objects: Object.fromEntries(
       Object.entries(state.objects).map(([instanceId, object]) => [
@@ -378,7 +380,7 @@ export function movePhysicalObject(
 ): PhysicalObjectRuntimeState {
   validateTargetSlotForObject(state, objectInstanceId, targetSlotId, graph);
 
-  const candidate = cloneState(state);
+  const candidate = clonePhysicalObjectRuntimeState(state);
   candidate.objects[objectInstanceId] = {
     ...candidate.objects[objectInstanceId]!,
     location: { kind: 'slot', slotId: targetSlotId },
@@ -405,7 +407,7 @@ export function detachPhysicalObject(
   const object = state.objects[objectInstanceId];
   if (!object) throw new Error(`Unknown physical object instance: ${objectInstanceId}.`);
 
-  const candidate = cloneState(state);
+  const candidate = clonePhysicalObjectRuntimeState(state);
   candidate.objects[objectInstanceId] = {
     ...candidate.objects[objectInstanceId]!,
     location: { kind: 'detached' },
