@@ -17,6 +17,18 @@ function createSyntheticModel() {
   const model = createContentModel();
   const { store } = model;
 
+  // Character-domain validation intentionally requires at least one archetype
+  // even when this synthetic proof does not author any characters.
+  store.setRow('archetypes', 'test_archetype', {
+    label: 'Test Archetype',
+    description: 'Synthetic validator fixture',
+    personaHint: '',
+    vocabulary: [],
+    defaultInterests: [],
+    defaultSong: '',
+    typingSpeedWpm: 70,
+  });
+
   store.setRow('districts', 'test_district', {
     name: 'Test District',
     mapX: 10,
