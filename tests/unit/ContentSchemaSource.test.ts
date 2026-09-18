@@ -11,16 +11,16 @@ describe('content schema source of truth (#100)', () => {
       store.setRow('places', 'place_test', {
         districtId: 'district_test',
         name: 'Test Place',
-        transitAccess: '[]',
-        legacyIds: '[]',
+        transitAccess: [],
+        legacyIds: [],
       }),
     ).not.toThrow();
 
     expect(store.getRow('places', 'place_test')).toEqual({
       districtId: 'district_test',
       name: 'Test Place',
-      transitAccess: '[]',
-      legacyIds: '[]',
+      transitAccess: [],
+      legacyIds: [],
     });
   });
 
@@ -31,8 +31,8 @@ describe('content schema source of truth (#100)', () => {
       displayName: 'Test Actor',
     });
 
-    expect(store.getCell('characters', 'actor_test', 'roles')).toBe('[]');
+    expect(store.getCell('characters', 'actor_test', 'roles')).toEqual([]);
     expect(store.getCell('characters', 'actor_test', 'reach')).toBe('local');
-    expect(store.getCell('characters', 'actor_test', 'languages')).toBe('[{"lang":"en","level":5}]');
+    expect(store.getCell('characters', 'actor_test', 'languages')).toEqual([{ lang: 'en', level: 5 }]);
   });
 });
