@@ -6,12 +6,12 @@
 // generated registry, never this store.
 
 import React from 'react';
-import { Provider, useCreateStore } from 'tinybase/ui-react';
+import { Provider } from 'tinybase/ui-react';
 import type { Tables } from 'tinybase';
 const ContentStudioShell = React.lazy(() =>
   import('./studio/ContentStudioShell').then((m) => ({ default: m.ContentStudioShell }))
 );
-import { createContentStore } from './content/schema';
+import { createContentModel } from './content/model';
 import { worldTablesFromGenerated } from './studio/worldTablesFromGenerated';
 import {
   GENERATED_CHARACTERS,
@@ -197,16 +197,16 @@ export function tablesFromGenerated(): Tables {
 }
 
 export const ContentInspector: React.FC = () => {
-  const store = useCreateStore(() => {
-    const next = createContentStore();
-    next.setTables(tablesFromGenerated());
+  const model = React.useMemo(() => {
+    const next = createContentModel();
+    next.store.setTables(tablesFromGenerated());
     return next;
-  });
+  }, []);
 
   return (
-    <Provider store={store}>
+    <Provider store={model.store}>
       <React.Suspense fallback={null}>
-        <ContentStudioShell store={store} />
+        <ContentStudioShell model={model} />
       </React.Suspense>
     </Provider>
   );

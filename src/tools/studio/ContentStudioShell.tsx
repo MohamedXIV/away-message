@@ -2,7 +2,7 @@
 // Main window and navigation shell for the visual Content Studio.
 
 import React, { useState } from 'react';
-import type { Store } from 'tinybase';
+import type { ContentModel } from '../content/model';
 import { CONTENT_VERSION } from '../../engine/coreBuddies.generated';
 import { useStudioStore } from './hooks/useStudioStore';
 import type { StudioTab } from './types';
@@ -21,11 +21,11 @@ import { RawInspectorTab } from './tabs/RawInspectorTab';
 import { ValidationErrorsModal } from './components/ValidationErrorsModal';
 
 interface Props {
-  store: Store;
+  model: ContentModel;
 }
 
-export const ContentStudioShell: React.FC<Props> = ({ store }) => {
-  const studio = useStudioStore(store);
+export const ContentStudioShell: React.FC<Props> = ({ model }) => {
+  const studio = useStudioStore(model);
 
   const [activeTab, setActiveTab] = useState<StudioTab>('characters');
   const [isMinimized, setIsMinimized] = useState(false);
@@ -200,6 +200,26 @@ export const ContentStudioShell: React.FC<Props> = ({ store }) => {
               <span>{errorCount} Issues</span>
             </button>
           )}
+
+          <button
+            type="button"
+            onClick={studio.undo}
+            disabled={!studio.canUndo}
+            className="rounded border border-purple-700/60 bg-purple-950/60 hover:bg-purple-900/60 disabled:opacity-30 disabled:cursor-not-allowed px-2.5 py-1 text-xs font-semibold text-purple-200 shadow transition-colors"
+            title="Undo last authored content edit"
+          >
+            Undo
+          </button>
+
+          <button
+            type="button"
+            onClick={studio.redo}
+            disabled={!studio.canRedo}
+            className="rounded border border-purple-700/60 bg-purple-950/60 hover:bg-purple-900/60 disabled:opacity-30 disabled:cursor-not-allowed px-2.5 py-1 text-xs font-semibold text-purple-200 shadow transition-colors"
+            title="Redo authored content edit"
+          >
+            Redo
+          </button>
 
           <button
             type="button"
