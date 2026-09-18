@@ -1,6 +1,6 @@
 // GENERATED — do not edit by hand.
-// Source: content/store.json (content vcfa8e2ef). Regenerate: npm run content:pull.
-export const WORLD_CONTENT_VERSION = 'cfa8e2ef';
+// Source: content/store.json (content v7920d1c0). Regenerate: npm run content:pull.
+export const WORLD_CONTENT_VERSION = '7920d1c0';
 
 export interface GeneratedSpatialPoint {
   x: number;
@@ -641,11 +641,37 @@ export interface GeneratedObjectPlacementDef {
   slotId: string;
 }
 
+export interface GeneratedPlaceServicePolicy {
+  id: string;
+  placeId: string;
+  acceptsDelivery: boolean;
+  deliveryTargetSlotId: string | null;
+}
+
 export const GENERATED_PHYSICAL_OBJECT_DEFS: GeneratedPhysicalObjectDef[] = [
 ];
 
 export const GENERATED_PLACEMENT_SLOTS: GeneratedPlacementSlotDef[] = [
+  {
+    id: "delivery_target_primary",
+    name: "Primary Delivery Target",
+    spaceId: "room104_main",
+    anchorId: "room104_delivery_anchor",
+    parentPlacementId: null,
+    slotKind: "delivery",
+    allowedObjectKinds: [],
+    tags: ["delivery"],
+  },
 ];
 
 export const GENERATED_OBJECT_PLACEMENTS: GeneratedObjectPlacementDef[] = [
+];
+
+export const GENERATED_PLACE_SERVICE_POLICIES: GeneratedPlaceServicePolicy[] = [
+  {
+    id: "primary_delivery_policy",
+    placeId: "room_104",
+    acceptsDelivery: true,
+    deliveryTargetSlotId: "delivery_target_primary",
+  },
 ];
