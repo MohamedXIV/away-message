@@ -14,7 +14,7 @@ describe('World content spaces/views (#51 slice 3)', () => {
 
   it('rejects invalid space IDs', () => {
     const tables = clone(validSpaceTables());
-    (tables['spaces']!['BAD ID'] as unknown) = { placeId: 'place_a1', name: 'Bad', tags: '[]' };
+    (tables['spaces']!['BAD ID'] as unknown) = { placeId: 'place_a1', name: 'Bad', tags: [] };
     const errors = validateContent(tables);
     expect(errors.some((e) => e.includes('spaces/BAD ID'))).toBe(true);
   });
@@ -35,7 +35,7 @@ describe('World content spaces/views (#51 slice 3)', () => {
 
   it('rejects invalid view IDs', () => {
     const tables = clone(validSpaceTables());
-    (tables['views']!['BAD ID'] as unknown) = { spaceId: 'space_a1', name: 'Bad', neighbors: '[]', tags: '[]' };
+    (tables['views']!['BAD ID'] as unknown) = { spaceId: 'space_a1', name: 'Bad', neighbors: [], tags: [] };
     const errors = validateContent(tables);
     expect(errors.some((e) => e.includes('views/BAD ID'))).toBe(true);
   });
