@@ -25,6 +25,21 @@ import {
   type PhysicalWorldState,
 } from './PhysicalItemEngine';
 import { GROCERY_SKUS, type DeliveryOrder, type Fulfillment } from './DeliveryEngine';
+import {
+  bridgePhysicalObjectContainers,
+  clonePhysicalObjectRuntimeState,
+  detachPhysicalObject as detachRuntimePhysicalObject,
+  getReachableAffordances,
+  hydratePhysicalObjectRuntimeState,
+  movePhysicalObject as moveRuntimePhysicalObject,
+  resolveContextRequirements,
+  resolvePlaceDeliveryTarget,
+  type ContextRequirement,
+  type ContextRequirementResult,
+  type PhysicalObjectRuntimeState,
+  type PhysicalRuntimeGraph,
+  type ReachableAffordance,
+} from './physical/PhysicalContextRuntime';
 import { PHYSICAL_ITEM_CATALOG } from './hardware/catalog';
 import {
   commitTravelPlan as createActiveTravel,
@@ -34,7 +49,15 @@ import {
 } from './transit/ActiveTravel';
 import type { ActiveTravelState, TravelPlan } from './transit/types';
 import type { SimulationState as TransportSimulationState } from './types';
-import { GENERATED_CONTAINERS, GENERATED_ITEMS } from './worldContent.generated';
+import {
+  GENERATED_CONTAINERS,
+  GENERATED_ITEMS,
+  GENERATED_OBJECT_PLACEMENTS,
+  GENERATED_PHYSICAL_OBJECT_DEFS,
+  GENERATED_PLACE_SERVICE_POLICIES,
+  GENERATED_PLACEMENT_SLOTS,
+  GENERATED_PLACES,
+} from './worldContent.generated';
 import {
   InnerVoiceEngine,
   emptyInnerVoicePersistedState,
@@ -49,18 +72,31 @@ export * from './SimulationEngineLegacyFacade';
 
 export type LiveSimulationState = LegacyLiveSimulationState & {
   physicalWorld: PhysicalWorldState;
+  physicalObjects: PhysicalObjectRuntimeState;
   activeTravel: ActiveTravelState | null;
 };
 
 type InitialSimulationState = Partial<TransportSimulationState> & {
   physicalWorld?: PhysicalWorldState;
+  physicalObjects?: PhysicalObjectRuntimeState;
   activeTravel?: ActiveTravelState | null;
 };
 
 const DELIVERY_PARCEL_DEFINITION_ID = 'delivery_parcel';
 const SHOPPING_BAG_DEFINITION_ID = 'corner_mart_shopping_bag';
-const DELIVERY_ANCHOR_ID = 'room104:delivery';
 const CORNER_MART_ITEM_KIND = 'corner-mart-item';
+
+const PHYSICAL_RUNTIME_GRAPH: PhysicalRuntimeGraph = {
+  objectDefs: GENERATED_PHYSICAL_OBJECT_DEFS,
+  slots: GENERATED_PLACEMENT_SLOTS,
+  placements: GENERATED_OBJECT_PLACEMENTS,
+};
+
+function resolveGeneratedPlaceId(rawId: string): string | null {
+  const direct = GENERATED_PLACES.find((place) => place.id === rawId);
+  if (direct) return direct.id;
+  return GENERATED_PLACES.find((place) => place.legacyIds?.includes(rawId))?.id ?? null;
+}
 
 function groceryDefinitionId(sku: string): string {
   return `corner-mart:${sku}`;
@@ -183,12 +219,17 @@ function cloneActiveTravel(state: ActiveTravelState): ActiveTravelState {
 
 export class SimulationEngine extends LegacySimulationEngine {
   private physicalWorldState: PhysicalWorldState | null = null;
+  private physicalObjectState: PhysicalObjectRuntimeState = { objects: {} };
   private activeTravelState: ActiveTravelState | null = null;
   /** Player Inner Voice rules gate (#23). Owns cooldown/notable-history only. */
   private readonly innerVoice: InnerVoiceEngine;
 
   public constructor(initialState?: InitialSimulationState) {
     super(initialState);
+    this.physicalObjectState = hydratePhysicalObjectRuntimeState(
+      initialState?.physicalObjects,
+      PHYSICAL_RUNTIME_GRAPH,
+    );
     this.physicalWorldState = this.hydratePhysicalWorld(initialState?.physicalWorld);
     this.activeTravelState = initialState?.activeTravel ? cloneActiveTravel(initialState.activeTravel) : null;
     this.innerVoice = new InnerVoiceEngine(
@@ -200,10 +241,21 @@ export class SimulationEngine extends LegacySimulationEngine {
   }
 
   private hydratePhysicalWorld(persisted?: PhysicalWorldState): PhysicalWorldState {
-    return bridgeOwnedInventoryIntoPhysicalWorld(
+    const owned = bridgeOwnedInventoryIntoPhysicalWorld(
       persisted ? clonePhysicalWorld(persisted) : emptyPhysicalWorld(),
       this.inventory.getState(),
     );
+    return bridgePhysicalObjectContainers(
+      owned,
+      this.physicalObjectState,
+      PHYSICAL_RUNTIME_GRAPH,
+    );
+  }
+
+  private currentDeliveryPlaceId(): string | null {
+    const spatialPlaceId = this.getActorSpatialProjection('player')?.membership.placeId;
+    if (spatialPlaceId) return spatialPlaceId;
+    return resolveGeneratedPlaceId(this.economy.getLocation());
   }
 
   private currentPhysicalWorld(): PhysicalWorldState {
@@ -282,12 +334,16 @@ export class SimulationEngine extends LegacySimulationEngine {
   }
 
   private materializeDeliveryParcel(order: DeliveryOrder): boolean {
+    if (!order.deliveryTarget) {
+      throw new Error(`Delivery order ${order.id} has no explicit authored target.`);
+    }
+
     const parcelId = `parcel:${order.id}`;
     this.materializeGroceryContainer(
       order,
       parcelId,
       DELIVERY_PARCEL_DEFINITION_ID,
-      { kind: 'worldAnchor', anchorId: DELIVERY_ANCHOR_ID },
+      { kind: 'worldAnchor', anchorId: order.deliveryTarget.anchorId },
       'order-item',
     );
 
@@ -296,6 +352,8 @@ export class SimulationEngine extends LegacySimulationEngine {
       this.telemetry.logEvent('economy', 'order_delivered', this.clock.getTotalMinutes(), {
         orderId: order.id,
         parcelId,
+        placeId: order.deliveryTarget.placeId,
+        deliveryTargetSlotId: order.deliveryTarget.slotId,
       });
     } catch {}
     return true;
@@ -307,7 +365,30 @@ export class SimulationEngine extends LegacySimulationEngine {
     nowMinute: number,
   ) {
     if (fulfillment !== 'pickup') {
-      return super.placeGroceryOrder(rawItems, fulfillment, nowMinute);
+      const placeId = this.currentDeliveryPlaceId();
+      if (!placeId) {
+        return { success: false, error: 'No canonical delivery place is available.' };
+      }
+
+      const target = resolvePlaceDeliveryTarget(
+        placeId,
+        GENERATED_PLACE_SERVICE_POLICIES,
+        PHYSICAL_RUNTIME_GRAPH,
+      );
+      if (!target.ok) {
+        return {
+          success: false,
+          error: `Delivery is unavailable here (${target.reason}).`,
+        };
+      }
+
+      return super.placeGroceryOrder(rawItems, fulfillment, nowMinute, {
+        deliveryTarget: {
+          placeId,
+          slotId: target.slotId,
+          anchorId: target.location.anchorId,
+        },
+      });
     }
 
     const items = (rawItems || [])
@@ -354,6 +435,50 @@ export class SimulationEngine extends LegacySimulationEngine {
 
   public getPhysicalWorldState(): PhysicalWorldState {
     return clonePhysicalWorld(this.currentPhysicalWorld());
+  }
+
+  public getPhysicalObjectState(): PhysicalObjectRuntimeState {
+    return clonePhysicalObjectRuntimeState(this.physicalObjectState);
+  }
+
+  public getReachablePhysicalAffordances(spaceId: string): ReachableAffordance[] {
+    return getReachableAffordances(
+      spaceId,
+      this.physicalObjectState,
+      PHYSICAL_RUNTIME_GRAPH,
+    );
+  }
+
+  public resolvePhysicalContextRequirements(
+    spaceId: string,
+    requirements: readonly ContextRequirement[],
+  ): ContextRequirementResult {
+    return resolveContextRequirements({
+      spaceId,
+      objectState: this.physicalObjectState,
+      graph: PHYSICAL_RUNTIME_GRAPH,
+      physicalWorld: this.currentPhysicalWorld(),
+      itemDefinitions: PHYSICAL_ITEM_DEFINITIONS,
+      playerInventoryContainerId: PLAYER_INVENTORY_CONTAINER_ID,
+      requirements,
+    });
+  }
+
+  public movePhysicalObject(instanceId: string, targetSlotId: string): void {
+    this.physicalObjectState = moveRuntimePhysicalObject(
+      this.physicalObjectState,
+      instanceId,
+      targetSlotId,
+      PHYSICAL_RUNTIME_GRAPH,
+    );
+  }
+
+  public detachPhysicalObject(instanceId: string): void {
+    this.physicalObjectState = detachRuntimePhysicalObject(
+      this.physicalObjectState,
+      instanceId,
+      PHYSICAL_RUNTIME_GRAPH,
+    );
   }
 
   public transferPhysicalItem(
@@ -473,6 +598,7 @@ export class SimulationEngine extends LegacySimulationEngine {
     return {
       ...super.getState(),
       physicalWorld: clonePhysicalWorld(this.currentPhysicalWorld()),
+      physicalObjects: this.getPhysicalObjectState(),
       activeTravel: this.getActiveTravel(),
       innerVoice: this.innerVoice.getPersistedState(),
     };
@@ -482,6 +608,7 @@ export class SimulationEngine extends LegacySimulationEngine {
     return {
       ...super.exportSnapshot(),
       physicalWorld: clonePhysicalWorld(this.currentPhysicalWorld()),
+      physicalObjects: this.getPhysicalObjectState(),
       activeTravel: this.getActiveTravel(),
       innerVoice: this.innerVoice.getPersistedState(),
     };
@@ -490,14 +617,20 @@ export class SimulationEngine extends LegacySimulationEngine {
   public override loadSnapshot(snapshot: TransportSimulationState): void {
     const extendedSnapshot = snapshot as TransportSimulationState & {
       physicalWorld?: PhysicalWorldState;
+      physicalObjects?: unknown;
       activeTravel?: unknown;
     };
     const persistedPhysicalWorld = extendedSnapshot.physicalWorld;
+    const persistedPhysicalObjects = extendedSnapshot.physicalObjects;
     const persistedActiveTravel = extendedSnapshot.activeTravel == null
       ? null
       : parseActiveTravel(extendedSnapshot.activeTravel);
 
     super.loadSnapshot(snapshot);
+    this.physicalObjectState = hydratePhysicalObjectRuntimeState(
+      persistedPhysicalObjects,
+      PHYSICAL_RUNTIME_GRAPH,
+    );
     this.physicalWorldState = this.hydratePhysicalWorld(persistedPhysicalWorld);
     this.activeTravelState = persistedActiveTravel;
     this.innerVoice.hydrate(snapshot.innerVoice ?? emptyInnerVoicePersistedState());
