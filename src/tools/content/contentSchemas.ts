@@ -9,8 +9,8 @@ const booleanCell = (defaultValue: boolean) => z.boolean().default(defaultValue)
  *
  * TinyBase derives its table schema from these Zod row schemas. Domain
  * semantics and cross-row constraints intentionally remain in validators.
- * Phase B initially preserves historical string-encoded collection cells;
- * those migrate to native array/object cells in explicit later slices.
+ * Collection/object cells use TinyBase-native values; JSON serialization is
+ * reserved for the store export boundary rather than embedded inside cells.
  */
 export const CONTENT_ROW_SCHEMAS = {
   characters: z.object({
@@ -95,6 +95,31 @@ export const CONTENT_ROW_SCHEMAS = {
     capacity: numberCell(1),
     allowedItemKinds: z.array(z.string()).default([]),
     tags: z.array(z.string()).default([]),
+  }),
+  physicalObjectDefs: z.object({
+    name: stringCell(),
+    kind: stringCell('fixture'),
+    containerId: stringCell(),
+    affordances: z.array(z.string()).default([]),
+    toolCapabilities: z.array(z.string()).default([]),
+    resourceCapabilities: z.array(z.string()).default([]),
+    tags: z.array(z.string()).default([]),
+  }),
+  placementSlots: z.object({
+    name: stringCell(),
+    // Root slots belong to one canonical Space. Nested slots leave spaceId empty
+    // and derive containment through parentPlacementId.
+    spaceId: stringCell(),
+    // Optional authored View anchor for interaction/presentation only.
+    anchorId: stringCell(),
+    parentPlacementId: stringCell(),
+    slotKind: stringCell('generic'),
+    allowedObjectKinds: z.array(z.string()).default([]),
+    tags: z.array(z.string()).default([]),
+  }),
+  objectPlacements: z.object({
+    objectDefId: stringCell(),
+    slotId: stringCell(),
   }),
   districts: z.object({
     name: stringCell(),
