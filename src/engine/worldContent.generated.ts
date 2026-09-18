@@ -2,12 +2,31 @@
 // Source: content/store.json (content v8c64c86f). Regenerate: npm run content:pull.
 export const WORLD_CONTENT_VERSION = '8c64c86f';
 
+export interface GeneratedSpatialPoint {
+  x: number;
+  y: number;
+}
+
+export interface GeneratedSpatialPosition {
+  x: number;
+  y: number;
+  z: number;
+}
+
+export interface GeneratedSpatialBounds {
+  polygon: GeneratedSpatialPoint[];
+  minZ?: number;
+  maxZ?: number;
+  priority?: number;
+}
+
 export interface GeneratedDistrictDef {
   id: string;
   name: string;
   mapX: number;
   mapY: number;
   tags: string[];
+  spatialBounds?: GeneratedSpatialBounds;
 }
 
 export interface GeneratedPlaceTransitAccess {
@@ -21,6 +40,8 @@ export interface GeneratedPlaceDef {
   name: string;
   transitAccess: GeneratedPlaceTransitAccess[];
   legacyIds?: string[];
+  spatialBounds?: GeneratedSpatialBounds;
+  entryPosition?: GeneratedSpatialPosition;
 }
 
 export interface GeneratedTransitStopDef {
@@ -189,6 +210,8 @@ export interface GeneratedSpaceDef {
   placeId: string;
   name: string;
   tags: string[];
+  spatialBounds?: GeneratedSpatialBounds;
+  entryPosition?: GeneratedSpatialPosition;
 }
 
 export interface GeneratedViewDef {
