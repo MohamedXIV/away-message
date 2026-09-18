@@ -19,6 +19,10 @@ import {
   GENERATED_SPACES,
   GENERATED_TRANSIT_STOPS,
   GENERATED_VIEWS,
+  GENERATED_VENUE_ROLES,
+  GENERATED_VENUE_STATIONS,
+  GENERATED_VENUE_SERVICES,
+  GENERATED_ACTIVITY_TEMPLATES,
 } from '../../engine/worldContent.generated';
 
 type StudioRow = Tables[string][string];
@@ -133,6 +137,47 @@ export function worldTablesFromGenerated(): Tables {
       placeId: policy.placeId,
       acceptsDelivery: policy.acceptsDelivery,
       deliveryTargetSlotId: optionalCell(policy.deliveryTargetSlotId),
+    })),
+    venueRoles: tableFrom(GENERATED_VENUE_ROLES, (role) => ({
+      placeId: role.placeId,
+      name: role.name,
+      roleKind: role.roleKind,
+      stationIds: [...role.stationIds],
+      tags: [...role.tags],
+    })),
+    venueStations: tableFrom(GENERATED_VENUE_STATIONS, (station) => ({
+      placeId: station.placeId,
+      spaceId: station.spaceId,
+      anchorId: optionalCell(station.anchorId),
+      name: station.name,
+      capacity: station.capacity,
+      roleKinds: [...station.roleKinds],
+      tags: [...station.tags],
+    })),
+    venueServices: tableFrom(GENERATED_VENUE_SERVICES, (service) => ({
+      placeId: service.placeId,
+      spaceId: service.spaceId,
+      name: service.name,
+      intentKinds: [...service.intentKinds],
+      activityTemplateId: service.activityTemplateId,
+      requiredRoleKinds: [...service.requiredRoleKinds],
+      requiredStationIds: [...service.requiredStationIds],
+      contextRequirements: service.contextRequirements.map((requirement) => ({ ...requirement })),
+      tags: [...service.tags],
+    })),
+    activityTemplates: tableFrom(GENERATED_ACTIVITY_TEMPLATES, (template) => ({
+      placeId: template.placeId,
+      name: template.name,
+      purpose: template.purpose,
+      activityKind: template.activityKind,
+      phases: template.phases.map((phase) => ({
+        id: phase.id,
+        durationMinutes: phase.durationMinutes,
+        stationId: optionalCell(phase.stationId),
+      })),
+      completionOwner: template.completionOwner,
+      completionKind: template.completionKind,
+      tags: [...template.tags],
     })),
     spaces: tableFrom(GENERATED_SPACES, (space) => ({
       placeId: space.placeId,
