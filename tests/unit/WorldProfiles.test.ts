@@ -21,7 +21,7 @@ export function validProfileTables(): ContentTables {
     kind: 'audio',
     uri: 'assets/world/a2.mp3',
     normalMapAssetId: '',
-    tags: '[]',
+    tags: [],
   };
   return {
     ...base,
@@ -32,7 +32,7 @@ export function validProfileTables(): ContentTables {
         timeOfDay: 'day',
         colorTint: '#fff2d9',
         intensity: 1,
-        tags: '[]',
+        tags: [],
       },
     },
     audioProfiles: {
@@ -41,7 +41,7 @@ export function validProfileTables(): ContentTables {
         kind: 'ambience',
         assetId: 'asset_a2',
         volume: 0.6,
-        tags: '[]',
+        tags: [],
       },
     },
     ambientProfiles: {
@@ -50,7 +50,7 @@ export function validProfileTables(): ContentTables {
         weather: 'clear',
         timeOfDay: 'evening',
         density: 0.5,
-        tags: '[]',
+        tags: [],
       },
     },
   };
