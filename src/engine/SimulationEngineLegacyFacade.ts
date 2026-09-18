@@ -51,6 +51,22 @@ import {
   type NpcTripRecord,
 } from './transit/NpcTrips';
 import {
+  clearActorSpatialPosition,
+  cloneActorSpatialPositions,
+  emptyActorSpatialPositions,
+  getActorSpatialProjection as projectActorSpatial,
+  hydrateActorSpatialPositions,
+  relocateActorSpatialPosition,
+  type ActorSpatialPositions,
+  type ActorSpatialProjection,
+  type ActorSpatialRelocation,
+} from './spatial/ActorSpatialState';
+import {
+  GENERATED_SPATIAL_WORLD,
+  getGeneratedPlaceEntryPosition,
+} from './spatial/GeneratedSpatialWorld';
+import type { SpatialPosition } from './spatial/SpatialPresence';
+import {
   collectEncounterCandidates,
   decideEncounter as decideEncounterPure,
   emptyEncounterDirectorState,
@@ -140,6 +156,12 @@ export class SimulationEngine extends SimulationEngineCore {
    */
   private npcMobility: NpcMobilityState = emptyNpcMobility();
   /**
+   * Canonical #93 local XYZ truth shared by player and NPC actors.
+   * Membership is derived from GENERATED_SPATIAL_WORLD and never cached here.
+   * Active travelers intentionally have no local position.
+   */
+  private actorSpatialPositions: ActorSpatialPositions = emptyActorSpatialPositions();
+  /**
    * Encounter Director cooldowns + surfaced one-shot identities (#47). The
    * only mutable home for that state — candidates are recomputed from
    * canonical systems on every decision, never stored here.
@@ -184,6 +206,7 @@ export class SimulationEngine extends SimulationEngineCore {
     // the authoritative minute — same-minute reads stay pure afterwards.
     this.ensureAllNpcLifeEntries();
     this.npcMobility = hydrateNpcMobility(initialState?.npcMobility ?? {});
+    this.actorSpatialPositions = hydrateActorSpatialPositions(initialState?.actorSpatialPositions ?? {});
     this.encounterDirector = hydrateEncounterDirectorState(initialState?.encounters ?? {});
   }
 
@@ -203,6 +226,7 @@ export class SimulationEngine extends SimulationEngineCore {
       installedSoftware: this.software.getInstalledSoftware(),
       npcLives: this.getNpcLivesState(),
       npcMobility: this.getNpcMobilityState(),
+      actorSpatialPositions: this.getActorSpatialPositions(),
       encounters: this.getEncounterDirectorState(),
     } as Readonly<LiveSimulationState>;
 
@@ -223,6 +247,7 @@ export class SimulationEngine extends SimulationEngineCore {
       installedSoftware: this.software.getInstalledSoftware(),
       npcLives: this.getNpcLivesState(),
       npcMobility: this.getNpcMobilityState(),
+      actorSpatialPositions: this.getActorSpatialPositions(),
       encounters: this.getEncounterDirectorState(),
     } as LiveSimulationState;
 
