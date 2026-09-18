@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildActorInteractionProjection,
+  projectActorIntoView,
   resolveActorPresentation,
   type ActorPresentationContext,
 } from '../../src/world/actorPresentation';
@@ -75,5 +76,49 @@ describe('actor presentation policy', () => {
     expect(friend.actions).toEqual(['inspect', 'greet', 'talk', 'wave']);
     expect(worker.actions).toEqual(['inspect', 'greet', 'ask_for_help']);
     expect(busy.actions).toEqual(['inspect', 'wave']);
+  });
+
+  it('projects one persistent actor through different authored views without changing identity', () => {
+    const near = projectActorIntoView('actor_alpha', {
+      viewId: 'view_near',
+      cameraMode: 'eye_level',
+      x: 0.35,
+      y: 0.7,
+      distance: 0.2,
+      facing: 'front_3q_left',
+      visible: true,
+    });
+    const far = projectActorIntoView('actor_alpha', {
+      viewId: 'view_far',
+      cameraMode: 'eye_level',
+      x: 0.8,
+      y: 0.45,
+      distance: 0.75,
+      facing: 'side_right',
+      visible: true,
+    });
+
+    expect(near).toMatchObject({ actorId: 'actor_alpha', viewId: 'view_near', tier: 'full_character', x: 0.35, y: 0.7 });
+    expect(far).toMatchObject({ actorId: 'actor_alpha', viewId: 'view_far', tier: 'background', x: 0.8, y: 0.45 });
+    expect(near.actorId).toBe(far.actorId);
+  });
+
+  it('keeps focus transient while authored placement remains unchanged', () => {
+    const placement = {
+      viewId: 'view_near',
+      cameraMode: 'eye_level' as const,
+      x: 0.35,
+      y: 0.7,
+      distance: 0.55,
+      facing: 'front' as const,
+      visible: true,
+    };
+    const normal = projectActorIntoView('actor_alpha', placement);
+    const focused = projectActorIntoView('actor_alpha', placement, { focused: true });
+    const returned = projectActorIntoView('actor_alpha', placement);
+
+    expect(normal.tier).toBe('silhouette_large');
+    expect(focused.tier).toBe('full_character');
+    expect(returned).toEqual(normal);
   });
 });
