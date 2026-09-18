@@ -302,6 +302,45 @@ describe('venue operations (#94)', () => {
     });
   });
 
+  it('a replacement worker can occupy a station while the original worker is on break', () => {
+    const active = staffedCafe();
+    let state = setVenueRoleAssignment(
+      active,
+      {
+        ...active.roleAssignments['test_barista_assignment']!,
+        status: 'break',
+      },
+      definitions,
+    );
+
+    state = setVenueRoleAssignment(
+      state,
+      {
+        id: 'test_relief_assignment',
+        actorId: 'test_relief_worker',
+        roleId: 'test_barista_role',
+        sourceKind: 'job',
+        sourceId: 'test_relief_shift',
+        status: 'active',
+        stationId: 'test_barista_station',
+      },
+      definitions,
+    );
+
+    expect(
+      evaluateVenueService({
+        serviceId: 'test_coffee_service',
+        definitions,
+        state,
+        actorPlaceIds: {
+          test_worker: 'test_cafe',
+          test_relief_worker: 'test_cafe',
+        },
+        contextResult: contextOk,
+      }),
+    ).toEqual({ available: true, blockers: [] });
+  });
+
   it('resolves an already-selected CharacterIntent without re-scoring or changing its provenance', () => {
     const state = staffedCafe();
     const intent = shopIntent();
