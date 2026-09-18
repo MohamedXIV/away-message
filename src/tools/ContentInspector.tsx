@@ -39,6 +39,10 @@ const PHYSICAL_OBJECT_DEF_KEY_ORDER = ['name', 'kind', 'containerId', 'affordanc
 const PLACEMENT_SLOT_KEY_ORDER = ['name', 'spaceId', 'anchorId', 'parentPlacementId', 'slotKind', 'allowedObjectKinds', 'tags'];
 const OBJECT_PLACEMENT_KEY_ORDER = ['objectDefId', 'slotId'];
 const PLACE_SERVICE_POLICY_KEY_ORDER = ['placeId', 'acceptsDelivery', 'deliveryTargetSlotId'];
+const VENUE_ROLE_KEY_ORDER = ['placeId', 'name', 'roleKind', 'stationIds', 'tags'];
+const VENUE_STATION_KEY_ORDER = ['placeId', 'spaceId', 'anchorId', 'name', 'capacity', 'roleKinds', 'tags'];
+const VENUE_SERVICE_KEY_ORDER = ['placeId', 'spaceId', 'name', 'intentKinds', 'activityTemplateId', 'requiredRoleKinds', 'requiredStationIds', 'contextRequirements', 'tags'];
+const ACTIVITY_TEMPLATE_KEY_ORDER = ['placeId', 'name', 'purpose', 'activityKind', 'phases', 'completionOwner', 'completionKind', 'tags'];
 const SPACE_KEY_ORDER = ['placeId', 'name', 'tags', 'spatialBounds', 'entryPosition'];
 const VIEW_KEY_ORDER = ['spaceId', 'name', 'neighbors', 'assetId', 'tags'];
 const ANCHOR_KEY_ORDER = ['viewId', 'name', 'x', 'y', 'tags'];
@@ -68,6 +72,10 @@ const TABLE_KEY_ORDERS: Record<string, string[]> = {
   placementSlots: PLACEMENT_SLOT_KEY_ORDER,
   objectPlacements: OBJECT_PLACEMENT_KEY_ORDER,
   placeServicePolicies: PLACE_SERVICE_POLICY_KEY_ORDER,
+  venueRoles: VENUE_ROLE_KEY_ORDER,
+  venueStations: VENUE_STATION_KEY_ORDER,
+  venueServices: VENUE_SERVICE_KEY_ORDER,
+  activityTemplates: ACTIVITY_TEMPLATE_KEY_ORDER,
   spaces: SPACE_KEY_ORDER,
   views: VIEW_KEY_ORDER,
   anchors: ANCHOR_KEY_ORDER,
