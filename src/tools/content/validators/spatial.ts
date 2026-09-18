@@ -88,6 +88,32 @@ function parseBounds(
   };
 }
 
+function boundsContainedBy(child: SpatialBounds, parent: SpatialBounds): boolean {
+  if (
+    parent.minZ !== undefined &&
+    (child.minZ === undefined || child.minZ < parent.minZ)
+  ) {
+    return false;
+  }
+  if (
+    parent.maxZ !== undefined &&
+    (child.maxZ === undefined || child.maxZ > parent.maxZ)
+  ) {
+    return false;
+  }
+
+  const sampleZ =
+    child.minZ ??
+    child.maxZ ??
+    parent.minZ ??
+    parent.maxZ ??
+    0;
+
+  return child.polygon.every((point) =>
+    containsSpatialPosition({ x: point.x, y: point.y, z: sampleZ }, parent),
+  );
+}
+
 function parseEntry(
   errors: string[],
   table: string,
@@ -146,9 +172,15 @@ export function validateWorldSpatialContent(tables: ContentTables): string[] {
 
     if (parsed) {
       placeBounds.set(id, parsed);
-      if (typeof districtId !== 'string' || !districtBounds.has(districtId)) {
+      const parent =
+        typeof districtId === 'string' ? districtBounds.get(districtId) : undefined;
+      if (!parent) {
         errors.push(
           `places/${id}.spatialBounds: parent district '${String(districtId)}' needs authored spatialBounds.`,
+        );
+      } else if (!boundsContainedBy(parsed.bounds, parent.bounds)) {
+        errors.push(
+          `places/${id}.spatialBounds: must stay inside parent district '${districtId}'.`,
         );
       }
     }
@@ -166,10 +198,18 @@ export function validateWorldSpatialContent(tables: ContentTables): string[] {
     const entry = parseEntry(errors, 'spaces', id, record['entryPosition']);
     const placeId = record['placeId'];
 
-    if (parsed && (typeof placeId !== 'string' || !placeBounds.has(placeId))) {
-      errors.push(
-        `spaces/${id}.spatialBounds: parent place '${String(placeId)}' needs authored spatialBounds.`,
-      );
+    if (parsed) {
+      const parent =
+        typeof placeId === 'string' ? placeBounds.get(placeId) : undefined;
+      if (!parent) {
+        errors.push(
+          `spaces/${id}.spatialBounds: parent place '${String(placeId)}' needs authored spatialBounds.`,
+        );
+      } else if (!boundsContainedBy(parsed.bounds, parent.bounds)) {
+        errors.push(
+          `spaces/${id}.spatialBounds: must stay inside parent place '${placeId}'.`,
+        );
+      }
     }
     if (entry && !parsed) {
       errors.push(`spaces/${id}.entryPosition: requires authored spatialBounds.`);
