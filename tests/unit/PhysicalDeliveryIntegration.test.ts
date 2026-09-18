@@ -82,6 +82,28 @@ describe('PhysicalItemEngine atomic materialization', () => {
   });
 });
 
+describe('physical delivery policy preflight', () => {
+  it('rejects a place without authored delivery policy before charging or creating an order', () => {
+    const sim = new SimulationEngine();
+    sim.economy.earnCash(100, 'policy preflight test');
+    sim.relocateActorSpatially('player', { x: 20, y: 60, z: 0 });
+
+    const cashBefore = sim.getState().player.cash;
+    const ordersBefore = sim.delivery.getState().orders;
+
+    const placed = sim.dispatchAction({
+      type: 'PLAYER_PLACE_ORDER',
+      items: [{ sku: 'noodles_cup', qty: 1 }],
+      fulfillment: 'delivery',
+    });
+
+    expect(placed.success).toBe(false);
+    expect(placed.error).toMatch(/missing_place_policy/);
+    expect(sim.getState().player.cash).toBe(cashBefore);
+    expect(sim.delivery.getState().orders).toEqual(ordersBefore);
+  });
+});
+
 describe('physical delivery arrival', () => {
   it('turns a due courier order into a physical parcel at the delivery anchor without crediting pantry', () => {
     const sim = new SimulationEngine();
