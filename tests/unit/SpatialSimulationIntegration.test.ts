@@ -127,6 +127,58 @@ describe('simulation spatial integration (#93)', () => {
     });
   });
 
+  it('save/reload mid-trip preserves transit truth and restores destination XYZ exactly once', () => {
+    const sim = new SimulationEngine();
+    sim.relocateActorSpatially('player', { x: 20, y: 60, z: 0 });
+    expect(sim.startTravel('player', fiveMinuteWalk(), 'reload_trip').success).toBe(true);
+
+    sim.advanceGameMinutes(2, 'travel');
+    const snapshot = sim.exportSnapshot();
+    expect(snapshot.actorSpatialPositions?.['player']).toBeUndefined();
+    expect(snapshot.activeTravel).toMatchObject({
+      status: 'active',
+      farePaid: 0,
+      plan: { totalMinutes: 5 },
+    });
+
+    const restored = new SimulationEngine(snapshot);
+    expect(restored.getActorSpatialProjection('player')).toBeNull();
+
+    restored.advanceGameMinutes(3, 'travel');
+    expect(restored.getActiveTravel()).toMatchObject({
+      status: 'arrived',
+      farePaid: 0,
+      plan: { totalMinutes: 5, destinationPlaceId: 'place_b1' },
+    });
+    expect(restored.getActorSpatialProjection('player')).toEqual({
+      position: { x: 80, y: 40, z: 0 },
+      membership: { districtId: 'district_b', placeId: 'place_b1' },
+    });
+
+    const afterArrival = restored.exportSnapshot();
+    restored.advanceGameMinutes(30, 'after arrival');
+    expect(restored.exportSnapshot().actorSpatialPositions).toEqual(
+      afterArrival.actorSpatialPositions,
+    );
+  });
+
+  it('uses settled XYZ as NPC physical place authority and keeps transit cache derived', () => {
+    const sim = new SimulationEngine({
+      npcMobility: {
+        trips: {},
+        places: { maya: 'place_a1' },
+      },
+    });
+
+    sim.relocateActorSpatially('maya', { x: 80, y: 40, z: 0 });
+
+    expect(sim.getNpcPlaceState('maya')).toEqual({
+      status: 'at_place',
+      placeId: 'place_b1',
+    });
+    expect(sim.getState().npcMobility?.places['maya']).toBe('place_b1');
+  });
+
   it('emits derived spatial transitions while renderer/view state stays irrelevant', () => {
     const sim = new SimulationEngine();
     const transitions: string[] = [];
