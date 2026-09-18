@@ -12,7 +12,7 @@ import {
 } from '../../engine/WorldModifiers';
 
 import type { ContentTables } from './shared';
-import { contentHash, tsString } from './shared';
+import { contentHash, tsString, validateCharacterId } from './shared';
 import {
   validateEventModifiers,
   validateWorldAnchors,
