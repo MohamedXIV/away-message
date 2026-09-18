@@ -48,6 +48,23 @@ import {
   travelStateAtMinute,
 } from './transit/ActiveTravel';
 import type { ActiveTravelState, TravelPlan } from './transit/types';
+import type { CharacterIntent } from './life/types';
+import {
+  advanceVenueActivities,
+  cloneVenueRuntimeState,
+  evaluateVenueService,
+  hydrateVenueRuntimeState,
+  resolveIntentToVenueActivity,
+  setVenueRoleAssignment as setVenueRoleAssignmentState,
+  startVenueActivity,
+  type ResolveVenueActivityResult,
+  type StartVenueActivityResult,
+  type VenueActivityInstance,
+  type VenueRoleAssignment,
+  type VenueRuntimeState,
+  type VenueServiceAvailability,
+} from './venue/VenueOperations';
+import { GENERATED_VENUE_DEFINITIONS } from './venue/GeneratedVenueDefinitions';
 import type { SimulationState as TransportSimulationState } from './types';
 import {
   GENERATED_CONTAINERS,
@@ -73,6 +90,7 @@ export * from './SimulationEngineLegacyFacade';
 export type LiveSimulationState = LegacyLiveSimulationState & {
   physicalWorld: PhysicalWorldState;
   physicalObjects: PhysicalObjectRuntimeState;
+  venueOperations: VenueRuntimeState;
   activeTravel: ActiveTravelState | null;
 };
 
@@ -220,6 +238,7 @@ function cloneActiveTravel(state: ActiveTravelState): ActiveTravelState {
 export class SimulationEngine extends LegacySimulationEngine {
   private physicalWorldState: PhysicalWorldState | null = null;
   private physicalObjectState: PhysicalObjectRuntimeState = { objects: {} };
+  private venueState: VenueRuntimeState = { roleAssignments: {}, activities: {} };
   private activeTravelState: ActiveTravelState | null = null;
   /** Player Inner Voice rules gate (#23). Owns cooldown/notable-history only. */
   private readonly innerVoice: InnerVoiceEngine;
@@ -230,14 +249,24 @@ export class SimulationEngine extends LegacySimulationEngine {
       initialState?.physicalObjects,
       PHYSICAL_RUNTIME_GRAPH,
     );
+    this.venueState = hydrateVenueRuntimeState(
+      initialState?.venueOperations,
+      GENERATED_VENUE_DEFINITIONS,
+    );
     this.physicalWorldState = this.hydratePhysicalWorld(initialState?.physicalWorld);
     this.activeTravelState = initialState?.activeTravel ? cloneActiveTravel(initialState.activeTravel) : null;
     this.innerVoice = new InnerVoiceEngine(
       (initialState as TransportSimulationState | undefined)?.innerVoice ?? null,
     );
     this.delivery.setArrivalHandler((order) => this.materializeDeliveryParcel(order));
-    this.events.on('time:tick', () => this.synchronizeActiveTravel());
-    this.events.on('time:jump', () => this.synchronizeActiveTravel());
+    this.events.on('time:tick', () => {
+      this.synchronizeActiveTravel();
+      this.synchronizeVenueActivities();
+    });
+    this.events.on('time:jump', () => {
+      this.synchronizeActiveTravel();
+      this.synchronizeVenueActivities();
+    });
   }
 
   private hydratePhysicalWorld(persisted?: PhysicalWorldState): PhysicalWorldState {
@@ -297,6 +326,35 @@ export class SimulationEngine extends LegacySimulationEngine {
           purposeRef: current.purposeRef ?? null,
         });
       } catch {}
+    }
+  }
+
+  private venueActorPlaceIds(extraActorIds: readonly string[] = []): Record<string, string | null> {
+    const actorIds = new Set<string>(extraActorIds);
+    for (const assignment of Object.values(this.venueState.roleAssignments)) {
+      actorIds.add(assignment.actorId);
+    }
+    for (const activity of Object.values(this.venueState.activities)) {
+      if (activity.status === 'active') actorIds.add(activity.actorId);
+    }
+
+    return Object.fromEntries(
+      [...actorIds].sort().map((actorId) => [
+        actorId,
+        this.getActorSpatialProjection(actorId)?.membership.placeId ?? null,
+      ]),
+    );
+  }
+
+  private synchronizeVenueActivities(): void {
+    const advanced = advanceVenueActivities(
+      this.venueState,
+      this.clock.getTotalMinutes(),
+      GENERATED_VENUE_DEFINITIONS,
+    );
+    this.venueState = advanced.state;
+    for (const command of advanced.completed) {
+      this.events.emit('venue:activity_completed', command);
     }
   }
 
@@ -439,6 +497,78 @@ export class SimulationEngine extends LegacySimulationEngine {
 
   public getPhysicalObjectState(): PhysicalObjectRuntimeState {
     return clonePhysicalObjectRuntimeState(this.physicalObjectState);
+  }
+
+  public getVenueRuntimeState(): VenueRuntimeState {
+    return cloneVenueRuntimeState(this.venueState);
+  }
+
+  public setVenueRoleAssignment(assignment: VenueRoleAssignment): void {
+    this.venueState = setVenueRoleAssignmentState(
+      this.venueState,
+      assignment,
+      GENERATED_VENUE_DEFINITIONS,
+    );
+  }
+
+  public getVenueServiceAvailability(serviceId: string): VenueServiceAvailability {
+    const service = GENERATED_VENUE_DEFINITIONS.services.find(
+      (candidate) => candidate.id === serviceId,
+    );
+    if (!service) return { available: false, blockers: ['unknown_service'] };
+
+    return evaluateVenueService({
+      serviceId,
+      definitions: GENERATED_VENUE_DEFINITIONS,
+      state: this.venueState,
+      actorPlaceIds: this.venueActorPlaceIds(),
+      contextResult: this.resolvePhysicalContextRequirements(
+        service.spaceId,
+        service.contextRequirements,
+      ),
+    });
+  }
+
+  public resolveVenueActivityIntent(intent: CharacterIntent): ResolveVenueActivityResult {
+    return resolveIntentToVenueActivity({
+      intent,
+      actorPlaceId:
+        this.getActorSpatialProjection(intent.actorId)?.membership.placeId ?? null,
+      definitions: GENERATED_VENUE_DEFINITIONS,
+      state: this.venueState,
+      actorPlaceIds: this.venueActorPlaceIds([intent.actorId]),
+      resolveContext: (spaceId, requirements) =>
+        this.resolvePhysicalContextRequirements(spaceId, requirements),
+    });
+  }
+
+  public startVenueActivityFromIntent(intent: CharacterIntent): StartVenueActivityResult {
+    const resolved = this.resolveVenueActivityIntent(intent);
+    if (!resolved.ok) return { ok: false, reason: resolved.reason };
+
+    const started = startVenueActivity(
+      this.venueState,
+      resolved.proposal,
+      GENERATED_VENUE_DEFINITIONS,
+      this.clock.getTotalMinutes(),
+    );
+    if (started.ok) this.venueState = started.state;
+    return started;
+  }
+
+  public startCurrentVenueActivity(actorId: string): StartVenueActivityResult {
+    const intent = this.getCharacterIntent(actorId);
+    if (!intent) return { ok: false, reason: 'no_character_intent' };
+    return this.startVenueActivityFromIntent(intent);
+  }
+
+  public getActiveVenueActivity(actorId: string): VenueActivityInstance | null {
+    const state = this.getVenueRuntimeState();
+    return (
+      Object.values(state.activities)
+        .filter((activity) => activity.actorId === actorId && activity.status === 'active')
+        .sort((a, b) => a.id.localeCompare(b.id))[0] ?? null
+    );
   }
 
   public getReachablePhysicalAffordances(spaceId: string): ReachableAffordance[] {
@@ -599,6 +729,7 @@ export class SimulationEngine extends LegacySimulationEngine {
       ...super.getState(),
       physicalWorld: clonePhysicalWorld(this.currentPhysicalWorld()),
       physicalObjects: this.getPhysicalObjectState(),
+      venueOperations: this.getVenueRuntimeState(),
       activeTravel: this.getActiveTravel(),
       innerVoice: this.innerVoice.getPersistedState(),
     };
@@ -609,6 +740,7 @@ export class SimulationEngine extends LegacySimulationEngine {
       ...super.exportSnapshot(),
       physicalWorld: clonePhysicalWorld(this.currentPhysicalWorld()),
       physicalObjects: this.getPhysicalObjectState(),
+      venueOperations: this.getVenueRuntimeState(),
       activeTravel: this.getActiveTravel(),
       innerVoice: this.innerVoice.getPersistedState(),
     };
@@ -618,10 +750,12 @@ export class SimulationEngine extends LegacySimulationEngine {
     const extendedSnapshot = snapshot as TransportSimulationState & {
       physicalWorld?: PhysicalWorldState;
       physicalObjects?: unknown;
+      venueOperations?: unknown;
       activeTravel?: unknown;
     };
     const persistedPhysicalWorld = extendedSnapshot.physicalWorld;
     const persistedPhysicalObjects = extendedSnapshot.physicalObjects;
+    const persistedVenueOperations = extendedSnapshot.venueOperations;
     const persistedActiveTravel = extendedSnapshot.activeTravel == null
       ? null
       : parseActiveTravel(extendedSnapshot.activeTravel);
@@ -630,6 +764,10 @@ export class SimulationEngine extends LegacySimulationEngine {
     this.physicalObjectState = hydratePhysicalObjectRuntimeState(
       persistedPhysicalObjects,
       PHYSICAL_RUNTIME_GRAPH,
+    );
+    this.venueState = hydrateVenueRuntimeState(
+      persistedVenueOperations,
+      GENERATED_VENUE_DEFINITIONS,
     );
     this.physicalWorldState = this.hydratePhysicalWorld(persistedPhysicalWorld);
     this.activeTravelState = persistedActiveTravel;

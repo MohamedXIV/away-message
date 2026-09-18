@@ -8,6 +8,7 @@ import type { NpcMobilityState } from '../transit/NpcTrips';
 import type { EncounterDirectorState } from '../encounters/types';
 import type { ActorSpatialPositions } from '../spatial/ActorSpatialState';
 import type { PhysicalObjectRuntimeState } from '../physical/PhysicalContextRuntime';
+import type { VenueRuntimeState } from '../venue/VenueOperations';
 
 export type TimeOfDay = 'morning' | 'day' | 'evening' | 'night' | 'late_night';
 
@@ -765,6 +766,12 @@ export interface SimulationState {
    */
   physicalObjects?: PhysicalObjectRuntimeState;
   /**
+   * Venue execution state (#94): source-backed role assignments plus bounded
+   * activity instances only. Definitions stay authored content; job/store/
+   * social/item consequences remain with their canonical owners.
+   */
+  venueOperations?: VenueRuntimeState;
+  /**
    * Encounter Director cooldowns + surfaced one-shot identities (#47).
    * Additive and optional: candidates are always recomputed from canonical
    * authorities after reload, never restored from here. Absent in older
@@ -892,4 +899,6 @@ export interface SimulationEventMap {
     transition: import('../spatial/SpatialPresence').SpatialTransition;
     position: import('../spatial/SpatialPresence').SpatialPosition | null;
   };
+  // Venue execution consequence (#94). Owners decide wage/social/item effects.
+  'venue:activity_completed': import('../venue/VenueOperations').VenueCompletionCommand;
 }

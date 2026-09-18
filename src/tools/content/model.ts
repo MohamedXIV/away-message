@@ -25,6 +25,14 @@ export const CONTENT_RELATIONSHIP_IDS = {
   objectPlacementDefinition: 'objectPlacementDefinition',
   placeServicePolicyPlace: 'placeServicePolicyPlace',
   placeServicePolicyDeliverySlot: 'placeServicePolicyDeliverySlot',
+  venueRolePlace: 'venueRolePlace',
+  venueStationPlace: 'venueStationPlace',
+  venueStationSpace: 'venueStationSpace',
+  venueStationAnchor: 'venueStationAnchor',
+  venueServicePlace: 'venueServicePlace',
+  venueServiceSpace: 'venueServiceSpace',
+  venueServiceActivityTemplate: 'venueServiceActivityTemplate',
+  activityTemplatePlace: 'activityTemplatePlace',
 } as const;
 
 export const CONTENT_INDEX_IDS = {
@@ -41,6 +49,10 @@ export const CONTENT_INDEX_IDS = {
   objectPlacementsBySlot: 'objectPlacementsBySlot',
   objectPlacementsByDefinition: 'objectPlacementsByDefinition',
   placeServicePoliciesByPlace: 'placeServicePoliciesByPlace',
+  venueRolesByPlace: 'venueRolesByPlace',
+  venueStationsByPlace: 'venueStationsByPlace',
+  venueServicesByPlace: 'venueServicesByPlace',
+  activityTemplatesByPlace: 'activityTemplatesByPlace',
 } as const;
 
 export const CONTENT_QUERY_IDS = {
@@ -175,6 +187,54 @@ export function createContentModel(store: ContentStore = createContentStore()): 
       'placeServicePolicies',
       'placementSlots',
       'deliveryTargetSlotId',
+    )
+    .setRelationshipDefinition(
+      CONTENT_RELATIONSHIP_IDS.venueRolePlace,
+      'venueRoles',
+      'places',
+      'placeId',
+    )
+    .setRelationshipDefinition(
+      CONTENT_RELATIONSHIP_IDS.venueStationPlace,
+      'venueStations',
+      'places',
+      'placeId',
+    )
+    .setRelationshipDefinition(
+      CONTENT_RELATIONSHIP_IDS.venueStationSpace,
+      'venueStations',
+      'spaces',
+      'spaceId',
+    )
+    .setRelationshipDefinition(
+      CONTENT_RELATIONSHIP_IDS.venueStationAnchor,
+      'venueStations',
+      'anchors',
+      'anchorId',
+    )
+    .setRelationshipDefinition(
+      CONTENT_RELATIONSHIP_IDS.venueServicePlace,
+      'venueServices',
+      'places',
+      'placeId',
+    )
+    .setRelationshipDefinition(
+      CONTENT_RELATIONSHIP_IDS.venueServiceSpace,
+      'venueServices',
+      'spaces',
+      'spaceId',
+    )
+    .setRelationshipDefinition(
+      CONTENT_RELATIONSHIP_IDS.venueServiceActivityTemplate,
+      'venueServices',
+      'activityTemplates',
+      'activityTemplateId',
+    )
+    .setRelationshipDefinition(
+      CONTENT_RELATIONSHIP_IDS.activityTemplatePlace,
+      'activityTemplates',
+      'places',
+      'placeId',
     );
 
   const indexes = createIndexes(store)
@@ -190,7 +250,11 @@ export function createContentModel(store: ContentStore = createContentStore()): 
     .setIndexDefinition(CONTENT_INDEX_IDS.placementSlotsByParentPlacement, 'placementSlots', 'parentPlacementId')
     .setIndexDefinition(CONTENT_INDEX_IDS.objectPlacementsBySlot, 'objectPlacements', 'slotId')
     .setIndexDefinition(CONTENT_INDEX_IDS.objectPlacementsByDefinition, 'objectPlacements', 'objectDefId')
-    .setIndexDefinition(CONTENT_INDEX_IDS.placeServicePoliciesByPlace, 'placeServicePolicies', 'placeId');
+    .setIndexDefinition(CONTENT_INDEX_IDS.placeServicePoliciesByPlace, 'placeServicePolicies', 'placeId')
+    .setIndexDefinition(CONTENT_INDEX_IDS.venueRolesByPlace, 'venueRoles', 'placeId')
+    .setIndexDefinition(CONTENT_INDEX_IDS.venueStationsByPlace, 'venueStations', 'placeId')
+    .setIndexDefinition(CONTENT_INDEX_IDS.venueServicesByPlace, 'venueServices', 'placeId')
+    .setIndexDefinition(CONTENT_INDEX_IDS.activityTemplatesByPlace, 'activityTemplates', 'placeId');
 
   const queries = createQueries(store).setQueryDefinition(
     CONTENT_QUERY_IDS.placementSlotsInSpace,

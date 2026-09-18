@@ -1,6 +1,6 @@
 // GENERATED — do not edit by hand.
-// Source: content/store.json (content v662f7f1f). Regenerate: npm run content:pull.
-export const WORLD_CONTENT_VERSION = '662f7f1f';
+// Source: content/store.json (content vae80844f). Regenerate: npm run content:pull.
+export const WORLD_CONTENT_VERSION = 'ae80844f';
 
 export interface GeneratedSpatialPoint {
   x: number;
@@ -244,6 +244,12 @@ export const GENERATED_SPACES: GeneratedSpaceDef[] = [
     spatialBounds: { polygon: [{ x: 17, y: 57 }, { x: 23, y: 57 }, { x: 23, y: 63 }, { x: 17, y: 63 }], minZ: 0, maxZ: 0, priority: 0 },
     entryPosition: { x: 20, y: 60, z: 0 },
   },
+  {
+    id: "space_b1",
+    placeId: "place_b1",
+    name: "Space B1",
+    tags: ["interior"],
+  },
 ];
 
 export const GENERATED_VIEWS: GeneratedViewDef[] = [
@@ -287,6 +293,14 @@ export const GENERATED_VIEWS: GeneratedViewDef[] = [
     assetId: null,
     tags: [],
   },
+  {
+    id: "view_b1",
+    spaceId: "space_b1",
+    name: "View B1",
+    neighbors: [],
+    assetId: null,
+    tags: ["fixture"],
+  },
 ];
 
 export interface GeneratedAnchorDef {
@@ -314,6 +328,38 @@ export const GENERATED_ANCHORS: GeneratedAnchorDef[] = [
     x: 0.5,
     y: 0.5,
     tags: ["hotspot"],
+  },
+  {
+    id: "fixture_cafe_customer_anchor",
+    viewId: "view_a1",
+    name: "Fixture Cafe Customer",
+    x: 0.65,
+    y: 0.5,
+    tags: ["fixture", "customer"],
+  },
+  {
+    id: "fixture_cafe_staff_anchor",
+    viewId: "view_a1",
+    name: "Fixture Cafe Staff",
+    x: 0.35,
+    y: 0.5,
+    tags: ["fixture", "staff"],
+  },
+  {
+    id: "fixture_shop_customer_anchor",
+    viewId: "view_b1",
+    name: "Fixture Shop Customer",
+    x: 0.65,
+    y: 0.5,
+    tags: ["fixture", "customer"],
+  },
+  {
+    id: "fixture_shop_staff_anchor",
+    viewId: "view_b1",
+    name: "Fixture Shop Staff",
+    x: 0.35,
+    y: 0.5,
+    tags: ["fixture", "staff"],
   },
   {
     id: "room104_bed",
@@ -723,5 +769,175 @@ export const GENERATED_PLACE_SERVICE_POLICIES: GeneratedPlaceServicePolicy[] = [
     placeId: "room_104",
     acceptsDelivery: true,
     deliveryTargetSlotId: "delivery_target_primary",
+  },
+];
+
+export interface GeneratedVenueRoleDef {
+  id: string;
+  placeId: string;
+  name: string;
+  roleKind: string;
+  stationIds: string[];
+  tags: string[];
+}
+
+export interface GeneratedVenueStationDef {
+  id: string;
+  placeId: string;
+  spaceId: string;
+  anchorId: string | null;
+  name: string;
+  capacity: number;
+  roleKinds: string[];
+  tags: string[];
+}
+
+export type GeneratedVenueContextRequirement =
+  | { kind: "item"; itemKind: string; quantity: number }
+  | { kind: "tool"; capability: string }
+  | { kind: "resource"; capability: string };
+
+export interface GeneratedVenueServiceDef {
+  id: string;
+  placeId: string;
+  spaceId: string;
+  name: string;
+  intentKinds: string[];
+  activityTemplateId: string;
+  requiredRoleKinds: string[];
+  requiredStationIds: string[];
+  contextRequirements: GeneratedVenueContextRequirement[];
+  tags: string[];
+}
+
+export interface GeneratedVenueActivityPhaseDef {
+  id: string;
+  durationMinutes: number;
+  stationId: string | null;
+}
+
+export interface GeneratedVenueActivityTemplateDef {
+  id: string;
+  placeId: string;
+  name: string;
+  purpose: string;
+  activityKind: string;
+  phases: GeneratedVenueActivityPhaseDef[];
+  completionOwner: string;
+  completionKind: string;
+  tags: string[];
+}
+
+export const GENERATED_VENUE_ROLES: GeneratedVenueRoleDef[] = [
+  {
+    id: "fixture_barista_role",
+    placeId: "place_a1",
+    name: "Fixture Barista",
+    roleKind: "barista",
+    stationIds: ["fixture_cafe_staff_station"],
+    tags: ["fixture"],
+  },
+  {
+    id: "fixture_cashier_role",
+    placeId: "place_b1",
+    name: "Fixture Cashier",
+    roleKind: "cashier",
+    stationIds: ["fixture_shop_staff_station"],
+    tags: ["fixture"],
+  },
+];
+
+export const GENERATED_VENUE_STATIONS: GeneratedVenueStationDef[] = [
+  {
+    id: "fixture_cafe_customer_station",
+    placeId: "place_a1",
+    spaceId: "space_a1",
+    anchorId: "fixture_cafe_customer_anchor",
+    name: "Fixture Cafe Customer Station",
+    capacity: 1,
+    roleKinds: ["customer"],
+    tags: ["fixture", "customer"],
+  },
+  {
+    id: "fixture_cafe_staff_station",
+    placeId: "place_a1",
+    spaceId: "space_a1",
+    anchorId: "fixture_cafe_staff_anchor",
+    name: "Fixture Cafe Staff Station",
+    capacity: 1,
+    roleKinds: ["barista"],
+    tags: ["fixture", "staff"],
+  },
+  {
+    id: "fixture_shop_customer_station",
+    placeId: "place_b1",
+    spaceId: "space_b1",
+    anchorId: "fixture_shop_customer_anchor",
+    name: "Fixture Shop Customer Station",
+    capacity: 1,
+    roleKinds: ["customer"],
+    tags: ["fixture", "customer"],
+  },
+  {
+    id: "fixture_shop_staff_station",
+    placeId: "place_b1",
+    spaceId: "space_b1",
+    anchorId: "fixture_shop_staff_anchor",
+    name: "Fixture Shop Staff Station",
+    capacity: 1,
+    roleKinds: ["cashier"],
+    tags: ["fixture", "staff"],
+  },
+];
+
+export const GENERATED_VENUE_SERVICES: GeneratedVenueServiceDef[] = [
+  {
+    id: "fixture_cafe_service",
+    placeId: "place_a1",
+    spaceId: "space_a1",
+    name: "Fixture Cafe Service",
+    intentKinds: ["shop_for_need"],
+    activityTemplateId: "fixture_cafe_customer_activity",
+    requiredRoleKinds: ["barista"],
+    requiredStationIds: ["fixture_cafe_staff_station", "fixture_cafe_customer_station"],
+    contextRequirements: [{ kind: "tool", capability: "work_surface" }, { kind: "resource", capability: "power" }],
+    tags: ["fixture", "cafe"],
+  },
+  {
+    id: "fixture_shop_service",
+    placeId: "place_b1",
+    spaceId: "space_b1",
+    name: "Fixture Shop Service",
+    intentKinds: ["shop_for_need"],
+    activityTemplateId: "fixture_shop_customer_activity",
+    requiredRoleKinds: ["cashier"],
+    requiredStationIds: ["fixture_shop_staff_station", "fixture_shop_customer_station"],
+    contextRequirements: [],
+    tags: ["fixture", "shop"],
+  },
+];
+
+export const GENERATED_ACTIVITY_TEMPLATES: GeneratedVenueActivityTemplateDef[] = [
+  {
+    id: "fixture_cafe_customer_activity",
+    placeId: "place_a1",
+    name: "Fixture Cafe Order",
+    purpose: "shop",
+    activityKind: "ordering",
+    phases: [{ id: "order", durationMinutes: 2, stationId: "fixture_cafe_customer_station" }, { id: "receive", durationMinutes: 2, stationId: "fixture_cafe_customer_station" }],
+    completionOwner: "shop",
+    completionKind: "order_ready",
+    tags: ["fixture", "cafe"],
+  },
+  {
+    id: "fixture_shop_customer_activity",
+    placeId: "place_b1",
+    name: "Fixture Shop Checkout",
+    purpose: "shop",
+    activityKind: "checkout",
+    phases: [{ id: "checkout", durationMinutes: 3, stationId: "fixture_shop_customer_station" }],
+    completionOwner: "shop",
+    completionKind: "checkout_ready",
+    tags: ["fixture", "shop"],
   },
 ];
