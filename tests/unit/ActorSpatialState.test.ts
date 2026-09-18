@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  clearActorSpatialPosition,
   emptyActorSpatialPositions,
   getActorSpatialProjection,
   hydrateActorSpatialPositions,
@@ -121,6 +122,24 @@ describe('actor spatial state (#93)', () => {
       player: { x: 1, y: 2, z: 0 },
       npc_ok: { x: 3, y: 4, z: 0 },
     });
+  });
+
+  it('clears local XYZ during transit and derives exit transitions once', () => {
+    const settled = relocateActorSpatialPosition(
+      emptyActorSpatialPositions(),
+      'actor_a',
+      { x: 20, y: 20, z: 0 },
+      world,
+    );
+    const departed = clearActorSpatialPosition(settled.positions, 'actor_a', world);
+
+    expect(departed.positions).toEqual({});
+    expect(departed.membership).toEqual({});
+    expect(departed.transitions).toEqual([
+      { type: 'PlaceExited', districtId: 'district_test', placeId: 'place_a' },
+      { type: 'DistrictExited', districtId: 'district_test' },
+    ]);
+    expect(clearActorSpatialPosition(departed.positions, 'actor_a', world).transitions).toEqual([]);
   });
 
   it('returns unknown projection when no canonical position exists', () => {
