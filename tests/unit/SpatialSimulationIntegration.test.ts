@@ -100,7 +100,7 @@ describe('simulation spatial integration (#93)', () => {
           plannedDepartureMinute: 480,
           expectedArrivalMinute: 485,
           policy: 'fastest',
-          status: 'active',
+          status: 'planned',
         },
       },
     };
