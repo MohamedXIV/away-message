@@ -83,11 +83,9 @@ export function generateWorldRegistrySource(tables: ContentTables): string {
   lines.push('export const GENERATED_DISTRICTS: GeneratedDistrictDef[] = [');
   for (const id of Object.keys(districts).sort()) {
     const r = districts[id] as Record<string, unknown>;
-    let tags: string[] = [];
-    try {
-      const parsed: unknown = JSON.parse(String(r['tags'] ?? '[]'));
-      if (Array.isArray(parsed)) tags = parsed.filter((x): x is string => typeof x === 'string');
-    } catch { tags = []; }
+    const tags = Array.isArray(r['tags'])
+      ? r['tags'].filter((x): x is string => typeof x === 'string')
+      : [];
     lines.push('  {');
     lines.push(`    id: ${tsString(id)},`);
     lines.push(`    name: ${tsString(String(r['name'] ?? ''))},`);
@@ -102,20 +100,14 @@ export function generateWorldRegistrySource(tables: ContentTables): string {
   lines.push('export const GENERATED_PLACES: GeneratedPlaceDef[] = [');
   for (const id of Object.keys(places).sort()) {
     const r = places[id] as Record<string, unknown>;
-    let access: Array<{ stopId: string; walkMinutes: number }> = [];
-    try {
-      const parsed: unknown = JSON.parse(String(r['transitAccess'] ?? '[]'));
-      if (Array.isArray(parsed)) {
-        access = parsed
+    const access: Array<{ stopId: string; walkMinutes: number }> = Array.isArray(r['transitAccess'])
+      ? r['transitAccess']
           .filter((e): e is Record<string, unknown> => !!e && typeof e === 'object')
-          .map((e) => ({ stopId: String(e['stopId'] ?? ''), walkMinutes: Number(e['walkMinutes'] ?? 0) }));
-      }
-    } catch { access = []; }
-    let legacyIds: string[] = [];
-    try {
-      const parsed: unknown = JSON.parse(String(r['legacyIds'] ?? '[]'));
-      if (Array.isArray(parsed)) legacyIds = parsed.filter((x): x is string => typeof x === 'string');
-    } catch { legacyIds = []; }
+          .map((e) => ({ stopId: String(e['stopId'] ?? ''), walkMinutes: Number(e['walkMinutes'] ?? 0) }))
+      : [];
+    const legacyIds = Array.isArray(r['legacyIds'])
+      ? r['legacyIds'].filter((x): x is string => typeof x === 'string')
+      : [];
     lines.push('  {');
     lines.push(`    id: ${tsString(id)},`);
     lines.push(`    districtId: ${tsString(String(r['districtId'] ?? ''))},`);
@@ -146,18 +138,10 @@ export function generateWorldRegistrySource(tables: ContentTables): string {
   lines.push('export const GENERATED_BUS_LINES: GeneratedBusLineDef[] = [');
   for (const id of Object.keys(busLines).sort()) {
     const r = busLines[id] as Record<string, unknown>;
-    const strArr = (v: unknown): string[] => {
-      try {
-        const parsed: unknown = JSON.parse(String(v ?? '[]'));
-        return Array.isArray(parsed) ? parsed.filter((x): x is string => typeof x === 'string') : [];
-      } catch { return []; }
-    };
-    const numArr = (v: unknown): number[] => {
-      try {
-        const parsed: unknown = JSON.parse(String(v ?? '[]'));
-        return Array.isArray(parsed) ? parsed.filter((x): x is number => typeof x === 'number') : [];
-      } catch { return []; }
-    };
+    const strArr = (v: unknown): string[] =>
+      Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : [];
+    const numArr = (v: unknown): number[] =>
+      Array.isArray(v) ? v.filter((x): x is number => typeof x === 'number') : [];
     lines.push('  {');
     lines.push(`    id: ${tsString(id)},`);
     lines.push(`    name: ${tsString(String(r['name'] ?? ''))},`);
@@ -191,12 +175,8 @@ export function generateWorldRegistrySource(tables: ContentTables): string {
   lines.push('}');
   lines.push('');
 
-  const strArr = (v: unknown): string[] => {
-    try {
-      const parsed: unknown = JSON.parse(String(v ?? '[]'));
-      return Array.isArray(parsed) ? parsed.filter((x): x is string => typeof x === 'string') : [];
-    } catch { return []; }
-  };
+  const strArr = (v: unknown): string[] =>
+    Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : [];
   const optId = (v: unknown): string =>
     v === undefined || v === null || v === '' ? 'null' : tsString(String(v));
 
