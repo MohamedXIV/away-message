@@ -93,7 +93,7 @@ The changed world is the progression UI.
 
 ## 4. Starting residence choice
 
-Do not force one canonical starting room solely because the previous implementation began with a fixed production room.
+Do not force one canonical starting room merely because an earlier implementation used one fixed production residence.
 
 The preferred opening is constrained choice:
 
@@ -390,7 +390,7 @@ The rule is still:
 
 > **Multi-view is not a quality tier.**
 
-A tiny cheap room may need only one or two strong compositions. A larger apartment may need several. The runtime must not require every residence to look like the old a fixed production room three-view contract.
+A tiny cheap room may need only one or two strong compositions. A larger apartment may need several. The runtime must not require every residence to look like an old fixed-residence three-view contract.
 
 ---
 
@@ -677,4 +677,4 @@ A future housing/residence gate should prove at least:
 9. one tiny apartment at a canonical town address can use the same generic residence/place runtime;
 10. the visual pipeline can swap bed/desk/rug state across relevant views without full-room permutation art.
 
-That is a stronger proof of the game's living-world architecture than permanently polishing one sacred a fixed production room.
+That is a stronger proof of the game's living-world architecture than permanently polishing one sacred production residence.
