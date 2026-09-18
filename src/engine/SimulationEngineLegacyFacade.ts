@@ -500,6 +500,86 @@ export class SimulationEngine extends SimulationEngineCore {
     return JSON.parse(JSON.stringify(this.npcMobility)) as NpcMobilityState;
   }
 
+  /** Canonical #93 XYZ snapshot (deep copy, no derived membership). */
+  public getActorSpatialPositions(): ActorSpatialPositions {
+    return cloneActorSpatialPositions(this.actorSpatialPositions);
+  }
+
+  /** Read-only derived spatial projection for one actor. */
+  public getActorSpatialProjection(actorId: string): ActorSpatialProjection | null {
+    return projectActorSpatial(
+      this.actorSpatialPositions,
+      actorId,
+      GENERATED_SPATIAL_WORLD,
+    );
+  }
+
+  private applyActorSpatialRelocation(
+    actorId: string,
+    relocation: ActorSpatialRelocation,
+    position: SpatialPosition | null,
+  ): void {
+    this.actorSpatialPositions = relocation.positions;
+    this.invalidateV6Cache();
+    for (const transition of relocation.transitions) {
+      this.events.emit('spatial:transition', {
+        actorId,
+        transition,
+        position,
+      });
+    }
+  }
+
+  /**
+   * Explicit simulation/debug relocation. Renderer/view changes must never
+   * call this implicitly; the caller supplies canonical town-space XYZ.
+   */
+  public relocateActorSpatially(
+    actorId: string,
+    position: SpatialPosition,
+  ): ActorSpatialProjection {
+    const relocation = relocateActorSpatialPosition(
+      this.actorSpatialPositions,
+      actorId,
+      position,
+      GENERATED_SPATIAL_WORLD,
+    );
+    this.applyActorSpatialRelocation(actorId, relocation, { ...position });
+    return {
+      position: { ...position },
+      membership: relocation.membership,
+    };
+  }
+
+  /** Transit departure removes local XYZ; the trip remains timing authority. */
+  protected clearActorSpatialForTravel(actorId: string): void {
+    const relocation = clearActorSpatialPosition(
+      this.actorSpatialPositions,
+      actorId,
+      GENERATED_SPATIAL_WORLD,
+    );
+    if (relocation.transitions.length === 0 && this.actorSpatialPositions[actorId] === undefined) {
+      return;
+    }
+    this.applyActorSpatialRelocation(actorId, relocation, null);
+  }
+
+  /**
+   * Transit arrival handoff: resolve an authored destination entry point
+   * exactly once, without calculating or changing trip timing/fare.
+   */
+  protected relocateActorToGeneratedPlaceEntry(actorId: string, placeId: string): boolean {
+    const entry = getGeneratedPlaceEntryPosition(placeId);
+    if (!entry) return false;
+    const projection = this.relocateActorSpatially(actorId, entry);
+    if (projection.membership.placeId !== placeId) {
+      throw new Error(
+        `Authored entry position for '${placeId}' does not resolve to that canonical place.`,
+      );
+    }
+    return true;
+  }
+
   /** Live trip record copy for one actor, or null when the actor holds none. */
   public getNpcTrip(actorId: string): NpcTripRecord | null {
     const record = this.npcMobility.trips[actorId];
@@ -626,6 +706,7 @@ export class SimulationEngine extends SimulationEngineCore {
     const progressed = progressNpcTrips(this.npcMobility, nowMinute);
     this.npcMobility = progressed.state;
     for (const actorId of progressed.departed) {
+      this.clearActorSpatialForTravel(actorId);
       try {
         const record = this.npcMobility.trips[actorId];
         this.telemetry.logEvent('world', 'travel_departed', nowMinute, {
@@ -637,6 +718,7 @@ export class SimulationEngine extends SimulationEngineCore {
       } catch {}
     }
     for (const arrival of progressed.arrivals) {
+      this.relocateActorToGeneratedPlaceEntry(arrival.actorId, arrival.destinationPlaceId);
       try {
         this.events.emit('npc:trip_arrived', { ...arrival });
       } catch {}
@@ -1287,6 +1369,7 @@ export class SimulationEngine extends SimulationEngineCore {
     // Missing slices (old saves) become empty defaults — planning resumes
     // deterministically on the next tick.
     this.npcMobility = hydrateNpcMobility(snapshot.npcMobility ?? {});
+    this.actorSpatialPositions = hydrateActorSpatialPositions(snapshot.actorSpatialPositions ?? {});
     this.encounterDirector = hydrateEncounterDirectorState(snapshot.encounters ?? {});
   }
 }
