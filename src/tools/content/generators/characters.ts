@@ -9,19 +9,15 @@ import { HEART_KEYS, TRAIT_KEYS } from '../domain/characters';
 function emitBackstory(row: unknown): string {
   if (!row || typeof row !== 'object') return 'null';
   const r = row as Record<string, unknown>;
-  let candidates: Array<{ handle: string; status: string; note?: string }> = [];
-  try {
-    const parsed: unknown = JSON.parse(String(r['candidates'] ?? '[]'));
-    if (Array.isArray(parsed)) {
-      candidates = parsed
+  const candidates: Array<{ handle: string; status: string; note?: string }> = Array.isArray(r['candidates'])
+    ? r['candidates']
         .filter((c): c is Record<string, unknown> => !!c && typeof c === 'object')
         .map((c) => ({
           handle: String(c['handle'] ?? ''),
           status: String(c['status'] ?? 'dead'),
           ...(typeof c['note'] === 'string' && c['note'] ? { note: String(c['note']).slice(0, 80) } : {}),
-        }));
-    }
-  } catch { candidates = []; }
+        }))
+    : [];
   const cand = candidates.map((c) =>
     `{ handle: ${tsString(c.handle)}, status: ${tsString(c.status)}${c.note !== undefined ? `, note: ${tsString(c.note)}` : ''} }`
   ).join(', ');
@@ -62,8 +58,12 @@ export function generateRegistrySource(tables: ContentTables): string {
   lines.push('export const GENERATED_ARCHETYPES: GeneratedArchetypeDef[] = [');
   for (const [archId, row] of Object.entries(archetypes)) {
     const r = row as Record<string, unknown>;
-    const vocab = JSON.parse(String(r['vocabulary'] ?? '[]')) as string[];
-    const interests = JSON.parse(String(r['defaultInterests'] ?? '[]')) as string[];
+    const vocab = Array.isArray(r['vocabulary'])
+      ? r['vocabulary'].filter((value): value is string => typeof value === 'string')
+      : [];
+    const interests = Array.isArray(r['defaultInterests'])
+      ? r['defaultInterests'].filter((value): value is string => typeof value === 'string')
+      : [];
     lines.push('  {');
     lines.push(`    id: ${tsString(archId)},`);
     lines.push(`    label: ${tsString(String(r['label'] ?? ''))},`);
@@ -113,11 +113,9 @@ export function generateRegistrySource(tables: ContentTables): string {
     lines.push(`    role: ${tsString(String(row['role'] ?? ''))},`);
     lines.push(`    displayName: ${tsString(String(row['displayName'] ?? ''))},`);
     lines.push(`    archetypeId: ${tsString(String(row['archetypeId'] ?? 'regular'))},`);
-    let roles: string[] = [];
-    try {
-      const parsed: unknown = JSON.parse(String(row['roles'] ?? '[]'));
-      if (Array.isArray(parsed)) roles = parsed.filter((x): x is string => typeof x === 'string');
-    } catch { roles = []; }
+    const roles = Array.isArray(row['roles'])
+      ? row['roles'].filter((x): x is string => typeof x === 'string')
+      : [];
     lines.push(`    roles: [${roles.map((x) => tsString(x)).join(', ')}],`);
     lines.push(`    reach: ${tsString(String(row['reach'] ?? 'local'))} as 'local' | 'remote',`);
     lines.push(`    hair: ${tsString(String(row['hair'] ?? 'brown'))},`);
@@ -125,15 +123,11 @@ export function generateRegistrySource(tables: ContentTables): string {
     lines.push(`    chatColor: ${tsString(String(row['chatColor'] ?? '#6a3fa0'))},`);
     lines.push(`    bio: ${tsString(String(row['bio'] ?? ''))},`);
     lines.push(`    typingSpeedWpm: ${Number(row['typingSpeedWpm'] ?? 60)},`);
-    let languages: Array<{ lang: string; level: number }> = [];
-    try {
-      const parsed: unknown = JSON.parse(String(row['languages'] ?? '[]'));
-      if (Array.isArray(parsed)) {
-        languages = parsed
+    const languages: Array<{ lang: string; level: number }> = Array.isArray(row['languages'])
+      ? row['languages']
           .filter((e): e is Record<string, unknown> => !!e && typeof e === 'object')
-          .map((e) => ({ lang: String(e['lang'] ?? 'en'), level: Number(e['level'] ?? 1) }));
-      }
-    } catch { languages = []; }
+          .map((e) => ({ lang: String(e['lang'] ?? 'en'), level: Number(e['level'] ?? 1) }))
+      : [];
     lines.push(`    languages: [${languages.map((l) => `{ lang: ${tsString(l.lang)}, level: ${l.level} }`).join(', ')}],`);
     lines.push(`    backstory: ${emitBackstory(backstories[id])},`);
     const numList = (keys: string[], src: Record<string, unknown>): string =>
@@ -142,10 +136,13 @@ export function generateRegistrySource(tables: ContentTables): string {
     lines.push(`    initialAffinity: { ${numList(HEART_KEYS, arow)} },`);
     lines.push(`    routine: { wakeMinute: ${Number(rrow['wakeMinute'] ?? 420)}, sleepMinute: ${Number(rrow['sleepMinute'] ?? 1380)}, workShift: ${tsString(String(rrow['workShift'] ?? 'day'))}, preferredHangout: ${tsString(String(rrow['preferredHangout'] ?? 'cafe'))} },`);
 
-    let expressions: Record<string, string> = {};
-    try {
-      expressions = JSON.parse(String(artRow['expressions'] ?? '{}'));
-    } catch { expressions = {}; }
+    const expressions: Record<string, string> =
+      artRow['expressions'] && typeof artRow['expressions'] === 'object' && !Array.isArray(artRow['expressions'])
+        ? Object.fromEntries(
+            Object.entries(artRow['expressions'] as Record<string, unknown>)
+              .filter((entry): entry is [string, string] => typeof entry[1] === 'string'),
+          )
+        : {};
     lines.push(`    art: { engine: ${tsString(String(artRow['engine'] ?? 'none'))}, modelPath: ${tsString(String(artRow['modelPath'] ?? ''))}, expressions: ${JSON.stringify(expressions)}, defaultOutfit: ${tsString(String(artRow['defaultOutfit'] ?? 'default'))} },`);
     lines.push('  },');
   }
@@ -162,7 +159,9 @@ export function generateRegistrySource(tables: ContentTables): string {
   lines.push('export const GENERATED_DIALOGUE_POOLS: GeneratedDialoguePool[] = [');
   for (const key of Object.keys(dialoguePools).sort()) {
     const row = dialoguePools[key] as Record<string, unknown>;
-    const parsed = JSON.parse(String(row['lines'] ?? '[]')) as string[];
+    const parsed = Array.isArray(row['lines'])
+      ? row['lines'].filter((line): line is string => typeof line === 'string')
+      : [];
     lines.push('  {');
     lines.push(`    key: ${tsString(key)},`);
     lines.push(`    lines: [${parsed.map((l) => tsString(l)).join(', ')}],`);
