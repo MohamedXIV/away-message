@@ -2,38 +2,35 @@
 
 ## 1. Purpose
 
-This document defines Away Message's canonical residence/housing direction.
+This document defines Away Message's canonical residence, housing, and living-space direction.
 
-It supersedes any older design assumption that Room 104 is the guaranteed starting room, permanent player home, delivery target, PC-setup location, or flagship place that must be finished at production quality before the residence system can evolve.
+No production residence, room number, place ID, or historical fixture is architectural authority. Any authored residence is ordinary sandbox content and must be replaceable without changing generic engine contracts.
 
-Room 104 may remain in content as an ordinary motel room or reference fixture. It is not sacred.
-
-The implementation backlog is tracked by:
+The implementation backlog is now split by responsibility:
 
 - #85 — residence/housing progression epic;
-- #86 — Residence/Tenancy authority and dynamic home resolution;
+- #98 — three-phase authored-content architecture roadmap;
+- #99 — Phase A: behavior-preserving content-compiler decomposition;
+- #100 — Phase B: TinyBase content-model modernization and generic authored physical graph;
+- #101 — Phase C: Content Studio integration on the shared TinyBase model;
+- #102 — minimal Residence/Tenancy root for dynamic `home`;
+- #103 — generic physical affordance/context runtime;
 - #87 — modular residence visuals and blockout-to-Phaser production contract;
 - #88 — housing choice, rent/upgrades, and moving.
 
 ---
 
-## 2. Core design law
+## 2. Core design laws
 
-> **The player's home is a current residence, not a room number.**
+> **The player's home is a current tenancy over a canonical Place, not a room number or special place ID.**
 
-No core system may assume:
+> **Place/service policy owns genuine location-wide rules only.**
 
-- the player starts in Room 104;
-- the player permanently lives in Room 104;
-- `home` means `room_104`;
-- deliveries always target Room 104;
-- PC setup/hardware management is tied to Room 104;
-- every starter room has a kitchenette;
-- every starter room has a private bathroom;
-- every residence has the same storage/furniture capabilities;
-- the same authored view count is required for every home.
+> **Direct physical actions belong to concrete reachable objects.**
 
-A residence uses the same canonical world model as any other physical place:
+> **Composed actions/recipes resolve their requirements from reachable context without physically merging inventories.**
+
+A residence uses the same canonical world and physical model as every other place:
 
 ```text
 Town
@@ -46,10 +43,18 @@ Space
   ↓
 View / Focus
   ↓
-Anchors + interactions + capabilities
+Anchor / Placement Slot
+  ↓
+Installed Object
+  ↓
+Nested Slots + Components
+  ↓
+Affordances / Tool Capabilities / Containers / Resources
 ```
 
-Residence/Tenancy state says **which valid Place currently functions as the player's home** and what the current occupancy/economic terms are. It does not create a second location system.
+Residence/Tenancy state says which canonical Place currently functions as the player's home and owns only tenancy/economic root state. It does not create a second location system, a residence-specific interaction engine, or a stored `canX` capability bag.
+
+Authored definitions belong to the shared content model. Mutable object/item instances, ownership, accessibility, container contents, tenancy and other save-state remain with their canonical runtime authorities.
 
 ---
 
@@ -88,7 +93,7 @@ The changed world is the progression UI.
 
 ## 4. Starting residence choice
 
-Do not force one canonical starting room solely because the previous implementation began with Room 104.
+Do not force one canonical starting room solely because the previous implementation began with a fixed production room.
 
 The preferred opening is constrained choice:
 
@@ -122,7 +127,7 @@ The player should receive agency without being able to skip the early economic a
 
 ## 5. Residence/Tenancy authority
 
-Mutable residence truth belongs in simulation/save state.
+Mutable residence truth belongs in simulation/save state and is intentionally small (#102).
 
 A representative purpose-level model is:
 
@@ -139,13 +144,15 @@ Exact names and nesting should follow implementation conventions.
 
 The residence system must not duplicate:
 
-- canonical Place definitions;
+- canonical Place/spatial definitions;
+- actor spatial truth;
 - district/transit geography;
-- physical item ownership/location;
+- physical item/object ownership or location;
 - economy cash truth;
 - delivery order truth;
 - PC/hardware truth;
-- landlord-owned fixture definitions.
+- landlord-owned fixture definitions;
+- object affordances, tool capabilities, containers, or resource providers.
 
 `home` is a semantic resolver:
 
@@ -154,38 +161,70 @@ home
   ↓
 ResidenceState.currentResidencePlaceId
   ↓
-canonical Place definition + current runtime state
+canonical Place + derived spatial membership + normal physical-world rules
 ```
 
-It is not a permanent generated alias to `room_104`.
+No hidden fallback residence ID exists.
 
 ---
 
-## 6. Capabilities, not room-number checks
+## 6. Physical interaction layers
 
-At-home actions must resolve from the current residence and its actual capabilities.
+Residence does not decide whether the player can sleep, bathe, use a computer, open storage, or prepare food. Those behaviors come from the generic physical model (#100/#103).
 
-Examples:
+### 6.1 Place / service policy
 
-### PC setup
-Requires a valid current-residence work/desk surface or equivalent authored capability. It does not require Room 104.
+A Place may own rules that genuinely describe the destination/service boundary, for example:
 
-### Sleep
-Requires an available sleeping capability/fixture.
+- delivery acceptance and routing policy;
+- reception/door/parcel handling policy;
+- visitor/access policy;
+- opening/access restrictions.
 
-### Hygiene
-A cheap room with no private bathroom must not expose a fake shower action. The player may need to use a shared motel bathroom or another valid facility.
+These policies do not manufacture direct object actions.
 
-### Food preparation
-A room with no kitchenette must not magically provide kettle/fridge/noodle preparation because an old room script expected those actions.
+### 6.2 Object affordances
 
-### Delivery
-Delivery resolves an appropriate current-residence delivery anchor/reception/door policy. Changing residence changes the home delivery target.
+Concrete accessible objects expose their own direct actions.
 
-### Storage
-Storage exists only where the residence/fixtures/owned containers actually provide it.
+```text
+Bed      → Sleep
+Bathtub  → Bathe
+Computer → Use / Power / Inspect
+Fridge   → Open
+Wardrobe → Open Storage
+```
 
-This capability-driven rule is more important than preserving old room UI behavior.
+Moving/removing/inaccessibilizing an object moves/removes/disables the affordances that object supplied. Do not mirror them as `place.canSleep`, `residence.canBathe`, `hasComputer`, or similar booleans.
+
+### 6.3 Context-composed requirements
+
+Actions combining multiple sources resolve requirements virtually from authoritative reachable state:
+
+```text
+player inventory/equipment
++ accessible local containers
++ reachable tool/resource providers
++ relevant concrete object state
+```
+
+Example:
+
+```text
+instant noodles
++ water
++ any reachable provider satisfying heat_water
+```
+
+The resolver preserves exact item/object identity, owner and physical location. It does not merge inventories. A kitchenette may be a useful authored arrangement of real objects/resources, but it is not magical capability authority.
+
+### 6.4 Delivery
+
+Delivery is intentionally different from direct object actions. Place/service policy may decide whether/how delivery is accepted, then the system must resolve an explicit authored/runtime target or route such as reception, door, or parcel container. Never invent a hidden fallback target.
+
+### 6.5 Shared facilities
+
+The same contracts apply outside residences. Shared bathrooms, laundries, shops, workplaces and public facilities are ordinary Places/Spaces with reachable objects and policies; `home` confers no special interaction engine.
 
 ---
 
@@ -351,7 +390,7 @@ The rule is still:
 
 > **Multi-view is not a quality tier.**
 
-A tiny cheap room may need only one or two strong compositions. A larger apartment may need several. The runtime must not require every residence to look like the old Room 104 three-view contract.
+A tiny cheap room may need only one or two strong compositions. A larger apartment may need several. The runtime must not require every residence to look like the old a fixed production room three-view contract.
 
 ---
 
@@ -604,24 +643,22 @@ After an explicit future save-compatibility freeze, migration/backward-compatibi
 
 ---
 
-## 20. Room 104 status
+## 20. No sacred residence IDs
 
-Room 104 is now one of three things only:
+No production residence, room number, place ID, or historical vertical-slice fixture may appear as:
 
-1. an ordinary motel-room content definition;
-2. a useful reference/test fixture for generic living-place behavior;
-3. a possible residence in a playthrough if availability/economy permits.
+- a permanent `home` alias;
+- an implicit starting residence;
+- a delivery fallback;
+- a PC/setup prerequisite;
+- a sleep/hygiene/food/storage capability source;
+- a generic engine test fixture;
+- a required renderer/view-count contract;
+- an architecture example that agents are expected to preserve.
 
-It is **not**:
+Production residences are ordinary authored sandbox content.
 
-- the player's identity;
-- the permanent home alias;
-- the required starting room;
-- the only PC setup location;
-- the only delivery destination;
-- the required final-art vertical slice.
-
-Reusable generic work from the former #26 / PR #80 should be preserved. Room-104-only production polish should not continue unless required to de-specialize/prove the generic system.
+Generic tests use synthetic IDs such as `test_residence_a`, `test_space_a`, and `test_bed_a`. Historical fixtures may remain in repository history or ordinary content, but they carry no architectural meaning.
 
 ---
 
@@ -640,4 +677,4 @@ A future housing/residence gate should prove at least:
 9. one tiny apartment at a canonical town address can use the same generic residence/place runtime;
 10. the visual pipeline can swap bed/desk/rug state across relevant views without full-room permutation art.
 
-That is a stronger proof of the game's living-world architecture than permanently polishing one sacred Room 104.
+That is a stronger proof of the game's living-world architecture than permanently polishing one sacred a fixed production room.
