@@ -57,14 +57,14 @@ export function useStudioStore(store: Store): StudioStoreContext {
         role: cleanId,
         displayName: displayName.trim() || cleanId,
         archetypeId: archetypeId || 'regular',
-        roles: '[]',
+        roles: [],
         reach: 'local',
         hair: 'brown',
         eyes: 'brown',
         chatColor: '#6a3fa0',
         bio: '',
         typingSpeedWpm: 70,
-        languages: JSON.stringify([{ lang: 'en', level: 5 }]),
+        languages: [{ lang: 'en', level: 5 }],
       });
 
       store.setRow('temperaments', cleanId, {
@@ -97,7 +97,7 @@ export function useStudioStore(store: Store): StudioStoreContext {
       store.setRow('artProfiles', cleanId, {
         engine: 'none',
         modelPath: '',
-        expressions: '{}',
+        expressions: {},
         defaultOutfit: 'default',
       });
 
@@ -106,7 +106,7 @@ export function useStudioStore(store: Store): StudioStoreContext {
         label: `Met ${displayName || cleanId} in town.`,
         lapseDays: 0,
         knowsAccounts: true,
-        candidates: '[]',
+        candidates: [],
         bioSeed: '',
       });
     });
@@ -133,8 +133,8 @@ export function useStudioStore(store: Store): StudioStoreContext {
       label: label.trim() || cleanId,
       description: 'Archetype description.',
       personaHint: 'Persona voice hint.',
-      vocabulary: '[]',
-      defaultInterests: '[]',
+      vocabulary: [],
+      defaultInterests: [],
       defaultSong: '',
       typingSpeedWpm: 70,
     });
@@ -150,7 +150,7 @@ export function useStudioStore(store: Store): StudioStoreContext {
     if (!cleanKey || tables['dialoguePools']?.[cleanKey]) return false;
 
     store.setRow('dialoguePools', cleanKey, {
-      lines: JSON.stringify(['Line 1', 'Line 2']),
+      lines: ['Line 1', 'Line 2'],
       version: 1,
     });
     return true;
