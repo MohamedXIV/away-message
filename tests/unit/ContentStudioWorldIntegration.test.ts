@@ -305,7 +305,7 @@ describe('Content Studio Living-World Integration & Acceptance (#52)', () => {
 
     const tagsArray = ['quiet', 'scenic', 'historic'];
     store.setCell('districts', 'district_a', 'tags', tagsArray);
-    expect(JSON.parse(String(store.getCell('districts', 'district_a', 'tags') ?? '[]'))).toEqual(tagsArray);
+    expect(store.getCell('districts', 'district_a', 'tags')).toEqual(tagsArray);
 
     // Validation passes with clean tags
     const tables = store.getTables() as Record<string, Record<string, Record<string, unknown>>>;
