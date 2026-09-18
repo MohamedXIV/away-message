@@ -1077,5 +1077,25 @@
       "density": 0.5,
       "tags": []
     }
+  },
+  "placementSlots": {
+    "delivery_target_primary": {
+      "name": "Primary Delivery Target",
+      "spaceId": "room104_main",
+      "anchorId": "room104_delivery_anchor",
+      "parentPlacementId": "",
+      "slotKind": "delivery",
+      "allowedObjectKinds": [],
+      "tags": [
+        "delivery"
+      ]
+    }
+  },
+  "placeServicePolicies": {
+    "primary_delivery_policy": {
+      "placeId": "room_104",
+      "acceptsDelivery": true,
+      "deliveryTargetSlotId": "delivery_target_primary"
+    }
   }
 }
