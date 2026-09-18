@@ -253,8 +253,8 @@ export const PhysicalDefinitionsTab: React.FC<Props> = ({ studio }) => {
                   <div className="md:col-span-2 space-y-2">
                     <TagListEditor
                       label="Allowed item kinds (empty = unrestricted)"
-                      tagsJson={activeRow['allowedItemKinds']}
-                      onChange={(nextJson) => studio.setCell('containers', activeId, 'allowedItemKinds', nextJson)}
+                      tags={activeRow['allowedItemKinds']}
+                      onChange={(nextTags) => studio.setCell('containers', activeId, 'allowedItemKinds', nextTags)}
                       placeholder="e.g. food, book, tools..."
                       fieldErrorDisplay={
                         <FieldErrorDisplay allErrors={studio.validationErrors} table="containers" rowId={activeId} field="allowedItemKinds" />
@@ -291,8 +291,8 @@ export const PhysicalDefinitionsTab: React.FC<Props> = ({ studio }) => {
               <div className="md:col-span-2">
                 <TagListEditor
                   label="Tags"
-                  tagsJson={activeRow['tags']}
-                  onChange={(nextJson) => studio.setCell(section, activeId, 'tags', nextJson)}
+                  tags={activeRow['tags']}
+                  onChange={(nextTags) => studio.setCell(section, activeId, 'tags', nextTags)}
                   placeholder="e.g. storage, food, fragile..."
                   fieldErrorDisplay={
                     <FieldErrorDisplay allErrors={studio.validationErrors} table={section} rowId={activeId} field="tags" />
