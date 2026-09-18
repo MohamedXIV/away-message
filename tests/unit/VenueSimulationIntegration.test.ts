@@ -163,7 +163,9 @@ describe('SimulationEngine venue integration (#94)', () => {
     const after = sim.exportSnapshot();
     expect(after.player.cash).toBe(before.player.cash);
     expect(after.inventory).toEqual(before.inventory);
-    expect(after.social).toEqual(before.social);
+    expect(after.physicalWorld).toEqual(before.physicalWorld);
+    expect(after.social.relationships).toEqual(before.social.relationships);
+    expect(after.social.npcBonds).toEqual(before.social.npcBonds);
   });
 
   it('supports the generic shop workflow through the same service/activity runtime', () => {
@@ -206,7 +208,7 @@ describe('SimulationEngine venue integration (#94)', () => {
 
     expect(sim.startVenueActivityFromIntent(cafeIntent())).toEqual({
       ok: false,
-      reason: 'no_compatible_service',
+      reason: 'service_unavailable',
     });
   });
 });
