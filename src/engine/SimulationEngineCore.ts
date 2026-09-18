@@ -1504,7 +1504,10 @@ export class SimulationEngine {
           this.world.queryActiveModifiers({ domain: 'delivery', atMinute: nowMinute }),
         );
       } catch { backlogExtra = 0; }
-      const order = this.delivery.placeDelivery(items, total, nowMinute, { etaExtraMinutes: backlogExtra });
+      const order = this.delivery.placeDelivery(items, total, nowMinute, {
+        ...deliveryOptions,
+        etaExtraMinutes: backlogExtra,
+      });
       this.telemetry.logEvent('economy', 'order_placed', nowMinute, { orderId: order.id, total, etaMinute: order.readyMinute });
       this.notifySubscribers();
       const etaH = Math.round((order.readyMinute - nowMinute) / 60);
