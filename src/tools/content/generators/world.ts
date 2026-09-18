@@ -8,6 +8,7 @@ import {
 } from '../../../engine/WorldModifiers';
 import type { ContentTables } from '../shared';
 import { contentHash, tsString } from '../shared';
+import { generatePhysicalWorldSource } from './physical';
 
 /**
  * Emit the world registry TypeScript source (#51 slice 1).
@@ -435,6 +436,9 @@ export function generateWorldRegistrySource(tables: ContentTables): string {
     lines.push('  },');
   }
   lines.push('];');
+  lines.push('');
+
+  lines.push(generatePhysicalWorldSource(tables));
   lines.push('');
 
   return lines.join('\n');
