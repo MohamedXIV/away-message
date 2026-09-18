@@ -59,46 +59,36 @@ export const ArchetypesTab: React.FC<Props> = ({ studio }) => {
     }
   };
 
-  const parseJsonArray = (val: unknown): string[] => {
-    if (Array.isArray(val)) return val.map(String);
-    if (typeof val === 'string') {
-      try {
-        const p = JSON.parse(val);
-        return Array.isArray(p) ? p.map(String) : [];
-      } catch {
-        return [];
-      }
-    }
-    return [];
-  };
+  const readStringArray = (val: unknown): string[] =>
+    Array.isArray(val) ? val.map(String) : [];
 
-  const vocabulary = parseJsonArray(active?.['vocabulary']);
-  const defaultInterests = parseJsonArray(active?.['defaultInterests']);
+  const vocabulary = readStringArray(active?.['vocabulary']);
+  const defaultInterests = readStringArray(active?.['defaultInterests']);
 
   const addVocab = (tag: string) => {
     const clean = tag.trim();
     if (!clean || vocabulary.includes(clean)) return;
     const next = [...vocabulary, clean];
-    studio.setCell('archetypes', selectedId, 'vocabulary', JSON.stringify(next));
+    studio.setCell('archetypes', selectedId, 'vocabulary', next);
     setNewVocabItem('');
   };
 
   const removeVocab = (idx: number) => {
     const next = vocabulary.filter((_, i) => i !== idx);
-    studio.setCell('archetypes', selectedId, 'vocabulary', JSON.stringify(next));
+    studio.setCell('archetypes', selectedId, 'vocabulary', next);
   };
 
   const addInterest = (item: string) => {
     const clean = item.trim();
     if (!clean || defaultInterests.includes(clean)) return;
     const next = [...defaultInterests, clean];
-    studio.setCell('archetypes', selectedId, 'defaultInterests', JSON.stringify(next));
+    studio.setCell('archetypes', selectedId, 'defaultInterests', next);
     setNewInterestItem('');
   };
 
   const removeInterest = (idx: number) => {
     const next = defaultInterests.filter((_, i) => i !== idx);
-    studio.setCell('archetypes', selectedId, 'defaultInterests', JSON.stringify(next));
+    studio.setCell('archetypes', selectedId, 'defaultInterests', next);
   };
 
   return (
