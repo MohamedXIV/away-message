@@ -14,7 +14,7 @@ describe('World content spaces/views (#51 slice 3)', () => {
 
   it('rejects invalid space IDs', () => {
     const tables = clone(validSpaceTables());
-    (tables['spaces']!['BAD ID'] as unknown) = { placeId: 'place_a1', name: 'Bad', tags: '[]' };
+    (tables['spaces']!['BAD ID'] as unknown) = { placeId: 'place_a1', name: 'Bad', tags: [] };
     const errors = validateContent(tables);
     expect(errors.some((e) => e.includes('spaces/BAD ID'))).toBe(true);
   });
@@ -35,7 +35,7 @@ describe('World content spaces/views (#51 slice 3)', () => {
 
   it('rejects invalid view IDs', () => {
     const tables = clone(validSpaceTables());
-    (tables['views']!['BAD ID'] as unknown) = { spaceId: 'space_a1', name: 'Bad', neighbors: '[]', tags: '[]' };
+    (tables['views']!['BAD ID'] as unknown) = { spaceId: 'space_a1', name: 'Bad', neighbors: [], tags: [] };
     const errors = validateContent(tables);
     expect(errors.some((e) => e.includes('views/BAD ID'))).toBe(true);
   });
@@ -49,19 +49,19 @@ describe('World content spaces/views (#51 slice 3)', () => {
 
   it('rejects a view neighbor referencing a missing view', () => {
     const tables = clone(validSpaceTables());
-    (tables['views']!['view_a1']! as Record<string, unknown>)['neighbors'] = '["view_ghost"]';
+    (tables['views']!['view_a1']! as Record<string, unknown>)['neighbors'] = ['view_ghost'];
     const errors = validateContent(tables);
     expect(errors.some((e) => e.includes('views/view_a1') && e.includes('view_ghost'))).toBe(true);
   });
 
   it('rejects a view neighboring itself', () => {
     const tables = clone(validSpaceTables());
-    (tables['views']!['view_a1']! as Record<string, unknown>)['neighbors'] = '["view_a1"]';
+    (tables['views']!['view_a1']! as Record<string, unknown>)['neighbors'] = ['view_a1'];
     const errors = validateContent(tables);
     expect(errors.some((e) => e.includes('views/view_a1') && e.includes('neighbors'))).toBe(true);
   });
 
-  it('rejects malformed neighbors JSON', () => {
+  it('rejects a non-array neighbors cell', () => {
     const tables = clone(validSpaceTables());
     (tables['views']!['view_a1']! as Record<string, unknown>)['neighbors'] = 'not-json';
     const errors = validateContent(tables);

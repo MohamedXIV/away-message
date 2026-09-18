@@ -250,8 +250,8 @@ export const WorldBasicsTab: React.FC<Props> = ({ studio }) => {
               <div className="md:col-span-2">
                 <TagListEditor
                   label="District Tags"
-                  tagsJson={activeDistrict['tags']}
-                  onChange={(nextJson) => studio.setCell('districts', activeDistrictId, 'tags', nextJson)}
+                  tags={activeDistrict['tags']}
+                  onChange={(nextTags) => studio.setCell('districts', activeDistrictId, 'tags', nextTags)}
                   placeholder="e.g. residential, commercial, historic..."
                   fieldErrorDisplay={
                     <FieldErrorDisplay allErrors={studio.validationErrors} table="districts" rowId={activeDistrictId} field="tags" />

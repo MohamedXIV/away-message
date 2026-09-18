@@ -42,62 +42,62 @@ describe('Town content schema (#51 slice 1)', () => {
 
   it('rejects a place access entry referencing a missing stop', () => {
     const tables = clone(validTownTables());
-    (tables['places']!['place_a1']! as Record<string, unknown>)['transitAccess'] = JSON.stringify([
+    (tables['places']!['place_a1']! as Record<string, unknown>)['transitAccess'] = [
       { stopId: 'stop_ghost', walkMinutes: 4 },
-    ]);
+    ];
     const errors = validateContent(tables);
     expect(errors.some((e) => e.includes('places/place_a1') && e.includes('stop_ghost'))).toBe(true);
   });
 
   it('rejects non-positive walk minutes in place access links', () => {
     const tables = clone(validTownTables());
-    (tables['places']!['place_a1']! as Record<string, unknown>)['transitAccess'] = JSON.stringify([
+    (tables['places']!['place_a1']! as Record<string, unknown>)['transitAccess'] = [
       { stopId: 'stop_a', walkMinutes: 0 },
-    ]);
+    ];
     const errors = validateContent(tables);
     expect(errors.some((e) => e.includes('places/place_a1') && e.includes('walkMinutes'))).toBe(true);
   });
 
   it('rejects a bus line referencing a nonexistent stop', () => {
     const tables = clone(validTownTables());
-    (tables['busLines']!['line_ab']! as Record<string, unknown>)['stopIds'] = JSON.stringify([
+    (tables['busLines']!['line_ab']! as Record<string, unknown>)['stopIds'] = [
       'stop_a',
       'stop_ghost',
-    ]);
+    ];
     const errors = validateContent(tables);
     expect(errors.some((e) => e.includes('busLines/line_ab') && e.includes('stop_ghost'))).toBe(true);
   });
 
   it('rejects a bus line with fewer than two stops', () => {
     const tables = clone(validTownTables());
-    (tables['busLines']!['line_ab']! as Record<string, unknown>)['stopIds'] = JSON.stringify(['stop_a']);
-    (tables['busLines']!['line_ab']! as Record<string, unknown>)['segmentMinutes'] = JSON.stringify([]);
+    (tables['busLines']!['line_ab']! as Record<string, unknown>)['stopIds'] = ['stop_a'];
+    (tables['busLines']!['line_ab']! as Record<string, unknown>)['segmentMinutes'] = [];
     const errors = validateContent(tables);
     expect(errors.some((e) => e.includes('busLines/line_ab') && e.includes('stopIds'))).toBe(true);
   });
 
   it('rejects adjacent duplicate stops in a bus line', () => {
     const tables = clone(validTownTables());
-    (tables['busLines']!['line_ab']! as Record<string, unknown>)['stopIds'] = JSON.stringify([
+    (tables['busLines']!['line_ab']! as Record<string, unknown>)['stopIds'] = [
       'stop_a',
       'stop_a',
       'stop_b',
-    ]);
-    (tables['busLines']!['line_ab']! as Record<string, unknown>)['segmentMinutes'] = JSON.stringify([5, 12]);
+    ];
+    (tables['busLines']!['line_ab']! as Record<string, unknown>)['segmentMinutes'] = [5, 12];
     const errors = validateContent(tables);
     expect(errors.some((e) => e.includes('busLines/line_ab') && e.includes('duplicate'))).toBe(true);
   });
 
   it('rejects segmentMinutes whose length does not match stops - 1', () => {
     const tables = clone(validTownTables());
-    (tables['busLines']!['line_ab']! as Record<string, unknown>)['segmentMinutes'] = JSON.stringify([12, 7]);
+    (tables['busLines']!['line_ab']! as Record<string, unknown>)['segmentMinutes'] = [12, 7];
     const errors = validateContent(tables);
     expect(errors.some((e) => e.includes('busLines/line_ab') && e.includes('segmentMinutes'))).toBe(true);
   });
 
   it('rejects zero/negative segment durations', () => {
     const tables = clone(validTownTables());
-    (tables['busLines']!['line_ab']! as Record<string, unknown>)['segmentMinutes'] = JSON.stringify([0]);
+    (tables['busLines']!['line_ab']! as Record<string, unknown>)['segmentMinutes'] = [0];
     const errors = validateContent(tables);
     expect(errors.some((e) => e.includes('busLines/line_ab') && e.includes('segmentMinutes'))).toBe(true);
   });
@@ -126,7 +126,7 @@ describe('Town content schema (#51 slice 1)', () => {
 
   it('rejects invalid or duplicate world IDs', () => {
     const tables = clone(validTownTables());
-    (tables['districts']!['BAD ID'] as unknown) = { name: 'Bad', mapX: 0, mapY: 0, tags: '[]' };
+    (tables['districts']!['BAD ID'] as unknown) = { name: 'Bad', mapX: 0, mapY: 0, tags: [] };
     const errors = validateContent(tables);
     expect(errors.some((e) => e.includes('districts/BAD ID'))).toBe(true);
   });

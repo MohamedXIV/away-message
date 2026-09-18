@@ -379,8 +379,8 @@ export const ProfilesTab: React.FC<Props> = ({ studio }) => {
               <div className="md:col-span-2">
                 <TagListEditor
                   label="Tags"
-                  tagsJson={activeRow['tags']}
-                  onChange={(nextJson) => studio.setCell(section, activeId, 'tags', nextJson)}
+                  tags={activeRow['tags']}
+                  onChange={(nextTags) => studio.setCell(section, activeId, 'tags', nextTags)}
                   placeholder="e.g. atmospheric, calm, indoor..."
                   fieldErrorDisplay={
                     <FieldErrorDisplay allErrors={studio.validationErrors} table={section} rowId={activeId} field="tags" />

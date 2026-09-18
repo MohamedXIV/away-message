@@ -9,20 +9,20 @@ describe('Content Studio world hydration', () => {
       name: 'District A',
       mapX: 20,
       mapY: 60,
-      tags: JSON.stringify(['residential']),
+      tags: ['residential'],
     });
     expect(tables.places?.place_a1).toMatchObject({
       districtId: 'district_a',
       name: 'Place A1',
-      transitAccess: JSON.stringify([{ stopId: 'stop_a', walkMinutes: 4 }]),
+      transitAccess: [{ stopId: 'stop_a', walkMinutes: 4 }],
     });
     expect(tables.transitStops?.stop_a).toMatchObject({
       districtId: 'district_a',
       placeId: 'place_a1',
     });
     expect(tables.busLines?.line_ab).toMatchObject({
-      stopIds: JSON.stringify(['stop_a', 'stop_b']),
-      segmentMinutes: JSON.stringify([12]),
+      stopIds: ['stop_a', 'stop_b'],
+      segmentMinutes: [12],
       headwayMinutes: 20,
       fare: 2,
     });
@@ -30,16 +30,16 @@ describe('Content Studio world hydration', () => {
       kind: 'food',
       portable: true,
       assetId: 'asset_a1',
-      tags: JSON.stringify(['food', 'perishable']),
+      tags: ['food', 'perishable'],
     });
     expect(tables.containers?.container_a).toMatchObject({
       capacity: 10,
-      allowedItemKinds: JSON.stringify(['food']),
+      allowedItemKinds: ['food'],
     });
     expect(tables.spaces?.space_a1?.placeId).toBe('place_a1');
     expect(tables.views?.view_a1).toMatchObject({
       spaceId: 'space_a1',
-      neighbors: JSON.stringify(['view_a2']),
+      neighbors: ['view_a2'],
       assetId: 'asset_a1',
     });
     expect(tables.anchors?.anchor_a1?.viewId).toBe('view_a1');

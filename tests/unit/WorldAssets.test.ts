@@ -14,7 +14,7 @@ describe('World content assets (#51 slice 5)', () => {
 
   it('rejects invalid asset IDs', () => {
     const tables = clone(validAssetTables());
-    (tables['assets']!['BAD ID'] as unknown) = { name: 'Bad', kind: 'image', uri: 'assets/world/bad.png', normalMapAssetId: '', tags: '[]' };
+    (tables['assets']!['BAD ID'] as unknown) = { name: 'Bad', kind: 'image', uri: 'assets/world/bad.png', normalMapAssetId: '', tags: [] };
     const errors = validateContent(tables);
     expect(errors.some((e) => e.includes('assets/BAD ID'))).toBe(true);
   });
@@ -56,7 +56,7 @@ describe('World content assets (#51 slice 5)', () => {
 
   it('rejects a normal-map target that is not an image', () => {
     const tables = clone(validAssetTables());
-    (tables['assets']!['asset_sfx'] as unknown) = { name: 'Sfx', kind: 'audio', uri: 'assets/world/sfx.mp3', normalMapAssetId: '', tags: '[]' };
+    (tables['assets']!['asset_sfx'] as unknown) = { name: 'Sfx', kind: 'audio', uri: 'assets/world/sfx.mp3', normalMapAssetId: '', tags: [] };
     (tables['assets']!['asset_a1']! as Record<string, unknown>)['normalMapAssetId'] = 'asset_sfx';
     const errors = validateContent(tables);
     expect(errors.some((e) => e.includes('assets/asset_a1') && e.includes('normalMapAssetId'))).toBe(true);
@@ -79,7 +79,7 @@ describe('World content assets (#51 slice 5)', () => {
   it('rejects an audio asset as a view background', () => {
     const tables = clone(validAssetTables());
     (tables['assets']!['voice'] as unknown) = {
-      name: 'Voice', kind: 'audio', uri: 'assets/voice.mp3', normalMapAssetId: '', tags: '[]',
+      name: 'Voice', kind: 'audio', uri: 'assets/voice.mp3', normalMapAssetId: '', tags: [],
     };
     (tables['views']!['view_a1']! as Record<string, unknown>)['assetId'] = 'voice';
     expect(validateContent(tables)).toEqual(expect.arrayContaining([

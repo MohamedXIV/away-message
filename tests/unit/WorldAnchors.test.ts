@@ -14,7 +14,7 @@ describe('World content anchors/interactions (#51 slice 4)', () => {
 
   it('rejects invalid anchor IDs', () => {
     const tables = clone(validAnchorTables());
-    (tables['anchors']!['BAD ID'] as unknown) = { viewId: 'view_a1', name: 'Bad', x: 0.5, y: 0.5, tags: '[]' };
+    (tables['anchors']!['BAD ID'] as unknown) = { viewId: 'view_a1', name: 'Bad', x: 0.5, y: 0.5, tags: [] };
     const errors = validateContent(tables);
     expect(errors.some((e) => e.includes('anchors/BAD ID'))).toBe(true);
   });
@@ -42,7 +42,7 @@ describe('World content anchors/interactions (#51 slice 4)', () => {
 
   it('rejects invalid interaction IDs', () => {
     const tables = clone(validAnchorTables());
-    (tables['interactions']!['BAD ID'] as unknown) = { anchorId: 'anchor_a1', capability: 'inspect', name: 'Bad', tags: '[]' };
+    (tables['interactions']!['BAD ID'] as unknown) = { anchorId: 'anchor_a1', capability: 'inspect', name: 'Bad', tags: [] };
     const errors = validateContent(tables);
     expect(errors.some((e) => e.includes('interactions/BAD ID'))).toBe(true);
   });

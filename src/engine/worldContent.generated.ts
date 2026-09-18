@@ -1,6 +1,6 @@
 // GENERATED — do not edit by hand.
-// Source: content/store.json (content v59b86490). Regenerate: npm run content:pull.
-export const WORLD_CONTENT_VERSION = '59b86490';
+// Source: content/store.json (content v8c64c86f). Regenerate: npm run content:pull.
+export const WORLD_CONTENT_VERSION = '8c64c86f';
 
 export interface GeneratedDistrictDef {
   id: string;
@@ -580,4 +580,41 @@ export const GENERATED_EVENT_MODIFIERS: GeneratedEventModifierDef[] = [
     targetIds: [],
     value: 40,
   },
+];
+
+export interface GeneratedPhysicalObjectDef {
+  id: string;
+  name: string;
+  kind: string;
+  containerId: string | null;
+  affordances: string[];
+  toolCapabilities: string[];
+  resourceCapabilities: string[];
+  tags: string[];
+}
+
+export interface GeneratedPlacementSlotDef {
+  id: string;
+  name: string;
+  spaceId: string | null;
+  anchorId: string | null;
+  parentPlacementId: string | null;
+  slotKind: string;
+  allowedObjectKinds: string[];
+  tags: string[];
+}
+
+export interface GeneratedObjectPlacementDef {
+  id: string;
+  objectDefId: string;
+  slotId: string;
+}
+
+export const GENERATED_PHYSICAL_OBJECT_DEFS: GeneratedPhysicalObjectDef[] = [
+];
+
+export const GENERATED_PLACEMENT_SLOTS: GeneratedPlacementSlotDef[] = [
+];
+
+export const GENERATED_OBJECT_PLACEMENTS: GeneratedObjectPlacementDef[] = [
 ];

@@ -9,7 +9,7 @@ export function buildLightProfileRow(
     timeOfDay: timeOfDay.trim(),
     colorTint: colorTint.trim(),
     intensity,
-    tags: '[]',
+    tags: [],
   };
 }
 
@@ -28,7 +28,7 @@ export function buildAudioProfileRow(
     kind,
     assetId: assetId.trim(),
     volume,
-    tags: '[]',
+    tags: [],
   };
 }
 
@@ -43,6 +43,6 @@ export function buildAmbientProfileRow(
     weather: weather.trim(),
     timeOfDay: timeOfDay.trim(),
     density,
-    tags: '[]',
+    tags: [],
   };
 }

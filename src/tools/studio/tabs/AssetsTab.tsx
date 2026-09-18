@@ -264,8 +264,8 @@ export const AssetsTab: React.FC<Props> = ({ studio }) => {
               <div className="md:col-span-2">
                 <TagListEditor
                   label="Tags"
-                  tagsJson={activeAsset['tags']}
-                  onChange={(nextJson) => studio.setCell('assets', activeId, 'tags', nextJson)}
+                  tags={activeAsset['tags']}
+                  onChange={(nextTags) => studio.setCell('assets', activeId, 'tags', nextTags)}
                   placeholder="e.g. background, prop, night..."
                   fieldErrorDisplay={
                     <FieldErrorDisplay allErrors={studio.validationErrors} table="assets" rowId={activeId} field="tags" />

@@ -52,24 +52,18 @@ export function validateCharacterContent(tables: ContentTables): string[] {
       errors.push(`archetypes/${archId}.typingSpeedWpm: must be 20..140.`);
     }
     for (const arrKey of ['vocabulary', 'defaultInterests']) {
-      try {
-        const arr = JSON.parse(String((row as Record<string, unknown>)[arrKey] ?? '[]'));
-        if (!Array.isArray(arr)) errors.push(`archetypes/${archId}.${arrKey}: must be JSON array.`);
-      } catch {
-        errors.push(`archetypes/${archId}.${arrKey}: invalid JSON.`);
-      }
+      const arr = (row as Record<string, unknown>)[arrKey];
+      if (!Array.isArray(arr)) errors.push(`archetypes/${archId}.${arrKey}: must be an array.`);
     }
   }
 
   // 2. All roles declared on live characters
   const liveRoles = new Set<string>();
   for (const row of Object.values(characters)) {
-    try {
-      const parsed: unknown = JSON.parse(String((row as Record<string, unknown>)?.['roles'] ?? '[]'));
-      if (Array.isArray(parsed)) {
-        for (const r of parsed) if (typeof r === 'string') liveRoles.add(r);
-      }
-    } catch { /* reported per character */ }
+    const roles = (row as Record<string, unknown>)?.['roles'];
+    if (Array.isArray(roles)) {
+      for (const role of roles) if (typeof role === 'string') liveRoles.add(role);
+    }
   }
 
   // 3. Characters validation
@@ -135,13 +129,7 @@ export function validateCharacterContent(tables: ContentTables): string[] {
     }
 
     // Roles capability tags
-    let roles: unknown = [];
-    try {
-      roles = JSON.parse(String((row as Record<string, unknown>)['roles'] ?? '[]'));
-    } catch {
-      errors.push(`characters/${id}.roles: invalid JSON array.`);
-      roles = null;
-    }
+    const roles = (row as Record<string, unknown>)['roles'];
     if (Array.isArray(roles)) {
       if (roles.length > 8) errors.push(`characters/${id}.roles: max 8 roles.`);
       for (const r of roles) {
@@ -149,17 +137,12 @@ export function validateCharacterContent(tables: ContentTables): string[] {
           errors.push(`characters/${id}.roles: '${String(r)}' must be lowercase tag ≤ 24 chars.`);
         }
       }
-    } else if (roles !== null) {
-      errors.push(`characters/${id}.roles: must be a JSON array.`);
+    } else {
+      errors.push(`characters/${id}.roles: must be an array.`);
     }
 
     // Languages
-    let languages: unknown = null;
-    try {
-      languages = JSON.parse(String((row as Record<string, unknown>)['languages'] ?? '[]'));
-    } catch {
-      errors.push(`characters/${id}.languages: invalid JSON array.`);
-    }
+    const languages = (row as Record<string, unknown>)['languages'];
     if (Array.isArray(languages)) {
       if (languages.length === 0 || languages.length > 3) errors.push(`characters/${id}.languages: needs 1..3 entries.`);
       for (const [i, entry] of languages.entries()) {
@@ -170,8 +153,8 @@ export function validateCharacterContent(tables: ContentTables): string[] {
           errors.push(`characters/${id}.languages[${i}].level: must be int 1..5.`);
         }
       }
-    } else if (languages !== null) {
-      errors.push(`characters/${id}.languages: must be a JSON array.`);
+    } else {
+      errors.push(`characters/${id}.languages: must be an array.`);
     }
 
     // Temperaments row check
@@ -244,12 +227,7 @@ export function validateCharacterContent(tables: ContentTables): string[] {
     if (typeof (row as Record<string, unknown>)['knowsAccounts'] !== 'boolean') {
       errors.push(`backstories/${id}.knowsAccounts: must be boolean.`);
     }
-    let candidates: unknown = null;
-    try {
-      candidates = JSON.parse(String((row as Record<string, unknown>)['candidates'] ?? ''));
-    } catch {
-      errors.push(`backstories/${id}.candidates: invalid JSON array.`);
-    }
+    const candidates = (row as Record<string, unknown>)['candidates'];
     if (Array.isArray(candidates)) {
       if (candidates.length > 3) errors.push(`backstories/${id}.candidates: max 3.`);
       for (const [i, c] of candidates.entries()) {
@@ -262,8 +240,8 @@ export function validateCharacterContent(tables: ContentTables): string[] {
           errors.push(`backstories/${id}.candidates[${i}].status: must be active|dead|changed.`);
         }
       }
-    } else if (candidates !== null) {
-      errors.push(`backstories/${id}.candidates: must be a JSON array.`);
+    } else {
+      errors.push(`backstories/${id}.candidates: must be an array.`);
     }
     const bio = (row as Record<string, unknown>)['bioSeed'];
     if (typeof bio !== 'string' || bio.length > 200) errors.push(`backstories/${id}.bioSeed: must be ≤ 200 chars.`);
@@ -310,12 +288,7 @@ export function validateCharacterContent(tables: ContentTables): string[] {
       errors.push(`dialoguePools/${key}: must be an object.`);
       continue;
     }
-    let lines: unknown = null;
-    try {
-      lines = JSON.parse(String((row as Record<string, unknown>)['lines'] ?? ''));
-    } catch {
-      errors.push(`dialoguePools/${key}.lines: invalid JSON.`);
-    }
+    const lines = (row as Record<string, unknown>)['lines'];
     if (Array.isArray(lines)) {
       if (lines.length === 0 || lines.length > 12) errors.push(`dialoguePools/${key}.lines: needs 1..12 lines.`);
       for (const [i, line] of lines.entries()) {
@@ -323,8 +296,8 @@ export function validateCharacterContent(tables: ContentTables): string[] {
           errors.push(`dialoguePools/${key}.lines[${i}]: must be a non-empty string <= 300 chars.`);
         }
       }
-    } else if (lines !== null) {
-      errors.push(`dialoguePools/${key}.lines: must be a JSON array.`);
+    } else {
+      errors.push(`dialoguePools/${key}.lines: must be an array.`);
     }
     const version = (row as Record<string, unknown>)['version'];
     if (!Number.isInteger(version) || (version as number) < 1) errors.push(`dialoguePools/${key}.version: must be an int >= 1.`);

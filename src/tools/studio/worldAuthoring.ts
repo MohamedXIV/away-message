@@ -11,7 +11,7 @@ export function buildDistrictRow(name: string) {
     name: name.trim(),
     mapX: 50,
     mapY: 50,
-    tags: '[]',
+    tags: [],
   };
 }
 
@@ -23,7 +23,7 @@ export function buildPlaceRow(name: string, districtId: string, districtIds: rea
   return {
     districtId,
     name: name.trim(),
-    transitAccess: '[]',
-    legacyIds: '[]',
+    transitAccess: [],
+    legacyIds: [],
   };
 }

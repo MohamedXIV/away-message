@@ -12,14 +12,13 @@ export const ArtProfileEditor: React.FC<Props> = ({ data, onChange }) => {
   const modelPath = String(data['modelPath'] ?? '');
   const defaultOutfit = String(data['defaultOutfit'] ?? 'default');
 
-  const expressions: Record<string, string> = (() => {
-    try {
-      const parsed = JSON.parse(String(data['expressions'] ?? '{}'));
-      return parsed && typeof parsed === 'object' ? parsed : {};
-    } catch {
-      return {};
-    }
-  })();
+  const expressions: Record<string, string> =
+    data['expressions'] && typeof data['expressions'] === 'object' && !Array.isArray(data['expressions'])
+      ? Object.fromEntries(
+          Object.entries(data['expressions'] as Record<string, unknown>)
+            .filter((entry): entry is [string, string] => typeof entry[1] === 'string'),
+        )
+      : {};
 
   const [newExpKey, setNewExpKey] = useState('');
   const [newExpAnim, setNewExpAnim] = useState('');
@@ -29,7 +28,7 @@ export const ArtProfileEditor: React.FC<Props> = ({ data, onChange }) => {
     const a = newExpAnim.trim();
     if (!k || !a) return;
     const next = { ...expressions, [k]: a };
-    onChange('expressions', JSON.stringify(next));
+    onChange('expressions', next);
     setNewExpKey('');
     setNewExpAnim('');
   };
@@ -37,12 +36,12 @@ export const ArtProfileEditor: React.FC<Props> = ({ data, onChange }) => {
   const handleRemoveExpression = (k: string) => {
     const next = { ...expressions };
     delete next[k];
-    onChange('expressions', JSON.stringify(next));
+    onChange('expressions', next);
   };
 
   const handleUpdateExpression = (k: string, val: string) => {
     const next = { ...expressions, [k]: val };
-    onChange('expressions', JSON.stringify(next));
+    onChange('expressions', next);
   };
 
   return (
