@@ -182,6 +182,131 @@ export function createEmptyVenueRuntimeState(): VenueRuntimeState {
   return { roleAssignments: {}, activities: {} };
 }
 
+export function hydrateVenueRuntimeState(
+  data: unknown,
+  definitions: VenueDefinitionSet,
+): VenueRuntimeState {
+  if (!data || typeof data !== 'object' || Array.isArray(data)) {
+    return createEmptyVenueRuntimeState();
+  }
+
+  const source = data as Record<string, unknown>;
+  const roleAssignments = source['roleAssignments'];
+  const activities = source['activities'];
+  let state = createEmptyVenueRuntimeState();
+
+  if (roleAssignments && typeof roleAssignments === 'object' && !Array.isArray(roleAssignments)) {
+    for (const [id, value] of Object.entries(roleAssignments as Record<string, unknown>).sort()) {
+      if (!value || typeof value !== 'object' || Array.isArray(value)) continue;
+      const row = value as Record<string, unknown>;
+      if (
+        row['id'] !== id ||
+        typeof row['actorId'] !== 'string' ||
+        typeof row['roleId'] !== 'string' ||
+        typeof row['sourceKind'] !== 'string' ||
+        typeof row['sourceId'] !== 'string' ||
+        !['active', 'break', 'inactive'].includes(String(row['status']))
+      ) {
+        continue;
+      }
+      try {
+        state = setVenueRoleAssignment(
+          state,
+          {
+            id,
+            actorId: row['actorId'],
+            roleId: row['roleId'],
+            sourceKind: row['sourceKind'],
+            sourceId: row['sourceId'],
+            status: row['status'] as VenueRoleAssignmentStatus,
+            stationId: typeof row['stationId'] === 'string' && row['stationId']
+              ? row['stationId']
+              : null,
+          },
+          definitions,
+        );
+      } catch {
+        // Current-format hydration is fail-closed: invalid assignments are ignored.
+      }
+    }
+  }
+
+  if (activities && typeof activities === 'object' && !Array.isArray(activities)) {
+    const maps = definitionMaps(definitions);
+    for (const [id, value] of Object.entries(activities as Record<string, unknown>).sort()) {
+      if (!value || typeof value !== 'object' || Array.isArray(value)) continue;
+      const row = value as Record<string, unknown>;
+      const templateId = row['activityTemplateId'];
+      const serviceId = row['serviceId'];
+      const template =
+        typeof templateId === 'string' ? maps.templates.get(templateId) : undefined;
+      const service =
+        typeof serviceId === 'string' ? maps.services.get(serviceId) : undefined;
+      if (!template || !service || service.activityTemplateId !== template.id) continue;
+      if (
+        row['id'] !== id ||
+        typeof row['actorId'] !== 'string' ||
+        typeof row['placeId'] !== 'string' ||
+        row['placeId'] !== service.placeId ||
+        !['active', 'completed'].includes(String(row['status'])) ||
+        !Number.isInteger(row['currentPhaseIndex']) ||
+        typeof row['phaseId'] !== 'string' ||
+        typeof row['phaseStartedAtMinute'] !== 'number' ||
+        typeof row['phaseEndsAtMinute'] !== 'number' ||
+        typeof row['startedAtMinute'] !== 'number'
+      ) {
+        continue;
+      }
+
+      const phaseIndex = Number(row['currentPhaseIndex']);
+      const phase = template.phases[phaseIndex];
+      if (!phase || phase.id !== row['phaseId']) continue;
+
+      const activity: VenueActivityInstance = {
+        id,
+        actorId: row['actorId'],
+        placeId: row['placeId'],
+        serviceId: service.id,
+        activityTemplateId: template.id,
+        purpose: typeof row['purpose'] === 'string' ? row['purpose'] : template.purpose,
+        activityKind:
+          typeof row['activityKind'] === 'string' ? row['activityKind'] : template.activityKind,
+        ...(typeof row['sourceKind'] === 'string'
+          ? { sourceKind: row['sourceKind'] as CharacterIntent['sourceKind'] }
+          : {}),
+        ...(typeof row['sourceId'] === 'string' ? { sourceId: row['sourceId'] } : {}),
+        ...(typeof row['targetActorId'] === 'string'
+          ? { targetActorId: row['targetActorId'] }
+          : {}),
+        intentKind:
+          typeof row['intentKind'] === 'string'
+            ? (row['intentKind'] as CharacterIntentKind)
+            : 'stay_current_activity',
+        intentPriority:
+          typeof row['intentPriority'] === 'number' ? row['intentPriority'] : 0,
+        intentReasons: Array.isArray(row['intentReasons'])
+          ? row['intentReasons'].filter(
+              (reason): reason is string => typeof reason === 'string',
+            )
+          : [],
+        status: row['status'] as VenueActivityStatus,
+        currentPhaseIndex: phaseIndex,
+        phaseId: phase.id,
+        phaseStartedAtMinute: row['phaseStartedAtMinute'],
+        phaseEndsAtMinute: row['phaseEndsAtMinute'],
+        stationId: phase.stationId,
+        startedAtMinute: row['startedAtMinute'],
+        ...(typeof row['completedAtMinute'] === 'number'
+          ? { completedAtMinute: row['completedAtMinute'] }
+          : {}),
+      };
+      state.activities[id] = activity;
+    }
+  }
+
+  return state;
+}
+
 function definitionMaps(definitions: VenueDefinitionSet) {
   return {
     roles: new Map(definitions.roles.map((role) => [role.id, role] as const)),
@@ -306,6 +431,15 @@ export function evaluateVenueService(args: {
     const station = stations.get(stationId);
     if (!station || station.placeId !== service.placeId) {
       blockers.push(`missing_station:${stationId}`);
+      continue;
+    }
+    // Staff stations are expected to be occupied by active workers. Customer/
+    // queue stations represent service capacity and must have a free slot.
+    if (
+      station.roleKinds.some((roleKind) => roleKind === 'customer' || roleKind === 'queue') &&
+      !stationHasCapacity(args.state, station)
+    ) {
+      blockers.push(`station_full:${stationId}`);
     }
   }
 
