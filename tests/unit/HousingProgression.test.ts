@@ -7,29 +7,28 @@ import {
 } from '../../src/engine/residence/HousingProgression';
 
 describe('HousingProgression', () => {
-  const offers: HousingOffer[] = [
-    {
-      id: 'offer_alpha',
-      placeId: 'test_lodging_alpha',
-      available: true,
-      monthlyRent: 55,
-      moveInCost: 20,
-    },
-    {
-      id: 'offer_beta',
-      placeId: 'test_lodging_beta',
-      available: false,
-      monthlyRent: 45,
-      moveInCost: 10,
-    },
-    {
-      id: 'offer_gamma',
-      placeId: 'test_lodging_gamma',
-      available: true,
-      monthlyRent: 80,
-      moveInCost: 70,
-    },
-  ];
+  const alphaOffer: HousingOffer = {
+    id: 'offer_alpha',
+    placeId: 'test_lodging_alpha',
+    available: true,
+    monthlyRent: 55,
+    moveInCost: 20,
+  };
+  const betaOffer: HousingOffer = {
+    id: 'offer_beta',
+    placeId: 'test_lodging_beta',
+    available: false,
+    monthlyRent: 45,
+    moveInCost: 10,
+  };
+  const gammaOffer: HousingOffer = {
+    id: 'offer_gamma',
+    placeId: 'test_lodging_gamma',
+    available: true,
+    monthlyRent: 80,
+    moveInCost: 70,
+  };
+  const offers: HousingOffer[] = [alphaOffer, betaOffer, gammaOffer];
 
   it('constrains starting choice by authored availability and affordability', () => {
     expect(listEligibleHousingOffers(offers, 60).map((offer) => offer.id)).toEqual(['offer_alpha']);
@@ -49,7 +48,7 @@ describe('HousingProgression', () => {
     };
 
     const first = commitHousingOffer({
-      offer: offers[0],
+      offer: alphaOffer,
       residence,
       moveInMinute: 120,
       spendMoveInCost: spend,
@@ -66,7 +65,7 @@ describe('HousingProgression', () => {
     });
 
     const duplicate = commitHousingOffer({
-      offer: offers[0],
+      offer: alphaOffer,
       residence,
       moveInMinute: 121,
       spendMoveInCost: spend,
@@ -87,7 +86,7 @@ describe('HousingProgression', () => {
     };
 
     expect(commitHousingOffer({
-      offer: offers[1],
+      offer: betaOffer,
       residence,
       moveInMinute: 0,
       spendMoveInCost: spend,
@@ -96,7 +95,7 @@ describe('HousingProgression', () => {
     expect(spendCalls).toBe(0);
 
     expect(commitHousingOffer({
-      offer: offers[2],
+      offer: gammaOffer,
       residence,
       moveInMinute: 0,
       spendMoveInCost: spend,
