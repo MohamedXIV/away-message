@@ -6,6 +6,7 @@ import type {
 } from '../../src/engine/worldContent.generated';
 import {
   calculateHousingRent,
+  commitHousingMove,
   commitHousingOffer,
   listEligibleHousingOffers,
   movePlayerOwnedHousingObjects,
@@ -140,8 +141,6 @@ describe('HousingProgression', () => {
     };
     const beforeDecor = calculateHousingRent({ baseRent: 55, propertyPackage });
 
-    // Player-owned objects are intentionally absent from the rent contract. Their exact
-    // instances belong to the physical ownership/location authority, not tenancy pricing.
     const playerOwnedObjectInstanceIds = ['owned_lamp_17', 'owned_terminal_42'];
     expect(playerOwnedObjectInstanceIds).toHaveLength(2);
     expect(calculateHousingRent({ baseRent: 55, propertyPackage })).toBe(beforeDecor);
@@ -168,94 +167,73 @@ describe('HousingProgression', () => {
     tags: [],
   };
   const moveSlots: GeneratedPlacementSlotDef[] = [
-    {
-      id: 'old_property_slot',
-      name: 'Old property slot',
-      spaceId: 'old_space',
-      anchorId: 'old_anchor',
-      parentPlacementId: null,
-      slotKind: 'floor',
-      allowedObjectKinds: ['furniture'],
-      tags: [],
-    },
-    {
-      id: 'new_residence_slot',
-      name: 'New residence slot',
-      spaceId: 'new_space',
-      anchorId: 'new_anchor',
-      parentPlacementId: null,
-      slotKind: 'floor',
-      allowedObjectKinds: ['furniture'],
-      tags: [],
-    },
-    {
-      id: 'incompatible_storage_slot',
-      name: 'Storage-only slot',
-      spaceId: 'new_space',
-      anchorId: 'storage_anchor',
-      parentPlacementId: null,
-      slotKind: 'floor',
-      allowedObjectKinds: ['storage'],
-      tags: [],
-    },
+    { id: 'old_property_slot', name: 'Old property slot', spaceId: 'old_space', anchorId: 'old_anchor', parentPlacementId: null, slotKind: 'floor', allowedObjectKinds: ['furniture'], tags: [] },
+    { id: 'new_residence_slot', name: 'New residence slot', spaceId: 'new_space', anchorId: 'new_anchor', parentPlacementId: null, slotKind: 'floor', allowedObjectKinds: ['furniture'], tags: [] },
+    { id: 'incompatible_storage_slot', name: 'Storage-only slot', spaceId: 'new_space', anchorId: 'storage_anchor', parentPlacementId: null, slotKind: 'floor', allowedObjectKinds: ['storage'], tags: [] },
   ];
-  const moveGraph: PhysicalRuntimeGraph = {
-    objectDefs: [furnitureDef, storageDef],
-    slots: moveSlots,
-    placements: [],
-  };
+  const moveGraph: PhysicalRuntimeGraph = { objectDefs: [furnitureDef, storageDef], slots: moveSlots, placements: [] };
   const moveState = (): PhysicalObjectRuntimeState => ({
     objects: {
-      owned_desk_17: {
-        instanceId: 'owned_desk_17',
-        objectDefId: 'test_furniture_def',
-        location: { kind: 'slot', slotId: 'old_property_slot' },
-      },
-      property_fixture_3: {
-        instanceId: 'property_fixture_3',
-        objectDefId: 'test_furniture_def',
-        location: { kind: 'detached' },
-      },
+      owned_desk_17: { instanceId: 'owned_desk_17', objectDefId: 'test_furniture_def', location: { kind: 'slot', slotId: 'old_property_slot' } },
+      property_fixture_3: { instanceId: 'property_fixture_3', objectDefId: 'test_furniture_def', location: { kind: 'detached' } },
     },
   });
   const isPlayerOwned = (instanceId: string): boolean => instanceId === 'owned_desk_17';
 
   it('moves exact player-owned instances while property fixtures stay with the old property', () => {
     const before = moveState();
-    const after = movePlayerOwnedHousingObjects({
-      state: before,
-      graph: moveGraph,
-      moves: [{ objectInstanceId: 'owned_desk_17', targetSlotId: 'new_residence_slot' }],
-      isPlayerOwnedObject: isPlayerOwned,
-    });
-
+    const after = movePlayerOwnedHousingObjects({ state: before, graph: moveGraph, moves: [{ objectInstanceId: 'owned_desk_17', targetSlotId: 'new_residence_slot' }], isPlayerOwnedObject: isPlayerOwned });
     expect(Object.keys(after.objects).sort()).toEqual(Object.keys(before.objects).sort());
-    expect(after.objects['owned_desk_17']).toEqual({
-      instanceId: 'owned_desk_17',
-      objectDefId: 'test_furniture_def',
-      location: { kind: 'slot', slotId: 'new_residence_slot' },
-    });
+    expect(after.objects['owned_desk_17']).toEqual({ instanceId: 'owned_desk_17', objectDefId: 'test_furniture_def', location: { kind: 'slot', slotId: 'new_residence_slot' } });
     expect(after.objects['property_fixture_3']).toEqual(before.objects['property_fixture_3']);
     expect(before.objects['owned_desk_17']?.location).toEqual({ kind: 'slot', slotId: 'old_property_slot' });
   });
 
   it('rejects property-owned or incompatible moves without mutating the original physical state', () => {
     const before = moveState();
+    expect(() => movePlayerOwnedHousingObjects({ state: before, graph: moveGraph, moves: [{ objectInstanceId: 'property_fixture_3', targetSlotId: 'new_residence_slot' }], isPlayerOwnedObject: isPlayerOwned })).toThrow('Housing cannot move non-player-owned object: property_fixture_3.');
+    expect(() => movePlayerOwnedHousingObjects({ state: before, graph: moveGraph, moves: [{ objectInstanceId: 'owned_desk_17', targetSlotId: 'incompatible_storage_slot' }], isPlayerOwnedObject: isPlayerOwned })).toThrow('is not allowed in slot incompatible_storage_slot');
+    expect(before).toEqual(moveState());
+  });
 
-    expect(() => movePlayerOwnedHousingObjects({
-      state: before,
-      graph: moveGraph,
-      moves: [{ objectInstanceId: 'property_fixture_3', targetSlotId: 'new_residence_slot' }],
+  it('commits tenancy only after the physical move is valid and exposes the new home immediately', () => {
+    const residence = new ResidenceTenancy({ currentResidencePlaceId: 'test_lodging_old', tenancyId: 'tenancy_old', moveInMinute: 10, currentRent: 40 });
+    let cash = 100;
+    const result = commitHousingMove({
+      offer: gammaOffer,
+      residence,
+      tenancyId: 'tenancy_new',
+      moveInMinute: 500,
+      spendMoveInCost: (amount) => { if (cash < amount) return false; cash -= amount; return true; },
+      physicalState: moveState(),
+      physicalGraph: moveGraph,
+      moves: [{ objectInstanceId: 'owned_desk_17', targetSlotId: 'new_residence_slot' }],
       isPlayerOwnedObject: isPlayerOwned,
-    })).toThrow('Housing cannot move non-player-owned object: property_fixture_3.');
+    });
 
-    expect(() => movePlayerOwnedHousingObjects({
-      state: before,
-      graph: moveGraph,
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(cash).toBe(30);
+    expect(residence.resolveHomePlaceId()).toBe('test_lodging_gamma');
+    expect(result.physicalState.objects['owned_desk_17']?.location).toEqual({ kind: 'slot', slotId: 'new_residence_slot' });
+    expect(result.physicalState.objects['property_fixture_3']).toEqual(moveState().objects['property_fixture_3']);
+  });
+
+  it('does not charge or change tenancy when physical installation is invalid', () => {
+    const residence = new ResidenceTenancy({ currentResidencePlaceId: 'test_lodging_old', tenancyId: 'tenancy_old', moveInMinute: 10, currentRent: 40 });
+    let spendCalls = 0;
+    expect(() => commitHousingMove({
+      offer: alphaOffer,
+      residence,
+      tenancyId: 'tenancy_new',
+      moveInMinute: 500,
+      spendMoveInCost: () => { spendCalls += 1; return true; },
+      physicalState: moveState(),
+      physicalGraph: moveGraph,
       moves: [{ objectInstanceId: 'owned_desk_17', targetSlotId: 'incompatible_storage_slot' }],
       isPlayerOwnedObject: isPlayerOwned,
     })).toThrow('is not allowed in slot incompatible_storage_slot');
-
-    expect(before).toEqual(moveState());
+    expect(spendCalls).toBe(0);
+    expect(residence.resolveHomePlaceId()).toBe('test_lodging_old');
   });
 });
