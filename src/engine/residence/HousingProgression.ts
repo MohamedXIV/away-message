@@ -1,4 +1,9 @@
 import type { ResidenceTenancy } from '../ResidenceTenancy';
+import {
+  movePhysicalObject,
+  type PhysicalObjectRuntimeState,
+  type PhysicalRuntimeGraph,
+} from '../physical/PhysicalContextRuntime';
 
 export interface HousingPropertyPackage {
   id: string;
@@ -19,6 +24,11 @@ export interface HousingOffer {
   available: boolean;
   monthlyRent: number;
   moveInCost: number;
+}
+
+export interface HousingObjectMove {
+  objectInstanceId: string;
+  targetSlotId: string;
 }
 
 export type HousingCommitFailure = 'unavailable' | 'unaffordable' | 'already-current-tenancy';
@@ -73,4 +83,39 @@ export function commitHousingOffer(input: {
   });
 
   return { ok: true };
+}
+
+/**
+ * Applies the physical part of an assisted residence move without owning either
+ * ownership truth or placement legality. Ownership is queried from its existing
+ * authority and every placement is delegated to PhysicalContextRuntime.
+ *
+ * movePhysicalObject is immutable, so a rejected later move leaves the caller's
+ * original state untouched: the transaction is all-or-nothing from housing's
+ * point of view and exact object instance IDs are preserved.
+ */
+export function movePlayerOwnedHousingObjects(input: {
+  state: PhysicalObjectRuntimeState;
+  graph: PhysicalRuntimeGraph;
+  moves: readonly Readonly<HousingObjectMove>[];
+  isPlayerOwnedObject: (objectInstanceId: string) => boolean;
+}): PhysicalObjectRuntimeState {
+  const { state, graph, moves, isPlayerOwnedObject } = input;
+  let candidate = state;
+  const seen = new Set<string>();
+
+  for (const move of moves) {
+    if (seen.has(move.objectInstanceId)) {
+      throw new Error(`Housing move contains duplicate object instance: ${move.objectInstanceId}.`);
+    }
+    seen.add(move.objectInstanceId);
+
+    if (!isPlayerOwnedObject(move.objectInstanceId)) {
+      throw new Error(`Housing cannot move non-player-owned object: ${move.objectInstanceId}.`);
+    }
+
+    candidate = movePhysicalObject(candidate, move.objectInstanceId, move.targetSlotId, graph);
+  }
+
+  return candidate;
 }
