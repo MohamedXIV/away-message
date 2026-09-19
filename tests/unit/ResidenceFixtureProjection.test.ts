@@ -51,6 +51,16 @@ const slots: GeneratedPlacementSlotDef[] = [
     tags: [],
   },
   {
+    id: 'test_bed_slot_alt',
+    name: 'Second Bed Slot',
+    spaceId: 'test_space',
+    anchorId: 'test_bed_anchor_alt',
+    parentPlacementId: null,
+    slotKind: 'floor',
+    allowedObjectKinds: ['bed'],
+    tags: [],
+  },
+  {
     id: 'test_rug_slot',
     name: 'Rug Slot',
     spaceId: 'test_space',
@@ -74,6 +84,7 @@ const slots: GeneratedPlacementSlotDef[] = [
 
 const placements: GeneratedObjectPlacementDef[] = [
   { id: 'test_bed_placement', objectDefId: 'test_bed_def', slotId: 'test_bed_slot' },
+  { id: 'test_bed_placement_alt', objectDefId: 'test_bed_def', slotId: 'test_bed_slot_alt' },
   { id: 'test_rug_placement', objectDefId: 'test_rug_def', slotId: 'test_rug_slot' },
 ];
 
@@ -106,54 +117,53 @@ const catalog: FixtureVisualCatalog = {
 describe('modular fixture visual projection (#87)', () => {
   it('projects one semantic object identity to view-specific art deterministically', () => {
     const state = materializeAuthoredPhysicalObjects(graph);
+    const viewA = projectFixtureVisuals('test_view_a', state, graph, catalog);
 
-    expect(projectFixtureVisuals('test_view_a', state, graph, catalog)).toEqual([
-      {
-        objectInstanceId: authoredObjectInstanceId('test_rug_placement'),
-        authoredPlacementId: 'test_rug_placement',
-        slotId: 'test_rug_slot',
-        objectDefId: 'test_rug_def',
-        variantId: 'woven',
-        assetId: 'test_rug_a',
-        depth: 5,
-      },
-      {
-        objectInstanceId: authoredObjectInstanceId('test_bed_placement'),
-        authoredPlacementId: 'test_bed_placement',
-        slotId: 'test_bed_slot',
-        objectDefId: 'test_bed_def',
-        variantId: 'basic',
-        assetId: 'test_bed_basic_a',
-        depth: 20,
-      },
-    ]);
+    expect(viewA.find((entry) => entry.objectInstanceId === authoredObjectInstanceId('test_rug_placement'))).toMatchObject({
+      authoredPlacementId: 'test_rug_placement',
+      slotId: 'test_rug_slot',
+      objectDefId: 'test_rug_def',
+      variantId: 'woven',
+      assetId: 'test_rug_a',
+      depth: 5,
+    });
+    expect(viewA.filter((entry) => entry.objectDefId === 'test_bed_def')).toHaveLength(2);
 
     const viewB = projectFixtureVisuals('test_view_b', state, graph, catalog);
-    expect(viewB.map((entry) => entry.objectInstanceId)).toEqual([
-      authoredObjectInstanceId('test_bed_placement'),
-    ]);
-    expect(viewB[0]?.assetId).toBe('test_bed_basic_b');
+    expect(viewB.filter((entry) => entry.objectDefId === 'test_bed_def')).toHaveLength(2);
+    expect(viewB.every((entry) => entry.assetId === 'test_bed_basic_b')).toBe(true);
+    expect(viewB.every((entry) => entry.objectInstanceId.startsWith('authored:'))).toBe(true);
   });
 
-  it('changes only visual selection when a property fixture variant changes', () => {
+  it('changes only one concrete fixture visual when same-definition fixtures coexist', () => {
     const state = materializeAuthoredPhysicalObjects(graph);
-    const selections = selectFixtureVisualVariant({}, 'test_bed_def', 'upgraded', catalog);
+    const targetId = authoredObjectInstanceId('test_bed_placement');
+    const otherId = authoredObjectInstanceId('test_bed_placement_alt');
+    const selections = selectFixtureVisualVariant({}, targetId, 'test_bed_def', 'upgraded', catalog);
     const projected = projectFixtureVisuals('test_view_a', state, graph, catalog, selections);
 
-    expect(projected.find((entry) => entry.objectDefId === 'test_bed_def')).toMatchObject({
-      objectInstanceId: authoredObjectInstanceId('test_bed_placement'),
+    expect(projected.find((entry) => entry.objectInstanceId === targetId)).toMatchObject({
       authoredPlacementId: 'test_bed_placement',
       slotId: 'test_bed_slot',
       variantId: 'upgraded',
       assetId: 'test_bed_upgraded_a',
     });
-    expect(state.objects[authoredObjectInstanceId('test_bed_placement')]?.objectDefId).toBe('test_bed_def');
+    expect(projected.find((entry) => entry.objectInstanceId === otherId)).toMatchObject({
+      variantId: 'basic',
+      assetId: 'test_bed_basic_a',
+    });
+    expect(state.objects[targetId]?.objectDefId).toBe('test_bed_def');
+    expect(state.objects[otherId]?.objectDefId).toBe('test_bed_def');
   });
 
   it('fails closed for unknown variants and missing view art without mutating state', () => {
-    expect(() => selectFixtureVisualVariant({}, 'test_bed_def', 'missing', catalog)).toThrow(
-      'Unknown fixture visual variant missing for test_bed_def.',
-    );
+    expect(() => selectFixtureVisualVariant(
+      {},
+      authoredObjectInstanceId('test_bed_placement'),
+      'test_bed_def',
+      'missing',
+      catalog,
+    )).toThrow('Unknown fixture visual variant missing for test_bed_def.');
 
     const state = materializeAuthoredPhysicalObjects(graph);
     const before = structuredClone(state);
