@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { ResidenceTenancy } from '../../src/engine/ResidenceTenancy';
 import {
+  calculateHousingRent,
   commitHousingOffer,
   listEligibleHousingOffers,
   type HousingOffer,
+  type HousingPropertyPackage,
 } from '../../src/engine/residence/HousingProgression';
 
 describe('HousingProgression', () => {
@@ -103,5 +105,36 @@ describe('HousingProgression', () => {
     })).toEqual({ ok: false, reason: 'unaffordable' });
     expect(spendCalls).toBe(1);
     expect(residence.getState()).toBeNull();
+  });
+
+  it('derives rent from tenancy terms and the supplied property package only', () => {
+    const basicPackage: HousingPropertyPackage = {
+      id: 'package_basic',
+      rentAdjustment: 0,
+      suppliedObjectDefIds: ['test_bed_basic'],
+    };
+    const improvedPackage: HousingPropertyPackage = {
+      id: 'package_improved',
+      rentAdjustment: 25,
+      suppliedObjectDefIds: ['test_bed_basic', 'test_desk_supplied'],
+    };
+
+    expect(calculateHousingRent({ baseRent: 55, propertyPackage: basicPackage })).toBe(55);
+    expect(calculateHousingRent({ baseRent: 55, propertyPackage: improvedPackage })).toBe(80);
+  });
+
+  it('does not let player-owned belongings alter property-derived rent', () => {
+    const propertyPackage: HousingPropertyPackage = {
+      id: 'package_alpha',
+      rentAdjustment: 10,
+      suppliedObjectDefIds: ['test_bed_supplied'],
+    };
+    const beforeDecor = calculateHousingRent({ baseRent: 55, propertyPackage });
+
+    // Player-owned objects are intentionally absent from the rent contract. Their exact
+    // instances belong to the physical ownership/location authority, not tenancy pricing.
+    const playerOwnedObjectInstanceIds = ['owned_lamp_17', 'owned_terminal_42'];
+    expect(playerOwnedObjectInstanceIds).toHaveLength(2);
+    expect(calculateHousingRent({ baseRent: 55, propertyPackage })).toBe(beforeDecor);
   });
 });
