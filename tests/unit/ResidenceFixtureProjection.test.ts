@@ -6,6 +6,7 @@ import type {
 } from '../../src/engine/worldContent.generated';
 import {
   authoredObjectInstanceId,
+  detachPhysicalObject,
   getReachableAffordances,
   materializeAuthoredPhysicalObjects,
   movePhysicalObject,
@@ -44,8 +45,8 @@ const placements: GeneratedObjectPlacementDef[] = [
 const graph: PhysicalRuntimeGraph = { objectDefs, slots, placements };
 const catalog: FixtureVisualCatalog = {
   test_bed_def: { defaultVariantId: 'basic', variants: { basic: { test_view_a: { assetId: 'test_bed_basic_a', depth: 20 }, test_view_b: { assetId: 'test_bed_basic_b', depth: 10 } }, upgraded: { test_view_a: { assetId: 'test_bed_upgraded_a', depth: 20 }, test_view_b: { assetId: 'test_bed_upgraded_b', depth: 10 } } } },
-  test_rug_def: { defaultVariantId: 'woven', variants: { woven: { test_view_a: { assetId: 'test_rug_a', depth: 5 } } } },
-  test_desk_def: { defaultVariantId: 'standard', variants: { standard: { test_view_a: { assetId: 'test_desk_a', depth: 15 }, test_view_b: { assetId: 'test_desk_b', depth: 15 } } } },
+  test_rug_def: { defaultVariantId: 'woven', variants: { woven: { test_view_a: { assetId: 'test_rug_a', depth: 5 }, test_view_b: { assetId: 'test_rug_b', depth: 5 } } } },
+  test_desk_def: { defaultVariantId: 'standard', variants: { standard: { test_view_a: { assetId: 'test_desk_a', depth: 15 }, test_view_b: { assetId: 'test_desk_b', depth: 15 } }, upgraded: { test_view_a: { assetId: 'test_desk_upgraded_a', depth: 15 }, test_view_b: { assetId: 'test_desk_upgraded_b', depth: 15 } } } },
   test_chair_def: { defaultVariantId: 'standard', variants: { standard: { test_view_a: { assetId: 'test_chair_a', depth: 16 }, test_view_b: { assetId: 'test_chair_b', depth: 16 } } } },
 };
 
@@ -100,5 +101,39 @@ describe('modular fixture visual projection (#87)', () => {
       { objectInstanceId: deskId, affordance: 'use' },
       { objectInstanceId: chairId, affordance: 'sit' },
     ]));
+  });
+
+  it('drives bed, desk and movable decor consistently across views from one physical state', () => {
+    const state = materializeAuthoredPhysicalObjects(graph);
+    const bedId = authoredObjectInstanceId('test_bed_placement');
+    const deskId = authoredObjectInstanceId('test_desk_placement');
+    const rugId = authoredObjectInstanceId('test_rug_placement');
+    const selections = selectFixtureVisualVariant(
+      selectFixtureVisualVariant({}, bedId, 'test_bed_def', 'upgraded', catalog),
+      deskId,
+      'test_desk_def',
+      'upgraded',
+      catalog,
+    );
+
+    for (const [viewId, bedAsset, deskAsset, rugAsset] of [
+      ['test_view_a', 'test_bed_upgraded_a', 'test_desk_upgraded_a', 'test_rug_a'],
+      ['test_view_b', 'test_bed_upgraded_b', 'test_desk_upgraded_b', 'test_rug_b'],
+    ] as const) {
+      const projected = projectFixtureVisuals(viewId, state, graph, catalog, selections);
+      expect(projected.find((entry) => entry.objectInstanceId === bedId)?.assetId).toBe(bedAsset);
+      expect(projected.find((entry) => entry.objectInstanceId === deskId)?.assetId).toBe(deskAsset);
+      expect(projected.find((entry) => entry.objectInstanceId === rugId)?.assetId).toBe(rugAsset);
+    }
+
+    const detached = detachPhysicalObject(state, rugId, graph);
+    expect(projectFixtureVisuals('test_view_a', detached, graph, catalog, selections).some((entry) => entry.objectInstanceId === rugId)).toBe(false);
+    expect(getReachableAffordances('test_space', detached, graph)).not.toContainEqual({ objectInstanceId: rugId, affordance: 'inspect' });
+  });
+
+  it('delegates placement compatibility to the generic physical graph', () => {
+    const state = materializeAuthoredPhysicalObjects(graph);
+    const rugId = authoredObjectInstanceId('test_rug_placement');
+    expect(() => movePhysicalObject(state, rugId, 'test_bed_slot_alt', graph)).toThrow('kind decor is not allowed in slot test_bed_slot_alt');
   });
 });
