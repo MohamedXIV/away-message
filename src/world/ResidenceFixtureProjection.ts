@@ -26,8 +26,14 @@ export interface FixtureVisualProjection {
   depth: number;
 }
 
+/**
+ * Select presentation for one concrete physical object. Selection is keyed by
+ * runtime identity rather than object definition so two beds using the same
+ * authored definition can still have independent fixture variants.
+ */
 export function selectFixtureVisualVariant(
   current: FixtureVisualSelections,
+  objectInstanceId: string,
   objectDefId: string,
   variantId: string,
   catalog: FixtureVisualCatalog,
@@ -37,7 +43,7 @@ export function selectFixtureVisualVariant(
     throw new Error(`Unknown fixture visual variant ${variantId} for ${objectDefId}.`);
   }
 
-  return { ...current, [objectDefId]: variantId };
+  return { ...current, [objectInstanceId]: variantId };
 }
 
 export function projectFixtureVisuals(
@@ -57,7 +63,7 @@ export function projectFixtureVisuals(
       const visualDefinition = catalog[object.objectDefId];
       if (!visualDefinition) return [];
 
-      const variantId = selections[object.objectDefId] ?? visualDefinition.defaultVariantId;
+      const variantId = selections[object.instanceId] ?? visualDefinition.defaultVariantId;
       const viewVisual = visualDefinition.variants[variantId]?.[viewId];
       if (!viewVisual) return [];
 
