@@ -1,5 +1,18 @@
 import type { ResidenceTenancy } from '../ResidenceTenancy';
 
+export interface HousingPropertyPackage {
+  id: string;
+  /** Economic effect of the property-supplied fixture/service package only. */
+  rentAdjustment: number;
+  /** Authored summary for offer/economy UI; runtime affordances stay on concrete objects. */
+  suppliedObjectDefIds: readonly string[];
+}
+
+export interface HousingRentTerms {
+  baseRent: number;
+  propertyPackage: Readonly<HousingPropertyPackage>;
+}
+
 export interface HousingOffer {
   id: string;
   placeId: string;
@@ -10,6 +23,20 @@ export interface HousingOffer {
 
 export type HousingCommitFailure = 'unavailable' | 'unaffordable' | 'already-current-tenancy';
 export type HousingCommitResult = { ok: true } | { ok: false; reason: HousingCommitFailure };
+
+export function calculateHousingRent(terms: Readonly<HousingRentTerms>): number {
+  const { baseRent, propertyPackage } = terms;
+  if (!Number.isFinite(baseRent) || baseRent < 0) {
+    throw new Error('Housing baseRent must be a non-negative finite number');
+  }
+  if (!Number.isFinite(propertyPackage.rentAdjustment)) {
+    throw new Error('Housing property package rentAdjustment must be finite');
+  }
+
+  const rent = baseRent + propertyPackage.rentAdjustment;
+  if (rent < 0) throw new Error('Housing calculated rent must be non-negative');
+  return rent;
+}
 
 export function listEligibleHousingOffers(
   offers: readonly HousingOffer[],
