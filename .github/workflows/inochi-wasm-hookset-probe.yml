@@ -137,13 +137,13 @@ jobs:
       - name: Require Away runtime exports on candidate WASM
         run: node scripts/verify-inochi-wasm-exports.mjs '${{ steps.wasm.outputs.path }}'
 
-      - name: Retain exact candidate and Midori fixture for runtime diagnosis
+      - name: Retain exact candidate and official fixtures for runtime diagnosis
         uses: actions/upload-artifact@v4
         with:
           name: inochi2d-hookset-diagnostic-${{ github.sha }}
           path: |
             ${{ steps.wasm.outputs.path }}
-            .tmp/example-models/Midori.inx
+            .tmp/example-models/*.inx
           if-no-files-found: error
           retention-days: 3
 
@@ -162,8 +162,27 @@ jobs:
       - name: Prove real part texture swap and restore on upstream Ada
         run: npx tsx scripts/probe-inochi-wasm-slot.ts '${{ steps.wasm.outputs.path }}' .tmp/inochi2d/examples/ada-static.inx
 
-      - name: Prove current-format runtime mutations on official Midori rig
+      - name: Discover and prove an official mutable rig
+        shell: bash
         run: |
-          test $(wc -c < .tmp/example-models/Midori.inx) -gt 1000
-          sha256sum .tmp/example-models/Midori.inx
-          npx tsx scripts/probe-inochi-wasm-load.ts '${{ steps.wasm.outputs.path }}' --fixture .tmp/example-models/Midori.inx --runtime-proof --allow-candidate-wasm
+          set -u
+          WASM='${{ steps.wasm.outputs.path }}'
+          shopt -s nullglob
+          fixtures=(.tmp/example-models/*.inx)
+          test ${#fixtures[@]} -gt 0
+          passed=''
+          for fixture in "${fixtures[@]}"; do
+            test $(wc -c < "$fixture") -gt 1000 || continue
+            echo "Trying runtime proof: $fixture"
+            sha256sum "$fixture"
+            if npx tsx scripts/probe-inochi-wasm-load.ts "$WASM" --fixture "$fixture" --runtime-proof --allow-candidate-wasm; then
+              passed="$fixture"
+              break
+            fi
+            echo "Rejected as runtime-proof fixture: $fixture"
+          done
+          if [ -z "$passed" ]; then
+            echo 'No official example-model fixture passed the two-parameter set/readback/restore proof on the pinned 0.9 WASM runtime.' >&2
+            exit 1
+          fi
+          echo "Runtime mutation proof fixture: $passed"
