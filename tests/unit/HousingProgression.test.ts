@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { ResidenceTenancy } from '../../src/engine/ResidenceTenancy';
+import { EconomyEngine } from '../../src/engine/EconomyEngine';
+import { EventBus } from '../../src/engine/EventBus';
 import type {
   GeneratedPhysicalObjectDef,
   GeneratedPlacementSlotDef,
@@ -29,6 +31,7 @@ describe('HousingProgression', () => {
     id: 'offer_gamma', placeId: 'test_lodging_gamma', available: true, monthlyRent: 80, moveInCost: 70,
   };
   const offers: HousingOffer[] = [alphaOffer, betaOffer, gammaOffer];
+  const ignoreRecurringRent = (_amount: number): void => {};
 
   it('constrains starting choice by authored availability and affordability', () => {
     expect(listEligibleHousingOffers(offers, 60).map((offer) => offer.id)).toEqual(['offer_alpha']);
@@ -39,10 +42,10 @@ describe('HousingProgression', () => {
     const residence = new ResidenceTenancy();
     let cash = 60;
     const spend = (amount: number): boolean => { if (cash < amount) return false; cash -= amount; return true; };
-    expect(commitHousingOffer({ offer: alphaOffer, residence, moveInMinute: 120, spendMoveInCost: spend, tenancyId: 'tenancy_alpha' })).toEqual({ ok: true });
+    expect(commitHousingOffer({ offer: alphaOffer, residence, moveInMinute: 120, spendMoveInCost: spend, setRecurringRentAmount: ignoreRecurringRent, tenancyId: 'tenancy_alpha' })).toEqual({ ok: true });
     expect(cash).toBe(40);
     expect(residence.getState()).toEqual({ currentResidencePlaceId: 'test_lodging_alpha', tenancyId: 'tenancy_alpha', moveInMinute: 120, currentRent: 55 });
-    expect(commitHousingOffer({ offer: alphaOffer, residence, moveInMinute: 121, spendMoveInCost: spend, tenancyId: 'tenancy_alpha' })).toEqual({ ok: false, reason: 'already-current-tenancy' });
+    expect(commitHousingOffer({ offer: alphaOffer, residence, moveInMinute: 121, spendMoveInCost: spend, setRecurringRentAmount: ignoreRecurringRent, tenancyId: 'tenancy_alpha' })).toEqual({ ok: false, reason: 'already-current-tenancy' });
     expect(cash).toBe(40);
     expect(residence.getState()?.moveInMinute).toBe(120);
   });
@@ -51,11 +54,35 @@ describe('HousingProgression', () => {
     const residence = new ResidenceTenancy();
     let spendCalls = 0;
     const spend = (_amount: number): boolean => { spendCalls += 1; return false; };
-    expect(commitHousingOffer({ offer: betaOffer, residence, moveInMinute: 0, spendMoveInCost: spend, tenancyId: 'tenancy_beta' })).toEqual({ ok: false, reason: 'unavailable' });
+    expect(commitHousingOffer({ offer: betaOffer, residence, moveInMinute: 0, spendMoveInCost: spend, setRecurringRentAmount: ignoreRecurringRent, tenancyId: 'tenancy_beta' })).toEqual({ ok: false, reason: 'unavailable' });
     expect(spendCalls).toBe(0);
-    expect(commitHousingOffer({ offer: gammaOffer, residence, moveInMinute: 0, spendMoveInCost: spend, tenancyId: 'tenancy_gamma' })).toEqual({ ok: false, reason: 'unaffordable' });
+    expect(commitHousingOffer({ offer: gammaOffer, residence, moveInMinute: 0, spendMoveInCost: spend, setRecurringRentAmount: ignoreRecurringRent, tenancyId: 'tenancy_gamma' })).toEqual({ ok: false, reason: 'unaffordable' });
     expect(spendCalls).toBe(1);
     expect(residence.getState()).toBeNull();
+  });
+
+  it('makes committed tenancy rent the real recurring economy charge', () => {
+    const residence = new ResidenceTenancy();
+    const economy = new EconomyEngine(new EventBus(), { cash: 300 });
+
+    expect(commitHousingOffer({
+      offer: alphaOffer,
+      residence,
+      tenancyId: 'tenancy_alpha',
+      moveInMinute: 120,
+      spendMoveInCost: (amount) => economy.spendCash(amount, 'Housing move-in'),
+      setRecurringRentAmount: (amount) => economy.setRecurringRentAmount(amount),
+    })).toEqual({ ok: true });
+
+    expect(economy.getState().rentAmount).toBe(55);
+    expect(economy.getState().recurringRentAmount).toBe(55);
+    expect(economy.payRent()).toEqual({ success: true });
+    expect(economy.getCash()).toBe(225);
+
+    economy.handleDayTransition(8);
+    expect(economy.getState().rentDueDay).toBe(14);
+    expect(economy.getState().rentPaid).toBe(false);
+    expect(economy.getState().rentAmount).toBe(55);
   });
 
   it('derives rent from tenancy terms and the supplied property package only', () => {
@@ -122,7 +149,7 @@ describe('HousingProgression', () => {
   it('commits tenancy only after the physical move is valid and exposes the new home immediately', () => {
     const residence = new ResidenceTenancy({ currentResidencePlaceId: 'test_lodging_old', tenancyId: 'tenancy_old', moveInMinute: 10, currentRent: 40 });
     let cash = 100;
-    const result = commitHousingMove({ offer: gammaOffer, residence, tenancyId: 'tenancy_new', moveInMinute: 500, spendMoveInCost: (amount) => { if (cash < amount) return false; cash -= amount; return true; }, physicalState: moveState(), physicalGraph: moveGraph, moves: [{ objectInstanceId: 'owned_desk_17', targetSlotId: 'new_residence_slot' }], isPlayerOwnedObject: isPlayerOwned });
+    const result = commitHousingMove({ offer: gammaOffer, residence, tenancyId: 'tenancy_new', moveInMinute: 500, spendMoveInCost: (amount) => { if (cash < amount) return false; cash -= amount; return true; }, setRecurringRentAmount: ignoreRecurringRent, physicalState: moveState(), physicalGraph: moveGraph, moves: [{ objectInstanceId: 'owned_desk_17', targetSlotId: 'new_residence_slot' }], isPlayerOwnedObject: isPlayerOwned });
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(cash).toBe(30);
@@ -134,7 +161,7 @@ describe('HousingProgression', () => {
   it('does not charge or change tenancy when physical installation is invalid', () => {
     const residence = new ResidenceTenancy({ currentResidencePlaceId: 'test_lodging_old', tenancyId: 'tenancy_old', moveInMinute: 10, currentRent: 40 });
     let spendCalls = 0;
-    expect(() => commitHousingMove({ offer: alphaOffer, residence, tenancyId: 'tenancy_new', moveInMinute: 500, spendMoveInCost: () => { spendCalls += 1; return true; }, physicalState: moveState(), physicalGraph: moveGraph, moves: [{ objectInstanceId: 'owned_desk_17', targetSlotId: 'incompatible_storage_slot' }], isPlayerOwnedObject: isPlayerOwned })).toThrow('is not allowed in slot incompatible_storage_slot');
+    expect(() => commitHousingMove({ offer: alphaOffer, residence, tenancyId: 'tenancy_new', moveInMinute: 500, spendMoveInCost: () => { spendCalls += 1; return true; }, setRecurringRentAmount: ignoreRecurringRent, physicalState: moveState(), physicalGraph: moveGraph, moves: [{ objectInstanceId: 'owned_desk_17', targetSlotId: 'incompatible_storage_slot' }], isPlayerOwnedObject: isPlayerOwned })).toThrow('is not allowed in slot incompatible_storage_slot');
     expect(spendCalls).toBe(0);
     expect(residence.resolveHomePlaceId()).toBe('test_lodging_old');
   });
