@@ -56,12 +56,20 @@ export function commitHousingOffer(input: {
   tenancyId: string;
   moveInMinute: number;
   spendMoveInCost: (amount: number) => boolean;
+  setRecurringRentAmount: (amount: number) => void;
 }): HousingCommitResult {
-  const { offer, residence, tenancyId, moveInMinute, spendMoveInCost } = input;
+  const { offer, residence, tenancyId, moveInMinute, spendMoveInCost, setRecurringRentAmount } = input;
+  if (!Number.isFinite(offer.monthlyRent) || offer.monthlyRent < 0) {
+    throw new Error('Housing monthlyRent must be a non-negative finite number');
+  }
+  if (!Number.isFinite(offer.moveInCost) || offer.moveInCost < 0) {
+    throw new Error('Housing moveInCost must be a non-negative finite number');
+  }
   if (!offer.available) return { ok: false, reason: 'unavailable' };
   const current = residence.getState();
   if (current?.tenancyId === tenancyId) return { ok: false, reason: 'already-current-tenancy' };
   if (!spendMoveInCost(offer.moveInCost)) return { ok: false, reason: 'unaffordable' };
+  setRecurringRentAmount(offer.monthlyRent);
   residence.setCurrentResidence({ placeId: offer.placeId, tenancyId, moveInMinute, currentRent: offer.monthlyRent });
   return { ok: true };
 }
@@ -100,12 +108,19 @@ export function commitHousingMove(input: {
   tenancyId: string;
   moveInMinute: number;
   spendMoveInCost: (amount: number) => boolean;
+  setRecurringRentAmount: (amount: number) => void;
   physicalState: PhysicalObjectRuntimeState;
   physicalGraph: PhysicalRuntimeGraph;
   moves: readonly Readonly<HousingObjectMove>[];
   isPlayerOwnedObject: (objectInstanceId: string) => boolean;
 }): HousingMoveCommitResult {
-  const { offer, residence, tenancyId, moveInMinute, spendMoveInCost, physicalState, physicalGraph, moves, isPlayerOwnedObject } = input;
+  const { offer, residence, tenancyId, moveInMinute, spendMoveInCost, setRecurringRentAmount, physicalState, physicalGraph, moves, isPlayerOwnedObject } = input;
+  if (!Number.isFinite(offer.monthlyRent) || offer.monthlyRent < 0) {
+    throw new Error('Housing monthlyRent must be a non-negative finite number');
+  }
+  if (!Number.isFinite(offer.moveInCost) || offer.moveInCost < 0) {
+    throw new Error('Housing moveInCost must be a non-negative finite number');
+  }
   if (!offer.available) return { ok: false, reason: 'unavailable' };
   if (residence.getState()?.tenancyId === tenancyId) return { ok: false, reason: 'already-current-tenancy' };
 
@@ -117,6 +132,7 @@ export function commitHousingMove(input: {
   });
 
   if (!spendMoveInCost(offer.moveInCost)) return { ok: false, reason: 'unaffordable' };
+  setRecurringRentAmount(offer.monthlyRent);
   residence.setCurrentResidence({ placeId: offer.placeId, tenancyId, moveInMinute, currentRent: offer.monthlyRent });
   return { ok: true, physicalState: candidatePhysicalState };
 }
