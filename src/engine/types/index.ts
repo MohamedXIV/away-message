@@ -47,7 +47,8 @@ export interface PlayerState {
   energy: number;            // 0..100
   fatigue: number;           // 0..100
   rentDueDay: number;        // Day 7, then Day 14
-  rentAmount: number;        // $140.00
+  rentAmount: number;        // Current amount due, including temporary late fees
+  recurringRentAmount?: number;// Contract rent before temporary late fees
   rentPaid: boolean;
   internetBillDueDay: number;// Day 5, then Day 12
   internetBillAmount: number;// $25.00
