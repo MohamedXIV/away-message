@@ -67,6 +67,7 @@ describe('HousingProgression cross-authority consumers', () => {
       tenancyId: 'tenancy_new',
       moveInMinute: 500,
       spendMoveInCost: () => true,
+      setRecurringRentAmount: () => {},
       physicalState: state,
       physicalGraph: graph,
       moves: [{ objectInstanceId: 'owned_terminal_desk_17', targetSlotId: 'new_owned_slot' }],
