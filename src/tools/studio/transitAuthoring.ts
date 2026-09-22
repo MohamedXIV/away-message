@@ -45,33 +45,21 @@ export function buildBusLineRow(
 
   return {
     name: name.trim(),
-    stopIds: JSON.stringify(stopIds),
+    stopIds: [...stopIds],
     serviceStartMinute: 360,
     serviceEndMinute: 1380,
     headwayMinutes: 20,
-    segmentMinutes: JSON.stringify(resizeSegmentMinutes([], stopIds.length)),
+    segmentMinutes: resizeSegmentMinutes([], stopIds.length),
     fare: 2,
   };
 }
 
 export function parseStringList(value: unknown): string[] {
-  if (typeof value !== 'string') return [];
-  try {
-    const parsed = JSON.parse(value);
-    return Array.isArray(parsed) ? parsed.map(String) : [];
-  } catch {
-    return [];
-  }
+  return Array.isArray(value) ? value.map(String) : [];
 }
 
 export function parseNumberList(value: unknown): number[] {
-  if (typeof value !== 'string') return [];
-  try {
-    const parsed = JSON.parse(value);
-    return Array.isArray(parsed) ? parsed.map(Number).filter(Number.isFinite) : [];
-  } catch {
-    return [];
-  }
+  return Array.isArray(value) ? value.map(Number).filter(Number.isFinite) : [];
 }
 
 export interface TransitAccessLink {
@@ -80,29 +68,21 @@ export interface TransitAccessLink {
 }
 
 export function parseTransitAccess(value: unknown): TransitAccessLink[] {
-  if (typeof value !== 'string') return [];
-  try {
-    const parsed = JSON.parse(value);
-    if (!Array.isArray(parsed)) return [];
-    return parsed
-      .filter((entry): entry is { stopId?: unknown; walkMinutes?: unknown } => Boolean(entry && typeof entry === 'object'))
-      .map((entry) => ({
-        stopId: String(entry.stopId ?? ''),
-        walkMinutes: typeof entry.walkMinutes === 'number' && Number.isFinite(entry.walkMinutes) ? entry.walkMinutes : 5,
-      }))
-      .filter((link) => link.stopId.length > 0);
-  } catch {
-    return [];
-  }
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter((entry): entry is { stopId?: unknown; walkMinutes?: unknown } => Boolean(entry && typeof entry === 'object'))
+    .map((entry) => ({
+      stopId: String(entry.stopId ?? ''),
+      walkMinutes: typeof entry.walkMinutes === 'number' && Number.isFinite(entry.walkMinutes) ? entry.walkMinutes : 5,
+    }))
+    .filter((link) => link.stopId.length > 0);
 }
 
-export function serializeTransitAccess(links: readonly TransitAccessLink[]): string {
-  return JSON.stringify(
-    links.map((link) => ({
-      stopId: link.stopId.trim(),
-      walkMinutes: link.walkMinutes,
-    })),
-  );
+export function serializeTransitAccess(links: readonly TransitAccessLink[]): TransitAccessLink[] {
+  return links.map((link) => ({
+    stopId: link.stopId.trim(),
+    walkMinutes: link.walkMinutes,
+  }));
 }
 
 export function reorderBusLineStops(

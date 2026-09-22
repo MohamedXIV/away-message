@@ -1,4 +1,4 @@
-import type { Tables } from 'tinybase';
+import type { Cell, Tables } from 'tinybase';
 import {
   GENERATED_AMBIENT_PROFILES,
   GENERATED_ANCHORS,
@@ -12,12 +12,20 @@ import {
   GENERATED_ITEMS,
   GENERATED_LIGHT_PROFILES,
   GENERATED_PLACES,
+  GENERATED_PHYSICAL_OBJECT_DEFS,
+  GENERATED_PLACEMENT_SLOTS,
+  GENERATED_OBJECT_PLACEMENTS,
+  GENERATED_PLACE_SERVICE_POLICIES,
   GENERATED_SPACES,
   GENERATED_TRANSIT_STOPS,
   GENERATED_VIEWS,
+  GENERATED_VENUE_ROLES,
+  GENERATED_VENUE_STATIONS,
+  GENERATED_VENUE_SERVICES,
+  GENERATED_ACTIVITY_TEMPLATES,
 } from '../../engine/worldContent.generated';
 
-type StudioRow = Record<string, string | number | boolean>;
+type StudioRow = Tables[string][string];
 type StudioTable = Record<string, StudioRow>;
 
 function tableFrom<T extends { id: string }>(
@@ -31,6 +39,24 @@ function optionalCell(value: string | null): string {
   return value ?? '';
 }
 
+function spatialBoundsCell(bounds: {
+  polygon: readonly { x: number; y: number }[];
+  minZ?: number;
+  maxZ?: number;
+  priority?: number;
+}): Cell {
+  return {
+    polygon: bounds.polygon.map((point) => ({ x: point.x, y: point.y })),
+    ...(bounds.minZ === undefined ? {} : { minZ: bounds.minZ }),
+    ...(bounds.maxZ === undefined ? {} : { maxZ: bounds.maxZ }),
+    ...(bounds.priority === undefined ? {} : { priority: bounds.priority }),
+  };
+}
+
+function spatialPositionCell(position: { x: number; y: number; z: number }): Cell {
+  return { x: position.x, y: position.y, z: position.z };
+}
+
 /** Reconstruct the authoring-store shape from generated runtime definitions. */
 export function worldTablesFromGenerated(): Tables {
   return {
@@ -38,13 +64,22 @@ export function worldTablesFromGenerated(): Tables {
       name: district.name,
       mapX: district.mapX,
       mapY: district.mapY,
-      tags: JSON.stringify(district.tags),
+      tags: [...district.tags],
+      ...(district.spatialBounds
+        ? { spatialBounds: spatialBoundsCell(district.spatialBounds) }
+        : {}),
     })),
     places: tableFrom(GENERATED_PLACES, (place) => ({
       districtId: place.districtId,
       name: place.name,
-      transitAccess: JSON.stringify(place.transitAccess),
-      legacyIds: JSON.stringify(place.legacyIds),
+      transitAccess: [...place.transitAccess],
+      legacyIds: [...(place.legacyIds ?? [])],
+      ...(place.spatialBounds
+        ? { spatialBounds: spatialBoundsCell(place.spatialBounds) }
+        : {}),
+      ...(place.entryPosition
+        ? { entryPosition: spatialPositionCell(place.entryPosition) }
+        : {}),
     })),
     transitStops: tableFrom(GENERATED_TRANSIT_STOPS, (stop) => ({
       districtId: stop.districtId,
@@ -55,11 +90,11 @@ export function worldTablesFromGenerated(): Tables {
     })),
     busLines: tableFrom(GENERATED_BUS_LINES, (line) => ({
       name: line.name,
-      stopIds: JSON.stringify(line.stopIds),
+      stopIds: [...line.stopIds],
       serviceStartMinute: line.serviceStartMinute,
       serviceEndMinute: line.serviceEndMinute,
       headwayMinutes: line.headwayMinutes,
-      segmentMinutes: JSON.stringify(line.segmentMinutes),
+      segmentMinutes: [...line.segmentMinutes],
       fare: line.fare,
     })),
     items: tableFrom(GENERATED_ITEMS, (item) => ({
@@ -68,73 +103,147 @@ export function worldTablesFromGenerated(): Tables {
       portable: item.portable,
       volume: item.volume,
       assetId: optionalCell(item.assetId),
-      tags: JSON.stringify(item.tags),
+      tags: [...item.tags],
     })),
     containers: tableFrom(GENERATED_CONTAINERS, (container) => ({
       name: container.name,
       capacity: container.capacity,
-      allowedItemKinds: JSON.stringify(container.allowedItemKinds),
-      tags: JSON.stringify(container.tags),
+      allowedItemKinds: [...container.allowedItemKinds],
+      tags: [...container.tags],
+    })),
+    physicalObjectDefs: tableFrom(GENERATED_PHYSICAL_OBJECT_DEFS, (definition) => ({
+      name: definition.name,
+      kind: definition.kind,
+      containerId: optionalCell(definition.containerId),
+      affordances: [...definition.affordances],
+      toolCapabilities: [...definition.toolCapabilities],
+      resourceCapabilities: [...definition.resourceCapabilities],
+      tags: [...definition.tags],
+    })),
+    placementSlots: tableFrom(GENERATED_PLACEMENT_SLOTS, (slot) => ({
+      name: slot.name,
+      spaceId: optionalCell(slot.spaceId),
+      anchorId: optionalCell(slot.anchorId),
+      parentPlacementId: optionalCell(slot.parentPlacementId),
+      slotKind: slot.slotKind,
+      allowedObjectKinds: [...slot.allowedObjectKinds],
+      tags: [...slot.tags],
+    })),
+    objectPlacements: tableFrom(GENERATED_OBJECT_PLACEMENTS, (placement) => ({
+      objectDefId: placement.objectDefId,
+      slotId: placement.slotId,
+    })),
+    placeServicePolicies: tableFrom(GENERATED_PLACE_SERVICE_POLICIES, (policy) => ({
+      placeId: policy.placeId,
+      acceptsDelivery: policy.acceptsDelivery,
+      deliveryTargetSlotId: optionalCell(policy.deliveryTargetSlotId),
+    })),
+    venueRoles: tableFrom(GENERATED_VENUE_ROLES, (role) => ({
+      placeId: role.placeId,
+      name: role.name,
+      roleKind: role.roleKind,
+      stationIds: [...role.stationIds],
+      tags: [...role.tags],
+    })),
+    venueStations: tableFrom(GENERATED_VENUE_STATIONS, (station) => ({
+      placeId: station.placeId,
+      spaceId: station.spaceId,
+      anchorId: optionalCell(station.anchorId),
+      name: station.name,
+      capacity: station.capacity,
+      roleKinds: [...station.roleKinds],
+      tags: [...station.tags],
+    })),
+    venueServices: tableFrom(GENERATED_VENUE_SERVICES, (service) => ({
+      placeId: service.placeId,
+      spaceId: service.spaceId,
+      name: service.name,
+      intentKinds: [...service.intentKinds],
+      activityTemplateId: service.activityTemplateId,
+      requiredRoleKinds: [...service.requiredRoleKinds],
+      requiredStationIds: [...service.requiredStationIds],
+      contextRequirements: service.contextRequirements.map((requirement) => ({ ...requirement })),
+      tags: [...service.tags],
+    })),
+    activityTemplates: tableFrom(GENERATED_ACTIVITY_TEMPLATES, (template) => ({
+      placeId: template.placeId,
+      name: template.name,
+      purpose: template.purpose,
+      activityKind: template.activityKind,
+      phases: template.phases.map((phase) => ({
+        id: phase.id,
+        durationMinutes: phase.durationMinutes,
+        stationId: optionalCell(phase.stationId),
+      })),
+      completionOwner: template.completionOwner,
+      completionKind: template.completionKind,
+      tags: [...template.tags],
     })),
     spaces: tableFrom(GENERATED_SPACES, (space) => ({
       placeId: space.placeId,
       name: space.name,
-      tags: JSON.stringify(space.tags),
+      tags: [...space.tags],
+      ...(space.spatialBounds
+        ? { spatialBounds: spatialBoundsCell(space.spatialBounds) }
+        : {}),
+      ...(space.entryPosition
+        ? { entryPosition: spatialPositionCell(space.entryPosition) }
+        : {}),
     })),
     views: tableFrom(GENERATED_VIEWS, (view) => ({
       spaceId: view.spaceId,
       name: view.name,
-      neighbors: JSON.stringify(view.neighbors),
+      neighbors: [...view.neighbors],
       assetId: optionalCell(view.assetId),
-      tags: JSON.stringify(view.tags),
+      tags: [...view.tags],
     })),
     anchors: tableFrom(GENERATED_ANCHORS, (anchor) => ({
       viewId: anchor.viewId,
       name: anchor.name,
       x: anchor.x,
       y: anchor.y,
-      tags: JSON.stringify(anchor.tags),
+      tags: [...anchor.tags],
     })),
     interactions: tableFrom(GENERATED_INTERACTIONS, (interaction) => ({
       anchorId: interaction.anchorId,
       capability: interaction.capability,
       name: interaction.name,
-      tags: JSON.stringify(interaction.tags),
+      tags: [...interaction.tags],
     })),
     assets: tableFrom(GENERATED_ASSETS, (asset) => ({
       name: asset.name,
       kind: asset.kind,
       uri: asset.uri,
       normalMapAssetId: optionalCell(asset.normalMapAssetId),
-      tags: JSON.stringify(asset.tags),
+      tags: [...asset.tags],
     })),
     lightProfiles: tableFrom(GENERATED_LIGHT_PROFILES, (profile) => ({
       name: profile.name,
       timeOfDay: optionalCell(profile.timeOfDay),
       colorTint: optionalCell(profile.colorTint),
       intensity: profile.intensity,
-      tags: JSON.stringify(profile.tags),
+      tags: [...profile.tags],
     })),
     audioProfiles: tableFrom(GENERATED_AUDIO_PROFILES, (profile) => ({
       name: profile.name,
       kind: profile.kind,
       assetId: optionalCell(profile.assetId),
       volume: profile.volume,
-      tags: JSON.stringify(profile.tags),
+      tags: [...profile.tags],
     })),
     ambientProfiles: tableFrom(GENERATED_AMBIENT_PROFILES, (profile) => ({
       name: profile.name,
       weather: optionalCell(profile.weather),
       timeOfDay: optionalCell(profile.timeOfDay),
       density: profile.density,
-      tags: JSON.stringify(profile.tags),
+      tags: [...profile.tags],
     })),
     eventModifiers: tableFrom(GENERATED_EVENT_MODIFIERS, (spec) => ({
       eventId: spec.eventId,
       domain: spec.domain,
       kind: spec.kind,
       durationMinutes: spec.durationMinutes,
-      targetIds: JSON.stringify(spec.targetIds),
+      targetIds: [...spec.targetIds],
       value: spec.value === undefined ? '' : String(spec.value),
     })),
   };

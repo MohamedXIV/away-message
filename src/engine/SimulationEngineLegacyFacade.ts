@@ -51,6 +51,22 @@ import {
   type NpcTripRecord,
 } from './transit/NpcTrips';
 import {
+  clearActorSpatialPosition,
+  cloneActorSpatialPositions,
+  emptyActorSpatialPositions,
+  getActorSpatialProjection as projectActorSpatial,
+  hydrateActorSpatialPositions,
+  relocateActorSpatialPosition,
+  type ActorSpatialPositions,
+  type ActorSpatialProjection,
+  type ActorSpatialRelocation,
+} from './spatial/ActorSpatialState';
+import {
+  GENERATED_SPATIAL_WORLD,
+  getGeneratedPlaceEntryPosition,
+} from './spatial/GeneratedSpatialWorld';
+import type { SpatialPosition } from './spatial/SpatialPresence';
+import {
   collectEncounterCandidates,
   decideEncounter as decideEncounterPure,
   emptyEncounterDirectorState,
@@ -140,6 +156,12 @@ export class SimulationEngine extends SimulationEngineCore {
    */
   private npcMobility: NpcMobilityState = emptyNpcMobility();
   /**
+   * Canonical #93 local XYZ truth shared by player and NPC actors.
+   * Membership is derived from GENERATED_SPATIAL_WORLD and never cached here.
+   * Active travelers intentionally have no local position.
+   */
+  private actorSpatialPositions: ActorSpatialPositions = emptyActorSpatialPositions();
+  /**
    * Encounter Director cooldowns + surfaced one-shot identities (#47). The
    * only mutable home for that state — candidates are recomputed from
    * canonical systems on every decision, never stored here.
@@ -184,6 +206,7 @@ export class SimulationEngine extends SimulationEngineCore {
     // the authoritative minute — same-minute reads stay pure afterwards.
     this.ensureAllNpcLifeEntries();
     this.npcMobility = hydrateNpcMobility(initialState?.npcMobility ?? {});
+    this.actorSpatialPositions = hydrateActorSpatialPositions(initialState?.actorSpatialPositions ?? {});
     this.encounterDirector = hydrateEncounterDirectorState(initialState?.encounters ?? {});
   }
 
@@ -203,6 +226,7 @@ export class SimulationEngine extends SimulationEngineCore {
       installedSoftware: this.software.getInstalledSoftware(),
       npcLives: this.getNpcLivesState(),
       npcMobility: this.getNpcMobilityState(),
+      actorSpatialPositions: this.getActorSpatialPositions(),
       encounters: this.getEncounterDirectorState(),
     } as Readonly<LiveSimulationState>;
 
@@ -223,6 +247,7 @@ export class SimulationEngine extends SimulationEngineCore {
       installedSoftware: this.software.getInstalledSoftware(),
       npcLives: this.getNpcLivesState(),
       npcMobility: this.getNpcMobilityState(),
+      actorSpatialPositions: this.getActorSpatialPositions(),
       encounters: this.getEncounterDirectorState(),
     } as LiveSimulationState;
 
@@ -475,6 +500,104 @@ export class SimulationEngine extends SimulationEngineCore {
     return JSON.parse(JSON.stringify(this.npcMobility)) as NpcMobilityState;
   }
 
+  /** Canonical #93 XYZ snapshot (deep copy, no derived membership). */
+  public getActorSpatialPositions(): ActorSpatialPositions {
+    return cloneActorSpatialPositions(this.actorSpatialPositions);
+  }
+
+  /** Read-only derived spatial projection for one actor. */
+  public getActorSpatialProjection(actorId: string): ActorSpatialProjection | null {
+    return projectActorSpatial(
+      this.actorSpatialPositions,
+      actorId,
+      GENERATED_SPATIAL_WORLD,
+    );
+  }
+
+  private applyActorSpatialRelocation(
+    actorId: string,
+    relocation: ActorSpatialRelocation,
+    position: SpatialPosition | null,
+  ): void {
+    this.actorSpatialPositions = relocation.positions;
+
+    // #37's places map remains a transit-planning cache only. Once an actor
+    // is settled (or has no trip), keep that cache derived from #93 spatial
+    // membership so it cannot drift into a second physical authority.
+    const trip = this.npcMobility.trips[actorId];
+    if (
+      actorId !== 'player' &&
+      (!trip || trip.status === 'arrived' || trip.status === 'failed' || trip.status === 'cancelled')
+    ) {
+      const places = { ...this.npcMobility.places };
+      if (relocation.membership.placeId) {
+        places[actorId] = relocation.membership.placeId;
+      } else {
+        delete places[actorId];
+      }
+      this.npcMobility = { ...this.npcMobility, places };
+    }
+
+    this.invalidateV6Cache();
+    for (const transition of relocation.transitions) {
+      this.events.emit('spatial:transition', {
+        actorId,
+        transition,
+        position,
+      });
+    }
+  }
+
+  /**
+   * Explicit simulation/debug relocation. Renderer/view changes must never
+   * call this implicitly; the caller supplies canonical town-space XYZ.
+   */
+  public relocateActorSpatially(
+    actorId: string,
+    position: SpatialPosition,
+  ): ActorSpatialProjection {
+    const relocation = relocateActorSpatialPosition(
+      this.actorSpatialPositions,
+      actorId,
+      position,
+      GENERATED_SPATIAL_WORLD,
+    );
+    this.applyActorSpatialRelocation(actorId, relocation, { ...position });
+    return {
+      position: { ...position },
+      membership: relocation.membership,
+    };
+  }
+
+  /** Transit departure removes local XYZ; the trip remains timing authority. */
+  protected clearActorSpatialForTravel(actorId: string): void {
+    const relocation = clearActorSpatialPosition(
+      this.actorSpatialPositions,
+      actorId,
+      GENERATED_SPATIAL_WORLD,
+    );
+    if (relocation.transitions.length === 0 && this.actorSpatialPositions[actorId] === undefined) {
+      return;
+    }
+    this.applyActorSpatialRelocation(actorId, relocation, null);
+  }
+
+  /**
+   * Transit arrival handoff: resolve an authored destination entry point
+   * exactly once, without calculating or changing trip timing/fare.
+   */
+  protected relocateActorToGeneratedPlaceEntry(actorId: string, placeId: string): boolean {
+    const entry = getGeneratedPlaceEntryPosition(placeId);
+    if (!entry) return false;
+    const projection = this.relocateActorSpatially(actorId, entry);
+    if (projection.membership.placeId !== placeId) {
+      throw new Error(
+        `Authored entry position for '${placeId}' does not resolve to that canonical place.`,
+      );
+    }
+    return true;
+  }
+
   /** Live trip record copy for one actor, or null when the actor holds none. */
   public getNpcTrip(actorId: string): NpcTripRecord | null {
     const record = this.npcMobility.trips[actorId];
@@ -483,16 +606,25 @@ export class SimulationEngine extends SimulationEngineCore {
   }
 
   /**
-   * Authoritative place truth for #45 presence resolution (#37). Pure read:
-   * AtPlace / planned departure / InTransit / arrival-facts / failure facts.
-   * Never touches messenger presence.
+   * Combined mobility/spatial read. Transit owns whether an actor is currently
+   * travelling; once locally settled, #93 XYZ containment owns physical place.
+   * Un-authored actors fall back to the #37 place cache during migration.
    */
   public getNpcPlaceState(actorId: string, atMinute?: number): NpcPlaceQuery {
-    return getNpcPlaceState(
+    const mobility = getNpcPlaceState(
       this.npcMobility,
       actorId,
       atMinute ?? this.clock.getTotalMinutes(),
     );
+    if (mobility.status === 'in_transit' || mobility.status === 'planned') {
+      return mobility;
+    }
+
+    const spatial = this.getActorSpatialProjection(actorId);
+    if (!spatial) return mobility;
+    return spatial.membership.placeId
+      ? { status: 'at_place', placeId: spatial.membership.placeId }
+      : { status: 'unknown' };
   }
 
   /** Factual deterministic travel overlap for later consumers. Facts only. */
@@ -524,7 +656,7 @@ export class SimulationEngine extends SimulationEngineCore {
     const mobility = this.getNpcMobilityState();
     const actors = this.social.getBuddies().map((buddy) => ({
       actorId: buddy.id,
-      place: getNpcPlaceState(mobility, buddy.id, nowMinute),
+      place: this.getNpcPlaceState(buddy.id, nowMinute),
       intent: this.getCharacterIntent(buddy.id),
       obligations: this.getCharacterObligations(buddy.id),
       relationship: this.social.getRelationships(buddy.id) ?? null,
@@ -601,6 +733,7 @@ export class SimulationEngine extends SimulationEngineCore {
     const progressed = progressNpcTrips(this.npcMobility, nowMinute);
     this.npcMobility = progressed.state;
     for (const actorId of progressed.departed) {
+      this.clearActorSpatialForTravel(actorId);
       try {
         const record = this.npcMobility.trips[actorId];
         this.telemetry.logEvent('world', 'travel_departed', nowMinute, {
@@ -612,6 +745,7 @@ export class SimulationEngine extends SimulationEngineCore {
       } catch {}
     }
     for (const arrival of progressed.arrivals) {
+      this.relocateActorToGeneratedPlaceEntry(arrival.actorId, arrival.destinationPlaceId);
       try {
         this.events.emit('npc:trip_arrived', { ...arrival });
       } catch {}
@@ -1262,6 +1396,7 @@ export class SimulationEngine extends SimulationEngineCore {
     // Missing slices (old saves) become empty defaults — planning resumes
     // deterministically on the next tick.
     this.npcMobility = hydrateNpcMobility(snapshot.npcMobility ?? {});
+    this.actorSpatialPositions = hydrateActorSpatialPositions(snapshot.actorSpatialPositions ?? {});
     this.encounterDirector = hydrateEncounterDirectorState(snapshot.encounters ?? {});
   }
 }

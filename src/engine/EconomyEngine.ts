@@ -13,7 +13,8 @@ export class EconomyEngine {
       energy: initialState?.energy ?? 100,
       fatigue: initialState?.fatigue ?? 0,
       rentDueDay: initialState?.rentDueDay ?? 7,
-      rentAmount: initialState?.rentAmount ?? 140.0,
+      rentAmount: initialState?.rentAmount ?? initialState?.recurringRentAmount ?? 140.0,
+      recurringRentAmount: initialState?.recurringRentAmount ?? initialState?.rentAmount ?? 140.0,
       rentPaid: initialState?.rentPaid ?? false,
       internetBillDueDay: initialState?.internetBillDueDay ?? 5,
       internetBillAmount: initialState?.internetBillAmount ?? 25.0,
@@ -47,6 +48,15 @@ export class EconomyEngine {
 
   public canAfford(amount: number): boolean {
     return this.state.cash >= amount;
+  }
+
+  /** Update the tenancy contract rent without owning tenancy/home truth. */
+  public setRecurringRentAmount(amount: number): void {
+    if (!Number.isFinite(amount) || amount < 0) {
+      throw new Error('Recurring rent must be a non-negative finite number.');
+    }
+    this.state.recurringRentAmount = amount;
+    if (!this.state.rentPaid) this.state.rentAmount = amount;
   }
 
   // Social battery (introvert protagonist): social acts spend it, solitude
@@ -149,7 +159,7 @@ export class EconomyEngine {
       return { success: false, error: `Insufficient funds for rent ($${this.state.rentAmount.toFixed(2)}).` };
     }
 
-    this.spendCash(this.state.rentAmount, `Motel rent payment (Due Day ${this.state.rentDueDay})`);
+    this.spendCash(this.state.rentAmount, `Rent payment (Due Day ${this.state.rentDueDay})`);
     this.state.rentPaid = true;
 
     this.eventBus.emit('economy:rent_paid', {
@@ -332,7 +342,7 @@ export class EconomyEngine {
     if (newDay > 7 && this.state.rentDueDay === 7 && this.state.rentPaid) {
       this.state.rentDueDay = 14;
       this.state.rentPaid = false;
-      this.state.rentAmount = 140.0;
+      this.state.rentAmount = this.state.recurringRentAmount ?? this.state.rentAmount;
     }
 
     // Advance internet bill cycle

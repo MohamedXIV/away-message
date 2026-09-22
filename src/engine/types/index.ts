@@ -6,6 +6,9 @@ import type { InnerVoicePersistedState } from '../innerVoice/types';
 import type { NpcLifePersistedState } from '../life/types';
 import type { NpcMobilityState } from '../transit/NpcTrips';
 import type { EncounterDirectorState } from '../encounters/types';
+import type { ActorSpatialPositions } from '../spatial/ActorSpatialState';
+import type { PhysicalObjectRuntimeState } from '../physical/PhysicalContextRuntime';
+import type { VenueRuntimeState } from '../venue/VenueOperations';
 
 export type TimeOfDay = 'morning' | 'day' | 'evening' | 'night' | 'late_night';
 
@@ -44,7 +47,8 @@ export interface PlayerState {
   energy: number;            // 0..100
   fatigue: number;           // 0..100
   rentDueDay: number;        // Day 7, then Day 14
-  rentAmount: number;        // $140.00
+  rentAmount: number;        // Current amount due, including temporary late fees
+  recurringRentAmount?: number;// Contract rent before temporary late fees
   rentPaid: boolean;
   internetBillDueDay: number;// Day 5, then Day 12
   internetBillAmount: number;// $25.00
@@ -750,6 +754,25 @@ export interface SimulationState {
    */
   npcMobility?: NpcMobilityState;
   /**
+   * Canonical renderer-neutral XYZ per local actor (#93). This slice stores
+   * irreducible positions only; district/place/space membership is always
+   * derived from authored spatial content after load. Actors in transit may
+   * intentionally have no local XYZ row.
+   */
+  actorSpatialPositions?: ActorSpatialPositions;
+  /**
+   * Canonical mutable physical-object placement state (#103). Definitions,
+   * slots, affordances, capabilities, and service policy remain authored
+   * content; this slice stores only exact runtime object identities/locations.
+   */
+  physicalObjects?: PhysicalObjectRuntimeState;
+  /**
+   * Venue execution state (#94): source-backed role assignments plus bounded
+   * activity instances only. Definitions stay authored content; job/store/
+   * social/item consequences remain with their canonical owners.
+   */
+  venueOperations?: VenueRuntimeState;
+  /**
    * Encounter Director cooldowns + surfaced one-shot identities (#47).
    * Additive and optional: candidates are always recomputed from canonical
    * authorities after reload, never restored from here. Absent in older
@@ -871,4 +894,12 @@ export interface SimulationEventMap {
   // Reports only — owners decide all consequences.
   'npc:trip_arrived': import('../transit/NpcTrips').NpcArrivalReceipt;
   'npc:trip_failed': import('../transit/NpcTrips').NpcFailureReceipt & { atMinute: number };
+  // Derived spatial consequence (#93). Renderer/view state never emits this.
+  'spatial:transition': {
+    actorId: string;
+    transition: import('../spatial/SpatialPresence').SpatialTransition;
+    position: import('../spatial/SpatialPresence').SpatialPosition | null;
+  };
+  // Venue execution consequence (#94). Owners decide wage/social/item effects.
+  'venue:activity_completed': import('../venue/VenueOperations').VenueCompletionCommand;
 }

@@ -22,44 +22,37 @@ export const CharacterIdentityForm: React.FC<Props> = ({
 }) => {
   const [newRoleInput, setNewRoleInput] = useState('');
 
-  // Parse JSON roles array safely
-  const roles: string[] = (() => {
-    try {
-      const parsed = JSON.parse(String(data['roles'] ?? '[]'));
-      return Array.isArray(parsed) ? parsed : [];
-    } catch {
-      return [];
-    }
-  })();
+  const roles: string[] = Array.isArray(data['roles'])
+    ? data['roles'].filter((value): value is string => typeof value === 'string')
+    : [];
 
-  // Parse JSON languages safely
-  const languages: Array<{ lang: string; level: number }> = (() => {
-    try {
-      const parsed = JSON.parse(String(data['languages'] ?? '[]'));
-      return Array.isArray(parsed) ? parsed : [];
-    } catch {
-      return [];
-    }
-  })();
+  const languages: Array<{ lang: string; level: number }> = Array.isArray(data['languages'])
+    ? data['languages']
+        .filter((entry): entry is Record<string, unknown> => Boolean(entry && typeof entry === 'object'))
+        .map((entry) => ({
+          lang: String(entry['lang'] ?? 'en'),
+          level: Number(entry['level'] ?? 1),
+        }))
+    : [];
 
   const handleAddRole = () => {
     const clean = newRoleInput.trim().toLowerCase().replace(/[^a-z0-9_-]/g, '');
     if (!clean || roles.includes(clean)) return;
     const next = [...roles, clean];
-    onChange('roles', JSON.stringify(next));
+    onChange('roles', next);
     setNewRoleInput('');
   };
 
   const handleRemoveRole = (tag: string) => {
     const next = roles.filter((r) => r !== tag);
-    onChange('roles', JSON.stringify(next));
+    onChange('roles', next);
   };
 
   const handleAddLanguage = () => {
     if (languages.length >= 3) return;
     const available = LANGUAGE_OPTIONS.find((l) => !languages.some((x) => x.lang === l)) || 'es';
     const next = [...languages, { lang: available, level: 3 }];
-    onChange('languages', JSON.stringify(next));
+    onChange('languages', next);
   };
 
   const handleUpdateLanguage = (index: number, key: 'lang' | 'level', value: unknown) => {
@@ -67,12 +60,12 @@ export const CharacterIdentityForm: React.FC<Props> = ({
       if (i !== index) return entry;
       return { ...entry, [key]: value };
     });
-    onChange('languages', JSON.stringify(next));
+    onChange('languages', next);
   };
 
   const handleRemoveLanguage = (index: number) => {
     const next = languages.filter((_, i) => i !== index);
-    onChange('languages', JSON.stringify(next));
+    onChange('languages', next);
   };
 
   return (

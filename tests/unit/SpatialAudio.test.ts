@@ -336,6 +336,18 @@ describe('Data-Driven Spatial Audio API & Architecture (#22)', () => {
     audioService.stop(rainHandle);
   });
 
+  it('does not let global rain intensity amplify a room-tone instance', () => {
+    const roomToneHandle = audioService.play('ambience.room_tone', {
+      loop: true,
+      volume: 0.12,
+    });
+
+    audioService.updateEnvironment({ rainIntensity: 1 });
+
+    const roomTone = webAudioBackend.getInstance(roomToneHandle);
+    expect(roomTone?.gainNode.gain.value).toBeCloseTo(0.12, 4);
+  });
+
   // --------------------------------------------------------------------------
   // 6. Pause / Resume / Suspend Lifecycle is Idempotent
   // --------------------------------------------------------------------------

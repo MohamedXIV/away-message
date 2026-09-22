@@ -96,12 +96,12 @@ export const TransitTab: React.FC<Props> = ({ studio }) => {
   const setLineStops = (nextStops: string[]) => {
     if (!activeLineId) return;
     const currentSegments = parseNumberList(activeLine?.['segmentMinutes']);
-    studio.setCell('busLines', activeLineId, 'stopIds', JSON.stringify(nextStops));
+    studio.setCell('busLines', activeLineId, 'stopIds', nextStops);
     studio.setCell(
       'busLines',
       activeLineId,
       'segmentMinutes',
-      JSON.stringify(resizeSegmentMinutes(currentSegments, nextStops.length)),
+      resizeSegmentMinutes(currentSegments, nextStops.length),
     );
   };
 
@@ -455,8 +455,8 @@ export const TransitTab: React.FC<Props> = ({ studio }) => {
                         disabled={index === 0}
                         onClick={() => {
                           const result = reorderBusLineStops(activeLineStops, activeSegments, index, index - 1);
-                          studio.setCell('busLines', activeLineId, 'stopIds', JSON.stringify(result.stops));
-                          studio.setCell('busLines', activeLineId, 'segmentMinutes', JSON.stringify(result.segments));
+                          studio.setCell('busLines', activeLineId, 'stopIds', result.stops);
+                          studio.setCell('busLines', activeLineId, 'segmentMinutes', result.segments);
                         }}
                         className="px-2 py-1 text-xs rounded bg-purple-950 disabled:opacity-30 hover:bg-purple-900 text-purple-200"
                       >
@@ -467,8 +467,8 @@ export const TransitTab: React.FC<Props> = ({ studio }) => {
                         disabled={index === activeLineStops.length - 1}
                         onClick={() => {
                           const result = reorderBusLineStops(activeLineStops, activeSegments, index, index + 1);
-                          studio.setCell('busLines', activeLineId, 'stopIds', JSON.stringify(result.stops));
-                          studio.setCell('busLines', activeLineId, 'segmentMinutes', JSON.stringify(result.segments));
+                          studio.setCell('busLines', activeLineId, 'stopIds', result.stops);
+                          studio.setCell('busLines', activeLineId, 'segmentMinutes', result.segments);
                         }}
                         className="px-2 py-1 text-xs rounded bg-purple-950 disabled:opacity-30 hover:bg-purple-900 text-purple-200"
                       >
@@ -478,8 +478,8 @@ export const TransitTab: React.FC<Props> = ({ studio }) => {
                         type="button"
                         onClick={() => {
                           const result = removeBusLineStop(activeLineStops, activeSegments, index);
-                          studio.setCell('busLines', activeLineId, 'stopIds', JSON.stringify(result.stops));
-                          studio.setCell('busLines', activeLineId, 'segmentMinutes', JSON.stringify(result.segments));
+                          studio.setCell('busLines', activeLineId, 'stopIds', result.stops);
+                          studio.setCell('busLines', activeLineId, 'segmentMinutes', result.segments);
                         }}
                         className="px-2 py-1 text-xs rounded bg-red-950/60 hover:bg-red-900/60 text-red-300 font-bold"
                       >
@@ -500,7 +500,7 @@ export const TransitTab: React.FC<Props> = ({ studio }) => {
                               onChange={(event) => {
                                 const next = [...activeSegments];
                                 next[index] = Number(event.target.value);
-                                studio.setCell('busLines', activeLineId, 'segmentMinutes', JSON.stringify(next));
+                                studio.setCell('busLines', activeLineId, 'segmentMinutes', next);
                               }}
                               className="w-16 rounded bg-[#130d24] border border-purple-700/60 px-2 py-0.5 text-xs text-white font-mono text-center"
                             />

@@ -60,7 +60,7 @@ export function buildEventModifierRow(
     domain,
     kind,
     durationMinutes,
-    targetIds: JSON.stringify([...targetIds]),
+    targetIds: [...targetIds],
     value,
   };
 }

@@ -15,14 +15,16 @@ export const BackstoryEditor: React.FC<Props> = ({ data, onChange }) => {
   const knowsAccounts = Boolean(data['knowsAccounts'] ?? true);
   const bioSeed = String(data['bioSeed'] ?? '');
 
-  const candidates: Array<{ handle: string; status: BuddyBackstory['candidates'][number]['status']; note?: string }> = (() => {
-    try {
-      const parsed = JSON.parse(String(data['candidates'] ?? '[]'));
-      return Array.isArray(parsed) ? parsed : [];
-    } catch {
-      return [];
-    }
-  })();
+  const candidates: Array<{ handle: string; status: BuddyBackstory['candidates'][number]['status']; note?: string }> =
+    Array.isArray(data['candidates'])
+      ? data['candidates']
+          .filter((entry): entry is Record<string, unknown> => Boolean(entry && typeof entry === 'object'))
+          .map((entry) => ({
+            handle: String(entry['handle'] ?? ''),
+            status: String(entry['status'] ?? 'active') as BuddyBackstory['candidates'][number]['status'],
+            ...(typeof entry['note'] === 'string' && entry['note'] ? { note: entry['note'] } : {}),
+          }))
+      : [];
 
   const [newHandle, setNewHandle] = useState('');
   const [newStatus, setNewStatus] = useState<BuddyBackstory['candidates'][number]['status']>('active');
@@ -31,13 +33,13 @@ export const BackstoryEditor: React.FC<Props> = ({ data, onChange }) => {
     const h = newHandle.trim().toLowerCase().replace(/[^a-z0-9_]/g, '');
     if (!h || candidates.some((c) => c.handle === h)) return;
     const next = [...candidates, { handle: h, status: newStatus }];
-    onChange('candidates', JSON.stringify(next));
+    onChange('candidates', next);
     setNewHandle('');
   };
 
   const handleRemoveCandidate = (index: number) => {
     const next = candidates.filter((_, i) => i !== index);
-    onChange('candidates', JSON.stringify(next));
+    onChange('candidates', next);
   };
 
   return (

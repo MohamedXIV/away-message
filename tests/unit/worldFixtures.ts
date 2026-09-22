@@ -15,26 +15,28 @@ export function validTownTables(): ContentTables {
         label: 'Regular',
         description: 'Town fixture scaffold.',
         personaHint: 'Steady.',
-        vocabulary: '[]',
-        defaultInterests: '[]',
+        vocabulary: [],
+        defaultInterests: [],
         defaultSong: '',
         typingSpeedWpm: 70,
       },
     },
     districts: {
-      district_a: { name: 'District A', mapX: 20, mapY: 60, tags: '["residential"]' },
-      district_b: { name: 'District B', mapX: 80, mapY: 40, tags: '["downtown"]' },
+      district_a: { name: 'District A', mapX: 20, mapY: 60, tags: ['residential'] },
+      district_b: { name: 'District B', mapX: 80, mapY: 40, tags: ['downtown'] },
     },
     places: {
       place_a1: {
         districtId: 'district_a',
         name: 'Place A1',
-        transitAccess: JSON.stringify([{ stopId: 'stop_a', walkMinutes: 4 }]),
+        transitAccess: [{ stopId: 'stop_a', walkMinutes: 4 }],
+        legacyIds: [],
       },
       place_b1: {
         districtId: 'district_b',
         name: 'Place B1',
-        transitAccess: JSON.stringify([{ stopId: 'stop_b', walkMinutes: 5 }]),
+        transitAccess: [{ stopId: 'stop_b', walkMinutes: 5 }],
+        legacyIds: [],
       },
     },
     transitStops: {
@@ -44,11 +46,11 @@ export function validTownTables(): ContentTables {
     busLines: {
       line_ab: {
         name: 'Line AB',
-        stopIds: JSON.stringify(['stop_a', 'stop_b']),
+        stopIds: ['stop_a', 'stop_b'],
         serviceStartMinute: 360,
         serviceEndMinute: 1380,
         headwayMinutes: 20,
-        segmentMinutes: JSON.stringify([12]),
+        segmentMinutes: [12],
         fare: 2,
       },
     },
@@ -73,12 +75,12 @@ export function validAssetTables(): ContentTables {
       portable: true,
       volume: 1,
       assetId: 'asset_a1',
-      tags: '["food","perishable"]',
+      tags: ['food', 'perishable'],
     };
   }
   if (!base['containers']) {
     (base as Record<string, unknown>)['containers'] = {
-      container_a: { name: 'Container A', capacity: 10, allowedItemKinds: '["food"]', tags: '["storage"]' },
+      container_a: { name: 'Container A', capacity: 10, allowedItemKinds: ['food'], tags: ['storage'] },
     };
   }
   views['view_a1'] = { ...views['view_a1'], assetId: 'asset_a1' };
@@ -92,14 +94,14 @@ export function validAssetTables(): ContentTables {
         kind: 'image',
         uri: 'assets/world/a1.png',
         normalMapAssetId: 'asset_a1_n',
-        tags: '[]',
+        tags: [],
       },
       asset_a1_n: {
         name: 'Asset A1 Normal',
         kind: 'image',
         uri: 'assets/world/a1_n.png',
         normalMapAssetId: '',
-        tags: '[]',
+        tags: [],
       },
     },
   };
@@ -115,7 +117,7 @@ export function validAnchorTables(): ContentTables {
         name: 'Anchor A1',
         x: 0.5,
         y: 0.5,
-        tags: '["hotspot"]',
+        tags: ['hotspot'],
       },
     },
     interactions: {
@@ -123,7 +125,7 @@ export function validAnchorTables(): ContentTables {
         anchorId: 'anchor_a1',
         capability: 'inspect',
         name: 'Interaction A1',
-        tags: '[]',
+        tags: [],
       },
     },
   };
@@ -137,21 +139,21 @@ export function validSpaceTables(): ContentTables {
       space_a1: {
         placeId: 'place_a1',
         name: 'Space A1',
-        tags: '["interior"]',
+        tags: ['interior'],
       },
     },
     views: {
       view_a1: {
         spaceId: 'space_a1',
         name: 'View A1',
-        neighbors: '["view_a2"]',
-        tags: '[]',
+        neighbors: ['view_a2'],
+        tags: [],
       },
       view_a2: {
         spaceId: 'space_a1',
         name: 'View A2',
-        neighbors: '["view_a1"]',
-        tags: '[]',
+        neighbors: ['view_a1'],
+        tags: [],
       },
     },
   };

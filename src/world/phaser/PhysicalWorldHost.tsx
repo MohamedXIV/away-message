@@ -14,6 +14,7 @@ export const PhysicalWorldHost: React.FC<PhysicalWorldHostProps> = ({
   overlaySlot,
   className = '',
   debug = false,
+  visualMode = 'production',
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const runtimeRef = useRef<PhaserWorldRuntime | null>(null);
@@ -36,6 +37,7 @@ export const PhysicalWorldHost: React.FC<PhysicalWorldHostProps> = ({
       parent: containerRef.current,
       projection,
       onIntent: handleIntent,
+      visualMode,
     });
     runtimeRef.current = runtime;
 

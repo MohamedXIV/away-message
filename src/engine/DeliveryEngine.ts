@@ -26,6 +26,12 @@ export interface OrderItem {
   qty: number;
 }
 
+export interface DeliveryTarget {
+  placeId: string;
+  slotId: string;
+  anchorId: string;
+}
+
 export interface DeliveryOrder {
   id: string;
   items: OrderItem[];
@@ -34,6 +40,8 @@ export interface DeliveryOrder {
   placedMinute: number;
   /** Minute the courier arrives (delivery) or the trip ends (pickup, completed inline). */
   readyMinute: number;
+  /** Explicit destination captured at order commit; no arrival-time fallback. */
+  deliveryTarget?: DeliveryTarget;
   status: 'transit' | 'done';
 }
 
@@ -58,6 +66,7 @@ export function deliveryEtaMinutes(orderId: string): number {
 export const DELIVERY_MAX_BACKLOG_EXTRA_MINUTES = 720;
 
 export interface PlaceDeliveryOptions {
+  deliveryTarget?: DeliveryTarget;
   /**
    * Extra courier minutes from active world-event backlog modifiers (#46).
    * Resolved and bounded by the caller; DeliveryEngine clamps again and owns
@@ -76,13 +85,23 @@ export class DeliveryEngine {
     if (initialState?.orders) {
       this.orders = initialState.orders
         .filter((o) => o && typeof o.id === 'string' && Array.isArray(o.items))
-        .map((o) => ({ ...o, items: o.items.map((i) => ({ ...i })) }))
+        .map((o) => ({
+          ...o,
+          items: o.items.map((i) => ({ ...i })),
+          ...(o.deliveryTarget ? { deliveryTarget: { ...o.deliveryTarget } } : {}),
+        }))
         .slice(-10);
     }
   }
 
   public getState(): DeliveryEngineState {
-    return { orders: this.orders.map((o) => ({ ...o, items: o.items.map((i) => ({ ...i })) })) };
+    return {
+      orders: this.orders.map((o) => ({
+        ...o,
+        items: o.items.map((i) => ({ ...i })),
+        ...(o.deliveryTarget ? { deliveryTarget: { ...o.deliveryTarget } } : {}),
+      })),
+    };
   }
 
   /**
@@ -113,6 +132,9 @@ export class DeliveryEngine {
       fulfillment: 'delivery',
       placedMinute: nowMinute,
       readyMinute: nowMinute + deliveryEtaMinutes(id) + backlogExtra,
+      ...(options?.deliveryTarget
+        ? { deliveryTarget: { ...options.deliveryTarget } }
+        : {}),
       status: 'transit',
     };
     this.orders.push(order);

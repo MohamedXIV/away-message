@@ -6,12 +6,12 @@
 // generated registry, never this store.
 
 import React from 'react';
-import { Provider, useCreateStore } from 'tinybase/ui-react';
+import { Provider } from 'tinybase/ui-react';
 import type { Tables } from 'tinybase';
 const ContentStudioShell = React.lazy(() =>
   import('./studio/ContentStudioShell').then((m) => ({ default: m.ContentStudioShell }))
 );
-import { createContentStore } from './content/schema';
+import { createContentModel } from './content/model';
 import { worldTablesFromGenerated } from './studio/worldTablesFromGenerated';
 import {
   GENERATED_CHARACTERS,
@@ -29,13 +29,21 @@ const ART_PROFILE_KEY_ORDER = ['engine', 'modelPath', 'expressions', 'defaultOut
 const AFFINITY_SEED_KEY_ORDER = ['roleA', 'roleB', 'value'];
 const BACKSTORY_KEY_ORDER = ['relationship', 'label', 'lapseDays', 'knowsAccounts', 'candidates', 'bioSeed'];
 const DIALOGUE_POOL_KEY_ORDER = ['lines', 'version'];
-const DISTRICT_KEY_ORDER = ['name', 'mapX', 'mapY', 'tags'];
-const PLACE_KEY_ORDER = ['districtId', 'name', 'transitAccess'];
+const DISTRICT_KEY_ORDER = ['name', 'mapX', 'mapY', 'tags', 'spatialBounds'];
+const PLACE_KEY_ORDER = ['districtId', 'name', 'transitAccess', 'legacyIds', 'spatialBounds', 'entryPosition'];
 const TRANSIT_STOP_KEY_ORDER = ['districtId', 'name', 'placeId', 'mapX', 'mapY'];
 const BUS_LINE_KEY_ORDER = ['name', 'stopIds', 'serviceStartMinute', 'serviceEndMinute', 'headwayMinutes', 'segmentMinutes', 'fare'];
 const ITEM_KEY_ORDER = ['name', 'kind', 'portable', 'volume', 'assetId', 'tags'];
 const CONTAINER_KEY_ORDER = ['name', 'capacity', 'allowedItemKinds', 'tags'];
-const SPACE_KEY_ORDER = ['placeId', 'name', 'tags'];
+const PHYSICAL_OBJECT_DEF_KEY_ORDER = ['name', 'kind', 'containerId', 'affordances', 'toolCapabilities', 'resourceCapabilities', 'tags'];
+const PLACEMENT_SLOT_KEY_ORDER = ['name', 'spaceId', 'anchorId', 'parentPlacementId', 'slotKind', 'allowedObjectKinds', 'tags'];
+const OBJECT_PLACEMENT_KEY_ORDER = ['objectDefId', 'slotId'];
+const PLACE_SERVICE_POLICY_KEY_ORDER = ['placeId', 'acceptsDelivery', 'deliveryTargetSlotId'];
+const VENUE_ROLE_KEY_ORDER = ['placeId', 'name', 'roleKind', 'stationIds', 'tags'];
+const VENUE_STATION_KEY_ORDER = ['placeId', 'spaceId', 'anchorId', 'name', 'capacity', 'roleKinds', 'tags'];
+const VENUE_SERVICE_KEY_ORDER = ['placeId', 'spaceId', 'name', 'intentKinds', 'activityTemplateId', 'requiredRoleKinds', 'requiredStationIds', 'contextRequirements', 'tags'];
+const ACTIVITY_TEMPLATE_KEY_ORDER = ['placeId', 'name', 'purpose', 'activityKind', 'phases', 'completionOwner', 'completionKind', 'tags'];
+const SPACE_KEY_ORDER = ['placeId', 'name', 'tags', 'spatialBounds', 'entryPosition'];
 const VIEW_KEY_ORDER = ['spaceId', 'name', 'neighbors', 'assetId', 'tags'];
 const ANCHOR_KEY_ORDER = ['viewId', 'name', 'x', 'y', 'tags'];
 const INTERACTION_KEY_ORDER = ['anchorId', 'capability', 'name', 'tags'];
@@ -60,6 +68,14 @@ const TABLE_KEY_ORDERS: Record<string, string[]> = {
   busLines: BUS_LINE_KEY_ORDER,
   items: ITEM_KEY_ORDER,
   containers: CONTAINER_KEY_ORDER,
+  physicalObjectDefs: PHYSICAL_OBJECT_DEF_KEY_ORDER,
+  placementSlots: PLACEMENT_SLOT_KEY_ORDER,
+  objectPlacements: OBJECT_PLACEMENT_KEY_ORDER,
+  placeServicePolicies: PLACE_SERVICE_POLICY_KEY_ORDER,
+  venueRoles: VENUE_ROLE_KEY_ORDER,
+  venueStations: VENUE_STATION_KEY_ORDER,
+  venueServices: VENUE_SERVICE_KEY_ORDER,
+  activityTemplates: ACTIVITY_TEMPLATE_KEY_ORDER,
   spaces: SPACE_KEY_ORDER,
   views: VIEW_KEY_ORDER,
   anchors: ANCHOR_KEY_ORDER,
@@ -92,12 +108,14 @@ export function exportStoreJson(tables: Tables): string {
 
 /** Baseline tables from the generated registry (Inspector hydration). */
 export function tablesFromGenerated(): Tables {
-  const characters: Record<string, Record<string, string | number | boolean>> = {};
-  const temperaments: Record<string, Record<string, number>> = {};
-  const initialAffinities: Record<string, Record<string, number>> = {};
-  const routines: Record<string, Record<string, string | number>> = {};
-  const artProfiles: Record<string, Record<string, string>> = {};
-  const backstories: Record<string, Record<string, string | number | boolean>> = {};
+  type StudioRow = Tables[string][string];
+  type StudioTable = Record<string, StudioRow>;
+  const characters: StudioTable = {};
+  const temperaments: StudioTable = {};
+  const initialAffinities: StudioTable = {};
+  const routines: StudioTable = {};
+  const artProfiles: StudioTable = {};
+  const backstories: StudioTable = {};
 
   for (const c of GENERATED_CHARACTERS) {
     characters[c.id] = {
@@ -110,8 +128,8 @@ export function tablesFromGenerated(): Tables {
       chatColor: c.chatColor,
       bio: c.bio,
       typingSpeedWpm: c.typingSpeedWpm,
-      languages: JSON.stringify(c.languages),
-      roles: JSON.stringify(c.roles),
+      languages: c.languages.map((entry) => ({ ...entry })),
+      roles: [...c.roles],
     };
     temperaments[c.id] = { ...c.temperament };
     initialAffinities[c.id] = { ...c.initialAffinity };
@@ -119,7 +137,7 @@ export function tablesFromGenerated(): Tables {
     artProfiles[c.id] = {
       engine: c.art.engine,
       modelPath: c.art.modelPath,
-      expressions: JSON.stringify(c.art.expressions),
+      expressions: { ...c.art.expressions },
       defaultOutfit: c.art.defaultOutfit,
     };
     if (c.backstory) {
@@ -128,26 +146,26 @@ export function tablesFromGenerated(): Tables {
         label: c.backstory.label,
         lapseDays: c.backstory.lapseDays,
         knowsAccounts: c.backstory.knowsAccounts,
-        candidates: JSON.stringify(c.backstory.candidates),
+        candidates: c.backstory.candidates.map((entry) => ({ ...entry })),
         bioSeed: c.backstory.bioSeed,
       };
     }
   }
 
-  const archetypes: Record<string, Record<string, string | number>> = {};
+  const archetypes: StudioTable = {};
   for (const a of GENERATED_ARCHETYPES) {
     archetypes[a.id] = {
       label: a.label,
       description: a.description,
       personaHint: a.personaHint,
-      vocabulary: JSON.stringify(a.vocabulary),
-      defaultInterests: JSON.stringify(a.defaultInterests),
+      vocabulary: [...a.vocabulary],
+      defaultInterests: [...a.defaultInterests],
       defaultSong: a.defaultSong,
       typingSpeedWpm: a.typingSpeedWpm,
     };
   }
 
-  const affinitySeeds: Record<string, Record<string, string | number>> = {};
+  const affinitySeeds: StudioTable = {};
   for (const s of GENERATED_AFFINITY_SEEDS) {
     affinitySeeds[`${s.roleA}__${s.roleB}`] = {
       roleA: s.roleA,
@@ -156,10 +174,10 @@ export function tablesFromGenerated(): Tables {
     };
   }
 
-  const dialoguePools: Record<string, Record<string, string | number>> = {};
+  const dialoguePools: StudioTable = {};
   for (const p of GENERATED_DIALOGUE_POOLS) {
     dialoguePools[p.key] = {
-      lines: JSON.stringify(p.lines),
+      lines: [...p.lines],
       version: p.version,
     };
   }
@@ -179,16 +197,16 @@ export function tablesFromGenerated(): Tables {
 }
 
 export const ContentInspector: React.FC = () => {
-  const store = useCreateStore(() => {
-    const next = createContentStore();
-    next.setTables(tablesFromGenerated());
+  const model = React.useMemo(() => {
+    const next = createContentModel();
+    next.store.setTables(tablesFromGenerated());
     return next;
-  });
+  }, []);
 
   return (
-    <Provider store={store}>
+    <Provider store={model.store}>
       <React.Suspense fallback={null}>
-        <ContentStudioShell store={store} />
+        <ContentStudioShell model={model} />
       </React.Suspense>
     </Provider>
   );

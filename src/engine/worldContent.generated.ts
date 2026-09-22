@@ -1,6 +1,24 @@
 // GENERATED — do not edit by hand.
-// Source: content/store.json (content v59b86490). Regenerate: npm run content:pull.
-export const WORLD_CONTENT_VERSION = '59b86490';
+// Source: content/store.json (content vae80844f). Regenerate: npm run content:pull.
+export const WORLD_CONTENT_VERSION = 'ae80844f';
+
+export interface GeneratedSpatialPoint {
+  x: number;
+  y: number;
+}
+
+export interface GeneratedSpatialPosition {
+  x: number;
+  y: number;
+  z: number;
+}
+
+export interface GeneratedSpatialBounds {
+  polygon: GeneratedSpatialPoint[];
+  minZ?: number;
+  maxZ?: number;
+  priority?: number;
+}
 
 export interface GeneratedDistrictDef {
   id: string;
@@ -8,6 +26,7 @@ export interface GeneratedDistrictDef {
   mapX: number;
   mapY: number;
   tags: string[];
+  spatialBounds?: GeneratedSpatialBounds;
 }
 
 export interface GeneratedPlaceTransitAccess {
@@ -21,6 +40,8 @@ export interface GeneratedPlaceDef {
   name: string;
   transitAccess: GeneratedPlaceTransitAccess[];
   legacyIds?: string[];
+  spatialBounds?: GeneratedSpatialBounds;
+  entryPosition?: GeneratedSpatialPosition;
 }
 
 export interface GeneratedTransitStopDef {
@@ -50,6 +71,7 @@ export const GENERATED_DISTRICTS: GeneratedDistrictDef[] = [
     mapX: 20,
     mapY: 60,
     tags: ["residential"],
+    spatialBounds: { polygon: [{ x: 0, y: 0 }, { x: 50, y: 0 }, { x: 50, y: 100 }, { x: 0, y: 100 }], minZ: 0, maxZ: 0, priority: 0 },
   },
   {
     id: "district_b",
@@ -57,6 +79,7 @@ export const GENERATED_DISTRICTS: GeneratedDistrictDef[] = [
     mapX: 80,
     mapY: 40,
     tags: ["downtown"],
+    spatialBounds: { polygon: [{ x: 50, y: 0 }, { x: 100, y: 0 }, { x: 100, y: 100 }, { x: 50, y: 100 }], minZ: 0, maxZ: 0, priority: 0 },
   },
 ];
 
@@ -67,6 +90,8 @@ export const GENERATED_PLACES: GeneratedPlaceDef[] = [
     name: "Place A1",
     transitAccess: [{ stopId: "stop_a", walkMinutes: 4 }],
     legacyIds: [],
+    spatialBounds: { polygon: [{ x: 15, y: 55 }, { x: 25, y: 55 }, { x: 25, y: 65 }, { x: 15, y: 65 }], minZ: 0, maxZ: 0, priority: 0 },
+    entryPosition: { x: 20, y: 60, z: 0 },
   },
   {
     id: "place_b1",
@@ -74,6 +99,8 @@ export const GENERATED_PLACES: GeneratedPlaceDef[] = [
     name: "Place B1",
     transitAccess: [{ stopId: "stop_b", walkMinutes: 5 }],
     legacyIds: [],
+    spatialBounds: { polygon: [{ x: 75, y: 35 }, { x: 85, y: 35 }, { x: 85, y: 45 }, { x: 75, y: 45 }], minZ: 0, maxZ: 0, priority: 0 },
+    entryPosition: { x: 80, y: 40, z: 0 },
   },
   {
     id: "room_104",
@@ -189,6 +216,8 @@ export interface GeneratedSpaceDef {
   placeId: string;
   name: string;
   tags: string[];
+  spatialBounds?: GeneratedSpatialBounds;
+  entryPosition?: GeneratedSpatialPosition;
 }
 
 export interface GeneratedViewDef {
@@ -211,6 +240,14 @@ export const GENERATED_SPACES: GeneratedSpaceDef[] = [
     id: "space_a1",
     placeId: "place_a1",
     name: "Space A1",
+    tags: ["interior"],
+    spatialBounds: { polygon: [{ x: 17, y: 57 }, { x: 23, y: 57 }, { x: 23, y: 63 }, { x: 17, y: 63 }], minZ: 0, maxZ: 0, priority: 0 },
+    entryPosition: { x: 20, y: 60, z: 0 },
+  },
+  {
+    id: "space_b1",
+    placeId: "place_b1",
+    name: "Space B1",
     tags: ["interior"],
   },
 ];
@@ -256,6 +293,14 @@ export const GENERATED_VIEWS: GeneratedViewDef[] = [
     assetId: null,
     tags: [],
   },
+  {
+    id: "view_b1",
+    spaceId: "space_b1",
+    name: "View B1",
+    neighbors: [],
+    assetId: null,
+    tags: ["fixture"],
+  },
 ];
 
 export interface GeneratedAnchorDef {
@@ -283,6 +328,38 @@ export const GENERATED_ANCHORS: GeneratedAnchorDef[] = [
     x: 0.5,
     y: 0.5,
     tags: ["hotspot"],
+  },
+  {
+    id: "fixture_cafe_customer_anchor",
+    viewId: "view_a1",
+    name: "Fixture Cafe Customer",
+    x: 0.65,
+    y: 0.5,
+    tags: ["fixture", "customer"],
+  },
+  {
+    id: "fixture_cafe_staff_anchor",
+    viewId: "view_a1",
+    name: "Fixture Cafe Staff",
+    x: 0.35,
+    y: 0.5,
+    tags: ["fixture", "staff"],
+  },
+  {
+    id: "fixture_shop_customer_anchor",
+    viewId: "view_b1",
+    name: "Fixture Shop Customer",
+    x: 0.65,
+    y: 0.5,
+    tags: ["fixture", "customer"],
+  },
+  {
+    id: "fixture_shop_staff_anchor",
+    viewId: "view_b1",
+    name: "Fixture Shop Staff",
+    x: 0.35,
+    y: 0.5,
+    tags: ["fixture", "staff"],
   },
   {
     id: "room104_bed",
@@ -579,5 +656,288 @@ export const GENERATED_EVENT_MODIFIERS: GeneratedEventModifierDef[] = [
     durationMinutes: 4320,
     targetIds: [],
     value: 40,
+  },
+];
+
+export interface GeneratedPhysicalObjectDef {
+  id: string;
+  name: string;
+  kind: string;
+  containerId: string | null;
+  affordances: string[];
+  toolCapabilities: string[];
+  resourceCapabilities: string[];
+  tags: string[];
+}
+
+export interface GeneratedPlacementSlotDef {
+  id: string;
+  name: string;
+  spaceId: string | null;
+  anchorId: string | null;
+  parentPlacementId: string | null;
+  slotKind: string;
+  allowedObjectKinds: string[];
+  tags: string[];
+}
+
+export interface GeneratedObjectPlacementDef {
+  id: string;
+  objectDefId: string;
+  slotId: string;
+}
+
+export interface GeneratedPlaceServicePolicy {
+  id: string;
+  placeId: string;
+  acceptsDelivery: boolean;
+  deliveryTargetSlotId: string | null;
+}
+
+export const GENERATED_PHYSICAL_OBJECT_DEFS: GeneratedPhysicalObjectDef[] = [
+  {
+    id: "fixture_drawer_def",
+    name: "Fixture Drawer",
+    kind: "storage",
+    containerId: "container_a",
+    affordances: ["open"],
+    toolCapabilities: [],
+    resourceCapabilities: [],
+    tags: ["fixture", "storage"],
+  },
+  {
+    id: "fixture_workbench_def",
+    name: "Fixture Workbench",
+    kind: "furniture",
+    containerId: null,
+    affordances: ["inspect"],
+    toolCapabilities: ["work_surface"],
+    resourceCapabilities: ["power"],
+    tags: ["fixture", "work"],
+  },
+];
+
+export const GENERATED_PLACEMENT_SLOTS: GeneratedPlacementSlotDef[] = [
+  {
+    id: "delivery_target_primary",
+    name: "Primary Delivery Target",
+    spaceId: "room104_main",
+    anchorId: "room104_delivery_anchor",
+    parentPlacementId: null,
+    slotKind: "delivery",
+    allowedObjectKinds: [],
+    tags: ["delivery"],
+  },
+  {
+    id: "fixture_drawer_slot",
+    name: "Fixture Drawer Slot",
+    spaceId: null,
+    anchorId: null,
+    parentPlacementId: "fixture_workbench_placement",
+    slotKind: "nested",
+    allowedObjectKinds: ["storage"],
+    tags: ["fixture"],
+  },
+  {
+    id: "fixture_workbench_slot",
+    name: "Fixture Workbench Slot",
+    spaceId: "space_a1",
+    anchorId: "anchor_a1",
+    parentPlacementId: null,
+    slotKind: "floor",
+    allowedObjectKinds: ["furniture"],
+    tags: ["fixture"],
+  },
+];
+
+export const GENERATED_OBJECT_PLACEMENTS: GeneratedObjectPlacementDef[] = [
+  {
+    id: "fixture_drawer_placement",
+    objectDefId: "fixture_drawer_def",
+    slotId: "fixture_drawer_slot",
+  },
+  {
+    id: "fixture_workbench_placement",
+    objectDefId: "fixture_workbench_def",
+    slotId: "fixture_workbench_slot",
+  },
+];
+
+export const GENERATED_PLACE_SERVICE_POLICIES: GeneratedPlaceServicePolicy[] = [
+  {
+    id: "primary_delivery_policy",
+    placeId: "room_104",
+    acceptsDelivery: true,
+    deliveryTargetSlotId: "delivery_target_primary",
+  },
+];
+
+export interface GeneratedVenueRoleDef {
+  id: string;
+  placeId: string;
+  name: string;
+  roleKind: string;
+  stationIds: string[];
+  tags: string[];
+}
+
+export interface GeneratedVenueStationDef {
+  id: string;
+  placeId: string;
+  spaceId: string;
+  anchorId: string | null;
+  name: string;
+  capacity: number;
+  roleKinds: string[];
+  tags: string[];
+}
+
+export type GeneratedVenueContextRequirement =
+  | { kind: "item"; itemKind: string; quantity: number }
+  | { kind: "tool"; capability: string }
+  | { kind: "resource"; capability: string };
+
+export interface GeneratedVenueServiceDef {
+  id: string;
+  placeId: string;
+  spaceId: string;
+  name: string;
+  intentKinds: string[];
+  activityTemplateId: string;
+  requiredRoleKinds: string[];
+  requiredStationIds: string[];
+  contextRequirements: GeneratedVenueContextRequirement[];
+  tags: string[];
+}
+
+export interface GeneratedVenueActivityPhaseDef {
+  id: string;
+  durationMinutes: number;
+  stationId: string | null;
+}
+
+export interface GeneratedVenueActivityTemplateDef {
+  id: string;
+  placeId: string;
+  name: string;
+  purpose: string;
+  activityKind: string;
+  phases: GeneratedVenueActivityPhaseDef[];
+  completionOwner: string;
+  completionKind: string;
+  tags: string[];
+}
+
+export const GENERATED_VENUE_ROLES: GeneratedVenueRoleDef[] = [
+  {
+    id: "fixture_barista_role",
+    placeId: "place_a1",
+    name: "Fixture Barista",
+    roleKind: "barista",
+    stationIds: ["fixture_cafe_staff_station"],
+    tags: ["fixture"],
+  },
+  {
+    id: "fixture_cashier_role",
+    placeId: "place_b1",
+    name: "Fixture Cashier",
+    roleKind: "cashier",
+    stationIds: ["fixture_shop_staff_station"],
+    tags: ["fixture"],
+  },
+];
+
+export const GENERATED_VENUE_STATIONS: GeneratedVenueStationDef[] = [
+  {
+    id: "fixture_cafe_customer_station",
+    placeId: "place_a1",
+    spaceId: "space_a1",
+    anchorId: "fixture_cafe_customer_anchor",
+    name: "Fixture Cafe Customer Station",
+    capacity: 1,
+    roleKinds: ["customer"],
+    tags: ["fixture", "customer"],
+  },
+  {
+    id: "fixture_cafe_staff_station",
+    placeId: "place_a1",
+    spaceId: "space_a1",
+    anchorId: "fixture_cafe_staff_anchor",
+    name: "Fixture Cafe Staff Station",
+    capacity: 1,
+    roleKinds: ["barista"],
+    tags: ["fixture", "staff"],
+  },
+  {
+    id: "fixture_shop_customer_station",
+    placeId: "place_b1",
+    spaceId: "space_b1",
+    anchorId: "fixture_shop_customer_anchor",
+    name: "Fixture Shop Customer Station",
+    capacity: 1,
+    roleKinds: ["customer"],
+    tags: ["fixture", "customer"],
+  },
+  {
+    id: "fixture_shop_staff_station",
+    placeId: "place_b1",
+    spaceId: "space_b1",
+    anchorId: "fixture_shop_staff_anchor",
+    name: "Fixture Shop Staff Station",
+    capacity: 1,
+    roleKinds: ["cashier"],
+    tags: ["fixture", "staff"],
+  },
+];
+
+export const GENERATED_VENUE_SERVICES: GeneratedVenueServiceDef[] = [
+  {
+    id: "fixture_cafe_service",
+    placeId: "place_a1",
+    spaceId: "space_a1",
+    name: "Fixture Cafe Service",
+    intentKinds: ["shop_for_need"],
+    activityTemplateId: "fixture_cafe_customer_activity",
+    requiredRoleKinds: ["barista"],
+    requiredStationIds: ["fixture_cafe_staff_station", "fixture_cafe_customer_station"],
+    contextRequirements: [{ kind: "tool", capability: "work_surface" }, { kind: "resource", capability: "power" }],
+    tags: ["fixture", "cafe"],
+  },
+  {
+    id: "fixture_shop_service",
+    placeId: "place_b1",
+    spaceId: "space_b1",
+    name: "Fixture Shop Service",
+    intentKinds: ["shop_for_need"],
+    activityTemplateId: "fixture_shop_customer_activity",
+    requiredRoleKinds: ["cashier"],
+    requiredStationIds: ["fixture_shop_staff_station", "fixture_shop_customer_station"],
+    contextRequirements: [],
+    tags: ["fixture", "shop"],
+  },
+];
+
+export const GENERATED_ACTIVITY_TEMPLATES: GeneratedVenueActivityTemplateDef[] = [
+  {
+    id: "fixture_cafe_customer_activity",
+    placeId: "place_a1",
+    name: "Fixture Cafe Order",
+    purpose: "shop",
+    activityKind: "ordering",
+    phases: [{ id: "order", durationMinutes: 2, stationId: "fixture_cafe_customer_station" }, { id: "receive", durationMinutes: 2, stationId: "fixture_cafe_customer_station" }],
+    completionOwner: "shop",
+    completionKind: "order_ready",
+    tags: ["fixture", "cafe"],
+  },
+  {
+    id: "fixture_shop_customer_activity",
+    placeId: "place_b1",
+    name: "Fixture Shop Checkout",
+    purpose: "shop",
+    activityKind: "checkout",
+    phases: [{ id: "checkout", durationMinutes: 3, stationId: "fixture_shop_customer_station" }],
+    completionOwner: "shop",
+    completionKind: "checkout_ready",
+    tags: ["fixture", "shop"],
   },
 ];

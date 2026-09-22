@@ -47,7 +47,7 @@ describe('Content Studio Living-World Integration & Acceptance (#52)', () => {
       name: 'Uptown District',
       mapX: 50,
       mapY: 50,
-      tags: '[]',
+      tags: [],
     });
 
     store.setCell('districts', districtId, 'mapX', 75);
@@ -135,11 +135,11 @@ describe('Content Studio Living-World Integration & Acceptance (#52)', () => {
     const lineRow = buildBusLineRow('Express Line', ['stop_a', 'stop_b'], availableStops);
     expect(lineRow).toEqual({
       name: 'Express Line',
-      stopIds: JSON.stringify(['stop_a', 'stop_b']),
+      stopIds: ['stop_a', 'stop_b'],
       serviceStartMinute: 360,
       serviceEndMinute: 1380,
       headwayMinutes: 20,
-      segmentMinutes: JSON.stringify([10]),
+      segmentMinutes: [10],
       fare: 2,
     });
   });
@@ -189,7 +189,7 @@ describe('Content Studio Living-World Integration & Acceptance (#52)', () => {
       portable: true,
       volume: 1,
       assetId: '',
-      tags: '[]',
+      tags: [],
     });
 
     const containerRow = buildContainerRow('Display Case');
@@ -197,8 +197,8 @@ describe('Content Studio Living-World Integration & Acceptance (#52)', () => {
     expect(store.getRow('containers', 'container_case')).toEqual({
       name: 'Display Case',
       capacity: 1,
-      allowedItemKinds: '[]',
-      tags: '[]',
+      allowedItemKinds: [],
+      tags: [],
     });
   });
 
@@ -304,8 +304,8 @@ describe('Content Studio Living-World Integration & Acceptance (#52)', () => {
     store.setTables(tablesFromGenerated());
 
     const tagsArray = ['quiet', 'scenic', 'historic'];
-    store.setCell('districts', 'district_a', 'tags', JSON.stringify(tagsArray));
-    expect(JSON.parse(String(store.getCell('districts', 'district_a', 'tags') ?? '[]'))).toEqual(tagsArray);
+    store.setCell('districts', 'district_a', 'tags', tagsArray);
+    expect(store.getCell('districts', 'district_a', 'tags')).toEqual(tagsArray);
 
     // Validation passes with clean tags
     const tables = store.getTables() as Record<string, Record<string, Record<string, unknown>>>;

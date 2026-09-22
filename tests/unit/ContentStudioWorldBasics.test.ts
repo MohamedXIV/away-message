@@ -16,7 +16,7 @@ describe('Content Studio world basics authoring', () => {
       name: 'Riverside',
       mapX: 50,
       mapY: 50,
-      tags: '[]',
+      tags: [],
     });
   });
 
@@ -24,8 +24,8 @@ describe('Content Studio world basics authoring', () => {
     expect(buildPlaceRow('Corner Cafe', 'district_a', ['district_a', 'district_b'])).toEqual({
       districtId: 'district_a',
       name: 'Corner Cafe',
-      transitAccess: '[]',
-      legacyIds: '[]',
+      transitAccess: [],
+      legacyIds: [],
     });
 
     expect(() => buildPlaceRow('Lost Cafe', 'missing', ['district_a'])).toThrow(

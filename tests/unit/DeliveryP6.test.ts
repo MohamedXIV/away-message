@@ -59,6 +59,11 @@ describe('P6 grocery orders (SimulationEngine)', () => {
     const orderId = (res.data as { orderId: string }).orderId;
     const order = sim.delivery.getState().orders.find((o) => o.id === orderId)!;
     expect(order.status).toBe('transit');
+    expect(order.deliveryTarget).toEqual({
+      placeId: 'room_104',
+      slotId: 'delivery_target_primary',
+      anchorId: 'room104_delivery_anchor',
+    });
     expect(order.readyMinute - order.placedMinute).toBeGreaterThanOrEqual(120);
     expect(order.readyMinute - order.placedMinute).toBeLessThanOrEqual(24 * 60);
     expect(sim.getState().player.pantry.groceries).toBe(0);
@@ -67,7 +72,7 @@ describe('P6 grocery orders (SimulationEngine)', () => {
     expect(sim.getState().player.pantry.groceries).toBe(0);
     expect(sim.getPhysicalWorldState().items[`parcel:${orderId}`]?.location).toEqual({
       kind: 'worldAnchor',
-      anchorId: 'room104:delivery',
+      anchorId: 'room104_delivery_anchor',
     });
   });
 

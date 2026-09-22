@@ -408,6 +408,10 @@ export class WebAudioBackend implements AudioBackend {
     const now = this.ctx?.currentTime || 0;
     switch (paramName) {
       case 'rainIntensity': {
+        // Environment parameters are global, but only rain events should
+        // receive rain modulation. Otherwise a rainy interior would make the
+        // room-tone oscillator jump to full volume.
+        if (!instance.eventId.includes('rain')) break;
         // Modulate volume or filter cutoff with rain intensity
         const baseVolume = 0.2 + value * 0.8;
         instance.gainNode.gain.setValueAtTime(baseVolume, now);
@@ -417,6 +421,7 @@ export class WebAudioBackend implements AudioBackend {
         break;
       }
       case 'windIntensity': {
+        if (!instance.eventId.includes('wind')) break;
         const baseVolume = 0.1 + value * 0.9;
         instance.gainNode.gain.setValueAtTime(baseVolume, now);
         if (instance.filterNode) {

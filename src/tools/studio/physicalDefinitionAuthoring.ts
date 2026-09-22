@@ -5,7 +5,7 @@ export function buildItemRow(name: string) {
     portable: true,
     volume: 1,
     assetId: '',
-    tags: '[]',
+    tags: [],
   };
 }
 
@@ -13,12 +13,12 @@ export function buildContainerRow(name: string) {
   return {
     name: name.trim(),
     capacity: 1,
-    allowedItemKinds: '[]',
-    tags: '[]',
+    allowedItemKinds: [],
+    tags: [],
   };
 }
 
-export function serializeSemanticList(values: readonly string[]): string {
+export function serializeSemanticList(values: readonly string[]): string[] {
   const seen = new Set<string>();
   const normalized: string[] = [];
 
@@ -29,15 +29,10 @@ export function serializeSemanticList(values: readonly string[]): string {
     normalized.push(trimmed);
   }
 
-  return JSON.stringify(normalized);
+  return normalized;
 }
 
-export function parseSemanticList(value: string): string[] {
-  try {
-    const parsed = JSON.parse(value) as unknown;
-    if (!Array.isArray(parsed)) return [];
-    return parsed.filter((entry): entry is string => typeof entry === 'string');
-  } catch {
-    return [];
-  }
+export function parseSemanticList(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter((entry): entry is string => typeof entry === 'string');
 }

@@ -1,6 +1,7 @@
 // src/world/phaser/WorldScene.ts
 
 import Phaser from 'phaser';
+import type { GeneratedAssetDef } from '../../engine/worldContent.generated';
 import type {
   WorldSceneProjection,
   WorldInteractionIntent,
@@ -8,13 +9,78 @@ import type {
   WorldFixtureCapabilityReport,
 } from './types';
 import { ensureFixtureTextures, createTechnicalFixtureProjection } from './technicalFixture';
+import { resolveProjectionVisual } from './projectionVisual';
+import {
+  buildProjectionAssetLoadPlan,
+  queueProjectionAssetLoads,
+  formatProjectionAssetLoadError,
+  textureHasLinkedNormalMap,
+  queueMissingProjectionAssetsForUpdate,
+  type ProjectionAssetLoadErrorFile,
+  type RefreshableProjectionLoadScene,
+} from './projectionAssets';
 import { EnvironmentManager } from './environment/EnvironmentManager';
 import { audioService, type AudioService } from '../../audio/AudioService';
 import { mapViewCoordinatesToAudioPosition } from '../../audio/spatialMapping';
+import type { SpatialAudioSourceDef } from '../../audio/types';
 
 export interface WorldSceneInitData {
   projection: WorldSceneProjection;
   onIntent?: (intent: WorldInteractionIntent) => void;
+  visualMode?: 'production' | 'technical-fixture';
+}
+
+export function resolveSceneBackgroundTexture(
+  projection: WorldSceneProjection,
+  visualMode: 'production' | 'technical-fixture',
+  assets?: readonly GeneratedAssetDef[],
+): string | null {
+  return visualMode === 'technical-fixture'
+    ? 'fixture_bg'
+    : resolveProjectionVisual(projection, assets).assetId;
+}
+
+export interface WorldSceneVisualPlan {
+  textureKey: string;
+  normalMapTextureKey: string | null;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+export function resolveProjectionCameraTarget(
+  projection: WorldSceneProjection,
+  width: number,
+  height: number,
+): { x: number; y: number; zoom: number } {
+  const focus = projection.focus ?? { x: 0.5, y: 0.5, zoom: 1 };
+  return {
+    x: focus.x <= 1 ? focus.x * width : focus.x,
+    y: focus.y <= 1 ? focus.y * height : focus.y,
+    zoom: focus.zoom,
+  };
+}
+
+export function resolveWorldSceneVisualPlan(
+  projection: WorldSceneProjection,
+  width: number,
+  height: number,
+  assets?: readonly GeneratedAssetDef[],
+): WorldSceneVisualPlan | null {
+  const visual = resolveProjectionVisual(projection, assets);
+  if (!visual.usesAuthoredAsset || !visual.assetId) {
+    return null;
+  }
+
+  return {
+    textureKey: visual.assetId,
+    normalMapTextureKey: visual.normalMapAssetId,
+    x: width / 2,
+    y: height / 2,
+    width,
+    height,
+  };
 }
 
 export class WorldScene extends Phaser.Scene {
@@ -22,8 +88,9 @@ export class WorldScene extends Phaser.Scene {
 
   public projection: WorldSceneProjection = createTechnicalFixtureProjection();
   private onIntent?: (intent: WorldInteractionIntent) => void;
+  private visualMode: 'production' | 'technical-fixture' = 'production';
   private environmentManager?: EnvironmentManager;
-  private audioHandles: string[] = [];
+  private audioHandles: Map<string, { handle: string; eventId: string }> = new Map();
 
   // Visual Display Layers
   private layerBackground?: Phaser.GameObjects.Container;
@@ -31,7 +98,7 @@ export class WorldScene extends Phaser.Scene {
   private layerActors?: Phaser.GameObjects.Container;
   private layerForeground?: Phaser.GameObjects.Container;
 
-  // GameObjects
+  // Projection-owned view image
   private bgImage?: Phaser.GameObjects.Image;
   private deskImage?: Phaser.GameObjects.Image;
   private assetA1Image?: Phaser.GameObjects.Image;
@@ -56,7 +123,6 @@ export class WorldScene extends Phaser.Scene {
 
   // Camera Focus
   private currentFocus: WorldCameraFocus = { x: 0.5, y: 0.5, zoom: 1.0 };
-  private isTransitioning = false;
 
   constructor() {
     super({ key: WorldScene.SCENE_KEY });
@@ -69,55 +135,83 @@ export class WorldScene extends Phaser.Scene {
     if (data?.onIntent) {
       this.onIntent = data.onIntent;
     }
+    if (data?.visualMode) {
+      this.visualMode = data.visualMode;
+    }
+  }
+
+  /**
+   * Queues the projection-selected production diffuse images and their
+   * linked normal maps (active view plus authored siblings) with relative
+   * Vite/itch-compatible URLs. Invalid references are reported by the load
+   * plan and queued nowhere; the projection stays assetless for those
+   * slots instead of borrowing another visual.
+   *
+   * The loaderror listener is registered BEFORE queueing so initial preload
+   * failures are reported loudly with the Phaser file key/URL. It is
+   * removed again on shutdown (see handleShutdown).
+   */
+  public preload(): void {
+    try {
+      this.load.off('loaderror', this.handleAssetLoadError, this);
+    } catch {
+      // Headless/test loaders may not implement off(); registration below still applies.
+    }
+    this.load.on('loaderror', this.handleAssetLoadError, this);
+    if (this.visualMode === 'production') {
+      queueProjectionAssetLoads(this, buildProjectionAssetLoadPlan(this.projection));
+    }
   }
 
   public create(): void {
-    // 1. Ensure procedural/authored textures exist in TextureManager
+    // Technical fixture textures still provide the current procedural particle
+    // probes; scenery selection itself is projection-owned below.
     ensureFixtureTextures(this);
+    // preload() already registered this listener before the boot queue ran.
+    // Re-assert it here (off-then-on) so scenes created without preload
+    // (tests, direct boots) still report failures loudly without doubling.
+    try {
+      this.load.off('loaderror', this.handleAssetLoadError, this);
+    } catch {
+      // Ignore headless/test loader differences.
+    }
+    this.load.on('loaderror', this.handleAssetLoadError, this);
 
     const width = this.scale.width;
     const height = this.scale.height;
 
-    // 2. Initialize Visual Display Layers
     this.layerBackground = this.add.container(0, 0).setDepth(10);
     this.layerScenery = this.add.container(0, 0).setDepth(20);
     this.layerActors = this.add.container(0, 0).setDepth(30);
     this.layerForeground = this.add.container(0, 0).setDepth(40);
 
-    // 3. Setup WebGL Lighting
     this.setupLighting();
-
-    // 4. Setup Layered Images / Sprites & Normal Mapping
     this.setupSprites(width, height);
-
-    // 5. Setup Particles (Dust motes & Rain)
     this.setupParticles(width, height);
-
-    // 6. Setup Render-Texture / Filter Path for reflections/wetness
     this.setupRenderTexturePath(width, height);
 
-    // 7. Setup Living Environment Subsystem
-    this.environmentManager = new EnvironmentManager(this, this.projection);
+    this.environmentManager = new EnvironmentManager(
+      this,
+      this.projection,
+      this.visualMode === 'technical-fixture',
+    );
     this.environmentManager.init();
-    if (this.curtainImage) this.environmentManager.registerMotionTarget('fixture_curtain', this.curtainImage);
-    if (this.clockHandImage) this.environmentManager.registerMotionTarget('fixture_clock_hand', this.clockHandImage);
-    if (this.deskImage) this.environmentManager.registerMotionTarget('fixture_desk', this.deskImage);
-    if (this.assetA1Image) this.environmentManager.registerMotionTarget('asset_a1', this.assetA1Image);
+    this.registerFixtureMotionTargets();
 
-    // 8. Setup Authored Pointer Hotspots
     this.setupHotspots(width, height);
-
-    // 9. Setup Pointer Movement for Movable Light
     this.setupPointerTracking();
 
-    // 10. Initial Camera setup
-    this.cameras.main.setZoom(1.0);
-    this.cameras.main.centerOn(width / 2, height / 2);
+    const initialCamera = resolveProjectionCameraTarget(this.projection, width, height);
+    this.cameras.main.setZoom(initialCamera.zoom);
+    this.cameras.main.centerOn(initialCamera.x, initialCamera.y);
+    this.currentFocus = {
+      x: initialCamera.x / width,
+      y: initialCamera.y / height,
+      zoom: initialCamera.zoom,
+    };
 
-    // 11. Setup Spatial Audio Subsystem
     this.setupSpatialAudio();
 
-    // Register scene cleanup hooks
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.handleShutdown, this);
     this.events.once(Phaser.Scenes.Events.DESTROY, this.handleDestroy, this);
   }
@@ -135,7 +229,6 @@ export class WorldScene extends Phaser.Scene {
     this.lights.enable();
     this.applyAmbientLighting();
 
-    // Add point lights from projection
     this.projection.lighting.pointLights.forEach((lightDef) => {
       const colorNum = parseInt(lightDef.color.replace('#', ''), 16) || 0xffffff;
       const lx = lightDef.x <= 1 ? lightDef.x * this.scale.width : lightDef.x;
@@ -155,7 +248,6 @@ export class WorldScene extends Phaser.Scene {
     const { ambientColor, ambientIntensity } = this.projection.lighting;
     const hex = parseInt(ambientColor.replace('#', ''), 16) || 0xffffff;
 
-    // Split RGB components scaled by intensity
     const r = Math.min(255, Math.round(((hex >> 16) & 0xff) * ambientIntensity));
     const g = Math.min(255, Math.round(((hex >> 8) & 0xff) * ambientIntensity));
     const b = Math.min(255, Math.round((hex & 0xff) * ambientIntensity));
@@ -164,65 +256,105 @@ export class WorldScene extends Phaser.Scene {
   }
 
   /**
-   * Sets up layered sprites with normal-map lighting
+   * Renders only the asset selected by the current projection. Assetless views
+   * intentionally remain without a scenery image instead of borrowing the
+   * technical fixture background, desk, clock, curtain, or asset identities.
+   * A projection that names an asset which failed to load is reported loudly
+   * and likewise left assetless — never silently substituted.
    */
   private setupSprites(width: number, height: number): void {
-    // Layer 0: Background
+    this.bgImage?.destroy();
+    this.bgImage = undefined;
+    this.deskImage?.destroy();
+    this.assetA1Image?.destroy();
+    this.curtainImage?.destroy();
+    this.clockHandImage?.destroy();
+    this.deskImage = this.assetA1Image = this.curtainImage = this.clockHandImage = undefined;
+
+    if (resolveSceneBackgroundTexture(this.projection, this.visualMode) === 'fixture_bg') {
+      this.setupFixtureSprites(width, height);
+      return;
+    }
+
+    const plan = resolveWorldSceneVisualPlan(this.projection, width, height);
+    if (!plan) {
+      return;
+    }
+    if (!this.textures.exists(plan.textureKey)) {
+      console.error(
+        `[projection-assets] Production asset '${plan.textureKey}' is not loaded; leaving the projection assetless rather than substituting another visual.`,
+      );
+      return;
+    }
+
+    this.bgImage = this.add.image(plan.x, plan.y, plan.textureKey);
+    this.bgImage.setDisplaySize(plan.width, plan.height);
+    this.layerBackground?.add(this.bgImage);
+
+    // Normal-map lighting only when the diffuse texture actually carries a
+    // linked normal map in texture state (Phaser 4 dataSource). A projection
+    // that names a normal map which failed to load (missing key or no linked
+    // data source) renders unlit — it is never reported as lit.
+    // The valid array-linked form (load.image(key, [diffuse, normal])) still
+    // lights, as does the procedural fixture path (setDataSource).
+    if (plan.normalMapTextureKey && textureHasLinkedNormalMap(this.textures, plan.textureKey)) {
+      const litImage = this.bgImage as unknown as {
+        setLighting?: (enable: boolean) => void;
+        setSelfShadow?: (enable: boolean, penumbra?: number, diffuseFlatThreshold?: number) => void;
+      };
+      litImage.setLighting?.(true);
+      litImage.setSelfShadow?.(true, 0.45, 0.25);
+    }
+  }
+
+  private setupFixtureSprites(width: number, height: number): void {
     this.bgImage = this.add.image(width / 2, height / 2, 'fixture_bg');
     this.bgImage.setDisplaySize(width, height);
     this.layerBackground?.add(this.bgImage);
 
-    // Layer 1: Midground Scenery (Desk)
+    const scaleFactor = Math.min(width / 1600, height / 900);
     this.deskImage = this.add.image(width * 0.58, height * 0.72, 'fixture_desk');
-    this.deskImage.setScale(Math.min(width / 1600, height / 900) * 1.1);
+    this.deskImage.setScale(scaleFactor * 1.1);
     this.layerScenery?.add(this.deskImage);
 
-    // Layer 2: Authors Asset A1 with Normal Map Lighting
     const a1X = width * 0.68;
     const a1Y = height * 0.35;
     this.assetA1Image = this.add.image(a1X, a1Y, 'asset_a1');
-    const scaleFactor = Math.min(width / 1600, height / 900);
     this.assetA1Image.setScale(scaleFactor * 1.15);
     this.layerActors?.add(this.assetA1Image);
-
-    // Enable WebGL per-pixel normal map lighting & self-shadowing on Asset A1
-    const objWithLighting = this.assetA1Image as unknown as {
+    const litAsset = this.assetA1Image as unknown as {
       setLighting?: (enable: boolean) => void;
       setSelfShadow?: (enable: boolean, penumbra?: number, diffuseFlatThreshold?: number) => void;
-      setPipeline?: (name: string) => void;
     };
+    litAsset.setLighting?.(true);
+    litAsset.setSelfShadow?.(true, 0.45, 0.25);
 
-    if (typeof objWithLighting.setLighting === 'function') {
-      objWithLighting.setLighting(true);
-    }
-    if (typeof objWithLighting.setSelfShadow === 'function') {
-      objWithLighting.setSelfShadow(true, 0.45, 0.25);
-    }
-
-    // Window curtain for ambient sway
     if (this.textures.exists('fixture_curtain')) {
-      const curtainX = width * 0.28;
-      const curtainY = height * 0.12;
-      this.curtainImage = this.add.image(curtainX, curtainY, 'fixture_curtain');
-      this.curtainImage.setOrigin(0.5, 0); // Pin top for natural sway
+      this.curtainImage = this.add.image(width * 0.28, height * 0.12, 'fixture_curtain');
+      this.curtainImage.setOrigin(0.5, 0);
       this.curtainImage.setScale(scaleFactor * 1.1);
       this.layerScenery?.add(this.curtainImage);
     }
-
-    // Clock hand pointer for Asset A1 ambient rotation
     if (this.textures.exists('fixture_clock_hand')) {
       this.clockHandImage = this.add.image(a1X, a1Y, 'fixture_clock_hand');
-      this.clockHandImage.setOrigin(0.5, 0.875); // Pivot at center boss
+      this.clockHandImage.setOrigin(0.5, 0.875);
       this.clockHandImage.setScale(scaleFactor * 1.15);
       this.layerActors?.add(this.clockHandImage);
     }
+  }
+
+  private registerFixtureMotionTargets(): void {
+    if (this.visualMode !== 'technical-fixture' || !this.environmentManager) return;
+    if (this.curtainImage) this.environmentManager.registerMotionTarget('fixture_curtain', this.curtainImage);
+    if (this.clockHandImage) this.environmentManager.registerMotionTarget('fixture_clock_hand', this.clockHandImage);
+    if (this.deskImage) this.environmentManager.registerMotionTarget('fixture_desk', this.deskImage);
+    if (this.assetA1Image) this.environmentManager.registerMotionTarget('asset_a1', this.assetA1Image);
   }
 
   /**
    * Sets up particles for dust motes and rainy weather
    */
   private setupParticles(width: number, height: number): void {
-    // Ambient dust motes
     if (this.textures.exists('fixture_mote')) {
       this.dustMoteEmitter = this.add.particles(0, 0, 'fixture_mote', {
         x: { min: 0, max: width },
@@ -241,7 +373,6 @@ export class WorldScene extends Phaser.Scene {
       }
     }
 
-    // Rain particles
     if (this.textures.exists('fixture_rain')) {
       this.rainEmitter = this.add.particles(0, 0, 'fixture_rain', {
         x: { min: 0, max: width + 200 },
@@ -254,7 +385,7 @@ export class WorldScene extends Phaser.Scene {
         quantity: 2,
       });
       this.rainEmitter.setDepth(46);
-      if (!this.projection.particles.rain) {
+      if (!this.projection.particles.rain || this.projection.isInterior) {
         this.rainEmitter.stop();
       }
     }
@@ -273,20 +404,14 @@ export class WorldScene extends Phaser.Scene {
     this.puddleRenderTexture.setDepth(22);
     this.puddleRenderTexture.setAlpha(0.65);
 
-    // Draw reflection of window/desk into render texture (flipped vertically)
     this.refreshRenderTextureReflection();
   }
 
   public refreshRenderTextureReflection(): void {
     if (!this.puddleRenderTexture || !this.bgImage) return;
     this.puddleRenderTexture.clear();
-
-    // Draw a reflective wash into the render texture
     this.puddleRenderTexture.fill(0x334a60, 0.5);
-    // Draw inverted portion of scenery to prove dynamic render texture path
-    if (this.deskImage) {
-      this.puddleRenderTexture.draw(this.deskImage, 40, 20);
-    }
+    this.puddleRenderTexture.draw(this.deskImage ?? this.bgImage, 40, 20);
   }
 
   /**
@@ -305,7 +430,6 @@ export class WorldScene extends Phaser.Scene {
    * Sets up authored pointer hotspots that emit semantic intents outward
    */
   private setupHotspots(width: number, height: number): void {
-    // Clear existing hotspots
     this.hotspotZones.forEach(({ zone, highlight }) => {
       zone.destroy();
       highlight.destroy();
@@ -317,12 +441,10 @@ export class WorldScene extends Phaser.Scene {
       const hy = anchor.y * height;
       const size = 64;
 
-      // Visual highlight marker
       const highlight = this.add.circle(hx, hy, size / 2, 0xffe680, 0);
       highlight.setStrokeStyle(2, 0xffdf78, 0);
       highlight.setDepth(35);
 
-      // Interactive zone
       const zone = this.add.zone(hx, hy, size, size)
         .setRectangleDropZone(size, size)
         .setInteractive({ cursor: 'pointer' });
@@ -362,56 +484,45 @@ export class WorldScene extends Phaser.Scene {
   }
 
   /**
-   * Camera transition between authored views or focus regions
+   * Requests a view transition. The authoritative host supplies the next
+   * projection; camera movement follows that projection's focus.
    */
-  public transitionToView(targetViewId: string, duration = 800): void {
-    if (this.isTransitioning) return;
-    this.isTransitioning = true;
-
-    const width = this.scale.width;
-    const height = this.scale.height;
-
-    // View-specific target coordinates and zooms
-    let targetX = width / 2;
-    let targetY = height / 2;
-    let targetZoom = 1.0;
-
-    if (targetViewId === 'view_a2') {
-      // Focus on window & puddle
-      targetX = width * 0.3;
-      targetY = height * 0.45;
-      targetZoom = 1.45;
-    } else {
-      // Main overview
-      targetX = width / 2;
-      targetY = height / 2;
-      targetZoom = 1.0;
-    }
-
-    this.cameras.main.pan(targetX, targetY, duration, 'Power2');
-    this.cameras.main.zoomTo(targetZoom, duration, 'Power2', true, (_cam, progress) => {
-      if (progress === 1) {
-        this.isTransitioning = false;
-        this.currentFocus = { x: targetX / width, y: targetY / height, zoom: targetZoom };
-        this.onIntent?.({
-          type: 'VIEW_TRANSITION',
-          targetViewId,
-        });
-      }
+  public transitionToView(targetViewId: string): void {
+    this.onIntent?.({
+      type: 'VIEW_TRANSITION',
+      targetViewId,
     });
   }
 
   /**
-   * Updates the scene projection from simulation state
+   * Updates the scene projection from simulation state.
+   *
+   * Boot loading is preload()-owned (active view plus authored siblings).
+   * A later projection may name a production asset that was never part of
+   * the boot set; in that case the missing assets are queued generically
+   * and the sprite refreshes once Phaser's loader completes. Repeated view
+   * updates coalesce into one pending refresh and never force-restart an
+   * in-flight load. Failures stay loud and assetless via the loaderror path.
    */
   public updateProjection(newProjection: WorldSceneProjection): void {
     this.projection = newProjection;
     this.environmentManager?.applyProjection(newProjection);
 
-    // 1. Update lighting
     this.applyAmbientLighting();
+    if (this.visualMode === 'production') {
+      try {
+        queueMissingProjectionAssetsForUpdate(
+          this as unknown as RefreshableProjectionLoadScene,
+          newProjection,
+          this.handleDynamicProjectionAssetsComplete,
+        );
+      } catch {
+        // Loader bookkeeping must never break a view update.
+      }
+    }
+    this.setupSprites(this.scale.width, this.scale.height);
+    this.registerFixtureMotionTargets();
 
-    // 2. Update particles
     if (this.dustMoteEmitter) {
       if (newProjection.particles.dustMotes) {
         this.dustMoteEmitter.start();
@@ -420,34 +531,30 @@ export class WorldScene extends Phaser.Scene {
       }
     }
     if (this.rainEmitter) {
-      if (newProjection.particles.rain) {
+      if (newProjection.particles.rain && !newProjection.isInterior) {
         this.rainEmitter.start();
       } else {
         this.rainEmitter.stop();
       }
     }
 
-    // 3. Update hotspots if anchors changed
     this.setupHotspots(this.scale.width, this.scale.height);
 
-    // 4. Update focus if specified
-    if (newProjection.focus) {
-      const fx = newProjection.focus.x * this.scale.width;
-      const fy = newProjection.focus.y * this.scale.height;
-      this.cameras.main.pan(fx, fy, 600, 'Power2');
-      this.cameras.main.zoomTo(newProjection.focus.zoom, 600, 'Power2');
-    }
+    const cameraTarget = resolveProjectionCameraTarget(
+      newProjection,
+      this.scale.width,
+      this.scale.height,
+    );
+    this.cameras.main.pan(cameraTarget.x, cameraTarget.y, 600, 'Power2');
+    this.cameras.main.zoomTo(cameraTarget.zoom, 600, 'Power2');
+    this.currentFocus = {
+      x: cameraTarget.x / this.scale.width,
+      y: cameraTarget.y / this.scale.height,
+      zoom: cameraTarget.zoom,
+    };
 
-    // 5. Update audio environment & listener
-    if (newProjection.listenerOrientation) {
-      audioService.setListenerOrientation(newProjection.listenerOrientation);
-    }
-    audioService.updateEnvironment({
-      rainIntensity: newProjection.weather === 'rain' ? 1.0 : 0.0,
-      windIntensity: newProjection.windIntensity ?? 0,
-      isInterior: newProjection.isInterior ?? true,
-      timeOfDay: newProjection.timeOfDay,
-    });
+    this.updateSpatialAudioEnvironment();
+    this.syncSpatialAudioSources();
   }
 
   /**
@@ -461,22 +568,22 @@ export class WorldScene extends Phaser.Scene {
       this.bgImage.setPosition(width / 2, height / 2);
       this.bgImage.setDisplaySize(width, height);
     }
-    if (this.deskImage) {
-      this.deskImage.setPosition(width * 0.58, height * 0.72);
-      this.deskImage.setScale(Math.min(width / 1600, height / 900) * 1.1);
+    if (this.visualMode === 'technical-fixture') {
+      const scaleFactor = Math.min(width / 1600, height / 900);
+      this.deskImage?.setPosition(width * 0.58, height * 0.72).setScale(scaleFactor * 1.1);
+      this.assetA1Image?.setPosition(width * 0.68, height * 0.35).setScale(scaleFactor * 1.15);
+      this.curtainImage?.setPosition(width * 0.28, height * 0.12).setScale(scaleFactor * 1.1);
+      this.clockHandImage?.setPosition(width * 0.68, height * 0.35).setScale(scaleFactor * 1.15);
     }
-    if (this.assetA1Image) {
-      this.assetA1Image.setPosition(width * 0.68, height * 0.35);
-      this.assetA1Image.setScale(Math.min(width / 1600, height / 900) * 1.15);
-    }
-    if (this.curtainImage) {
-      this.curtainImage.setPosition(width * 0.28, height * 0.12);
-      this.curtainImage.setScale(Math.min(width / 1600, height / 900) * 1.1);
-    }
-    if (this.clockHandImage) {
-      this.clockHandImage.setPosition(width * 0.68, height * 0.35);
-      this.clockHandImage.setScale(Math.min(width / 1600, height / 900) * 1.15);
-    }
+
+    const cameraTarget = resolveProjectionCameraTarget(this.projection, width, height);
+    this.cameras.main.centerOn(cameraTarget.x, cameraTarget.y);
+    this.cameras.main.setZoom(cameraTarget.zoom);
+    this.currentFocus = {
+      x: cameraTarget.x / width,
+      y: cameraTarget.y / height,
+      zoom: cameraTarget.zoom,
+    };
 
     this.setupHotspots(width, height);
     this.refreshRenderTextureReflection();
@@ -506,11 +613,22 @@ export class WorldScene extends Phaser.Scene {
   }
 
   public getCapabilityReport(): WorldFixtureCapabilityReport {
+    const visualPlan = resolveWorldSceneVisualPlan(
+      this.projection,
+      this.scale?.width ?? 0,
+      this.scale?.height ?? 0,
+    );
     return {
       reactLifecycle: true,
       noDuplicateCanvas: true,
       layeredRendering: !!(this.layerBackground && this.layerScenery && this.layerActors && this.layerForeground),
-      normalMapLighting: !!(this.lights && this.assetA1Image),
+      // True only when a scenery image is showing AND its diffuse texture
+      // actually carries a linked normal map. A named-but-failed normal map
+      // (missing key or no dataSource) never reports success.
+      normalMapLighting: this.visualMode === 'technical-fixture'
+        ? !!(this.lights && this.assetA1Image && textureHasLinkedNormalMap(this.textures, 'asset_a1'))
+        : !!(this.lights && this.bgImage && visualPlan?.normalMapTextureKey
+          && textureHasLinkedNormalMap(this.textures, visualPlan.textureKey)),
       movablePointLight: !!(this.movableLight ?? this.environmentManager?.getMovableLight()),
       particles: !!(this.dustMoteEmitter && this.rainEmitter),
       renderTextureFilter: !!this.puddleRenderTexture,
@@ -525,7 +643,7 @@ export class WorldScene extends Phaser.Scene {
     };
   }
 
-  private setupSpatialAudio(): void {
+  private updateSpatialAudioEnvironment(): void {
     if (this.projection.listenerOrientation) {
       audioService.setListenerOrientation(this.projection.listenerOrientation);
     }
@@ -535,33 +653,127 @@ export class WorldScene extends Phaser.Scene {
       isInterior: this.projection.isInterior ?? true,
       timeOfDay: this.projection.timeOfDay,
     });
+  }
 
-    if (this.projection.spatialAudioSources) {
-      for (const src of this.projection.spatialAudioSources) {
-        const audioPos = mapViewCoordinatesToAudioPosition(src.x, src.y, src.z ?? 0);
-        const handle = audioService.play(src.eventId, {
-          loop: src.loop ?? true,
-          volume: src.volume ?? 1.0,
-          bus: src.bus ?? 'ambience',
-          position: audioPos,
-          parameters: src.parameters,
-        });
-        if (handle) {
-          this.audioHandles.push(handle);
+  /**
+   * Keeps projection-owned sources stable across view/weather updates. A
+   * source ID is the lifecycle identity; changing its event or removing it
+   * stops the old handle before a replacement is created.
+   */
+  private syncSpatialAudioSources(): void {
+    const sourceDefs = this.projection.spatialAudioSources ?? [];
+    const sourceById = new Map(sourceDefs.map((source) => [source.id, source]));
+
+    for (const [sourceId, active] of this.audioHandles) {
+      const next = sourceById.get(sourceId);
+      if (
+        !next
+        || next.eventId !== active.eventId
+        || !audioService.isInstanceActive(active.handle)
+      ) {
+        if (audioService.isInstanceActive(active.handle)) {
+          audioService.stop(active.handle, 0.15);
         }
+        this.audioHandles.delete(sourceId);
+      }
+    }
+
+    for (const src of sourceDefs) {
+      const audioPos = mapViewCoordinatesToAudioPosition(src.x, src.y, src.z ?? 0);
+      const active = this.audioHandles.get(src.id);
+
+      if (active && active.eventId === src.eventId) {
+        audioService.setSourcePosition(active.handle, audioPos);
+        for (const [name, value] of Object.entries(src.parameters ?? {})) {
+          audioService.setParameter(name, value, active.handle);
+        }
+        continue;
+      }
+
+      if (active) {
+        audioService.stop(active.handle, 0.15);
+        this.audioHandles.delete(src.id);
+      }
+
+      const handle = this.playSpatialAudioSource(src, audioPos);
+      if (handle) {
+        this.audioHandles.set(src.id, { handle, eventId: src.eventId });
       }
     }
   }
 
+  private playSpatialAudioSource(
+    src: SpatialAudioSourceDef,
+    audioPos: ReturnType<typeof mapViewCoordinatesToAudioPosition>,
+  ): string {
+    return audioService.play(src.eventId, {
+      loop: src.loop ?? true,
+      volume: src.volume ?? 1.0,
+      bus: src.bus ?? 'ambience',
+      position: audioPos,
+      parameters: src.parameters,
+    });
+  }
+
+  private setupSpatialAudio(): void {
+    this.updateSpatialAudioEnvironment();
+    this.syncSpatialAudioSources();
+  }
+
   private handleShutdown(): void {
-    for (const handle of this.audioHandles) {
+    try {
+      this.load.off('loaderror', this.handleAssetLoadError, this);
+    } catch {
+      // Headless/test loaders may not implement off().
+    }
+    // Dynamic refresh is registered without a context (see
+    // queueMissingProjectionAssetsForUpdate); remove both forms so a pending
+    // refresh never fires after shutdown. Phaser's own loader shutdown also
+    // clears all listeners, this is belt-and-braces for restarts.
+    try {
+      this.load.off('complete', this.handleDynamicProjectionAssetsComplete);
+    } catch {
+      // No pending dynamic refresh in most shutdowns; ignore listener edge cases.
+    }
+    try {
+      this.load.off('complete', this.handleDynamicProjectionAssetsComplete, this);
+    } catch {
+      // Ignore listener edge cases.
+    }
+    for (const { handle } of this.audioHandles.values()) {
       audioService.stop(handle, 0);
     }
-    this.audioHandles = [];
+    this.audioHandles.clear();
   }
 
   private handleDestroy(): void {
     this.handleShutdown();
+  }
+
+  /**
+   * One-shot refresh after a post-boot dynamic asset load completes. Renders
+   * the current projection (which may have advanced past the projection that
+   * triggered the load — setupSprites always uses the latest), so a later
+   * projection is never left stale behind a completed download.
+   */
+  private handleDynamicProjectionAssetsComplete = (): void => {
+    try {
+      if (!this.textures) return;
+      this.setupSprites(this.scale.width, this.scale.height);
+      this.refreshRenderTextureReflection();
+    } catch {
+      // Refresh is best-effort; the next view update re-renders anyway.
+    }
+  };
+
+  /**
+   * Reports a failed production asset download loudly, including the Phaser
+   * file key and resolved URL when provided. The render path stays
+   * assetless for that projection (see setupSprites) — it never substitutes
+   * another visual.
+   */
+  private handleAssetLoadError(file: ProjectionAssetLoadErrorFile): void {
+    console.error(formatProjectionAssetLoadError(file));
   }
 
   public getAudioService(): AudioService {

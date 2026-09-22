@@ -33,18 +33,8 @@ export const DialoguePoolsTab: React.FC<Props> = ({ studio }) => {
 
   const activePool = pools[selectedKey];
 
-  const parseLines = (val: unknown): string[] => {
-    if (Array.isArray(val)) return val.map(String);
-    if (typeof val === 'string') {
-      try {
-        const p = JSON.parse(val);
-        return Array.isArray(p) ? p.map(String) : [];
-      } catch {
-        return [];
-      }
-    }
-    return [];
-  };
+  const parseLines = (val: unknown): string[] =>
+    Array.isArray(val) ? val.map(String) : [];
 
   const lines = parseLines(activePool?.['lines']);
 
@@ -74,7 +64,7 @@ export const DialoguePoolsTab: React.FC<Props> = ({ studio }) => {
   };
 
   const updateLines = (nextLines: string[]) => {
-    studio.setCell('dialoguePools', selectedKey, 'lines', JSON.stringify(nextLines));
+    studio.setCell('dialoguePools', selectedKey, 'lines', nextLines);
   };
 
   const handleAddLine = () => {

@@ -21,6 +21,6 @@ export function buildAssetRow(
     kind,
     uri: uri.trim(),
     normalMapAssetId: normalMapAssetId.trim(),
-    tags: '[]',
+    tags: [],
   };
 }

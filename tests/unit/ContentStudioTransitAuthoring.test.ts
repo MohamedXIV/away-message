@@ -29,11 +29,11 @@ describe('Content Studio transit authoring', () => {
   it('creates a canonical bus-line row with readable service defaults', () => {
     expect(buildBusLineRow('Crosstown', ['stop_a', 'stop_b'], ['stop_a', 'stop_b'])).toEqual({
       name: 'Crosstown',
-      stopIds: '["stop_a","stop_b"]',
+      stopIds: ['stop_a', 'stop_b'],
       serviceStartMinute: 360,
       serviceEndMinute: 1380,
       headwayMinutes: 20,
-      segmentMinutes: '[10]',
+      segmentMinutes: [10],
       fare: 2,
     });
   });

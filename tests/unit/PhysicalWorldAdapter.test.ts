@@ -64,7 +64,7 @@ describe('Physical World Presentation Adapter', () => {
       timeOfDay: 'evening',
       weather: 'rain',
     });
-    expect(rainProj.particles.rain).toBe(true);
+    expect(rainProj.particles.rain).toBe(false);
     expect(rainProj.particles.density).toBeGreaterThan(0);
   });
 

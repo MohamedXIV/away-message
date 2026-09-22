@@ -8,10 +8,10 @@ import {
 
 describe('Content Studio transit access and stop reordering', () => {
   it('parses and serializes place transit access preserving stopId and walkMinutes', () => {
-    const raw = JSON.stringify([
+    const raw = [
       { stopId: 'stop_a', walkMinutes: 4 },
       { stopId: 'stop_b', walkMinutes: 7 },
-    ]);
+    ];
 
     const parsed = parseTransitAccess(raw);
     expect(parsed).toEqual([
@@ -21,7 +21,7 @@ describe('Content Studio transit access and stop reordering', () => {
 
     const updated = [...parsed, { stopId: 'stop_c', walkMinutes: 10 }];
     const serialized = serializeTransitAccess(updated);
-    expect(JSON.parse(serialized)).toEqual([
+    expect(serialized).toEqual([
       { stopId: 'stop_a', walkMinutes: 4 },
       { stopId: 'stop_b', walkMinutes: 7 },
       { stopId: 'stop_c', walkMinutes: 10 },
@@ -34,7 +34,7 @@ describe('Content Studio transit access and stop reordering', () => {
       { stopId: 'stop_b', walkMinutes: -3 },
     ];
     const serialized = serializeTransitAccess(rawWithInvalid);
-    expect(JSON.parse(serialized)).toEqual([
+    expect(serialized).toEqual([
       { stopId: 'stop_a', walkMinutes: 0 },
       { stopId: 'stop_b', walkMinutes: -3 },
     ]);
@@ -42,8 +42,8 @@ describe('Content Studio transit access and stop reordering', () => {
 
   it('handles empty or malformed transit access gracefully', () => {
     expect(parseTransitAccess('')).toEqual([]);
-    expect(parseTransitAccess('invalid')).toEqual([]);
-    expect(parseTransitAccess('{}')).toEqual([]);
+    expect(parseTransitAccess({})).toEqual([]);
+    expect(parseTransitAccess(null)).toEqual([]);
   });
 
   it('reorders bus line stops while preserving segment mapping for surviving pairs', () => {
