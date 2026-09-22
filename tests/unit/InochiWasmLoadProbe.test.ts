@@ -1,3 +1,6 @@
+import { createHash } from 'node:crypto';
+import { readFile } from 'node:fs/promises';
+import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
   allocatePuppetInputOrThrow,
@@ -74,6 +77,18 @@ describe('Inochi WASM real-byte probe safety (#34)', () => {
       path: '.tmp/inochi2d/examples/ada-static.inx',
       label: '.tmp/inochi2d/examples/ada-static.inx',
     });
+    expect(resolveProbeFixture(['candidate.wasm', '--fixture', 'tests/fixtures/away-puppet/runtime-two-parameter.inp'])).toEqual({
+      path: 'tests/fixtures/away-puppet/runtime-two-parameter.inp',
+      label: 'tests/fixtures/away-puppet/runtime-two-parameter.inp',
+    });
+  });
+
+  it('locks the checked-in two-parameter runtime puppet fixture digest and header', async () => {
+    const fixturePath = resolve(__dirname, '../fixtures/away-puppet/runtime-two-parameter.inp');
+    const bytes = await readFile(fixturePath);
+    const hash = createHash('sha256').update(bytes).digest('hex');
+    expect(hash).toBe('67f1089d71f50ebf7863756a18ed1664f57006e457b97cd10ebd534c0522d883');
+    expect(bytes.subarray(0, 8).toString('utf-8')).toBe('TRNSRTS2');
   });
 
   it('keeps proven Ada gates independent while deeper parameter modes remain explicit', () => {
