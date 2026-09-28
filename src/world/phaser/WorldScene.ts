@@ -23,6 +23,7 @@ import { EnvironmentManager } from './environment/EnvironmentManager';
 import { audioService, type AudioService } from '../../audio/AudioService';
 import { mapViewCoordinatesToAudioPosition } from '../../audio/spatialMapping';
 import type { SpatialAudioSourceDef } from '../../audio/types';
+import { createTechnicalAwayPuppetCharacterMount } from './TechnicalAwayPuppetRig';
 import {
   destroyWorldSceneCharacterMounts,
   disposeRemovedWorldSceneCharacters,
@@ -194,6 +195,12 @@ export class WorldScene extends Phaser.Scene {
     this.layerScenery = this.add.container(0, 0).setDepth(20);
     this.layerActors = this.add.container(0, 0).setDepth(30);
     this.layerForeground = this.add.container(0, 0).setDepth(40);
+
+    if (this.visualMode === 'technical-fixture' && this.characterMounts.length === 0) {
+      this.characterMounts = [
+        createTechnicalAwayPuppetCharacterMount('fixture_cafe_customer_anchor'),
+      ];
+    }
 
     this.setupLighting();
     this.setupSprites(width, height);
@@ -770,6 +777,9 @@ export class WorldScene extends Phaser.Scene {
   }
 
   private syncCharacterMounts(width: number, height: number): void {
+    if (this.layerActors) {
+      for (const mount of this.characterMounts) mount.attach?.(this, this.layerActors);
+    }
     syncWorldSceneCharacterMounts(this.projection, width, height, this.characterMounts);
   }
 

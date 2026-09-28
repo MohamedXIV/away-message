@@ -1,3 +1,4 @@
+import type Phaser from 'phaser';
 import type { CharacterRenderer, CharacterVisualState } from '../characterRenderer';
 import type { WorldSceneProjection } from './types';
 import { resolveCharacterAnchorTransform } from './PhaserCharacterSurface';
@@ -9,6 +10,8 @@ export interface WorldSceneCharacterMount {
   readonly visualState: Omit<CharacterVisualState, 'transform'>;
   readonly scale?: number;
   readonly depth?: number;
+  /** Optional late Phaser attachment for renderer surfaces created outside the Scene. */
+  readonly attach?: (scene: Phaser.Scene, parent: Phaser.GameObjects.Container) => void;
 }
 
 export interface CharacterMountSyncResult {

@@ -17,6 +17,33 @@ export interface CharacterVisualState {
   readonly transform: CharacterRenderTransform;
 }
 
+export interface CharacterMeshTexture {
+  readonly id: string;
+  readonly width: number;
+  readonly height: number;
+  /** Detached RGBA8 bytes owned by the character backend. */
+  readonly rgba: Uint8ClampedArray;
+}
+
+export type CharacterMeshBlendMode = 'normal' | 'multiply' | 'screen' | 'add';
+
+export interface CharacterMeshBatch {
+  readonly id: string;
+  readonly textureId: string;
+  /** Flat [x, y, u, v] tuples in puppet-local coordinates. */
+  readonly vertices: readonly number[];
+  /** Flat triangle indices [a, b, c, ...]. */
+  readonly triangles: readonly number[];
+  readonly tint?: string;
+  readonly alpha?: number;
+  readonly blendMode?: CharacterMeshBlendMode;
+}
+
+export interface CharacterMeshFrame {
+  readonly textures: readonly CharacterMeshTexture[];
+  readonly batches: readonly CharacterMeshBatch[];
+}
+
 export interface SemanticAppearanceDescription {
   readonly actorId: string;
   readonly observableTraits: readonly string[];

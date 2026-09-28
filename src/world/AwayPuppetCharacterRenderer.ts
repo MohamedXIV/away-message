@@ -2,6 +2,7 @@ import type { SemanticPuppet } from '../tooling/away-puppet/SemanticPuppet';
 import type { AwayPuppetOpenLifecycle } from '../tooling/away-puppet/McpSemanticTools';
 import type {
   CharacterRenderer,
+  CharacterMeshFrame,
   CharacterRenderTransform,
   CharacterVisualState,
 } from './characterRenderer';
@@ -40,6 +41,8 @@ export interface AwayPuppetMotionProfile {
 export interface AwayPuppetCharacterSession {
   readonly puppet: AwayPuppetSemanticController;
   readonly motion?: AwayPuppetMotionProfile;
+  /** Optional renderer-neutral frame provider used by Away Puppet backends. */
+  readonly renderFrame?: (deltaMs: number) => CharacterMeshFrame | undefined;
   dispose(): void;
 }
 
@@ -76,7 +79,7 @@ export function createAwayPuppetCharacterSessionLoader(
 
 export interface CharacterRenderSurface {
   setTransform(transform: Readonly<CharacterRenderTransform>): void;
-  update(deltaMs: number): void;
+  update(deltaMs: number, frame?: Readonly<CharacterMeshFrame>): void;
   destroy(): void;
 }
 
@@ -97,9 +100,23 @@ export class AwayPuppetCharacterRenderer implements CharacterRenderer {
     private readonly surface: CharacterRenderSurface,
   ) {}
 
-  async load(profileId: string): Promise<void> {
+  load(profileId: string): Promise<void> {
     this.assertAlive();
-    const next = await this.loadSession(profileId);
+    const loaded = this.loadSession(profileId);
+
+    // Synchronous loaders are installed immediately so a Phaser scene can
+    // attach and project a technical/runtime puppet in the same create pass.
+    if (!(loaded instanceof Promise) && typeof (loaded as { then?: unknown }).then !== 'function') {
+      this.installSession(loaded);
+      return Promise.resolve();
+    }
+
+    return Promise.resolve(loaded).then((next) => {
+      this.installSession(next);
+    });
+  }
+
+  private installSession(next: AwayPuppetCharacterSession): void {
     if (this.destroyed) {
       next.dispose();
       throw new Error('Character renderer is destroyed');
@@ -164,8 +181,9 @@ export class AwayPuppetCharacterRenderer implements CharacterRenderer {
       throw new Error('Character renderer delta must be a finite non-negative number');
     }
     this.motionElapsedMs += deltaMs;
-    this.applyMotion(this.requireSession(), this.motionElapsedMs);
-    this.surface.update(deltaMs);
+    const session = this.requireSession();
+    this.applyMotion(session, this.motionElapsedMs);
+    this.surface.update(deltaMs, session.renderFrame?.(deltaMs));
   }
 
   private applyMotion(session: AwayPuppetCharacterSession, elapsedMs: number): void {
