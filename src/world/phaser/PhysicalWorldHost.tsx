@@ -10,6 +10,7 @@ import type {
 
 export const PhysicalWorldHost: React.FC<PhysicalWorldHostProps> = ({
   projection,
+  characters,
   onIntent,
   overlaySlot,
   className = '',
@@ -36,6 +37,7 @@ export const PhysicalWorldHost: React.FC<PhysicalWorldHostProps> = ({
     const runtime = new PhaserWorldRuntime({
       parent: containerRef.current,
       projection,
+      characters,
       onIntent: handleIntent,
       visualMode,
     });

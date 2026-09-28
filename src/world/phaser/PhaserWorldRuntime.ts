@@ -2,6 +2,7 @@
 
 import Phaser from 'phaser';
 import { WorldScene, type WorldSceneInitData } from './WorldScene';
+import type { WorldSceneCharacterMount } from './WorldSceneCharacters';
 import type {
   WorldSceneProjection,
   WorldInteractionIntent,
@@ -10,6 +11,8 @@ import type {
 export interface PhaserWorldRuntimeOptions {
   parent: HTMLElement;
   projection: WorldSceneProjection;
+  /** Renderers must already be loaded; WorldScene owns their disposal. */
+  characters?: readonly WorldSceneCharacterMount[];
   onIntent?: (intent: WorldInteractionIntent) => void;
   renderType?: number;
   visualMode?: 'production' | 'technical-fixture';
@@ -22,6 +25,7 @@ export class PhaserWorldRuntime {
   private onIntent?: (intent: WorldInteractionIntent) => void;
   private currentProjection: WorldSceneProjection;
   private renderType?: number;
+  private readonly characters?: readonly WorldSceneCharacterMount[];
   private visualMode: 'production' | 'technical-fixture';
 
   constructor(options: PhaserWorldRuntimeOptions) {
@@ -29,6 +33,7 @@ export class PhaserWorldRuntime {
     this.onIntent = options.onIntent;
     this.currentProjection = options.projection;
     this.renderType = options.renderType;
+    this.characters = options.characters;
     this.visualMode = options.visualMode ?? 'production';
 
     this.initGame();
@@ -42,6 +47,7 @@ export class PhaserWorldRuntime {
 
     const sceneData: WorldSceneInitData = {
       projection: this.currentProjection,
+      characters: this.characters,
       onIntent: (intent) => this.onIntent?.(intent),
       visualMode: this.visualMode,
     };

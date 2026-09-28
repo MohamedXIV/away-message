@@ -1,6 +1,7 @@
 // src/world/phaser/types.ts
 
 import type React from 'react';
+import type { WorldSceneCharacterMount } from './WorldSceneCharacters';
 import type { TimeOfDay, WeatherType } from '../types';
 import type { PuddleZoneDef } from './environment/puddles';
 import type { AmbientMotionDef } from './environment/ambientMotion';
@@ -101,6 +102,8 @@ export interface WorldInteractionIntent {
 
 export interface PhysicalWorldHostProps {
   projection: WorldSceneProjection;
+  /** Preloaded full-character renderers for the active authored view. The scene owns their disposal. */
+  characters?: readonly WorldSceneCharacterMount[];
   onIntent?: (intent: WorldInteractionIntent) => void;
   overlaySlot?: React.ReactNode;
   className?: string;
