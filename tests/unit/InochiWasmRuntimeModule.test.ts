@@ -16,6 +16,7 @@ class FakeWasmExports {
   readonly tintAssignments: Array<{ partPointer: number; r: number; g: number; b: number }> = [];
   readonly textureAssignments: Array<{ partPointer: number; attachment: number; texturePointer: number }> = [];
   private readonly partTextures = new Map<string, number>();
+  private readonly partTints = new Map<number, readonly [number, number, number]>();
 
   constructor() {
     this.names.set(300, this.writeCString('Body Mass'));
@@ -89,7 +90,15 @@ class FakeWasmExports {
     this.textureAssignments.push({ partPointer, attachment, texturePointer });
     return true;
   }
+  in_part_get_tint(partPointer: number, rPointer: number, gPointer: number, bPointer: number): void {
+    const [r, g, b] = this.partTints.get(partPointer) ?? [1, 1, 1];
+    const view = new DataView(this.memory.buffer);
+    view.setFloat32(rPointer, r, true);
+    view.setFloat32(gPointer, g, true);
+    view.setFloat32(bPointer, b, true);
+  }
   in_part_set_tint(partPointer: number, r: number, g: number, b: number): boolean {
+    this.partTints.set(partPointer, [r, g, b]);
     this.tintAssignments.push({ partPointer, r, g, b });
     return true;
   }
@@ -202,6 +211,21 @@ describe('corrected low-level Inochi WASM runtime module (#34)', () => {
     expect(exports.tintAssignments[0]?.b).toBeCloseTo(0x99 / 255);
 
     expect(() => puppet.assignPartTint?.('Hair', '#fff')).toThrow(/#RRGGBB/i);
+    puppet.free();
+  });
+
+  it('fails closed when Part tint readback disagrees with the requested semantic color', () => {
+    const exports = new FakeWasmExports();
+    exports.in_part_get_tint = (_partPointer, rPointer, gPointer, bPointer) => {
+      const view = new DataView(exports.memory.buffer);
+      view.setFloat32(rPointer, 0, true);
+      view.setFloat32(gPointer, 0, true);
+      view.setFloat32(bPointer, 0, true);
+    };
+    const module = createInochiWasmRuntimeModule(exports);
+    const puppet = new module.Puppet(new Uint8Array([1]).buffer);
+
+    expect(() => puppet.assignPartTint?.('Hair', '#336699')).toThrow(/tint assignment readback failed/i);
     puppet.free();
   });
 

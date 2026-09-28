@@ -345,6 +345,23 @@ export function createInochiWasmRuntimeModule(exports: InochiWasmRuntimeExports)
         if (!exports.in_part_set_tint(partPointer, r, g, b)) {
           throw new Error(`Inochi WASM part tint assignment failed for ${nodeName}`);
         }
+        if (typeof exports.in_part_get_tint === 'function') {
+          const readbackPointer = allocate(exports, 12, 'part tint readback allocation');
+          try {
+            exports.in_part_get_tint(partPointer, readbackPointer, readbackPointer + 4, readbackPointer + 8);
+            const view = new DataView(exports.memory.buffer);
+            const observed = [
+              view.getFloat32(readbackPointer, true),
+              view.getFloat32(readbackPointer + 4, true),
+              view.getFloat32(readbackPointer + 8, true),
+            ];
+            if (observed.some((value, index) => Math.abs(value - [r, g, b][index]!) > 1e-5)) {
+              throw new Error(`Inochi WASM part tint assignment readback failed for ${nodeName}`);
+            }
+          } finally {
+            exports.nu_free(readbackPointer);
+          }
+        }
       }
 
       free(): void {
