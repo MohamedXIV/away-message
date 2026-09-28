@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { CharacterRenderer, CharacterVisualState } from '../../src/world/characterRenderer';
 import {
   destroyWorldSceneCharacterMounts,
+  disposeRemovedWorldSceneCharacters,
   syncWorldSceneCharacterMounts,
   updateWorldSceneCharacterMounts,
   type WorldSceneCharacterMount,
@@ -150,6 +151,23 @@ describe('WorldSceneCharacters (#25)', () => {
 
     destroyWorldSceneCharacterMounts([mount, mount]);
     expect(renderer.destroy).toHaveBeenCalledOnce();
+  });
+
+  it('retains the same actor renderer across presence changes and disposes departures once', () => {
+    const retained = rendererSpy();
+    const removed = rendererSpy();
+    const previous: WorldSceneCharacterMount[] = [
+      { actorId: 'actor-fixture-1', anchorId: 'customer', renderer: retained, visualState },
+      { actorId: 'actor-fixture-2', anchorId: 'customer', renderer: removed,
+        visualState: { ...visualState, actorId: 'actor-fixture-2' } },
+    ];
+    const next: WorldSceneCharacterMount[] = [
+      { ...previous[0]!, anchorId: 'window' },
+    ];
+
+    disposeRemovedWorldSceneCharacters(previous, next);
+    expect(retained.destroy).not.toHaveBeenCalled();
+    expect(removed.destroy).toHaveBeenCalledOnce();
   });
 
   it('rejects renderer mounts that could cross-wire simulation identity', () => {

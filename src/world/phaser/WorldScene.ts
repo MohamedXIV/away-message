@@ -25,6 +25,7 @@ import { mapViewCoordinatesToAudioPosition } from '../../audio/spatialMapping';
 import type { SpatialAudioSourceDef } from '../../audio/types';
 import {
   destroyWorldSceneCharacterMounts,
+  disposeRemovedWorldSceneCharacters,
   syncWorldSceneCharacterMounts,
   updateWorldSceneCharacterMounts,
   type WorldSceneCharacterMount,
@@ -224,6 +225,13 @@ export class WorldScene extends Phaser.Scene {
 
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.handleShutdown, this);
     this.events.once(Phaser.Scenes.Events.DESTROY, this.handleDestroy, this);
+  }
+
+  /** Reprojects live actors without restarting the scene or changing simulation identity. */
+  public setCharacterMounts(next: readonly WorldSceneCharacterMount[]): void {
+    disposeRemovedWorldSceneCharacters(this.characterMounts, next);
+    this.characterMounts = next;
+    if (this.layerActors) this.syncCharacterMounts(this.scale.width, this.scale.height);
   }
 
   public override update(time: number, delta: number): void {

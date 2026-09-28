@@ -25,7 +25,7 @@ export class PhaserWorldRuntime {
   private onIntent?: (intent: WorldInteractionIntent) => void;
   private currentProjection: WorldSceneProjection;
   private renderType?: number;
-  private readonly characters?: readonly WorldSceneCharacterMount[];
+  private characters: readonly WorldSceneCharacterMount[];
   private visualMode: 'production' | 'technical-fixture';
 
   constructor(options: PhaserWorldRuntimeOptions) {
@@ -33,7 +33,7 @@ export class PhaserWorldRuntime {
     this.onIntent = options.onIntent;
     this.currentProjection = options.projection;
     this.renderType = options.renderType;
-    this.characters = options.characters;
+    this.characters = options.characters ?? [];
     this.visualMode = options.visualMode ?? 'production';
 
     this.initGame();
@@ -81,7 +81,7 @@ export class PhaserWorldRuntime {
       if (this.isDestroyed || !this.game) return;
       const activeScene = this.game.scene.getScene(WorldScene.SCENE_KEY) as WorldScene | null;
       if (activeScene) {
-        activeScene.init(sceneData);
+        activeScene.init({ ...sceneData, characters: this.characters });
       }
     });
   }
@@ -98,6 +98,12 @@ export class PhaserWorldRuntime {
     if (scene && typeof scene.updateProjection === 'function') {
       scene.updateProjection(newProjection);
     }
+  }
+
+  public updateCharacters(characters: readonly WorldSceneCharacterMount[]): void {
+    if (this.isDestroyed) return;
+    this.characters = characters;
+    this.getScene()?.setCharacterMounts(characters);
   }
 
   public transitionToView(targetViewId: string, _duration?: number): void {

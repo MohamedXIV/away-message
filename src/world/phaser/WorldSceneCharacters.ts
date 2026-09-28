@@ -82,3 +82,12 @@ export function destroyWorldSceneCharacterMounts(
     mount.renderer.destroy();
   }
 }
+
+/** Releases only renderers no longer present in the next projection. */
+export function disposeRemovedWorldSceneCharacters(
+  previous: readonly WorldSceneCharacterMount[],
+  next: readonly WorldSceneCharacterMount[],
+): void {
+  const retained = new Set(next.map((mount) => mount.renderer));
+  destroyWorldSceneCharacterMounts(previous.filter((mount) => !retained.has(mount.renderer)));
+}

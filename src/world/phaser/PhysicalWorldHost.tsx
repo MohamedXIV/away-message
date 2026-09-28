@@ -71,6 +71,11 @@ export const PhysicalWorldHost: React.FC<PhysicalWorldHostProps> = ({
     };
   }, []);
 
+  // Keep live actor mounts in sync when presence or the authored view changes.
+  useEffect(() => {
+    runtimeRef.current?.updateCharacters(characters ?? []);
+  }, [characters]);
+
   // Synchronize projection updates to active Phaser runtime
   useEffect(() => {
     if (runtimeRef.current) {
