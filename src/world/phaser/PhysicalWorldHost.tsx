@@ -42,6 +42,9 @@ export const PhysicalWorldHost: React.FC<PhysicalWorldHostProps> = ({
       visualMode,
     });
     runtimeRef.current = runtime;
+    if (debug && typeof window !== 'undefined') {
+      (window as any).__awayPhysicalWorldRuntime = runtime;
+    }
 
     // ResizeObserver for HiDPI responsive canvas scaling
     const resizeObserver = new ResizeObserver((entries) => {
@@ -67,6 +70,13 @@ export const PhysicalWorldHost: React.FC<PhysicalWorldHostProps> = ({
       clearTimeout(timer);
       resizeObserver.disconnect();
       runtime.destroy();
+      if (
+        debug
+        && typeof window !== 'undefined'
+        && (window as any).__awayPhysicalWorldRuntime === runtime
+      ) {
+        delete (window as any).__awayPhysicalWorldRuntime;
+      }
       runtimeRef.current = null;
     };
   }, []);

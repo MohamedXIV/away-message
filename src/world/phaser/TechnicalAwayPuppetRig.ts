@@ -340,6 +340,7 @@ export function createTechnicalAwayPuppetVisualState(actorId: string): Omit<Char
 export function createTechnicalAwayPuppetCharacterMount(
   anchorId: string,
   actorId = 'actor-away-puppet-technical',
+  visualState: Omit<CharacterVisualState, 'transform'> = createTechnicalAwayPuppetVisualState(actorId),
 ): WorldSceneCharacterMount {
   const surface = new PhaserCharacterSurface();
   const renderer = new AwayPuppetCharacterRenderer(createTechnicalAwayPuppetSessionLoader(), surface);
@@ -351,9 +352,76 @@ export function createTechnicalAwayPuppetCharacterMount(
     actorId,
     anchorId,
     renderer,
-    visualState: createTechnicalAwayPuppetVisualState(actorId),
+    visualState,
     scale: 1.15,
     depth: 31,
     attach: (scene: Phaser.Scene, parent: Phaser.GameObjects.Container) => surface.attach(scene, parent),
   };
+}
+
+
+/**
+ * Three actors reuse one generic rig/profile while varying only semantic
+ * morphology, slots and tints. This is the representative small-group fixture
+ * used for browser/performance evidence in #25.
+ */
+export function createTechnicalAwayPuppetCharacterGroup(): WorldSceneCharacterMount[] {
+  const firstId = 'actor-away-puppet-technical-a';
+  const secondId = 'actor-away-puppet-technical-b';
+  const thirdId = 'actor-away-puppet-technical-c';
+
+  const first = createTechnicalAwayPuppetVisualState(firstId);
+  const secondBase = createTechnicalAwayPuppetVisualState(secondId);
+  const thirdBase = createTechnicalAwayPuppetVisualState(thirdId);
+
+  return [
+    createTechnicalAwayPuppetCharacterMount('fixture_cafe_customer_anchor', firstId, first),
+    createTechnicalAwayPuppetCharacterMount('fixture_cafe_staff_anchor', secondId, {
+      ...secondBase,
+      morphs: {
+        'body.mass': -0.35,
+        'body.frame': 0.45,
+        'face.roundness': -0.2,
+      },
+      parts: {
+        ...secondBase.parts,
+        'hair.front': 'hair.short-layered',
+        'face.eyes': 'eyes.narrow',
+        'face.brows': 'brows.straight',
+        'wardrobe.top': 'top.crew-neck',
+        'wardrobe.outer': 'outer.none',
+      },
+      tints: {
+        skin: '#8f624d',
+        hair: '#161311',
+        iris: '#3d5f75',
+        clothing: '#526374',
+        outerwear: '#526374',
+      },
+      expression: 'expression.neutral',
+    }),
+    createTechnicalAwayPuppetCharacterMount('anchor_a1', thirdId, {
+      ...thirdBase,
+      morphs: {
+        'body.mass': 0.55,
+        'body.frame': -0.4,
+        'face.roundness': 0.5,
+      },
+      parts: {
+        ...thirdBase.parts,
+        'hair.front': 'hair.medium-wave',
+        'face.mouth': 'mouth.full',
+        'wardrobe.top': 'top.crew-neck',
+        'wardrobe.outer': 'outer.light-jacket',
+      },
+      tints: {
+        skin: '#d2a082',
+        hair: '#7a5036',
+        iris: '#6a7047',
+        clothing: '#7b5c52',
+        outerwear: '#3f4c46',
+      },
+      expression: 'expression.surprised',
+    }),
+  ];
 }

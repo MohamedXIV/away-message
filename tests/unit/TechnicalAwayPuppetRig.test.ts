@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  createTechnicalAwayPuppetCharacterGroup,
   createTechnicalAwayPuppetSession,
   createTechnicalAwayPuppetVisualState,
   TECHNICAL_AWAY_PUPPET_PROFILE,
@@ -18,6 +19,18 @@ function width(vertices: readonly number[]): number {
 }
 
 describe('Technical Away Puppet rig (#25)', () => {
+  it('builds a representative three-actor group by reusing one generic rig profile', () => {
+    const group = createTechnicalAwayPuppetCharacterGroup();
+    expect(group).toHaveLength(3);
+    expect(new Set(group.map((mount) => mount.actorId)).size).toBe(3);
+    expect(new Set(group.map((mount) => mount.visualState.profileId))).toEqual(
+      new Set([TECHNICAL_AWAY_PUPPET_PROFILE]),
+    );
+    expect(new Set(group.map((mount) => mount.visualState.parts['hair.front'])).size).toBe(2);
+    expect(new Set(group.map((mount) => mount.visualState.tints.skin)).size).toBe(3);
+    for (const mount of group) mount.renderer.destroy();
+  });
+
   it('is generic and exposes a modular profile without canonical-character identity', () => {
     const state = createTechnicalAwayPuppetVisualState('dynamic-actor-918');
     expect(state.actorId).toBe('dynamic-actor-918');

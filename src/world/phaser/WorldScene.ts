@@ -23,7 +23,7 @@ import { EnvironmentManager } from './environment/EnvironmentManager';
 import { audioService, type AudioService } from '../../audio/AudioService';
 import { mapViewCoordinatesToAudioPosition } from '../../audio/spatialMapping';
 import type { SpatialAudioSourceDef } from '../../audio/types';
-import { createTechnicalAwayPuppetCharacterMount } from './TechnicalAwayPuppetRig';
+import { createTechnicalAwayPuppetCharacterGroup } from './TechnicalAwayPuppetRig';
 import {
   destroyWorldSceneCharacterMounts,
   disposeRemovedWorldSceneCharacters,
@@ -197,9 +197,7 @@ export class WorldScene extends Phaser.Scene {
     this.layerForeground = this.add.container(0, 0).setDepth(40);
 
     if (this.visualMode === 'technical-fixture' && this.characterMounts.length === 0) {
-      this.characterMounts = [
-        createTechnicalAwayPuppetCharacterMount('fixture_cafe_customer_anchor'),
-      ];
+      this.characterMounts = createTechnicalAwayPuppetCharacterGroup();
     }
 
     this.setupLighting();
@@ -241,9 +239,39 @@ export class WorldScene extends Phaser.Scene {
     if (this.layerActors) this.syncCharacterMounts(this.scale.width, this.scale.height);
   }
 
+  private characterUpdateSamples = 0;
+  private characterUpdateTotalMs = 0;
+  private characterUpdateMaxMs = 0;
+
   public override update(time: number, delta: number): void {
     this.environmentManager?.update(time, delta);
+    const started = typeof performance !== 'undefined' ? performance.now() : 0;
     updateWorldSceneCharacterMounts(this.characterMounts, delta);
+    if (started > 0 && typeof performance !== 'undefined') {
+      const elapsed = performance.now() - started;
+      this.characterUpdateSamples += 1;
+      this.characterUpdateTotalMs += elapsed;
+      this.characterUpdateMaxMs = Math.max(this.characterUpdateMaxMs, elapsed);
+    }
+  }
+
+  /** Debug-only evidence surface for #25 browser/performance verification. */
+  public getCharacterRuntimeStats(): {
+    actorCount: number;
+    sampleCount: number;
+    averageUpdateMs: number;
+    maxUpdateMs: number;
+    actualFps: number;
+  } {
+    return {
+      actorCount: this.characterMounts.length,
+      sampleCount: this.characterUpdateSamples,
+      averageUpdateMs: this.characterUpdateSamples > 0
+        ? this.characterUpdateTotalMs / this.characterUpdateSamples
+        : 0,
+      maxUpdateMs: this.characterUpdateMaxMs,
+      actualFps: this.game.loop.actualFps,
+    };
   }
 
   /**
