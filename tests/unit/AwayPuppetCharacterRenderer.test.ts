@@ -260,6 +260,43 @@ describe('AwayPuppetCharacterRenderer (#25)', () => {
     expect(disposed).toEqual(['profile.slow']);
   });
 
+
+  it('forwards renderer-neutral frames from the loaded session to the render surface', async () => {
+    const frames: unknown[] = [];
+    const expectedFrame = {
+      textures: [{
+        id: 'fixture',
+        width: 1,
+        height: 1,
+        rgba: new Uint8ClampedArray([255, 255, 255, 255]),
+      }],
+      batches: [{
+        id: 'quad',
+        textureId: 'fixture',
+        vertices: [0, 0, 0, 0, 1, 0, 1, 0, 1, 1, 1, 1],
+        triangles: [0, 1, 2],
+      }],
+    };
+
+    const renderer = new AwayPuppetCharacterRenderer(
+      (): AwayPuppetCharacterSession => ({
+        puppet: createSemanticSpy([]),
+        renderFrame: () => expectedFrame,
+        dispose: () => undefined,
+      }),
+      {
+        setTransform: () => undefined,
+        update: (_deltaMs, frame) => frames.push(frame),
+        destroy: () => undefined,
+      },
+    );
+
+    await renderer.load('profile.render-frame');
+    renderer.update(16.67);
+
+    expect(frames).toEqual([expectedFrame]);
+  });
+
   it('rejects mutation before a profile is loaded and invalid frame deltas', async () => {
     const renderer = new AwayPuppetCharacterRenderer(
       () => ({

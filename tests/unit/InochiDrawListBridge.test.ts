@@ -194,6 +194,60 @@ describe('Inochi draw-list -> CharacterMeshFrame', () => {
 });
 
 
+
+  it('respects non-zero allocation vertex/index offsets without leaking prefix data', () => {
+    const commandBytes = new Uint8Array(INOCHI_DRAW_COMMAND_STRIDE);
+    const command = new DataView(commandBytes.buffer);
+    command.setUint32(0, 0x700, true);
+    command.setUint32(44, 9, true);
+    command.setUint32(48, 2, true);
+    command.setUint32(52, 3, true);
+    command.setUint32(56, 6, true);
+    command.setUint32(60, 0x0101, true);
+    command.setFloat32(64, 1, true);
+    command.setFloat32(68, 1, true);
+    command.setFloat32(72, 1, true);
+    command.setFloat32(92, 1, true);
+
+    const vertexBytes = new Uint8Array(6 * 16);
+    const vertexView = new DataView(vertexBytes.buffer);
+    const vertices = [
+      [-99, -99, 0, 0],
+      [-88, -88, 0, 0],
+      [-1, -1, 0, 0],
+      [1, -1, 1, 0],
+      [1, 1, 1, 1],
+      [-1, 1, 0, 1],
+    ];
+    vertices.forEach((vertex, index) => vertex.forEach(
+      (value, component) => vertexView.setFloat32(index * 16 + component * 4, value, true),
+    ));
+
+    const indexBytes = new Uint8Array(9 * 4);
+    const indexView = new DataView(indexBytes.buffer);
+    [77, 78, 79, 0, 1, 2, 0, 2, 3].forEach(
+      (value, index) => indexView.setUint32(index * 4, value, true),
+    );
+
+    const texture = decodeInochiTextureRgba('fixture-texture', 1, 1, 4, new Uint8Array([255, 255, 255, 255]));
+    const frame = convertInochiDrawListToCharacterFrame({
+      useBaseVertex: true,
+      commandCount: 1,
+      commandBytes,
+      vertexBytes,
+      indexBytes,
+      allocations: [{ vtxOffset: 2, idxOffset: 3, idxCount: 6, vtxCount: 4, allocId: 9 }],
+    }, new Map([[0x700, texture]]));
+
+    expect(frame.batches[0]?.vertices).toEqual([
+      -1, -1, 0, 0,
+      1, -1, 1, 0,
+      1, 1, 1, 1,
+      -1, 1, 0, 1,
+    ]);
+    expect(frame.batches[0]?.triangles).toEqual([0, 1, 2, 0, 2, 3]);
+  });
+
   it('fails closed for non-base-vertex draw lists instead of guessing index rebasing', () => {
     const commandBytes = new Uint8Array(INOCHI_DRAW_COMMAND_STRIDE);
     const command = new DataView(commandBytes.buffer);
