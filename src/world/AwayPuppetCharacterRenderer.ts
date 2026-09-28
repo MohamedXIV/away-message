@@ -1,4 +1,5 @@
 import type { SemanticPuppet } from '../tooling/away-puppet/SemanticPuppet';
+import type { AwayPuppetOpenLifecycle } from '../tooling/away-puppet/McpSemanticTools';
 import type {
   CharacterRenderer,
   CharacterRenderTransform,
@@ -46,6 +47,33 @@ export type AwayPuppetCharacterSessionLoader = (
   profileId: string,
 ) => AwayPuppetCharacterSession | Promise<AwayPuppetCharacterSession>;
 
+export type AwayPuppetProfileSourceResolver = (profileId: string) => string;
+export type AwayPuppetMotionResolver = (
+  profileId: string,
+) => AwayPuppetMotionProfile | undefined;
+
+/**
+ * Bridges the game-owned profile id to the merged Away Puppet lifecycle.
+ * Source resolution stays injected so neither the renderer nor simulation
+ * hard-codes canonical NPCs, asset paths, or raw Inochi ids.
+ */
+export function createAwayPuppetCharacterSessionLoader(
+  lifecycle: AwayPuppetOpenLifecycle,
+  resolveSource: AwayPuppetProfileSourceResolver,
+  resolveMotion: AwayPuppetMotionResolver = () => undefined,
+): AwayPuppetCharacterSessionLoader {
+  return (profileId) => {
+    const source = resolveSource(profileId);
+    if (!source) throw new Error(`No Away Puppet source for profile: ${profileId}`);
+    const session = lifecycle.open(source);
+    return {
+      puppet: session.puppet,
+      motion: resolveMotion(profileId),
+      dispose: () => session.dispose(),
+    };
+  };
+}
+
 export interface CharacterRenderSurface {
   setTransform(transform: Readonly<CharacterRenderTransform>): void;
   update(deltaMs: number): void;
@@ -72,7 +100,10 @@ export class AwayPuppetCharacterRenderer implements CharacterRenderer {
   async load(profileId: string): Promise<void> {
     this.assertAlive();
     const next = await this.loadSession(profileId);
-    this.assertAlive();
+    if (this.destroyed) {
+      next.dispose();
+      throw new Error('Character renderer is destroyed');
+    }
 
     const previous = this.session;
     this.session = next;
