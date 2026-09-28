@@ -1,4 +1,5 @@
 import type { AwayPuppetOpenLifecycle, AwayPuppetSession } from './McpSemanticTools';
+import type { CharacterMeshFrame } from '../../world/characterRenderer';
 import {
   SemanticPuppet,
   validateAwayRigMetadata,
@@ -21,6 +22,7 @@ export interface InochiWebRuntimePuppet {
   readonly parameters: readonly InochiWebRuntimeParameter[];
   readonly root: InochiWebRuntimeNode | null;
   assignPartTexture?(nodeName: string, textureIndex: number, attachment: number): void;
+  captureRenderFrame?(deltaMs: number): CharacterMeshFrame;
   free(): void;
 }
 
@@ -141,6 +143,9 @@ export function createInochiWebLifecycle(
 
         return {
           puppet,
+          ...(rawPuppet.captureRenderFrame
+            ? { renderFrame: (deltaMs: number) => rawPuppet.captureRenderFrame!(deltaMs) }
+            : {}),
           dispose: () => {
             if (disposed) return;
             disposed = true;

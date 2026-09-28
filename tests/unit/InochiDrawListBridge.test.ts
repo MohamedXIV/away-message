@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   copyInochiDrawList,
+  convertInochiDrawListToCharacterFrame,
+  decodeInochiTextureRgba,
   INOCHI_DRAW_COMMAND_STRIDE,
   type InochiDrawListRawApi,
 } from '../../src/tooling/away-puppet/InochiDrawListBridge';
@@ -100,5 +102,91 @@ describe('Inochi draw-list bridge', () => {
       allocations: [],
     });
     expect(freed).toHaveLength(4);
+  });
+});
+
+
+describe('Inochi draw-list -> CharacterMeshFrame', () => {
+  it('decodes a normal textured part command into renderer-neutral triangles', () => {
+    const commandBytes = new Uint8Array(INOCHI_DRAW_COMMAND_STRIDE);
+    const command = new DataView(commandBytes.buffer);
+    command.setUint32(0, 0x700, true); // primary texture pointer
+    command.setUint32(32, 0, true); // IN_DRAW_STATE_NORMAL
+    command.setUint32(36, 0, true); // normal blend
+    command.setUint32(44, 42, true);
+    command.setUint32(48, 0, true);
+    command.setUint32(52, 0, true);
+    command.setUint32(56, 6, true);
+    command.setFloat32(64, 1, true);
+    command.setFloat32(68, 0.5, true);
+    command.setFloat32(72, 0.25, true);
+    command.setFloat32(92, 0.75, true); // PartVars opacity
+
+    const vertexBytes = new Uint8Array(4 * 16);
+    const vertices = new DataView(vertexBytes.buffer);
+    [
+      [-1, -1, 0, 0],
+      [1, -1, 1, 0],
+      [1, 1, 1, 1],
+      [-1, 1, 0, 1],
+    ].forEach((vertex, index) => {
+      const offset = index * 16;
+      vertex.forEach((value, component) => vertices.setFloat32(offset + component * 4, value, true));
+    });
+
+    const indexBytes = new Uint8Array(6 * 4);
+    const indices = new DataView(indexBytes.buffer);
+    [0, 1, 2, 0, 2, 3].forEach((value, index) => indices.setUint32(index * 4, value, true));
+
+    const texture = decodeInochiTextureRgba(
+      'fixture-texture',
+      1,
+      1,
+      4,
+      new Uint8Array([255, 255, 255, 255]),
+    );
+    const frame = convertInochiDrawListToCharacterFrame({
+      useBaseVertex: true,
+      commandCount: 1,
+      commandBytes,
+      vertexBytes,
+      indexBytes,
+      allocations: [{ vtxOffset: 0, idxOffset: 0, idxCount: 6, vtxCount: 4, allocId: 42 }],
+    }, new Map([[0x700, texture]]));
+
+    expect(frame.textures).toEqual([texture]);
+    expect(frame.batches).toHaveLength(1);
+    expect(frame.batches[0]).toMatchObject({
+      id: 'inochi-0-42',
+      textureId: 'fixture-texture',
+      triangles: [0, 1, 2, 0, 2, 3],
+      tint: '#ff8040',
+      alpha: 0.75,
+      blendMode: 'normal',
+    });
+    expect(frame.batches[0]?.vertices).toEqual([
+      -1, -1, 0, 0,
+      1, -1, 1, 0,
+      1, 1, 1, 1,
+      -1, 1, 0, 1,
+    ]);
+  });
+
+  it('fails closed for mask/composite states instead of flattening them incorrectly', () => {
+    const commandBytes = new Uint8Array(INOCHI_DRAW_COMMAND_STRIDE);
+    const command = new DataView(commandBytes.buffer);
+    command.setUint32(0, 0x700, true);
+    command.setUint32(32, 1, true); // DEFINE_MASK
+    command.setUint32(44, 1, true);
+
+    expect(() => convertInochiDrawListToCharacterFrame({
+      useBaseVertex: true,
+      commandCount: 1,
+      commandBytes,
+      vertexBytes: new Uint8Array(),
+      indexBytes: new Uint8Array(),
+      allocations: [{ vtxOffset: 0, idxOffset: 0, idxCount: 0, vtxCount: 0, allocId: 1 }],
+    }, new Map([[0x700, decodeInochiTextureRgba('t', 1, 1, 4, new Uint8Array([255, 255, 255, 255]))]])))
+      .toThrow(/mask\/composite support is required/i);
   });
 });

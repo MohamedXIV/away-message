@@ -1,4 +1,5 @@
 import { SemanticPuppet } from './SemanticPuppet';
+import type { CharacterMeshFrame } from '../../world/characterRenderer';
 
 export type AwayPuppetToolName =
   | 'puppet.open'
@@ -27,6 +28,7 @@ export interface AwayPuppetToolService {
 
 export interface AwayPuppetSession {
   readonly puppet: SemanticPuppet;
+  readonly renderFrame?: (deltaMs: number) => CharacterMeshFrame;
   dispose(): void;
 }
 

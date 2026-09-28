@@ -8,6 +8,13 @@ import {
   type InochiWebSourceLoader,
 } from './InochiWebLifecycle';
 import { createAwayPuppetToolService, type AwayPuppetToolService } from './McpSemanticTools';
+import {
+  copyInochiDrawList,
+  convertInochiDrawListToCharacterFrame,
+  decodeInochiTextureRgba,
+  type InochiDrawListRawApi,
+} from './InochiDrawListBridge';
+import type { CharacterMeshFrame, CharacterMeshTexture } from '../../world/characterRenderer';
 
 export interface InochiWasmRuntimeExports extends InochiWebBootstrapExports {
   readonly memory: WebAssembly.Memory;
@@ -29,6 +36,19 @@ export interface InochiWasmRuntimeExports extends InochiWebBootstrapExports {
   in_as_part?(pointer: number): number | bigint;
   in_texture_cache_get_texture?(pointer: number, slot: number): number | bigint;
   in_part_set_texture?(pointer: number, attachment: number, texturePointer: number): boolean;
+  in_puppet_update?(pointer: number, deltaSeconds: number): void;
+  in_puppet_draw?(pointer: number, deltaSeconds: number): void;
+  in_puppet_get_drawlist?(pointer: number): number | bigint;
+  in_drawlist_get_use_base_vertex?(pointer: number): boolean;
+  in_drawlist_get_commands?(pointer: number, countPointer: number): number | bigint;
+  in_drawlist_get_vertex_data?(pointer: number, byteCountPointer: number): number | bigint;
+  in_drawlist_get_index_data?(pointer: number, byteCountPointer: number): number | bigint;
+  in_drawlist_get_allocations?(pointer: number, countPointer: number): number | bigint;
+  in_texture_cache_get_size?(pointer: number): number;
+  in_texture_get_width?(pointer: number): number;
+  in_texture_get_height?(pointer: number): number;
+  in_texture_get_channels?(pointer: number): number;
+  in_texture_get_pixels?(pointer: number): number | bigint;
 }
 
 function requirePointer(pointer: number | bigint, operation: string): number {
@@ -196,6 +216,72 @@ export function createInochiWasmRuntimeModule(exports: InochiWasmRuntimeExports)
           this.disposed = true;
           throw error;
         }
+      }
+
+      captureRenderFrame(deltaMs: number): CharacterMeshFrame {
+        if (this.disposed) throw new Error('Inochi WASM puppet is disposed');
+        if (!Number.isFinite(deltaMs) || deltaMs < 0) throw new Error('Inochi render delta must be a finite non-negative number');
+        const required = [
+          exports.in_puppet_update,
+          exports.in_puppet_draw,
+          exports.in_puppet_get_drawlist,
+          exports.in_drawlist_get_use_base_vertex,
+          exports.in_drawlist_get_commands,
+          exports.in_drawlist_get_vertex_data,
+          exports.in_drawlist_get_index_data,
+          exports.in_drawlist_get_allocations,
+          exports.in_puppet_get_texture_cache,
+          exports.in_texture_cache_get_size,
+          exports.in_texture_cache_get_texture,
+          exports.in_texture_get_width,
+          exports.in_texture_get_height,
+          exports.in_texture_get_channels,
+          exports.in_texture_get_pixels,
+        ];
+        if (required.some((candidate) => typeof candidate !== 'function')) {
+          throw new Error('Renderer capture is unavailable through this Inochi WASM build');
+        }
+
+        const deltaSeconds = deltaMs / 1000;
+        exports.in_puppet_update!(this.pointer, deltaSeconds);
+        exports.in_puppet_draw!(this.pointer, deltaSeconds);
+        const drawListPointer = requirePointer(exports.in_puppet_get_drawlist!(this.pointer), 'draw-list lookup');
+
+        const raw: InochiDrawListRawApi = {
+          memory: exports.memory,
+          alloc: (bytes) => allocate(exports, bytes, 'draw-list scratch allocation'),
+          free: (ptr) => exports.nu_free(ptr),
+          getUseBaseVertex: (ptr) => exports.in_drawlist_get_use_base_vertex!(ptr),
+          getCommands: (ptr, out) => Number(exports.in_drawlist_get_commands!(ptr, out)),
+          getVertexData: (ptr, out) => Number(exports.in_drawlist_get_vertex_data!(ptr, out)),
+          getIndexData: (ptr, out) => Number(exports.in_drawlist_get_index_data!(ptr, out)),
+          getAllocations: (ptr, out) => Number(exports.in_drawlist_get_allocations!(ptr, out)),
+        };
+        const copied = copyInochiDrawList(raw, drawListPointer);
+
+        const cachePointer = requirePointer(exports.in_puppet_get_texture_cache!(this.pointer), 'texture cache lookup');
+        const textureCount = exports.in_texture_cache_get_size!(cachePointer);
+        if (!Number.isSafeInteger(textureCount) || textureCount < 0) throw new Error('Inochi texture cache returned an invalid size');
+
+        const textures = new Map<number, CharacterMeshTexture>();
+        for (let slot = 0; slot < textureCount; slot += 1) {
+          const texturePointer = requirePointer(exports.in_texture_cache_get_texture!(cachePointer, slot), `texture ${slot} lookup`);
+          const width = exports.in_texture_get_width!(texturePointer);
+          const height = exports.in_texture_get_height!(texturePointer);
+          const channels = exports.in_texture_get_channels!(texturePointer);
+          if (!Number.isSafeInteger(width) || width <= 0 || !Number.isSafeInteger(height) || height <= 0) {
+            throw new Error(`Inochi texture ${slot} has invalid dimensions`);
+          }
+          if (![1, 2, 3, 4].includes(channels)) throw new Error(`Inochi texture ${slot} has unsupported channel count ${channels}`);
+          const byteLength = width * height * channels;
+          if (!Number.isSafeInteger(byteLength) || byteLength <= 0) throw new Error(`Inochi texture ${slot} byte length overflow`);
+          const pixelsPointer = requirePointer(exports.in_texture_get_pixels!(texturePointer), `texture ${slot} pixels`);
+          if (pixelsPointer + byteLength > exports.memory.buffer.byteLength) throw new Error(`Inochi texture ${slot} pixels exceed WASM memory`);
+          const pixels = new Uint8Array(new Uint8Array(exports.memory.buffer, pixelsPointer, byteLength));
+          textures.set(texturePointer, decodeInochiTextureRgba(`inochi-texture-${slot}`, width, height, channels, pixels));
+        }
+
+        return convertInochiDrawListToCharacterFrame(copied, textures);
       }
 
       assignPartTexture(nodeName: string, textureIndex: number, attachment: number): void {

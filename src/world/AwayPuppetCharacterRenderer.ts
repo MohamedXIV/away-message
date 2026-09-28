@@ -72,6 +72,7 @@ export function createAwayPuppetCharacterSessionLoader(
     return {
       puppet: session.puppet,
       motion: resolveMotion(profileId),
+      ...(session.renderFrame ? { renderFrame: session.renderFrame } : {}),
       dispose: () => session.dispose(),
     };
   };
