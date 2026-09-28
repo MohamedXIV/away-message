@@ -22,6 +22,7 @@ export interface InochiWebRuntimePuppet {
   readonly parameters: readonly InochiWebRuntimeParameter[];
   readonly root: InochiWebRuntimeNode | null;
   assignPartTexture?(nodeName: string, textureIndex: number, attachment: number): void;
+  assignPartTint?(nodeName: string, color: string): void;
   captureRenderFrame?(deltaMs: number): CharacterMeshFrame;
   free(): void;
 }
@@ -104,9 +105,12 @@ class InochiWebRawPuppetAdapter implements RawPuppetAdapter {
     node.enabled = visible;
   }
 
-  setNodeTint(id: string, _color: string): void {
+  setNodeTint(id: string, color: string): void {
     if (!this.nodes.has(id)) throw new Error(`Unknown Inochi node: ${id}`);
-    throw new Error('Node tint is unavailable through the pinned Inochi Web runtime adapter');
+    if (typeof this.puppet.assignPartTint !== 'function') {
+      throw new Error('Node tint is unavailable through this Inochi Web runtime build');
+    }
+    this.puppet.assignPartTint(id, color);
   }
 
   assignSlot(nodeId: string, assetId: string): void {

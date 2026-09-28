@@ -4,16 +4,19 @@ on:
   push:
     branches:
       - feat/away-puppet-tooling
+      - feat/25-character-renderer
     paths:
       - '.github/workflows/inochi-wasm-hookset-probe.yml'
       - 'scripts/probe-inochi-wasm-load.ts'
       - 'scripts/probe-inochi-wasm-draw-list.ts'
       - 'scripts/probe-inochi-wasm-slot.ts'
+      - 'scripts/probe-inochi-wasm-tint.ts'
       - 'scripts/verify-inochi-wasm-exports.mjs'
       - 'src/tooling/away-puppet/InochiDrawListBridge.ts'
       - 'src/tooling/away-puppet/InochiWebModuleBootstrap.ts'
       - 'src/tooling/away-puppet/InochiWasmDiagnostics.ts'
       - 'src/tooling/away-puppet/InochiWasmRuntimeModule.ts'
+      - 'src/tooling/away-puppet/InochiWebLifecycle.ts'
       - 'tests/fixtures/away-puppet/runtime-two-parameter.inp'
       - 'tests/unit/InochiWasmLoadProbe.test.ts'
   workflow_dispatch:
@@ -103,6 +106,31 @@ jobs:
                   if (n_self.textures[attachment])
                       n_self.textures[attachment].release();
                   n_self.textures[attachment] = next;
+                  return true;
+              }
+              return false;
+          }
+
+          /**
+              Copies the Part multiply tint into caller-owned scalar outputs.
+          */
+          void in_part_get_tint(in_part_t* self, float* r, float* g, float* b) {
+              if (auto n_self = cast(Part)self) {
+                  if (r) *r = n_self.tint.x;
+                  if (g) *g = n_self.tint.y;
+                  if (b) *b = n_self.tint.z;
+              }
+          }
+
+          /**
+              Replaces the Part multiply tint. Rendering consumes this value
+              through PartVars on the next draw-list build.
+          */
+          bool in_part_set_tint(in_part_t* self, float r, float g, float b) {
+              if (auto n_self = cast(Part)self) {
+                  n_self.tint.x = clamp(r, 0, 1);
+                  n_self.tint.y = clamp(g, 0, 1);
+                  n_self.tint.z = clamp(b, 0, 1);
                   return true;
               }
               return false;
@@ -246,6 +274,9 @@ jobs:
 
       - name: Prove real part texture swap and restore on upstream Ada
         run: npx tsx scripts/probe-inochi-wasm-slot.ts '${{ steps.wasm.outputs.path }}' .tmp/inochi2d/examples/ada-static.inx
+
+      - name: Prove real part tint swap and restore on upstream Ada
+        run: npx tsx scripts/probe-inochi-wasm-tint.ts '${{ steps.wasm.outputs.path }}' .tmp/inochi2d/examples/ada-static.inx
 
       - name: Verify checked-in runtime puppet fixture digest
         shell: bash

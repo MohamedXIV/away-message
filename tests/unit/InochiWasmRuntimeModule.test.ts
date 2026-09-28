@@ -13,6 +13,9 @@ class FakeWasmExports {
   private readonly enabled = new Map<number, boolean>([[400, true], [401, true]]);
   readonly freedPuppets: number[] = [];
   readonly loadedBytes: number[][] = [];
+  readonly tintAssignments: Array<{ partPointer: number; r: number; g: number; b: number }> = [];
+  readonly textureAssignments: Array<{ partPointer: number; attachment: number; texturePointer: number }> = [];
+  private readonly partTextures = new Map<string, number>();
 
   constructor() {
     this.names.set(300, this.writeCString('Body Mass'));
@@ -73,6 +76,22 @@ class FakeWasmExports {
     const array = this.alloc(children.length * 4);
     children.forEach((child, index) => new DataView(this.memory.buffer).setUint32(array + index * 4, child, true));
     return array;
+  }
+
+  in_as_part(pointer: number): number { return pointer === 401 ? 501 : 0; }
+  in_puppet_get_texture_cache(_pointer: number): number { return 600; }
+  in_texture_cache_get_texture(_pointer: number, slot: number): number { return 700 + slot; }
+  in_part_get_texture(partPointer: number, attachment: number): number {
+    return this.partTextures.get(`${partPointer}:${attachment}`) ?? 0;
+  }
+  in_part_set_texture(partPointer: number, attachment: number, texturePointer: number): boolean {
+    this.partTextures.set(`${partPointer}:${attachment}`, texturePointer);
+    this.textureAssignments.push({ partPointer, attachment, texturePointer });
+    return true;
+  }
+  in_part_set_tint(partPointer: number, r: number, g: number, b: number): boolean {
+    this.tintAssignments.push({ partPointer, r, g, b });
+    return true;
   }
 }
 
@@ -167,6 +186,25 @@ const metadata: AwayRigMetadata = {
 };
 
 describe('corrected low-level Inochi WASM runtime module (#34)', () => {
+  it('maps runtime part slot/tint mutations through proven CFFI extensions with readback', () => {
+    const exports = new FakeWasmExports();
+    const module = createInochiWasmRuntimeModule(exports);
+    const puppet = new module.Puppet(new Uint8Array([1, 2, 3]).buffer);
+
+    puppet.assignPartTexture?.('Hair', 3, 0);
+    expect(exports.textureAssignments).toEqual([{ partPointer: 501, attachment: 0, texturePointer: 703 }]);
+
+    puppet.assignPartTint?.('Hair', '#336699');
+    expect(exports.tintAssignments).toHaveLength(1);
+    expect(exports.tintAssignments[0]).toMatchObject({ partPointer: 501 });
+    expect(exports.tintAssignments[0]?.r).toBeCloseTo(0x33 / 255);
+    expect(exports.tintAssignments[0]?.g).toBeCloseTo(0x66 / 255);
+    expect(exports.tintAssignments[0]?.b).toBeCloseTo(0x99 / 255);
+
+    expect(() => puppet.assignPartTint?.('Hair', '#fff')).toThrow(/#RRGGBB/i);
+    puppet.free();
+  });
+
   it('loads real bytes through CFFI shape and exposes semantic wrapper-compatible parameters/nodes', () => {
     const exports = new FakeWasmExports();
     const module = createInochiWasmRuntimeModule(exports);

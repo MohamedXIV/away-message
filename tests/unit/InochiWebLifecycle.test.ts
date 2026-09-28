@@ -21,7 +21,9 @@ const metadata: AwayRigMetadata = {
       },
     },
   },
-  tints: {},
+  tints: {
+    hair: { nodeIds: ['NodeHairFront'] },
+  },
   expressions: {},
   poses: {},
 };
@@ -47,6 +49,7 @@ class FakeNode {
 class FakePuppet {
   static freeCount = 0;
   static slotAssignments: Array<{ nodeName: string; textureIndex: number; attachment: number }> = [];
+  static tintAssignments: Array<{ nodeName: string; color: string }> = [];
   readonly parameters = [new FakeParameter('ParamBodyMass', 0)];
   readonly root = new FakeNode('Root', [new FakeNode('NodeHairFront')]);
   readonly name = 'Fixture';
@@ -57,6 +60,9 @@ class FakePuppet {
   draw(): void {}
   assignPartTexture(nodeName: string, textureIndex: number, attachment: number): void {
     FakePuppet.slotAssignments.push({ nodeName, textureIndex, attachment });
+  }
+  assignPartTint(nodeName: string, color: string): void {
+    FakePuppet.tintAssignments.push({ nodeName, color });
   }
   free(): void { FakePuppet.freeCount += 1; }
 }
@@ -106,7 +112,10 @@ describe('Inochi Web production lifecycle bridge (#34)', () => {
       { nodeName: 'NodeHairFront', textureIndex: 3, attachment: 0 },
     ]);
     expect(() => service.call('away.assign_slot', { slot: 'hair.front', assetId: 'hair.unknown' })).toThrow(/unknown slot asset/i);
-    expect(() => service.call('part.set_tint', { channel: 'hair', color: '#fff' })).toThrow();
+
+    FakePuppet.tintAssignments = [];
+    expect(service.call('part.set_tint', { channel: 'hair', color: '#336699' })).toEqual({ ok: true });
+    expect(FakePuppet.tintAssignments).toEqual([{ nodeName: 'NodeHairFront', color: '#336699' }]);
   });
 
   it('frees a newly loaded raw puppet when metadata validation fails', () => {
