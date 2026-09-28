@@ -23,11 +23,18 @@ import { EnvironmentManager } from './environment/EnvironmentManager';
 import { audioService, type AudioService } from '../../audio/AudioService';
 import { mapViewCoordinatesToAudioPosition } from '../../audio/spatialMapping';
 import type { SpatialAudioSourceDef } from '../../audio/types';
+import {
+  destroyWorldSceneCharacterMounts,
+  syncWorldSceneCharacterMounts,
+  updateWorldSceneCharacterMounts,
+  type WorldSceneCharacterMount,
+} from './WorldSceneCharacters';
 
 export interface WorldSceneInitData {
   projection: WorldSceneProjection;
   onIntent?: (intent: WorldInteractionIntent) => void;
   visualMode?: 'production' | 'technical-fixture';
+  characters?: readonly WorldSceneCharacterMount[];
 }
 
 export function resolveSceneBackgroundTexture(
@@ -91,6 +98,7 @@ export class WorldScene extends Phaser.Scene {
   private visualMode: 'production' | 'technical-fixture' = 'production';
   private environmentManager?: EnvironmentManager;
   private audioHandles: Map<string, { handle: string; eventId: string }> = new Map();
+  private characterMounts: readonly WorldSceneCharacterMount[] = [];
 
   // Visual Display Layers
   private layerBackground?: Phaser.GameObjects.Container;
@@ -138,6 +146,7 @@ export class WorldScene extends Phaser.Scene {
     if (data?.visualMode) {
       this.visualMode = data.visualMode;
     }
+    this.characterMounts = data?.characters ?? [];
   }
 
   /**
@@ -199,6 +208,7 @@ export class WorldScene extends Phaser.Scene {
     this.registerFixtureMotionTargets();
 
     this.setupHotspots(width, height);
+    this.syncCharacterMounts(width, height);
     this.setupPointerTracking();
 
     const initialCamera = resolveProjectionCameraTarget(this.projection, width, height);
@@ -218,6 +228,7 @@ export class WorldScene extends Phaser.Scene {
 
   public override update(time: number, delta: number): void {
     this.environmentManager?.update(time, delta);
+    updateWorldSceneCharacterMounts(this.characterMounts, delta);
   }
 
   /**
@@ -539,6 +550,7 @@ export class WorldScene extends Phaser.Scene {
     }
 
     this.setupHotspots(this.scale.width, this.scale.height);
+    this.syncCharacterMounts(this.scale.width, this.scale.height);
 
     const cameraTarget = resolveProjectionCameraTarget(
       newProjection,
@@ -586,6 +598,7 @@ export class WorldScene extends Phaser.Scene {
     };
 
     this.setupHotspots(width, height);
+    this.syncCharacterMounts(width, height);
     this.refreshRenderTextureReflection();
     this.environmentManager?.handleResize(width, height);
   }
@@ -744,6 +757,12 @@ export class WorldScene extends Phaser.Scene {
       audioService.stop(handle, 0);
     }
     this.audioHandles.clear();
+    destroyWorldSceneCharacterMounts(this.characterMounts);
+    this.characterMounts = [];
+  }
+
+  private syncCharacterMounts(width: number, height: number): void {
+    syncWorldSceneCharacterMounts(this.projection, width, height, this.characterMounts);
   }
 
   private handleDestroy(): void {
