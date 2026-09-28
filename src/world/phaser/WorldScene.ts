@@ -258,13 +258,29 @@ export class WorldScene extends Phaser.Scene {
   /** Debug-only evidence surface for #25 browser/performance verification. */
   public getCharacterRuntimeStats(): {
     actorCount: number;
+    surfaceCount: number;
+    meshCount: number;
+    surfaceNames: string[];
     sampleCount: number;
     averageUpdateMs: number;
     maxUpdateMs: number;
     actualFps: number;
   } {
+    const surfaces = (this.layerActors?.list ?? []).filter(
+      (object) => typeof object.name === 'string' && object.name.startsWith('away-puppet-surface-'),
+    );
+    const meshCount = surfaces.reduce((total, object) => {
+      const children = (object as Phaser.GameObjects.Container).list ?? [];
+      return total + children.filter(
+        (child) => typeof child.name === 'string' && child.name.startsWith('away-puppet-mesh-'),
+      ).length;
+    }, 0);
+
     return {
       actorCount: this.characterMounts.length,
+      surfaceCount: surfaces.length,
+      meshCount,
+      surfaceNames: surfaces.map((surface) => surface.name),
       sampleCount: this.characterUpdateSamples,
       averageUpdateMs: this.characterUpdateSamples > 0
         ? this.characterUpdateTotalMs / this.characterUpdateSamples

@@ -26,6 +26,9 @@ export const PhysicalWorldHost: React.FC<PhysicalWorldHostProps> = ({
   const [lastIntent, setLastIntent] = useState<WorldInteractionIntent | null>(null);
   const [characterStats, setCharacterStats] = useState<{
     actorCount: number;
+    surfaceCount: number;
+    meshCount: number;
+    surfaceNames: string[];
     sampleCount: number;
     averageUpdateMs: number;
     maxUpdateMs: number;
@@ -308,7 +311,8 @@ export const PhysicalWorldHost: React.FC<PhysicalWorldHostProps> = ({
               data-testid="away-puppet-runtime-stats"
               className="pt-1.5 border-t border-slate-800 text-[10px] text-cyan-200 font-mono"
             >
-              Away Puppet: {characterStats.actorCount} actors · {characterStats.actualFps.toFixed(1)} FPS ·
+              Away Puppet: {characterStats.actorCount} actors · {characterStats.surfaceCount} surfaces ·
+              {' '}{characterStats.meshCount} meshes · {characterStats.actualFps.toFixed(1)} FPS ·
               {' '}update avg {characterStats.averageUpdateMs.toFixed(3)} ms · max {characterStats.maxUpdateMs.toFixed(3)} ms ·
               {' '}{characterStats.sampleCount} samples
             </div>
