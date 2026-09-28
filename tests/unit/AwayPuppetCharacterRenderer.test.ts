@@ -160,6 +160,51 @@ describe('AwayPuppetCharacterRenderer (#25)', () => {
     });
   });
 
+  it('drives bounded blink, breathing, and secondary motion through semantic morphs', async () => {
+    const events: string[] = [];
+    const renderer = new AwayPuppetCharacterRenderer(
+      (): AwayPuppetCharacterSession => ({
+        puppet: createSemanticSpy(events),
+        motion: {
+          idleMorphs: [
+            { name: 'idle.breath', center: 0, amplitude: 0.08, periodMs: 2000 },
+            { name: 'secondary.hair', center: 0, amplitude: 0.12, periodMs: 1400, phase: 0.5 },
+            { name: 'secondary.cloth', center: 0, amplitude: 0.06, periodMs: 1800, phase: 1 },
+          ],
+          blink: {
+            morphName: 'face.blink',
+            intervalMs: 4000,
+            durationMs: 160,
+            openValue: 0,
+            closedValue: 1,
+          },
+        },
+        dispose: () => undefined,
+      }),
+      createSurfaceSpy([], [], { value: 0 }),
+    );
+
+    await renderer.load('profile.generic-production-fixture');
+    renderer.update(80);
+    renderer.update(920);
+
+    const values = events.map((event) => {
+      const [, raw] = event.split('=');
+      return Number(raw);
+    });
+    expect(events.some((event) => event.startsWith('morph:face.blink='))).toBe(true);
+    expect(events.some((event) => event.startsWith('morph:idle.breath='))).toBe(true);
+    expect(events.some((event) => event.startsWith('morph:secondary.hair='))).toBe(true);
+    expect(events.some((event) => event.startsWith('morph:secondary.cloth='))).toBe(true);
+    expect(values.every(Number.isFinite)).toBe(true);
+    expect(values.filter((_, index) => events[index]!.startsWith('morph:idle.breath='))
+      .every((value) => Math.abs(value) <= 0.080001)).toBe(true);
+    expect(values.filter((_, index) => events[index]!.startsWith('morph:secondary.hair='))
+      .every((value) => Math.abs(value) <= 0.120001)).toBe(true);
+    expect(values.filter((_, index) => events[index]!.startsWith('morph:secondary.cloth='))
+      .every((value) => Math.abs(value) <= 0.060001)).toBe(true);
+  });
+
   it('rejects mutation before a profile is loaded and invalid frame deltas', async () => {
     const renderer = new AwayPuppetCharacterRenderer(
       () => ({
