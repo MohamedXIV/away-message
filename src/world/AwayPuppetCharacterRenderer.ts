@@ -15,8 +15,30 @@ export type AwayPuppetSemanticController = Pick<
   | 'setPartVisibility'
 >;
 
+export interface SemanticIdleMorph {
+  readonly name: string;
+  readonly center: number;
+  readonly amplitude: number;
+  readonly periodMs: number;
+  readonly phase?: number;
+}
+
+export interface SemanticBlinkMotion {
+  readonly morphName: string;
+  readonly intervalMs: number;
+  readonly durationMs: number;
+  readonly closedValue: number;
+  readonly openValue: number;
+}
+
+export interface AwayPuppetMotionProfile {
+  readonly idleMorphs?: readonly SemanticIdleMorph[];
+  readonly blink?: SemanticBlinkMotion;
+}
+
 export interface AwayPuppetCharacterSession {
   readonly puppet: AwayPuppetSemanticController;
+  readonly motion?: AwayPuppetMotionProfile;
   dispose(): void;
 }
 
@@ -40,6 +62,7 @@ export interface CharacterRenderSurface {
 export class AwayPuppetCharacterRenderer implements CharacterRenderer {
   private session: AwayPuppetCharacterSession | null = null;
   private destroyed = false;
+  private motionElapsedMs = 0;
 
   constructor(
     private readonly loadSession: AwayPuppetCharacterSessionLoader,
@@ -53,6 +76,7 @@ export class AwayPuppetCharacterRenderer implements CharacterRenderer {
 
     const previous = this.session;
     this.session = next;
+    this.motionElapsedMs = 0;
     previous?.dispose();
   }
 
@@ -108,7 +132,32 @@ export class AwayPuppetCharacterRenderer implements CharacterRenderer {
     if (!Number.isFinite(deltaMs) || deltaMs < 0) {
       throw new Error('Character renderer delta must be a finite non-negative number');
     }
+    this.motionElapsedMs += deltaMs;
+    this.applyMotion(this.requireSession(), this.motionElapsedMs);
     this.surface.update(deltaMs);
+  }
+
+  private applyMotion(session: AwayPuppetCharacterSession, elapsedMs: number): void {
+    for (const motion of session.motion?.idleMorphs ?? []) {
+      if (!Number.isFinite(motion.periodMs) || motion.periodMs <= 0) continue;
+      const phase = (elapsedMs / motion.periodMs) * Math.PI * 2 + (motion.phase ?? 0);
+      const value = motion.center + Math.sin(phase) * Math.abs(motion.amplitude);
+      session.puppet.setMorph(motion.name, value);
+    }
+
+    const blink = session.motion?.blink;
+    if (!blink || blink.intervalMs <= 0 || blink.durationMs <= 0) return;
+
+    const cycleMs = elapsedMs % blink.intervalMs;
+    const halfBlink = blink.durationMs / 2;
+    let value = blink.openValue;
+    if (cycleMs < blink.durationMs) {
+      const progress = cycleMs <= halfBlink
+        ? cycleMs / halfBlink
+        : (blink.durationMs - cycleMs) / halfBlink;
+      value = blink.openValue + (blink.closedValue - blink.openValue) * progress;
+    }
+    session.puppet.setMorph(blink.morphName, value);
   }
 
   destroy(): void {
