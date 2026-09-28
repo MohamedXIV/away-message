@@ -6,6 +6,7 @@ import {
 } from '../../src/world/characterRenderer';
 import {
   AwayPuppetCharacterRenderer,
+  createAwayPuppetCharacterSessionLoader,
   type AwayPuppetCharacterSession,
   type AwayPuppetSemanticController,
   type CharacterRenderSurface,
@@ -203,6 +204,60 @@ describe('AwayPuppetCharacterRenderer (#25)', () => {
       .every((value) => Math.abs(value) <= 0.120001)).toBe(true);
     expect(values.filter((_, index) => events[index]!.startsWith('morph:secondary.cloth='))
       .every((value) => Math.abs(value) <= 0.060001)).toBe(true);
+  });
+
+
+  it('opens real Away Puppet lifecycle sessions through injected generic profile mapping', async () => {
+    const opened: string[] = [];
+    const disposed: string[] = [];
+    const puppet = createSemanticSpy([]);
+    const loader = createAwayPuppetCharacterSessionLoader(
+      {
+        open: (source) => {
+          opened.push(source);
+          return {
+            puppet: puppet as never,
+            dispose: () => disposed.push(source),
+          };
+        },
+      },
+      (profileId) => `/puppets/${profileId}.inp2`,
+      () => ({
+        idleMorphs: [{ name: 'idle.breath', center: 0, amplitude: 0.05, periodMs: 2000 }],
+      }),
+    );
+
+    const renderer = new AwayPuppetCharacterRenderer(
+      loader,
+      createSurfaceSpy([], [], { value: 0 }),
+    );
+    await renderer.load('generic-adult-a');
+    expect(opened).toEqual(['/puppets/generic-adult-a.inp2']);
+
+    renderer.destroy();
+    expect(disposed).toEqual(['/puppets/generic-adult-a.inp2']);
+  });
+
+  it('disposes a session that resolves after the renderer was destroyed', async () => {
+    let resolveSession!: (session: AwayPuppetCharacterSession) => void;
+    const disposed: string[] = [];
+    const pending = new Promise<AwayPuppetCharacterSession>((resolve) => {
+      resolveSession = resolve;
+    });
+    const renderer = new AwayPuppetCharacterRenderer(
+      () => pending,
+      createSurfaceSpy([], [], { value: 0 }),
+    );
+
+    const load = renderer.load('profile.slow');
+    renderer.destroy();
+    resolveSession({
+      puppet: createSemanticSpy([]),
+      dispose: () => disposed.push('profile.slow'),
+    });
+
+    await expect(load).rejects.toThrow(/destroyed/i);
+    expect(disposed).toEqual(['profile.slow']);
   });
 
   it('rejects mutation before a profile is loaded and invalid frame deltas', async () => {
