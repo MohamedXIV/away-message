@@ -2,9 +2,18 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   PhaserCharacterSurface,
   resolveCharacterAnchorTransform,
+  toPhaserMeshIndices,
 } from '../../src/world/phaser/PhaserCharacterSurface';
 
 describe('PhaserCharacterSurface (#25)', () => {
+  it('converts renderer-neutral triangles to Phaser Mesh2D page-index tuples', () => {
+    expect(toPhaserMeshIndices([0, 1, 2, 0, 2, 3])).toEqual([
+      0, 1, 2, 0,
+      0, 2, 3, 0,
+    ]);
+    expect(() => toPhaserMeshIndices([0, 1])).toThrow(/complete triples/i);
+  });
+
   it('resolves normalized authored CharacterAnchor coordinates into scene pixels', () => {
     expect(resolveCharacterAnchorTransform({
       id: 'fixture_customer',
