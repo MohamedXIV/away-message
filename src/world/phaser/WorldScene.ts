@@ -259,6 +259,7 @@ export class WorldScene extends Phaser.Scene {
   public getCharacterRuntimeStats(): {
     actorCount: number;
     surfaceCount: number;
+    visibleSurfaceCount: number;
     meshCount: number;
     surfaceNames: string[];
     sampleCount: number;
@@ -279,6 +280,7 @@ export class WorldScene extends Phaser.Scene {
     return {
       actorCount: this.characterMounts.length,
       surfaceCount: surfaces.length,
+      visibleSurfaceCount: surfaces.filter((surface) => surface.visible).length,
       meshCount,
       surfaceNames: surfaces.map((surface) => surface.name),
       sampleCount: this.characterUpdateSamples,

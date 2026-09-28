@@ -119,7 +119,8 @@ It requires:
 - real Mesh2D children (at least 30 for the representative group);
 - non-zero runtime samples/FPS;
 - logged average/max character update cost;
-- stable surface identities across View A1 -> A2 -> A1.
+- stable surface identities across View A1 -> A2 -> A1;
+- authored-anchor visibility: 3 visible surfaces in A1, 0 in anchorless A2, then the same 3 surfaces visible again in A1.
 
 The test logs one line beginning with:
 

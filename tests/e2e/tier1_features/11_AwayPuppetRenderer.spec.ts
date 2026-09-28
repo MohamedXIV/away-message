@@ -3,6 +3,7 @@ import { test, expect } from '@playwright/test';
 interface CharacterRuntimeStats {
   actorCount: number;
   surfaceCount: number;
+  visibleSurfaceCount: number;
   meshCount: number;
   surfaceNames: string[];
   sampleCount: number;
@@ -44,6 +45,7 @@ test.describe('Issue #25 Away Puppet Phaser browser proof', () => {
 
     expect(before.actorCount).toBe(3);
     expect(before.surfaceCount).toBe(3);
+    expect(before.visibleSurfaceCount).toBe(3);
     expect(before.meshCount).toBeGreaterThanOrEqual(30);
     expect(before.surfaceNames).toHaveLength(3);
     expect(new Set(before.surfaceNames).size).toBe(3);
@@ -55,10 +57,18 @@ test.describe('Issue #25 Away Puppet Phaser browser proof', () => {
     console.log('[away-puppet-performance]', JSON.stringify(before));
 
     await page.getByRole('button', { name: /View A2/ }).click();
+    await expect(page.getByTestId('world-fixture-controls')).toContainText('View A2');
     await expect.poll(async () => (await readCharacterStats(page)).surfaceNames).toEqual(before.surfaceNames);
+    await expect.poll(async () => (await readCharacterStats(page)).visibleSurfaceCount, {
+      message: 'authored view A2 has no character anchors, so retained puppet surfaces must hide',
+    }).toBe(0);
 
     await page.getByRole('button', { name: /View A1/ }).click();
+    await expect(page.getByTestId('world-fixture-controls')).toContainText('View A1');
     await expect.poll(async () => (await readCharacterStats(page)).surfaceNames).toEqual(before.surfaceNames);
+    await expect.poll(async () => (await readCharacterStats(page)).visibleSurfaceCount, {
+      message: 'returning to authored view A1 must remount the retained puppet surfaces',
+    }).toBe(3);
 
     const after = await readCharacterStats(page);
     expect(after.surfaceCount).toBe(3);

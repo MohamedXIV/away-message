@@ -223,10 +223,11 @@ export const App: React.FC = () => {
             visualMode="technical-fixture"
             onIntent={(intent) => {
               if (intent.type === 'VIEW_TRANSITION' && intent.targetViewId) {
-                setFixtureProjection((prev) => ({
-                  ...prev,
-                  viewId: intent.targetViewId!,
-                  viewName: intent.targetViewId === 'view_a2' ? 'View A2 (Desk Focus)' : 'View A1 (Overview)',
+                // Rebuild the authored projection instead of mutating only its
+                // label/id. Anchors, assets and space/view data must all agree
+                // with the active authored view so character visibility is real.
+                setFixtureProjection(createTechnicalFixtureProjection({
+                  viewId: intent.targetViewId,
                 }));
               }
             }}

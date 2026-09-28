@@ -27,6 +27,7 @@ export const PhysicalWorldHost: React.FC<PhysicalWorldHostProps> = ({
   const [characterStats, setCharacterStats] = useState<{
     actorCount: number;
     surfaceCount: number;
+    visibleSurfaceCount: number;
     meshCount: number;
     surfaceNames: string[];
     sampleCount: number;
@@ -312,7 +313,8 @@ export const PhysicalWorldHost: React.FC<PhysicalWorldHostProps> = ({
               className="pt-1.5 border-t border-slate-800 text-[10px] text-cyan-200 font-mono"
             >
               Away Puppet: {characterStats.actorCount} actors · {characterStats.surfaceCount} surfaces ·
-              {' '}{characterStats.meshCount} meshes · {characterStats.actualFps.toFixed(1)} FPS ·
+              {' '}{characterStats.visibleSurfaceCount} visible · {characterStats.meshCount} meshes ·
+              {' '}{characterStats.actualFps.toFixed(1)} FPS ·
               {' '}update avg {characterStats.averageUpdateMs.toFixed(3)} ms · max {characterStats.maxUpdateMs.toFixed(3)} ms ·
               {' '}{characterStats.sampleCount} samples
             </div>
