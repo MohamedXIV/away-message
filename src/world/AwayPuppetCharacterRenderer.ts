@@ -180,12 +180,14 @@ export class AwayPuppetCharacterRenderer implements CharacterRenderer {
     if (!blink || blink.intervalMs <= 0 || blink.durationMs <= 0) return;
 
     const cycleMs = elapsedMs % blink.intervalMs;
+    const blinkStartMs = Math.max(0, blink.intervalMs - blink.durationMs);
+    const blinkElapsedMs = cycleMs - blinkStartMs;
     const halfBlink = blink.durationMs / 2;
     let value = blink.openValue;
-    if (cycleMs < blink.durationMs) {
-      const progress = cycleMs <= halfBlink
-        ? cycleMs / halfBlink
-        : (blink.durationMs - cycleMs) / halfBlink;
+    if (blinkElapsedMs >= 0 && blinkElapsedMs < blink.durationMs) {
+      const progress = blinkElapsedMs <= halfBlink
+        ? blinkElapsedMs / halfBlink
+        : (blink.durationMs - blinkElapsedMs) / halfBlink;
       value = blink.openValue + (blink.closedValue - blink.openValue) * progress;
     }
     session.puppet.setMorph(blink.morphName, value);
