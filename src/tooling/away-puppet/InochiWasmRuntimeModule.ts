@@ -186,6 +186,7 @@ export function createInochiWasmRuntimeModule(exports: InochiWasmRuntimeExports)
       readonly parameters: readonly InochiWebRuntimeParameter[];
       readonly root: InochiWebRuntimeNode | null;
       private disposed = false;
+      private readonly renderTextures = new Map<number, CharacterMeshTexture>();
 
       constructor(bytes: ArrayBufferLike) {
         const source = new Uint8Array(bytes);
@@ -266,19 +267,24 @@ export function createInochiWasmRuntimeModule(exports: InochiWasmRuntimeExports)
         const textures = new Map<number, CharacterMeshTexture>();
         for (let slot = 0; slot < textureCount; slot += 1) {
           const texturePointer = requirePointer(exports.in_texture_cache_get_texture!(cachePointer, slot), `texture ${slot} lookup`);
-          const width = exports.in_texture_get_width!(texturePointer);
-          const height = exports.in_texture_get_height!(texturePointer);
-          const channels = exports.in_texture_get_channels!(texturePointer);
-          if (!Number.isSafeInteger(width) || width <= 0 || !Number.isSafeInteger(height) || height <= 0) {
-            throw new Error(`Inochi texture ${slot} has invalid dimensions`);
+          let texture = this.renderTextures.get(texturePointer);
+          if (!texture) {
+            const width = exports.in_texture_get_width!(texturePointer);
+            const height = exports.in_texture_get_height!(texturePointer);
+            const channels = exports.in_texture_get_channels!(texturePointer);
+            if (!Number.isSafeInteger(width) || width <= 0 || !Number.isSafeInteger(height) || height <= 0) {
+              throw new Error(`Inochi texture ${slot} has invalid dimensions`);
+            }
+            if (![1, 2, 3, 4].includes(channels)) throw new Error(`Inochi texture ${slot} has unsupported channel count ${channels}`);
+            const byteLength = width * height * channels;
+            if (!Number.isSafeInteger(byteLength) || byteLength <= 0) throw new Error(`Inochi texture ${slot} byte length overflow`);
+            const pixelsPointer = requirePointer(exports.in_texture_get_pixels!(texturePointer), `texture ${slot} pixels`);
+            if (pixelsPointer + byteLength > exports.memory.buffer.byteLength) throw new Error(`Inochi texture ${slot} pixels exceed WASM memory`);
+            const pixels = new Uint8Array(new Uint8Array(exports.memory.buffer, pixelsPointer, byteLength));
+            texture = decodeInochiTextureRgba(`inochi-texture-${slot}`, width, height, channels, pixels);
+            this.renderTextures.set(texturePointer, texture);
           }
-          if (![1, 2, 3, 4].includes(channels)) throw new Error(`Inochi texture ${slot} has unsupported channel count ${channels}`);
-          const byteLength = width * height * channels;
-          if (!Number.isSafeInteger(byteLength) || byteLength <= 0) throw new Error(`Inochi texture ${slot} byte length overflow`);
-          const pixelsPointer = requirePointer(exports.in_texture_get_pixels!(texturePointer), `texture ${slot} pixels`);
-          if (pixelsPointer + byteLength > exports.memory.buffer.byteLength) throw new Error(`Inochi texture ${slot} pixels exceed WASM memory`);
-          const pixels = new Uint8Array(new Uint8Array(exports.memory.buffer, pixelsPointer, byteLength));
-          textures.set(texturePointer, decodeInochiTextureRgba(`inochi-texture-${slot}`, width, height, channels, pixels));
+          textures.set(texturePointer, texture);
         }
 
         return convertInochiDrawListToCharacterFrame(copied, textures);
@@ -309,6 +315,7 @@ export function createInochiWasmRuntimeModule(exports: InochiWasmRuntimeExports)
       free(): void {
         if (this.disposed) return;
         this.disposed = true;
+        this.renderTextures.clear();
         exports.in_puppet_free(this.pointer);
       }
     },

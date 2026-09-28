@@ -211,6 +211,9 @@ function toHexChannel(value: number): string {
   return byte.toString(16).padStart(2, '0');
 }
 
+const INOCHI_PART_TYPE = 0x0101;
+const INOCHI_ANIMATED_PART_TYPE = 0x0201;
+
 function decodePartVariables(bytes: Uint8Array): { tint: string; alpha: number } {
   if (bytes.byteLength < 36) return { tint: '#ffffff', alpha: 1 };
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
@@ -280,6 +283,12 @@ export function convertInochiDrawListToCharacterFrame(
     if (command.state !== 0) {
       throw new Error(`Unsupported Inochi draw state ${command.state} at command ${commandIndex}; mask/composite support is required`);
     }
+    if (command.type !== INOCHI_PART_TYPE && command.type !== INOCHI_ANIMATED_PART_TYPE) {
+      throw new Error(`Unsupported Inochi normal draw type 0x${command.type.toString(16)} at command ${commandIndex}`);
+    }
+    if (!copied.useBaseVertex) {
+      throw new Error('Inochi draw lists without base-vertex indices are not supported by the Phaser bridge yet');
+    }
     const allocation = allocations.get(command.allocId);
     if (!allocation) throw new Error(`Missing Inochi draw allocation ${command.allocId}`);
     if (command.vtxOffset !== allocation.vtxOffset) {
@@ -299,7 +308,7 @@ export function convertInochiDrawListToCharacterFrame(
     if (vertexEnd > vertices.length) throw new Error(`Inochi allocation ${allocation.allocId} vertex range is out of bounds`);
 
     const commandIndices = indices.slice(command.idxOffset, command.idxOffset + command.elemCount);
-    const triangles = commandIndices.map((index) => copied.useBaseVertex ? index : index - allocation.vtxOffset);
+    const triangles = commandIndices;
     if (triangles.some((index) => index < 0 || index >= allocation.vtxCount)) {
       throw new Error(`Inochi draw command ${commandIndex} contains an out-of-range mesh index`);
     }

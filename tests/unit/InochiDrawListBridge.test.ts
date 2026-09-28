@@ -117,6 +117,7 @@ describe('Inochi draw-list -> CharacterMeshFrame', () => {
     command.setUint32(48, 0, true);
     command.setUint32(52, 0, true);
     command.setUint32(56, 6, true);
+    command.setUint32(60, 0x0101, true); // Part type
     command.setFloat32(64, 1, true);
     command.setFloat32(68, 0.5, true);
     command.setFloat32(72, 0.25, true);
@@ -178,6 +179,7 @@ describe('Inochi draw-list -> CharacterMeshFrame', () => {
     command.setUint32(0, 0x700, true);
     command.setUint32(32, 1, true); // DEFINE_MASK
     command.setUint32(44, 1, true);
+    command.setUint32(60, 0x0101, true);
 
     expect(() => convertInochiDrawListToCharacterFrame({
       useBaseVertex: true,
@@ -190,3 +192,22 @@ describe('Inochi draw-list -> CharacterMeshFrame', () => {
       .toThrow(/mask\/composite support is required/i);
   });
 });
+
+
+  it('fails closed for non-base-vertex draw lists instead of guessing index rebasing', () => {
+    const commandBytes = new Uint8Array(INOCHI_DRAW_COMMAND_STRIDE);
+    const command = new DataView(commandBytes.buffer);
+    command.setUint32(0, 0x700, true);
+    command.setUint32(44, 1, true);
+    command.setUint32(60, 0x0101, true);
+
+    expect(() => convertInochiDrawListToCharacterFrame({
+      useBaseVertex: false,
+      commandCount: 1,
+      commandBytes,
+      vertexBytes: new Uint8Array(),
+      indexBytes: new Uint8Array(),
+      allocations: [{ vtxOffset: 0, idxOffset: 0, idxCount: 0, vtxCount: 0, allocId: 1 }],
+    }, new Map([[0x700, decodeInochiTextureRgba('t', 1, 1, 4, new Uint8Array([255, 255, 255, 255]))]])))
+      .toThrow(/without base-vertex indices/i);
+  });

@@ -24,6 +24,13 @@ export const PhysicalWorldHost: React.FC<PhysicalWorldHostProps> = ({
 
   const [capabilityReport, setCapabilityReport] = useState<WorldFixtureCapabilityReport | null>(null);
   const [lastIntent, setLastIntent] = useState<WorldInteractionIntent | null>(null);
+  const [characterStats, setCharacterStats] = useState<{
+    actorCount: number;
+    sampleCount: number;
+    averageUpdateMs: number;
+    maxUpdateMs: number;
+    actualFps: number;
+  } | null>(null);
 
   const handleIntent = useCallback((intent: WorldInteractionIntent) => {
     setLastIntent(intent);
@@ -92,6 +99,16 @@ export const PhysicalWorldHost: React.FC<PhysicalWorldHostProps> = ({
       runtimeRef.current.updateProjection(projection);
     }
   }, [projection]);
+
+  // Lightweight debug sampling for the #25 representative puppet workload.
+  useEffect(() => {
+    if (!debug) return;
+    const timer = window.setInterval(() => {
+      const scene = runtimeRef.current?.getScene();
+      setCharacterStats(scene?.getCharacterRuntimeStats?.() ?? null);
+    }, 500);
+    return () => window.clearInterval(timer);
+  }, [debug]);
 
   const handleSwitchView = (targetViewId: string) => {
     runtimeRef.current?.transitionToView(targetViewId);
@@ -285,6 +302,17 @@ export const PhysicalWorldHost: React.FC<PhysicalWorldHostProps> = ({
               </button>
             </div>
           </div>
+
+          {characterStats && (
+            <div
+              data-testid="away-puppet-runtime-stats"
+              className="pt-1.5 border-t border-slate-800 text-[10px] text-cyan-200 font-mono"
+            >
+              Away Puppet: {characterStats.actorCount} actors · {characterStats.actualFps.toFixed(1)} FPS ·
+              {' '}update avg {characterStats.averageUpdateMs.toFixed(3)} ms · max {characterStats.maxUpdateMs.toFixed(3)} ms ·
+              {' '}{characterStats.sampleCount} samples
+            </div>
+          )}
 
           {/* Capabilities Report Badge */}
           {capabilityReport && (
