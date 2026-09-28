@@ -1,7 +1,7 @@
 // src/world/components/CityMapView.tsx
-// P7 Oakhaven schematic map — 2005 tourist-map styling, click a node to go.
-// Shows open/closed per headline hours, you-are-here, NPC hints, and a
-// walk/bus quote (time + fare) before confirming.
+// P7 Oakhaven schematic map & district guide — 2005 tourist-map styling, click a node to go.
+// Shows open/closed per headline hours, you-are-here, NPC hints, walk/bus quotes,
+// and district navigation projection (#36).
 
 import React, { useState } from 'react';
 import {
@@ -15,6 +15,10 @@ import {
   type TravelMode,
 } from '../../engine/CityMap';
 import { soundManager } from '../../audio/SoundManager';
+import { DistrictNavigationView } from './DistrictNavigationView';
+import { getGeneratedTransitNetwork, type TransitNetwork } from '../../engine/transit/TransitNetwork';
+import { createDefaultTownKnowledge, type TownKnowledgeState } from '../../engine/transit/TownKnowledge';
+import type { PlaceId } from '../../engine/transit/types';
 
 interface CityMapViewProps {
   currentNode: CityNodeId;
@@ -24,7 +28,34 @@ interface CityMapViewProps {
   raining: boolean;
   storming: boolean;
   onTravel: (to: CityNodeId, mode: TravelMode) => void;
+  network?: TransitNetwork;
+  knowledge?: TownKnowledgeState;
 }
+
+const nodeToPlaceMap: Record<CityNodeId, PlaceId> = {
+  home: 'room_104',
+  lobby: 'place_a1',
+  cafe: 'place_b1',
+  diner: 'place_b1',
+  cart: 'place_a1',
+  canal: 'place_a1',
+  laundry: 'place_a1',
+  techmart: 'place_b1',
+};
+
+const placeToNodeMap: Record<string, CityNodeId> = {
+  place_a1: 'lobby',
+  place_b1: 'cafe',
+  room_104: 'home',
+  home: 'home',
+  lobby: 'lobby',
+  cafe: 'cafe',
+  diner: 'diner',
+  cart: 'cart',
+  canal: 'canal',
+  laundry: 'laundry',
+  techmart: 'techmart',
+};
 
 export const CityMapView: React.FC<CityMapViewProps> = ({
   currentNode,
@@ -34,7 +65,10 @@ export const CityMapView: React.FC<CityMapViewProps> = ({
   raining,
   storming,
   onTravel,
+  network = getGeneratedTransitNetwork(),
+  knowledge = createDefaultTownKnowledge(network, nodeToPlaceMap[currentNode] ?? 'place_a1'),
 }) => {
+  const [tab, setTab] = useState<'schematic' | 'districts'>('schematic');
   const [selected, setSelected] = useState<CityNodeId | null>(null);
   const [mode, setMode] = useState<TravelMode>('walk');
 
@@ -55,9 +89,61 @@ export const CityMapView: React.FC<CityMapViewProps> = ({
     (quote.mode === 'walk' && energy < 10 && quote.minutes > 0) ||
     (selected === 'canal' && storming);
 
+  const currentPlaceId = nodeToPlaceMap[currentNode] ?? 'place_a1';
+
   return (
     <div>
-      <svg viewBox="0 0 100 100" className="w-full rounded border border-slate-700 bg-[#0d1626]" role="img" aria-label="Oakhaven city map">
+      {/* 2005 navigation view switcher */}
+      <div className="mb-2 flex items-center justify-between border-b border-slate-700/80 pb-1.5 text-xs font-bold">
+        <div className="flex rounded border border-slate-700 bg-slate-800/80 p-0.5">
+          <button
+            onClick={() => {
+              soundManager.play('click');
+              setTab('schematic');
+            }}
+            className={`px-2.5 py-1 rounded cursor-pointer transition-all ${
+              tab === 'schematic'
+                ? 'bg-amber-500 text-slate-950 font-bold shadow'
+                : 'text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            Schematic Map
+          </button>
+          <button
+            onClick={() => {
+              soundManager.play('click');
+              setTab('districts');
+            }}
+            className={`px-2.5 py-1 rounded cursor-pointer transition-all ${
+              tab === 'districts'
+                ? 'bg-amber-500 text-slate-950 font-bold shadow'
+                : 'text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            Districts & Transit
+          </button>
+        </div>
+        <span className="text-[10px] text-slate-400">Oakhaven Guide</span>
+      </div>
+
+      {tab === 'districts' ? (
+        <DistrictNavigationView
+          network={network}
+          knowledge={knowledge}
+          currentPlaceId={currentPlaceId}
+          departAtMinute={hour * 60}
+          playerCash={cash}
+          playerEnergy={energy}
+          raining={raining}
+          storming={storming}
+          onTravel={(destPlaceId, travelMode) => {
+            const destNode = placeToNodeMap[destPlaceId] ?? 'cafe';
+            onTravel(destNode, travelMode);
+          }}
+        />
+      ) : (
+        <div>
+          <svg viewBox="0 0 100 100" className="w-full rounded border border-slate-700 bg-[#0d1626]" role="img" aria-label="Oakhaven city map">
         {/* Night-paper background grid */}
         {Array.from({ length: 9 }, (_, i) => (
           <line key={`v${i}`} x1={(i + 1) * 10} y1={0} x2={(i + 1) * 10} y2={100} stroke="#1b2942" strokeWidth={0.3} />
@@ -178,6 +264,9 @@ export const CityMapView: React.FC<CityMapViewProps> = ({
       {selected === currentNode && (
         <div className="mt-2 text-center text-[11px] italic text-slate-500">You are here. Pick somewhere else to go.</div>
       )}
+        </div>
+      )}
     </div>
   );
 };
+
