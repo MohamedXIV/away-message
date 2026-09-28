@@ -92,9 +92,13 @@ export const PhysicalWorldHost: React.FC<PhysicalWorldHostProps> = ({
     };
   }, []);
 
-  // Keep live actor mounts in sync when presence or the authored view changes.
+  // Keep an explicitly supplied actor roster in sync. Undefined deliberately
+  // means "let the Scene own visual-mode defaults" (used by the #25 fixture);
+  // an explicit [] still clears all characters.
   useEffect(() => {
-    runtimeRef.current?.updateCharacters(characters ?? []);
+    if (characters !== undefined) {
+      runtimeRef.current?.updateCharacters(characters);
+    }
   }, [characters]);
 
   // Synchronize projection updates to active Phaser runtime

@@ -89,6 +89,8 @@ A real-Ada tint probe is now part of the Hookset workflow, but the current GitHu
 
 #25 explicitly permits a small compatibility runtime when required. The technical fixture therefore uses one generic test profile, never a canonical NPC asset, and exercises the exact production `CharacterRenderer` semantic contract.
 
+In technical-fixture mode, absence of an externally supplied `characters` roster intentionally lets the Scene own this default group; an explicit empty roster still clears characters. This distinction prevents the React/runtime synchronization path from erasing the fixture immediately after boot.
+
 The representative group contains three actors reusing one profile while varying:
 
 - body mass/frame and face roundness;

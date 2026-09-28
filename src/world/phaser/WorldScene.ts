@@ -148,7 +148,11 @@ export class WorldScene extends Phaser.Scene {
     if (data?.visualMode) {
       this.visualMode = data.visualMode;
     }
-    this.characterMounts = data?.characters ?? [];
+    // Missing `characters` means "preserve Scene-owned/default mounts".
+    // An explicit [] remains meaningful and clears the roster.
+    if (data && Object.prototype.hasOwnProperty.call(data, 'characters')) {
+      this.characterMounts = data.characters ?? [];
+    }
   }
 
   /**
