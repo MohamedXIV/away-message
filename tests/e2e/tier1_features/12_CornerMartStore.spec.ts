@@ -30,6 +30,13 @@ interface StoreFixtureState {
     sceneContext: string;
     personaSuffix: string;
   } | null;
+  chatBusy: boolean;
+  chatHistory: Array<{
+    senderId: string;
+    recipientId: string;
+    text: string;
+    tags: string[];
+  }>;
   cash: number;
   actorCount: number;
   innerVoiceTopic: string | null;
@@ -256,9 +263,32 @@ test.describe('Issue #28 living CornerMart single-view proof', () => {
     expect(talkState.activeSocialTarget?.sceneContext).toContain('front counter');
     expect(talkState.activeSocialTarget?.sceneContext).not.toContain('stock');
     expect(talkState.activeSocialTarget?.personaSuffix).toContain('physically present');
+    await expect(page.getByTestId('corner-mart-physical-chat')).toBeVisible();
 
-    const cashBefore = talkState.cash;
-    const focusBeforeTake = talkState;
+    await page.getByTestId('corner-mart-chat-input').fill('long night?');
+    await clickFixtureControl(page, 'corner-mart-chat-send');
+    await expect.poll(async () => (await readStoreState(page)).chatHistory.length, {
+      timeout: 15_000,
+      message: 'expected player line and cashier reply in canonical SocialEngine history',
+    }).toBeGreaterThanOrEqual(2);
+    await expect.poll(async () => (await readStoreState(page)).chatBusy).toBe(false);
+
+    const chatted = await readStoreState(page);
+    const recentChat = chatted.chatHistory.slice(-2);
+    expect(recentChat[0]).toMatchObject({
+      senderId: 'player',
+      recipientId: 'corner_mart_cashier',
+      text: 'long night?',
+    });
+    expect(recentChat[0]?.tags).toContain('physical-chat');
+    expect(recentChat[1]?.senderId).toBe('corner_mart_cashier');
+    expect(recentChat[1]?.recipientId).toBe('player');
+    expect(recentChat[1]?.text.trim().length).toBeGreaterThan(0);
+    expect(recentChat[1]?.tags).toContain('physical-chat');
+    await expect(page.getByTestId('corner-mart-chat-history')).toContainText('long night?');
+
+    const cashBefore = chatted.cash;
+    const focusBeforeTake = chatted;
     expect(focusBeforeTake.focusedStock.every((slot) => slot.itemInstanceId !== null)).toBe(true);
 
     await clickFixtureControl(page, 'corner-mart-take-item');
@@ -267,7 +297,8 @@ test.describe('Issue #28 living CornerMart single-view proof', () => {
     expect(afterTake.cashier.checkout).toBe(true);
     expect(afterTake.focusedStock.some((slot) => slot.itemInstanceId === null)).toBe(true);
 
-    await clickFixtureControl(page, 'corner-mart-cashier');
+    await expect(page.getByTestId('corner-mart-checkout')).toBeEnabled();
+    await clickFixtureControl(page, 'corner-mart-checkout');
     await expect.poll(async () => (await readStoreState(page)).unpaidCount).toBe(0);
     const paid = await readStoreState(page);
     expect(paid.ownedCount).toBe(1);
@@ -277,6 +308,7 @@ test.describe('Issue #28 living CornerMart single-view proof', () => {
     const characterPerf = await readCharacterPerf(page);
     console.log('[corner-mart-browser]', JSON.stringify({
       state: paid,
+      chatHistory: paid.chatHistory,
       props: propAfter,
       characterPerf,
       perfNote:
