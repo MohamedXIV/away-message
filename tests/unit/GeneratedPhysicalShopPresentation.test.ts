@@ -29,6 +29,13 @@ describe('generated physical shop presentation (#28)', () => {
       targetName: 'corner_mart_fan_prop',
       type: 'rotation',
     }));
+    expect(projection.weatherWindowZones).toEqual([
+      expect.objectContaining({
+        id: 'corner_mart_window_prop',
+        width: 0.055,
+        height: 0.333,
+      }),
+    ]);
   });
 
   it('preserves generic day/weather environment truth for manual clear/rain phase smoke tests', () => {
@@ -42,6 +49,7 @@ describe('generated physical shop presentation (#28)', () => {
     });
 
     expect(morning.timeOfDay).toBe('morning');
+    expect(morning.minuteOfDay).not.toBe(rainyNight.minuteOfDay);
     expect(morning.weather).toBe('clear');
     expect(rainyNight.timeOfDay).toBe('night');
     expect(rainyNight.weather).toBe('rain');
