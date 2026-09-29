@@ -600,6 +600,7 @@ export class WorldScene extends Phaser.Scene {
         this.onIntent?.({
           type: 'INTERACTION',
           anchorId: anchor.id,
+          ...(anchor.actorId ? { actorId: anchor.actorId } : {}),
           capability: primaryInteraction?.capability ?? 'inspect',
           name: primaryInteraction?.name ?? anchor.name,
           payload: { anchorTags: anchor.tags },
