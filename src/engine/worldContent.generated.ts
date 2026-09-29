@@ -1,6 +1,6 @@
 // GENERATED — do not edit by hand.
-// Source: content/store.json (content vd5c64374). Regenerate: npm run content:pull.
-export const WORLD_CONTENT_VERSION = 'd5c64374';
+// Source: content/store.json (content v8dad2cc9). Regenerate: npm run content:pull.
+export const WORLD_CONTENT_VERSION = '8dad2cc9';
 
 export interface GeneratedSpatialPoint {
   x: number;
@@ -1162,7 +1162,7 @@ export const GENERATED_SHOP_FIXTURES: GeneratedShopFixtureDef[] = [
     name: "Center Grocery Shelf",
     kind: "shelf",
     focusZoom: 1.65,
-    lightProfileIds: [],
+    lightProfileIds: ["corner_mart_fluorescent"],
     audioProfileIds: [],
     effectTags: [],
   },
@@ -1174,7 +1174,7 @@ export const GENERATED_SHOP_FIXTURES: GeneratedShopFixtureDef[] = [
     name: "Left Grocery Shelf",
     kind: "shelf",
     focusZoom: 1.65,
-    lightProfileIds: [],
+    lightProfileIds: ["corner_mart_fluorescent"],
     audioProfileIds: [],
     effectTags: [],
   },
