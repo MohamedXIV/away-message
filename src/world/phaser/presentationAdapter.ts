@@ -42,6 +42,8 @@ export interface CreateProjectionOptions {
   focus?: WorldCameraFocus | null;
   spatialAudioSources?: SpatialAudioSourceDef[];
   listenerOrientation?: ListenerOrientation;
+  /** Optional actor ownership for authored anchors in the active view. */
+  actorByAnchorId?: Readonly<Record<string, string>>;
 }
 
 export function getMinuteForTimeOfDay(timeOfDay: TimeOfDay): number {
@@ -193,6 +195,7 @@ export function createWorldSceneProjection(
     isInterior: explicitIsInterior,
     spatialAudioSources,
     listenerOrientation,
+    actorByAnchorId = {},
   } = options;
 
   const place = GENERATED_PLACES.find((p) => p.id === placeId);
@@ -235,6 +238,7 @@ export function createWorldSceneProjection(
       x: a.x,
       y: a.y,
       tags: a.tags,
+      ...(actorByAnchorId[a.id] ? { actorId: actorByAnchorId[a.id] } : {}),
       interactions: interactions.map((i) => ({
         id: i.id,
         capability: i.capability,
@@ -289,11 +293,13 @@ export function createSemanticInteractionIntent(
   anchorId: string,
   capability: string,
   name: string,
-  payload?: Record<string, unknown>
+  payload?: Record<string, unknown>,
+  actorId?: string,
 ): WorldInteractionIntent {
   return {
     type: 'INTERACTION',
     anchorId,
+    ...(actorId ? { actorId } : {}),
     capability,
     name,
     payload,
