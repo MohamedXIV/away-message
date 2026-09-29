@@ -133,6 +133,47 @@ describe('AwayPuppetCharacterRenderer (#25)', () => {
     expect(disposed).toEqual(['profile.base-a', 'profile.base-b']);
   });
 
+  it('keeps the newest async profile when an older load resolves late', async () => {
+    const disposed: string[] = [];
+    const eventsA: string[] = [];
+    const eventsB: string[] = [];
+    const resolvers = new Map<string, (session: AwayPuppetCharacterSession) => void>();
+
+    const renderer = new AwayPuppetCharacterRenderer(
+      (profileId) => new Promise<AwayPuppetCharacterSession>((resolve) => {
+        resolvers.set(profileId, resolve);
+      }),
+      createSurfaceSpy([], [], { value: 0 }),
+    );
+
+    const loadA = renderer.load('profile.slow-a');
+    const loadB = renderer.load('profile.fast-b');
+
+    resolvers.get('profile.fast-b')!({
+      puppet: createSemanticSpy(eventsB),
+      dispose: () => disposed.push('profile.fast-b'),
+    });
+    await loadB;
+    renderer.setExpression('expression.latest');
+
+    resolvers.get('profile.slow-a')!({
+      puppet: createSemanticSpy(eventsA),
+      dispose: () => disposed.push('profile.slow-a'),
+    });
+    await loadA;
+    renderer.setExpression('expression.still-latest');
+
+    expect(eventsA).toEqual([]);
+    expect(eventsB).toEqual([
+      'expression:expression.latest',
+      'expression:expression.still-latest',
+    ]);
+    expect(disposed).toEqual(['profile.slow-a']);
+
+    renderer.destroy();
+    expect(disposed).toEqual(['profile.slow-a', 'profile.fast-b']);
+  });
+
   it('keeps physical appearance separate from online knowledge', () => {
     const physical = {
       actorId: 'actor-42',
