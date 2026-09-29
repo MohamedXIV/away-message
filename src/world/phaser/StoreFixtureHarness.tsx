@@ -296,7 +296,10 @@ export const StoreFixtureHarness: React.FC<StoreFixtureHarnessProps> = ({ onExit
       exposeRuntime={true}
       onIntent={handleIntent}
       overlaySlot={
-        <div className="pointer-events-auto absolute bottom-2 left-1/2 -translate-x-1/2 max-w-[calc(100%-1rem)] rounded border border-emerald-900/70 bg-black/70 px-2 py-1.5 text-[10px] text-slate-100 font-mono shadow-lg backdrop-blur-sm">
+        <div
+          data-testid="corner-mart-qa-bar"
+          className="pointer-events-auto absolute bottom-2 left-1/2 -translate-x-1/2 max-w-[calc(100%-1rem)] rounded border border-emerald-900/70 bg-black/70 px-2 py-1.5 text-[10px] text-slate-100 font-mono shadow-lg backdrop-blur-sm"
+        >
           <div className="flex flex-wrap items-center justify-center gap-1">
             <strong className="mr-1 text-emerald-300">CORNERMART QA</strong>
             <span
