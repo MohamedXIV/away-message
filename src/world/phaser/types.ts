@@ -43,6 +43,7 @@ export interface WorldAnchorProjection {
   x: number; // 0..1 normalized coordinate
   y: number; // 0..1 normalized coordinate
   tags: string[];
+  actorId?: string;
   interactions: WorldInteractionDef[];
 }
 
@@ -113,6 +114,7 @@ export type WorldInteractionIntentType =
 export interface WorldInteractionIntent {
   type: WorldInteractionIntentType;
   anchorId?: string;
+  actorId?: string;
   capability?: string;
   name?: string;
   targetViewId?: string;
@@ -128,6 +130,8 @@ export interface PhysicalWorldHostProps {
   overlaySlot?: React.ReactNode;
   className?: string;
   debug?: boolean;
+  /** Exposes the runtime to browser QA without rendering the debug panel. */
+  exposeRuntime?: boolean;
   visualMode?: 'production' | 'technical-fixture';
 }
 
