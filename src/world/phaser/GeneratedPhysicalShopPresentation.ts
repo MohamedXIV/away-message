@@ -45,7 +45,10 @@ function lightForFixture(
       kind: fixture.kind === 'fridge' ? 'fridge' : 'lamp',
       x: anchor.x,
       y: anchor.y,
-      radius: fixture.kind === 'fridge' ? 220 : 430,
+      // Fluorescent fixtures are broad ceiling/fill sources rather than
+      // point-like lamps. Keep deep late-night ambient dark while preserving
+      // readable shelf detail through authored artificial-light prominence.
+      radius: fixture.kind === 'fridge' ? 220 : fluorescent ? 900 : 430,
       color: profile.colorTint ?? '#ffffff',
       baseIntensity: profile.intensity,
       ...(fluorescent
