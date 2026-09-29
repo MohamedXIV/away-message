@@ -176,7 +176,10 @@ test.describe('Issue #28 living CornerMart single-view proof', () => {
       timeout: 10_000,
       message: 'expected engine-backed cashier renderer to mount',
     }).toBe(1);
-    expect((await readCharacterPerf(page)).visibleSurfaceCount).toBe(1);
+    await expect.poll(async () => (await readCharacterPerf(page)).visibleSurfaceCount, {
+      timeout: 10_000,
+      message: 'expected the mounted cashier puppet surface to become visible',
+    }).toBe(1);
 
     const capabilities = await page.evaluate(() => {
       const runtime = (window as typeof window & {
