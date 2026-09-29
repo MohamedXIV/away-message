@@ -2,6 +2,7 @@
 
 import Phaser from 'phaser';
 import { WorldScene, type WorldSceneInitData } from './WorldScene';
+import type { WorldSceneCharacterMount } from './WorldSceneCharacters';
 import type {
   WorldSceneProjection,
   WorldInteractionIntent,
@@ -10,6 +11,8 @@ import type {
 export interface PhaserWorldRuntimeOptions {
   parent: HTMLElement;
   projection: WorldSceneProjection;
+  /** Renderers must already be loaded; WorldScene owns their disposal. */
+  characters?: readonly WorldSceneCharacterMount[];
   onIntent?: (intent: WorldInteractionIntent) => void;
   renderType?: number;
   visualMode?: 'production' | 'technical-fixture';
@@ -22,6 +25,8 @@ export class PhaserWorldRuntime {
   private onIntent?: (intent: WorldInteractionIntent) => void;
   private currentProjection: WorldSceneProjection;
   private renderType?: number;
+  /** Undefined means the Scene may supply visual-mode defaults; [] is an explicit empty roster. */
+  private characters: readonly WorldSceneCharacterMount[] | undefined;
   private visualMode: 'production' | 'technical-fixture';
 
   constructor(options: PhaserWorldRuntimeOptions) {
@@ -29,6 +34,7 @@ export class PhaserWorldRuntime {
     this.onIntent = options.onIntent;
     this.currentProjection = options.projection;
     this.renderType = options.renderType;
+    this.characters = options.characters;
     this.visualMode = options.visualMode ?? 'production';
 
     this.initGame();
@@ -40,11 +46,13 @@ export class PhaserWorldRuntime {
     const width = this.parent.clientWidth || 1600;
     const height = this.parent.clientHeight || 900;
 
-    const sceneData: WorldSceneInitData = {
+    const buildSceneData = (): WorldSceneInitData => ({
       projection: this.currentProjection,
+      ...(this.characters !== undefined ? { characters: this.characters } : {}),
       onIntent: (intent) => this.onIntent?.(intent),
       visualMode: this.visualMode,
-    };
+    });
+    const sceneData = buildSceneData();
 
     const sceneInstance = new WorldScene();
     sceneInstance.init(sceneData);
@@ -75,7 +83,7 @@ export class PhaserWorldRuntime {
       if (this.isDestroyed || !this.game) return;
       const activeScene = this.game.scene.getScene(WorldScene.SCENE_KEY) as WorldScene | null;
       if (activeScene) {
-        activeScene.init(sceneData);
+        activeScene.init(buildSceneData());
       }
     });
   }
@@ -92,6 +100,12 @@ export class PhaserWorldRuntime {
     if (scene && typeof scene.updateProjection === 'function') {
       scene.updateProjection(newProjection);
     }
+  }
+
+  public updateCharacters(characters: readonly WorldSceneCharacterMount[]): void {
+    if (this.isDestroyed) return;
+    this.characters = characters;
+    this.getScene()?.setCharacterMounts(characters);
   }
 
   public transitionToView(targetViewId: string, _duration?: number): void {

@@ -10,6 +10,7 @@ import type {
 
 export const PhysicalWorldHost: React.FC<PhysicalWorldHostProps> = ({
   projection,
+  characters,
   onIntent,
   overlaySlot,
   className = '',
@@ -23,6 +24,17 @@ export const PhysicalWorldHost: React.FC<PhysicalWorldHostProps> = ({
 
   const [capabilityReport, setCapabilityReport] = useState<WorldFixtureCapabilityReport | null>(null);
   const [lastIntent, setLastIntent] = useState<WorldInteractionIntent | null>(null);
+  const [characterStats, setCharacterStats] = useState<{
+    actorCount: number;
+    surfaceCount: number;
+    visibleSurfaceCount: number;
+    meshCount: number;
+    surfaceNames: string[];
+    sampleCount: number;
+    averageUpdateMs: number;
+    maxUpdateMs: number;
+    actualFps: number;
+  } | null>(null);
 
   const handleIntent = useCallback((intent: WorldInteractionIntent) => {
     setLastIntent(intent);
@@ -36,10 +48,14 @@ export const PhysicalWorldHost: React.FC<PhysicalWorldHostProps> = ({
     const runtime = new PhaserWorldRuntime({
       parent: containerRef.current,
       projection,
+      characters,
       onIntent: handleIntent,
       visualMode,
     });
     runtimeRef.current = runtime;
+    if (debug && typeof window !== 'undefined') {
+      (window as any).__awayPhysicalWorldRuntime = runtime;
+    }
 
     // ResizeObserver for HiDPI responsive canvas scaling
     const resizeObserver = new ResizeObserver((entries) => {
@@ -65,9 +81,25 @@ export const PhysicalWorldHost: React.FC<PhysicalWorldHostProps> = ({
       clearTimeout(timer);
       resizeObserver.disconnect();
       runtime.destroy();
+      if (
+        debug
+        && typeof window !== 'undefined'
+        && (window as any).__awayPhysicalWorldRuntime === runtime
+      ) {
+        delete (window as any).__awayPhysicalWorldRuntime;
+      }
       runtimeRef.current = null;
     };
   }, []);
+
+  // Keep an explicitly supplied actor roster in sync. Undefined deliberately
+  // means "let the Scene own visual-mode defaults" (used by the #25 fixture);
+  // an explicit [] still clears all characters.
+  useEffect(() => {
+    if (characters !== undefined) {
+      runtimeRef.current?.updateCharacters(characters);
+    }
+  }, [characters]);
 
   // Synchronize projection updates to active Phaser runtime
   useEffect(() => {
@@ -75,6 +107,16 @@ export const PhysicalWorldHost: React.FC<PhysicalWorldHostProps> = ({
       runtimeRef.current.updateProjection(projection);
     }
   }, [projection]);
+
+  // Lightweight debug sampling for the #25 representative puppet workload.
+  useEffect(() => {
+    if (!debug) return;
+    const timer = window.setInterval(() => {
+      const scene = runtimeRef.current?.getScene();
+      setCharacterStats(scene?.getCharacterRuntimeStats?.() ?? null);
+    }, 500);
+    return () => window.clearInterval(timer);
+  }, [debug]);
 
   const handleSwitchView = (targetViewId: string) => {
     runtimeRef.current?.transitionToView(targetViewId);
@@ -268,6 +310,19 @@ export const PhysicalWorldHost: React.FC<PhysicalWorldHostProps> = ({
               </button>
             </div>
           </div>
+
+          {characterStats && (
+            <div
+              data-testid="away-puppet-runtime-stats"
+              className="pt-1.5 border-t border-slate-800 text-[10px] text-cyan-200 font-mono"
+            >
+              Away Puppet: {characterStats.actorCount} actors · {characterStats.surfaceCount} surfaces ·
+              {' '}{characterStats.visibleSurfaceCount} visible · {characterStats.meshCount} meshes ·
+              {' '}{characterStats.actualFps.toFixed(1)} FPS ·
+              {' '}update avg {characterStats.averageUpdateMs.toFixed(3)} ms · max {characterStats.maxUpdateMs.toFixed(3)} ms ·
+              {' '}{characterStats.sampleCount} samples
+            </div>
+          )}
 
           {/* Capabilities Report Badge */}
           {capabilityReport && (

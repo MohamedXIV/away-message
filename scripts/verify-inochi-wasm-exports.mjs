@@ -16,6 +16,8 @@ const REQUIRED_EXPORTS = [
   'in_as_part',
   'in_part_get_texture',
   'in_part_set_texture',
+  'in_part_get_tint',
+  'in_part_set_tint',
   'in_drawlist_get_commands',
   'in_drawlist_get_vertex_data',
   'in_drawlist_get_index_data',
