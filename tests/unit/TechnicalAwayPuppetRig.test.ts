@@ -8,6 +8,7 @@ import {
   TECHNICAL_AWAY_PUPPET_PROFILE,
 } from '../../src/world/phaser/TechnicalAwayPuppetRig';
 import type { CharacterMeshFrame } from '../../src/world/characterRenderer';
+import { createTechnicalFixtureProjection } from '../../src/world/phaser/technicalFixture';
 
 function requireFrame(session: ReturnType<typeof createTechnicalAwayPuppetSession>): CharacterMeshFrame {
   const frame = session.renderFrame?.(0);
@@ -28,6 +29,15 @@ function width(vertices: readonly number[]): number {
 }
 
 describe('Technical Away Puppet rig (#25)', () => {
+  it('keeps the right-side fixture actor clear of the wall-clock presentation', () => {
+    const projection = createTechnicalFixtureProjection();
+    const customerAnchor = projection.anchors.find(
+      (anchor) => anchor.id === 'fixture_cafe_customer_anchor',
+    );
+
+    expect(customerAnchor).toMatchObject({ x: 0.85, y: 0.72 });
+  });
+
   it('builds a representative three-actor group by reusing one generic rig profile', () => {
     const group = createTechnicalAwayPuppetCharacterGroup();
     expect(group).toHaveLength(3);

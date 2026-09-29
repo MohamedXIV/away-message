@@ -394,10 +394,12 @@ import type { CreateProjectionOptions } from './presentationAdapter';
 /**
  * Default projection for the Technical Fixture showcasing living environment capabilities
  */
+const FIXTURE_CUSTOMER_CHARACTER_POSITION = { x: 0.85, y: 0.72 } as const;
+
 export function createTechnicalFixtureProjection(
   overrides: Partial<CreateProjectionOptions> = {}
 ): WorldSceneProjection {
-  return createWorldSceneProjection({
+  const projection = createWorldSceneProjection({
     placeId: 'place_a1',
     viewId: 'view_a1',
     timeOfDay: 'evening',
@@ -541,4 +543,16 @@ export function createTechnicalFixtureProjection(
     listenerOrientation: 'forward',
     ...overrides,
   });
+
+  // The technical puppet harness shares View A1 with the clock/lighting fixture.
+  // Keep the representative customer readable without changing generated world
+  // content or simulation-owned actor identity/placement outside this fixture.
+  return {
+    ...projection,
+    anchors: projection.anchors.map((anchor) => (
+      anchor.id === 'fixture_cafe_customer_anchor'
+        ? { ...anchor, ...FIXTURE_CUSTOMER_CHARACTER_POSITION }
+        : anchor
+    )),
+  };
 }
