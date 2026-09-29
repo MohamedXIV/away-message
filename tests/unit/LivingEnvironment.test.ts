@@ -584,5 +584,81 @@ describe('Living Environment Subsystem', () => {
 
       envMgr.destroy();
     });
+
+    it('regression (3): authored interior rain emit zones stay inside the window bounds', () => {
+      const projection = {
+        ...createTechnicalFixtureProjection({
+          weather: 'rain',
+          isInterior: true,
+          minuteOfDay: 1200,
+        }),
+        assetId: 'corner_mart_hero',
+        weatherWindowZones: [
+          { id: 'window', x: 0.8, y: 0.1, width: 0.1, height: 0.4 },
+        ],
+      };
+
+      const emitterRecords: Array<{
+        config: Record<string, unknown>;
+        zones: Array<{
+          source: {
+            getRandomPoint(point: { x: number; y: number }): void;
+          };
+        }>;
+      }> = [];
+      const mockScene = createMockScene() as any;
+      mockScene.add.particles = (
+        _x: number,
+        _y: number,
+        _texture: string,
+        config: Record<string, unknown>,
+      ) => {
+        const record = {
+          config,
+          zones: [] as Array<{
+            source: {
+              getRandomPoint(point: { x: number; y: number }): void;
+            };
+          }>,
+        };
+        emitterRecords.push(record);
+        return {
+          setDepth: () => {},
+          start: () => {},
+          stop: () => {},
+          destroy: () => {},
+          clearEmitZones: () => { record.zones = []; },
+          addEmitZone: (zones: typeof record.zones) => {
+            record.zones = [...zones];
+            return record.zones;
+          },
+        };
+      };
+
+      const envMgr = new EnvironmentManager(mockScene, projection);
+      envMgr.init();
+
+      const backgroundRain = emitterRecords.find((record) => record.config['frequency'] === 35);
+      const windowDroplets = emitterRecords.find((record) => record.config['frequency'] === 180);
+      expect(backgroundRain?.config['x']).toBe(0);
+      expect(backgroundRain?.config['y']).toBe(0);
+      expect(windowDroplets?.config['x']).toBe(0);
+      expect(windowDroplets?.config['y']).toBe(0);
+
+      for (const record of [backgroundRain, windowDroplets]) {
+        expect(record?.zones).toHaveLength(1);
+        const source = record!.zones[0]!.source;
+        for (let sample = 0; sample < 12; sample += 1) {
+          const point = { x: 0, y: 0 };
+          source.getRandomPoint(point);
+          expect(point.x).toBeGreaterThanOrEqual(0.8 * 1280);
+          expect(point.x).toBeLessThanOrEqual(0.9 * 1280);
+          expect(point.y).toBeGreaterThanOrEqual(0.1 * 720);
+          expect(point.y).toBeLessThanOrEqual(0.5 * 720);
+        }
+      }
+
+      envMgr.destroy();
+    });
   });
 });
