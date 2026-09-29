@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { SimulationEngine } from '../../engine/SimulationEngine';
+import { requestPhysicalShopArrivalThought } from '../../engine/PhysicalShopInnerVoice';
 import {
   getGeneratedPhysicalShop,
   getGeneratedShopFixtureAtAnchor,
@@ -24,6 +25,12 @@ export const StoreFixtureHarness: React.FC<StoreFixtureHarnessProps> = ({ onExit
   const [revision, setRevision] = useState(0);
   const [timeOfDay, setTimeOfDay] = useState<TimeOfDay>('day');
   const [weather, setWeather] = useState<WeatherType>('clear');
+  const [arrivalThought] = useState(() => requestPhysicalShopArrivalThought(simulation, {
+    placeId: STORE_PLACE_ID,
+    placeName: 'CornerMart',
+    timeOfDay: 'day',
+    weather: 'clear',
+  }));
   const [focusFixtureId, setFocusFixtureId] = useState<string | null>(null);
   const [message, setMessage] = useState('Entered CornerMart.');
 
@@ -74,6 +81,7 @@ export const StoreFixtureHarness: React.FC<StoreFixtureHarnessProps> = ({ onExit
     cash: simulation.getState().player.cash,
     focusedStock,
     actorCount: characters.length,
+    innerVoiceTopic: arrivalThought?.topic ?? null,
   };
 
   const bump = () => setRevision((value) => value + 1);
