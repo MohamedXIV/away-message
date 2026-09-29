@@ -1,6 +1,6 @@
 // GENERATED — do not edit by hand.
-// Source: content/store.json (content v284fb2fa). Regenerate: npm run content:pull.
-export const WORLD_CONTENT_VERSION = '284fb2fa';
+// Source: content/store.json (content vd5c64374). Regenerate: npm run content:pull.
+export const WORLD_CONTENT_VERSION = 'd5c64374';
 
 export interface GeneratedSpatialPoint {
   x: number;
@@ -381,8 +381,8 @@ export const GENERATED_ANCHORS: GeneratedAnchorDef[] = [
     id: "corner_mart_window",
     viewId: "view_b1",
     name: "Front Window",
-    x: 0.84,
-    y: 0.2,
+    x: 0.929,
+    y: 0.35,
     tags: ["ambient", "window", "weather"],
   },
   {
@@ -678,6 +678,14 @@ export const GENERATED_ASSETS: GeneratedAssetDef[] = [
     uri: "assets/world/corner_mart_hero_normal.svg",
     normalMapAssetId: null,
     tags: ["production", "shop", "normal"],
+  },
+  {
+    id: "corner_mart_window_glass",
+    name: "CornerMart Window Glass",
+    kind: "image",
+    uri: "assets/world/corner_mart_window_glass.svg",
+    normalMapAssetId: null,
+    tags: ["production", "shop", "prop", "window"],
   },
 ];
 
@@ -1218,5 +1226,18 @@ export const GENERATED_SCENE_PROPS: GeneratedScenePropDef[] = [
     motionSpeed: 72,
     motionAmplitude: 0,
     tags: ["shop", "fan", "ambient"],
+  },
+  {
+    id: "corner_mart_window_prop",
+    viewId: "view_b1",
+    anchorId: "corner_mart_window",
+    assetId: "corner_mart_window_glass",
+    depth: 18,
+    width: 0.055,
+    height: 0.333,
+    motionType: null,
+    motionSpeed: 0,
+    motionAmplitude: 0,
+    tags: ["shop", "window", "weather-window"],
   },
 ];
