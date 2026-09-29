@@ -15,7 +15,10 @@ import {
 import type { TimeOfDay, WeatherType } from '../types';
 import { PhysicalWorldHost } from './PhysicalWorldHost';
 import { createGeneratedPhysicalShopProjection } from './GeneratedPhysicalShopPresentation';
-import { createTechnicalAwayPuppetCharacterMount } from './TechnicalAwayPuppetRig';
+import {
+  createTechnicalAwayPuppetCharacterMount,
+  createTechnicalAwayPuppetVisualState,
+} from './TechnicalAwayPuppetRig';
 import type { WorldInteractionIntent } from './types';
 
 const STORE_PLACE_ID = 'place_b1';
@@ -103,11 +106,21 @@ export const StoreFixtureHarness: React.FC<StoreFixtureHarnessProps> = ({ onExit
   );
 
   const characters = useMemo(() => {
+    const baseVisual = createTechnicalAwayPuppetVisualState(CASHIER_ACTOR_ID);
     const cashier = createTechnicalAwayPuppetCharacterMount(
       'fixture_shop_staff_anchor',
       CASHIER_ACTOR_ID,
+      {
+        ...baseVisual,
+        tints: {
+          ...baseVisual.tints,
+          clothing: '#c78b48',
+          outerwear: '#315d4d',
+          hair: '#3d2a22',
+        },
+      },
     );
-    return [{ ...cashier, scale: 0.98, depth: 32 }];
+    return [{ ...cashier, scale: 1.08, depth: 32 }];
   }, []);
 
   const shopState = useMemo(
@@ -137,6 +150,11 @@ export const StoreFixtureHarness: React.FC<StoreFixtureHarnessProps> = ({ onExit
     weather,
     focusFixtureId,
     sceneProps: projection.sceneProps?.map((prop) => prop.id) ?? [],
+    weatherWindowZones: projection.weatherWindowZones ?? [],
+    cashierAnchorActorId:
+      projection.anchors.find((anchor) => anchor.id === 'fixture_shop_staff_anchor')?.actorId ?? null,
+    venueCashierAssignment:
+      simulation.getVenueRuntimeState().roleAssignments['corner_mart_cashier_assignment'] ?? null,
     stockCount: ownership.filter((entry) => entry === 'store').length,
     unpaidCount: ownership.filter((entry) => entry === 'unpaid').length,
     ownedCount: ownership.filter((entry) => entry === 'owned').length,
