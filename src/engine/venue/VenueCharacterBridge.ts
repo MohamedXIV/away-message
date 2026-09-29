@@ -2,18 +2,20 @@ import { buildCharacter, type BuildCharacterOptions } from '../CharacterEngine';
 import {
   resolveCharacterPresenceFromSimulation,
   type CharacterPresenceProjection,
-  type CharacterPresenceSimulationSource,
 } from '../life/Presence';
 import { getGeneratedPlaceEntryPosition } from '../spatial/GeneratedSpatialWorld';
 import type { SpatialPosition } from '../spatial/SpatialPresence';
-import type { BuddyCharacter } from '../types';
+import type { BuddyCharacter, BuddyPresence } from '../types';
+import type { NpcPlaceQuery } from '../transit/NpcTrips';
 import type { VenueRoleAssignment, VenueRuntimeState } from './VenueOperations';
 
-export interface VenueCharacterSimulationSource extends CharacterPresenceSimulationSource {
-  social: CharacterPresenceSimulationSource['social'] & {
+export interface VenueCharacterSimulationSource {
+  social: {
     getBuddy(actorId: string): BuddyCharacter | undefined;
     registerBuddy(definition: BuddyCharacter): BuddyCharacter;
+    getPresence(actorId: string): BuddyPresence | undefined;
   };
+  getNpcPlaceState(actorId: string, atMinute?: number): NpcPlaceQuery;
   relocateActorSpatially(actorId: string, position: SpatialPosition): unknown;
   setVenueRoleAssignment(assignment: VenueRoleAssignment): void;
   getVenueRuntimeState(): VenueRuntimeState;
