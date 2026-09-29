@@ -272,10 +272,13 @@ export class WorldScene extends Phaser.Scene {
     actualFps: number;
   } {
     const surfaces = (this.layerActors?.list ?? []).filter(
-      (object) => typeof object.name === 'string' && object.name.startsWith('away-puppet-surface-'),
+      (object): object is Phaser.GameObjects.Container =>
+        object instanceof Phaser.GameObjects.Container
+        && typeof object.name === 'string'
+        && object.name.startsWith('away-puppet-surface-'),
     );
     const meshCount = surfaces.reduce((total, object) => {
-      const children = (object as Phaser.GameObjects.Container).list ?? [];
+      const children = object.list ?? [];
       return total + children.filter(
         (child) => typeof child.name === 'string' && child.name.startsWith('away-puppet-mesh-'),
       ).length;

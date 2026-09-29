@@ -215,7 +215,12 @@ export class PhaserCharacterSurface implements CharacterRenderSurface {
       mesh.indices = indices;
     }
 
-    mesh.setTint(parseTint(batch.tint));
+    // Phaser 4.2.1 runtime exposes Mesh2D.setTint(), but its generated
+    // TypeScript declaration omits that method. Keep the compatibility cast
+    // local to this exact runtime seam rather than widening Mesh2D globally.
+    (mesh as Phaser.GameObjects.Mesh2D & {
+      setTint(color: number): Phaser.GameObjects.Mesh2D;
+    }).setTint(parseTint(batch.tint));
     mesh.setAlpha(batch.alpha ?? 1);
     mesh.setBlendMode(mapBlendMode(batch.blendMode));
   }

@@ -5,8 +5,15 @@ import {
   createTechnicalAwayPuppetVisualState,
   TECHNICAL_AWAY_PUPPET_PROFILE,
 } from '../../src/world/phaser/TechnicalAwayPuppetRig';
+import type { CharacterMeshFrame } from '../../src/world/characterRenderer';
 
-function batch(frame: NonNullable<ReturnType<NonNullable<ReturnType<typeof createTechnicalAwayPuppetSession>['renderFrame']>>>, id: string) {
+function requireFrame(session: ReturnType<typeof createTechnicalAwayPuppetSession>): CharacterMeshFrame {
+  const frame = session.renderFrame?.(0);
+  if (!frame) throw new Error('Technical Away Puppet session did not produce a render frame');
+  return frame;
+}
+
+function batch(frame: Readonly<CharacterMeshFrame>, id: string) {
   const found = frame.batches.find((candidate) => candidate.id === id);
   if (!found) throw new Error(`Missing batch ${id}`);
   return found;
@@ -44,9 +51,7 @@ describe('Technical Away Puppet rig (#25)', () => {
 
   it('changes body geometry, hairstyle, wardrobe and tint through the semantic controller', () => {
     const session = createTechnicalAwayPuppetSession();
-    const render = session.renderFrame!;
-
-    const initial = render(0);
+    const initial = requireFrame(session);
     const initialTorsoWidth = width(batch(initial, 'wardrobe.top').vertices);
     const initialHairWidth = width(batch(initial, 'hair.front.top').vertices);
     expect(initial.batches.some((entry) => entry.id === 'wardrobe.outer.left')).toBe(true);
@@ -59,7 +64,7 @@ describe('Technical Away Puppet rig (#25)', () => {
     session.puppet.setTint('hair', '#704c2f');
     session.puppet.setTint('clothing', '#485f78');
 
-    const changed = render(0);
+    const changed = requireFrame(session);
     expect(width(batch(changed, 'wardrobe.top').vertices)).toBeGreaterThan(initialTorsoWidth);
     expect(width(batch(changed, 'hair.front.top').vertices)).toBeGreaterThan(initialHairWidth);
     expect(changed.batches.some((entry) => entry.id === 'wardrobe.top.detail')).toBe(true);
@@ -71,9 +76,7 @@ describe('Technical Away Puppet rig (#25)', () => {
 
   it('proves expression, blink and secondary-motion morphs change rendered geometry', () => {
     const session = createTechnicalAwayPuppetSession();
-    const render = session.renderFrame!;
-
-    const neutral = render(0);
+    const neutral = requireFrame(session);
     const neutralMouthWidth = width(batch(neutral, 'mouth').vertices);
     const neutralEyeHeight = Math.abs(batch(neutral, 'eye.left.iris').vertices[1]! - batch(neutral, 'eye.left.iris').vertices[9]!);
     const neutralHairX = batch(neutral, 'hair.front.top').vertices[0]!;
@@ -83,7 +86,7 @@ describe('Technical Away Puppet rig (#25)', () => {
     session.puppet.setMorph('secondary.hair', 0.75);
     session.puppet.setMorph('secondary.cloth', -0.5);
 
-    const animated = render(0);
+    const animated = requireFrame(session);
     expect(width(batch(animated, 'mouth').vertices)).toBeGreaterThan(neutralMouthWidth);
     const blinkEyeHeight = Math.abs(batch(animated, 'eye.left.iris').vertices[1]! - batch(animated, 'eye.left.iris').vertices[9]!);
     expect(blinkEyeHeight).toBeLessThan(neutralEyeHeight);
