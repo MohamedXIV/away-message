@@ -30,6 +30,7 @@ export class EnvironmentManager {
   private foregroundRainEmitter?: Phaser.GameObjects.Particles.ParticleEmitter;
   private windowDropletsEmitter?: Phaser.GameObjects.Particles.ParticleEmitter;
   private splashEmitter?: Phaser.GameObjects.Particles.ParticleEmitter;
+  private weatherResolution: WeatherLayerResolution | null = null;
 
   // Ambient Motion Targets & Base Transforms
   private motionTargets: Map<string, Phaser.GameObjects.GameObject> = new Map();
@@ -64,6 +65,7 @@ export class EnvironmentManager {
 
     // 2. Setup Weather Layer Emitters
     this.setupWeatherEmitters(width, height);
+    this.syncWeatherWindowZones(width, height);
 
     // 3. Setup Puddle Zones
     this.setupPuddleZones(width, height);
@@ -130,6 +132,9 @@ export class EnvironmentManager {
     this.currentDayPhaseParams = interpolateDayPhase(this.currentMinuteOfDay);
 
     this.applyAmbientLighting();
+    if (this.scene?.scale) {
+      this.syncWeatherWindowZones(this.scene.scale.width, this.scene.scale.height);
+    }
     this.applyWeatherResolution();
     this.refreshPuddleDefs();
     if (this.scene?.scale) {
@@ -138,7 +143,12 @@ export class EnvironmentManager {
   }
 
   public handleResize(width: number, height: number): void {
+    this.syncWeatherWindowZones(width, height);
     this.syncPuddleVisuals(width, height);
+  }
+
+  public getWeatherLayerResolution(): WeatherLayerResolution | null {
+    return this.weatherResolution ? { ...this.weatherResolution } : null;
   }
 
   public triggerLightning(durationMs = 300, peakIntensity = 3.5): void {
@@ -354,16 +364,39 @@ export class EnvironmentManager {
     }
   }
 
+  private syncWeatherWindowZones(width: number, height: number): void {
+    const zones = this.projection.weatherWindowZones ?? [];
+    const emitters = [this.backgroundRainEmitter, this.windowDropletsEmitter]
+      .filter((emitter): emitter is Phaser.GameObjects.Particles.ParticleEmitter => Boolean(emitter));
+
+    for (const emitter of emitters) {
+      emitter.clearEmitZones();
+      if (zones.length === 0) continue;
+      emitter.addEmitZone(zones.map((zone) => ({
+        type: 'random' as const,
+        source: new Phaser.Geom.Rectangle(
+          zone.x * width,
+          zone.y * height,
+          zone.width * width,
+          zone.height * height,
+        ),
+      })));
+    }
+  }
+
   private applyWeatherResolution(): void {
     const isInterior = this.projection.isInterior ?? true;
+    const hasAuthoredWindowZone = (this.projection.weatherWindowZones?.length ?? 0) > 0;
     const resolution: WeatherLayerResolution = resolveWeatherLayers({
       weather: this.projection.weather,
       isInterior,
-      // Authored production backgrounds are opaque until a view-specific
-      // window mask/shader is supplied. Technical fixture projections have no
-      // assetId and retain the older window-rain probe behavior.
-      allowUnmaskedInteriorRain: this.allowFixtureWindowRain || !this.projection.assetId,
+      // Production interiors may opt into rain only when a bounded authored
+      // window zone exists. This keeps rain off opaque room pixels while
+      // allowing the exterior/window region to remain visibly weather-aware.
+      allowUnmaskedInteriorRain:
+        this.allowFixtureWindowRain || !this.projection.assetId || hasAuthoredWindowZone,
     });
+    this.weatherResolution = resolution;
 
     if (this.dustMoteEmitter) {
       if (resolution.dustMotes) this.dustMoteEmitter.start();
