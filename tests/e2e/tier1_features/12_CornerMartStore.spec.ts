@@ -15,6 +15,7 @@ interface StoreFixtureState {
   cash: number;
   actorCount: number;
   innerVoiceTopic: string | null;
+  focusedStock: Array<{ slotId: string; itemInstanceId: string | null }>;
 }
 
 interface PropRuntimeStats {
@@ -62,6 +63,20 @@ test.describe('Issue #28 living CornerMart single-view proof', () => {
 
     await expect(page.getByTestId('away-puppet-runtime-stats')).toContainText('Away Puppet: 1 actors', {
       timeout: 10_000,
+    });
+
+    const capabilities = await page.evaluate(() => {
+      const runtime = (window as typeof window & {
+        __awayPhysicalWorldRuntime?: {
+          getScene(): { getCapabilityReport(): { normalMapLighting: boolean; ambientMotion: boolean; spatialAudio: boolean } } | null;
+        };
+      }).__awayPhysicalWorldRuntime;
+      return runtime?.getScene()?.getCapabilityReport() ?? null;
+    });
+    expect(capabilities).toMatchObject({
+      normalMapLighting: true,
+      ambientMotion: true,
+      spatialAudio: true,
     });
 
     await expect.poll(async () => (await readPropStats(page)).propCount, {
@@ -115,9 +130,14 @@ test.describe('Issue #28 living CornerMart single-view proof', () => {
     expect(focus?.zoom).toBe(1.75);
 
     const cashBefore = (await readStoreState(page)).cash;
+    const focusBeforeTake = await readStoreState(page);
+    expect(focusBeforeTake.focusedStock.every((slot) => slot.itemInstanceId !== null)).toBe(true);
+
     await page.getByTestId('corner-mart-take-item').click();
     await expect.poll(async () => (await readStoreState(page)).unpaidCount).toBe(1);
-    expect((await readStoreState(page)).cashier.checkout).toBe(true);
+    const afterTake = await readStoreState(page);
+    expect(afterTake.cashier.checkout).toBe(true);
+    expect(afterTake.focusedStock.some((slot) => slot.itemInstanceId === null)).toBe(true);
 
     await page.getByTestId('corner-mart-cashier').click();
     await expect.poll(async () => (await readStoreState(page)).unpaidCount).toBe(0);
