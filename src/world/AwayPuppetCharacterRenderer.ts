@@ -95,6 +95,7 @@ export class AwayPuppetCharacterRenderer implements CharacterRenderer {
   private session: AwayPuppetCharacterSession | null = null;
   private destroyed = false;
   private motionElapsedMs = 0;
+  private loadVersion = 0;
 
   constructor(
     private readonly loadSession: AwayPuppetCharacterSessionLoader,
@@ -103,24 +104,29 @@ export class AwayPuppetCharacterRenderer implements CharacterRenderer {
 
   load(profileId: string): Promise<void> {
     this.assertAlive();
+    const loadVersion = ++this.loadVersion;
     const loaded = this.loadSession(profileId);
 
     // Synchronous loaders are installed immediately so a Phaser scene can
     // attach and project a technical/runtime puppet in the same create pass.
     if (!(loaded instanceof Promise) && typeof (loaded as { then?: unknown }).then !== 'function') {
-      this.installSession(loaded);
+      this.installSession(loaded, loadVersion);
       return Promise.resolve();
     }
 
     return Promise.resolve(loaded).then((next) => {
-      this.installSession(next);
+      this.installSession(next, loadVersion);
     });
   }
 
-  private installSession(next: AwayPuppetCharacterSession): void {
+  private installSession(next: AwayPuppetCharacterSession, loadVersion: number): void {
     if (this.destroyed) {
       next.dispose();
       throw new Error('Character renderer is destroyed');
+    }
+    if (loadVersion !== this.loadVersion) {
+      next.dispose();
+      return;
     }
 
     const previous = this.session;
