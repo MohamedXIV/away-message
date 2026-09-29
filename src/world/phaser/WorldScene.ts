@@ -114,6 +114,7 @@ export class WorldScene extends Phaser.Scene {
   private assetA1Image?: Phaser.GameObjects.Image;
   private curtainImage?: Phaser.GameObjects.Image;
   private clockHandImage?: Phaser.GameObjects.Image;
+  private projectionPropImages = new Map<string, Phaser.GameObjects.Image>();
   private puddleRenderTexture?: Phaser.GameObjects.RenderTexture;
 
   // Lights
@@ -348,6 +349,8 @@ export class WorldScene extends Phaser.Scene {
     this.assetA1Image?.destroy();
     this.curtainImage?.destroy();
     this.clockHandImage?.destroy();
+    for (const propImage of this.projectionPropImages.values()) propImage.destroy();
+    this.projectionPropImages.clear();
     this.deskImage = this.assetA1Image = this.curtainImage = this.clockHandImage = undefined;
 
     if (resolveSceneBackgroundTexture(this.projection, this.visualMode) === 'fixture_bg') {
@@ -383,6 +386,32 @@ export class WorldScene extends Phaser.Scene {
       };
       litImage.setLighting?.(true);
       litImage.setSelfShadow?.(true, 0.45, 0.25);
+    }
+
+    this.setupProjectionProps(width, height);
+  }
+
+  private setupProjectionProps(width: number, height: number): void {
+    for (const prop of this.projection.sceneProps ?? []) {
+      if (!this.textures.exists(prop.assetId)) {
+        console.error(
+          `[projection-assets] Scene prop asset '${prop.assetId}' is not loaded; omitting prop '${prop.id}'.`,
+        );
+        continue;
+      }
+
+      const image = this.add.image(prop.x * width, prop.y * height, prop.assetId);
+      image.setName(`world-prop-${prop.id}`);
+      image.setDisplaySize(prop.width * width, prop.height * height);
+      image.setDepth(prop.depth);
+
+      const layer = prop.depth >= 40
+        ? this.layerForeground
+        : prop.depth >= 30
+          ? this.layerActors
+          : this.layerScenery;
+      layer?.add(image);
+      this.projectionPropImages.set(prop.id, image);
     }
   }
 
@@ -423,11 +452,16 @@ export class WorldScene extends Phaser.Scene {
   }
 
   private registerFixtureMotionTargets(): void {
-    if (this.visualMode !== 'technical-fixture' || !this.environmentManager) return;
-    if (this.curtainImage) this.environmentManager.registerMotionTarget('fixture_curtain', this.curtainImage);
-    if (this.clockHandImage) this.environmentManager.registerMotionTarget('fixture_clock_hand', this.clockHandImage);
-    if (this.deskImage) this.environmentManager.registerMotionTarget('fixture_desk', this.deskImage);
-    if (this.assetA1Image) this.environmentManager.registerMotionTarget('asset_a1', this.assetA1Image);
+    if (!this.environmentManager) return;
+    if (this.visualMode === 'technical-fixture') {
+      if (this.curtainImage) this.environmentManager.registerMotionTarget('fixture_curtain', this.curtainImage);
+      if (this.clockHandImage) this.environmentManager.registerMotionTarget('fixture_clock_hand', this.clockHandImage);
+      if (this.deskImage) this.environmentManager.registerMotionTarget('fixture_desk', this.deskImage);
+      if (this.assetA1Image) this.environmentManager.registerMotionTarget('asset_a1', this.assetA1Image);
+    }
+    for (const [propId, image] of this.projectionPropImages) {
+      this.environmentManager.registerMotionTarget(propId, image);
+    }
   }
 
   /**
@@ -655,6 +689,11 @@ export class WorldScene extends Phaser.Scene {
       this.curtainImage?.setPosition(width * 0.28, height * 0.12).setScale(scaleFactor * 1.1);
       this.clockHandImage?.setPosition(width * 0.68, height * 0.35).setScale(scaleFactor * 1.15);
     }
+    for (const prop of this.projection.sceneProps ?? []) {
+      this.projectionPropImages.get(prop.id)
+        ?.setPosition(prop.x * width, prop.y * height)
+        .setDisplaySize(prop.width * width, prop.height * height);
+    }
 
     const cameraTarget = resolveProjectionCameraTarget(this.projection, width, height);
     this.cameras.main.centerOn(cameraTarget.x, cameraTarget.y);
@@ -825,6 +864,8 @@ export class WorldScene extends Phaser.Scene {
       audioService.stop(handle, 0);
     }
     this.audioHandles.clear();
+    for (const propImage of this.projectionPropImages.values()) propImage.destroy();
+    this.projectionPropImages.clear();
     destroyWorldSceneCharacterMounts(this.characterMounts);
     this.characterMounts = [];
   }
@@ -850,6 +891,7 @@ export class WorldScene extends Phaser.Scene {
     try {
       if (!this.textures) return;
       this.setupSprites(this.scale.width, this.scale.height);
+      this.registerFixtureMotionTargets();
       this.refreshRenderTextureReflection();
     } catch {
       // Refresh is best-effort; the next view update re-renders anyway.
