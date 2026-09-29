@@ -88,11 +88,18 @@ async function readCharacterPerf(page: Page): Promise<{
 
 test.describe('Issue #28 living CornerMart single-view proof', () => {
   test('keeps one hero view alive while focus, weather and shopping state change', async ({ page }) => {
+    // A clean local Chromium/Playwright headless run has completed this full
+    // end-to-end path in ~45s. Keep a bounded 60s budget for cold boot +
+    // Phaser/WebGL startup + the full interaction sequence.
+    test.setTimeout(60_000);
     await page.goto('/?fixture=store');
 
-    await expect(page.getByTestId('physical-world-host')).toBeVisible();
-    await expect(page.getByTestId('phaser-container').locator('canvas')).toBeVisible();
-    await expect(page.getByTestId('corner-mart-status')).toBeVisible();
+    // Clean-server mounts have crossed the default 5s assertion budget
+    // (~5.0s observed), so give only the cold-mount checks wider headroom.
+    const coldMountTimeout = 15_000;
+    await expect(page.getByTestId('physical-world-host')).toBeVisible({ timeout: coldMountTimeout });
+    await expect(page.getByTestId('phaser-container').locator('canvas')).toBeVisible({ timeout: coldMountTimeout });
+    await expect(page.getByTestId('corner-mart-status')).toBeVisible({ timeout: coldMountTimeout });
 
     await expect.poll(async () => (await readStoreState(page)).sceneProps).toContain('corner_mart_fan_prop');
     const initial = await readStoreState(page);
@@ -195,7 +202,7 @@ test.describe('Issue #28 living CornerMart single-view proof', () => {
       props: propAfter,
       characterPerf,
       perfNote:
-        'average/max update ms measure character-renderer update cost; actualFps is Phaser game-loop scheduling in this browser environment',
+        'average/max update ms measure character-renderer update cost; actualFps is Phaser game.loop.actualFps for this local Chromium/Playwright headless run and may reflect headless scheduling rather than renderer cost',
     }));
   });
 });

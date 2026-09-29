@@ -439,7 +439,14 @@ describe('Living Environment Subsystem', () => {
         addLight: () => ({ setIntensity: () => {}, setColor: () => {} }),
       },
       add: {
-        particles: () => ({ setDepth: () => {}, start: () => {}, stop: () => {}, destroy: () => {} }),
+        particles: () => ({
+          setDepth: () => {},
+          start: () => {},
+          stop: () => {},
+          destroy: () => {},
+          clearEmitZones: () => {},
+          addEmitZone: () => [],
+        }),
         renderTexture: () => ({
           setDepth: () => {},
           setAlpha: () => {},
