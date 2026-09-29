@@ -25,6 +25,7 @@ export interface GeneratedShopProjectionOptions {
   timeOfDay?: TimeOfDay;
   weather?: WeatherType;
   focusFixtureId?: string | null;
+  actorByAnchorId?: Readonly<Record<string, string>>;
 }
 
 function lightForFixture(
@@ -168,6 +169,7 @@ export function createGeneratedPhysicalShopProjection(
       listenerOrientation: 'forward',
       isInterior: true,
       windIntensity: weather === 'rain' ? 0.25 : 0.05,
+      actorByAnchorId: options.actorByAnchorId,
     }),
     sceneProps: props,
     weatherWindowZones,
