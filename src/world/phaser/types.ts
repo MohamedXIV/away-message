@@ -69,6 +69,14 @@ export interface WorldScenePropProjection {
   depth: number;
 }
 
+export interface WorldWeatherWindowZone {
+  id: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
 export interface WorldSceneProjection {
   placeId: string;
   placeName: string;
@@ -93,6 +101,7 @@ export interface WorldSceneProjection {
   authoredLights?: AuthoredLightDef[];
   spatialAudioSources?: SpatialAudioSourceDef[];
   sceneProps?: WorldScenePropProjection[];
+  weatherWindowZones?: WorldWeatherWindowZone[];
   listenerOrientation?: ListenerOrientation;
 }
 
