@@ -51,8 +51,9 @@ export interface SemanticAppearanceDescription {
 }
 
 export interface CharacterAppearanceKnowledge {
-  readonly physical: SemanticAppearanceDescription;
-  readonly online: SemanticAppearanceDescription | null;
+  readonly actorId: string;
+  readonly observableAppearance: SemanticAppearanceDescription | null;
+  readonly source: 'physical' | 'shared' | 'unknown';
 }
 
 export interface CharacterRenderer {
@@ -74,8 +75,28 @@ export function resolveAppearanceKnowledge(
   context: 'physical' | 'online',
   remotelyShared?: Readonly<SemanticAppearanceDescription> | null,
 ): CharacterAppearanceKnowledge {
+  if (context === 'physical') {
+    return {
+      actorId: physical.actorId,
+      observableAppearance: physical,
+      source: 'physical',
+    };
+  }
+
+  if (remotelyShared) {
+    if (remotelyShared.actorId !== physical.actorId) {
+      throw new Error('Shared appearance actor does not match physical appearance actor');
+    }
+    return {
+      actorId: physical.actorId,
+      observableAppearance: remotelyShared,
+      source: 'shared',
+    };
+  }
+
   return {
-    physical,
-    online: context === 'physical' ? physical : (remotelyShared ?? null),
+    actorId: physical.actorId,
+    observableAppearance: null,
+    source: 'unknown',
   };
 }
