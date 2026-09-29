@@ -23,6 +23,8 @@ describe('generated physical shop presentation (#28)', () => {
     const projection = createGeneratedPhysicalShopProjection('place_b1');
 
     expect(projection.authoredLights?.some((light) => light.flicker?.type === 'fluorescent')).toBe(true);
+    expect(projection.authoredLights?.find((light) => light.flicker?.type === 'fluorescent')?.radius)
+      .toBe(900);
     expect(projection.authoredLights?.some((light) => light.kind === 'fridge')).toBe(true);
     expect(projection.spatialAudioSources?.some((source) => source.eventId.includes('fridge'))).toBe(true);
     expect(projection.sceneProps).toContainEqual(expect.objectContaining({
