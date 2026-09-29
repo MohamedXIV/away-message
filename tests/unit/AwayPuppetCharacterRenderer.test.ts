@@ -182,8 +182,9 @@ describe('AwayPuppetCharacterRenderer (#25)', () => {
     } as const;
 
     expect(resolveAppearanceKnowledge(physical, 'online')).toEqual({
-      physical,
-      online: null,
+      actorId: 'actor-42',
+      observableAppearance: null,
+      source: 'unknown',
     });
 
     const shared = {
@@ -193,13 +194,19 @@ describe('AwayPuppetCharacterRenderer (#25)', () => {
     } as const;
 
     expect(resolveAppearanceKnowledge(physical, 'online', shared)).toEqual({
-      physical,
-      online: shared,
+      actorId: 'actor-42',
+      observableAppearance: shared,
+      source: 'shared',
     });
     expect(resolveAppearanceKnowledge(physical, 'physical')).toEqual({
-      physical,
-      online: physical,
+      actorId: 'actor-42',
+      observableAppearance: physical,
+      source: 'physical',
     });
+    expect(() => resolveAppearanceKnowledge(physical, 'online', {
+      ...shared,
+      actorId: 'actor-other',
+    })).toThrow(/actor/i);
   });
 
   it('drives bounded blink, breathing, and secondary motion through semantic morphs', async () => {
