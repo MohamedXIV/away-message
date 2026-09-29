@@ -85,6 +85,9 @@ export function buildProjectionAssetLoadPlan(
   for (const view of projection.availableViews ?? []) {
     if (view.assetId) candidateIds.push(view.assetId);
   }
+  for (const prop of projection.sceneProps ?? []) {
+    if (prop.assetId) candidateIds.push(prop.assetId);
+  }
 
   for (const assetId of candidateIds) {
     if (seenDiffuse.has(assetId)) continue;
