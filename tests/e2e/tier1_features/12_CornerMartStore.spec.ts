@@ -8,10 +8,28 @@ interface StoreFixtureState {
   weather: string;
   focusFixtureId: string | null;
   sceneProps: string[];
+  weatherWindowZones: Array<{ id: string; x: number; y: number; width: number; height: number }>;
+  cashierAnchorActorId: string | null;
+  venueCashierAssignment: {
+    actorId: string;
+    roleId: string;
+    stationId: string | null;
+    status: string;
+  } | null;
   stockCount: number;
   unpaidCount: number;
   ownedCount: number;
   cashier: { talk: boolean; checkout: boolean };
+  cashierIdentity: { actorId: string; displayName: string; handle: string } | null;
+  cashierPresence: {
+    physical: { kind: string; placeId?: string };
+    availability: { canInteractInPerson: boolean };
+  } | null;
+  activeSocialTarget: {
+    actorId: string;
+    sceneContext: string;
+    personaSuffix: string;
+  } | null;
   cash: number;
   actorCount: number;
   innerVoiceTopic: string | null;
@@ -56,6 +74,9 @@ async function clickFixtureControl(page: Page, testId: string): Promise<void> {
 }
 
 async function readCharacterPerf(page: Page): Promise<{
+  actorCount: number;
+  visibleSurfaceCount: number;
+  meshCount: number;
   sampleCount: number;
   averageUpdateMs: number;
   maxUpdateMs: number;
@@ -66,6 +87,9 @@ async function readCharacterPerf(page: Page): Promise<{
       __awayPhysicalWorldRuntime?: {
         getScene(): {
           getCharacterRuntimeStats(): {
+            actorCount: number;
+            visibleSurfaceCount: number;
+            meshCount: number;
             sampleCount: number;
             averageUpdateMs: number;
             maxUpdateMs: number;
@@ -78,6 +102,9 @@ async function readCharacterPerf(page: Page): Promise<{
     if (!scene) throw new Error('CornerMart Phaser runtime is unavailable');
     const stats = scene.getCharacterRuntimeStats();
     return {
+      actorCount: stats.actorCount,
+      visibleSurfaceCount: stats.visibleSurfaceCount,
+      meshCount: stats.meshCount,
       sampleCount: stats.sampleCount,
       averageUpdateMs: stats.averageUpdateMs,
       maxUpdateMs: stats.maxUpdateMs,
@@ -88,10 +115,10 @@ async function readCharacterPerf(page: Page): Promise<{
 
 test.describe('Issue #28 living CornerMart single-view proof', () => {
   test('keeps one hero view alive while focus, weather and shopping state change', async ({ page }) => {
-    // A clean local Chromium/Playwright headless run has completed this full
-    // end-to-end path in ~45s. Keep a bounded 60s budget for cold boot +
-    // Phaser/WebGL startup + the full interaction sequence.
-    test.setTimeout(60_000);
+    // Local Chromium/Playwright headless runs have ranged from ~45s to the
+    // edge of 60s even while headed Chromium stays near 60 FPS. Keep a bounded
+    // 90s test budget as scheduling margin; individual assertions remain tight.
+    test.setTimeout(90_000);
     await page.goto('/?fixture=store');
 
     // Clean-server mounts have crossed the default 5s assertion budget
@@ -110,10 +137,35 @@ test.describe('Issue #28 living CornerMart single-view proof', () => {
     expect(initial.cashier).toEqual({ talk: true, checkout: false });
     expect(initial.actorCount).toBe(1);
     expect(initial.innerVoiceTopic).toBe('physical_shop_arrival');
-
-    await expect(page.getByTestId('away-puppet-runtime-stats')).toContainText('Away Puppet: 1 actors', {
-      timeout: 10_000,
+    expect(initial.cashierAnchorActorId).toBe('corner_mart_cashier');
+    expect(initial.venueCashierAssignment).toMatchObject({
+      actorId: 'corner_mart_cashier',
+      roleId: 'fixture_cashier_role',
+      stationId: 'fixture_shop_staff_station',
+      status: 'active',
     });
+    expect(initial.cashierIdentity).toEqual({
+      actorId: 'corner_mart_cashier',
+      displayName: 'Casey',
+      handle: 'casey_counter',
+    });
+    expect(initial.cashierPresence?.availability.canInteractInPerson).toBe(true);
+    expect(initial.cashierPresence?.physical).toEqual({
+      kind: 'at_place',
+      placeId: 'place_b1',
+    });
+    expect(initial.weatherWindowZones).toHaveLength(1);
+    expect(initial.weatherWindowZones[0]).toMatchObject({
+      id: 'corner_mart_window_prop',
+      width: 0.055,
+      height: 0.333,
+    });
+
+    await expect.poll(async () => (await readCharacterPerf(page)).actorCount, {
+      timeout: 10_000,
+      message: 'expected engine-backed cashier renderer to mount',
+    }).toBe(1);
+    expect((await readCharacterPerf(page)).visibleSurfaceCount).toBe(1);
 
     const capabilities = await page.evaluate(() => {
       const runtime = (window as typeof window & {
@@ -179,8 +231,17 @@ test.describe('Issue #28 living CornerMart single-view proof', () => {
     });
     expect(focus?.zoom).toBe(1.75);
 
-    const cashBefore = (await readStoreState(page)).cash;
-    const focusBeforeTake = await readStoreState(page);
+    await clickFixtureControl(page, 'corner-mart-cashier');
+    await expect.poll(async () => (await readStoreState(page)).activeSocialTarget?.actorId)
+      .toBe('corner_mart_cashier');
+    const talkState = await readStoreState(page);
+    expect(talkState.activeSocialTarget?.sceneContext).toContain('In-person meeting at CornerMart');
+    expect(talkState.activeSocialTarget?.sceneContext).toContain('front counter');
+    expect(talkState.activeSocialTarget?.sceneContext).not.toContain('stock');
+    expect(talkState.activeSocialTarget?.personaSuffix).toContain('physically present');
+
+    const cashBefore = talkState.cash;
+    const focusBeforeTake = talkState;
     expect(focusBeforeTake.focusedStock.every((slot) => slot.itemInstanceId !== null)).toBe(true);
 
     await clickFixtureControl(page, 'corner-mart-take-item');
