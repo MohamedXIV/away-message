@@ -11,11 +11,13 @@ import type { AuthoredLightDef } from './environment/lightingEngine';
 import {
   createWorldSceneProjection,
   getDefaultSpatialAudioSources,
+  getMinuteForTimeOfDay,
 } from './presentationAdapter';
 import type {
   WorldCameraFocus,
   WorldSceneProjection,
   WorldScenePropProjection,
+  WorldWeatherWindowZone,
 } from './types';
 import type { SpatialAudioSourceDef } from '../../audio/types';
 
@@ -82,9 +84,11 @@ function audioForFixture(
 function scenePropsForView(viewId: string): {
   props: WorldScenePropProjection[];
   motions: AmbientMotionDef[];
+  weatherWindowZones: WorldWeatherWindowZone[];
 } {
   const props: WorldScenePropProjection[] = [];
   const motions: AmbientMotionDef[] = [];
+  const weatherWindowZones: WorldWeatherWindowZone[] = [];
 
   for (const prop of GENERATED_SCENE_PROPS.filter((candidate) => candidate.viewId === viewId)) {
     const anchor = GENERATED_ANCHORS.find((candidate) => candidate.id === prop.anchorId);
@@ -98,6 +102,15 @@ function scenePropsForView(viewId: string): {
       height: prop.height,
       depth: prop.depth,
     });
+    if (prop.tags.includes('weather-window')) {
+      weatherWindowZones.push({
+        id: prop.id,
+        x: anchor.x - prop.width / 2,
+        y: anchor.y - prop.height / 2,
+        width: prop.width,
+        height: prop.height,
+      });
+    }
     if (prop.motionType) {
       motions.push({
         id: `motion-${prop.id}`,
@@ -108,7 +121,7 @@ function scenePropsForView(viewId: string): {
       });
     }
   }
-  return { props, motions };
+  return { props, motions, weatherWindowZones };
 }
 
 export function createGeneratedPhysicalShopProjection(
@@ -134,7 +147,7 @@ export function createGeneratedPhysicalShopProjection(
 
   const timeOfDay = options.timeOfDay ?? 'day';
   const weather = options.weather ?? 'clear';
-  const { props, motions } = scenePropsForView(viewId);
+  const { props, motions, weatherWindowZones } = scenePropsForView(viewId);
   const authoredLights = fixtures.flatMap(lightForFixture);
   const spatialAudioSources = [
     ...getDefaultSpatialAudioSources(weather, true),
@@ -146,6 +159,7 @@ export function createGeneratedPhysicalShopProjection(
       placeId,
       viewId,
       timeOfDay,
+      minuteOfDay: getMinuteForTimeOfDay(timeOfDay),
       weather,
       focus,
       authoredLights,
@@ -156,5 +170,6 @@ export function createGeneratedPhysicalShopProjection(
       windIntensity: weather === 'rain' ? 0.25 : 0.05,
     }),
     sceneProps: props,
+    weatherWindowZones,
   };
 }
