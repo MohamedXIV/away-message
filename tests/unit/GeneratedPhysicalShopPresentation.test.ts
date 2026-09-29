@@ -22,9 +22,15 @@ describe('generated physical shop presentation (#28)', () => {
   it('projects authored fluorescent/fridge lighting, compressor audio and moving fan prop', () => {
     const projection = createGeneratedPhysicalShopProjection('place_b1');
 
-    expect(projection.authoredLights?.some((light) => light.flicker?.type === 'fluorescent')).toBe(true);
-    expect(projection.authoredLights?.find((light) => light.flicker?.type === 'fluorescent')?.radius)
-      .toBe(900);
+    const fluorescentLights = projection.authoredLights
+      ?.filter((light) => light.flicker?.type === 'fluorescent') ?? [];
+    expect(fluorescentLights).toHaveLength(3);
+    expect(fluorescentLights.every((light) => light.radius === 430)).toBe(true);
+    expect(fluorescentLights.map((light) => light.id)).toEqual(expect.arrayContaining([
+      'shop-light-corner_mart_cashier_counter-corner_mart_fluorescent',
+      'shop-light-corner_mart_shelf_center-corner_mart_fluorescent',
+      'shop-light-corner_mart_shelf_left-corner_mart_fluorescent',
+    ]));
     expect(projection.authoredLights?.some((light) => light.kind === 'fridge')).toBe(true);
     expect(projection.spatialAudioSources?.some((source) => source.eventId.includes('fridge'))).toBe(true);
     expect(projection.sceneProps).toContainEqual(expect.objectContaining({
