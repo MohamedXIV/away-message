@@ -306,8 +306,10 @@ export class EnvironmentManager {
     // Background Rain (Visible behind scenery / through window)
     if (this.scene.textures.exists('fixture_rain')) {
       this.backgroundRainEmitter = this.scene.add.particles(0, 0, 'fixture_rain', {
-        x: { min: 80, max: Math.min(width, 500) },
-        y: -30,
+        // Position is owned by emit zones. Keeping x/y at zero avoids Phaser
+        // adding emitter ops on top of the authored window-zone point.
+        x: 0,
+        y: 0,
         speedX: { min: -100, max: -70 },
         speedY: { min: 400, max: 600 },
         lifespan: 1100,
@@ -336,8 +338,9 @@ export class EnvironmentManager {
     // Window droplets / runoff (Indoor only, on glass)
     if (this.scene.textures.exists('fixture_mote')) {
       this.windowDropletsEmitter = this.scene.add.particles(0, 0, 'fixture_mote', {
-        x: { min: 140, max: 440 }, // Window bounds
-        y: { min: 120, max: 540 },
+        // Position is owned by emit zones; see syncWeatherWindowZones.
+        x: 0,
+        y: 0,
         speedX: 0,
         speedY: { min: 20, max: 65 },
         scale: { start: 0.35, end: 0.2 },
@@ -365,29 +368,34 @@ export class EnvironmentManager {
   }
 
   private syncWeatherWindowZones(width: number, height: number): void {
-    const zones = this.projection.weatherWindowZones ?? [];
+    const authoredZones = this.projection.weatherWindowZones ?? [];
     const emitters = [this.backgroundRainEmitter, this.windowDropletsEmitter]
       .filter((emitter): emitter is Phaser.GameObjects.Particles.ParticleEmitter => Boolean(emitter));
 
     for (const emitter of emitters) {
       emitter.clearEmitZones();
-      if (zones.length === 0) continue;
-      emitter.addEmitZone(zones.map((zone) => {
-        const x = zone.x * width;
-        const y = zone.y * height;
-        const zoneWidth = zone.width * width;
-        const zoneHeight = zone.height * height;
 
-        // Phaser 4.2.1 declares RandomZoneSource#getRandomPoint with the
-        // structural Vector2Like callback shape, while Geom.Rectangle's
-        // generic helper is narrowed to Vector2. Adapt the authored rectangle
-        // locally instead of widening Phaser globals or casting through any.
+      const zones = authoredZones.length > 0
+        ? authoredZones.map((zone) => ({
+            x: zone.x * width,
+            y: zone.y * height,
+            width: zone.width * width,
+            height: zone.height * height,
+          }))
+        : emitter === this.backgroundRainEmitter
+          ? [{ x: 80, y: -30, width: Math.max(1, Math.min(width, 500) - 80), height: 1 }]
+          : [{ x: 140, y: 120, width: 300, height: 420 }];
+
+      emitter.addEmitZone(zones.map((zone) => {
+        // Phaser applies an emit-zone point first and then adds particle x/y
+        // ops. These emitters deliberately use x=0/y=0, so this callback is
+        // the sole positional authority for window rain/droplets.
         const source: {
           getRandomPoint(point: Phaser.Types.Math.Vector2Like): void;
         } = {
           getRandomPoint(point) {
-            point.x = x + Math.random() * zoneWidth;
-            point.y = y + Math.random() * zoneHeight;
+            point.x = zone.x + Math.random() * zone.width;
+            point.y = zone.y + Math.random() * zone.height;
           },
         };
 
