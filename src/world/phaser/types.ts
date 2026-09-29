@@ -59,6 +59,16 @@ export interface WorldCameraFocus {
   zoom: number;
 }
 
+export interface WorldScenePropProjection {
+  id: string;
+  assetId: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  depth: number;
+}
+
 export interface WorldSceneProjection {
   placeId: string;
   placeName: string;
@@ -82,6 +92,7 @@ export interface WorldSceneProjection {
   ambientMotions?: AmbientMotionDef[];
   authoredLights?: AuthoredLightDef[];
   spatialAudioSources?: SpatialAudioSourceDef[];
+  sceneProps?: WorldScenePropProjection[];
   listenerOrientation?: ListenerOrientation;
 }
 
