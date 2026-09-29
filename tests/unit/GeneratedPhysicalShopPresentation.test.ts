@@ -3,7 +3,9 @@ import { createGeneratedPhysicalShopProjection } from '../../src/world/phaser/Ge
 
 describe('generated physical shop presentation (#28)', () => {
   it('keeps CornerMart on one authored hero view while focus changes only camera projection', () => {
-    const hero = createGeneratedPhysicalShopProjection('place_b1');
+    const hero = createGeneratedPhysicalShopProjection('place_b1', {
+      actorByAnchorId: { fixture_shop_staff_anchor: 'corner_mart_cashier' },
+    });
     const fridge = createGeneratedPhysicalShopProjection('place_b1', {
       focusFixtureId: 'corner_mart_fridge',
     });
@@ -11,6 +13,8 @@ describe('generated physical shop presentation (#28)', () => {
     expect(hero.viewId).toBe('view_b1');
     expect(hero.availableViews).toHaveLength(1);
     expect(hero.focus).toBeNull();
+    expect(hero.anchors.find((anchor) => anchor.id === 'fixture_shop_staff_anchor')?.actorId)
+      .toBe('corner_mart_cashier');
     expect(fridge.viewId).toBe('view_b1');
     expect(fridge.focus).toMatchObject({ zoom: 1.75 });
   });
