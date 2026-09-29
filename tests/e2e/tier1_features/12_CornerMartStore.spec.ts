@@ -64,8 +64,8 @@ test.describe('Issue #28 living CornerMart single-view proof', () => {
 
     await expect.poll(async () => (await readPropStats(page)).propCount, {
       timeout: 10_000,
-      message: 'expected authored fan prop to render through WorldScene',
-    }).toBe(1);
+      message: 'expected authored fan/window props to render through WorldScene',
+    }).toBeGreaterThanOrEqual(2);
     const propBefore = await readPropStats(page);
     await page.waitForTimeout(500);
     const propAfter = await readPropStats(page);
@@ -79,6 +79,28 @@ test.describe('Issue #28 living CornerMart single-view proof', () => {
     await expect.poll(async () => (await readStoreState(page)).timeOfDay).toBe('night');
     await expect.poll(async () => (await readStoreState(page)).weather).toBe('rain');
     await expect.poll(async () => (await readStoreState(page)).focusFixtureId).toBe('corner_mart_fridge');
+
+    const weatherLayers = await page.evaluate(() => {
+      const runtime = (window as typeof window & {
+        __awayPhysicalWorldRuntime?: {
+          getScene(): {
+            getEnvironmentManager(): {
+              getWeatherLayerResolution(): {
+                backgroundRain: boolean;
+                foregroundRain: boolean;
+                windowDroplets: boolean;
+              } | null;
+            } | undefined;
+          } | null;
+        };
+      }).__awayPhysicalWorldRuntime;
+      return runtime?.getScene()?.getEnvironmentManager()?.getWeatherLayerResolution() ?? null;
+    });
+    expect(weatherLayers).toMatchObject({
+      backgroundRain: true,
+      foregroundRain: false,
+      windowDroplets: true,
+    });
 
     const focus = await page.evaluate(() => {
       const runtime = (window as typeof window & {
