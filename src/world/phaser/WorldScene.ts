@@ -300,6 +300,20 @@ export class WorldScene extends Phaser.Scene {
     };
   }
 
+  public getScenePropRuntimeStats(): {
+    propCount: number;
+    propNames: string[];
+    angles: Record<string, number>;
+  } {
+    return {
+      propCount: this.projectionPropImages.size,
+      propNames: [...this.projectionPropImages.keys()],
+      angles: Object.fromEntries(
+        [...this.projectionPropImages.entries()].map(([id, image]) => [id, image.angle]),
+      ),
+    };
+  }
+
   /**
    * Sets up 2D WebGL dynamic lights and ambient profile
    */
