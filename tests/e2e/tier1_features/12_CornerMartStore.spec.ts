@@ -73,6 +73,13 @@ async function clickFixtureControl(page: Page, testId: string): Promise<void> {
   await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
 }
 
+async function clickWorldAnchor(page: Page, x: number, y: number): Promise<void> {
+  const canvas = page.getByTestId('phaser-container').locator('canvas');
+  const box = await canvas.boundingBox();
+  if (!box) throw new Error('CornerMart canvas has no clickable bounds');
+  await page.mouse.click(box.x + box.width * x, box.y + box.height * y);
+}
+
 async function readCharacterPerf(page: Page): Promise<{
   actorCount: number;
   visibleSurfaceCount: number;
@@ -127,6 +134,10 @@ test.describe('Issue #28 living CornerMart single-view proof', () => {
     await expect(page.getByTestId('physical-world-host')).toBeVisible({ timeout: coldMountTimeout });
     await expect(page.getByTestId('phaser-container').locator('canvas')).toBeVisible({ timeout: coldMountTimeout });
     await expect(page.getByTestId('corner-mart-status')).toBeVisible({ timeout: coldMountTimeout });
+    await expect(page.getByTestId('world-fixture-controls')).toHaveCount(0);
+    const qaBar = await page.getByTestId('corner-mart-qa-bar').boundingBox();
+    expect(qaBar).not.toBeNull();
+    expect(qaBar!.height).toBeLessThan(120);
 
     await expect.poll(async () => (await readStoreState(page)).sceneProps).toContain('corner_mart_fan_prop');
     const initial = await readStoreState(page);
@@ -231,7 +242,10 @@ test.describe('Issue #28 living CornerMart single-view proof', () => {
     });
     expect(focus?.zoom).toBe(1.75);
 
-    await clickFixtureControl(page, 'corner-mart-cashier');
+    // Hit the actual authored cashier hotspot in the Phaser canvas. This proves
+    // anchor -> actorId -> world intent -> social target rather than bypassing
+    // the world interaction path through a QA-only button.
+    await clickWorldAnchor(page, 0.72, 0.67);
     await expect.poll(async () => (await readStoreState(page)).activeSocialTarget?.actorId)
       .toBe('corner_mart_cashier');
     const talkState = await readStoreState(page);
