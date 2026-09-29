@@ -6,6 +6,12 @@ import {
   getGeneratedShopFixtureAtAnchor,
   projectGeneratedPhysicalShopFocus,
 } from '../../engine/GeneratedPhysicalShopDefinitions';
+import {
+  ensureVenueRoleCharacter,
+  resolveInPersonVenueCharacterContext,
+  type EnsureVenueRoleCharacterOptions,
+  type InPersonVenueCharacterContext,
+} from '../../engine/venue/VenueCharacterBridge';
 import type { TimeOfDay, WeatherType } from '../types';
 import { PhysicalWorldHost } from './PhysicalWorldHost';
 import { createGeneratedPhysicalShopProjection } from './GeneratedPhysicalShopPresentation';
@@ -14,13 +20,61 @@ import type { WorldInteractionIntent } from './types';
 
 const STORE_PLACE_ID = 'place_b1';
 const STORE_WORLD_SEED = 'corner-mart-browser-fixture-v1';
+const CASHIER_ACTOR_ID = 'corner_mart_cashier';
+
+const CASHIER_SETUP: EnsureVenueRoleCharacterOptions = {
+  character: {
+    id: CASHIER_ACTOR_ID,
+    displayName: 'Casey',
+    handle: 'casey_counter',
+    archetype: 'regular',
+    reach: 'local',
+    roles: ['cashier', 'shop-staff'],
+    appearance: { hair: 'brown', eyes: 'hazel' },
+    languages: [{ lang: 'en', level: 5 }],
+    status: 'acquaintance',
+    metVia: 'intro',
+    createdDay: 1,
+  },
+  placeId: STORE_PLACE_ID,
+  assignment: {
+    id: 'corner_mart_cashier_assignment',
+    roleId: 'fixture_cashier_role',
+    sourceKind: 'authored_fixture',
+    sourceId: 'corner_mart',
+    status: 'active',
+    stationId: 'fixture_shop_staff_station',
+  },
+};
 
 export interface StoreFixtureHarnessProps {
   onExit?: () => void;
 }
 
+function resolveCashierContext(
+  simulation: SimulationEngine,
+  viewName: string,
+  weather: WeatherType,
+): InPersonVenueCharacterContext | null {
+  return resolveInPersonVenueCharacterContext(simulation, CASHIER_ACTOR_ID, {
+    playerPlaceId: STORE_PLACE_ID,
+    placeName: 'CornerMart',
+    viewName,
+    visibleContext: [
+      'front counter',
+      'grocery shelves',
+      'drink fridge',
+      weather === 'rain' ? 'rain at the front window' : 'front window',
+    ],
+  });
+}
+
 export const StoreFixtureHarness: React.FC<StoreFixtureHarnessProps> = ({ onExit }) => {
-  const [simulation] = useState(() => new SimulationEngine());
+  const [simulation] = useState(() => {
+    const engine = new SimulationEngine();
+    ensureVenueRoleCharacter(engine, CASHIER_SETUP);
+    return engine;
+  });
   const shop = useMemo(() => getGeneratedPhysicalShop(STORE_PLACE_ID), []);
   const [revision, setRevision] = useState(0);
   const [timeOfDay, setTimeOfDay] = useState<TimeOfDay>('day');
@@ -33,12 +87,17 @@ export const StoreFixtureHarness: React.FC<StoreFixtureHarnessProps> = ({ onExit
   }));
   const [focusFixtureId, setFocusFixtureId] = useState<string | null>(null);
   const [message, setMessage] = useState('Entered CornerMart.');
+  const [activeSocialTarget, setActiveSocialTarget] =
+    useState<InPersonVenueCharacterContext | null>(null);
 
   const projection = useMemo(
     () => createGeneratedPhysicalShopProjection(STORE_PLACE_ID, {
       timeOfDay,
       weather,
       focusFixtureId,
+      actorByAnchorId: {
+        fixture_shop_staff_anchor: CASHIER_ACTOR_ID,
+      },
     }),
     [timeOfDay, weather, focusFixtureId],
   );
@@ -46,9 +105,9 @@ export const StoreFixtureHarness: React.FC<StoreFixtureHarnessProps> = ({ onExit
   const characters = useMemo(() => {
     const cashier = createTechnicalAwayPuppetCharacterMount(
       'fixture_shop_staff_anchor',
-      'actor-corner-mart-cashier',
+      CASHIER_ACTOR_ID,
     );
-    return [{ ...cashier, scale: 0.82 }];
+    return [{ ...cashier, scale: 0.98, depth: 32 }];
   }, []);
 
   const shopState = useMemo(
@@ -58,6 +117,10 @@ export const StoreFixtureHarness: React.FC<StoreFixtureHarnessProps> = ({ onExit
   const cashierCapabilities = useMemo(
     () => simulation.getPhysicalShopCashierCapabilities(shop.storeId, STORE_WORLD_SEED, shop.fixtures),
     [simulation, shop, revision],
+  );
+  const cashierContext = useMemo(
+    () => resolveCashierContext(simulation, projection.viewName, weather),
+    [simulation, projection.viewName, weather, revision],
   );
 
   const focusedStock = useMemo(() => {
@@ -78,6 +141,21 @@ export const StoreFixtureHarness: React.FC<StoreFixtureHarnessProps> = ({ onExit
     unpaidCount: ownership.filter((entry) => entry === 'unpaid').length,
     ownedCount: ownership.filter((entry) => entry === 'owned').length,
     cashier: cashierCapabilities,
+    cashierIdentity: cashierContext
+      ? {
+          actorId: cashierContext.actorId,
+          displayName: cashierContext.displayName,
+          handle: cashierContext.handle,
+        }
+      : null,
+    cashierPresence: cashierContext?.presence ?? null,
+    activeSocialTarget: activeSocialTarget
+      ? {
+          actorId: activeSocialTarget.actorId,
+          sceneContext: activeSocialTarget.sceneContext,
+          personaSuffix: activeSocialTarget.personaSuffix,
+        }
+      : null,
     cash: simulation.getState().player.cash,
     focusedStock,
     actorCount: characters.length,
@@ -119,16 +197,35 @@ export const StoreFixtureHarness: React.FC<StoreFixtureHarnessProps> = ({ onExit
     bump();
   };
 
-  const useCashier = () => {
+  const useCashier = (actorId: string) => {
+    const context = resolveInPersonVenueCharacterContext(simulation, actorId, {
+      playerPlaceId: STORE_PLACE_ID,
+      placeName: projection.placeName,
+      viewName: projection.viewName,
+      visibleContext: [
+        'front counter',
+        'grocery shelves',
+        'drink fridge',
+        weather === 'rain' ? 'rain at the front window' : 'front window',
+      ],
+    });
+    if (!context) {
+      setActiveSocialTarget(null);
+      setMessage('The cashier is not physically available here.');
+      return;
+    }
+
+    setActiveSocialTarget(context);
     const capabilities = simulation.getPhysicalShopCashierCapabilities(
       shop.storeId,
       STORE_WORLD_SEED,
       shop.fixtures,
     );
     if (!capabilities.checkout) {
-      setMessage('Cashier is available to talk; basket is empty.');
+      setMessage(`Talk to ${context.displayName} in person; basket is empty.`);
       return;
     }
+
     const result = simulation.checkoutPhysicalShop(
       shop.storeId,
       STORE_WORLD_SEED,
@@ -137,7 +234,7 @@ export const StoreFixtureHarness: React.FC<StoreFixtureHarnessProps> = ({ onExit
     );
     setMessage(
       result.success
-        ? `Checkout complete: $${result.total?.toFixed(2) ?? '0.00'}.`
+        ? `${context.displayName} checked you out: $${result.total?.toFixed(2) ?? '0.00'}.`
         : result.error ?? 'Checkout failed.',
     );
     bump();
@@ -154,7 +251,11 @@ export const StoreFixtureHarness: React.FC<StoreFixtureHarnessProps> = ({ onExit
       return;
     }
     if (intent.capability === 'cashier') {
-      useCashier();
+      if (!intent.actorId) {
+        setMessage('Cashier hotspot is missing actor identity.');
+        return;
+      }
+      useCashier(intent.actorId);
       return;
     }
     if (intent.capability === 'leave_store') {
@@ -173,48 +274,37 @@ export const StoreFixtureHarness: React.FC<StoreFixtureHarnessProps> = ({ onExit
       projection={projection}
       characters={characters}
       visualMode="production"
-      debug={true}
+      debug={false}
+      exposeRuntime={true}
       onIntent={handleIntent}
       overlaySlot={
-        <div className="pointer-events-auto absolute top-3 left-3 w-[360px] max-w-[42vw] bg-black/85 border border-emerald-800 p-3 text-[11px] text-slate-100 font-mono shadow-xl">
-          <div className="flex items-center justify-between border-b border-emerald-900 pb-2 mb-2">
-            <strong className="text-emerald-300">CORNERMART #28 QA</strong>
-            {onExit && (
-              <button data-testid="corner-mart-exit" onClick={onExit} className="text-slate-300 hover:text-white">
-                Exit
-              </button>
-            )}
-          </div>
-          <div
-            data-testid="corner-mart-status"
-            data-state={JSON.stringify(status)}
-            className="text-slate-300 mb-2"
-          >
-            {timeOfDay} / {weather} · {focusFixtureId ?? 'hero'} · stock {status.stockCount} ·
-            {' '}unpaid {status.unpaidCount} · owned {status.ownedCount}
-          </div>
-          <div data-testid="corner-mart-message" className="text-amber-200 mb-2 min-h-4">{message}</div>
-
-          <div className="flex flex-wrap gap-1 mb-2">
+        <div className="pointer-events-auto absolute bottom-2 left-1/2 -translate-x-1/2 max-w-[calc(100%-1rem)] rounded border border-emerald-900/70 bg-black/70 px-2 py-1.5 text-[10px] text-slate-100 font-mono shadow-lg backdrop-blur-sm">
+          <div className="flex flex-wrap items-center justify-center gap-1">
+            <strong className="mr-1 text-emerald-300">CORNERMART QA</strong>
+            <span
+              data-testid="corner-mart-status"
+              data-state={JSON.stringify(status)}
+              className="mr-1 whitespace-nowrap text-slate-300"
+            >
+              {timeOfDay}/{weather} · {focusFixtureId ?? 'hero'} · stock {status.stockCount} ·
+              {' '}unpaid {status.unpaidCount} · owned {status.ownedCount}
+            </span>
             {phases.map((phase) => (
               <button
                 key={phase}
                 data-testid={'corner-mart-phase-' + phase}
                 onClick={() => setTimeOfDay(phase)}
-                className={`px-1.5 py-1 border ${timeOfDay === phase ? 'bg-emerald-800 border-emerald-500' : 'bg-slate-900 border-slate-700'}`}
+                className={`px-1.5 py-0.5 border rounded ${timeOfDay === phase ? 'bg-emerald-800 border-emerald-500' : 'bg-slate-900 border-slate-700'}`}
               >
                 {phase}
               </button>
             ))}
-          </div>
-
-          <div className="flex gap-1 mb-2">
             {(['clear', 'rain'] as WeatherType[]).map((nextWeather) => (
               <button
                 key={nextWeather}
                 data-testid={'corner-mart-weather-' + nextWeather}
                 onClick={() => setWeather(nextWeather)}
-                className={`px-2 py-1 border ${weather === nextWeather ? 'bg-blue-800 border-blue-500' : 'bg-slate-900 border-slate-700'}`}
+                className={`px-1.5 py-0.5 border rounded ${weather === nextWeather ? 'bg-blue-800 border-blue-500' : 'bg-slate-900 border-slate-700'}`}
               >
                 {nextWeather}
               </button>
@@ -222,41 +312,53 @@ export const StoreFixtureHarness: React.FC<StoreFixtureHarnessProps> = ({ onExit
             <button
               data-testid="corner-mart-focus-hero"
               onClick={() => setFocusFixtureId(null)}
-              className="px-2 py-1 bg-slate-900 border border-slate-700"
+              className="px-1.5 py-0.5 bg-slate-900 border border-slate-700 rounded"
             >
               hero
             </button>
             <button
               data-testid="corner-mart-focus-fridge"
               onClick={() => setFocusFixtureId('corner_mart_fridge')}
-              className="px-2 py-1 bg-slate-900 border border-slate-700"
+              className="px-1.5 py-0.5 bg-slate-900 border border-slate-700 rounded"
             >
               fridge
             </button>
-          </div>
-
-          <div className="flex flex-wrap gap-1">
             <button
               data-testid="corner-mart-take-item"
               onClick={takeFirstFocusedItem}
-              className="px-2 py-1 bg-amber-900 border border-amber-700"
+              className="px-1.5 py-0.5 bg-amber-900 border border-amber-700 rounded"
             >
-              Take item
+              Take
             </button>
             <button
               data-testid="corner-mart-return-item"
               onClick={returnFirstUnpaidItem}
-              className="px-2 py-1 bg-slate-800 border border-slate-600"
+              className="px-1.5 py-0.5 bg-slate-800 border border-slate-600 rounded"
             >
-              Return unpaid
+              Return
             </button>
             <button
               data-testid="corner-mart-cashier"
-              onClick={useCashier}
-              className="px-2 py-1 bg-emerald-900 border border-emerald-700"
+              onClick={() => useCashier(CASHIER_ACTOR_ID)}
+              className="px-1.5 py-0.5 bg-emerald-900 border border-emerald-700 rounded"
             >
-              Cashier
+              Cashier/Talk
             </button>
+            {onExit && (
+              <button
+                data-testid="corner-mart-exit"
+                onClick={onExit}
+                className="px-1.5 py-0.5 text-slate-300 border border-slate-700 rounded"
+              >
+                Exit
+              </button>
+            )}
+          </div>
+          <div
+            data-testid="corner-mart-message"
+            className="mt-1 text-center text-[10px] text-amber-200"
+          >
+            {message}
           </div>
         </div>
       }
