@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { SimulationEngine } from '../../src/engine/SimulationEngine';
+import { buildDmChatContext } from '../../src/apps/pulse/utils/chatContext';
 import {
   ensureVenueRoleCharacter,
   resolveInPersonVenueCharacterContext,
@@ -81,6 +82,24 @@ describe('VenueCharacterBridge', () => {
     expect(context?.sceneContext).toContain('rain at the window');
     expect(context?.sceneContext).not.toContain('unpaid');
     expect(context?.sceneContext).not.toContain('stock');
+
+    const dmContext = buildDmChatContext({
+      engine: simulation,
+      buddyId: context!.actorId,
+      playerText: 'hello',
+      pulse: {
+        conversationMemory: {},
+        buddyFacts: {},
+        conversationSummaries: {},
+        recentReplies: {},
+      },
+      day: 1,
+      totalMinutes: 720,
+      sceneContext: context!.sceneContext,
+      personaSuffix: context!.personaSuffix,
+    });
+    expect(dmContext.relationshipSummary).toContain('Scene: In-person meeting at CornerMart');
+    expect(dmContext.persona).toContain('physically present with the player');
 
     const remote = resolveInPersonVenueCharacterContext(
       simulation,
