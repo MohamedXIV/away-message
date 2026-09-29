@@ -372,15 +372,30 @@ export class EnvironmentManager {
     for (const emitter of emitters) {
       emitter.clearEmitZones();
       if (zones.length === 0) continue;
-      emitter.addEmitZone(zones.map((zone) => ({
-        type: 'random' as const,
-        source: new Phaser.Geom.Rectangle(
-          zone.x * width,
-          zone.y * height,
-          zone.width * width,
-          zone.height * height,
-        ),
-      })));
+      emitter.addEmitZone(zones.map((zone) => {
+        const x = zone.x * width;
+        const y = zone.y * height;
+        const zoneWidth = zone.width * width;
+        const zoneHeight = zone.height * height;
+
+        // Phaser 4.2.1 declares RandomZoneSource#getRandomPoint with the
+        // structural Vector2Like callback shape, while Geom.Rectangle's
+        // generic helper is narrowed to Vector2. Adapt the authored rectangle
+        // locally instead of widening Phaser globals or casting through any.
+        const source: {
+          getRandomPoint(point: Phaser.Types.Math.Vector2Like): void;
+        } = {
+          getRandomPoint(point) {
+            point.x = x + Math.random() * zoneWidth;
+            point.y = y + Math.random() * zoneHeight;
+          },
+        };
+
+        return {
+          type: 'random' as const,
+          source,
+        };
+      }));
     }
   }
 

@@ -43,6 +43,49 @@ async function readPropStats(page: Page): Promise<PropRuntimeStats> {
   });
 }
 
+async function clickFixtureControl(page: Page, testId: string): Promise<void> {
+  const control = page.getByTestId(testId);
+  await expect(control).toBeVisible();
+  const box = await control.boundingBox();
+  if (!box) throw new Error(`CornerMart fixture control '${testId}' has no clickable bounds`);
+
+  // Use a real pointer event without Locator.click()'s repeated actionability
+  // stability sampling. The Phaser/headless loop can be intentionally slow
+  // under Playwright even when the fixed React overlay itself is clickable.
+  await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+}
+
+async function readCharacterPerf(page: Page): Promise<{
+  sampleCount: number;
+  averageUpdateMs: number;
+  maxUpdateMs: number;
+  actualFps: number;
+}> {
+  return page.evaluate(() => {
+    const runtime = (window as typeof window & {
+      __awayPhysicalWorldRuntime?: {
+        getScene(): {
+          getCharacterRuntimeStats(): {
+            sampleCount: number;
+            averageUpdateMs: number;
+            maxUpdateMs: number;
+            actualFps: number;
+          };
+        } | null;
+      };
+    }).__awayPhysicalWorldRuntime;
+    const scene = runtime?.getScene();
+    if (!scene) throw new Error('CornerMart Phaser runtime is unavailable');
+    const stats = scene.getCharacterRuntimeStats();
+    return {
+      sampleCount: stats.sampleCount,
+      averageUpdateMs: stats.averageUpdateMs,
+      maxUpdateMs: stats.maxUpdateMs,
+      actualFps: stats.actualFps,
+    };
+  });
+}
+
 test.describe('Issue #28 living CornerMart single-view proof', () => {
   test('keeps one hero view alive while focus, weather and shopping state change', async ({ page }) => {
     await page.goto('/?fixture=store');
@@ -89,9 +132,9 @@ test.describe('Issue #28 living CornerMart single-view proof', () => {
     expect(propAfter.propNames).toContain('corner_mart_fan_prop');
     expect(propAfter.angles['corner_mart_fan_prop']).not.toBe(propBefore.angles['corner_mart_fan_prop']);
 
-    await page.getByTestId('corner-mart-phase-night').click();
-    await page.getByTestId('corner-mart-weather-rain').click();
-    await page.getByTestId('corner-mart-focus-fridge').click();
+    await clickFixtureControl(page, 'corner-mart-phase-night');
+    await clickFixtureControl(page, 'corner-mart-weather-rain');
+    await clickFixtureControl(page, 'corner-mart-focus-fridge');
 
     await expect.poll(async () => (await readStoreState(page)).timeOfDay).toBe('night');
     await expect.poll(async () => (await readStoreState(page)).weather).toBe('rain');
@@ -133,22 +176,26 @@ test.describe('Issue #28 living CornerMart single-view proof', () => {
     const focusBeforeTake = await readStoreState(page);
     expect(focusBeforeTake.focusedStock.every((slot) => slot.itemInstanceId !== null)).toBe(true);
 
-    await page.getByTestId('corner-mart-take-item').click();
+    await clickFixtureControl(page, 'corner-mart-take-item');
     await expect.poll(async () => (await readStoreState(page)).unpaidCount).toBe(1);
     const afterTake = await readStoreState(page);
     expect(afterTake.cashier.checkout).toBe(true);
     expect(afterTake.focusedStock.some((slot) => slot.itemInstanceId === null)).toBe(true);
 
-    await page.getByTestId('corner-mart-cashier').click();
+    await clickFixtureControl(page, 'corner-mart-cashier');
     await expect.poll(async () => (await readStoreState(page)).unpaidCount).toBe(0);
     const paid = await readStoreState(page);
     expect(paid.ownedCount).toBe(1);
     expect(paid.cash).toBeLessThan(cashBefore);
     expect(paid.viewId).toBe('view_b1');
 
+    const characterPerf = await readCharacterPerf(page);
     console.log('[corner-mart-browser]', JSON.stringify({
       state: paid,
       props: propAfter,
+      characterPerf,
+      perfNote:
+        'average/max update ms measure character-renderer update cost; actualFps is Phaser game-loop scheduling in this browser environment',
     }));
   });
 });
