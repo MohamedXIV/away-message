@@ -7,6 +7,7 @@ import { validateCharacterContent } from './validators/characters';
 import { validatePhysicalGraph } from './validators/physical';
 import { validateWorldSpatialContent } from './validators/spatial';
 import { validateVenueContent } from './validators/venue';
+import { validateShopContent } from './validators/shop';
 import {
   validateEventModifiers,
   validateWorldAnchors,
@@ -33,6 +34,7 @@ export { generateWorldRegistrySource } from './generators/world';
 export { validatePhysicalGraph } from './validators/physical';
 export { validateWorldSpatialContent } from './validators/spatial';
 export { validateVenueContent } from './validators/venue';
+export { validateShopContent } from './validators/shop';
 
 /** Semantic validation against engine rules. Returns error list (empty = valid). */
 export function validateContent(tables: ContentTables): string[] {
@@ -48,5 +50,6 @@ export function validateContent(tables: ContentTables): string[] {
     ...validatePhysicalGraph(tables),
     ...validateWorldSpatialContent(tables),
     ...validateVenueContent(tables),
+    ...validateShopContent(tables),
   ];
 }
