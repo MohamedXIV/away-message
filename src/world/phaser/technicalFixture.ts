@@ -394,7 +394,7 @@ import type { CreateProjectionOptions } from './presentationAdapter';
 /**
  * Default projection for the Technical Fixture showcasing living environment capabilities
  */
-const FIXTURE_CUSTOMER_CHARACTER_POSITION = { x: 0.85, y: 0.72 } as const;
+const FIXTURE_CUSTOMER_CHARACTER_POSITION = { x: 0.62, y: 0.90 } as const;
 
 export function createTechnicalFixtureProjection(
   overrides: Partial<CreateProjectionOptions> = {}

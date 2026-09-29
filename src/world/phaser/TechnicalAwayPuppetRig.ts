@@ -374,8 +374,14 @@ export function createTechnicalAwayPuppetCharacterGroup(): WorldSceneCharacterMo
   const secondBase = createTechnicalAwayPuppetVisualState(secondId);
   const thirdBase = createTechnicalAwayPuppetVisualState(thirdId);
 
+  const customer = createTechnicalAwayPuppetCharacterMount(
+    'fixture_cafe_customer_anchor',
+    firstId,
+    first,
+  );
+
   return [
-    createTechnicalAwayPuppetCharacterMount('fixture_cafe_customer_anchor', firstId, first),
+    { ...customer, scale: 0.9 },
     createTechnicalAwayPuppetCharacterMount('fixture_cafe_staff_anchor', secondId, {
       ...secondBase,
       morphs: {

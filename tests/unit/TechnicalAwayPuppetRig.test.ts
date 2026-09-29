@@ -35,12 +35,14 @@ describe('Technical Away Puppet rig (#25)', () => {
       (anchor) => anchor.id === 'fixture_cafe_customer_anchor',
     );
 
-    expect(customerAnchor).toMatchObject({ x: 0.85, y: 0.72 });
+    expect(customerAnchor).toMatchObject({ x: 0.62, y: 0.90 });
   });
 
   it('builds a representative three-actor group by reusing one generic rig profile', () => {
     const group = createTechnicalAwayPuppetCharacterGroup();
     expect(group).toHaveLength(3);
+    expect(group[0]?.anchorId).toBe('fixture_cafe_customer_anchor');
+    expect(group[0]?.scale).toBe(0.9);
     expect(new Set(group.map((mount) => mount.actorId)).size).toBe(3);
     expect(new Set(group.map((mount) => mount.visualState.profileId))).toEqual(
       new Set([TECHNICAL_AWAY_PUPPET_PROFILE]),
