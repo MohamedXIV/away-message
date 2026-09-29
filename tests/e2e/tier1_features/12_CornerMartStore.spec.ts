@@ -14,6 +14,7 @@ interface StoreFixtureState {
   cashier: { talk: boolean; checkout: boolean };
   cash: number;
   actorCount: number;
+  innerVoiceTopic: string | null;
 }
 
 interface PropRuntimeStats {
@@ -57,6 +58,7 @@ test.describe('Issue #28 living CornerMart single-view proof', () => {
     expect(initial.focusFixtureId).toBeNull();
     expect(initial.cashier).toEqual({ talk: true, checkout: false });
     expect(initial.actorCount).toBe(1);
+    expect(initial.innerVoiceTopic).toBe('physical_shop_arrival');
 
     await expect(page.getByTestId('away-puppet-runtime-stats')).toContainText('Away Puppet: 1 actors', {
       timeout: 10_000,
