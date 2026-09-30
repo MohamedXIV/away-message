@@ -187,7 +187,7 @@ player_knows(placeId)
 world_flag("festival_active")
 ```
 
-Do not create special variables such as `mayaTrust` or other fixed-cast fields.
+Do not create special variables tied to a named actor when a generic actor/role lookup can express the same rule.
 
 ## 11. Semantic effects
 
@@ -241,4 +241,3 @@ The architecture must tolerate content replacement.
 
 A character can be renamed, replaced or removed. A place can be promoted from light to rich presentation. A website or job can disappear. These changes must not require rewriting unrelated engines.
 
-The old fixed 14-day/fixed-cast experiment has no authority over current content design.
