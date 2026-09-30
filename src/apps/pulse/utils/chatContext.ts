@@ -81,7 +81,7 @@ export interface PulseMemorySlices {
   npcActivity?: Record<string, string>;
 }
 
-export function buddyPersonaLine(buddyId: string, buddy?: BuddyCharacter | null): string {
+export function buddyPersonaLine(_buddyId: string, buddy?: BuddyCharacter | null): string {
   if (buddy?.bio?.trim()) return buddy.bio.trim();
   const archetype = buddy?.archetype && CHARACTER_ARCHETYPES[buddy.archetype] ? buddy.archetype : undefined;
   if (archetype) {

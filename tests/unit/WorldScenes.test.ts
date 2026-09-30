@@ -78,8 +78,8 @@ describe('2D World Scenes, Atmosphere, Interactables & App Integration', () => {
       }
 
       // Check narrative flag condition
-      const postCafeRes = getContextualWindowThought(12, 'day', 'clear', { maya_met_in_person: true });
-      expect(postCafeRes.thought).toContain('Maya');
+      const postCafeRes = getContextualWindowThought(12, 'day', 'clear', { met_in_person: true });
+      expect(postCafeRes.thought).toContain('Starlight Café');
     });
 
     it('contains persistent street entities with required properties', () => {
@@ -280,14 +280,14 @@ describe('2D World Scenes, Atmosphere, Interactables & App Integration', () => {
       expect(toneToExpression(undefined, 'shy')).toBe('shy');
     });
 
-    it('simulates in-person meeting effects: advances 75m, deducts $4 coffee, sets maya_met_in_person', () => {
+    it('simulates in-person meeting effects: advances 75m, deducts $4 coffee, sets met_in_person flag', () => {
       const initialCash = engine.getState().player.cash;
       const initialMinutes = engine.clock.getTotalMinutes();
 
       // Apply social action for meeting
       engine.dispatchAction({
         type: 'SOCIAL_APPLY_ACTION',
-        buddyId: 'starlight_maya',
+        buddyId: 'starlight_guest',
         socialAction: 'empathy',
       });
 
@@ -302,23 +302,23 @@ describe('2D World Scenes, Atmosphere, Interactables & App Integration', () => {
       engine.dispatchAction({
         type: 'TIME_ADVANCE_MINUTES',
         minutes: 75,
-        reason: 'Meeting Maya at Starlight Café',
+        reason: 'Meeting friend at Starlight Café',
       });
 
       // Set narrative flag
       engine.dispatchAction({
         type: 'NARRATIVE_SET_FLAG',
-        key: 'maya_met_in_person',
+        key: 'met_in_person',
         value: true,
       });
 
       expect(engine.clock.getTotalMinutes()).toBe(initialMinutes + 75);
       expect(engine.getState().player.cash).toBe(initialCash - 4.00);
-      expect(engine.getState().narrative.flags.maya_met_in_person).toBe(true);
+      expect(engine.getState().narrative.flags.met_in_person).toBe(true);
     });
   });
 
-  describe('7. View Switching & Day 14 Evaluation Resolution', () => {
+  describe('7. View Switching & Open-Ended Sandbox Progression', () => {
     it('switches views between pc, room, cafe, and work', () => {
       engine.dispatchAction({ type: 'VIEW_SWITCH', view: 'room' });
       expect(engine.getState().activeView).toBe('room');
@@ -330,19 +330,15 @@ describe('2D World Scenes, Atmosphere, Interactables & App Integration', () => {
       expect(engine.getState().activeView).toBe('pc');
     });
 
-    it('supports Day 14 evaluation completion and free play mode flags', () => {
-      // Simulate jumping to Day 15
+    it('advances seamlessly into future weeks without forced endings', () => {
+      // Advance across two weeks
       for (let d = 1; d <= 14; d++) {
         engine.dispatchAction({ type: 'PLAYER_REST_OR_SLEEP', wakeHour: 8 });
       }
       expect(engine.clock.getTime().day).toBe(15);
 
-      // Set free play flags
-      engine.dispatchAction({ type: 'NARRATIVE_SET_FLAG', key: 'free_play_unlocked', value: true });
-      engine.dispatchAction({ type: 'NARRATIVE_SET_FLAG', key: 'day14_evaluation_completed', value: true });
-
-      expect(engine.getState().narrative.flags.free_play_unlocked).toBe(true);
-      expect(engine.getState().narrative.flags.day14_evaluation_completed).toBe(true);
+      engine.dispatchAction({ type: 'NARRATIVE_SET_FLAG', key: 'sandbox_milestone_reached', value: true });
+      expect(engine.getState().narrative.flags.sandbox_milestone_reached).toBe(true);
     });
   });
 });

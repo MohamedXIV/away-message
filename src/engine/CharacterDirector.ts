@@ -90,7 +90,7 @@ const METVIA_FLAVOR: Record<BuddyMetVia, string> = {
   'pulse-room': 'you met in a Pulse chat room',
   work: 'you met during a food-cart shift',
   intro: 'a mutual friend introduced you',
-  core: 'you have known each other a while',
+  seed: 'you have known each other a while',
 };
 
 function buildIntroText(displayName: string, archetype: CharacterArchetype, seed: string, myplaceId: string): string {
@@ -216,7 +216,7 @@ export async function generateNewcomer(
             createdDay: req.day,
             status: 'stranger',
             // Online sources birth remote buddies (no art, no in-person life).
-            reach: req.metVia === 'work' || req.metVia === 'intro' || req.metVia === 'core' ? 'local' : 'remote',
+            reach: req.metVia === 'work' || req.metVia === 'intro' || req.metVia === 'seed' ? 'local' : 'remote',
             appearance: { hair: parsed.hair, eyes: parsed.eyes },
             languages: parsed.languages.map((l) => ({ lang: l.lang, level: l.level })),
             roles: pickArchetypeRoles(parsed.archetype, `${seed}:${aiId}`),
@@ -261,7 +261,7 @@ function templateResult(
     createdDay: req.day,
     status: 'stranger',
     // Online sources birth remote buddies (no art, no in-person life).
-    reach: req.metVia === 'work' || req.metVia === 'intro' || req.metVia === 'core' ? 'local' : 'remote',
+    reach: req.metVia === 'work' || req.metVia === 'intro' || req.metVia === 'seed' ? 'local' : 'remote',
     roles: pickArchetypeRoles(archetype, `${seed}:${id}`),
     ...(() => {
       const look = pickTemplateAppearance(`${seed}:${id}`);

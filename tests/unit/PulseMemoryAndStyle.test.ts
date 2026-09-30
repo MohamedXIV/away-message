@@ -95,7 +95,8 @@ describe('Pulse NPC Style Profiles', () => {
     expect(relaxed).toContain('relaxed');
 
     expect(getNpcAvailabilityLabel({ status: 'online', awayMessage: '' }, 14)).toContain('available');
-    expect(getNpcAvailabilityLabel({ status: 'away', awayMessage: 'afk' }, 3)).toContain('slowly');
+    expect(getNpcAvailabilityLabel({ status: 'away', awayMessage: 'afk' }, 3)).toContain('winding down');
+    expect(getNpcAvailabilityLabel({ status: 'away', awayMessage: 'afk' }, 14)).toContain('slowly');
     expect(getNpcAvailabilityLabel({ status: 'offline', awayMessage: '' }, 14)).toContain('offline');
 
     expect(getNpcActivityLabel({ status: 'away', awayMessage: 'at the desk... dont look at me' }, 'maya', 14)).toBe('at the desk... dont look at me');

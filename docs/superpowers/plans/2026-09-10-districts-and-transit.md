@@ -35,7 +35,7 @@
 - Modify: `src/tools/content/schema.ts`
 - Modify: `src/tools/content/codegen.ts`
 - Modify: `tools/pull-content.ts` only if generated output is split
-- Modify: `src/engine/coreBuddies.generated.ts` through `npm run content:pull`, never by hand
+- Modify: `src/engine/seedCharacters.generated.ts` through `npm run content:pull`, never by hand
 - Modify/Create tests: `tests/unit/ContentStore.test.ts` and/or focused `tests/unit/TownContent.test.ts`
 
 ### Step 1: Write failing content validation tests
@@ -76,7 +76,7 @@ Run focused tests to GREEN.
 
 ### Step 4: Generate typed registries
 
-Extend `generateRegistrySource()` to emit stable generated types/constants for districts, places, stops and lines. If `coreBuddies.generated.ts` becomes semantically unreasonable, split generated world data into a focused generated file but keep one `content:pull`/`content:check` contract.
+Extend `generateRegistrySource()` to emit stable generated types/constants for districts, places, stops and lines. If `seedCharacters.generated.ts` becomes semantically unreasonable, split generated world data into a focused generated file but keep one `content:pull`/`content:check` contract.
 
 Run:
 

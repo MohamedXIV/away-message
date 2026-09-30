@@ -248,7 +248,7 @@ describe('Adversarial M1 Stress & Gating Suite', () => {
       expect(loaded.downloads.find(d => d.id === 'dl_task_3')?.status).toBe('complete');
     });
 
-    it('simulates 14-day full progression with daily saves and state consistency', async () => {
+    it('simulates multi-week progression with daily saves and state consistency', async () => {
       const sim = new SimulationEngine();
 
       for (let day = 1; day <= 14; day++) {

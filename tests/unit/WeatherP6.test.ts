@@ -27,7 +27,7 @@ const AFF = (a: string, b: string): number => {
 };
 
 describe('P6.2 deterministic weather', () => {
-  it('runs a stable 14-day cycle with storms every 15th day', () => {
+  it('runs a stable two-week cycle with storms every 15th day', () => {
     expect(getWeatherForDay(1).condition).toBe('overcast');
     expect(getWeatherForDay(2).condition).toBe('rain');
     expect(getWeatherForDay(6).condition).toBe('fog');

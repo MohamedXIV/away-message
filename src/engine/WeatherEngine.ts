@@ -14,7 +14,7 @@ export interface DayWeather {
   lowF: number;
 }
 
-/** Hand-authored 14-day Oakhaven cycle (canal town in late August: mostly grey, sometimes hot). */
+/** Hand-authored two-week Oakhaven cycle (canal town in late August: mostly grey, sometimes hot). */
 const CYCLE: WeatherCondition[] = [
   'overcast', 'rain', 'rain', 'drizzle', 'overcast', 'fog', 'clear',
   'rain', 'overcast', 'heat', 'drizzle', 'rain', 'fog', 'clear',
@@ -36,7 +36,7 @@ function hashDay(day: number): number {
   return hash;
 }
 
-/** Weather for a game day: 14-day cycle + a governed storm every 15th day. */
+/** Weather for a game day: repeating two-week cycle + a governed storm every 15th day. */
 export function getWeatherForDay(rawDay: number): DayWeather {
   const day = Math.max(1, Math.floor(rawDay) || 1);
   // Monthly-ish storm front (days 15, 30, 45...) — the one dramatic exception

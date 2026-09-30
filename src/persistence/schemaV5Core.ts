@@ -28,7 +28,7 @@ export interface SaveSlotRecord {
     energy: number;              // 0..100
     fatigue: number;             // 0..100
     socialBattery: number;       // 0..100 (v4: introvert meter, old rows backfill full)
-    rentDueDay: number;          // Day 7, Day 14
+    rentDueDay: number;          // Weekly rent due day (e.g. Day 7, 21)
     rentAmount: number;          // $140.00
     rentPaid: boolean;
     consecutiveLateWarnings: number;

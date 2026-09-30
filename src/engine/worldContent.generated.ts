@@ -1,6 +1,6 @@
 // GENERATED — do not edit by hand.
-// Source: content/store.json (content vae80844f). Regenerate: npm run content:pull.
-export const WORLD_CONTENT_VERSION = 'ae80844f';
+// Source: content/store.json (content v0e4b839a). Regenerate: npm run content:pull.
+export const WORLD_CONTENT_VERSION = '0e4b839a';
 
 export interface GeneratedSpatialPoint {
   x: number;

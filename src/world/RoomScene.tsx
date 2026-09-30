@@ -9,7 +9,7 @@ import { getRoomDeskPresentation } from './RoomComputerPresentation';
 import { RoomHotspotId, RoomActivityOption, WeatherType } from './types';
 import { getWeatherForDay, isWetWeather } from '../engine/WeatherEngine';
 import { CITY_NODES, type CityNodeId, type TravelMode } from '../engine/CityMap';
-import { buddyWithRole } from '../engine/coreBuddies';
+import { seedCharacterWithRole } from '../engine/seedCharacters';
 import { CityPlaceView } from './components/CityPlaceView';
 
 function playerLocationLabel(location: CityNodeId): string {
@@ -186,7 +186,7 @@ export const RoomScene: React.FC = () => {
     try {
       const engine = useSimulationStore.getState().engine;
       return engine.getJobBoard().map(({ gig, pending }) => {
-        const holder = buddyWithRole(gig.contactRole);
+        const holder = seedCharacterWithRole(gig.contactRole);
         const contact = holder ? engine.social.getBuddy(holder.id) : undefined;
         return {
           gigId: gig.id,

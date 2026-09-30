@@ -43,7 +43,7 @@ describe('Pulse Conference Multi-Reply', () => {
   });
 
   it('handles empty participantIds gracefully', () => {
-    expect(getRoomResponderSequence('unknown-room', [], 0, 'hello')).toEqual(['nora']);
+    expect(getRoomResponderSequence('unknown-room', [], 0, 'hello')).toEqual([]);
   });
 
   it('respects participant list size for count cap', () => {
