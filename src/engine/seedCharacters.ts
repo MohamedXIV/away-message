@@ -30,8 +30,6 @@ export { CONTENT_VERSION, GENERATED_ARCHETYPES, GENERATED_DIALOGUE_POOLS };
 
 export interface SeedCharacter {
   id: string;
-  /** Stable story role (never renamed): anchors resolve through it. */
-  role: string;
   displayName: string;
   archetypeId: string;
   archetype: CharacterArchetype;
@@ -72,7 +70,6 @@ function normalize(def: GeneratedCharacterDef): SeedCharacter {
   };
   return {
     id: def.id,
-    role: typeof def.role === 'string' && def.role ? def.role : def.id,
     displayName: def.displayName,
     archetypeId: def.archetypeId,
     archetype: def.archetypeId as CharacterArchetype,
