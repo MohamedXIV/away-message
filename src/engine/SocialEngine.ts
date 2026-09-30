@@ -68,7 +68,6 @@ export function npcBondKey(rawFrom: string, rawTo: string): string {
 
 // Canonical actor ids and handle/former-id aliases derive from authored seed content.
 // After a rename, old aliases keep resolving through `formerIds`; no actor id is privileged.
-// ids keep resolving through `formerIds` (save bridge, no code changes).
 // Declared before SEED_AFFINITIES: seed keys are computed through
 // affinityKey → normalizeBuddyId at module load (TDZ otherwise).
 export const BUDDY_ID_ALIASES: Record<string, string> = Object.fromEntries(
