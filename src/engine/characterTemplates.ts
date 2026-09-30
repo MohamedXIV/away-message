@@ -370,8 +370,7 @@ export interface AttitudeEntry {
 
 /**
  * Per-archetype attitude palettes for world events.
- * coworker/artist/nightowl/regular carry the original ryan/maya/nora/henderson
- * voices verbatim; student/trader are new but follow the same shape.
+ * Archetype palettes are reusable behavioral voices independent of actor identity.
  */
 export const ARCHETYPE_ATTITUDES: Record<CharacterArchetype, Record<GlobalEventCategory, AttitudeEntry>> = {
   coworker: {
