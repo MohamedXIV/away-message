@@ -4,7 +4,7 @@ import { UserProfileHeader } from './UserProfileHeader';
 import { BuddyGroup } from './BuddyGroup';
 import { formatLastSeen } from './BuddyItem';
 import { soundManager } from '../../../audio/SoundManager';
-import { PULSE_GROUPS, PULSE_ROOMS } from '../data/pulseRooms';
+import { PULSE_GROUPS, PULSE_ROOMS, resolvePulseRoomParticipantIds } from '../data/pulseRooms';
 import type { PulseLoginSession } from './PulseLoginSplash';
 import type { PulseActivityEntry } from '../types';
 import type { PulseSkin } from '../persistence';
@@ -136,7 +136,10 @@ export const BuddyListWindow: React.FC<BuddyListWindowProps> = ({
   }, [groupOrder]);
 
   const groupedBuddies = useMemo(() => {
-    const knownMemberIds = new Set(Object.values(PULSE_GROUPS).flatMap((g) => g.memberIds));
+    const groups = Object.values(PULSE_GROUPS);
+    const matchesGroup = (buddy: (typeof visibleBuddies)[number]['buddy'], group: (typeof groups)[number]) =>
+      group.memberIds.includes(buddy.id)
+      || (buddy.roles ?? []).some((role) => group.roles.includes(role));
     const mapped = effectiveGroupOrder.map((groupId) => {
       if (groupId === 'uncategorized') return null; // handled below, only when non-empty
       const group = PULSE_GROUPS[groupId];
@@ -145,11 +148,10 @@ export const BuddyListWindow: React.FC<BuddyListWindowProps> = ({
       return {
         id: groupId,
         label,
-        buddies: visibleBuddies.filter(({ buddy }) => group.memberIds.includes(buddy.id)),
+        buddies: visibleBuddies.filter(({ buddy }) => matchesGroup(buddy, group)),
       };
     }).filter(Boolean) as Array<{ id: string; label: string; buddies: typeof visibleBuddies }>;
-    // Dynamic buddies not listed in any static group land here instead of being invisible
-    const ungrouped = visibleBuddies.filter(({ buddy }) => !knownMemberIds.has(buddy.id));
+    const ungrouped = visibleBuddies.filter(({ buddy }) => !groups.some((group) => matchesGroup(buddy, group)));
     if (ungrouped.length > 0) {
       mapped.push({ id: 'uncategorized', label: groupLabels['uncategorized'] || 'Others', buddies: ungrouped });
     }
@@ -367,7 +369,7 @@ export const BuddyListWindow: React.FC<BuddyListWindowProps> = ({
                   <span className="h-3 w-3 rounded-full border border-black/20" style={{ backgroundColor: room.color }} />
                   <span className="font-bold text-[#1c4167]">{room.name}</span>
                   {(roomUnreadCounts[room.id] ?? 0) > 0 && <span className="rounded-full bg-[#d96c3b] px-1.5 py-0.5 text-[9px] font-bold text-white">{roomUnreadCounts[room.id] ?? 0}</span>}
-                  <span className="ml-auto text-[10px] text-gray-500">{room.participantIds.length + 1}</span>
+                  <span className="ml-auto text-[10px] text-gray-500">{resolvePulseRoomParticipantIds(room, engine.social.getBuddies()).length + 1}</span>
                 </div>
                 <div className="mt-1 flex items-center justify-between gap-2"><span className="truncate text-[10px] text-gray-600">{room.topic}</span><span className="text-[9px] font-bold uppercase text-gray-400">{joinedRoomIds.includes(room.id) ? 'joined' : 'join'}</span></div>
               </button>
