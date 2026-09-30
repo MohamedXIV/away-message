@@ -5,9 +5,19 @@
 > If the workflow changes, update this file in the same PR. Stale rules are worse than none.
 
 ## What this is
-Cozy life-sim set in 2005: a desktop OS sim (React 19 + Vite + Tailwind + Zustand + Dexie)
+Cozy open-ended life-sim set in 2005: a desktop OS sim (React 19 + Vite + Tailwind + Zustand + Dexie)
 where a dynamic roster of characters can chat with live AI, remember meaningful history,
 and live governed sandbox lives. Online AI-heavy, offline-safe via templates.
+
+## Product identity — do not regress
+
+Away Message is an **open-ended sandbox**, not a fixed campaign.
+
+The short 14-day evaluation structure used during an early two-day implementation experiment is retired product history. It is not a milestone, ending, target duration, canonical playthrough, acceptance gate, or content template. Do not recreate it in docs, code, tests, UI, telemetry, or issues.
+
+There is no mandatory protagonist NPC, romance, meeting, café scene, or named core cast. `maya`, `ryan`, `nora`, `henderson` and similar names may survive temporarily as ordinary authored content, migration data, or test fixtures, but **the game must remain valid if any of them is renamed, replaced, never generated, never met, or removed**.
+
+Progression is systemic and potentially indefinite: residence, work, money, hardware/software, internet discovery, relationships, town knowledge, travel, possessions, activities, and character lives continue without a canonical final day or "game complete" state.
 
 The current implementation still contains legacy named/core-character IDs and compatibility behavior. Treat those as migration/fixture reality, **not** as a permanent product rule that future systems may hard-code around.
 
