@@ -358,7 +358,7 @@ export interface RelationshipDimensions {
 }
 
 // Character Lives — fixed temperament (Big5-lite). Set once at creation
-// (core 4 hand-authored, procedural from archetype + stable id jitter) and
+// (authored seeds and procedural actors from archetype + stable id jitter) and
 // never mutated afterwards, never chosen by AI. Rules read these to weight
 // rolls and pick template lines; AI only paraphrases inside chat.
 export interface CharacterTraits {
