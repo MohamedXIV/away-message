@@ -1674,7 +1674,7 @@ export class SimulationEngine {
           // Showing up in person reads spontaneous.
           this.social.observePlayerTrait(buddyId, { spontaneity: 70 }, day);
           const shy = this.social.getTraits(buddyId).shyness >= 60;
-          const line = shy ? pickOutingNoraLine(`${outingId}:${day}`) : pickOutingMayaLine(`${outingId}:${day}`);
+          const line = shy ? pickOutingReservedLine(`${outingId}:${day}`) : pickOutingWarmLine(`${outingId}:${day}`);
           this.social.sendMessage(buddyId, buddyId, 'player', line, this.clock.getTotalMinutes(), false, ['outing', 'canal']);
           this.telemetry.logEvent('social', 'outing_encounter', minutes, { buddyId, outing: outingId });
           this.notifySubscribers();
