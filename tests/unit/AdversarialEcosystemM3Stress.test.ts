@@ -111,7 +111,7 @@ describe('Adversarial M3 Stress & Quality Suite: Pulse Messenger & Ecosystem App
       expect(formatSimulationTime(-10)).toBe('12:00 AM'); // Negative offset clamps to 0 (12:00 AM)
     });
 
-    it('validates integrity of all authored dialogue scripts', () => {
+    it('validates optional authored dialogue scripts when entries exist', () => {
       expect(Array.isArray(DIALOGUE_SCRIPTS)).toBe(true);
       for (const script of DIALOGUE_SCRIPTS) {
         expect(script.id).toBeTruthy();
