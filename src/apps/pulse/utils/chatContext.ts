@@ -1,6 +1,5 @@
 import { getNpcStyle, getNpcMoodLabel, getNpcAvailabilityLabel, getNpcActivityLabel } from '../data/npcStyles';
 import { CHARACTER_ARCHETYPES } from '../../../engine/characterTemplates';
-import { CORE_BY_ID } from '../../../engine/coreBuddies';
 import type { BuddyCharacter, BuddyPresence, RelationshipDimensions } from '../../../engine/types';
 import { buildBodyHint } from '../../../engine/BodyDirector';
 import { weatherLineForDay } from '../../../engine/WeatherEngine';
@@ -83,9 +82,7 @@ export interface PulseMemorySlices {
 }
 
 export function buddyPersonaLine(buddyId: string, buddy?: BuddyCharacter | null): string {
-  // Core voices come from the registry (content-owned, never hand-copied here).
-  const core = CORE_BY_ID[buddyId];
-  if (core) return core.persona;
+  if (buddy?.bio?.trim()) return buddy.bio.trim();
   const archetype = buddy?.archetype && CHARACTER_ARCHETYPES[buddy.archetype] ? buddy.archetype : undefined;
   if (archetype) {
     const template = CHARACTER_ARCHETYPES[archetype];
