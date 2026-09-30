@@ -1,26 +1,24 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { SimulationEngine } from '../../src/engine/SimulationEngine';
 
-// Deprecated Ink story arc — sandbox mode no longer uses beats.
-// This file is kept as a skipped regression stub.
-
-describe('14-Day Full Story Arcs Integration Test Suite (deprecated — sandbox)', () => {
-  let simEngine: SimulationEngine;
+describe('Open-ended sandbox continuity', () => {
+  let sim: SimulationEngine;
 
   beforeEach(() => {
-    simEngine = new SimulationEngine();
+    sim = new SimulationEngine();
   });
 
-  it.skip('runs complete 14-day evaluation story arc from Day 1 to Day 14 free play unlock', () => {
-    expect(simEngine.getState().time.day).toBe(1);
-    // Sandbox: beat-based assertions removed. See WorldEventsEngine tests.
+  it('world events continue as time advances without a campaign ending', () => {
+    sim.dispatchAction({ type: 'TIME_ADVANCE_MINUTES', minutes: 3 * 1440, reason: 'advance sandbox' });
+    expect(sim.getState().world.triggeredEvents.length).toBeGreaterThan(0);
+    expect(sim.getState().world.triggeredEvents.some((e) => e.id === 'myplace_v2_launch')).toBe(true);
   });
 
-  it('sandbox world events trigger on day advance', () => {
-    expect(simEngine.getState().world.triggeredEvents.length).toBe(0);
-    simEngine.dispatchAction({ type: 'TIME_ADVANCE_MINUTES', minutes: 3 * 1440, reason: 'jump to day 4' });
-    const state = simEngine.getState();
-    expect(state.world.triggeredEvents.length).toBeGreaterThan(0);
-    expect(state.world.triggeredEvents.some((e) => e.id === 'myplace_v2_launch')).toBe(true);
+  it('continues well beyond two weeks without completion/free-play semantics', () => {
+    sim.dispatchAction({ type: 'TIME_ADVANCE_MINUTES', minutes: 30 * 1440, reason: 'long sandbox run' });
+    const state = sim.getState();
+    expect(state.time.day).toBeGreaterThan(14);
+    expect(state.world.flags['evaluation_complete']).toBeUndefined();
+    expect(state.world.flags['free_play_unlocked']).toBeUndefined();
   });
 });
