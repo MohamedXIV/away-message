@@ -57,7 +57,7 @@ export function validateCharacterContent(tables: ContentTables): string[] {
     }
   }
 
-  // 2. All roles declared on live characters
+  // 2. Capability roles declared on live characters
   const liveRoles = new Set<string>();
   for (const row of Object.values(characters)) {
     const roles = (row as Record<string, unknown>)?.['roles'];
@@ -74,16 +74,6 @@ export function validateCharacterContent(tables: ContentTables): string[] {
     }
     const idCheck = validateCharacterId(id);
     if (!idCheck.ok) errors.push(`characters/${id}: ${idCheck.error}`);
-    const role = (row as Record<string, unknown>)['role'];
-    if (typeof role !== 'string' || !role.trim()) {
-      errors.push(`characters/${id}.role: must be a non-empty stable role key.`);
-    } else {
-      const clash = Object.entries(characters).find(
-        ([otherId, other]) => otherId !== id && (other as Record<string, unknown>)?.['role'] === role
-      );
-      if (clash) errors.push(`characters/${id}.role: duplicate role '${role}' (also on ${clash[0]}).`);
-    }
-
     const str = (k: string, max: number): string | null => {
       const v = (row as Record<string, unknown>)[k];
       if (typeof v !== 'string' || !v.trim() || v.length > max) {
