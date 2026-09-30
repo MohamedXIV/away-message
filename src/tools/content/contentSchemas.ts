@@ -54,7 +54,6 @@ const venueActivityPhaseSchema = z.object({
  */
 export const CONTENT_ROW_SCHEMAS = {
   characters: z.object({
-    role: stringCell(),
     displayName: stringCell(),
     archetypeId: stringCell('regular'),
     roles: z.array(z.string()).default([]),
