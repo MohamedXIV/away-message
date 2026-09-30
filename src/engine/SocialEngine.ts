@@ -1527,14 +1527,22 @@ export class SocialEngine {
     return Array.from(this.buddies.values());
   }
 
-  /** Resolve current live actors by capability role. Seed content has no runtime privilege. */
+  /** Resolve current actors by capability role. Seed content has no runtime privilege. */
   public getBuddiesWithRole(role: string): BuddyCharacter[] {
     return this.getBuddies()
-      .filter((buddy) => (buddy.roles ?? []).includes(role))
-      .sort((a, b) => a.id.localeCompare(b.id));
+      .filter((buddy) =>
+        (buddy.roles ?? []).includes(role)
+        && buddy.status !== 'gone'
+        && buddy.status !== 'blocked'
+      )
+      .sort((a, b) => {
+        const aDistant = a.status === 'distant' ? 1 : 0;
+        const bDistant = b.status === 'distant' ? 1 : 0;
+        return aDistant - bDistant || a.id.localeCompare(b.id);
+      });
   }
 
-  /** Deterministic first current actor carrying a capability role. */
+  /** Deterministic current actor carrying a capability role, preferring non-distant actors. */
   public getBuddyWithRole(role: string): BuddyCharacter | undefined {
     return this.getBuddiesWithRole(role)[0];
   }
