@@ -1,19 +1,13 @@
 import { StoryKnot } from '../types';
-import { RYAN_14DAY_KNOTS } from './ryanArcs';
-import { MAYA_14DAY_KNOTS } from './mayaArcs';
-import { NORA_14DAY_KNOTS } from './noraArcs';
-import { HENDERSON_14DAY_KNOTS } from './hendersonArcs';
-import { CAFE_MEETING_KNOTS } from './cafeMeetingArc';
-import { EVALUATION_ENDING_KNOTS } from './evaluationEndingArc';
 
-export const ALL_STORY_KNOTS: StoryKnot[] = [
-  ...RYAN_14DAY_KNOTS,
-  ...MAYA_14DAY_KNOTS,
-  ...NORA_14DAY_KNOTS,
-  ...HENDERSON_14DAY_KNOTS,
-  ...CAFE_MEETING_KNOTS,
-  ...EVALUATION_ENDING_KNOTS,
-];
+/**
+ * The fixed day-by-day campaign knots were retired with the old evaluation experiment.
+ *
+ * The sandbox does not ship a canonical global story sequence or mandatory named cast.
+ * Optional authored narrative content may register knots at runtime/content boundaries,
+ * but this module intentionally provides no built-in campaign.
+ */
+export const ALL_STORY_KNOTS: StoryKnot[] = [];
 
 export function getStoryKnotsByCharacter(characterId: string): StoryKnot[] {
   return ALL_STORY_KNOTS.filter((k) => k.characterId === characterId);
