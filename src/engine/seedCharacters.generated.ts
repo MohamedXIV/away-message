@@ -1,6 +1,6 @@
 // GENERATED — do not edit by hand.
-// Source: content/store.json (content vae80844f). Regenerate: npm run content:pull.
-export const CONTENT_VERSION = 'ae80844f';
+// Source: content/store.json (content v0e4b839a). Regenerate: npm run content:pull.
+export const CONTENT_VERSION = '0e4b839a';
 
 export interface GeneratedArchetypeDef {
   id: string;
@@ -78,7 +78,6 @@ export const GENERATED_ARCHETYPES: GeneratedArchetypeDef[] = [
 
 export interface GeneratedCharacterDef {
   id: string;
-  role: string;
   displayName: string;
   archetypeId: string;
   roles: string[];
@@ -99,7 +98,6 @@ export interface GeneratedCharacterDef {
 export const GENERATED_CHARACTERS: GeneratedCharacterDef[] = [
   {
     id: "ryan",
-    role: "ryan",
     displayName: "Ryan",
     archetypeId: "coworker",
     roles: ["cart-owner"],
@@ -118,7 +116,6 @@ export const GENERATED_CHARACTERS: GeneratedCharacterDef[] = [
   },
   {
     id: "maya",
-    role: "maya",
     displayName: "Maya",
     archetypeId: "artist",
     roles: ["diner-staff", "rain-lover"],
@@ -137,7 +134,6 @@ export const GENERATED_CHARACTERS: GeneratedCharacterDef[] = [
   },
   {
     id: "nora",
-    role: "nora",
     displayName: "Nora",
     archetypeId: "nightowl",
     roles: ["canal-regular"],
@@ -156,7 +152,6 @@ export const GENERATED_CHARACTERS: GeneratedCharacterDef[] = [
   },
   {
     id: "henderson",
-    role: "henderson",
     displayName: "Mr. Henderson",
     archetypeId: "regular",
     roles: ["landlord"],
