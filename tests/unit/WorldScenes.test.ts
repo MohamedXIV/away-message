@@ -269,7 +269,7 @@ describe('2D World Scenes, Atmosphere, Interactables & App Integration', () => {
   });
 
   describe('6. Free Café Chat: tone-driven expressions (no scripted tree)', () => {
-    it('maps reply tones to Maya canvas expressions', () => {
+    it('maps reply tones to café canvas expressions', () => {
       expect(toneToExpression('happy', 'neutral')).toBe('smile');
       expect(toneToExpression('so HAPPY!!', 'neutral')).toBe('smile');
       expect(toneToExpression('shy', 'neutral')).toBe('shy');
