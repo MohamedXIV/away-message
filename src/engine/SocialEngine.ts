@@ -66,8 +66,8 @@ export function npcBondKey(rawFrom: string, rawTo: string): string {
   return `${from}__${to}`;
 }
 
-// Canonical engine ids are short ('maya'); old saves/UI used handles.
-// Handle + former-id aliases derive from the registry: after a rename, old
+// Canonical actor ids and handle/former-id aliases derive from authored seed content.
+// After a rename, old aliases keep resolving through `formerIds`; no actor id is privileged.
 // ids keep resolving through `formerIds` (save bridge, no code changes).
 // Declared before SEED_AFFINITIES: seed keys are computed through
 // affinityKey → normalizeBuddyId at module load (TDZ otherwise).
@@ -1289,7 +1289,7 @@ export class SocialEngine {
 
   /**
    * Compact romance line answering "are you seeing anyone?" ("Romance: dating
-   * Ryan since day 8"). Always present (single when uninvolved) so the model
+   * Sam since day 8"). Always present (single when uninvolved) so the model
    * never invents partners.
    */
   public buildRomanceContext(rawBuddyId: string): string {
