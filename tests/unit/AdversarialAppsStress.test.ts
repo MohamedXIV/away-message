@@ -8,7 +8,8 @@ import { SocialEngine } from '../../src/engine/SocialEngine';
 import { DownloadManager } from '../../src/engine/DownloadManager';
 import { parseEmoticons, tokenizeEmoticons } from '../../src/apps/pulse/utils/emoticonParser';
 import { AWAY_MESSAGE_PRESETS } from '../../src/apps/pulse/data/awayMessagePresets';
-import { DIALOGUE_SCRIPTS } from '../../src/apps/pulse/data/dialogueTrees';
+import { DIALOGUE_SCRIPTS, validateDialogueScripts } from '../../src/apps/pulse/data/dialogueTrees';
+import type { NpcDialogueScript } from '../../src/apps/pulse/types';
 import { OsVersion } from '../../src/engine/types';
 
 describe('Adversarial Stress Test Suite — Pulse Messenger & Ecosystem Applications', () => {
@@ -768,32 +769,45 @@ describe('Adversarial Stress Test Suite — Pulse Messenger & Ecosystem Applicat
       expect(threats[0]?.id).toBe('threat_2');
     });
 
-    it('validates optional authored Pulse dialogue graph integrity when entries exist', () => {
-      expect(Array.isArray(DIALOGUE_SCRIPTS)).toBe(true);
+    it('validates dialogue graph rules even when production authored content is optional', () => {
+      expect(validateDialogueScripts(DIALOGUE_SCRIPTS)).toEqual([]);
 
-      const allScriptIds = new Set(DIALOGUE_SCRIPTS.map((s) => s.id));
+      const validFixture: NpcDialogueScript[] = [
+        {
+          id: 'fixture_intro',
+          buddyId: 'actor_fixture',
+          messages: [{ text: 'hey' }],
+          playerChoices: [
+            {
+              id: 'continue',
+              text: 'keep talking',
+              socialAction: 'empathy',
+              nextScriptId: 'fixture_followup',
+            },
+          ],
+        },
+        {
+          id: 'fixture_followup',
+          buddyId: 'actor_fixture',
+          messages: [{ text: 'still here' }],
+        },
+      ];
+      expect(validateDialogueScripts(validFixture)).toEqual([]);
 
-      DIALOGUE_SCRIPTS.forEach((script) => {
-        expect(script.id).toBeTruthy();
-        expect(script.buddyId).toBeTruthy();
-        expect(script.messages.length).toBeGreaterThan(0);
-
-        script.messages.forEach((msg) => {
-          expect(msg.text).toBeTruthy();
-        });
-
-        if (script.playerChoices) {
-          script.playerChoices.forEach((choice) => {
-            expect(choice.text).toBeTruthy();
-            expect(choice.socialAction).toBeTruthy();
-
-            // If branching to next script, ensure the destination exists
-            if (choice.nextScriptId) {
-              expect(allScriptIds.has(choice.nextScriptId)).toBe(true);
-            }
-          });
-        }
-      });
+      const danglingFixture: NpcDialogueScript[] = [
+        {
+          ...validFixture[0]!,
+          playerChoices: [{
+            id: 'broken',
+            text: 'go nowhere',
+            socialAction: 'empathy',
+            nextScriptId: 'missing_script',
+          }],
+        },
+      ];
+      expect(validateDialogueScripts(danglingFixture)).toContain(
+        "script[0].playerChoices[0].nextScriptId 'missing_script' does not exist",
+      );
     });
   });
 });
