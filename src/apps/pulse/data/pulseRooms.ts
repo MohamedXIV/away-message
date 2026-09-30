@@ -1,4 +1,5 @@
 import { seedCharacterWithRole } from '../../../engine/seedCharacters';
+import type { BuddyCharacter } from '../../../engine/types';
 
 export interface PulseRoom {
   id: string;
@@ -6,6 +7,7 @@ export interface PulseRoom {
   topic: string;
   description: string;
   participantIds: string[];
+  participantRoles: string[];
   color: string;
   seedMessages: Array<{ senderId: string; text: string; minute: number }>;
 }
@@ -23,9 +25,17 @@ function seedMessage(role: string, text: string, minute: number): Array<{ sender
   return senderId ? [{ senderId, text, minute }] : [];
 }
 
-export const PULSE_GROUPS: Record<string, { label: string; memberIds: string[] }> = {
-  friends: { label: 'Friends & People', memberIds: roleIds('diner-staff', 'cart-owner', 'canal-regular') },
-  work: { label: 'Work / Property', memberIds: roleIds('landlord') },
+export const PULSE_GROUPS: Record<string, { label: string; memberIds: string[]; roles: string[] }> = {
+  friends: {
+    label: 'Friends & People',
+    memberIds: roleIds('diner-staff', 'cart-owner', 'canal-regular'),
+    roles: ['diner-staff', 'cart-owner', 'canal-regular'],
+  },
+  work: {
+    label: 'Work / Property',
+    memberIds: roleIds('landlord'),
+    roles: ['landlord'],
+  },
 };
 
 export const PULSE_ROOMS: PulseRoom[] = [
@@ -35,6 +45,7 @@ export const PULSE_ROOMS: PulseRoom[] = [
     topic: 'general chat · no caps unless urgent',
     description: 'The default lobby for people who are online too late.',
     participantIds: roleIds('diner-staff', 'cart-owner', 'canal-regular'),
+    participantRoles: ['diner-staff', 'cart-owner', 'canal-regular'],
     color: '#6b4c9a',
     seedMessages: [
       ...seedMessage('cart-owner', 'welcome to the lounge ppl', 1324),
@@ -47,6 +58,7 @@ export const PULSE_ROOMS: PulseRoom[] = [
     topic: 'hardware · drivers · overclocking · no warranty',
     description: 'A noisy little help room for modders and desperate downloaders.',
     participantIds: roleIds('cart-owner', 'landlord'),
+    participantRoles: ['cart-owner', 'landlord'],
     color: '#26736a',
     seedMessages: [
       ...seedMessage('cart-owner', 'anyone got a driver mirror that isnt crawling?', 1302),
@@ -59,6 +71,7 @@ export const PULSE_ROOMS: PulseRoom[] = [
     topic: 'music · streetlights · things heard after midnight',
     description: 'For people who keep the lights on while everyone else sleeps.',
     participantIds: roleIds('diner-staff', 'canal-regular'),
+    participantRoles: ['diner-staff', 'canal-regular'],
     color: '#315a8c',
     seedMessages: [
       ...seedMessage('diner-staff', 'sending a playlist link in a sec...', 1288),
@@ -69,4 +82,18 @@ export const PULSE_ROOMS: PulseRoom[] = [
 
 export function getPulseRoom(roomId: string): PulseRoom | undefined {
   return PULSE_ROOMS.find((room) => room.id === roomId);
+}
+
+export function resolvePulseRoomParticipantIds(room: PulseRoom, buddies: BuddyCharacter[]): string[] {
+  const liveIds = new Set(buddies.map((buddy) => buddy.id));
+  const resolved = new Set(room.participantIds.filter((id) => liveIds.has(id)));
+
+  for (const buddy of buddies) {
+    if (buddy.status === 'gone' || buddy.status === 'blocked') continue;
+    if ((buddy.roles ?? []).some((role) => room.participantRoles.includes(role))) {
+      resolved.add(buddy.id);
+    }
+  }
+
+  return Array.from(resolved).sort();
 }
