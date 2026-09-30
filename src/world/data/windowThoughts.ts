@@ -77,12 +77,6 @@ export const WINDOW_THOUGHTS: WindowThought[] = [
     mood: 'hopeful',
   },
   {
-    id: 'settled_rhythm',
-    minDay: 13,
-    text: 'Time settles into a rhythm in this room. The desk is covered in CD jewel cases, notes, and receipts. The hum of the computer fan has become as natural as breathing. The two halves of your life are starting to feel connected.',
-    mood: 'hopeful',
-  },
-  {
     id: 'generic_late_night',
     timeOfDay: ['late_night'],
     text: '3:00 AM. The city is dead quiet except for the distant drone of the highway and the clicking of the hard drive on the desk. You feel like the only conscious person for miles.',
