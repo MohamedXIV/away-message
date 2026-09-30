@@ -22,7 +22,7 @@ import {
 import { EventBus } from './EventBus';
 import { getWeatherForDay, isWetWeather } from './WeatherEngine';
 import { validateCharacterId, isValidSchedule, traitsForBuddy, clampTraits, clampRelationships, resolveArchetype, rollSeeded100 } from './characterTemplates';
-import { CORE_BUDDIES, coreBuddyDef, isRegistryBuddy, resolveAffinitySeeds } from './coreBuddies';
+import { SEED_CHARACTERS, seedCharacterDef, isSeedCharacter, resolveAffinitySeeds } from './seedCharacters';
 import { validatePersistedBuddy, sanitizeLanguages } from './CharacterEngine';
 
 // P3 long-term memory caps (keeps prompt injection bounded and saves small)
@@ -72,7 +72,7 @@ export function npcBondKey(rawFrom: string, rawTo: string): string {
 // Declared before SEED_AFFINITIES: seed keys are computed through
 // affinityKey → normalizeBuddyId at module load (TDZ otherwise).
 export const BUDDY_ID_ALIASES: Record<string, string> = Object.fromEntries(
-  CORE_BUDDIES.flatMap((b) => [[b.handle, b.id], ...b.formerIds.map((old): [string, string] => [old, b.id])])
+  SEED_CHARACTERS.flatMap((b) => [[b.handle, b.id], ...b.formerIds.map((old): [string, string] => [old, b.id])])
 );
 
 export function normalizeBuddyId(id: string): string {
@@ -311,7 +311,7 @@ export class SocialEngine {
     // while their per-save lifecycle divergence is persisted separately.
     const buddyDefs: Record<string, BuddyCharacter> = {};
     for (const [id, b] of this.buddies.entries()) {
-      if (isRegistryBuddy(id)) continue;
+      if (isSeedCharacter(id)) continue;
       buddyDefs[id] = {
         ...b,
         initialRelationships: { ...b.initialRelationships },
@@ -330,7 +330,7 @@ export class SocialEngine {
 
     const seedActorStatuses: Record<string, BuddyLifecycleStatus> = {};
     const removedSeedActorIds: string[] = [];
-    for (const seed of CORE_BUDDIES) {
+    for (const seed of SEED_CHARACTERS) {
       const live = this.buddies.get(seed.id);
       if (!live) {
         removedSeedActorIds.push(seed.id);
@@ -372,7 +372,7 @@ export class SocialEngine {
     // Apply per-save seed-roster divergence before restoring dependent state.
     for (const rawId of state.removedSeedActorIds ?? []) {
       const id = normalizeBuddyId(rawId);
-      if (isRegistryBuddy(id)) this.buddies.delete(id);
+      if (isSeedCharacter(id)) this.buddies.delete(id);
     }
     for (const [rawId, status] of Object.entries(state.seedActorStatuses ?? {})) {
       const id = normalizeBuddyId(rawId);
@@ -380,11 +380,11 @@ export class SocialEngine {
       if (buddy) buddy.status = status;
     }
 
-    // Re-register persisted non-registry defs first so rel/presence/convos land on real buddies.
+    // Re-register persisted non-seed definitions first so rel/presence/convos land on real buddies.
     if (state.buddies) {
       for (const [rawId, def] of Object.entries(state.buddies)) {
         const id = normalizeBuddyId(rawId);
-        if (this.buddies.has(id) || isRegistryBuddy(id)) continue;
+        if (this.buddies.has(id) || isSeedCharacter(id)) continue;
         const res = validatePersistedBuddy({ ...def, id });
         if (!res.ok || !res.definition) continue;
         this.buddies.set(id, res.definition);
@@ -626,8 +626,8 @@ export class SocialEngine {
    * These actors are starting content, not mandatory product identities.
    */
   private initializeCharacters(): void {
-    for (const buddy of CORE_BUDDIES) {
-      this.buddies.set(buddy.id, coreBuddyDef(buddy.id));
+    for (const buddy of SEED_CHARACTERS) {
+      this.buddies.set(buddy.id, seedCharacterDef(buddy.id));
     }
   }
 
