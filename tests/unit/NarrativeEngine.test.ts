@@ -45,7 +45,7 @@ describe('NarrativeEngine & semantic tag subsystem', () => {
     expect(parsed.map((tag) => tag.type)).toEqual(['beat', 'effect_flag', 'social']);
   });
 
-  it('injects generic relationship maps instead of fixed-cast fields', () => {
+  it('injects generic actor-keyed relationship maps', () => {
     const snapshot = narrative.injectContext(sim.getState());
     expect(snapshot.sim_current_day).toBe(1);
     expect(snapshot.sim_player_cash).toBe(38);
