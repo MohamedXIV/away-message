@@ -15,7 +15,7 @@ import type {
   RelationshipStage,
   ScheduleBlock,
 } from './types';
-import { CORE_BUDDIES, CORE_BY_ID } from './coreBuddies';
+import { SEED_CHARACTERS, SEED_BY_ID } from './seedCharacters';
 
 export interface ScheduleBlockSpec {
   start: number; // minute of day 0..1439
@@ -353,14 +353,14 @@ export function pickTemplateIntroLine(archetype: CharacterArchetype, seed: strin
   return line.replaceAll('{name}', displayName);
 }
 
-/** Core ids → archetype, derived from the registry (single source of truth). */
-export const CORE_ID_TO_ARCHETYPE: Record<string, CharacterArchetype> = Object.fromEntries(
-  CORE_BUDDIES.map((b) => [b.id, b.archetype])
+/** Seed ids → archetype, derived from the registry (single source of truth). */
+export const SEED_ID_TO_ARCHETYPE: Record<string, CharacterArchetype> = Object.fromEntries(
+  SEED_CHARACTERS.map((b) => [b.id, b.archetype])
 );
 
 export function resolveArchetype(buddyId: string, stored?: CharacterArchetype): CharacterArchetype {
   if (stored && CHARACTER_ARCHETYPES[stored]) return stored;
-  return CORE_ID_TO_ARCHETYPE[buddyId] ?? 'regular';
+  return SEED_ID_TO_ARCHETYPE[buddyId] ?? 'regular';
 }
 
 export interface AttitudeEntry {
@@ -532,7 +532,7 @@ export const ARCHETYPE_CONFRONT_LINES: Record<CharacterArchetype, string[]> = {
   ],
 };
 
-/** Farewell lines when a buddy goes distant (procedural buddies only, core 4 never leave). */
+/** Farewell lines when a buddy goes distant (procedural buddies only, seed characters never leave). */
 export const ARCHETYPE_FAREWELL_LINES: Record<CharacterArchetype, string[]> = {
   coworker: [
     'alright. i need some space for a while. dont take it personal... actually, take it a little personal.',
@@ -1125,17 +1125,17 @@ export function clampTraits(traits: Partial<CharacterTraits> | undefined): Chara
 }
 
 /**
- * Hand-authored temperament for the core 4 (code-owned, never persisted).
+ * Hand-authored temperament for the seed characters (code-owned, never persisted).
  * Derived from the registry — edit content/store.json, never this map.
  */
-export const CORE_TRAITS: Record<string, CharacterTraits> = Object.fromEntries(
-  CORE_BUDDIES.map((b) => [b.id, { ...b.traits }])
+export const SEED_TRAITS: Record<string, CharacterTraits> = Object.fromEntries(
+  SEED_CHARACTERS.map((b) => [b.id, { ...b.traits }])
 );
 
-/** Traits for a buddy id: core hand-authored wins, everyone else inherits their archetype. */
+/** Traits for a buddy id: seed-authored wins, everyone else inherits their archetype. */
 export function traitsForBuddy(buddyId: string, archetype: CharacterArchetype): CharacterTraits {
-  const core = CORE_BY_ID[buddyId];
-  if (core) return { ...core.traits };
+  const seed = SEED_BY_ID[buddyId];
+  if (seed) return { ...seed.traits };
   return { ...(CHARACTER_ARCHETYPES[archetype]?.defaultTraits ?? CHARACTER_ARCHETYPES['regular'].defaultTraits) };
 }
 
@@ -1290,8 +1290,8 @@ export function pickTemplateAppearance(seed: string): { hair: string; eyes: stri
 }
 
 /** MSN-era signature colors: derived from the registry (edit content, not this map). */
-export const CORE_SIGNATURE_COLORS: Record<string, string> = Object.fromEntries(
-  CORE_BUDDIES.map((b) => [b.id, b.color])
+export const SEED_SIGNATURE_COLORS: Record<string, string> = Object.fromEntries(
+  SEED_CHARACTERS.map((b) => [b.id, b.color])
 );
 
 export const ARCHETYPE_SIGNATURE_COLORS: Record<CharacterArchetype, string> = {
@@ -1303,10 +1303,10 @@ export const ARCHETYPE_SIGNATURE_COLORS: Record<CharacterArchetype, string> = {
   regular: '#6e6e6e',
 };
 
-/** Signature chat color for a buddy id (core fixed, procedural by archetype). */
+/** Signature chat color for a buddy id (seed-authored, procedural by archetype). */
 export function buddySignatureColor(buddyId: string, archetype: CharacterArchetype): string {
-  const core = CORE_BY_ID[buddyId];
-  if (core) return core.color;
+  const seed = SEED_BY_ID[buddyId];
+  if (seed) return seed.color;
   return ARCHETYPE_SIGNATURE_COLORS[archetype] ?? '#800080';
 }
 /** Thank-you lines when the player helps with a mediation (rules-picked, capped). */
