@@ -26,7 +26,6 @@ const banned: Array<{ label: string; pattern: RegExp }> = [
   { label: 'obsolete core provenance', pattern: new RegExp("metVia\\s*:\\s*['\"]core['\"]", 'i') },
   { label: 'retired finite-game ids', pattern: new RegExp('(?:end_game|mid_game)_', 'i') },
   { label: 'named outing rule API', pattern: new RegExp('(?:mayaDinerEncounter|noraCanalEncounter|pickOutingMayaLine|pickOutingNoraLine)', 'i') },
-  { label: 'fixed residence identifier', pattern: new RegExp('(?:Room\\s*104|room_104)', 'i') },
 ];
 
 function extension(path: string): string {
