@@ -465,8 +465,12 @@ export interface SocialEngineState {
   relationships: Record<string, RelationshipDimensions>;
   presence: Record<string, BuddyPresence>;
   conversations: Record<string, MessageRecord[]>;
-  // Dynamic roster: buddy definitions (core 4 are code-owned; procedural ones persist here)
+  // Dynamic roster: non-registry actor definitions persist here.
   buddies?: Record<string, BuddyCharacter>;
+  // Authored seed actors are content defaults, not sacred identities. Optional
+  // lifecycle overrides/removals let a save diverge from the seed roster.
+  seedActorStatuses?: Record<string, BuddyLifecycleStatus>;
+  removedSeedActorIds?: string[];
   // P3 long-term memory: immortal facts + promises per buddy (persisted, capped)
   coreMemories?: Record<string, CoreMemory[]>;
   promises?: Record<string, PromiseRecord[]>;
