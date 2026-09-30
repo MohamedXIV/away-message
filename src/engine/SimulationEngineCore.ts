@@ -47,7 +47,7 @@ import {
 } from './PlayerActs';
 import { CITY_NODES, isCityNodeId, quoteTravel, walkEnergyCost, rollStreetEncounter, BUS_FARE, type CityNodeId, type TravelMode } from './CityMap';
 import { pulseHasFeature, getAllPulseReleases } from './PulseCatalog';
-import { CORE_BY_ID, buddyWithRole } from './coreBuddies';
+import { SEED_BY_ID, seedCharacterWithRole } from './seedCharacters';
 
 export class SimulationEngine {
   public readonly clock!: GameClock;
@@ -283,7 +283,7 @@ export class SimulationEngine {
           if (res) {
             const link = `http://myplace.local/${res.username}`;
             // Voice follows the announcer's temperament (rename-proof).
-            const announcer = Object.values(CORE_BY_ID).find((b) => b.myplace === res.username);
+            const announcer = Object.values(SEED_BY_ID).find((b) => b.myplace === res.username);
             const traits = announcer ? this.social.getTraits(announcer.id) : { shyness: 50, discipline: 50 };
             const text = pickMyplaceUpdateLine(traits.shyness, traits.discipline, link);
             try { this.social.sendMessage(res.username, res.username, 'player', text, currentMinutes, false, ['myplace_update']); } catch {}
@@ -333,7 +333,7 @@ export class SimulationEngine {
         if (res) {
           const link = `http://myplace.local/${res.username}`;
           // Voice follows the announcer's temperament (rename-proof).
-          const announcer = Object.values(CORE_BY_ID).find((b) => b.myplace === res.username);
+          const announcer = Object.values(SEED_BY_ID).find((b) => b.myplace === res.username);
           const traits = announcer ? this.social.getTraits(announcer.id) : { shyness: 50, discipline: 50 };
           const text = pickMyplaceUpdateLine(traits.shyness, traits.discipline, link);
           try { this.social.sendMessage(res.username, res.username, 'player', text, currentMinutes, false, ['myplace_update']); } catch {}
@@ -1260,12 +1260,12 @@ export class SimulationEngine {
   private ensureMyPlaceStub(buddy: { handle?: string; id: string; displayName: string; archetype?: any; backstory?: { label?: string; bioSeed?: string } }): void {
     try {
       // One page per buddy: prefer the registry myplace username so links stay canonical.
-      const username = CORE_BY_ID[buddy.id]?.myplace || buddy.handle || buddy.id;
+      const username = SEED_BY_ID[buddy.id]?.myplace || buddy.handle || buddy.id;
       this.myplace.ensureNpcProfile({
         username,
         displayName: buddy.displayName,
         archetype: buddy.archetype,
-        backstory: buddy.backstory ?? CORE_BY_ID[buddy.id]?.backstory ?? undefined,
+        backstory: buddy.backstory ?? SEED_BY_ID[buddy.id]?.backstory ?? undefined,
       });
       // Also index by raw id so MyPlace routing works with either key
       if (buddy.handle && buddy.handle !== buddy.id) {
@@ -1273,7 +1273,7 @@ export class SimulationEngine {
           username: buddy.id,
           displayName: buddy.displayName,
           archetype: buddy.archetype,
-          backstory: buddy.backstory ?? CORE_BY_ID[buddy.id]?.backstory ?? undefined,
+          backstory: buddy.backstory ?? SEED_BY_ID[buddy.id]?.backstory ?? undefined,
         });
       }
     } catch { /* MyPlace stub is best-effort */ }
@@ -1422,7 +1422,7 @@ export class SimulationEngine {
         const done = this.world.getFlag(`jobapp_${gig.id}_done`);
         if (typeof applied !== 'number' || applied <= 0 || done) continue;
         if (now < applied + replyDelayMinutes(gig.id, applied)) continue;
-        const holder = buddyWithRole(gig.contactRole);
+        const holder = seedCharacterWithRole(gig.contactRole);
         const contact = holder ? this.social.getBuddy(holder.id) : undefined;
         const gone = !contact || contact.status === 'distant' || contact.status === 'gone' || contact.status === 'blocked';
         const stage = contact ? this.social.getRelationshipStage(contact.id) : 'stranger';
@@ -1541,7 +1541,7 @@ export class SimulationEngine {
   // No landlord on the roster → the economy still ticks, the DM is skipped.
   // (Availability is NOT required — rent is owed even to a distant landlord.)
   private sendRentNote(text: string, tags: string[], currentMinutes: number, event: string, extra?: Record<string, unknown>): void {
-    const holder = buddyWithRole('landlord');
+    const holder = seedCharacterWithRole('landlord');
     const landlord = holder ? this.social.getBuddy(holder.id) : undefined;
     if (!landlord) return;
     this.social.sendMessage(landlord.id, landlord.id, 'player', text, currentMinutes, false, ['rent', ...tags]);
@@ -1640,7 +1640,7 @@ export class SimulationEngine {
       // Encounters (deterministic per day; buddies must be present and available).
       // Whoever holds the role shows up — voice pool follows temperament, not identity.
       if (outingId === 'diner_soup' || outingId === 'diner_platter' || outingId === 'diner_pie') {
-        const staffer = buddyWithRole('diner-staff');
+        const staffer = seedCharacterWithRole('diner-staff');
         const maya = staffer ? this.social.getBuddy(staffer.id) : undefined;
         if (SimulationEngine.isBuddyAvailable(maya) && maya && mayaDinerEncounter(hour, day)) {
           const buddyId = maya.id;
@@ -1662,7 +1662,7 @@ export class SimulationEngine {
         return { success: true, data: { summary: `Hearty ${spec.label} at the diner. Quiet tables, good coffee.` } };
       }
       if (outingId === 'canal_walk') {
-        const regular = buddyWithRole('canal-regular');
+        const regular = seedCharacterWithRole('canal-regular');
         const walker = regular ? this.social.getBuddy(regular.id) : undefined;
         const raining = isWetWeather(weather.condition);
         if (SimulationEngine.isBuddyAvailable(walker) && walker && noraCanalEncounter(hour, day, raining)) {
