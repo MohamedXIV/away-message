@@ -14,7 +14,7 @@ export interface DayWeather {
   lowF: number;
 }
 
-/** Hand-authored two-week Oakhaven cycle (canal town in late August: mostly grey, sometimes hot). */
+/** Hand-authored repeating Oakhaven weather pattern (canal town in late August: mostly grey, sometimes hot). */
 const CYCLE: WeatherCondition[] = [
   'overcast', 'rain', 'rain', 'drizzle', 'overcast', 'fog', 'clear',
   'rain', 'overcast', 'heat', 'drizzle', 'rain', 'fog', 'clear',
@@ -36,7 +36,7 @@ function hashDay(day: number): number {
   return hash;
 }
 
-/** Weather for a game day: repeating two-week cycle + a governed storm every 15th day. */
+/** Weather for a game day: repeating authored pattern + a governed storm every 15th day. */
 export function getWeatherForDay(rawDay: number): DayWeather {
   const day = Math.max(1, Math.floor(rawDay) || 1);
   // Monthly-ish storm front (days 15, 30, 45...) — the one dramatic exception
@@ -67,7 +67,7 @@ export function gameDayLabel(rawDay: number): string {
   return new Date(2006, 7, 21 + day).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
-/** Wet days make Maya happy (rain/drizzle/storm). */
+/** Wet-weather classifier used by rain-sensitive character roles and world rules. */
 export function isWetWeather(condition: WeatherCondition): boolean {
   return condition === 'rain' || condition === 'drizzle' || condition === 'storm';
 }
