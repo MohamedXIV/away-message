@@ -13,11 +13,9 @@ and live governed sandbox lives. Online AI-heavy, offline-safe via templates.
 
 Away Message is an **open-ended sandbox**, not a fixed campaign.
 
-The short 14-day evaluation structure used during an early two-day implementation experiment is retired product history. It is not a milestone, ending, target duration, canonical playthrough, acceptance gate, or content template. Do not recreate it in docs, code, tests, UI, telemetry, or issues.
+There is no mandatory protagonist NPC, romance, meeting, café scene, or named core cast. Legacy named actors may survive temporarily as ordinary authored content, migration data, or test fixtures, but **the game must remain valid if any of them is renamed, replaced, never generated, never met, or removed**.
 
-There is no mandatory protagonist NPC, romance, meeting, café scene, or named core cast. `maya`, `ryan`, `nora`, `henderson` and similar names may survive temporarily as ordinary authored content, migration data, or test fixtures, but **the game must remain valid if any of them is renamed, replaced, never generated, never met, or removed**.
-
-Progression is systemic and potentially indefinite: residence, work, money, hardware/software, internet discovery, relationships, town knowledge, travel, possessions, activities, and character lives continue without a canonical final day or "game complete" state.
+Progression is systemic and open-ended: residence, work, money, hardware/software, internet discovery, relationships, town knowledge, travel, possessions, activities, and character lives continue without a canonical final day or completion gate.
 
 The current implementation still contains legacy named/core-character IDs and compatibility behavior. Treat those as migration/fixture reality, **not** as a permanent product rule that future systems may hard-code around.
 
@@ -103,7 +101,7 @@ If a useful Orion concept overlaps an existing Away system, follow the salvage d
 - **Player and NPC mobility share the town.** NPCs may choose policies/preferences, but they cannot invent impossible shortcuts outside the same route/service model the player uses.
 - **Transit presentation is optional, transit state is not.** A bus stop may be a normal living Place and a bus ride may use a reusable interior view, but skipping/compressing presentation must advance exactly the same authoritative itinerary once.
 - **Physical existence and player knowledge differ.** A character, district, place, stop, line, residence listing or event may exist in simulation before the player knows it. UI/projectors/AI must not reveal undiscovered truth merely because it exists in state.
-- **Dynamic roster is the product direction.** Legacy IDs such as `maya`, `ryan`, `nora`, and `henderson` may remain in current tests/content during migration. Do not create new architecture that requires those identities, protects them because of their names, or makes a gameplay role/path character-specific when a role/capability can own it. Pre-freeze historical saves do not create an obligation to retain these IDs forever.
+- **Dynamic roster is the product direction.** Legacy named IDs may remain in current tests/content during migration. Do not create new architecture that requires any specific identity, protects a character because of its name, or makes a gameplay role/path character-specific when a role/capability can own it. Pre-freeze historical saves do not create an obligation to retain those IDs forever.
 - **Preserve current social safety/rarity rules while migrating, but do not elevate legacy identity exceptions into new architecture.** Any future generalized lifecycle rule must be role/state-driven and explicitly tested.
 - **Offline-first:** every AI feature ships a template fallback that works with no key (see `makeFallback*`, `pickTemplate*`, `ARCHETYPE_*` pools). AI outage must never break the tick — wrap in try/catch.
 - **Governed generation:** Zod-validate every model output; cap everything (memories, promises, affinities, guestbooks, links); era lock 1998–2006; fictional `.local` URLs only, never real ones.
