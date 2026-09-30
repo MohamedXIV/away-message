@@ -3,26 +3,9 @@ import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
 
 const ROOT = process.cwd();
-const SCAN_ROOTS = [
-  'AGENTS.md',
-  'AI_LAB.md',
-  'CHANGELOG.md',
-  'PROJECT.md',
-  'TEST_INFRA.md',
-  'index.html',
-  'src',
-  'tests',
-  'docs',
-  'content',
-  'scripts',
-  'tools',
-  'tools',
-  'AI_LAB.md',
-  'TEST_INFRA.md',
-  'CHANGELOG.md',
-];
+const SCAN_ROOTS = ['.'];
 
-const TEXT_EXTENSIONS = new Set(['.md', '.ts', '.tsx', '.js', '.jsx', '.mjs', '.json', '.html']);
+const TEXT_EXTENSIONS = new Set(['.md', '.txt', '.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs', '.json', '.html', '.yml', '.yaml']);
 const SELF = 'tests/unit/NoLegacyCampaign.test.ts';
 
 const banned: Array<{ label: string; pattern: RegExp }> = [
@@ -65,13 +48,14 @@ function collect(path: string, out: string[]): void {
       || name === '.git'
       || name === 'coverage'
       || name === '.vite'
+      || name === '.agents'
     ) continue;
     collect(join(path, name), out);
   }
 }
 
 describe('product direction guard', () => {
-  it('contains no retired fixed-duration/fixed-cast campaign authority anywhere in the repository', () => {
+  it('contains no retired fixed-duration/fixed-cast campaign authority across repository product sources', () => {
     const files: string[] = [];
     for (const root of SCAN_ROOTS) collect(root, files);
 
