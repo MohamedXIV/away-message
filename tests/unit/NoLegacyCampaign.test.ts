@@ -6,6 +6,7 @@ const ROOT = process.cwd();
 const SCAN_ROOTS = [
   'AGENTS.md',
   'AI_LAB.md',
+  'CHANGELOG.md',
   'PROJECT.md',
   'TEST_INFRA.md',
   'index.html',
