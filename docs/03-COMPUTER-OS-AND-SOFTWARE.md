@@ -83,7 +83,7 @@ These are gameplay abstractions, not hardware-accurate simulation.
 
 ## 4. Upgrade options
 
-Evaluation build should support at least:
+sandbox build should support at least:
 
 ### RAM
 - 512 MB → 1 GB
