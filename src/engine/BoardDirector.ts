@@ -14,7 +14,6 @@ import {
   pickMailWelcome,
   resolveArchetype,
 } from './characterTemplates';
-import { CORE_IDS } from './coreBuddies';
 import type { CharacterArchetype } from './types';
 
 function hashStr(value: string): number {
@@ -301,13 +300,13 @@ export function buildRentMailHistory(flags: Record<string, boolean | number | st
     const day = kind === 'due' ? dueDay : dueDay + 1;
     out.push({
       key: `rentmail_${kind}_${dueDay}`,
-      buddyId: landlordId ?? CORE_IDS.HENDERSON,
-      sender: 'Mr. Henderson',
+      buddyId: landlordId ?? 'property_management',
+      sender: landlordId ? 'Property Manager' : 'Property Management',
       senderEmail: 'desk@starlitemotel.local',
-      subject: kind === 'due' ? `Room 104 rent due — $${amount.toFixed(2)}` : 'Second notice — Room 104',
+      subject: kind === 'due' ? `your residence rent due — $${amount.toFixed(2)}` : 'Second notice — your residence',
       body: kind === 'due'
-        ? `Dear occupant of Room 104,\n\nThis is a reminder that your weekly rent of $${amount.toFixed(2)} is due today. Please settle at the front desk before 8pm to avoid a late fee.\n\nNote: the DSL wall port stays active regardless. Downloads, however, nap until we settle.\n\n- Front Desk Management`
-        : `Dear occupant,\n\nRoom 104 remains unpaid ($${amount.toFixed(2)} plus any late fee). Your download line is paused until we settle — browsing still works, patience still free.\n\nCome see me at the desk.\n\n- Front Desk Management`,
+        ? `Dear occupant of your residence,\n\nThis is a reminder that your weekly rent of $${amount.toFixed(2)} is due today. Please settle at the front desk before 8pm to avoid a late fee.\n\nNote: the DSL wall port stays active regardless. Downloads, however, nap until we settle.\n\n- Front Desk Management`
+        : `Dear occupant,\n\nyour residence remains unpaid ($${amount.toFixed(2)} plus any late fee). Your download line is paused until we settle — browsing still works, patience still free.\n\nCome see me at the desk.\n\n- Front Desk Management`,
       day,
     });
   }
