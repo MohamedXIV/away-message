@@ -298,8 +298,6 @@ The game can borrow small pieces from these forms without becoming them.
 
 The game does **not** have a canonical campaign length, final day, required ending, or mandatory named social arc.
 
-A former 14-day evaluation structure was built very early as a short implementation experiment. It is retired product history. Do not use it as design authority, content cadence, acceptance criteria, telemetry framing, or a reason to privilege any named character.
-
 ### What a save is
 
 A save is an ongoing life in one simulated town.
@@ -314,7 +312,7 @@ The player may:
 - move residence and carry possessions/history forward;
 - continue for as long as the systems and authored/generated content remain interesting.
 
-There is no transition from "campaign" to "free play". The game is the sandbox from the beginning.
+The game is the sandbox from the beginning and remains open-ended.
 
 ### Characters
 
@@ -343,9 +341,9 @@ World events, schedules and authored/generated opportunities may create local ar
 
 ### Completion
 
-There is no product-level "game complete" state.
+There is no product-level completion gate.
 
-Optional milestones, diagnostics, telemetry snapshots or scenario tests may exist for development, but they must never imply that a save ends or becomes "free play" after a fixed number of days.
+Optional milestones, diagnostics, telemetry snapshots or scenario tests may exist for development, but they must never imply that a save ends after a fixed amount of time.
 
 ### Product test
 
