@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { hashReply, isDuplicateReply, extractFactsFromPlayerMessage, buildConversationSummary, buildMemoryContext } from '../../src/apps/pulse/utils/conversationMemory';
 import { getNpcStyle, getNpcMoodLabel, getNpcAvailabilityLabel, getNpcActivityLabel, NPC_STYLE_PROFILES } from '../../src/apps/pulse/data/npcStyles';
 import { loadPulseState, makeDefaultPulseState, savePulseState } from '../../src/apps/pulse/persistence';
+import { SimulationEngine } from '../../src/engine/SimulationEngine';
 
 describe('Pulse Conversation Memory & Anti-Repeat', () => {
   it('hashReply is deterministic and length-sensitive', () => {
@@ -60,19 +61,33 @@ describe('Pulse Conversation Memory & Anti-Repeat', () => {
 });
 
 describe('Pulse NPC Style Profiles', () => {
-  it('provides distinct profiles per buddy', () => {
-    const maya = getNpcStyle('maya');
-    const ryan = getNpcStyle('ryan');
-    const nora = getNpcStyle('nora');
-    const henderson = getNpcStyle('henderson');
-    expect(maya.typing.wpm).toBeLessThan(ryan.typing.wpm);
-    expect(ryan.typing.wpm).toBeGreaterThan(80);
-    expect(maya.vocabulary).toContain('hey...');
-    expect(ryan.vocabulary).toContain('yo');
-    expect(nora.vocabulary).toContain('quiet');
-    expect(henderson.vocabulary).toContain('Please');
-    expect(maya.quirks).toContain('lowercase-heavy');
-    expect(henderson.punctuation).toContain('formal');
+  it('derives distinct behavioral profiles from live roles rather than actor ids', () => {
+    const sim = new SimulationEngine();
+    const actorFor = (role: string, id: string) => {
+      const holder = sim.social.getBuddyWithRole(role);
+      expect(holder).toBeDefined();
+      return {
+        ...holder!,
+        id,
+        displayName: id,
+        handle: id,
+        roles: [role],
+      };
+    };
+
+    const reserved = getNpcStyle(actorFor('diner-staff', 'replacement_reserved'));
+    const warm = getNpcStyle(actorFor('cart-owner', 'replacement_warm'));
+    const night = getNpcStyle(actorFor('canal-regular', 'replacement_night'));
+    const property = getNpcStyle(actorFor('landlord', 'replacement_property'));
+
+    expect(reserved.typing.wpm).toBeLessThan(warm.typing.wpm);
+    expect(warm.typing.wpm).toBeGreaterThan(80);
+    expect(reserved.vocabulary).toContain('hey...');
+    expect(warm.vocabulary).toContain('yo');
+    expect(night.vocabulary).toContain('quiet');
+    expect(property.vocabulary).toContain('Please');
+    expect(reserved.quirks).toContain('lowercase-heavy');
+    expect(property.punctuation).toContain('formal');
   });
 
   it('falls back to generic profile for unknown buddy', () => {
@@ -99,8 +114,12 @@ describe('Pulse NPC Style Profiles', () => {
     expect(getNpcAvailabilityLabel({ status: 'away', awayMessage: 'afk' }, 14)).toContain('slowly');
     expect(getNpcAvailabilityLabel({ status: 'offline', awayMessage: '' }, 14)).toContain('offline');
 
-    expect(getNpcActivityLabel({ status: 'away', awayMessage: 'at the desk... dont look at me' }, 'maya', 14)).toBe('at the desk... dont look at me');
-    expect(getNpcActivityLabel({ status: 'online', awayMessage: '' }, 'maya', 20)).toContain('rain');
+    const sim = new SimulationEngine();
+    const rainHolder = sim.social.getBuddyWithRole('rain-lover');
+    expect(rainHolder).toBeDefined();
+    const replacementRainLover = { ...rainHolder!, id: 'replacement_rain_lover', displayName: 'Replacement', handle: 'replacement' };
+    expect(getNpcActivityLabel({ status: 'away', awayMessage: 'at the desk... dont look at me' }, replacementRainLover, 14)).toBe('at the desk... dont look at me');
+    expect(getNpcActivityLabel({ status: 'online', awayMessage: '' }, replacementRainLover, 20)).toContain('rain');
   });
 
   it('persists conversationSummaries, recentReplies and buddyFacts alongside legacy fields', () => {
@@ -113,24 +132,24 @@ describe('Pulse NPC Style Profiles', () => {
     });
 
     const state = makeDefaultPulseState();
-    state.conversationSummaries = { maya: 'talked about music and rain' };
-    state.recentReplies = { maya: ['hey... you there?'] };
-    state.buddyFacts = { maya: ['Player name is Alex'] };
+    state.conversationSummaries = { actor_fixture: 'talked about music and rain' };
+    state.recentReplies = { actor_fixture: ['hey... you there?'] };
+    state.buddyFacts = { actor_fixture: ['Player name is Alex'] };
     savePulseState(state);
     const restored = loadPulseState();
-    expect(restored.conversationSummaries.maya).toBe('talked about music and rain');
-    expect(restored.recentReplies.maya?.[0]).toBe('hey... you there?');
-    expect(restored.buddyFacts.maya?.[0]).toContain('Alex');
+    expect(restored.conversationSummaries.actor_fixture).toBe('talked about music and rain');
+    expect(restored.recentReplies.actor_fixture?.[0]).toBe('hey... you there?');
+    expect(restored.buddyFacts.actor_fixture?.[0]).toContain('Alex');
 
     vi.unstubAllGlobals();
   });
 
-  it('has style profiles for all known buddies', () => {
-    const knownIds = ['maya', 'ryan', 'nora', 'henderson'];
-    knownIds.forEach((id) => {
-      expect(NPC_STYLE_PROFILES[id]).toBeDefined();
-      expect(NPC_STYLE_PROFILES[id]!.persona.length).toBeGreaterThan(20);
-      expect(NPC_STYLE_PROFILES[id]!.typing.wpm).toBeGreaterThan(30);
+  it('defines reusable style profiles for capability roles', () => {
+    const roles = ['diner-staff', 'cart-owner', 'canal-regular', 'landlord'];
+    roles.forEach((role) => {
+      expect(NPC_STYLE_PROFILES[role]).toBeDefined();
+      expect(NPC_STYLE_PROFILES[role]!.persona.length).toBeGreaterThan(20);
+      expect(NPC_STYLE_PROFILES[role]!.typing.wpm).toBeGreaterThan(30);
     });
   });
 });
