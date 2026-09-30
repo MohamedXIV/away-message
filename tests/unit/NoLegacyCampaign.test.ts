@@ -12,6 +12,9 @@ const SCAN_ROOTS = [
   'docs',
   'content',
   'scripts',
+  'tools',
+  'AI_LAB.md',
+  'TEST_INFRA.md',
 ];
 
 const TEXT_EXTENSIONS = new Set(['.md', '.ts', '.tsx', '.js', '.jsx', '.mjs', '.json', '.html']);
@@ -33,6 +36,8 @@ const banned: Array<{ label: string; pattern: RegExp }> = [
   { label: 'obsolete core cast symbols', pattern: new RegExp('(?:CORE_BUDDIES|CORE_IDS|CORE_BY_ID|CoreBuddy|coreBuddyDef|coreBuddyIds|isRegistryBuddy)', 'i') },
   { label: 'obsolete core-derived symbols', pattern: new RegExp('(?:CORE_PROFILE_ALIASES|CORE_ID_TO_ARCHETYPE|CORE_TRAITS|CORE_SIGNATURE_COLORS)', 'i') },
   { label: 'obsolete core provenance', pattern: new RegExp("metVia\\s*:\\s*['\"]core['\"]", 'i') },
+  { label: 'retired finite-game ids', pattern: new RegExp('(?:end_game|mid_game)_', 'i') },
+  { label: 'named outing rule API', pattern: new RegExp('(?:mayaDinerEncounter|noraCanalEncounter|pickOutingMayaLine|pickOutingNoraLine)', 'i') },
 ];
 
 function extension(path: string): string {
