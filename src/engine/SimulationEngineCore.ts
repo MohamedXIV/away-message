@@ -1422,8 +1422,7 @@ export class SimulationEngine {
         const done = this.world.getFlag(`jobapp_${gig.id}_done`);
         if (typeof applied !== 'number' || applied <= 0 || done) continue;
         if (now < applied + replyDelayMinutes(gig.id, applied)) continue;
-        const holder = this.social.getBuddyWithRole(gig.contactRole);
-        const contact = holder ? this.social.getBuddy(holder.id) : undefined;
+        const contact = this.social.getBuddyWithRole(gig.contactRole);
         const gone = !contact || contact.status === 'distant' || contact.status === 'gone' || contact.status === 'blocked';
         const stage = contact ? this.social.getRelationshipStage(contact.id) : 'stranger';
         const { accepted, odds } = decideApplication({
@@ -1541,15 +1540,10 @@ export class SimulationEngine {
   // No landlord on the roster → the economy still ticks, the DM is skipped.
   // (Availability is NOT required — rent is owed even to a distant landlord.)
   private sendRentNote(text: string, tags: string[], currentMinutes: number, event: string, extra?: Record<string, unknown>): void {
-    const holder = this.social.getBuddyWithRole('landlord');
-    const landlord = holder ? this.social.getBuddy(holder.id) : undefined;
+    const landlord = this.social.getBuddyWithRole('landlord');
     if (!landlord) return;
     this.social.sendMessage(landlord.id, landlord.id, 'player', text, currentMinutes, false, ['rent', ...tags]);
     this.telemetry.logEvent('economy', event, currentMinutes, { buddyId: landlord.id, ...(extra ?? {}) });
-  }
-
-  private sendRentContactNote(text: string, tags: string[], currentMinutes: number, event: string, extra?: Record<string, unknown>): void {
-    this.sendRentNote(text, tags, currentMinutes, event, extra);
   }
 
   /** Daily rent pass: gentle reminder → stern warning → overdue nudges. Rules only. */
@@ -1564,10 +1558,10 @@ export class SimulationEngine {
       if (newDay === dueDay - 2 && !this.world.getFlag(`rent_reminded_${dueDay}`)) {
         this.world.setFlag(`rent_reminded_${dueDay}`, true);
         this.world.setFlag(`rentmail_due_${dueDay}`, Math.round(amount * 100));
-        this.sendRentContactNote(pickRentReminderLine(`${dueDay}`, amount, dueDay), ['reminder'], minutes, 'rent_reminded', { dueDay });
+        this.sendRentNote(pickRentReminderLine(`${dueDay}`, amount, dueDay), ['reminder'], minutes, 'rent_reminded', { dueDay });
       } else if (newDay === dueDay && !this.world.getFlag(`rent_warned_${dueDay}`)) {
         this.world.setFlag(`rent_warned_${dueDay}`, true);
-        this.sendRentContactNote(pickRentSternLine(`${dueDay}`, amount, dueDay), ['warning'], minutes, 'rent_warned', { dueDay });
+        this.sendRentNote(pickRentSternLine(`${dueDay}`, amount, dueDay), ['warning'], minutes, 'rent_warned', { dueDay });
       } else if (newDay > dueDay) {
         // Catch-up for multi-day jumps: stamp the paper trail silently
         // (messages stay current-rung only — no backdated nag spam)
@@ -1579,7 +1573,7 @@ export class SimulationEngine {
         }
         if (!this.world.getFlag(`rent_nudge_${newDay}`)) {
           this.world.setFlag(`rent_nudge_${newDay}`, true);
-          this.sendRentContactNote(pickRentNudgeLine(`${newDay}`, amount), ['nudge'], minutes, 'rent_nudged', { dueDay });
+          this.sendRentNote(pickRentNudgeLine(`${newDay}`, amount), ['nudge'], minutes, 'rent_nudged', { dueDay });
         }
       }
     } catch { /* rent never breaks the tick */ }
@@ -1640,8 +1634,7 @@ export class SimulationEngine {
       // Encounters (deterministic per day; buddies must be present and available).
       // Whoever holds the role shows up — voice pool follows temperament, not identity.
       if (outingId === 'diner_soup' || outingId === 'diner_platter' || outingId === 'diner_pie') {
-        const staffer = this.social.getBuddyWithRole('diner-staff');
-        const staffBuddy = staffer ? this.social.getBuddy(staffer.id) : undefined;
+        const staffBuddy = this.social.getBuddyWithRole('diner-staff');
         if (SimulationEngine.isBuddyAvailable(staffBuddy) && staffBuddy && dinerStaffEncounter(hour, day)) {
           const buddyId = staffBuddy.id;
           this.social.applySocialAction(buddyId, 'remembered_detail');
@@ -1662,8 +1655,7 @@ export class SimulationEngine {
         return { success: true, data: { summary: `Hearty ${spec.label} at the diner. Quiet tables, good coffee.` } };
       }
       if (outingId === 'canal_walk') {
-        const regular = this.social.getBuddyWithRole('canal-regular');
-        const walker = regular ? this.social.getBuddy(regular.id) : undefined;
+        const walker = this.social.getBuddyWithRole('canal-regular');
         const raining = isWetWeather(weather.condition);
         if (SimulationEngine.isBuddyAvailable(walker) && walker && canalRegularEncounter(hour, day, raining)) {
           const buddyId = walker.id;
@@ -1893,7 +1885,7 @@ export class SimulationEngine {
         // P6.4 kindness restored: line unpaused + the active property contact says thanks
         if (this.world.getFlag('rent_overdue')) this.world.setFlag('rent_overdue', false);
         try {
-          this.sendRentContactNote(pickRentThanksLine(`paid${this.clock.getTime().day}`), ['thanks'], currentMinutes, 'rent_thanked', {});
+          this.sendRentNote(pickRentThanksLine(`paid${this.clock.getTime().day}`), ['thanks'], currentMinutes, 'rent_thanked', {});
         } catch { /* thanks is best-effort */ }
         this.telemetry.logEvent('economy', 'rent_paid', currentMinutes, {
           day: this.clock.getTime().day,
