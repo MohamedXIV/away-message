@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { soundManager } from '../../audio/SoundManager';
 import { useSimulationStore } from '../../store/useSimulationStore';
 import { buildNpcMailForDay, buildRentMailHistory, gameDayToMailDate, type NpcMail } from '../../engine/BoardDirector';
-import { buddyWithRole } from '../../engine/coreBuddies';
+import { seedCharacterWithRole } from '../../engine/seedCharacters';
 import { locationLabel } from '../../engine/AppointmentDirector';
 
 interface EmailMessage {
@@ -107,7 +107,7 @@ export const MailboxApp: React.FC = () => {
       const trimmed = collected.slice(-10);
       // P6.4 rent paper trail (survives payment — reconstructed from flags; never trimmed away)
       try {
-        const landlord = buddyWithRole('landlord');
+        const landlord = seedCharacterWithRole('landlord');
         const landlordId = landlord ? engine.social.getBuddy(landlord.id)?.id : undefined;
         for (const rent of buildRentMailHistory(engine.world.getFlags(), landlordId)) {
           if (!trimmed.some((m) => m.key === rent.key)) trimmed.push(rent);
