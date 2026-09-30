@@ -1935,7 +1935,7 @@ export class SimulationEngine {
       }
 
       case 'PLAYER_INTERACT_ROOM': {
-        // P7 gating: room comforts live in Room 104
+        // P7 gating: room comforts require the player's current home
         const roomErr = SimulationEngine.requireLocation(this.economy.getLocation(), 'home');
         if (roomErr) return { success: false, error: roomErr };
         const durations: Record<string, number> = {
@@ -2069,7 +2069,7 @@ export class SimulationEngine {
       case 'DOWNLOAD_START': {
         // P6.4 lenient teeth: overdue rent pauses NEW downloads (browsing still works)
         if (this.world.getFlag('rent_overdue')) {
-          return { success: false, error: 'Download line paused by the front desk — settle Room 104 rent to resume.' };
+          return { success: false, error: 'Download line paused by property management — settle your residence rent to resume.' };
         }
         try {
           const task = this.downloads.startDownload({
