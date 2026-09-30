@@ -1527,6 +1527,18 @@ export class SocialEngine {
     return Array.from(this.buddies.values());
   }
 
+  /** Resolve current live actors by capability role. Seed content has no runtime privilege. */
+  public getBuddiesWithRole(role: string): BuddyCharacter[] {
+    return this.getBuddies()
+      .filter((buddy) => (buddy.roles ?? []).includes(role))
+      .sort((a, b) => a.id.localeCompare(b.id));
+  }
+
+  /** Deterministic first current actor carrying a capability role. */
+  public getBuddyWithRole(role: string): BuddyCharacter | undefined {
+    return this.getBuddiesWithRole(role)[0];
+  }
+
   public getRelationships(rawId: string): RelationshipDimensions | undefined {
     const rel = this.relationships.get(normalizeBuddyId(rawId));
     return rel ? { ...rel } : undefined;
