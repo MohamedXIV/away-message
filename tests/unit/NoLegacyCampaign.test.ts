@@ -55,13 +55,19 @@ function collect(path: string, out: string[]): void {
   }
 
   for (const name of readdirSync(absolute)) {
-    if (name === 'node_modules' || name === 'dist' || name === '.git') continue;
+    if (
+      name === 'node_modules'
+      || name === 'dist'
+      || name === '.git'
+      || name === 'coverage'
+      || name === '.vite'
+    ) continue;
     collect(join(path, name), out);
   }
 }
 
 describe('product direction guard', () => {
-  it('contains no retired fixed-duration/fixed-cast campaign authority', () => {
+  it('contains no retired fixed-duration/fixed-cast campaign authority anywhere in the repository', () => {
     const files: string[] = [];
     for (const root of SCAN_ROOTS) collect(root, files);
 
