@@ -63,6 +63,17 @@ describe('SocialEngine (dynamic roster, presence & hidden relationship dimension
       isProcedural: true,
       createdDay: 2,
     });
+    social.registerBuddy({
+      ...template,
+      id: 'aaa_distant_diner',
+      displayName: 'Distant Diner Staff',
+      handle: 'aaa_distant_diner',
+      roles: ['diner-staff'],
+      status: 'distant',
+      metVia: 'work',
+      isProcedural: true,
+      createdDay: 2,
+    });
 
     expect(social.getBuddyWithRole('diner-staff')?.id).toBe('dynamic_diner_staff');
   });
