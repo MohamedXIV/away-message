@@ -853,7 +853,7 @@ export const PulseMessengerApp: React.FC = () => {
       for (let responderIndex = 0; responderIndex < responderIds.length; responderIndex++) {
         const responderId = responderIds[responderIndex]!;
         const responder = engine.social.getBuddy(responderId);
-        const style = getNpcStyle(responderId);
+        const style = getNpcStyle(responder ?? responderId);
         // P5.3 direct address: rules pick the target + tone, AI only phrases it
         let directTarget: DirectTarget | null = null;
         let responderStage = 'acquaintance';
@@ -1060,7 +1060,7 @@ export const PulseMessengerApp: React.FC = () => {
       selectedResponders.forEach((responderId, responderIndex) => {
         const responder = engine.social.getBuddy(responderId);
         const recentMessages = existingMessages.slice(-8).map((message) => ({ sender: message.senderId === 'player' ? 'player' : message.senderName, text: message.text }));
-        const ambientStyle = getNpcStyle(responderId);
+        const ambientStyle = getNpcStyle(responder ?? responderId);
         let ambientWorldKnowledge = '';
         try {
           const eAny2 = engine as unknown as { world?: { getKnowledgeContextForBuddy: (bid:string, day:number)=>string; getKnowledgeContext: (day:number)=>string } };
