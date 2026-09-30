@@ -54,7 +54,7 @@ export const WINDOW_THOUGHTS: WindowThought[] = [
     mood: 'melancholy',
   },
   {
-    id: 'mid_game_work',
+    id: 'settling_workday',
     minDay: 4,
     maxDay: 8,
     timeOfDay: ['morning', 'day'],
@@ -62,7 +62,7 @@ export const WINDOW_THOUGHTS: WindowThought[] = [
     mood: 'restless',
   },
   {
-    id: 'mid_game_night',
+    id: 'evening_connections',
     minDay: 5,
     maxDay: 9,
     timeOfDay: ['evening', 'night'],
@@ -77,7 +77,7 @@ export const WINDOW_THOUGHTS: WindowThought[] = [
     mood: 'hopeful',
   },
   {
-    id: 'end_game_clarity',
+    id: 'settled_rhythm',
     minDay: 13,
     text: 'Time settles into a rhythm in this room. The desk is covered in CD jewel cases, notes, and receipts. The hum of the computer fan has become as natural as breathing. Whatever comes next, you found a way to bridge both worlds.',
     mood: 'hopeful',
