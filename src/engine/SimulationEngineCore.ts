@@ -1536,12 +1536,12 @@ export class SimulationEngine {
   // goes to Mailbox via rentmail_* flags; Pulse carries the human voice.
   // ==========================================
 
-  // Rent notes come from whoever holds the landlord role (rename-proof).
-  // No landlord on the roster → the economy still ticks, the DM is skipped.
-  // (Availability is NOT required — rent is owed even to a distant landlord.)
+  // Rent notes may use an available actor carrying the landlord role.
+  // The economy and Mailbox paper trail remain authoritative even when no such
+  // actor is currently available, so NPC lifecycle never blocks tenancy.
   private sendRentNote(text: string, tags: string[], currentMinutes: number, event: string, extra?: Record<string, unknown>): void {
     const landlord = this.social.getBuddyWithRole('landlord');
-    if (!landlord) return;
+    if (!SimulationEngine.isBuddyAvailable(landlord)) return;
     this.social.sendMessage(landlord.id, landlord.id, 'player', text, currentMinutes, false, ['rent', ...tags]);
     this.telemetry.logEvent('economy', event, currentMinutes, { buddyId: landlord.id, ...(extra ?? {}) });
   }
