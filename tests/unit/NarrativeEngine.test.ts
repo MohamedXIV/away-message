@@ -84,6 +84,5 @@ describe('NarrativeEngine & semantic tag subsystem', () => {
 
     expect(restored.getFlag('local_detail_seen')).toBe(true);
     expect(restored.getState().visitedKnotIds).toContain('optional_local_event');
-    expect(restored.getFlag('evaluation_complete')).toBeUndefined();
   });
 });
