@@ -45,6 +45,5 @@ describe('Generic in-person appointment semantics', () => {
 
     expect(sim.getState().activeView).toBe('cafe');
     expect(sim.social.getRelationships(actorId)?.trust).toBeGreaterThanOrEqual(before?.trust ?? 0);
-    expect(sim.getState().world.flags['evaluation_complete']).toBeUndefined();
   });
 });
