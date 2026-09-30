@@ -286,14 +286,20 @@ export class NarrativeEngine {
     const snap = snapshot || this.contextSnapshot;
     if (!snap) return true;
 
+    const activeActorId = this.currentKnotId
+      ? this.knots.get(this.currentKnotId)?.characterId
+      : undefined;
+
     if (choice.requiredFamiliarity !== undefined) {
-      const fam = snap.sim_maya_familiarity;
+      if (!activeActorId) return false;
+      const fam = snap.sim_buddies_familiarity[activeActorId] ?? 0;
       if (fam < choice.requiredFamiliarity) return false;
     }
 
     if (choice.requiredTrust !== undefined) {
-      const tr = snap.sim_maya_trust;
-      if (tr < choice.requiredTrust) return false;
+      if (!activeActorId) return false;
+      const trust = snap.sim_buddies_trust[activeActorId] ?? 0;
+      if (trust < choice.requiredTrust) return false;
     }
 
     if (choice.conditionFlag && !snap.flags[choice.conditionFlag]) {
