@@ -1,13 +1,12 @@
 // src/world/CafeScene.tsx
-// Starlight Café — free AI conversation with Maya (P8/A2). Same DM-grade
-// persona / relationship / memory / world inputs as Pulse, shared memory both
-// ways, AI-suggested quick replies for the player. No scripted beats.
+// Starlight Café — optional in-person sandbox conversation with whichever local
+// actor is selected. Uses the same governed relationship/memory/world inputs as Pulse.
 
 import React, { useEffect, useRef, useState } from 'react';
 import { useSimulationStore } from '../store/useSimulationStore';
 import { soundManager } from '../audio/SoundManager';
 import { CafeCanvasRenderer } from './CafeCanvas';
-import { MayaExpression } from './types';
+import { CafeExpression } from './types';
 import { Coffee, Clock, ArrowRight, Send } from 'lucide-react';
 import { aiService } from '../ai/service';
 import { loadAISettings } from '../ai/settings';
@@ -27,7 +26,7 @@ import { CORE_BUDDIES } from '../engine/coreBuddies';
 
 interface CafeTurn {
   id: number;
-  speaker: 'Maya' | 'You';
+  speaker: 'buddy' | 'player';
   text: string;
 }
 
@@ -48,10 +47,10 @@ function defaultCafeBuddyId(engine: { social: { getBuddies(): Array<{ id: string
       best = b;
     }
   }
-  return best?.id ?? CORE_BUDDIES[0]?.id ?? 'maya';
+  return best?.id ?? CORE_BUDDIES[0]?.id ?? '';
 }
 
-export function toneToExpression(tone: string | undefined, fallback: MayaExpression): MayaExpression {
+export function toneToExpression(tone: string | undefined, fallback: CafeExpression): CafeExpression {
   const normalized = (tone || '').toLowerCase();
   if (/happy|laugh|excit|playful|joy|grin/.test(normalized)) return 'smile';
   if (/shy|nervous|embarrass|blush/.test(normalized)) return 'shy';
@@ -74,20 +73,20 @@ export const CafeScene: React.FC<{ buddyId?: string }> = ({ buddyId: propBuddyId
   const switchView = useSimulationStore((s) => s.switchView);
   const spendCash = useSimulationStore((s) => s.spendCash);
   const advanceTime = useSimulationStore((s) => s.advanceTime);
-  const setWorldFlag = useSimulationStore((s) => s.setWorldFlag);
   const applySocialAction = useSimulationStore((s) => s.applySocialAction);
 
+  if (!buddyId) throw new Error('CafeScene requires at least one available local actor.');
   const buddy = engine.social.getBuddy(buddyId);
   const buddyName = buddy?.displayName || buddyId;
 
   // Dialogue State
   const [turns, setTurns] = useState<CafeTurn[]>([
-    { id: 0, speaker: 'Maya', text: CAFE_OPENER },
+    { id: 0, speaker: 'buddy', text: CAFE_OPENER },
   ]);
   const [input, setInput] = useState('');
   const [injectedSuggestion, setInjectedSuggestion] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [currentExpression, setCurrentExpression] = useState<MayaExpression>('smile');
+  const [currentExpression, setCurrentExpression] = useState<CafeExpression>('smile');
   const [displayedText, setDisplayedText] = useState<string>(CAFE_OPENER);
   const [isTyping, setIsTyping] = useState<boolean>(false);
 
@@ -122,10 +121,10 @@ export const CafeScene: React.FC<{ buddyId?: string }> = ({ buddyId: propBuddyId
     }
   }, [currentExpression]);
 
-  // Typewriter Text Effect on the latest Maya turn
-  const latestMayaText = [...turns].reverse().find((turn) => turn.speaker === 'Maya')?.text ?? '';
+  // Typewriter effect on the latest guest turn
+  const latestBuddyText = [...turns].reverse().find((turn) => turn.speaker === 'buddy')?.text ?? '';
   useEffect(() => {
-    const fullText = latestMayaText;
+    const fullText = latestBuddyText;
     setDisplayedText('');
     if (!fullText) {
       setIsTyping(false);
@@ -143,7 +142,7 @@ export const CafeScene: React.FC<{ buddyId?: string }> = ({ buddyId: propBuddyId
     }, 22);
 
     return () => clearInterval(interval);
-  }, [latestMayaText]);
+  }, [latestBuddyText]);
 
   // Autoscroll history
   useEffect(() => {
@@ -153,16 +152,16 @@ export const CafeScene: React.FC<{ buddyId?: string }> = ({ buddyId: propBuddyId
   // Skip typewriter on dialogue box click
   const handleDialogueBoxClick = () => {
     if (isTyping) {
-      setDisplayedText(latestMayaText);
+      setDisplayedText(latestBuddyText);
       setIsTyping(false);
     }
   };
 
-  // Suggest player replies whenever Maya's latest line changes
-  const latestMayaId = [...turns].reverse().find((turn) => turn.speaker === 'Maya')?.id;
+  // Suggest player replies whenever the guest's latest line changes
+  const latestBuddyId = [...turns].reverse().find((turn) => turn.speaker === 'buddy')?.id;
   useEffect(() => {
-    if (latestMayaId === undefined || busy) return;
-    const key = `${buddyId}:cafe:${latestMayaId}`;
+    if (latestBuddyId === undefined || busy) return;
+    const key = `${buddyId}:cafe:${latestBuddyId}`;
     void refreshSuggestions(key, async () => {
       const slices = readMemorySlices();
       const buddyNow = engine.social.getBuddy(buddyId);
@@ -182,13 +181,13 @@ export const CafeScene: React.FC<{ buddyId?: string }> = ({ buddyId: propBuddyId
       }, loadAISettings());
       return result.data.replies.map((text) => ({ text, ...toneSuggestion(text) }));
     });
-  }, [latestMayaId, busy, buddyId, engine, refreshSuggestions]);
+  }, [latestBuddyId, busy, buddyId, engine, refreshSuggestions]);
 
   useEffect(() => {
     if (injectedSuggestion) setInput(injectedSuggestion);
   }, [injectedSuggestion]);
 
-  const pushTurn = (speaker: 'Maya' | 'You', text: string) => {
+  const pushTurn = (speaker: 'buddy' | 'player', text: string) => {
     turnId.current += 1;
     const id = turnId.current;
     setTurns((previous) => [...previous.slice(-30), { id, speaker, text }]);
@@ -201,12 +200,12 @@ export const CafeScene: React.FC<{ buddyId?: string }> = ({ buddyId: propBuddyId
     // Social battery gate first: refused lines surface as inner voice, input kept.
     const sendRes = engine.dispatchAction({ type: 'SOCIAL_SEND_MESSAGE', buddyId, text, tags: ['cafe'] });
     if (!sendRes.success) {
-      pushTurn('You', `(${sendRes.error ?? '...not now.'})`);
+      pushTurn('player', `(${sendRes.error ?? '...not now.'})`);
       return;
     }
     setInput('');
     setInjectedSuggestion(null);
-    pushTurn('You', text);
+    pushTurn('player', text);
     setBusy(true);
     try {
       // Same shared path as Pulse DMs: engine history → ledger → context → AI → record.
@@ -256,24 +255,21 @@ export const CafeScene: React.FC<{ buddyId?: string }> = ({ buddyId: propBuddyId
 
       const firstTone = result.data.messages[0]?.tone;
       setCurrentExpression((previous) => toneToExpression(firstTone, previous));
-      for (const line of texts.length > 0 ? texts : ['...']) pushTurn('Maya', line);
+      for (const line of texts.length > 0 ? texts : ['...']) pushTurn('buddy', line);
     } catch {
-      pushTurn('Maya', 'sorry, lost my train of thought for a sec... what were you saying?');
+      pushTurn('buddy', 'sorry, lost my train of thought for a sec... what were you saying?');
     } finally {
       setBusy(false);
     }
   };
 
-  // Wrap up meeting — sandbox: just a world flag, no narrative beat
+  // Wrap up this optional encounter. No campaign beat or named-character gate.
   const handleFinishMeeting = () => {
     soundManager.play('click');
     // Deduct coffee cost
     spendCash(4.00, 'Coffee at Starlight Café');
     // Advance 75 minutes
-    advanceTime(75, 'Meeting Maya at Starlight Café');
-    // Set world flag & social state
-    setWorldFlag('maya_met_in_person', true);
-    setWorldFlag('maya_cafe_scheduled', true);
+    advanceTime(75, `Coffee with ${buddyName} at Starlight Café`);
     try { applySocialAction(buddyId, 'vulnerable_share'); } catch {}
 
     // Return to room
@@ -324,8 +320,8 @@ export const CafeScene: React.FC<{ buddyId?: string }> = ({ buddyId: propBuddyId
         {/* Scrollable history */}
         <div ref={historyRef} className="overflow-y-auto text-[13px] leading-relaxed space-y-1.5 pr-1 min-h-0">
           {priorTurns.slice(-8).map((turn) => (
-            <div key={turn.id} className={turn.speaker === 'You' ? 'text-right' : 'text-left'}>
-              <span className={`inline-block max-w-[85%] rounded px-2 py-1 ${turn.speaker === 'You' ? 'bg-amber-700/60 text-amber-50' : 'bg-slate-800 text-slate-200'}`}>
+            <div key={turn.id} className={turn.speaker === 'player' ? 'text-right' : 'text-left'}>
+              <span className={`inline-block max-w-[85%] rounded px-2 py-1 ${turn.speaker === 'player' ? 'bg-amber-700/60 text-amber-50' : 'bg-slate-800 text-slate-200'}`}>
                 {turn.text}
               </span>
             </div>
@@ -348,7 +344,7 @@ export const CafeScene: React.FC<{ buddyId?: string }> = ({ buddyId: propBuddyId
           disabled={busy}
           onPick={(text) => setInjectedSuggestion(text)}
           onRefresh={() => {
-            const id = [...turns].reverse().find((turn) => turn.speaker === 'Maya')?.id;
+            const id = [...turns].reverse().find((turn) => turn.speaker === 'buddy')?.id;
             if (id === undefined) return;
             void refreshSuggestions(`${buddyId}:cafe:${id}:manual`, async () => {
               const slices = readMemorySlices();
