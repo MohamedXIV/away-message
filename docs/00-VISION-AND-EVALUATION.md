@@ -1,4 +1,4 @@
-# Vision and Complete Evaluation Build
+# Vision and Open-Ended Sandbox
 
 ## Game Vision and Design Pillars
 
@@ -26,7 +26,7 @@ The physical world exists primarily to **feed and complicate the digital world**
 
 ## 2. Emotional arc
 
-The evaluation build must visibly move the player along these axes:
+the sandbox must visibly move the player along these axes:
 
 ```text
 isolated        → connected
@@ -66,7 +66,7 @@ It should have:
 
 The computer should become more personal over time.
 
-By the end of the evaluation build, opening the file system or installed-program list should tell a story about the player's decisions.
+By the end of the sandbox, opening the file system or installed-program list should tell a story about the player's decisions.
 
 ---
 
@@ -191,7 +191,7 @@ The player should frequently return to a screen and find evidence that the world
 
 Do not display:
 
-`Maya Relationship: 73/100`
+`Relationship: 73/100`
 
 The internal simulation may use hidden dimensions, but the player reads relationships through behavior:
 
@@ -294,393 +294,59 @@ The game can borrow small pieces from these forms without becoming them.
 
 ---
 
-## Complete Evaluation Build
+## Open-Ended Sandbox Product Direction
 
-## 1. Purpose
+The game does **not** have a canonical campaign length, final day, required ending, or mandatory named social arc.
 
-The evaluation build must be a **small complete game**, not a proof-of-concept menu and not an endless sandbox with no conclusion.
+A former 14-day evaluation structure was built very early as a short implementation experiment. It is retired product history. Do not use it as design authority, content cadence, acceptance criteria, telemetry framing, or a reason to privilege any named character.
 
-The player must be able to start a new save, live through the beginning, experience meaningful progression, reach at least one physical social meeting, upgrade the PC/OS, face ordinary financial pressure, discover several internet rabbit holes, and reach an evaluation ending.
+### What a save is
 
-Target:
-
-- **14 in-game days**
-- approximately **3–6 hours** for a first exploratory playthrough
-- no hard requirement to see every optional event in one run
-- replayable enough that a second run can produce different priorities and social outcomes
-
-The 14-day structure is evaluation content. It is not a commitment to the length of a future commercial game.
-
----
-
-## 2. Canonical starting state
-
-### Player
-
-- lives alone in a cheap motel room
-- has a basic food-service / food-cart job
-- starts with `$38`
-- has very little disposable income
-- has a small existing social graph
-- owns a low-end PC
-
-### PC
-
-- fictional older operating system: `Orion OS 4.8`
-- old single-core CPU tier
-- `512 MB` RAM
-- `40 GB` HDD
-- approximately `7 GB` free
-- `256 kbps` DSL
-
-Preinstalled:
-
-- Voyager Browser
-- My Computer / file manager
-- Trash
-- Add/Remove Programs
-- simple Notepad-like editor
-- terminal
-- basic system settings
-
-Not preinstalled:
-
-- Messenger
-- download manager
-- music player
-- archive utility
-- photo viewer/editor
-- anti-spyware utility
-- P2P client
-- webcam utility
-
----
-
-## 3. Main evaluation characters
-
-Names and visual identities are **provisional evaluation content**. Their system roles are more important than final naming.
-
-### Ryan
-
-Coworker and the player's clearest existing connection.
-
-Functions:
-
-- introduces Pulse Messenger,
-- recommends practical software,
-- provides work-related context,
-- demonstrates a character whose schedule is partly physical and partly online,
-- can invite the player to a cheap after-work activity.
-
-Tone:
-
-- casual,
-- practical,
-- slightly teasing,
-- not deeply intimate.
-
-### Maya
-
-New online connection who becomes the primary proof that the computer can carry emotional weight.
-
-Functions:
-
-- arrives through a mutual connection or online community,
-- starts as a username/avatar,
-- gradually shares more personal context,
-- can become a close friend,
-- may have mild chemistry depending on choices,
-- eventually participates in a physical meeting.
-
-The evaluation build must not require a romance route.
-
-### Nora / `NightOwl87`
-
-Forum regular / internet-native acquaintance.
-
-Functions:
-
-- introduces rabbit-hole browsing,
-- shows that online identity can differ from real identity,
-- connects several websites and forum threads,
-- may surface a small inconsistency or mystery,
-- does not need a dramatic payoff.
-
-### Motel staff / street regulars
-
-Small physical-world recurring presences.
-
-Functions:
-
-- make the room feel located in a real place,
-- support window observations,
-- provide mundane continuity,
-- occasionally connect physical and internet information.
-
----
-
-## 4. Fourteen-day structure
-
-The structure is authored enough to guarantee progression, but several events may move within a day based on player behavior.
-
-### Days 1–3 — The proven opening
-
-Keep the strongest vertical-slice sequence.
-
-Day 1:
-- wake in motel
-- work shift
-- Ryan asks whether player uses Pulse
-- find Pulse website
-- download installer
-- leave PC while download continues
-- make tea / look out window
-- install Pulse
-- first Ryan chat
-
-Day 2:
-- wake to offline/new message
-- discover FlashFetch
-- discover RetroAmp
-- meet Maya online
-- attempt PhotoBox
-- fail compatibility because of OS/RAM
-- see first real reason to upgrade
-
-Day 3:
-- discover ZipMate installer vs portable ZIP
-- encounter WeatherBuddy bundled extras
-- optionally get SearchMate toolbar/homepage changes
-- learn Add/Remove Programs
-- repeated street observation begins to feel familiar
-
-### Days 4–6 — The internet becomes a world
-
-Add:
-- local search engine
-- city news
-- classifieds
-- forum / personal page rabbit hole
-- used RAM listing
-- larger game-demo or media download
-- first meaningful disk-space pressure
-- first optional technical shortcut through terminal/file knowledge
-
-Narrative:
-- Maya becomes a recurring contact rather than a one-off scene
-- Nora/NightOwl87 appears through a forum
-- player can search a username and find older traces
-- one conversation continues while another download or task runs in background
-
-Physical:
-- unlock street/bus-stop viewpoint
-- first optional short café or convenience-store visit
-- room lighting and street population should visibly differ by time
-
-### Day 7 — First pressure point
-
-Weekly motel payment is due.
-
-The player should have to consider money.
-
-Possible states:
-- comfortably pays,
-- pays but delays a PC upgrade,
-- pays late and absorbs a small fee / awkward conversation.
-
-Do not hard-game-over the evaluation build for one missed payment.
-
-This day tests whether the economy gives real weight to upgrades.
-
-### Days 8–9 — Hardware and OS transition
-
-The player should have a realistic path to:
-
-- upgrade RAM to at least `1 GB`,
-- free or increase disk capacity,
-- obtain `Orion OS 6`.
-
-The upgrade should be diegetic.
+A save is an ongoing life in one simulated town.
 
 The player may:
-- buy used RAM through classifieds,
-- buy from TechMart,
-- choose a cheaper/riskier seller,
-- postpone one upgrade.
+- start in any valid affordable residence offered by current content;
+- work, change routines and pursue optional income;
+- acquire, upgrade, repair, replace and use computers/software;
+- discover websites, people, places, jobs, listings and services over time;
+- build or lose relationships with a dynamic roster;
+- meet people physically when truthful schedules, knowledge, location and relationship state allow it;
+- move residence and carry possessions/history forward;
+- continue for as long as the systems and authored/generated content remain interesting.
 
-The OS installation must be a small event:
-- compatibility check,
-- install screen,
-- restart,
-- new boot screen,
-- visibly newer desktop shell,
-- cleaner XP-inspired visual generation while retaining the fictional OS identity.
+There is no transition from "campaign" to "free play". The game is the sandbox from the beginning.
 
-The newer OS should not be a purely cosmetic reward.
+### Characters
 
-It unlocks:
-- PhotoBox,
-- newer Pulse version or feature,
-- optional webcam/photo functionality,
-- newer browser capability.
+No named NPC is required for a valid save.
 
-### Day 10 — Social life crosses the screen
+Characters such as legacy authored examples may appear in current data during migration, but:
+- no character is the mandatory main relationship;
+- no romance or meeting is required;
+- no engine API may assume one named person exists;
+- any role should be resolved through role/capability/state bindings;
+- the player may never meet a particular authored character and the game remains valid.
 
-Maya or another close contact suggests a real-world meeting.
+### Progression
 
-The player can:
-- accept,
-- decline,
-- tentatively accept,
-- delay because of work/money.
+Progression is multi-axis and systemic rather than a fixed sequence:
+- money and work;
+- housing and belongings;
+- computer hardware, OS and software;
+- internet access and discovered information;
+- relationships, memories and social history;
+- town knowledge and mobility;
+- routines, opportunities and obligations;
+- player-created goals.
 
-The game must translate authored dialogue choice into a deterministic appointment state.
+World events, schedules and authored/generated opportunities may create local arcs, but they do not form one mandatory global plot.
 
-The meeting should not require an expensive branch.
+### Completion
 
-A broke player can still meet at a cheaper location or adjust the plan.
+There is no product-level "game complete" state.
 
-### Days 11–12 — Physical meeting and consequence
+Optional milestones, diagnostics, telemetry snapshots or scenario tests may exist for development, but they must never imply that a save ends or becomes "free play" after a fixed number of days.
 
-At least one important café/street meeting occurs.
+### Product test
 
-The physical meeting should feel different from online chat:
-- longer pauses,
-- portrait/sprite staging,
-- environmental context,
-- fewer rapid-fire choices,
-- time advances substantially.
-
-Afterward:
-- online tone can change,
-- the contact may message about the meeting later,
-- another character may know it happened,
-- the player may see the physical location differently on return.
-
-This is the evaluation build's clearest test of:
-`online life → physical life → online consequence`.
-
-### Day 13 — A strange but contained escalation
-
-Introduce one event that makes the internet feel larger and less predictable.
-
-Examples that fit the evaluation build:
-- an old forum post contradicts something a person said,
-- a website disappears,
-- an unknown user adds the player,
-- a recurring street detail aligns with an online clue,
-- a classified seller behaves suspiciously,
-- a digital-gold service has a sharp price move.
-
-This event should create curiosity without turning the game into horror or a conspiracy thriller.
-
-Not every thread must resolve.
-
-### Day 14 — Evaluation conclusion
-
-The player reaches a small but complete emotional/economic checkpoint.
-
-By the end, the player should plausibly have:
-
-- paid or dealt with two weeks of motel pressure,
-- improved the PC,
-- seen both OS generations or at minimum earned a clear path to the second,
-- installed several chosen programs,
-- built a visibly richer contact list,
-- experienced one meaningful physical social event,
-- discovered at least one strange internet thread,
-- changed the room/computer from temporary to personal.
-
-End with a quiet authored sequence rather than a boss fight or giant reveal.
-
-Examples:
-- return from work,
-- boot the upgraded PC,
-- several contacts are online,
-- a download completes,
-- a message arrives from the person the player now cares about,
-- the street outside has its own ongoing life.
-
-Then display:
-
-`Evaluation Build Complete`
-
-Allow free play afterward.
-
----
-
-## 5. Required complete-game systems
-
-The evaluation build must include working versions of:
-
-- authoritative game clock
-- day/night progression
-- sleep
-- work
-- money
-- rent/bills
-- room actions
-- window observations
-- street state
-- fake OS
-- two OS generations
-- storage
-- RAM/CPU tiers
-- internet speed
-- downloads
-- file records
-- installers
-- software compatibility
-- software uninstall
-- browser
-- fake websites
-- search
-- Messenger
-- email/webmail
-- contacts
-- schedules
-- offline messages
-- hidden relationship dimensions
-- Ink-authored choices
-- at least one outside social meeting
-- save/load
-- local evaluation/debug export
-
----
-
-## 6. Required content quantity
-
-Minimum recommended content for a convincing evaluation:
-
-- 1 motel room with layered presentation
-- 1 window/street view with persistent recurring details
-- 3–4 additional physical locations
-- 2 OS generations
-- 10–12 software entries
-- 15–20 fake websites/pages with cross-links
-- 4–6 meaningful contacts
-- several ambient handles/users
-- 2 income activities
-- 1 major close-relationship arc
-- 1 smaller forum/internet arc
-- 1 contained financial-risk mechanic
-- 1 real-world meeting
-- 1 evaluation ending
-
-Quantity is subordinate to coherence.
-
----
-
-## 7. Failure conditions for the evaluation
-
-The build has failed its purpose if:
-
-- the PC feels like a menu instead of a place,
-- most useful software is already installed,
-- background systems pause when hidden,
-- money stops mattering after the opening,
-- the player never anticipates someone coming online,
-- the outside world feels unrelated to the computer,
-- the story advances only through explicit scene triggers,
-- the game requires external APIs to remain playable,
-- the final result cannot be played from start to conclusion in one coherent save.
+The product succeeds when the sandbox remains coherent and interesting across different saves, casts, residences, routines and priorities without requiring the player to follow a predetermined script.
