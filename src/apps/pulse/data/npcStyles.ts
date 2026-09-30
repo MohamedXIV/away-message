@@ -1,5 +1,4 @@
-import type { BuddyPresence } from '../../../engine/types';
-import { SEED_BY_ID, seedCharacterWithRole } from '../../../engine/seedCharacters';
+import type { BuddyCharacter, BuddyPresence } from '../../../engine/types';
 
 export interface NpcStyleProfile {
   buddyId: string;
@@ -19,17 +18,11 @@ export interface NpcStyleProfile {
 
 type NpcStyleDetails = Omit<NpcStyleProfile, 'buddyId' | 'displayName' | 'handle'>;
 
-export const NPC_STYLE_PROFILES: Record<string, NpcStyleProfile> = {};
+/** Reusable behavioral voice profiles keyed by capability role, never actor identity. */
+export const NPC_STYLE_PROFILES: Record<string, NpcStyleDetails> = {};
 
 function registerRoleStyle(role: string, details: NpcStyleDetails): void {
-  const actor = seedCharacterWithRole(role);
-  if (!actor) return;
-  NPC_STYLE_PROFILES[actor.id] = {
-    buddyId: actor.id,
-    displayName: actor.displayName,
-    handle: actor.handle,
-    ...details,
-  };
+  NPC_STYLE_PROFILES[role] = details;
 }
 
 registerRoleStyle('diner-staff', {
@@ -68,17 +61,31 @@ registerRoleStyle('landlord', {
   summaryHint: 'formal, terse, professional',
 });
 
-export function getNpcStyle(buddyId: string): NpcStyleProfile {
-  return NPC_STYLE_PROFILES[buddyId] || {
+type NpcStyleSubject = Pick<BuddyCharacter, 'id' | 'displayName' | 'handle' | 'roles' | 'typingSpeedWpm' | 'archetype'>;
+
+function asStyleSubject(subject: string | NpcStyleSubject): NpcStyleSubject | null {
+  return typeof subject === 'string' ? null : subject;
+}
+
+export function getNpcStyle(subject: string | NpcStyleSubject): NpcStyleProfile {
+  const buddy = asStyleSubject(subject);
+  const buddyId = buddy?.id ?? subject as string;
+  const roleStyle = buddy?.roles
+    ?.map((role) => NPC_STYLE_PROFILES[role])
+    .find((profile): profile is NpcStyleDetails => !!profile);
+
+  return {
     buddyId,
-    displayName: buddyId,
-    handle: buddyId,
-    persona: `A believable online friend ${buddyId} with a distinct but grounded personality.`,
-    vocabulary: [],
-    punctuation: 'neutral',
-    quirks: [],
-    typing: { wpm: 65, variance: 10, pauseStyle: 'normal' },
-    summaryHint: 'neutral',
+    displayName: buddy?.displayName ?? buddyId,
+    handle: buddy?.handle ?? buddyId,
+    ...(roleStyle ?? {
+      persona: `A believable online friend ${buddy?.displayName ?? buddyId} with a distinct but grounded personality.`,
+      vocabulary: [],
+      punctuation: 'neutral',
+      quirks: [],
+      typing: { wpm: buddy?.typingSpeedWpm ?? 65, variance: 10, pauseStyle: 'normal' },
+      summaryHint: buddy?.archetype ? `${buddy.archetype} acquaintance` : 'neutral',
+    }),
   };
 }
 
@@ -121,14 +128,18 @@ const ARCHETYPE_ONLINE_LABELS: Record<string, string> = {
   trader: 'online — watching the tape',
 };
 
-export function getNpcActivityLabel(presence: BuddyPresence | undefined, buddyId: string, gameHour: number): string {
+export function getNpcActivityLabel(
+  presence: BuddyPresence | undefined,
+  subject: string | NpcStyleSubject,
+  gameHour: number,
+): string {
   if (presence?.awayMessage) return presence.awayMessage;
   if (presence?.status === 'online') {
-    const seed = SEED_BY_ID[buddyId];
-    if (seed?.roles?.includes('rain-lover') && gameHour >= 18) {
-      return `online — listening to rain / myplace/${seed.myplace || buddyId}`;
+    const buddy = asStyleSubject(subject);
+    if (buddy?.roles?.includes('rain-lover') && gameHour >= 18) {
+      return 'online — listening to rain';
     }
-    const archetype = seed?.archetype;
+    const archetype = buddy?.archetype;
     return (archetype && ARCHETYPE_ONLINE_LABELS[archetype]) || 'online and checking messages';
   }
   if (presence?.status === 'away') return presence.awayMessage || 'stepped away briefly';
