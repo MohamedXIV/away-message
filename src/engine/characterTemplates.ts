@@ -969,23 +969,23 @@ export function pickOutingReservedLine(seed: string): string {
 
 /** Gentle reminder two days before rent is due. */
 export const RENT_REMINDER_LINES: string[] = [
-  'Good morning. A friendly reminder that Room 104 rent (${amount}) is due on day {day}. Front desk, anytime before 8pm.',
+  'Good morning. A friendly reminder that your rent (${amount}) is due on day {day}. Front desk, anytime before 8pm.',
   'Hello — rent of ${amount} comes due on day {day}. Pay at the desk when convenient. Thank you.',
 ];
 /** Stern same-day warning. */
 export const RENT_STERN_LINES: string[] = [
-  'Room 104: rent of ${amount} is due TODAY. Please settle at the front desk to avoid a late fee.',
-  'Final courtesy notice: ${amount} due today for Room 104. The ledger waits for no one.',
+  'Your rent of ${amount} is due TODAY. Please settle with property management to avoid a late fee.',
+  'Final courtesy notice: ${amount} is due today for your residence. The ledger waits for no one.',
 ];
 /** Daily overdue nudge (capped 1/day, kind but firm). */
 export const RENT_NUDGE_LINES: string[] = [
-  'Room 104 account is past due (${amount}). I have paused your download line until we settle. The desk is open.',
-  'A reminder that Room 104 remains unpaid (${amount}). Downloads are paused meantime — come see me.',
+  'Your residence account is past due (${amount}). I have paused your download line until we settle. The desk is open.',
+  'A reminder that your residence account remains unpaid (${amount}). Downloads are paused meantime — contact property management.',
 ];
 /** Thank-you on payment. */
 export const RENT_THANKS_LINES: string[] = [
-  'Payment received for Room 104. Thank you — a pleasure doing business. Download line restored.',
-  'Room 104 is settled. Much appreciated. Your line is back to full speed.',
+  'Payment received for your residence. Thank you — a pleasure doing business. Download line restored.',
+  'Your residence account is settled. Much appreciated. Your line is back to full speed.',
 ];
 
 function fillRent(text: string, amount: number, day: number): string {
