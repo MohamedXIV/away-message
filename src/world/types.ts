@@ -71,16 +71,14 @@ export interface WindowThought {
   mood: 'melancholy' | 'curious' | 'nostalgic' | 'hopeful' | 'restless';
 }
 
-export type MayaExpression =
+export type CafeExpression =
   | 'neutral'
   | 'smile'
   | 'thoughtful'
   | 'surprised'
   | 'shy';
 
-// NOTE (P8): the scripted cafe dialogue tree (CafeDialogueChoice/CafeDialogueBeat)
-// is retired — CafeScene is free AI chat on shared Pulse memory. The expression
-// enum above survives (driven by reply tone now).
+// Café expression vocabulary is presentation-only and applies to whichever actor is rendered.
 
 export interface RoomActivityOption {
   id: string;
