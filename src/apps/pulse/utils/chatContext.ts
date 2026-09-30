@@ -231,10 +231,10 @@ export function buildDmChatContext(input: DmContextInput): DmChatContext {
       sleepDebt: playerState?.sleepDebt ?? 0,
     });
   } catch { playerEnergy = 80; }
-  const style = getNpcStyle(buddyId);
+  const style = getNpcStyle(buddy ?? buddyId);
   const mood = getNpcMoodLabel(presence, relationship, gameHour, playerEnergy);
   const availability = getNpcAvailabilityLabel(presence, gameHour);
-  const activity = getNpcActivityLabel(presence, buddyId, gameHour);
+  const activity = getNpcActivityLabel(presence, buddy ?? buddyId, gameHour);
   const existingMemory = pulse.conversationMemory[buddyId] || [];
   const existingFacts = pulse.buddyFacts[buddyId] || [];
   const newFacts = extractFactsFromPlayerMessage(text);
