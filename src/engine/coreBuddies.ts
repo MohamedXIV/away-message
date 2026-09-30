@@ -1,5 +1,5 @@
 // src/engine/coreBuddies.ts
-// The core-buddy registry: single source of truth for core-4 identity.
+// Authored seed-character registry projected from content.
 // Values come from content (content/store.json → coreBuddies.generated.ts);
 // this module adds types, casts, schedules, and ROLE ANCHORS.
 // Phase 2 renames point the anchors (and the store) at the new ids —
@@ -126,7 +126,7 @@ export const CORE_BY_ID: Record<string, CoreBuddy> = Object.fromEntries(
   CORE_BUDDIES.map((b) => [b.id, b])
 );
 
-/** All core ids (code-owned, protected — see SocialEngine core guards). */
+/** Authored seed ids. These are content defaults, not required product identities. */
 export function coreBuddyIds(): string[] {
   return CORE_BUDDIES.map((b) => b.id);
 }
@@ -207,7 +207,7 @@ const CORE_CANONICAL_BLOCKS: Record<string, Array<{ start: number; end: number; 
   ],
 };
 
-/** 14-day schedule from canonical blocks or character's routine. */
+/** Weekly repeating schedule from authored blocks or character routine. */
 export function coreSchedule(id: string): Record<number, ScheduleBlock[]> {
   const blocks = CORE_CANONICAL_BLOCKS[id];
   let dailyBlocks: ScheduleBlock[] = [];
@@ -242,13 +242,13 @@ export function coreSchedule(id: string): Record<number, ScheduleBlock[]> {
   }
 
   const sched: Record<number, ScheduleBlock[]> = {};
-  for (let day = 1; day <= 14; day++) {
+  for (let day = 1; day <= 7; day++) {
     sched[day] = dailyBlocks.map((b) => ({ ...b }));
   }
   return sched;
 }
 
-/** Full BuddyCharacter def for a registry buddy (core-owned: never persisted). */
+/** Full BuddyCharacter definition for a registry-authored seed actor. */
 export function coreBuddyDef(id: string): BuddyCharacter {
   const buddy = CORE_BY_ID[id];
   if (!buddy) throw new Error(`coreBuddies: unknown core buddy '${id}'.`);
