@@ -23,7 +23,7 @@ import { WorldEventsEngine } from './WorldEventsEngine';
 import { totalDeliveryBacklogExtra } from './WorldModifiers';
 import { OsEngine } from './OsEngine';
 import { PulseEngine } from './PulseEngine';
-import { MyPlaceEngine, CORE_PROFILE_ALIASES } from './MyPlaceEngine';
+import { MyPlaceEngine, SEED_PROFILE_ALIASES } from './MyPlaceEngine';
 import { validatePersistedBuddy } from './CharacterEngine';
 import { generateNewcomer, shouldAutoDiscover, NEWCOMER_METVIA_ROTATION } from './CharacterDirector';
 import { STRAINED_ANNOYANCE, DISTANT_ANNOYANCE, GONE_ANNOYANCE, traitCompatibility } from './SocialEngine';
@@ -1240,7 +1240,7 @@ export class SimulationEngine {
       if (appointmentRoll(`${username}:${day}:gbco`) >= 50) return;
       const owner = this.social.getBuddies().find((b) =>
         b.handle === username || b.id === username
-        || CORE_PROFILE_ALIASES[b.id] === username || CORE_PROFILE_ALIASES[b.handle] === username);
+        || SEED_PROFILE_ALIASES[b.id] === username || SEED_PROFILE_ALIASES[b.handle] === username);
       const candidates = this.social.getBuddies().filter((b) => {
         if (owner && b.id === owner.id) return false;
         if (b.status === 'distant' || b.status === 'gone' || b.status === 'blocked') return false;
@@ -1710,7 +1710,7 @@ export class SimulationEngine {
    */
   private resolveProfileUsername(buddy: { id: string; handle: string }): string | null {
     try {
-      const alias = CORE_PROFILE_ALIASES[buddy.id] ?? CORE_PROFILE_ALIASES[buddy.handle];
+      const alias = SEED_PROFILE_ALIASES[buddy.id] ?? SEED_PROFILE_ALIASES[buddy.handle];
       if (alias && this.myplace.getNpcProfile(alias)) return alias;
       if (this.myplace.getNpcProfile(buddy.handle)) return buddy.handle;
       if (this.myplace.getNpcProfile(buddy.id)) return buddy.id;
