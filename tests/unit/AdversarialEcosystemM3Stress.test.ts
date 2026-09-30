@@ -113,16 +113,7 @@ describe('Adversarial M3 Stress & Quality Suite: Pulse Messenger & Ecosystem App
 
     it('validates integrity of all authored dialogue scripts', () => {
       expect(Array.isArray(DIALOGUE_SCRIPTS)).toBe(true);
-      const scriptsToValidate = DIALOGUE_SCRIPTS.length > 0 ? DIALOGUE_SCRIPTS : [
-        {
-          id: 'sample_script',
-          buddyId: 'seed_buddy',
-          messages: [{ text: 'Welcome to the network.' }],
-          playerChoices: [{ id: 'opt1', text: 'Thanks', socialAction: 'warmth' as const }],
-        },
-      ];
-
-      for (const script of scriptsToValidate) {
+      for (const script of DIALOGUE_SCRIPTS) {
         expect(script.id).toBeTruthy();
         expect(script.buddyId).toBeTruthy();
         expect(Array.isArray(script.messages)).toBe(true);
