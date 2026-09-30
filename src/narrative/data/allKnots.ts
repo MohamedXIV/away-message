@@ -1,11 +1,9 @@
 import { StoryKnot } from '../types';
 
 /**
- * The fixed day-by-day campaign knots were retired with the old evaluation experiment.
- *
- * The sandbox does not ship a canonical global story sequence or mandatory named cast.
- * Optional authored narrative content may register knots at runtime/content boundaries,
- * but this module intentionally provides no built-in campaign.
+ * Optional authored narrative content may register actor/state-driven knots at
+ * runtime/content boundaries. The sandbox intentionally provides no mandatory
+ * global story sequence or required named cast.
  */
 export const ALL_STORY_KNOTS: StoryKnot[] = [];
 
