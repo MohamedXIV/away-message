@@ -182,8 +182,8 @@ export class SocialEngine {
   }
 
   /**
-   * Register a new buddy at runtime (unified roster — core 4 stay code-owned,
-   * every NEW buddy comes through here, typically built by CharacterEngine).
+   * Register a new actor at runtime. Authored seed actors and generated actors
+   * share the same social contracts; new actors typically come from CharacterEngine.
    * Throws on invalid/duplicate ids. Never overwrites existing state.
    */
   public registerBuddy(def: BuddyCharacter): BuddyCharacter {
@@ -238,9 +238,6 @@ export class SocialEngine {
   public removeBuddy(rawId: string): boolean {
     const id = normalizeBuddyId(rawId);
     if (!this.buddies.has(id)) return false;
-    if (isRegistryBuddy(id)) {
-      throw new Error(`Core buddy cannot be removed: ${id}`);
-    }
     this.buddies.delete(id);
     this.relationships.delete(id);
     this.presence.delete(id);
@@ -310,7 +307,8 @@ export class SocialEngine {
     for (const [id, handles] of Object.entries(this.knownHandles)) knownHandles[id] = [...handles];
     const epitaphs = [...this.epitaphs];
 
-    // Persist only non-registry buddy defs (registry defs are code-owned and re-seeded).
+    // Persist generated/non-registry definitions. Seed definitions come from content,
+    // while their per-save lifecycle divergence is persisted separately.
     const buddyDefs: Record<string, BuddyCharacter> = {};
     for (const [id, b] of this.buddies.entries()) {
       if (isRegistryBuddy(id)) continue;
@@ -330,7 +328,36 @@ export class SocialEngine {
       };
     }
 
-    return { relationships: rels, presence: pres, conversations: convs, buddies: buddyDefs, coreMemories: mems, promises: proms, affinities: affs, affinityCaps: caps, npcBonds: bonds, agenda, mediations, npcSocialLog, playerReads, knownHandles, epitaphs };
+    const seedActorStatuses: Record<string, BuddyLifecycleStatus> = {};
+    const removedSeedActorIds: string[] = [];
+    for (const seed of CORE_BUDDIES) {
+      const live = this.buddies.get(seed.id);
+      if (!live) {
+        removedSeedActorIds.push(seed.id);
+      } else if (live.status) {
+        seedActorStatuses[seed.id] = live.status;
+      }
+    }
+
+    return {
+      relationships: rels,
+      presence: pres,
+      conversations: convs,
+      buddies: buddyDefs,
+      seedActorStatuses,
+      removedSeedActorIds,
+      coreMemories: mems,
+      promises: proms,
+      affinities: affs,
+      affinityCaps: caps,
+      npcBonds: bonds,
+      agenda,
+      mediations,
+      npcSocialLog,
+      playerReads,
+      knownHandles,
+      epitaphs,
+    };
   }
 
   private static sanitizeMemoryText(text: string, max: number): string {
@@ -342,6 +369,17 @@ export class SocialEngine {
   }
 
   public restoreState(state: SocialEngineState): void {
+    // Apply per-save seed-roster divergence before restoring dependent state.
+    for (const rawId of state.removedSeedActorIds ?? []) {
+      const id = normalizeBuddyId(rawId);
+      if (isRegistryBuddy(id)) this.buddies.delete(id);
+    }
+    for (const [rawId, status] of Object.entries(state.seedActorStatuses ?? {})) {
+      const id = normalizeBuddyId(rawId);
+      const buddy = this.buddies.get(id);
+      if (buddy) buddy.status = status;
+    }
+
     // Re-register persisted non-registry defs first so rel/presence/convos land on real buddies.
     if (state.buddies) {
       for (const [rawId, def] of Object.entries(state.buddies)) {
@@ -824,9 +862,6 @@ export class SocialEngine {
     const id = normalizeBuddyId(rawId);
     const buddy = this.buddies.get(id);
     if (!buddy) throw new Error(`Buddy not found: ${id}`);
-    if (isRegistryBuddy(id) && (status === 'distant' || status === 'gone' || status === 'blocked')) {
-      throw new Error(`Core buddy is protected from '${status}': ${id}`);
-    }
     buddy.status = status;
     this.eventBus.emit('social:buddy_status_changed', { buddyId: id, status });
     return { ...buddy };
