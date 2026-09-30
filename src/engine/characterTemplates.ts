@@ -724,7 +724,7 @@ export function pickMeetingApologyLine(seed: string, location: string): string {
 // P5.2 — CO-OP WRAP-UP LINES ({detail} = the night's deterministic mini-event)
 // ==========================================
 
-/** Side-shift wrap-ups (Ryan-flavoured, used for work meetings that happen). */
+/** Side-shift wrap-ups used for work meetings that happen. */
 export const SHIFT_WRAP_LINES: string[] = [
   'yo that shift was WILD. {detail} — we survived tho lol. you earned that pay',
   'we make a good crew lol. {detail} — see? told you it would be fun',
