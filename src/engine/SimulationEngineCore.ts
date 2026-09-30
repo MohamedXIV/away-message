@@ -47,7 +47,7 @@ import {
 } from './PlayerActs';
 import { CITY_NODES, isCityNodeId, quoteTravel, walkEnergyCost, rollStreetEncounter, BUS_FARE, type CityNodeId, type TravelMode } from './CityMap';
 import { pulseHasFeature, getAllPulseReleases } from './PulseCatalog';
-import { CORE_BY_ID, CORE_IDS, buddyWithRole, isRegistryBuddy } from './coreBuddies';
+import { CORE_BY_ID, buddyWithRole } from './coreBuddies';
 
 export class SimulationEngine {
   public readonly clock!: GameClock;
@@ -465,9 +465,6 @@ export class SimulationEngine {
         this.telemetry.logEvent('social', 'relationship_confrontation', currentMinutes, { buddyId, annoyance: rels.annoyance, witnesses: this.shiftWitnessAffinities(buddyId, -4) });
         return;
       }
-
-      // Registry village characters cap at strained — they never walk away
-      if (isRegistryBuddy(buddyId)) return;
 
       if (sharpState === 'confronted' && rels.annoyance >= DISTANT_ANNOYANCE) {
         const active = this.world.getFlag('sharp_active');
@@ -1172,7 +1169,7 @@ export class SimulationEngine {
           this.world.updateAppointment(appt.id, { status: 'happened', isCompleted: true, npcShowed: true, playerShowed: true });
           // P5.2 co-op enrichment: joint work pays more (dims x2 + wage/flavor), cafe stays intimate
           // P6 gig shifts ride the same path (marked by gig_ id prefix, any contact)
-          const isShift = appt.locationId === 'work' && (buddy.id === CORE_IDS.RYAN || buddy.archetype === 'coworker' || appt.id.startsWith('gig_'));
+          const isShift = appt.locationId === 'work' && (buddy.archetype === 'coworker' || appt.id.startsWith('gig_'));
           const isArchive = appt.locationId === 'archive';
           if (isShift || isArchive) {
             const detail = pickCoopDetail(appt.id, isShift ? 'shift' : 'archive');
