@@ -768,7 +768,7 @@ describe('Adversarial Stress Test Suite — Pulse Messenger & Ecosystem Applicat
       expect(threats[0]?.id).toBe('threat_2');
     });
 
-    it('validates Pulse Messenger branching dialogue tree graph integrity', () => {
+    it('validates optional authored Pulse dialogue graph integrity when entries exist', () => {
       expect(Array.isArray(DIALOGUE_SCRIPTS)).toBe(true);
 
       const allScriptIds = new Set(DIALOGUE_SCRIPTS.map((s) => s.id));
