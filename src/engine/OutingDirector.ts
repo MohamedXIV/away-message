@@ -65,14 +65,14 @@ export function outingRoll(seed: string): number {
   return hashText(seed) % 100;
 }
 
-/** Maya works the diner 11:00–20:00; encounter odds per day-seed. */
-export function mayaDinerEncounter(hour: number, day: number): boolean {
+/** Diner-staff encounter window; odds are deterministic per day seed. */
+export function dinerStaffEncounter(hour: number, day: number): boolean {
   if (hour < 11 || hour >= 20) return false;
   return outingRoll(`diner:${day}`) < 45;
 }
 
-/** Nora walks the canal late; rain makes her likelier. */
-export function noraCanalEncounter(hour: number, day: number, raining: boolean): boolean {
+/** Late canal-regular encounter window; wet weather raises the chance. */
+export function canalRegularEncounter(hour: number, day: number, raining: boolean): boolean {
   if (!(hour >= 22 || hour < 2)) return false;
   return outingRoll(`canal:${day}`) < (raining ? 65 : 50);
 }
