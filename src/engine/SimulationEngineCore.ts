@@ -27,10 +27,10 @@ import { MyPlaceEngine, SEED_PROFILE_ALIASES } from './MyPlaceEngine';
 import { validatePersistedBuddy } from './CharacterEngine';
 import { generateNewcomer, shouldAutoDiscover, NEWCOMER_METVIA_ROTATION } from './CharacterDirector';
 import { STRAINED_ANNOYANCE, DISTANT_ANNOYANCE, GONE_ANNOYANCE, traitCompatibility } from './SocialEngine';
-import { pickConfrontLine, pickFarewellLine, pickReturnLine, pickInitiativeText, pickRsvpLine, pickStoodUpLine, pickMeetingApologyLine, pickShiftWrapLine, pickGigWrapLine, pickArchiveWrapLine, pickGuestbookLine, pickGuestbookReplyLine, pickTop8NewsLine, pickOutingMayaLine, pickOutingNoraLine, pickRentReminderLine, pickRentSternLine, pickRentNudgeLine, pickRentThanksLine, pickJobAcceptLine, pickJobRejectLine, pickLeaveLine, pickMediationAskLine, pickMediationThanks, pickMyplaceUpdateLine, pickContactLine, pickContactBounce, pickBackstoryReintro, pickRuninSpot, pickRuninVerb, classifyScheduleBlock, AGENDA_LABELS, rollSeeded100, pickSeeded, spreadSeed, resolveArchetype } from './characterTemplates';
+import { pickConfrontLine, pickFarewellLine, pickReturnLine, pickInitiativeText, pickRsvpLine, pickStoodUpLine, pickMeetingApologyLine, pickShiftWrapLine, pickGigWrapLine, pickArchiveWrapLine, pickGuestbookLine, pickGuestbookReplyLine, pickTop8NewsLine, pickOutingWarmLine, pickOutingReservedLine, pickRentReminderLine, pickRentSternLine, pickRentNudgeLine, pickRentThanksLine, pickJobAcceptLine, pickJobRejectLine, pickLeaveLine, pickMediationAskLine, pickMediationThanks, pickMyplaceUpdateLine, pickContactLine, pickContactBounce, pickBackstoryReintro, pickRuninSpot, pickRuninVerb, classifyScheduleBlock, AGENDA_LABELS, rollSeeded100, pickSeeded, spreadSeed, resolveArchetype } from './characterTemplates';
 import { parseMeetupProposal, isMeetupCancelText, decideRsvp, decideNpcShow, appointmentRoll, locationLabel, LOCATION_SLOTS, pickCoopDetail, SHIFT_WAGE } from './AppointmentDirector';
 import { getWeatherForDay, isSevereWeather, isWetWeather, shiftWageBonus } from './WeatherEngine';
-import { OUTINGS, isValidOutingId, isOutingOpen, outingHoursLabel, mayaDinerEncounter, noraCanalEncounter, buildLaundromatRumor, MIN_OUTING_ENERGY, type OutingId } from './OutingDirector';
+import { OUTINGS, isValidOutingId, isOutingOpen, outingHoursLabel, dinerStaffEncounter, canalRegularEncounter, buildLaundromatRumor, MIN_OUTING_ENERGY, type OutingId } from './OutingDirector';
 import { GIGS, jobRoll, replyDelayMinutes, decideApplication } from './JobDirector';
 import {
   classifyPlayerTone,
@@ -1641,13 +1641,13 @@ export class SimulationEngine {
       // Whoever holds the role shows up — voice pool follows temperament, not identity.
       if (outingId === 'diner_soup' || outingId === 'diner_platter' || outingId === 'diner_pie') {
         const staffer = seedCharacterWithRole('diner-staff');
-        const maya = staffer ? this.social.getBuddy(staffer.id) : undefined;
+        const staffBuddy = staffer ? this.social.getBuddy(staffer.id) : undefined;
         if (SimulationEngine.isBuddyAvailable(maya) && maya && mayaDinerEncounter(hour, day)) {
-          const buddyId = maya.id;
+          const buddyId = staffBuddy.id;
           this.social.applySocialAction(buddyId, 'remembered_detail');
-          this.social.addCoreMemory(buddyId, { text: `Ran into ${maya.displayName} working the diner, Day ${day}.`, kind: 'shared_moment', day });
+          this.social.addCoreMemory(buddyId, { text: `Ran into ${staffBuddy.displayName} working the diner, Day ${day}.`, kind: 'shared_moment', day });
           // Face to face: you learn their handle on the spot.
-          this.social.learnHandle(buddyId, maya.handle);
+          this.social.learnHandle(buddyId, staffBuddy.handle);
           // Showing up in person reads spontaneous.
           this.social.observePlayerTrait(buddyId, { spontaneity: 70 }, day);
           const shy = this.social.getTraits(buddyId).shyness >= 60;
@@ -1655,7 +1655,7 @@ export class SimulationEngine {
           this.social.sendMessage(buddyId, buddyId, 'player', line, this.clock.getTotalMinutes(), false, ['outing', 'diner']);
           this.telemetry.logEvent('social', 'outing_encounter', minutes, { buddyId, outing: outingId });
           this.notifySubscribers();
-          return { success: true, data: { summary: `Hearty ${spec.label} at the diner — and ${maya.displayName} was on shift!`, encounterBuddyId: buddyId } };
+          return { success: true, data: { summary: `Hearty ${spec.label} at the diner — and ${staffBuddy.displayName} was on shift!`, encounterBuddyId: buddyId } };
         }
         this.telemetry.logEvent('room', 'outing_diner', minutes, { outing: outingId });
         this.notifySubscribers();
