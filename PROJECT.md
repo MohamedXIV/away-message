@@ -1,7 +1,11 @@
-# Project: Away Message (Sandbox AI Experiment)
+# Project: Away Message (Open-Ended Sandbox)
 
 ## 1. Architecture Overview
-"Away Message" is a sandbox AI-driven desktop simulation and 2D atmospheric life simulator set in the late 1990s / early 2000s. Online/AI is now core — offline determinism and Ink beats have been removed.
+"Away Message" is an open-ended sandbox desktop simulation and 2D atmospheric life simulator set in the late 1990s / early 2000s.
+
+**Product rule:** there is no canonical day limit, ending, mandatory named character, required social encounter, or fixed story path. The former 14-day evaluation campaign was a short early implementation experiment and is retired. Dynamic roster + systemic progression are the product direction.
+
+Online AI enriches surface dialogue and generated content; deterministic rules remain authoritative and offline-safe template fallbacks must keep the simulation healthy.
 
 ### Layered Separation of Concerns
 1. **Pure TypeScript Simulation Engine (`src/engine/`)**:
@@ -39,7 +43,7 @@
 | 5 | Download Manager Engine | Background downloads, bandwidth allocation, server caps, pause/resume, cancel | M1 | docs/03, 05 |
 | 6 | Virtual File System Engine | Directory tree (`Desktop`, `Downloads`, `Documents`, `Music`, `Program Files`, `Trash`), file metadata, deletion, execution | M1 | docs/03, 05 |
 | 7 | Software Registry Engine | Installation state machine, requirement validation, bundled components, uninstaller | M1 | docs/03, 05 |
-| 8 | Character Schedule & Social Engine | 14-day schedule matrices for 4 buddies, 5 hidden relationship dimensions (`familiarity`, `trust`, `comfort`, `respect`, `annoyance`) | M1 | docs/01, 04, 05 |
+| 8 | Character Schedule & Social Engine | Open-ended schedules/routines for a dynamic roster, with hidden relationship dimensions (`familiarity`, `trust`, `comfort`, `respect`, `annoyance`) | M1 | docs/01, 04, 05 |
 | 9 | Dexie Persistence & Migration | IndexedDB schema, lossless reload, auto-save on time jumps, state export/import | M1 | docs/05 |
 | 10 | Evaluation Telemetry Engine | Local JSON telemetry recorder (play duration, money earned, software installed, endings reached) | M1 | docs/05, 07 |
 | 11 | Web Audio Retro Synthesizer | Dial-up handshake audio, UI clicks, chimes, ambient noise, RetroAmp playback | M1 | docs/02, 07 |
@@ -68,10 +72,10 @@
 | 34 | WorldEventsEngine (Sandbox Knowledge Bank) | Global event catalog, `checkAndTriggerEvents()`, `getKnowledgeContext()` injection into AI chat, world flags | M4 | docs/04, 06 |
 | 35 | AI-Heavy Sandbox Chats | All Pulse/buddy/room chats via `src/ai/service.ts` (Gemini/Groq/OpenRouter/Fal), `worldKnowledge` + `relationshipSummary` grounded prompting | M4 | docs/04, 06 |
 | 36 | 2D Layered Room & Desk Environment | Phaser/Canvas 2D room (8 layers, 5 time-of-day phases, weather overlays, persistent street entities) | M4 | docs/02 |
-| 37 | Physical Room Interactables | PC Desk (14-day progressive clutter), Bed (sleep/rest), Kettle (tea/coffee), Window (observation), Door (errands/work) | M4 | docs/01, 02 |
-| 38 | In-Person Café Meeting Scene | Day 11-12 Maya meeting minigame/dialogue with physical atmosphere and post-meeting shift | M4 | docs/00, 04 |
-| 39 | Evaluation Endings & Free Play | Day 14 completion modal, telemetry summary, post-game continuous free play mode | M4 | docs/00, 07 |
-| 40 | E2E Playwright Suite (Tiers 1-4) | 4-tier automated test suite covering all features, boundaries, combinations, and full 14-day playthroughs | E2E Track | docs/06, 07 |
+| 37 | Physical Living-Space Interactables | PC/work surfaces, sleep/rest, food/drink, observation, storage and exits driven by current residence capabilities | M4 | docs/01, 02 |
+| 38 | In-Person Social Encounters | Optional actor-agnostic meetings that arise from truthful location, schedule, relationship and knowledge state | M4 | docs/00, 04 |
+| 39 | Sandbox Milestones & Telemetry | Optional diagnostics/milestones without a canonical ending, final day, or unlock into "free play" | M4 | docs/00, 07 |
+| 40 | E2E Playwright Suite (Tiers 1-4) | Automated coverage for features, boundaries, combinations and long-running sandbox continuity | E2E Track | docs/06, 07 |
 | 41 | Vitest Domain Unit/Integration Suites | 100% pure TS unit test coverage across clock, downloads, VFS, economy, schedules, persistence | E2E Track | docs/06, 07 |
 | 42 | Tier 5 Adversarial Coverage Hardening | White-box stress tests, chaos injection, memory leak checks, security audit | M5 | docs/07 |
 
@@ -84,9 +88,9 @@
 | **M1** | Core Architecture & Simulation Engine | Package/build setup, pure TS `SimulationEngine`, GameClock, EventBus, VFS, Downloads, Software Registry, Economy, Schedules, Dexie persistence, Web Audio synth | None | DONE |
 | **M2** | Desktop Environment & OS Systems | Window Manager, Orion OS 4.8 / 6.x themes, Desktop Shell, Taskbar, Start Menu, CRT shader, Dial-up sim, Add/Remove Programs, Terminal, File Explorer, Control Panel | M1 | DONE |
 | **M3** | Fake Internet, Browser & Desktop Apps | Voyager Browser, 18 Fake Internet sites, search index, Pulse Messenger (AIM), RetroAmp, FlashFetch, ZipMate, PhotoBox 3.0, WeatherBuddy/SearchMate adware, SafeSweep, Notepad | M1, M2 | DONE |
-| **M4** | Sandbox World & 2D World | WorldEventsEngine (global events → knowledge bank), AI-driven sandbox chats, 2D Phaser/Canvas room (8 layers, 5 lighting phases), room interactables, café meeting (now world-flag based), Day 14 milestone modal (now optional) | M1, M2, M3 | IN_PROGRESS |
-| **M5** | Final Integration & 100% E2E Pass + Adversarial Hardening | Full game loop integration, passing 100% E2E tests (Tiers 1-4), Tier 5 Adversarial testing & chaos verification, telemetry export, evaluation build ready | M1, M2, M3, M4, E2E | PLANNED |
-| **E2E** | E2E Testing Track (Requirement-Driven) | Comprehensive Vitest suites + Playwright 4-tier test suite (Tiers 1-4: Feature coverage, boundaries, pairwise combinations, 14-day playthroughs), publish `TEST_READY.md` | M1 (for test infra) | IN_PROGRESS |
+| **M4** | Sandbox World & 2D World | WorldEventsEngine, governed AI chat, generic authored places, dynamic characters, living interactions and optional in-person encounters | M1, M2, M3 | IN_PROGRESS |
+| **M5** | Integration & Adversarial Hardening | Sandbox-loop integration, E2E coverage, adversarial testing, telemetry/debug export and long-run continuity | M1, M2, M3, M4, E2E | PLANNED |
+| **E2E** | E2E Testing Track (Requirement-Driven) | Comprehensive Vitest + Playwright coverage for feature behavior, boundaries, combinations, persistence and long-running sandbox continuity | M1 (for test infra) | IN_PROGRESS |
 
 ---
 
