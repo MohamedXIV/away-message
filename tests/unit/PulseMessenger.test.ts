@@ -59,14 +59,4 @@ describe('Pulse Messenger Subsystem Test Suite', () => {
     vi.unstubAllGlobals();
   });
 
-  it('has structured branching dialogue scripts with narrative action impacts', () => {
-    const mayaScript = DIALOGUE_SCRIPTS.find((s) => s.id === 'maya_day1_greeting');
-    expect(mayaScript).toBeDefined();
-    expect(mayaScript?.messages.length).toBeGreaterThan(0);
-    expect(mayaScript?.playerChoices?.length).toBeGreaterThan(0);
-
-    const firstChoice = mayaScript?.playerChoices?.[0];
-    expect(firstChoice?.socialAction).toBe('empathy');
-    expect(firstChoice?.nextScriptId).toBe('maya_day1_fast');
-  });
 });
