@@ -2,7 +2,7 @@
 
 This document defines acceptance for the current Away Message product direction.
 
-> Away Message is an open-ended sandbox. The former 14-day evaluation campaign was a short early implementation experiment and is retired. There is no canonical final day, ending, fixed protagonist NPC, mandatory Maya path, required café meeting, or transition into "free play".
+> Away Message is an open-ended sandbox. There is no canonical final day, ending, fixed protagonist NPC, mandatory named-character path, required social encounter, or completion transition.
 
 ## 1. Definition of a healthy sandbox build
 
@@ -31,7 +31,7 @@ The player must be able to:
 - [ ] Residence/Tenancy belongs to simulation truth.
 - [ ] Character physical/device/online presence stays coherent.
 - [ ] Active travel continues without requiring a visible travel scene.
-- [ ] No fixed day triggers a product ending or unlocks "free play".
+- [ ] No fixed day triggers a product ending or completion mode.
 
 ## 3. Computer and software progression
 
@@ -46,7 +46,7 @@ The player must be able to:
 ## 4. Dynamic social sandbox
 
 - [ ] The roster may vary by save/content.
-- [ ] No product rule requires Maya, Ryan, Nora, Henderson, or any other named NPC.
+- [ ] No product rule requires any specific named NPC.
 - [ ] Roles/capabilities/state drive work, meetings, services and opportunities.
 - [ ] Relationship dimensions are hidden simulation truth.
 - [ ] Characters may initiate interactions according to truthful context.
@@ -120,7 +120,7 @@ E2E coverage should prove representative sandbox loops rather than one canonical
 - dynamic social contact and optional in-person encounter;
 - district + bus continuity;
 - save/reload during meaningful active state;
-- long-running time advancement well beyond two in-game weeks with no ending/free-play transition.
+- long-running time advancement with no ending/completion transition.
 
 ## 11. Quality bar
 
