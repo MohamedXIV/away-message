@@ -41,6 +41,32 @@ describe('SocialEngine (dynamic roster, presence & hidden relationship dimension
     expect(night.every((status) => ['online', 'away', 'offline'].includes(status ?? ''))).toBe(true);
   });
 
+  it('resolves capability roles from the live roster after seed content changes', () => {
+    const seedHolder = social.getBuddyWithRole('diner-staff');
+    expect(seedHolder).toBeDefined();
+    if (!seedHolder) return;
+
+    expect(social.removeBuddy(seedHolder.id)).toBe(true);
+
+    const template = social.getBuddies()[0];
+    expect(template).toBeDefined();
+    if (!template) return;
+
+    social.registerBuddy({
+      ...template,
+      id: 'dynamic_diner_staff',
+      displayName: 'Dynamic Diner Staff',
+      handle: 'dynamic_diner_staff',
+      roles: ['diner-staff'],
+      status: 'stranger',
+      metVia: 'work',
+      isProcedural: true,
+      createdDay: 2,
+    });
+
+    expect(social.getBuddyWithRole('diner-staff')?.id).toBe('dynamic_diner_staff');
+  });
+
   it('applies semantic social actions to any actor', () => {
     expect(actorId).toBeTruthy();
     const before = social.getRelationships(actorId)!;
