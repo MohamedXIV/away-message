@@ -7,7 +7,7 @@ import { PulseRoomWindow, PulseRoomMessage } from './components/PulseRoomWindow'
 import { PulseProfileCard } from './components/PulseProfileCard';
 import { PulseFriendRequest } from './components/PulseFriendRequest';
 import type { PulseListView } from './components/BuddyListWindow';
-import { getPulseRoom, PULSE_ROOMS } from './data/pulseRooms';
+import { getPulseRoom, PULSE_ROOMS, resolvePulseRoomParticipantIds } from './data/pulseRooms';
 import { usePulseAudio } from './hooks/usePulseAudio';
 import { useSimulatedTyping } from './hooks/useSimulatedTyping';
 import { usePulseNotifications } from './hooks/usePulseNotifications';
@@ -821,7 +821,7 @@ export const PulseMessengerApp: React.FC = () => {
     setPulseState((previous) => ({ ...previous, roomMessages: { ...previous.roomMessages, [room.id]: [...(previous.roomMessages[room.id] || []), playerMessage].slice(-80) } }));
     setRoomTyping(true);
 
-    const liveParticipantIds = room.participantIds.filter((id) => !!engine.social.getBuddy(id));
+    const liveParticipantIds = resolvePulseRoomParticipantIds(room, engine.social.getBuddies());
     const responderIds = getRoomResponderSequence(room.id, liveParticipantIds, existingMessages.length, text);
     const roomTopic = roomTopics[room.id] || room.topic;
     let recentMessages = [...existingMessages, playerMessage].slice(-10).map((message) => ({
@@ -990,7 +990,7 @@ export const PulseMessengerApp: React.FC = () => {
   const handleWhisper = async (targetId: string, text: string) => {
     if (!activeRoomId || !session) return;
     const room = getPulseRoom(activeRoomId);
-    if (!room || !room.participantIds.includes(targetId)) return;
+    if (!room || !resolvePulseRoomParticipantIds(room, engine.social.getBuddies()).includes(targetId)) return;
     const target = engine.social.getBuddy(targetId);
     const whisper: PulseRoomMessage = { id: `whisper_${Date.now()}`, senderId: 'player', senderName: session.username, text, minute: totalMinutes, kind: 'whisper', targetId };
     setPulseState((previous) => ({ ...previous, roomMessages: { ...previous.roomMessages, [room.id]: [...(previous.roomMessages[room.id] || []), whisper].slice(-80) }, roomReadThrough: { ...previous.roomReadThrough, [room.id]: (previous.roomMessages[room.id]?.length ?? 0) + 1 } }));
@@ -1054,7 +1054,7 @@ export const PulseMessengerApp: React.FC = () => {
     pendingRooms.forEach((room) => {
       const existingMessages = pulseState.roomMessages[room.id] || [];
       const ambientCount = hashString(`${room.id}:${activityBucket}`) % 100 < 22 ? 2 : 1;
-      const liveParticipantIds = room.participantIds.filter((id) => !!engine.social.getBuddy(id));
+      const liveParticipantIds = resolvePulseRoomParticipantIds(room, engine.social.getBuddies());
       const responderSequence = getRoomResponderSequence(room.id, liveParticipantIds, existingMessages.length + activityBucket, `ambient-${activityBucket}`);
       const selectedResponders = responderSequence.slice(0, ambientCount);
       selectedResponders.forEach((responderId, responderIndex) => {
