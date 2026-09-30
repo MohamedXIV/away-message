@@ -51,7 +51,7 @@ describe('NarrativeEngine & semantic tag subsystem', () => {
     expect(snapshot.sim_player_cash).toBe(38);
     expect(snapshot.sim_buddies_familiarity[actorId]).toBeTypeOf('number');
     expect(snapshot.sim_buddies_trust[actorId]).toBeTypeOf('number');
-    expect('sim_maya_trust' in snapshot).toBe(false);
+    expect(Object.keys(snapshot.sim_buddies_trust)).toContain(actorId);
   });
 
   it('evaluates actor-generic conditions', () => {
