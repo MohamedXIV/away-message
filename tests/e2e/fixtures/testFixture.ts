@@ -4,7 +4,6 @@ import { BrowserPage } from './pageObjects/BrowserPage';
 import { PulsePage } from './pageObjects/PulsePage';
 import { RoomPage } from './pageObjects/RoomPage';
 import { CafePage } from './pageObjects/CafePage';
-import { Day14ModalPage } from './pageObjects/Day14ModalPage';
 
 export interface SimHelpers {
   getState: () => Promise<any>;
@@ -29,7 +28,6 @@ export interface TestFixtures {
   pulsePage: PulsePage;
   roomPage: RoomPage;
   cafePage: CafePage;
-  day14Page: Day14ModalPage;
   sim: SimHelpers;
 }
 
@@ -53,10 +51,6 @@ export const test = base.extend<TestFixtures>({
   cafePage: async ({ page }, use) => {
     const cafePage = new CafePage(page);
     await use(cafePage);
-  },
-  day14Page: async ({ page }, use) => {
-    const day14Page = new Day14ModalPage(page);
-    await use(day14Page);
   },
   sim: async ({ page }, use) => {
     const helpers: SimHelpers = {
