@@ -29,6 +29,10 @@ const banned: Array<{ label: string; pattern: RegExp }> = [
   { label: 'legacy named intro alias', pattern: new RegExp('(ryan|nora)_' + 'intro', 'i') },
   { label: 'protected core cast language', pattern: new RegExp('core\\s*(?:4|four).*?(?:protected|required|cannot)', 'i') },
   { label: 'protected core buddy language', pattern: new RegExp('core\\s+buddy.*?(?:protected|required|cannot)', 'i') },
+  { label: 'obsolete core buddy module', pattern: new RegExp('coreBuddies', 'i') },
+  { label: 'obsolete core cast symbols', pattern: new RegExp('(?:CORE_BUDDIES|CORE_IDS|CORE_BY_ID|CoreBuddy|coreBuddyDef|coreBuddyIds|isRegistryBuddy)', 'i') },
+  { label: 'obsolete core-derived symbols', pattern: new RegExp('(?:CORE_PROFILE_ALIASES|CORE_ID_TO_ARCHETYPE|CORE_TRAITS|CORE_SIGNATURE_COLORS)', 'i') },
+  { label: 'obsolete core provenance', pattern: new RegExp("metVia\\s*:\\s*['\"]core['\"]", 'i') },
 ];
 
 function extension(path: string): string {
