@@ -101,9 +101,9 @@ export const AILabApp: React.FC = () => {
     setImageResult(null);
     setNotice('Generating character image via Fal (small, era-appropriate)...');
     try {
-      const buddyNames: Record<string, string> = { maya: 'Maya', ryan: 'Ryan', nora: 'Nora', henderson: 'Mr. Henderson' };
+      const buddy = engine.social.getBuddy(imageBuddy);
       const res = await generateCharacterImage(
-        { buddyId: imageBuddy, buddyName: buddyNames[imageBuddy] || imageBuddy, prompt: imagePrompt, size: { width: 320, height: 240 } },
+        { buddyId: imageBuddy, buddyName: buddy?.displayName || imageBuddy || 'Character', prompt: imagePrompt, size: { width: 320, height: 240 } },
         settings
       );
       setImageResult({ url: res.url, provider: res.provider, fallback: res.fallback, error: res.error });
@@ -472,7 +472,7 @@ export const AILabApp: React.FC = () => {
         <h2 className="mb-2 font-bold">Benchmark inputs</h2>
         <label className="mb-1 block font-semibold" htmlFor="site-host">Fictional site host</label>
         <input id="site-host" value={siteName} onChange={(event) => setSiteName(event.target.value)} className="mb-2 w-full border border-gray-500 px-2 py-1" />
-        <label className="mb-1 block font-semibold" htmlFor="chat-prompt">Maya chat prompt</label>
+        <label className="mb-1 block font-semibold" htmlFor="chat-prompt">Character chat prompt</label>
         <input id="chat-prompt" value={chatPrompt} onChange={(event) => setChatPrompt(event.target.value)} className="w-full border border-gray-500 px-2 py-1" />
         <button disabled={running} onClick={runBenchmarks} className="mt-3 border border-gray-700 bg-[#000080] px-4 py-1 font-bold text-white disabled:cursor-wait disabled:opacity-60">
           {running ? 'Running benchmark...' : 'Run all provider benchmarks'}
