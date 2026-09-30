@@ -17,7 +17,6 @@ import {
   useSimulationTicker,
   useSimulationStore,
   useActiveView,
-  useGameTime,
 } from './store/useSimulationStore';
 import { useAudioStore } from './store/useAudioStore';
 import { SimulationEngine } from './engine/SimulationEngine';
@@ -87,7 +86,6 @@ export const App: React.FC = () => {
   const osVersion = osState.currentOsId;
   const activeView = useActiveView();
   const switchView = useSimulationStore((s) => s.switchView);
-  useGameTime();
 
   // P9 boot phases: menu → loading → game. Boot requests (menu Continue/Load)
   // arrive via reload so every subsystem starts from the slot coherently.
