@@ -1,8 +1,8 @@
-# Mid-2000s Internet Life Sim — Evaluation Build Docs
+# Away Message — Open-Ended Sandbox Docs
 
 **This package contains exactly 13 core files.**
 
-It defines a complete playable evaluation version of the game, not a commercial shipping build and not a small vertical slice.
+It defines the current open-ended sandbox product direction. Historical evaluation-era material must not be treated as current product authority.
 
 ## Read order
 
@@ -31,14 +31,11 @@ Current cross-cutting architecture supplements:
 
 ## Goal
 
-Build a complete small game that can answer whether the concept is worth continuing.
+Build an open-ended life sandbox where the player can keep living, working, upgrading, browsing, moving, meeting people and changing relationships without a scripted final day.
 
-Target:
-- roughly 14 in-game days,
-- beginning → progression → midpoint → physical social meeting → evaluation ending,
-- enough content and systems to judge the lived experience,
-- provisional art is allowed,
-- final art direction is intentionally not frozen.
+The former 14-day evaluation campaign was an early two-day implementation experiment and is retired. It must not return as a canonical duration, ending, playthrough, test gate, or narrative spine.
+
+There is no mandatory Maya, Ryan, Nora, Henderson, romance route, café meeting, or other fixed cast path. Named characters may exist as ordinary authored inhabitants or temporary fixtures, but systems must resolve actors through roles, capabilities, relationships, location, knowledge and current state.
 
 ## Canonical stack
 
@@ -46,14 +43,13 @@ Target:
 - Vite
 - React + DOM + CSS
 - Phaser 4.x
-- Ink + inkjs
 - Zustand
 - Zod
 - Dexie / IndexedDB
 - Vitest
 - Playwright
 
-Not required for the evaluation build:
+Not required for the core sandbox:
 - backend,
 - runtime LLM,
 - Electron,
@@ -226,9 +222,9 @@ The game specification must remain usable by any implementation workflow.
 
 Only `09-MANUS-RUN-CONSTRAINTS.md` contains provider-specific execution constraints.
 
-### Complete evaluation build, not shipping build
+### Sandbox scope, not shipping ceremony
 
-Do not spend evaluation time on:
+Do not spend sandbox-development time on:
 - Steam integration,
 - achievements,
 - cloud infrastructure,
@@ -237,6 +233,8 @@ Do not spend evaluation time on:
 - final soundtrack,
 - commercial packaging,
 - production-scale content quantity.
+
+The goal is breadth, coherence and long-running systemic life—not a scripted campaign completion.
 
 ### Background continuity
 
@@ -291,15 +289,15 @@ Examples:
 - player/NPC presence and arrival truth
 - world-event modifiers consumed through domain boundaries
 
-**Ink**
-- authored prose
-- branching dialogue
-- narrative choices
-- semantic narrative tags
+**Governed narrative / AI surfaces**
+- optional authored prose and semantic narrative data
+- AI-paraphrased dialogue where enabled
+- validated semantic effects only
+- no ownership of canonical simulation truth
 
-### Ink is not the world database
+### Narrative text is not the world database
 
-Ink may read approved simulation context and emit validated semantic effects.
+Authored or AI-generated narrative text may read approved simulation context and may emit only validated semantic effects.
 
 Do not duplicate authoritative money, time, hardware, download, schedule, relationship, obligation, character intent, residence, district, route, travel, appointment, job, event, item, spatial location, venue activity, or presence truth inside Ink.
 
@@ -357,7 +355,6 @@ Do not introduce without proven need:
 - microservices,
 - server database,
 - real network dependency,
-- runtime LLM,
 - desktop wrapper,
 - traffic simulation,
 - vehicle physics,
