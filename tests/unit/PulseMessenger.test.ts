@@ -1,7 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { parseEmoticons } from '../../src/apps/pulse/utils/emoticonParser';
 import { AWAY_MESSAGE_PRESETS } from '../../src/apps/pulse/data/awayMessagePresets';
-import { DIALOGUE_SCRIPTS } from '../../src/apps/pulse/data/dialogueTrees';
 import { formatSimulationTime } from '../../src/apps/pulse/utils/timeFormat';
 import { loadPulseState, makeDefaultPulseState, savePulseState } from '../../src/apps/pulse/persistence';
 
