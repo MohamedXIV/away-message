@@ -104,7 +104,7 @@ export interface InstalledSoftwareRecord {
 
 export interface MessageRecord {
   id: string;                    // Primary key
-  buddyId: string;               // "ryan_foodcart", "starlight_maya", "NightOwl87", "motel_office"
+  buddyId: string;               // authored actor id/handle; resolved through the seed alias registry
   sender: 'player' | 'buddy' | 'system';
   text: string;
   timestamp: number;             // Game monotonic minute or epoch ms
