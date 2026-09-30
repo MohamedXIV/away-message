@@ -47,7 +47,7 @@ import {
 } from './PlayerActs';
 import { CITY_NODES, isCityNodeId, quoteTravel, walkEnergyCost, rollStreetEncounter, BUS_FARE, type CityNodeId, type TravelMode } from './CityMap';
 import { pulseHasFeature, getAllPulseReleases } from './PulseCatalog';
-import { SEED_BY_ID, seedCharacterWithRole } from './seedCharacters';
+import { SEED_BY_ID } from './seedCharacters';
 
 export class SimulationEngine {
   public readonly clock!: GameClock;
@@ -1422,7 +1422,7 @@ export class SimulationEngine {
         const done = this.world.getFlag(`jobapp_${gig.id}_done`);
         if (typeof applied !== 'number' || applied <= 0 || done) continue;
         if (now < applied + replyDelayMinutes(gig.id, applied)) continue;
-        const holder = seedCharacterWithRole(gig.contactRole);
+        const holder = this.social.getBuddyWithRole(gig.contactRole);
         const contact = holder ? this.social.getBuddy(holder.id) : undefined;
         const gone = !contact || contact.status === 'distant' || contact.status === 'gone' || contact.status === 'blocked';
         const stage = contact ? this.social.getRelationshipStage(contact.id) : 'stranger';
@@ -1532,7 +1532,7 @@ export class SimulationEngine {
   }
 
   // ==========================================
-  // P6.4 — RENT LADDER (Henderson: remind → warn → pause downloads → thanks)
+  // P6.4 — RENT LADDER (role-driven property contact: remind → warn → pause downloads → thanks)
   // Lenient teeth: browsing works, new downloads nap until paid. Paper trail
   // goes to Mailbox via rentmail_* flags; Pulse carries the human voice.
   // ==========================================
@@ -1541,14 +1541,14 @@ export class SimulationEngine {
   // No landlord on the roster → the economy still ticks, the DM is skipped.
   // (Availability is NOT required — rent is owed even to a distant landlord.)
   private sendRentNote(text: string, tags: string[], currentMinutes: number, event: string, extra?: Record<string, unknown>): void {
-    const holder = seedCharacterWithRole('landlord');
+    const holder = this.social.getBuddyWithRole('landlord');
     const landlord = holder ? this.social.getBuddy(holder.id) : undefined;
     if (!landlord) return;
     this.social.sendMessage(landlord.id, landlord.id, 'player', text, currentMinutes, false, ['rent', ...tags]);
     this.telemetry.logEvent('economy', event, currentMinutes, { buddyId: landlord.id, ...(extra ?? {}) });
   }
 
-  private sendHendersonNote(text: string, tags: string[], currentMinutes: number, event: string, extra?: Record<string, unknown>): void {
+  private sendRentContactNote(text: string, tags: string[], currentMinutes: number, event: string, extra?: Record<string, unknown>): void {
     this.sendRentNote(text, tags, currentMinutes, event, extra);
   }
 
@@ -1564,10 +1564,10 @@ export class SimulationEngine {
       if (newDay === dueDay - 2 && !this.world.getFlag(`rent_reminded_${dueDay}`)) {
         this.world.setFlag(`rent_reminded_${dueDay}`, true);
         this.world.setFlag(`rentmail_due_${dueDay}`, Math.round(amount * 100));
-        this.sendHendersonNote(pickRentReminderLine(`${dueDay}`, amount, dueDay), ['reminder'], minutes, 'rent_reminded', { dueDay });
+        this.sendRentContactNote(pickRentReminderLine(`${dueDay}`, amount, dueDay), ['reminder'], minutes, 'rent_reminded', { dueDay });
       } else if (newDay === dueDay && !this.world.getFlag(`rent_warned_${dueDay}`)) {
         this.world.setFlag(`rent_warned_${dueDay}`, true);
-        this.sendHendersonNote(pickRentSternLine(`${dueDay}`, amount, dueDay), ['warning'], minutes, 'rent_warned', { dueDay });
+        this.sendRentContactNote(pickRentSternLine(`${dueDay}`, amount, dueDay), ['warning'], minutes, 'rent_warned', { dueDay });
       } else if (newDay > dueDay) {
         // Catch-up for multi-day jumps: stamp the paper trail silently
         // (messages stay current-rung only — no backdated nag spam)
@@ -1579,7 +1579,7 @@ export class SimulationEngine {
         }
         if (!this.world.getFlag(`rent_nudge_${newDay}`)) {
           this.world.setFlag(`rent_nudge_${newDay}`, true);
-          this.sendHendersonNote(pickRentNudgeLine(`${newDay}`, amount), ['nudge'], minutes, 'rent_nudged', { dueDay });
+          this.sendRentContactNote(pickRentNudgeLine(`${newDay}`, amount), ['nudge'], minutes, 'rent_nudged', { dueDay });
         }
       }
     } catch { /* rent never breaks the tick */ }
@@ -1640,7 +1640,7 @@ export class SimulationEngine {
       // Encounters (deterministic per day; buddies must be present and available).
       // Whoever holds the role shows up — voice pool follows temperament, not identity.
       if (outingId === 'diner_soup' || outingId === 'diner_platter' || outingId === 'diner_pie') {
-        const staffer = seedCharacterWithRole('diner-staff');
+        const staffer = this.social.getBuddyWithRole('diner-staff');
         const staffBuddy = staffer ? this.social.getBuddy(staffer.id) : undefined;
         if (SimulationEngine.isBuddyAvailable(staffBuddy) && staffBuddy && dinerStaffEncounter(hour, day)) {
           const buddyId = staffBuddy.id;
@@ -1662,7 +1662,7 @@ export class SimulationEngine {
         return { success: true, data: { summary: `Hearty ${spec.label} at the diner. Quiet tables, good coffee.` } };
       }
       if (outingId === 'canal_walk') {
-        const regular = seedCharacterWithRole('canal-regular');
+        const regular = this.social.getBuddyWithRole('canal-regular');
         const walker = regular ? this.social.getBuddy(regular.id) : undefined;
         const raining = isWetWeather(weather.condition);
         if (SimulationEngine.isBuddyAvailable(walker) && walker && canalRegularEncounter(hour, day, raining)) {
@@ -1706,7 +1706,7 @@ export class SimulationEngine {
 
   /**
    * Which profile page belongs to a buddy. Legacy rich profiles win over stubs:
-   * alias (maya_x) → handle → id, so notes land where players actually look.
+   * profile alias → handle → id, so notes land where players actually look.
    */
   private resolveProfileUsername(buddy: { id: string; handle: string }): string | null {
     try {
@@ -1890,10 +1890,10 @@ export class SimulationEngine {
       case 'PLAYER_PAY_RENT': {
         const rentRes = this.economy.payRent();
         if (!rentRes.success) return { success: false, error: rentRes.error };
-        // P6.4 kindness restored: line unpaused + Henderson says thanks
+        // P6.4 kindness restored: line unpaused + the active property contact says thanks
         if (this.world.getFlag('rent_overdue')) this.world.setFlag('rent_overdue', false);
         try {
-          this.sendHendersonNote(pickRentThanksLine(`paid${this.clock.getTime().day}`), ['thanks'], currentMinutes, 'rent_thanked', {});
+          this.sendRentContactNote(pickRentThanksLine(`paid${this.clock.getTime().day}`), ['thanks'], currentMinutes, 'rent_thanked', {});
         } catch { /* thanks is best-effort */ }
         this.telemetry.logEvent('economy', 'rent_paid', currentMinutes, {
           day: this.clock.getTime().day,
