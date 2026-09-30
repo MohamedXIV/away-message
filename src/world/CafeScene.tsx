@@ -36,7 +36,7 @@ const CAFE_OPENER =
 function defaultCafeBuddyId(engine: { social: { getBuddies(): Array<{ id: string; status?: string; reach?: string }>; getRelationships(id: string): { familiarity: number } | undefined } }): string {
   const buddies = engine.social.getBuddies();
   const locals = buddies.filter((b) => (b.reach ?? 'local') === 'local' && b.status !== 'distant' && b.status !== 'gone' && b.status !== 'blocked');
-  const pool = locals.length > 0 ? locals : buddies;
+  const pool = locals;
   let best = pool[0];
   let bestFam = -1;
   for (const b of pool) {
@@ -74,8 +74,7 @@ export const CafeScene: React.FC<{ buddyId?: string }> = ({ buddyId: propBuddyId
   const advanceTime = useSimulationStore((s) => s.advanceTime);
   const applySocialAction = useSimulationStore((s) => s.applySocialAction);
 
-  if (!buddyId) throw new Error('CafeScene requires at least one available local actor.');
-  const buddy = engine.social.getBuddy(buddyId);
+  const buddy = buddyId ? engine.social.getBuddy(buddyId) : undefined;
   const buddyName = buddy?.displayName || buddyId;
 
   // Dialogue State
@@ -159,7 +158,7 @@ export const CafeScene: React.FC<{ buddyId?: string }> = ({ buddyId: propBuddyId
   // Suggest player replies whenever the guest's latest line changes
   const latestBuddyId = [...turns].reverse().find((turn) => turn.speaker === 'buddy')?.id;
   useEffect(() => {
-    if (latestBuddyId === undefined || busy) return;
+    if (!buddyId || latestBuddyId === undefined || busy) return;
     const key = `${buddyId}:cafe:${latestBuddyId}`;
     void refreshSuggestions(key, async () => {
       const slices = readMemorySlices();
@@ -194,7 +193,7 @@ export const CafeScene: React.FC<{ buddyId?: string }> = ({ buddyId: propBuddyId
 
   const handleSend = async () => {
     const text = input.trim();
-    if (!text || busy) return;
+    if (!buddyId || !text || busy) return;
     soundManager.play('click');
     // Social battery gate first: refused lines surface as inner voice, input kept.
     const sendRes = engine.dispatchAction({ type: 'SOCIAL_SEND_MESSAGE', buddyId, text, tags: ['cafe'] });
@@ -265,6 +264,10 @@ export const CafeScene: React.FC<{ buddyId?: string }> = ({ buddyId: propBuddyId
   // Wrap up this optional encounter. No campaign beat or named-character gate.
   const handleFinishMeeting = () => {
     soundManager.play('click');
+    if (!buddyId) {
+      switchView('room');
+      return;
+    }
     // Deduct coffee cost
     spendCash(4.00, 'Coffee at Starlight Café');
     // Advance 75 minutes
@@ -277,6 +280,26 @@ export const CafeScene: React.FC<{ buddyId?: string }> = ({ buddyId: propBuddyId
 
   const formattedTime = `${String(time.hour).padStart(2, '0')}:${String(time.minute).padStart(2, '0')}`;
   const priorTurns = turns.slice(0, -1);
+
+  if (!buddyId) {
+    return (
+      <div className="w-full h-full bg-slate-950 text-slate-200 flex items-center justify-center p-6">
+        <div className="max-w-md border border-amber-800/50 bg-slate-900 p-6 rounded shadow-xl text-center">
+          <Coffee className="w-8 h-8 mx-auto mb-3 text-amber-400" />
+          <h2 className="font-bold text-amber-200 mb-2">Starlight Café</h2>
+          <p className="text-sm text-slate-400 mb-5">
+            The café is open, but nobody you know is available to meet here right now.
+          </p>
+          <button
+            onClick={() => switchView('room')}
+            className="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded text-sm font-bold"
+          >
+            Leave café
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="relative w-full h-full bg-slate-950 flex flex-col select-none overflow-hidden font-sans">
