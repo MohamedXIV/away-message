@@ -426,7 +426,7 @@ export class SimulationEngine {
   // ==========================================
   // P3 — SHARP RELATIONSHIP EVENTS (governed, rules-only, template-voiced)
   // Ladder for sustained dismissiveness: confrontation → distant (7 days) → gone.
-  // Core 4 are protected: they cap at a strained confrontation, they never leave.
+  // Any actor may progress through strained, distant, gone, or blocked lifecycle states.
   // Governor: a single active sharp event at a time (world flag 'sharp_active').
   // ==========================================
 
