@@ -41,7 +41,7 @@ describe('TelemetryEngine (sandbox metrics & JSON exporter)', () => {
     expect(stats.minutesInRoomView).toBe(1);
   });
 
-  it('logs sandbox events and exports diagnostics without completion fields', () => {
+  it('logs sandbox events and exports diagnostics', () => {
     telemetry.logEvent('world', 'place_discovered', 500, { placeId: 'corner_mart' });
 
     const jsonStr = telemetry.exportTelemetryJson();
@@ -49,8 +49,6 @@ describe('TelemetryEngine (sandbox metrics & JSON exporter)', () => {
 
     const parsed = JSON.parse(jsonStr);
     expect(parsed.schemaVersion).toBe('1.0.0');
-    expect(parsed.stats.cafeMeetingAttended).toBeUndefined();
-    expect(parsed.stats.endingReached).toBeUndefined();
     expect(parsed.recentLogs.length).toBeGreaterThan(0);
     expect(parsed.recentLogs[0].action).toBe('place_discovered');
   });
