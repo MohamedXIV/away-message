@@ -324,8 +324,8 @@ const WEATHER_SEVERITY: Record<string, number> = {
 
 /**
  * One weather thread per week: the most dramatic day leads, the 7-day strip
- * is the body. Authors rotate to whoever loves (or hates) it most:
- * wet weeks → Maya, heat → Ryan, fog → Nora, else round-robin.
+ * is the body. Authors rotate toward actors whose roles/archetypes fit the weather,
+ * with deterministic round-robin fallback.
  */
 export function buildWeeklyWeatherThread(
   day: number,
