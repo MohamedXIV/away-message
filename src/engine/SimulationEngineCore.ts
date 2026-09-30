@@ -1642,7 +1642,7 @@ export class SimulationEngine {
       if (outingId === 'diner_soup' || outingId === 'diner_platter' || outingId === 'diner_pie') {
         const staffer = seedCharacterWithRole('diner-staff');
         const staffBuddy = staffer ? this.social.getBuddy(staffer.id) : undefined;
-        if (SimulationEngine.isBuddyAvailable(maya) && maya && mayaDinerEncounter(hour, day)) {
+        if (SimulationEngine.isBuddyAvailable(staffBuddy) && staffBuddy && dinerStaffEncounter(hour, day)) {
           const buddyId = staffBuddy.id;
           this.social.applySocialAction(buddyId, 'remembered_detail');
           this.social.addCoreMemory(buddyId, { text: `Ran into ${staffBuddy.displayName} working the diner, Day ${day}.`, kind: 'shared_moment', day });
@@ -1651,7 +1651,7 @@ export class SimulationEngine {
           // Showing up in person reads spontaneous.
           this.social.observePlayerTrait(buddyId, { spontaneity: 70 }, day);
           const shy = this.social.getTraits(buddyId).shyness >= 60;
-          const line = shy ? pickOutingNoraLine(`${outingId}:${day}`) : pickOutingMayaLine(`${outingId}:${day}`);
+          const line = shy ? pickOutingReservedLine(`${outingId}:${day}`) : pickOutingWarmLine(`${outingId}:${day}`);
           this.social.sendMessage(buddyId, buddyId, 'player', line, this.clock.getTotalMinutes(), false, ['outing', 'diner']);
           this.telemetry.logEvent('social', 'outing_encounter', minutes, { buddyId, outing: outingId });
           this.notifySubscribers();
@@ -1665,7 +1665,7 @@ export class SimulationEngine {
         const regular = seedCharacterWithRole('canal-regular');
         const walker = regular ? this.social.getBuddy(regular.id) : undefined;
         const raining = isWetWeather(weather.condition);
-        if (SimulationEngine.isBuddyAvailable(walker) && walker && noraCanalEncounter(hour, day, raining)) {
+        if (SimulationEngine.isBuddyAvailable(walker) && walker && canalRegularEncounter(hour, day, raining)) {
           const buddyId = walker.id;
           this.social.applySocialAction(buddyId, 'intellectual_curiosity');
           this.social.addCoreMemory(buddyId, { text: `Walked the canal with ${walker.displayName}, Day ${day}${raining ? ' in the rain' : ''}.`, kind: 'shared_moment', day });
