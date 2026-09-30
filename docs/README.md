@@ -33,7 +33,7 @@ Current cross-cutting architecture supplements:
 
 Build an open-ended life sandbox where the player can keep living, working, upgrading, browsing, moving, meeting people and changing relationships without a scripted final day.
 
-There is no mandatory named NPC, romance route, café meeting, or fixed-cast path. Named characters may exist as ordinary authored inhabitants or temporary fixtures, but systems must resolve actors through roles, capabilities, relationships, location, knowledge and current state.
+There is no mandatory named NPC, romance route, café meeting, or named-character progression path. Named characters may exist as ordinary authored inhabitants or temporary fixtures, but systems must resolve actors through roles, capabilities, relationships, location, knowledge and current state.
 
 ## Canonical stack
 
