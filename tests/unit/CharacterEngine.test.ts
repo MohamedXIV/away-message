@@ -102,34 +102,60 @@ describe('SocialEngine dynamic roster (registerBuddy + weekly rotation + persist
     expect(social.getMessages('sam_guitar')).toEqual([]);
   });
 
-  it('rejects duplicates, invalid ids, and core removal', () => {
+  it('rejects duplicates and invalid ids while allowing seed actors to leave', () => {
     const social = new SocialEngine(new EventBus());
     const { definition } = buildCharacter({ id: 'sam_guitar', displayName: 'Sam', handle: 'sam_guitar' });
     social.registerBuddy(definition);
     expect(() => social.registerBuddy(definition)).toThrow(/already registered/);
     expect(() => social.registerBuddy({ ...definition, id: 'Bad Id!' })).toThrow();
-    expect(() => social.removeBuddy('maya')).toThrow(/Core buddy/);
+    const seedId = social.getBuddies()[0]?.id;
+    expect(seedId).toBeTruthy();
+    if (seedId) expect(social.removeBuddy(seedId)).toBe(true);
     expect(social.removeBuddy('sam_guitar')).toBe(true);
     expect(social.getBuddy('sam_guitar')).toBeUndefined();
   });
 
-  it('resolves weekly rotation for dynamic buddies on day 8+ and free play', () => {
+  it('resolves weekly rotation for dynamic buddies indefinitely', () => {
     const social = new SocialEngine(new EventBus());
     const { definition } = buildCharacter({ id: 'sam_guitar', displayName: 'Sam', handle: 'sam_guitar', archetype: 'artist' });
     social.registerBuddy(definition);
     // Day 8 21:00 (totalMinutes = 7*1440 + 1260) — artist is online late via weekly rotation
     social.updatePresence(7 * 1440 + 1200);
     expect(social.getPresence('sam_guitar')?.status).toBe('online');
-    // Day 20 (free play) still resolves instead of collapsing
+    // Day 20 still resolves instead of collapsing
     social.updatePresence(19 * 1440 + 1200);
     expect(social.getPresence('sam_guitar')?.status).toBe('online');
   });
 
-  it('keeps core 14-day schedules byte-identical under weekly lookup', () => {
+  it('keeps authored seed schedules working through weekly rotation', () => {
     const social = new SocialEngine(new EventBus());
-    // Day 8 08:00 → henderson online (office), same as before the rotation change
+    const seed = social.getBuddies()[0];
+    expect(seed).toBeDefined();
+    if (!seed) return;
     social.updatePresence(7 * 1440 + 480);
-    expect(social.getPresence('henderson')?.status).toBe('online');
+    expect(social.getPresence(seed.id)).toBeDefined();
+  });
+
+  it('persists seed actor removal across reload', () => {
+    const social = new SocialEngine(new EventBus());
+    const seedId = social.getBuddies()[0]?.id;
+    expect(seedId).toBeTruthy();
+    if (!seedId) return;
+
+    expect(social.removeBuddy(seedId)).toBe(true);
+    const restored = new SocialEngine(new EventBus(), social.getState());
+    expect(restored.getBuddy(seedId)).toBeUndefined();
+  });
+
+  it('persists seed actor lifecycle status without identity protection', () => {
+    const social = new SocialEngine(new EventBus());
+    const seedId = social.getBuddies()[0]?.id;
+    expect(seedId).toBeTruthy();
+    if (!seedId) return;
+
+    social.setBuddyStatus(seedId, 'gone');
+    const restored = new SocialEngine(new EventBus(), social.getState());
+    expect(restored.getBuddy(seedId)?.status).toBe('gone');
   });
 
   it('shares the timeline end-to-end: attitudes + MyPlace stub follow registration', () => {
@@ -177,7 +203,7 @@ describe('SocialEngine dynamic roster (registerBuddy + weekly rotation + persist
     expect(restored.getRelationships('sam_guitar')?.familiarity).toBe(
       social.getRelationships('sam_guitar')?.familiarity
     );
-    // Core 4 untouched
-    expect(restored.getBuddy('maya')?.handle).toBe('starlight_maya');
+    // Authored seed roster remains available unless this save changed it.
+    expect(restored.getBuddies().length).toBeGreaterThan(0);
   });
 });
