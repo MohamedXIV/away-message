@@ -584,8 +584,8 @@ export class SocialEngine {
   }
 
   /**
-   * Core roster, sourced from the registry (content/store.json → generated).
-   * Byte-identical to the old hand-written defs — the registry IS those defs.
+   * Authored seed roster, sourced from the registry (content/store.json → generated).
+   * These actors are starting content, not mandatory product identities.
    */
   private initializeCharacters(): void {
     for (const buddy of CORE_BUDDIES) {
@@ -596,7 +596,7 @@ export class SocialEngine {
   /**
    * Updates contact presence based on current game time.
    * Schedule lookup: exact day → weekly rotation (day 8 reuses day 1 pattern) → day 1.
-   * Core buddies keep 1..14 maps (unchanged behaviour); dynamic buddies use 1..7.
+   * Authored and dynamic actors use repeating weekly schedules unless a specific day override exists.
    */
   public updatePresence(currentTotalMinutes: number): void {
     const day = Math.floor(currentTotalMinutes / 1440) + 1;
