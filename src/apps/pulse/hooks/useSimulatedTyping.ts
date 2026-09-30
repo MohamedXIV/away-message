@@ -110,7 +110,7 @@ export function useSimulatedTyping(_activeConversationBuddyId: string | null) {
   const triggerNpcScript = useCallback((script: NpcDialogueScript) => {
     clearTimeouts();
     const buddy = engine.social.getBuddy(script.buddyId);
-    const style = getNpcStyle(script.buddyId);
+    const style = getNpcStyle(buddy ?? script.buddyId);
     const traits = engine.social.getTraits(script.buddyId);
     // Prefer style profile wpm but respect engine's buddy speed if it exists; apply variance for human feel
     const baseWpm = style.typing.wpm ?? buddy?.typingSpeedWpm ?? 60;
