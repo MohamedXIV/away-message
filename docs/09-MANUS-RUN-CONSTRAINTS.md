@@ -7,7 +7,7 @@
 
 ## Purpose
 
-Use this file only when running the evaluation build through Manus.
+Use this file only when using Manus for bounded sandbox implementation tasks.
 
 The goal is to spend Manus-specific generation capacity on assets that most improve our ability to judge the **feel of the complete game**, while keeping the implementation architecture independent of any one provider.
 
@@ -105,7 +105,7 @@ Prefer:
 
 Avoid making every state of a location a completely new flattened image.
 
-The evaluation build may use flattened images when necessary for speed, but gameplay code must not depend on a specific flattened composition.
+The sandbox build may use flattened images when necessary for speed, but gameplay code must not depend on a specific flattened composition.
 
 ## Video Budget Strategy
 
@@ -151,7 +151,7 @@ Before generating media for the day:
 
 A failed or mediocre generation still consumes scarce production time and potentially quota.
 
-Do not repeatedly regenerate an asset for polish during the evaluation build.
+Do not repeatedly regenerate an asset for polish during the sandbox build.
 
 If an image is:
 - readable,
