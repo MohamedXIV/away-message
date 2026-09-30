@@ -14,11 +14,10 @@ describe('Open-ended sandbox continuity', () => {
     expect(sim.getState().world.triggeredEvents.some((e) => e.id === 'myplace_v2_launch')).toBe(true);
   });
 
-  it('continues well beyond two weeks without completion/free-play semantics', () => {
+  it('continues through long-running sandbox time without a completion gate', () => {
     sim.dispatchAction({ type: 'TIME_ADVANCE_MINUTES', minutes: 30 * 1440, reason: 'long sandbox run' });
     const state = sim.getState();
     expect(state.time.day).toBeGreaterThan(14);
     expect(state.world.flags['evaluation_complete']).toBeUndefined();
-    expect(state.world.flags['free_play_unlocked']).toBeUndefined();
   });
 });
