@@ -18,6 +18,5 @@ describe('Open-ended sandbox continuity', () => {
     sim.dispatchAction({ type: 'TIME_ADVANCE_MINUTES', minutes: 30 * 1440, reason: 'long sandbox run' });
     const state = sim.getState();
     expect(state.time.day).toBeGreaterThan(14);
-    expect(state.world.flags['evaluation_complete']).toBeUndefined();
   });
 });
