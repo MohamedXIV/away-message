@@ -72,6 +72,24 @@ describe('Pulse Conference Multi-Reply', () => {
     expect(participants).not.toContain(seedHolder.id);
   });
 
+  it('excludes gone or blocked authored seed participants from live room membership', () => {
+    const sim = new SimulationEngine();
+    const room = PULSE_ROOMS.find((r) => r.id === 'orion-lounge')!;
+    const seedId = room.participantIds[0];
+    expect(seedId).toBeTruthy();
+    if (!seedId) return;
+
+    const goneRoster = sim.social.getBuddies().map((buddy) =>
+      buddy.id === seedId ? { ...buddy, status: 'gone' as const } : buddy,
+    );
+    expect(resolvePulseRoomParticipantIds(room, goneRoster)).not.toContain(seedId);
+
+    const blockedRoster = sim.social.getBuddies().map((buddy) =>
+      buddy.id === seedId ? { ...buddy, status: 'blocked' as const } : buddy,
+    );
+    expect(resolvePulseRoomParticipantIds(room, blockedRoster)).not.toContain(seedId);
+  });
+
   it('handles empty participantIds gracefully', () => {
     expect(getRoomResponderSequence('unknown-room', [], 0, 'hello')).toEqual([]);
   });
