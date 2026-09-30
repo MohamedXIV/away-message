@@ -22,7 +22,6 @@ import { buildConversationSummary } from '../apps/pulse/utils/conversationMemory
 import { useReplySuggestions } from '../apps/pulse/hooks/useReplySuggestions';
 import { ReplyChips } from '../apps/pulse/components/ReplyChips';
 import { toneSuggestion } from '../engine/PlayerActs';
-import { CORE_BUDDIES } from '../engine/coreBuddies';
 
 interface CafeTurn {
   id: number;
@@ -47,7 +46,7 @@ function defaultCafeBuddyId(engine: { social: { getBuddies(): Array<{ id: string
       best = b;
     }
   }
-  return best?.id ?? CORE_BUDDIES[0]?.id ?? '';
+  return best?.id ?? '';
 }
 
 export function toneToExpression(tone: string | undefined, fallback: CafeExpression): CafeExpression {
