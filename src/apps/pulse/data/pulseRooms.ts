@@ -1,4 +1,4 @@
-import { buddyWithRole } from '../../../engine/coreBuddies';
+import { seedCharacterWithRole } from '../../../engine/seedCharacters';
 
 export interface PulseRoom {
   id: string;
@@ -11,7 +11,7 @@ export interface PulseRoom {
 }
 
 function actorForRole(role: string): string | null {
-  return buddyWithRole(role)?.id ?? null;
+  return seedCharacterWithRole(role)?.id ?? null;
 }
 
 function roleIds(...roles: string[]): string[] {
