@@ -79,7 +79,7 @@ export const WINDOW_THOUGHTS: WindowThought[] = [
   {
     id: 'settled_rhythm',
     minDay: 13,
-    text: 'Time settles into a rhythm in this room. The desk is covered in CD jewel cases, notes, and receipts. The hum of the computer fan has become as natural as breathing. Whatever comes next, you found a way to bridge both worlds.',
+    text: 'Time settles into a rhythm in this room. The desk is covered in CD jewel cases, notes, and receipts. The hum of the computer fan has become as natural as breathing. The two halves of your life are starting to feel connected.',
     mood: 'hopeful',
   },
   {
