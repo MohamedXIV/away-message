@@ -1,4 +1,4 @@
-# Content Data and Ink Integration
+# Content Data and Governed Narrative Integration
 
 ## 1. Content philosophy
 
@@ -10,7 +10,7 @@ Game content should be data-driven enough that adding:
 - an observation,
 does not require editing unrelated UI logic.
 
-Do not make the evaluation build a forest of one-off hardcoded components.
+Do not make the sandbox build a forest of one-off hardcoded components.
 
 ---
 
@@ -160,158 +160,85 @@ Avoid embedding arbitrary JavaScript strings in content.
 
 ---
 
-## 9. Ink build pipeline
+## 9. Governed narrative/content pipeline
 
-Source:
+Narrative-facing content is optional sandbox content, not a required campaign script.
 
-```text
-narrative/*.ink
+Authorable definitions may describe:
+- characters and roles;
+- dialogue pools/persona hints;
+- world events;
+- knowledge/disclosure constraints;
+- semantic interaction options;
+- optional local story/event templates.
+
+Generated or authored text must never become a second database for simulation truth.
+
+## 10. Narrative variable policy
+
+Narrative surfaces read approved projections from simulation.
+
+Prefer generic actor/state lookups:
+
+```
+relationship(actorId, "trust")
+actor_has_role(actorId, "diner-staff")
+player_knows(placeId)
+world_flag("festival_active")
 ```
 
-Build-time:
-- compile Ink to JSON using a compatible Ink compiler
-- validate compilation
-- place compiled JSON under `src/narrative/compiled/` or equivalent
+Do not create special variables such as `mayaTrust` or other fixed-cast fields.
 
-Runtime:
-- inkjs loads compiled story
-- game sets approved external/context variables
-- player advances story/choices
-- adapter reads output lines and tags
-- validated semantic tags become simulation actions
+## 11. Semantic effects
 
----
+Text/content may request only validated semantic actions, for example:
 
-## 10. Ink variable policy
-
-Ink may contain narrative-local variables.
-
-Authoritative game-state values should be injected/read through the adapter.
-
-Avoid maintaining duplicate mutable truth such as:
-
-```text
-Ink: mayaTrust = 4
-Simulation: mayaTrust = 7
+```
+# effect:appointment_offer:<actorId>:<placeId>
+# effect:discover_place:<placeId>
+# effect:discover_site:<siteId>
+# social:<actorId>:empathy
 ```
 
-Relationship truth belongs in simulation.
-
-Ink can receive:
-`maya_trust_band = "medium"`
-
-or a numeric read-only value for conditions.
-
----
-
-## 11. Narrative effects
-
-Use tags or a controlled bridge.
-
-Example Ink output:
-
-```text
-Maya: maybe we could grab coffee saturday
-# beat:maya_invite
-# effect:appointment_offer:maya:cafe
-```
-
-The adapter parses and validates the effect.
-
-The simulation decides:
-- whether it is legal,
-- what state to change,
-- what appointment record to create.
-
-Ink does not directly mutate arbitrary game objects.
-
----
+Owning domain systems validate and commit the actual result.
 
 ## 12. Social-action tags
 
-Example:
+Social tags target the actor involved in the current interaction, not a sacred named NPC.
 
-```text
-# social:maya:empathy
-# social:maya:tease
-# social:maya:dismiss
-# social:maya:remembered_detail
 ```
-
-The relationship system applies tuned effects.
-
-This keeps narrative writing semantic and balance centralized.
-
----
+# social:<actorId>:empathy
+# social:<actorId>:tease_playful
+# social:<actorId>:dismissive
+# social:<actorId>:remembered_detail
+```
 
 ## 13. Narrative organization
 
-Recommended:
+Organize optional content by capability, place, event, archetype or reusable interaction template where practical.
 
-```text
-narrative/
-  main.ink
+Avoid directory/file layouts that imply a fixed mandatory cast or linear day-by-day campaign.
 
-  characters/
-    ryan.ink
-    maya.ink
-    nora.ink
-
-  arcs/
-    opening.ink
-    software.ink
-    meeting.ink
-    strange-thread.ink
-    ending.ink
-
-  ambient/
-    work.ink
-    window.ink
-```
-
-Keep files focused and grep-friendly.
-
----
-
-## 14. Ink testing
+## 14. Narrative testing
 
 Test:
-- all included Ink compiles,
-- named knots/stitches exist,
-- critical beats are reachable under canonical states,
-- forbidden early reveal flags are not present,
-- ending can be reached from more than one reasonable progression state.
+- knowledge safety;
+- semantic effect validation;
+- actor-agnostic role/capability resolution;
+- deterministic consequence ownership;
+- provider failure/fallback behavior;
+- save/reload of relevant social/world state.
 
----
+Do not test that every save follows the same named-character arc.
 
 ## 15. Content validation command
 
-The project should expose one development command that validates:
-
-- Zod content schemas,
-- duplicate IDs,
-- missing references,
-- Ink compilation,
-- required websites,
-- required software,
-- critical location asset references.
-
-Exact command name is implementation choice.
-
----
+Content validation/codegen remains mandatory where authorable data is involved. Invalid cross-references should fail before runtime.
 
 ## 16. Content is replaceable
 
-Final art, names, and many lines can change later.
+The architecture must tolerate content replacement.
 
-Stable IDs should be semantic and not tied to filenames.
+A character can be renamed, replaced or removed. A place can be promoted from light to rich presentation. A website or job can disappear. These changes must not require rewriting unrelated engines.
 
-Good:
-`char.maya`
-`software.pulse.5`
-`location.cafe`
-
-Bad:
-`pretty_girl_final2`
-`app7`
-`bg_new_new`
+The old fixed 14-day/fixed-cast experiment has no authority over current content design.
