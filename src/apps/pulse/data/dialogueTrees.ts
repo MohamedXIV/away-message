@@ -32,9 +32,8 @@ function knotToScript(knot: StoryKnot): NpcDialogueScript {
 /**
  * Optional authored dialogue scripts only.
  *
- * The old named Day-1 compatibility intros were removed with the retired
- * fixed-cast campaign. Runtime content may register actor-specific scripts,
- * but no named actor or day-by-day story is built into the product.
+ * Runtime content may register actor-specific scripts, but no named actor or
+ * day-by-day story is built into the product.
  */
 export const DIALOGUE_SCRIPTS: NpcDialogueScript[] = ALL_STORY_KNOTS.map(knotToScript);
 
