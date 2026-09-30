@@ -15,7 +15,7 @@ export interface DayWeather {
 }
 
 /** Hand-authored repeating Oakhaven weather pattern (canal town in late August: mostly grey, sometimes hot). */
-const CYCLE: WeatherCondition[] = [
+const WEATHER_PATTERN: WeatherCondition[] = [
   'overcast', 'rain', 'rain', 'drizzle', 'overcast', 'fog', 'clear',
   'rain', 'overcast', 'heat', 'drizzle', 'rain', 'fog', 'clear',
 ];
@@ -40,7 +40,7 @@ function hashDay(day: number): number {
 export function getWeatherForDay(rawDay: number): DayWeather {
   const day = Math.max(1, Math.floor(rawDay) || 1);
   // Monthly-ish storm front (days 15, 30, 45...) — the one dramatic exception
-  const condition: WeatherCondition = day % 15 === 0 ? 'storm' : CYCLE[(day - 1) % CYCLE.length]!;
+  const condition: WeatherCondition = day % 15 === 0 ? 'storm' : WEATHER_PATTERN[(day - 1) % WEATHER_PATTERN.length]!;
   const meta = CONDITION_META[condition];
   const jitter = (hashDay(day) % 5) - 2;
   return { day, condition, label: meta.label, icon: meta.icon, highF: meta.highF + jitter, lowF: meta.lowF };
