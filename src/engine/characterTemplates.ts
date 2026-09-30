@@ -736,7 +736,7 @@ export const GIG_WRAP_LINES: string[] = [
   'good work today. {detail} — you earned every cent of that pay.',
   'shift done, and honestly? you were great. {detail} — come back anytime.',
 ];
-/** Archive-night wrap-ups (Nora-flavoured, used for archive meetings that happen). */
+/** Archive-night wrap-ups for quiet/observant archive meetings. */
 export const ARCHIVE_WRAP_LINES: string[] = [
   'productive night. {detail} — filing it under unsolved. thanks for the hands.',
   'found something. {detail} — you have good eyes for this.',
@@ -943,29 +943,29 @@ export function pickMailWelcome(seed: string): string {
 // P6.3 — OUTING ENCOUNTER LINES (sent on chance meetings out in the city)
 // ==========================================
 
-/** Maya spots you at the diner during her shift. */
-export const OUTING_MAYA_LINES: string[] = [
+/** Warm/open outing encounter lines. */
+export const OUTING_WARM_LINES: string[] = [
   'hey!! you came to the diner?? shouldve told me, i wouldve saved you the good booth lol',
   'omg hi!! on my break in like ten — dont you dare leave before i sit down',
   'you have great timing, slow hour. sit, i will bring you coffee on the house ~',
 ];
-/** Nora crosses paths with you on the late canal walk. */
-export const OUTING_NORA_LINES: string[] = [
+/** Reserved/observant outing encounter lines. */
+export const OUTING_RESERVED_LINES: string[] = [
   'oh. it is you. walking the canal too? the hum is louder tonight.',
   'couldnt sleep either? walk with me a bit. i found something weird upstream.',
   'hey. good night for it — quiet water, loud wires. stay a while?',
 ];
 
-export function pickOutingMayaLine(seed: string): string {
-  return pickFromPool(OUTING_MAYA_LINES, `${seed}:outingmaya`);
+export function pickOutingWarmLine(seed: string): string {
+  return pickFromPool(OUTING_WARM_LINES, `${seed}:outingwarm`);
 }
 
-export function pickOutingNoraLine(seed: string): string {
-  return pickFromPool(OUTING_NORA_LINES, `${seed}:outingnora`);
+export function pickOutingReservedLine(seed: string): string {
+  return pickFromPool(OUTING_RESERVED_LINES, `${seed}:outingreserved`);
 }
 
 // ==========================================
-// P6.4 — RENT LADDER LINES (Henderson: formal, escalating, never cruel)
+// P6.4 — RENT LADDER LINES (property-management voice: formal, escalating, never cruel)
 // ==========================================
 
 /** Gentle reminder two days before rent is due. */
