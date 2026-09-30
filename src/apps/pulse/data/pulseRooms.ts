@@ -85,8 +85,14 @@ export function getPulseRoom(roomId: string): PulseRoom | undefined {
 }
 
 export function resolvePulseRoomParticipantIds(room: PulseRoom, buddies: BuddyCharacter[]): string[] {
-  const liveIds = new Set(buddies.map((buddy) => buddy.id));
-  const resolved = new Set(room.participantIds.filter((id) => liveIds.has(id)));
+  const liveById = new Map(buddies.map((buddy) => [buddy.id, buddy] as const));
+  const resolved = new Set<string>();
+
+  for (const id of room.participantIds) {
+    const buddy = liveById.get(id);
+    if (!buddy || buddy.status === 'gone' || buddy.status === 'blocked') continue;
+    resolved.add(id);
+  }
 
   for (const buddy of buddies) {
     if (buddy.status === 'gone' || buddy.status === 'blocked') continue;
