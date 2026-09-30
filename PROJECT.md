@@ -74,7 +74,7 @@ Online AI enriches surface dialogue and generated content; deterministic rules r
 | 36 | 2D Layered Room & Desk Environment | Phaser/Canvas 2D room (8 layers, 5 time-of-day phases, weather overlays, persistent street entities) | M4 | docs/02 |
 | 37 | Physical Living-Space Interactables | PC/work surfaces, sleep/rest, food/drink, observation, storage and exits driven by current residence capabilities | M4 | docs/01, 02 |
 | 38 | In-Person Social Encounters | Optional actor-agnostic meetings that arise from truthful location, schedule, relationship and knowledge state | M4 | docs/00, 04 |
-| 39 | Sandbox Milestones & Telemetry | Optional diagnostics/milestones without a canonical ending or final day | M4 | docs/00, 07 |
+| 39 | Sandbox Milestones & Telemetry | Optional local diagnostics and systemic milestones for ongoing saves | M4 | docs/00, 07 |
 | 40 | E2E Playwright Suite (Tiers 1-4) | Automated coverage for features, boundaries, combinations and long-running sandbox continuity | E2E Track | docs/06, 07 |
 | 41 | Vitest Domain Unit/Integration Suites | 100% pure TS unit test coverage across clock, downloads, VFS, economy, schedules, persistence | E2E Track | docs/06, 07 |
 | 42 | Tier 5 Adversarial Coverage Hardening | White-box stress tests, chaos injection, memory leak checks, security audit | M5 | docs/07 |
