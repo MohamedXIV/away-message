@@ -37,6 +37,53 @@ function knotToScript(knot: StoryKnot): NpcDialogueScript {
  */
 export const DIALOGUE_SCRIPTS: NpcDialogueScript[] = ALL_STORY_KNOTS.map(knotToScript);
 
+/**
+ * Validate a dialogue graph independently of whether production ships any
+ * authored scripts. An empty list is valid; malformed entries and dangling
+ * branch targets are not.
+ */
+export function validateDialogueScripts(scripts: readonly NpcDialogueScript[]): string[] {
+  const errors: string[] = [];
+  const ids = new Set<string>();
+
+  scripts.forEach((script, scriptIndex) => {
+    const at = `script[${scriptIndex}]`;
+    if (!script.id?.trim()) {
+      errors.push(`${at}.id must be non-empty`);
+    } else if (ids.has(script.id)) {
+      errors.push(`${at}.id duplicates '${script.id}'`);
+    } else {
+      ids.add(script.id);
+    }
+
+    if (!script.buddyId?.trim()) errors.push(`${at}.buddyId must be non-empty`);
+    if (!Array.isArray(script.messages) || script.messages.length === 0) {
+      errors.push(`${at}.messages must contain at least one message`);
+    } else {
+      script.messages.forEach((message, messageIndex) => {
+        if (!message.text?.trim()) errors.push(`${at}.messages[${messageIndex}].text must be non-empty`);
+      });
+    }
+
+    script.playerChoices?.forEach((choice, choiceIndex) => {
+      const choiceAt = `${at}.playerChoices[${choiceIndex}]`;
+      if (!choice.id?.trim()) errors.push(`${choiceAt}.id must be non-empty`);
+      if (!choice.text?.trim()) errors.push(`${choiceAt}.text must be non-empty`);
+      if (!choice.socialAction) errors.push(`${choiceAt}.socialAction must be set`);
+    });
+  });
+
+  scripts.forEach((script, scriptIndex) => {
+    script.playerChoices?.forEach((choice, choiceIndex) => {
+      if (choice.nextScriptId && !ids.has(choice.nextScriptId)) {
+        errors.push(`script[${scriptIndex}].playerChoices[${choiceIndex}].nextScriptId '${choice.nextScriptId}' does not exist`);
+      }
+    });
+  });
+
+  return errors;
+}
+
 export function findDialogueScript(id: string): NpcDialogueScript | undefined {
   return DIALOGUE_SCRIPTS.find((script) => script.id === id);
 }
