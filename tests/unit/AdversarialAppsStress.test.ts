@@ -771,23 +771,9 @@ describe('Adversarial Stress Test Suite — Pulse Messenger & Ecosystem Applicat
     it('validates Pulse Messenger branching dialogue tree graph integrity', () => {
       expect(Array.isArray(DIALOGUE_SCRIPTS)).toBe(true);
 
-      const testScripts = DIALOGUE_SCRIPTS.length > 0 ? DIALOGUE_SCRIPTS : [
-        {
-          id: 'test_node_1',
-          buddyId: 'test_buddy',
-          messages: [{ text: 'Hello!' }],
-          playerChoices: [{ id: 'c1', text: 'Hi', socialAction: 'empathy' as const, nextScriptId: 'test_node_2' }],
-        },
-        {
-          id: 'test_node_2',
-          buddyId: 'test_buddy',
-          messages: [{ text: 'How are you?' }],
-        },
-      ];
+      const allScriptIds = new Set(DIALOGUE_SCRIPTS.map((s) => s.id));
 
-      const allScriptIds = new Set(testScripts.map((s) => s.id));
-
-      testScripts.forEach((script) => {
+      DIALOGUE_SCRIPTS.forEach((script) => {
         expect(script.id).toBeTruthy();
         expect(script.buddyId).toBeTruthy();
         expect(script.messages.length).toBeGreaterThan(0);
