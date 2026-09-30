@@ -1,6 +1,7 @@
 import type { PulseRoomMessage } from './components/PulseRoomWindow';
 import type { PulseActivityEntry } from './types';
 import { PULSE_GROUPS, PULSE_ROOMS } from './data/pulseRooms';
+import { SEED_BY_ID } from '../../engine/seedCharacters';
 import { db } from '../../persistence/db';
 import { APP_VERSION } from '../../version';
 
@@ -225,11 +226,10 @@ export interface PulsePersistedState {
 }
 
 function makeSeedMessages(): Record<string, PulseRoomMessage[]> {
-  const names: Record<string, string> = { maya: 'Maya', ryan: 'Ryan', nora: 'Nora', henderson: 'Mr. Henderson' };
   return Object.fromEntries(PULSE_ROOMS.map((room) => [room.id, room.seedMessages.map((message, index) => ({
     id: `${room.id}-seed-${index}`,
     senderId: message.senderId,
-    senderName: names[message.senderId] || message.senderId,
+    senderName: SEED_BY_ID[message.senderId]?.displayName || message.senderId,
     text: message.text,
     minute: message.minute,
   }))]));
