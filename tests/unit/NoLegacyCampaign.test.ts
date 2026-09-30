@@ -5,13 +5,16 @@ import { join, relative } from 'node:path';
 const ROOT = process.cwd();
 const SCAN_ROOTS = [
   'AGENTS.md',
+  'AI_LAB.md',
   'PROJECT.md',
+  'TEST_INFRA.md',
   'index.html',
   'src',
   'tests',
   'docs',
   'content',
   'scripts',
+  'tools',
   'tools',
   'AI_LAB.md',
   'TEST_INFRA.md',
