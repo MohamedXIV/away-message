@@ -15,6 +15,7 @@ const SCAN_ROOTS = [
   'tools',
   'AI_LAB.md',
   'TEST_INFRA.md',
+  'CHANGELOG.md',
 ];
 
 const TEXT_EXTENSIONS = new Set(['.md', '.ts', '.tsx', '.js', '.jsx', '.mjs', '.json', '.html']);
