@@ -22,6 +22,7 @@ import { SocialEngine } from './SocialEngine';
 import { TelemetryEngine } from './TelemetryEngine';
 import { WorldEventsEngine } from './WorldEventsEngine';
 import { EnvironmentEngine } from './EnvironmentEngine';
+import { MoodEngine, type MoodContext } from './MoodEngine';
 import { totalDeliveryBacklogExtra } from './WorldModifiers';
 import { OsEngine } from './OsEngine';
 import { PulseEngine } from './PulseEngine';
@@ -68,6 +69,7 @@ export class SimulationEngine {
   public readonly telemetry!: TelemetryEngine;
   public readonly world!: WorldEventsEngine;
   public readonly environment!: EnvironmentEngine;
+  public readonly mood!: MoodEngine;
 
   private activeView: 'pc' | 'room' | 'cafe' | 'work' | 'city' = 'room';
   private subscribers: Set<(state: Readonly<SimulationState>) => void> = new Set();
@@ -98,6 +100,11 @@ export class SimulationEngine {
       this.events,
       this.world,
       () => this.clock.getTotalMinutes(),
+    );
+    this.mood = new MoodEngine(
+      this.events,
+      (initialState as any)?.mood,
+      () => this.buildMoodContext(),
     );
     // OsEngine is core — sync with hardware osVersion
     const osInitial = (initialState as any)?.os ?? { currentOsId: initialState?.hardware?.osVersion };
@@ -149,7 +156,28 @@ export class SimulationEngine {
     this.registerInternalEventHandlers();
   }
 
+  private buildMoodContext(): MoodContext {
+    const finance = this.economy.getState();
+    return {
+      atMinute: this.clock.getTotalMinutes(),
+      needs: this.needs.getSnapshot(),
+      environment: this.environment.getCurrentSnapshot(),
+      finance: {
+        cash: finance.cash,
+        rentDueDay: finance.rentDueDay,
+        rentAmount: finance.rentAmount,
+        rentPaid: finance.rentPaid,
+        currentDay: this.clock.getTime().day,
+      },
+    };
+  }
+
   private registerInternalEventHandlers(): void {
+    this.events.on('mood:changed', () => {
+      this._stateVersion++;
+      this._cachedState = null;
+    });
+
     this.events.on('time:day_changed', ({ newDay }) => {
       this.economy.handleDayTransition(newDay);
       const needsDay = this.needs.handleDayTransition();
@@ -227,6 +255,8 @@ export class SimulationEngine {
   }
 
   public getState(): Readonly<SimulationState> {
+    // Mood context is derived, so reconcile before consulting the state cache.
+    this.mood.publishIfChanged();
     // Cheap cache: if version hasn't changed, return same object reference to keep getSnapshot stable
     if (this._cachedState && this._cachedStateVersion === this._stateVersion) {
       return this._cachedState;
@@ -260,6 +290,7 @@ export class SimulationEngine {
       time: this.clock.getTime(),
       player: this.economy.getState(),
       needs: this.needs.getState(),
+      mood: this.mood.getState(),
       hardware: this.hardware.getState(),
       os: osState,
       pulse: pulseState,
@@ -2573,6 +2604,7 @@ export class SimulationEngine {
     this.clock.setTotalMinutes(snapshot.time.totalMinutes);
     this.needs.loadState((snapshot as any).needs ?? snapshot.player);
     this.economy.loadState(snapshot.player);
+    this.mood.loadState((snapshot as any).mood);
     this.hardware.loadState(snapshot.hardware);
     // OsEngine — load from dedicated os field or fallback to hardware osVersion
     const osSrc = (snapshot as any).os ?? { currentOsId: (snapshot as any).hardware?.osVersion };
