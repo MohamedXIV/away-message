@@ -2,10 +2,12 @@
 // Starlight Café — optional in-person sandbox conversation with whichever local
 // actor is selected. Uses the same governed relationship/memory/world inputs as Pulse.
 
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useSimulationStore } from '../store/useSimulationStore';
 import { soundManager } from '../audio/SoundManager';
-import { CafeCanvasRenderer } from './CafeCanvas';
+import { PhysicalWorldHost } from './phaser/PhysicalWorldHost';
+import { createWorldSceneProjection } from './phaser/presentationAdapter';
+import { GENERATED_VENUE_SERVICES } from '../engine/worldContent.generated';
 import { CafeExpression } from './types';
 import { Coffee, Clock, ArrowRight, Send } from 'lucide-react';
 import { aiService } from '../ai/service';
@@ -59,8 +61,6 @@ export function toneToExpression(tone: string | undefined, fallback: CafeExpress
 }
 
 export const CafeScene: React.FC<{ buddyId?: string }> = ({ buddyId: propBuddyId }) => {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const rendererRef = useRef<CafeCanvasRenderer | null>(null);
   const historyRef = useRef<HTMLDivElement>(null);
   const turnId = useRef(0);
 
@@ -73,6 +73,7 @@ export const CafeScene: React.FC<{ buddyId?: string }> = ({ buddyId: propBuddyId
   const spendCash = useSimulationStore((s) => s.spendCash);
   const advanceTime = useSimulationStore((s) => s.advanceTime);
   const applySocialAction = useSimulationStore((s) => s.applySocialAction);
+  useSimulationStore((s) => s.state.world.triggeredEvents);
 
   const buddy = buddyId ? engine.social.getBuddy(buddyId) : undefined;
   const buddyName = buddy?.displayName || buddyId;
@@ -90,34 +91,34 @@ export const CafeScene: React.FC<{ buddyId?: string }> = ({ buddyId: propBuddyId
 
   const { suggestions, loading: suggestionsLoading, refresh: refreshSuggestions } = useReplySuggestions();
 
-  // Initialize and mount Canvas Renderer
-  useEffect(() => {
-    if (!canvasRef.current) return;
-
-    const canvas = canvasRef.current;
-    // Hi-DPI backing store (relative-space drawing — sharpen only, never stretch)
-    canvas.width = 1600;
-    canvas.height = 900;
-
-    const renderer = new CafeCanvasRenderer({
-      canvas,
-      expression: currentExpression,
-    });
-    rendererRef.current = renderer;
-
-    return () => {
-      renderer.destroy();
-      rendererRef.current = null;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // Update expression on canvas when it changes
-  useEffect(() => {
-    if (rendererRef.current) {
-      rendererRef.current.setExpression(currentExpression);
-    }
-  }, [currentExpression]);
+  const cafeService = GENERATED_VENUE_SERVICES.find((service) => service.tags.includes('cafe'));
+  if (!cafeService) throw new Error('Generated world has no authored café venue service.');
+  const cafeEnvironment = engine.gameContext.environment.current();
+  const cafeProjection = useMemo(
+    () => createWorldSceneProjection({
+      placeId: cafeService.placeId,
+      timeOfDay: time.timeOfDay,
+      minuteOfDay: time.hour * 60 + time.minute,
+      environment: cafeEnvironment,
+      isInterior: true,
+      actorByAnchorId: buddyId
+        ? { fixture_cafe_customer_anchor: buddyId }
+        : {},
+    }),
+    [
+      cafeService.placeId,
+      buddyId,
+      time.timeOfDay,
+      time.hour,
+      time.minute,
+      cafeEnvironment.atMinute,
+      cafeEnvironment.weather.condition,
+      cafeEnvironment.weather.precipitation,
+      cafeEnvironment.weather.wind,
+      cafeEnvironment.weather.visibility,
+      cafeEnvironment.sourceEventIds.join('|'),
+    ],
+  );
 
   // Typewriter effect on the latest guest turn
   const latestBuddyText = [...turns].reverse().find((turn) => turn.speaker === 'buddy')?.text ?? '';
@@ -316,14 +317,15 @@ export const CafeScene: React.FC<{ buddyId?: string }> = ({ buddyId: propBuddyId
         </div>
       </div>
 
-      {/* Main Canvas View */}
-      <div className="flex-1 relative flex items-center justify-center p-2 bg-black overflow-hidden min-h-0">
-        <canvas
-          ref={canvasRef}
-          className="max-w-full max-h-full aspect-[16/9] shadow-2xl object-contain border border-amber-900/60 rounded"
+      {/* Canonical authored physical-world renderer; dialogue remains a React overlay. */}
+      <div className="flex-1 relative bg-black overflow-hidden min-h-0">
+        <PhysicalWorldHost
+          projection={cafeProjection}
+          visualMode="production"
+          className="w-full h-full"
         />
 
-        {/* Floating Expression Badge */}
+        {/* Floating semantic expression badge until authored puppet assets replace the generic venue projection. */}
         <div className="absolute top-4 left-6 bg-slate-900/80 border border-amber-500/40 px-3 py-1 rounded-full text-xs text-amber-300 flex items-center gap-1.5 shadow-lg backdrop-blur-sm">
           <span className="capitalize">{buddyName}: {currentExpression}</span>
         </div>
