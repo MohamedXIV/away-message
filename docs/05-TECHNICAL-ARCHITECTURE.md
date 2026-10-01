@@ -97,6 +97,57 @@ Persistence
 
 ---
 
+## 3A. Active Environment / Needs / Mood authority correction
+
+Issues #128–#132 intentionally refine the current simulation boundaries before more apps and physical-world features depend on them.
+
+Canonical design: `12-ENVIRONMENT-PLAYER-NEEDS-AND-MOOD.md`.
+
+Execution roadmap: `docs/superpowers/plans/2026-10-01-environment-needs-mood-foundation.md`.
+
+Target flow:
+
+```text
+GameClock ─────────────────────────────────────────────┐
+                                                      │
+base climate/weather ────────┐                        │
+                             ▼                        │
+WorldEventsEngine ──> typed modifiers ──> EnvironmentEngine
+                                          │
+                                          └─ semantic snapshot / forecast
+
+Finance authority            PlayerNeedsEngine
+  money/rent/bills             energy/fatigue/hunger
+  wages/payments               health/sleep/social battery
+             \                /
+              \              /
+               Simulation orchestration
+                         │
+                         ▼
+                     MoodEngine
+                         │
+                  semantic snapshot
+                         │
+                stable Game Context reads
+                         │
+           apps / Phaser / audio / Inner Voice
+```
+
+Architecture rules:
+
+- Environment is the only canonical resolved weather/environment truth. Existing day-based Weather helpers become internal provider/migration material rather than a public authority that every consumer imports.
+- `WorldEventsEngine` publishes typed bounded environment modifiers with provenance; it does not mutate Phaser or Environment state directly.
+- Phaser's `EnvironmentManager` remains presentation-only. Puddles/particles/lightning/ambient motion may be transient renderer state, but canonical precipitation/wind/visibility/condition come from simulation.
+- Current `EconomyEngine` ownership of both finance and body/social-resource state is a migration seam. Target ownership separates Finance from Player Needs.
+- Mood is independent from Needs, Finance, relationships and presentation. Contextual influences reconcile instead of stacking per tick; transient effects use semantic kinds, provenance and deterministic expiry/decay.
+- Cross-domain actions are coordinated by Simulation/application orchestration. A work shift may cause both payment and fatigue without Finance owning fatigue.
+- Stable Game Context reads prevent WeatherBuddy, UI, audio, Phaser, Inner Voice or Life Matrix from depending on implementation classes or re-deriving thresholds.
+- Before save-compatibility freeze, prefer correct current-format ownership over historical development-save shims.
+
+The exact filenames/classes may change during implementation. These ownership boundaries are the requirement.
+
+---
+
 ## 4. Golden rule
 
 > **Simulation never imports React, Phaser, or Ink runtime UI code.**
@@ -214,7 +265,10 @@ src/
     CharacterEngine.ts
     CharacterDirector.ts
     AppointmentDirector.ts
-    WeatherEngine.ts
+    WeatherEngine.ts          # current base-weather/migration input during #129
+    EnvironmentEngine.ts      # target authoritative resolved environment owner (#129)
+    PlayerNeedsEngine.ts      # target physiological/social-resource owner (#130)
+    MoodEngine.ts             # target affect owner (#131)
     WorldEventsEngine.ts
     ...
 
