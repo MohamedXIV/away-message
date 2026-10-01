@@ -1585,7 +1585,7 @@ export class SimulationEngine {
   // the laundromat returns a rumor in the action result (UI notice).
   // ==========================================
 
-  private static isBuddyAvailable(buddy: { status?: string } | undefined): boolean {
+  private static isBuddyAvailable<T extends { status?: string }>(buddy: T | undefined): buddy is T {
     return !!buddy && buddy.status !== 'distant' && buddy.status !== 'gone' && buddy.status !== 'blocked';
   }
 
