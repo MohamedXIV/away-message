@@ -1,8 +1,8 @@
 import { getNpcStyle, getNpcMoodLabel, getNpcAvailabilityLabel, getNpcActivityLabel } from '../data/npcStyles';
 import { CHARACTER_ARCHETYPES } from '../../../engine/characterTemplates';
 import type { BuddyCharacter, BuddyPresence, RelationshipDimensions } from '../../../engine/types';
+import type { GameContextReadApi } from '../../../engine/GameContext';
 import { buildBodyHint } from '../../../engine/BodyDirector';
-import { weatherLineForDay } from '../../../engine/WeatherEngine';
 import {
   extractFactsFromPlayerMessage,
   extractPromisesFromPlayerMessage,
@@ -68,7 +68,7 @@ export interface ChatEngine {
     getKnowledgeContext?(day: number): string;
   };
   clock?: { getTime(): { day: number } };
-  economy?: { getState(): { energy: number; hunger?: number; health?: number; sleepDebt?: number } };
+  gameContext?: GameContextReadApi;
 }
 
 /** The four Pulse memory stores every chat turn reads and writes. */
@@ -219,20 +219,23 @@ export function buildDmChatContext(input: DmContextInput): DmChatContext {
   const relationship = engine.social.getRelationships(buddyId);
   const presence = engine.social.getPresence(buddyId);
   const gameHour = Math.floor((totalMinutes % 1440) / 60);
-  let playerEnergy = 80;
   let bodyHint = '';
   try {
-    const playerState = engine.economy?.getState();
-    playerEnergy = playerState?.energy ?? 80;
-    bodyHint = buildBodyHint({
-      energy: playerState?.energy ?? 80,
-      hunger: playerState?.hunger ?? 0,
-      health: playerState?.health ?? 100,
-      sleepDebt: playerState?.sleepDebt ?? 0,
-    });
-  } catch { playerEnergy = 80; }
+    const needs = engine.gameContext?.player.needs();
+    if (needs) {
+      // NPC-facing BodyDirector turns private needs into one bounded observable cue.
+      // Exact values never enter the NPC prompt.
+      bodyHint = buildBodyHint({
+        energy: needs.energy,
+        hunger: needs.hunger,
+        health: needs.health,
+        sleepDebt: needs.sleepDebt,
+      });
+    }
+  } catch { /* body cue is best-effort */ }
   const style = getNpcStyle(buddy ?? buddyId);
-  const mood = getNpcMoodLabel(presence, relationship, gameHour, playerEnergy);
+  // Player Needs/Mood never drive private NPC state implicitly.
+  const mood = getNpcMoodLabel(presence, relationship, gameHour);
   const availability = getNpcAvailabilityLabel(presence, gameHour);
   const activity = getNpcActivityLabel(presence, buddy ?? buddyId, gameHour);
   const existingMemory = pulse.conversationMemory[buddyId] || [];
@@ -290,8 +293,16 @@ export function buildDmChatContext(input: DmContextInput): DmChatContext {
   let photoRecallHint = '';
   let weatherLine = '';
   try {
-    weatherLine = weatherLineForDay(currentDay);
-  } catch { /* weather is best-effort */ }
+    const environment = engine.gameContext?.environment.current();
+    if (environment) {
+      weatherLine = [
+        `Weather today: ${environment.weather.condition}`,
+        environment.weather.tags.length > 0
+          ? `(${environment.weather.tags.join(', ')})`
+          : '',
+      ].filter(Boolean).join(' ');
+    }
+  } catch { /* observable weather is best-effort */ }
   try {
     relationshipStage = engine.social.getRelationshipStage(buddyId);
     dailyMood = engine.social.getDailyMood(buddyId, currentDay);
