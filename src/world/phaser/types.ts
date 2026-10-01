@@ -7,6 +7,7 @@ import type { PuddleZoneDef } from './environment/puddles';
 import type { AmbientMotionDef } from './environment/ambientMotion';
 import type { AuthoredLightDef } from './environment/lightingEngine';
 import type { SpatialAudioSourceDef, ListenerOrientation } from '../../audio/types';
+import type { EnvironmentSnapshot } from '../../engine/EnvironmentEngine';
 
 export interface WorldPointLightDef {
   id: string;
@@ -89,6 +90,8 @@ export interface WorldSceneProjection {
   normalMapAssetId: string | null;
   timeOfDay: TimeOfDay;
   weather: WeatherType;
+  /** Canonical semantic Environment truth. Legacy coarse weather remains presentation-only. */
+  environment?: EnvironmentSnapshot;
   lighting: WorldLightingProjection;
   particles: WorldParticleProjection;
   anchors: WorldAnchorProjection[];

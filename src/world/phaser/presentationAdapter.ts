@@ -26,6 +26,9 @@ import type { PuddleZoneDef } from './environment/puddles';
 import type { AmbientMotionDef } from './environment/ambientMotion';
 import type { AuthoredLightDef } from './environment/lightingEngine';
 import type { SpatialAudioSourceDef, ListenerOrientation } from '../../audio/types';
+import type { EnvironmentSnapshot } from '../../engine/EnvironmentEngine';
+import { projectEnvironmentPresentation } from './environment/environmentProjection';
+import { projectEnvironmentAudio } from '../../audio/environmentMapping';
 
 export interface CreateProjectionOptions {
   placeId: string;
@@ -33,6 +36,8 @@ export interface CreateProjectionOptions {
   timeOfDay?: TimeOfDay;
   minuteOfDay?: number;
   weather?: WeatherType;
+  /** Canonical environment snapshot. When supplied it owns weather/wind semantics. */
+  environment?: EnvironmentSnapshot;
   customLights?: WorldPointLightDef[];
   authoredLights?: AuthoredLightDef[];
   puddleZones?: PuddleZoneDef[];
@@ -107,6 +112,7 @@ export function getLightingForTimeOfDay(
 export function getParticlesForWeather(
   weather: WeatherType,
   isInterior = false,
+  rainIntensity = 1,
 ): WorldParticleProjection {
   switch (weather) {
     case 'rain':
@@ -116,7 +122,7 @@ export function getParticlesForWeather(
         // projections keep the weather state but leave this layer to the
         // EnvironmentManager's occlusion-aware background/window paths.
         rain: !isInterior,
-        density: 1.0,
+        density: Math.max(0, Math.min(1, rainIntensity)),
       };
     case 'cloudy':
       return {
@@ -141,9 +147,15 @@ export function getParticlesForWeather(
  * authored place-specific audio data intact.
  */
 export function getDefaultSpatialAudioSources(
-  weather: WeatherType,
+  weatherOrEnvironment: WeatherType | EnvironmentSnapshot,
   isInterior: boolean,
 ): SpatialAudioSourceDef[] {
+  const environment = typeof weatherOrEnvironment === 'string' ? null : weatherOrEnvironment;
+  const presentation = environment ? projectEnvironmentPresentation(environment) : null;
+  const audio = environment ? projectEnvironmentAudio(environment) : null;
+  const weather = presentation?.weather ?? weatherOrEnvironment as WeatherType;
+  const rainIntensity = audio?.precipitation ?? (weather === 'rain' ? 1 : 0);
+  const windIntensity = audio?.wind ?? 0;
   const sources: SpatialAudioSourceDef[] = [
     {
       id: 'environment_room_tone',
@@ -168,7 +180,8 @@ export function getDefaultSpatialAudioSources(
       volume: isInterior ? 0.25 : 0.55,
       bus: 'ambience',
       parameters: {
-        rainIntensity: isInterior ? 0.35 : 1,
+        rainIntensity: rainIntensity * (isInterior ? 0.35 : 1),
+        windIntensity: resolvedWindIntensity,
         muffled: isInterior ? 1 : 0,
       },
     });
@@ -184,7 +197,8 @@ export function createWorldSceneProjection(
     placeId,
     viewId,
     timeOfDay = 'day',
-    weather = 'clear',
+    weather: requestedWeather = 'clear',
+    environment,
     customLights = [],
     focus = null,
     minuteOfDay,
@@ -256,11 +270,22 @@ export function createWorldSceneProjection(
     neighbors: v.neighbors,
   }));
 
+  const environmentPresentation = environment
+    ? projectEnvironmentPresentation(environment)
+    : null;
+  const weather = environmentPresentation?.weather ?? requestedWeather;
+  const resolvedWindIntensity = environmentPresentation?.windIntensity ?? windIntensity;
   const effectiveMinute = minuteOfDay ?? getMinuteForTimeOfDay(timeOfDay);
   const lighting = getLightingForTimeOfDay(timeOfDay, customLights, minuteOfDay);
-  const particles = getParticlesForWeather(weather, isInterior);
+  const particles = getParticlesForWeather(
+    weather,
+    isInterior,
+    environmentPresentation?.rainIntensity ?? (weather === 'rain' ? 1 : 0),
+  );
   const resolvedSpatialAudioSources = spatialAudioSources
-    ?? (activeView ? getDefaultSpatialAudioSources(weather, isInterior) : undefined);
+    ?? (activeView
+      ? getDefaultSpatialAudioSources(environment ?? weather, isInterior)
+      : undefined);
 
   return {
     placeId,
@@ -273,6 +298,7 @@ export function createWorldSceneProjection(
     normalMapAssetId,
     timeOfDay,
     weather,
+    ...(environment ? { environment } : {}),
     lighting,
     particles,
     anchors: anchorProjections,

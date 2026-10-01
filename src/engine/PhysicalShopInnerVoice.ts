@@ -30,8 +30,8 @@ export function requestPhysicalShopArrivalThought(
 ): ThoughtIntent | null {
   const currentEnvironment = source.gameContext?.environment.current();
   const currentTime = source.gameContext?.time.current();
-  const observedWeather = currentEnvironment?.weather.condition ?? observedWeather;
-  const observedTimeOfDay = currentTime?.timeOfDay ?? observedTimeOfDay;
+  const observedWeather = currentEnvironment?.weather.condition ?? observation.weather;
+  const observedTimeOfDay = currentTime?.timeOfDay ?? observation.timeOfDay;
   const rainy = currentEnvironment
     ? currentEnvironment.weather.tags.includes('wet')
     : observedWeather === 'rain';
