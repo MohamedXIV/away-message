@@ -6,7 +6,7 @@ import {
   GENERATED_SHOP_FIXTURES,
 } from '../../engine/worldContent.generated';
 import type { TimeOfDay, WeatherType } from '../types';
-import type { EnvironmentSnapshot } from '../../engine/EnvironmentEngine';
+import type { EnvironmentSnapshot } from '../../engine/GameContext';
 import { projectEnvironmentPresentation } from './environment/environmentProjection';
 import type { AmbientMotionDef } from './environment/ambientMotion';
 import type { AuthoredLightDef } from './environment/lightingEngine';

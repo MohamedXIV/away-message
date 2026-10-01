@@ -54,3 +54,12 @@ export function createGameContextReadApi(
     }),
   });
 }
+
+export type {
+  EnvironmentContext,
+  EnvironmentForecastQuery,
+  EnvironmentQuery,
+  EnvironmentSnapshot,
+} from './EnvironmentEngine';
+export type { PlayerNeedsSnapshot } from './PlayerNeedsEngine';
+export type { MoodSnapshot } from './MoodEngine';

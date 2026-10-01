@@ -1,5 +1,5 @@
 // src/world/phaser/environment/environmentProjection.ts
-import type { EnvironmentSnapshot } from '../../../engine/EnvironmentEngine';
+import type { EnvironmentSnapshot } from '../../../engine/GameContext';
 import type { WeatherType } from '../../types';
 
 export interface EnvironmentPresentationProfile {

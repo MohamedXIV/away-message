@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useSimulationStore } from '../../store/useSimulationStore';
-import type { EnvironmentSnapshot } from '../../engine/EnvironmentEngine';
+import type { EnvironmentSnapshot } from '../../engine/GameContext';
 
 export const WeatherBuddyApp: React.FC = () => {
   const engine = useSimulationStore((s) => s.engine);

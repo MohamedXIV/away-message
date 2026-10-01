@@ -7,7 +7,7 @@ import type { PuddleZoneDef } from './environment/puddles';
 import type { AmbientMotionDef } from './environment/ambientMotion';
 import type { AuthoredLightDef } from './environment/lightingEngine';
 import type { SpatialAudioSourceDef, ListenerOrientation } from '../../audio/types';
-import type { EnvironmentSnapshot } from '../../engine/EnvironmentEngine';
+import type { EnvironmentSnapshot } from '../../engine/GameContext';
 
 export interface WorldPointLightDef {
   id: string;
