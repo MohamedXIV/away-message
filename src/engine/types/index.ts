@@ -743,6 +743,11 @@ export interface SimulationState {
   };
   activeView: 'pc' | 'room' | 'cafe' | 'work' | 'city';
   /**
+   * Canonical mutable current-home tenancy. The authored Place remains static
+   * content; this slice only says which eligible Place is currently home.
+   */
+  residence?: import('../ResidenceTenancy').ResidenceState;
+  /**
    * Player Inner Voice cooldown/notable-history (#23). Additive and optional:
    * absent in older saves (clean defaults apply), ignored by older builds.
    * No SAVE_FORMAT bump required.

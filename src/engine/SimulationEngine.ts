@@ -75,6 +75,7 @@ import {
 } from './venue/VenueOperations';
 import { GENERATED_VENUE_DEFINITIONS } from './venue/GeneratedVenueDefinitions';
 import type { SimulationState as TransportSimulationState } from './types';
+import { ResidenceTenancy, type ResidenceState } from './ResidenceTenancy';
 import {
   GENERATED_CONTAINERS,
   GENERATED_ITEMS,
@@ -83,6 +84,7 @@ import {
   GENERATED_PLACE_SERVICE_POLICIES,
   GENERATED_PLACEMENT_SLOTS,
   GENERATED_PLACES,
+  GENERATED_SPACES,
 } from './worldContent.generated';
 import {
   InnerVoiceEngine,
@@ -125,6 +127,23 @@ function resolveGeneratedPlaceId(rawId: string): string | null {
   const direct = GENERATED_PLACES.find((place) => place.id === rawId);
   if (direct) return direct.id;
   return GENERATED_PLACES.find((place) => place.legacyIds?.includes(rawId))?.id ?? null;
+}
+
+function defaultResidenceState(initialState?: InitialSimulationState): ResidenceState {
+  const authoredHomeSpace = GENERATED_SPACES.find((space) => space.tags.includes('home'));
+  if (!authoredHomeSpace) {
+    throw new Error('Generated world has no authored home space for the starter tenancy.');
+  }
+  const authoredHome = GENERATED_PLACES.find((place) => place.id === authoredHomeSpace.placeId);
+  if (!authoredHome) {
+    throw new Error(`Authored home space '${authoredHomeSpace.id}' references a missing Place.`);
+  }
+  return {
+    currentResidencePlaceId: authoredHome.id,
+    tenancyId: `starter:${authoredHome.id}`,
+    moveInMinute: 0,
+    currentRent: initialState?.player?.rentAmount ?? 140,
+  };
 }
 
 function groceryDefinitionId(sku: string): string {
@@ -262,6 +281,7 @@ function cloneActiveTravel(state: ActiveTravelState): ActiveTravelState {
 }
 
 export class SimulationEngine extends LegacySimulationEngine {
+  private readonly residence: ResidenceTenancy;
   private physicalWorldState: PhysicalWorldState | null = null;
   private physicalObjectState: PhysicalObjectRuntimeState = { objects: {} };
   private physicalShopStates: Record<string, PhysicalShopState> = {};
@@ -272,6 +292,7 @@ export class SimulationEngine extends LegacySimulationEngine {
 
   public constructor(initialState?: InitialSimulationState) {
     super(initialState);
+    this.residence = new ResidenceTenancy(initialState?.residence ?? defaultResidenceState(initialState));
     this.physicalObjectState = hydratePhysicalObjectRuntimeState(
       initialState?.physicalObjects,
       PHYSICAL_RUNTIME_GRAPH,
@@ -309,10 +330,22 @@ export class SimulationEngine extends LegacySimulationEngine {
     );
   }
 
+  public getResidenceState(): ResidenceState {
+    const state = this.residence.getState();
+    if (!state) throw new Error('Simulation has no current residence tenancy.');
+    return state;
+  }
+
+  public getCurrentResidencePlaceId(): string {
+    return this.getResidenceState().currentResidencePlaceId;
+  }
+
   private currentDeliveryPlaceId(): string | null {
     const spatialPlaceId = this.getActorSpatialProjection('player')?.membership.placeId;
     if (spatialPlaceId) return spatialPlaceId;
-    return resolveGeneratedPlaceId(this.economy.getLocation());
+    const legacyLocation = this.economy.getLocation();
+    if (legacyLocation === 'home') return this.residence.resolveHomePlaceId();
+    return resolveGeneratedPlaceId(legacyLocation);
   }
 
   private currentPhysicalWorld(): PhysicalWorldState {
@@ -842,6 +875,7 @@ export class SimulationEngine extends LegacySimulationEngine {
       physicalShops: clonePhysicalShopStates(this.physicalShopStates),
       venueOperations: this.getVenueRuntimeState(),
       activeTravel: this.getActiveTravel(),
+      residence: this.getResidenceState(),
       innerVoice: this.innerVoice.getPersistedState(),
     };
   }
@@ -854,6 +888,7 @@ export class SimulationEngine extends LegacySimulationEngine {
       physicalShops: clonePhysicalShopStates(this.physicalShopStates),
       venueOperations: this.getVenueRuntimeState(),
       activeTravel: this.getActiveTravel(),
+      residence: this.getResidenceState(),
       innerVoice: this.innerVoice.getPersistedState(),
     };
   }
@@ -865,6 +900,7 @@ export class SimulationEngine extends LegacySimulationEngine {
       physicalShops?: Record<string, PhysicalShopState>;
       venueOperations?: unknown;
       activeTravel?: unknown;
+      residence?: ResidenceState;
     };
     const persistedPhysicalWorld = extendedSnapshot.physicalWorld;
     const persistedPhysicalObjects = extendedSnapshot.physicalObjects;
@@ -873,8 +909,10 @@ export class SimulationEngine extends LegacySimulationEngine {
     const persistedActiveTravel = extendedSnapshot.activeTravel == null
       ? null
       : parseActiveTravel(extendedSnapshot.activeTravel);
+    const persistedResidence = extendedSnapshot.residence;
 
     super.loadSnapshot(snapshot);
+    this.residence.restore(persistedResidence ?? defaultResidenceState(snapshot));
     this.physicalObjectState = hydratePhysicalObjectRuntimeState(
       persistedPhysicalObjects,
       PHYSICAL_RUNTIME_GRAPH,

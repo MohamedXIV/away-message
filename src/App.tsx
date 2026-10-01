@@ -276,7 +276,7 @@ export const App: React.FC = () => {
           {phase === 'loading' && (
             <div className="w-full h-full flex flex-col items-center justify-center gap-3 bg-black text-slate-300 font-sans">
               <div className="text-4xl animate-pulse">💾</div>
-              <div className="text-sm font-bold tracking-widest">LOADING ROOM 104…</div>
+              <div className="text-sm font-bold tracking-widest">LOADING RESIDENCE…</div>
               {bootError && <div className="text-xs text-red-400">{bootError}</div>}
             </div>
           )}
