@@ -1,5 +1,5 @@
 // src/world/phaser/environment/environmentProjection.ts
-import type { EnvironmentSnapshot } from '../../../engine/EnvironmentEngine';
+import type { GameContextEnvironmentSnapshot } from '../../../engine/GameContext';
 import type { WeatherType } from '../../types';
 
 export interface EnvironmentPresentationProfile {
@@ -12,7 +12,7 @@ export interface EnvironmentPresentationProfile {
 }
 
 export function projectEnvironmentPresentation(
-  snapshot: EnvironmentSnapshot,
+  snapshot: GameContextEnvironmentSnapshot,
 ): EnvironmentPresentationProfile {
   const condition = snapshot.weather.condition;
   const weather: WeatherType =
