@@ -30,14 +30,20 @@ describe('physical shop Inner Voice integration (#28)', () => {
     expect(repeated).toBeNull();
   });
 
-  it('uses only visible weather/place knowledge for a rainy arrival', () => {
+  it('uses canonical Game Context weather rather than observation weather as alternate truth', () => {
     const simulation = new SimulationEngine();
+    // Day 2 is deterministic rain in the canonical Environment base provider.
+    simulation.advanceGameMinutes(1440);
+    const nowMinute = simulation.clock.getTotalMinutes();
+    expect(simulation.gameContext.environment.current().weather.condition).toBe('rain');
+
     const thought = requestPhysicalShopArrivalThought(simulation, {
       placeId: 'place_b1',
       placeName: 'CornerMart',
-      timeOfDay: 'night',
-      weather: 'rain',
-      nowMinute: 1320,
+      timeOfDay: 'day',
+      // Deliberately stale/presentation input: canonical Game Context must win.
+      weather: 'clear',
+      nowMinute,
     });
 
     expect(thought?.knowledgeRefs).toEqual([

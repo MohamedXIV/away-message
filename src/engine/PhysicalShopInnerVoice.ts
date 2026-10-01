@@ -55,9 +55,6 @@ export function requestPhysicalShopArrivalThought(
         ...(rainy ? { weatherHint: String(observedWeather) } : {}),
         timeHint: String(observedTimeOfDay),
       };
-  const moodBand = source.gameContext?.player.mood().band;
-  const needs = source.gameContext?.player.needs();
-
   return source.requestInnerThought({
     kind: 'place_changed',
     topic: 'physical_shop_arrival',
@@ -65,11 +62,10 @@ export function requestPhysicalShopArrivalThought(
     tone: rainy || late ? 'curious' : 'neutral',
     priority: 24,
     source: 'world:physical_shop',
-    knowledgeRefs: [
-      ...knowledgeRefs,
-      ...(moodBand ? [`player:mood:${moodBand}`] : []),
-      ...(needs?.isExhausted ? [`player:body:${needs.energyBand}`] : []),
-    ],
+    // Provenance names only the knowledge this particular thought actually uses.
+    // Game Context may provide bounded private-player hints for other thoughts, but
+    // a shop-arrival atmosphere line must not leak or imply Mood/Needs by default.
+    knowledgeRefs,
     cooldownKey: `physical_shop_arrival:${observation.placeId}`,
     presentation: 'ambient',
     knowledge: publicKnowledge,

@@ -23,6 +23,28 @@ export interface GameContextReadApi {
   };
 }
 
+function cloneEnvironment(snapshot: EnvironmentSnapshot): EnvironmentSnapshot {
+  return {
+    ...snapshot,
+    weather: {
+      ...snapshot.weather,
+      tags: [...snapshot.weather.tags],
+    },
+    sourceEventIds: [...snapshot.sourceEventIds],
+  };
+}
+
+function cloneNeeds(snapshot: Readonly<PlayerNeedsSnapshot>): PlayerNeedsSnapshot {
+  return { ...snapshot };
+}
+
+function cloneMood(snapshot: MoodSnapshot): MoodSnapshot {
+  return {
+    ...snapshot,
+    influences: snapshot.influences.map((influence) => ({ ...influence })),
+  };
+}
+
 export interface GameContextReadDependencies {
   getTime(): GameTime;
   getCurrentEnvironment(context?: EnvironmentContext): EnvironmentSnapshot;
@@ -44,13 +66,16 @@ export function createGameContextReadApi(
       current: () => ({ ...deps.getTime() }),
     }),
     environment: Object.freeze({
-      current: (context: EnvironmentContext = {}) => deps.getCurrentEnvironment(context),
-      at: (query: EnvironmentQuery) => deps.getEnvironmentAt(query),
-      forecast: (query: EnvironmentForecastQuery) => deps.getEnvironmentForecast(query),
+      current: (context: EnvironmentContext = {}) =>
+        cloneEnvironment(deps.getCurrentEnvironment(context)),
+      at: (query: EnvironmentQuery) =>
+        cloneEnvironment(deps.getEnvironmentAt(query)),
+      forecast: (query: EnvironmentForecastQuery) =>
+        deps.getEnvironmentForecast(query).map(cloneEnvironment),
     }),
     player: Object.freeze({
-      needs: () => deps.getNeeds(),
-      mood: () => deps.getMood(),
+      needs: () => cloneNeeds(deps.getNeeds()),
+      mood: () => cloneMood(deps.getMood()),
     }),
   });
 }

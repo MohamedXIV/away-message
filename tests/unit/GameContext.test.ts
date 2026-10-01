@@ -19,4 +19,17 @@ describe('GameContextReadApi (#132)', () => {
     expect(Object.isFrozen(sim.gameContext)).toBe(true);
     expect(Object.isFrozen(sim.gameContext.environment)).toBe(true);
   });
+
+  it('returns detached semantic snapshots that cannot mutate domain authority', () => {
+    const sim = new SimulationEngine();
+    const environment = sim.gameContext.environment.current();
+    const originalTags = [...environment.weather.tags];
+
+    environment.weather.tags.push('consumer-mutation');
+    environment.sourceEventIds.push('consumer-event');
+
+    const reread = sim.gameContext.environment.current();
+    expect(reread.weather.tags).toEqual(originalTags);
+    expect(reread.sourceEventIds).not.toContain('consumer-event');
+  });
 });
