@@ -253,7 +253,7 @@ export const App: React.FC = () => {
                   onClick={() => setPhaserFixtureActive(false)}
                   className="px-3 py-1 bg-slate-900/90 hover:bg-slate-800 text-amber-300 border border-slate-700 text-xs font-mono shadow-md rounded flex items-center gap-1.5 cursor-pointer"
                 >
-                  ← Return to Room 104 (Canvas2D)
+                  ← Return to Game
                 </button>
               </div>
             }

@@ -135,7 +135,7 @@ export const MainMenu: React.FC<MainMenuProps> = ({ onBoot }) => {
         <div className="text-center mb-6">
           <div className="text-5xl mb-2">💬</div>
           <h1 className="text-3xl font-black tracking-widest text-amber-300">AWAY MESSAGE</h1>
-          <p className="mt-1 text-xs text-slate-400">Room 104 • Oakhaven • dial-up not included</p>
+          <p className="mt-1 text-xs text-slate-400">Oakhaven • early web years • dial-up not included</p>
         </div>
 
         <div className="bg-slate-900/90 border-2 border-slate-700 rounded-lg p-4 space-y-2 shadow-2xl">
@@ -216,7 +216,7 @@ export const MainMenu: React.FC<MainMenuProps> = ({ onBoot }) => {
 
           {showHelp && (
             <div className="text-[11px] leading-relaxed text-slate-300 bg-slate-800/60 border border-slate-700 rounded p-3 space-y-1.5">
-              <p><b className="text-amber-300">You</b> just moved into Room 104 with $38, a humming PC and dial-up.</p>
+              <p><b className="text-amber-300">You</b> just moved into a cheap Oakhaven residence with little cash, a humming PC and dial-up.</p>
               <p><b className="text-amber-300">Live:</b> work shifts, eat, sleep, pay rent on day 7. Hunger and fatigue are real.</p>
               <p><b className="text-amber-300">Befriend:</b> open <b>Pulse Messenger</b> (install it from DownloadHub first!) and talk. Promises matter. So does showing up.</p>
               <p><b className="text-amber-300">Explore:</b> rooms, NightBoard, MyPlace, the city map. Everything reacts to everything.</p>
