@@ -100,9 +100,9 @@ export const DesktopShell: React.FC = () => {
       <div className="w-full h-full flex flex-col items-center justify-center bg-zinc-950 text-zinc-300 font-mono select-none p-4">
         <div className="max-w-md w-full p-6 bg-zinc-900 border border-zinc-800 rounded shadow-2xl text-center space-y-4">
           <div className="text-4xl">{packageWaiting ? '📦' : '🪵'}</div>
-          <h2 className="text-base font-bold text-amber-400">{packageWaiting ? 'Computer Package Waiting in Room 104' : 'Empty Desk — No Computer Installed'}</h2>
-          <p className="text-xs text-zinc-400 leading-relaxed">{packageWaiting ? 'The refurbished computer is still boxed and unassembled. Set it up at the desk before trying to power it on.' : "Your motel desk in Room 104 is completely bare. Head out through the hallway door to downtown Tech Mart and visit Milo's Silicon & Spares to pick up a refurbished PC rig."}</p>
-          <button onClick={() => switchView('room')} className="px-5 py-2 bg-amber-600 hover:bg-amber-500 text-black font-bold text-xs rounded transition-colors cursor-pointer">← Back to Room 104</button>
+          <h2 className="text-base font-bold text-amber-400">{packageWaiting ? 'Computer Package Waiting at Your Residence' : 'Empty Desk — No Computer Installed'}</h2>
+          <p className="text-xs text-zinc-400 leading-relaxed">{packageWaiting ? 'The refurbished computer is still boxed and unassembled. Set it up at the desk before trying to power it on.' : "Your residence desk is completely bare. Head out through the hallway door to downtown Tech Mart and visit Milo's Silicon & Spares to pick up a refurbished PC rig."}</p>
+          <button onClick={() => switchView('room')} className="px-5 py-2 bg-amber-600 hover:bg-amber-500 text-black font-bold text-xs rounded transition-colors cursor-pointer">← Back to Residence</button>
         </div>
       </div>
     );
@@ -159,10 +159,10 @@ export const DesktopShell: React.FC = () => {
               ))}
             </div>
           ) : (
-            <p className="text-xs text-amber-500">No owned Orion setup disc is available in Room 104.</p>
+            <p className="text-xs text-amber-500">No owned Orion setup disc is available at your residence.</p>
           )}
           {bootSetupError && <div className="border border-red-900 bg-red-950/30 px-3 py-2 text-xs text-red-300">{bootSetupError}</div>}
-          <button type="button" onClick={() => switchView('room')} className="px-4 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs border border-zinc-600 cursor-pointer">Back to Room 104</button>
+          <button type="button" onClick={() => switchView('room')} className="px-4 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs border border-zinc-600 cursor-pointer">Back to Residence</button>
         </div>
         {bootSetupTarget && <OsSetupWizard targetOs={bootSetupTarget} onClose={() => setBootSetupTarget(null)} />}
       </div>
