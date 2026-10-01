@@ -10,6 +10,10 @@ import type { GameTime } from './types';
 import type { MoodSnapshot } from './MoodEngine';
 import type { PlayerNeedsSnapshot } from './PlayerNeedsEngine';
 
+export type GameContextEnvironmentSnapshot = EnvironmentSnapshot;
+export type GameContextNeedsSnapshot = PlayerNeedsSnapshot;
+export type GameContextMoodSnapshot = MoodSnapshot;
+
 export interface GameContextForecastQuery extends EnvironmentContext {
   days: number;
   atMinute?: number;
