@@ -35,6 +35,20 @@ if (errors.length > 0) {
 
 const source = generateRegistrySource(tables);
 const worldSource = generateWorldRegistrySource(tables);
+
+function reportFirstDiff(label: string, actual: string, expected: string): void {
+  const actualLines = actual.split('\n');
+  const expectedLines = expected.split('\n');
+  const count = Math.max(actualLines.length, expectedLines.length);
+  for (let index = 0; index < count; index += 1) {
+    if (actualLines[index] === expectedLines[index]) continue;
+    const line = index + 1;
+    console.error(`${label} first differs at line ${line}:`);
+    console.error(`  actual:   ${JSON.stringify(actualLines[index] ?? '<EOF>')}`);
+    console.error(`  expected: ${JSON.stringify(expectedLines[index] ?? '<EOF>')}`);
+    return;
+  }
+}
 if (process.argv.includes('--check')) {
   let current = '';
   let currentWorld = '';
@@ -47,10 +61,12 @@ if (process.argv.includes('--check')) {
   }
   if (current !== source) {
     console.error('content:check failed — src/engine/seedCharacters.generated.ts is stale. Run npm run content:pull.');
+    reportFirstDiff('seedCharacters.generated.ts', current, source);
     process.exit(1);
   }
   if (currentWorld !== worldSource) {
     console.error('content:check failed — src/engine/worldContent.generated.ts is stale. Run npm run content:pull.');
+    reportFirstDiff('worldContent.generated.ts', currentWorld, worldSource);
     process.exit(1);
   }
   console.log('content:check ok — generated registries match content/store.json.');
