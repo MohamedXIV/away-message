@@ -720,6 +720,8 @@ export interface SimulationState {
    * read-only compatibility projection until #132 removes their consumers.
    */
   needs?: import('../PlayerNeedsEngine').PlayerNeedsState;
+  /** Canonical semantic player Mood state (#131). */
+  mood?: import('../MoodEngine').MoodState;
   hardware: HardwareState;
   computer: ComputerSetupState;
   display: DisplaySetupState;
@@ -903,6 +905,10 @@ export interface SimulationEventMap {
   'environment:changed': {
     previous: import('../EnvironmentEngine').EnvironmentSnapshot | null;
     current: import('../EnvironmentEngine').EnvironmentSnapshot;
+  };
+  'mood:changed': {
+    previous: import('../MoodEngine').MoodSnapshot | null;
+    current: import('../MoodEngine').MoodSnapshot;
   };
   // Deprecated narrative aliases
   'narrative:tag_emitted': { tag: InkSemanticTag };
