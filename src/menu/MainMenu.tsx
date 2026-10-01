@@ -3,9 +3,17 @@ import { SAVE_SLOTS, AUTOSAVE_ID, listSlots, deleteSlot, mostRecentSlot, request
 import { loadAISettings, saveAISettings } from '../ai/settings';
 import type { AIProviderId } from '../ai/types';
 import { soundManager } from '../audio/SoundManager';
+import { DEFAULT_STARTING_CASH } from '../engine/EconomyEngine';
+import { GENERATED_HOUSING_OFFERS, GENERATED_PLACES } from '../engine/worldContent.generated';
+import { listStarterHousingOffers } from '../engine/residence/HousingProgression';
 
 const KEY_BACKUP = 'away-message-ai-key-backup';
 const PROVIDERS: AIProviderId[] = ['gemini', 'groq', 'openrouter', 'fal'];
+const STARTER_HOUSING_OFFERS = listStarterHousingOffers(
+  GENERATED_HOUSING_OFFERS,
+  DEFAULT_STARTING_CASH,
+);
+const PLACE_NAMES = new Map(GENERATED_PLACES.map((place) => [place.id, place.name] as const));
 
 function formatDate(updatedAt: number): string {
   try {
@@ -52,6 +60,7 @@ export const MainMenu: React.FC<MainMenuProps> = ({ onBoot }) => {
   const [keyInput, setKeyInput] = useState('');
   const [keySaved, setKeySaved] = useState(() => Boolean(loadAISettings().byokKeys[loadAISettings().activeProvider]));
   const [confirmNew, setConfirmNew] = useState(false);
+  const [showResidenceChoice, setShowResidenceChoice] = useState(false);
 
   useEffect(() => {
     restoreBackupKey();
@@ -89,10 +98,15 @@ export const MainMenu: React.FC<MainMenuProps> = ({ onBoot }) => {
     requestBoot({ kind: 'new', slotId: 'slot_1' });
   };
 
-  const handleNew = () => {
+  const handleNew = (housingOfferId: string) => {
     soundManager.play('click');
     // Fresh timeline — old saves stay on disk, autosave restarts with the run.
-    requestBoot({ kind: 'new', slotId: 'slot_1' });
+    requestBoot({ kind: 'new', slotId: 'slot_1', housingOfferId });
+  };
+
+  const beginNewGame = () => {
+    setConfirmNew(false);
+    setShowResidenceChoice(true);
   };
 
   const handleLoad = (slotId: string) => {
@@ -149,17 +163,45 @@ export const MainMenu: React.FC<MainMenuProps> = ({ onBoot }) => {
           )}
           {!confirmNew ? (
             <button
-              onClick={() => (loaded && slots.some((s) => s.hasSnapshot) ? setConfirmNew(true) : handleNew())}
+              onClick={() => (loaded && slots.some((s) => s.hasSnapshot) ? setConfirmNew(true) : beginNewGame())}
               className="w-full px-4 py-2 bg-slate-700 hover:bg-slate-600 text-slate-100 font-bold rounded text-sm cursor-pointer"
             >
               ＋ New Game
             </button>
           ) : (
             <div className="flex gap-2">
-              <button onClick={handleNew} className="flex-1 px-4 py-2 bg-red-700 hover:bg-red-600 text-white font-bold rounded text-sm cursor-pointer">
-                Start fresh (old saves stay)
+              <button onClick={beginNewGame} className="flex-1 px-4 py-2 bg-red-700 hover:bg-red-600 text-white font-bold rounded text-sm cursor-pointer">
+                Choose residence & start fresh
               </button>
               <button onClick={() => setConfirmNew(false)} className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded text-sm cursor-pointer">
+                Cancel
+              </button>
+            </div>
+          )}
+
+          {showResidenceChoice && (
+            <div className="rounded border border-amber-700/60 bg-amber-950/20 p-3 space-y-2">
+              <div>
+                <div className="text-xs font-black uppercase tracking-wider text-amber-300">Choose your starting residence</div>
+                <div className="text-[10px] text-slate-400">Only authored, available housing you can afford is shown.</div>
+              </div>
+              {STARTER_HOUSING_OFFERS.length === 0 ? (
+                <div className="text-xs text-red-300">No affordable starter residence is currently authored.</div>
+              ) : STARTER_HOUSING_OFFERS.map((offer) => (
+                <button
+                  key={offer.id}
+                  type="button"
+                  onClick={() => handleNew(offer.id)}
+                  className="w-full rounded border border-slate-700 bg-slate-800/90 px-3 py-2 text-left hover:border-amber-500 hover:bg-slate-800"
+                >
+                  <span className="block text-xs font-bold text-slate-100">{PLACE_NAMES.get(offer.placeId) ?? offer.placeId}</span>
+                  <span className="block text-[10px] text-slate-400">
+                    Rent ${offer.monthlyRent.toFixed(0)} · move-in ${offer.moveInCost.toFixed(0)}
+                    {offer.starterDefault ? ' · default' : ''}
+                  </span>
+                </button>
+              ))}
+              <button type="button" onClick={() => setShowResidenceChoice(false)} className="text-[10px] text-slate-400 underline hover:text-slate-200">
                 Cancel
               </button>
             </div>

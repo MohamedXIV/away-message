@@ -142,7 +142,9 @@ export const App: React.FC = () => {
           await restoreSlotPulse(request.slotId);
           useSimulationStore.getState().setEngine(new SimulationEngine(snapshot as any));
         } else if (request.kind === 'new') {
-          useSimulationStore.getState().setEngine(new SimulationEngine());
+          useSimulationStore.getState().setEngine(new SimulationEngine({
+            starterHousingOfferId: request.housingOfferId,
+          }));
         }
         setPhase('game');
       } catch (error) {

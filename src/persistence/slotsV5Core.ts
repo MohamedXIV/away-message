@@ -70,6 +70,7 @@ const BOOT_KEY = 'away_message_boot_v1';
 export interface BootRequest {
   kind: 'new' | 'slot';
   slotId: string;
+  housingOfferId?: string;
 }
 
 export interface SlotSummary {
@@ -445,7 +446,15 @@ export function consumeBootRequest(): BootRequest | null {
     window.localStorage.removeItem(BOOT_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw) as Partial<BootRequest>;
-    if (parsed.kind === 'new') return { kind: 'new', slotId: 'slot_1' };
+    if (parsed.kind === 'new') {
+      return {
+        kind: 'new',
+        slotId: 'slot_1',
+        ...(typeof parsed.housingOfferId === 'string' && parsed.housingOfferId
+          ? { housingOfferId: parsed.housingOfferId }
+          : {}),
+      };
+    }
     if (parsed.kind === 'slot' && typeof parsed.slotId === 'string' && parsed.slotId) {
       return { kind: 'slot', slotId: parsed.slotId };
     }
