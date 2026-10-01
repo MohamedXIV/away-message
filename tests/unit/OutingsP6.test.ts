@@ -52,16 +52,16 @@ describe('P6.3 city outings (SimulationEngine)', () => {
     expect(sim.doCityOuting('moon').success).toBe(false);
     // P7 gating runs before energy/cash checks: travel to the canal first
     expect(sim.dispatchAction({ type: 'TRAVEL_TO', to: 'canal', mode: 'walk' }).success).toBe(true);
-    (sim.economy as any).state.energy = 10;
+    sim.needs.loadState({ ...sim.needs.getState(), energy: 10 });
     expect(sim.doCityOuting('canal_walk').success).toBe(false);
-    (sim.economy as any).state.energy = 100;
+    sim.needs.loadState({ ...sim.needs.getState(), energy: 100 });
     expect(sim.dispatchAction({ type: 'TRAVEL_TO', to: 'diner', mode: 'walk' }).success).toBe(true);
     (sim.economy as any).state.cash = 1;
     expect(sim.doCityOuting('diner_platter').success).toBe(false);
     // Day 15 is a storm: the canal path itself is closed
     sim.advanceGameMinutes(14 * 24 * 60, 'advance to storm window');
     expect(getWeatherForDay(sim.clock.getTime().day).condition).toBe('storm');
-    (sim.economy as any).state.energy = 100;
+    sim.needs.loadState({ ...sim.needs.getState(), energy: 100 });
     const res = sim.dispatchAction({ type: 'TRAVEL_TO', to: 'canal', mode: 'walk' });
     expect(res.success).toBe(false);
     expect(res.error).toContain('storm');
