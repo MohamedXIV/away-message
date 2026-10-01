@@ -63,7 +63,7 @@ export const RoomScene: React.FC = () => {
 
   // Active Modals
   const [activeModal, setActiveModal] = useState<
-    'window' | 'beverage' | 'door' | 'sleep' | 'hardware' | null
+    'window' | 'beverage' | 'door' | 'sleep' | 'hardware' | 'housing' | null
   >(null);
 
   const environment = engine.gameContext.environment.current();
@@ -372,6 +372,17 @@ export const RoomScene: React.FC = () => {
           </button>
           <button
             onClick={() => {
+              soundManager.play('click');
+              setActiveModal('housing');
+            }}
+            className="flex items-center gap-1 px-2.5 py-1 bg-slate-800 hover:bg-slate-700 border border-slate-600 rounded text-slate-200 text-xs font-bold transition-colors cursor-pointer"
+            title="Review authored housing offers"
+          >
+            <span>⌂</span>
+            <span>Housing</span>
+          </button>
+          <button
+            onClick={() => {
               soundManager.play('door_open');
               setActiveModal('door');
             }}
@@ -456,6 +467,51 @@ export const RoomScene: React.FC = () => {
           </div>
         )}
       </div>
+
+      {activeModal === 'housing' && (
+        <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/65 p-4">
+          <div className="w-full max-w-md rounded-lg border border-slate-600 bg-slate-900 p-4 shadow-2xl">
+            <div className="mb-3 flex items-start justify-between gap-4">
+              <div>
+                <h2 className="text-sm font-black text-amber-300">Housing</h2>
+                <p className="text-[11px] text-slate-400">Authored rentals. Moving changes tenancy and recurring rent immediately.</p>
+              </div>
+              <button onClick={() => setActiveModal(null)} className="text-slate-400 hover:text-white">✕</button>
+            </div>
+            <div className="space-y-2">
+              {engine.getHousingOffers().map((offer) => (
+                <div key={offer.id} className="flex items-center justify-between gap-3 rounded border border-slate-700 bg-slate-800/80 p-2">
+                  <div className="min-w-0">
+                    <div className="truncate text-xs font-bold text-slate-100">
+                      {offer.placeName}{offer.current ? ' · Current' : ''}
+                    </div>
+                    <div className="text-[10px] text-slate-400">
+                      Rent ${offer.monthlyRent.toFixed(0)} · move-in ${offer.moveInCost.toFixed(0)}
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    disabled={offer.current || !offer.available || !offer.affordable}
+                    onClick={() => {
+                      const result = engine.moveResidenceToOffer(offer.id);
+                      if (result.success) {
+                        syncStateFromEngine();
+                        setActiveModal(null);
+                        flashOutingNotice(`Moved to ${offer.placeName}. New rent: ${offer.monthlyRent.toFixed(0)}.`);
+                      } else {
+                        flashOutingNotice(result.error ?? 'Could not move.');
+                      }
+                    }}
+                    className="rounded bg-amber-600 px-2.5 py-1 text-[10px] font-bold text-slate-950 hover:bg-amber-500 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    {offer.current ? 'Current' : !offer.available ? 'Unavailable' : !offer.affordable ? 'Need cash' : 'Move'}
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Modals */}
       {activeModal === 'window' && (

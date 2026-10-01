@@ -35,3 +35,49 @@ describe('living-world residence integration (#29)', () => {
     expect(sim.getCurrentResidencePlaceId()).toBe(sim.getResidenceState().currentResidencePlaceId);
   });
 });
+
+describe('living-world housing choice and move gate (#29)', () => {
+  it('starts from an authored choice and moves to a better authored residence without resetting identity/state', () => {
+    const sim = new SimulationEngine({ starterHousingOfferId: 'starter_room_208' } as any);
+    expect(sim.getCurrentResidencePlaceId()).toBe('room_208');
+    expect(sim.economy.getCash()).toBe(20);
+    expect(sim.getResidenceState().currentRent).toBe(125);
+
+    const buddiesBefore = sim.social.getBuddies().map((buddy) => buddy.id);
+    const needsBefore = sim.needs.getState();
+    const hardwareBefore = sim.hardware.getState();
+    const inventoryBefore = sim.inventory.getState();
+    const objectsBefore = sim.getPhysicalObjectState();
+
+    const initialProjection = createWorldSceneProjection({
+      placeId: sim.getCurrentResidencePlaceId(),
+      timeOfDay: sim.gameContext.time.current().timeOfDay,
+      environment: sim.gameContext.environment.current(),
+      isInterior: true,
+    });
+    expect(initialProjection.placeId).toBe('room_208');
+    expect(initialProjection.viewId).toBe('room208_main_view');
+
+    sim.economy.earnCash(200, 'housing gate setup');
+    expect(sim.moveResidenceToOffer('better_room_305')).toEqual({ success: true });
+
+    expect(sim.getCurrentResidencePlaceId()).toBe('room_305');
+    expect(sim.getResidenceState().currentRent).toBe(185);
+    expect(sim.economy.getState().recurringRentAmount).toBe(185);
+    expect(sim.economy.getCash()).toBe(130);
+    expect(sim.social.getBuddies().map((buddy) => buddy.id)).toEqual(buddiesBefore);
+    expect(sim.needs.getState()).toEqual(needsBefore);
+    expect(sim.hardware.getState()).toEqual(hardwareBefore);
+    expect(sim.inventory.getState()).toEqual(inventoryBefore);
+    expect(sim.getPhysicalObjectState()).toEqual(objectsBefore);
+
+    const movedProjection = createWorldSceneProjection({
+      placeId: sim.getCurrentResidencePlaceId(),
+      timeOfDay: sim.gameContext.time.current().timeOfDay,
+      environment: sim.gameContext.environment.current(),
+      isInterior: true,
+    });
+    expect(movedProjection.placeId).toBe('room_305');
+    expect(movedProjection.viewId).toBe('room305_main_view');
+  });
+});

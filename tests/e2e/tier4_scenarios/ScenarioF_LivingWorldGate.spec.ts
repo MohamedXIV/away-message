@@ -1,4 +1,5 @@
 import { test, expect } from '../fixtures/testFixture';
+import { GENERATED_HOUSING_OFFERS } from '../../src/engine/worldContent.generated';
 
 test.describe('Tier 4: Scenario F — Living-world integration gate (#29)', () => {
   test('current tenancy, canonical player context, and Phaser presentation stay composed', async ({
@@ -51,6 +52,9 @@ test.describe('Tier 4: Scenario F — Living-world integration gate (#29)', () =
     expect(initial.activeView).toBe('room');
     expect(initial.residencePlaceId).toBe(initial.resolvedHomePlaceId);
     expect(initial.residencePlaceId).toBeTruthy();
+    expect(GENERATED_HOUSING_OFFERS.some((offer) =>
+      offer.starterEligible && offer.placeId === initial.residencePlaceId
+    )).toBe(true);
     expect(initial.environment.atMinute).toBeGreaterThanOrEqual(0);
     expect(initial.environment.precipitation).toBeGreaterThanOrEqual(0);
     expect(initial.environment.precipitation).toBeLessThanOrEqual(1);

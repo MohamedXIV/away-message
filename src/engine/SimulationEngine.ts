@@ -360,6 +360,66 @@ export class SimulationEngine extends LegacySimulationEngine {
     return this.getResidenceState().currentResidencePlaceId;
   }
 
+  public getHousingOffers(): Array<{
+    id: string;
+    placeId: string;
+    placeName: string;
+    available: boolean;
+    monthlyRent: number;
+    moveInCost: number;
+    starterEligible: boolean;
+    starterDefault: boolean;
+    current: boolean;
+    affordable: boolean;
+  }> {
+    const currentPlaceId = this.getCurrentResidencePlaceId();
+    const cash = this.economy.getCash();
+    return GENERATED_HOUSING_OFFERS
+      .map((offer) => ({
+        ...offer,
+        placeName: GENERATED_PLACES.find((place) => place.id === offer.placeId)?.name ?? offer.placeId,
+        current: offer.placeId === currentPlaceId,
+        affordable: offer.moveInCost <= cash,
+      }))
+      .sort((a, b) => a.monthlyRent - b.monthlyRent || a.id.localeCompare(b.id));
+  }
+
+  public moveResidenceToOffer(offerId: string): { success: boolean; error?: string } {
+    const offer = GENERATED_HOUSING_OFFERS.find((candidate) => candidate.id === offerId);
+    if (!offer) return { success: false, error: `Unknown housing offer '${offerId}'.` };
+    if (offer.placeId === this.getCurrentResidencePlaceId()) {
+      return { success: false, error: 'That residence is already your current home.' };
+    }
+
+    const beforeCash = this.economy.getCash();
+    const committed = commitHousingOffer({
+      offer,
+      residence: this.residence,
+      tenancyId: `tenancy:${offer.id}:${this.clock.getTotalMinutes()}`,
+      moveInMinute: this.clock.getTotalMinutes(),
+      spendMoveInCost: (amount) => this.economy.spendCash(amount, 'Residence move-in'),
+      setRecurringRentAmount: (amount) => this.economy.setRecurringRentAmount(amount),
+    });
+    if (!committed.ok) {
+      const error = committed.reason === 'unaffordable'
+        ? `Cannot afford the ${offer.moveInCost.toFixed(0)} move-in cost.`
+        : committed.reason === 'unavailable'
+          ? 'That residence is not currently available.'
+          : 'That residence is already active.';
+      return { success: false, error };
+    }
+
+    try {
+      this.telemetry.logEvent('world', 'residence_changed', this.clock.getTotalMinutes(), {
+        offerId: offer.id,
+        placeId: offer.placeId,
+        moveInCost: beforeCash - this.economy.getCash(),
+        monthlyRent: offer.monthlyRent,
+      });
+    } catch {}
+    return { success: true };
+  }
+
   private currentDeliveryPlaceId(): string | null {
     const spatialPlaceId = this.getActorSpatialProjection('player')?.membership.placeId;
     if (spatialPlaceId) return spatialPlaceId;
