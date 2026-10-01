@@ -23,6 +23,7 @@ import { TelemetryEngine } from './TelemetryEngine';
 import { WorldEventsEngine } from './WorldEventsEngine';
 import { EnvironmentEngine } from './EnvironmentEngine';
 import { MoodEngine, type MoodContext } from './MoodEngine';
+import { createGameContext, type GameContextReadApi } from './GameContext';
 import { totalDeliveryBacklogExtra } from './WorldModifiers';
 import { OsEngine } from './OsEngine';
 import { PulseEngine } from './PulseEngine';
@@ -70,6 +71,7 @@ export class SimulationEngine {
   public readonly world!: WorldEventsEngine;
   public readonly environment!: EnvironmentEngine;
   public readonly mood!: MoodEngine;
+  public readonly gameContext!: GameContextReadApi;
 
   private activeView: 'pc' | 'room' | 'cafe' | 'work' | 'city' = 'room';
   private subscribers: Set<(state: Readonly<SimulationState>) => void> = new Set();
@@ -106,6 +108,18 @@ export class SimulationEngine {
       (initialState as any)?.mood,
       () => this.buildMoodContext(),
     );
+    this.gameContext = createGameContext({
+      time: () => this.clock.getTime(),
+      environmentCurrent: (context) => this.environment.getCurrentSnapshot(context),
+      environmentAt: (query) => this.environment.getSnapshot(query),
+      environmentForecast: (atMinute, days, context = {}) => this.environment.getForecast({
+        ...context,
+        atMinute,
+        count: days,
+      }),
+      needs: () => this.needs.getSnapshot(),
+      mood: () => this.mood.getCurrentSnapshot(),
+    });
     // OsEngine is core — sync with hardware osVersion
     const osInitial = (initialState as any)?.os ?? { currentOsId: initialState?.hardware?.osVersion };
     this.os = new OsEngine(this.events, { currentOsId: osInitial.currentOsId ?? initialState?.hardware?.osVersion, ...(osInitial as object) });
