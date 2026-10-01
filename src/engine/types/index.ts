@@ -888,6 +888,10 @@ export interface SimulationEventMap {
   'world:flag_changed': { key: string; value: boolean | number | string };
   'world:global_event_triggered': { event: GlobalEvent };
   'world:appointment_scheduled': { appointment: Appointment };
+  'environment:changed': {
+    previous: import('../EnvironmentEngine').EnvironmentSnapshot | null;
+    current: import('../EnvironmentEngine').EnvironmentSnapshot;
+  };
   // Deprecated narrative aliases
   'narrative:tag_emitted': { tag: InkSemanticTag };
   'narrative:beat_triggered': { beatId: string };

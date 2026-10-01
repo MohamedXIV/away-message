@@ -34,6 +34,9 @@ describe('Content event modifiers (#46)', () => {
         bad_value: { eventId: 'x', domain: 'delivery', kind: 'courier_backlog', durationMinutes: 60, targetIds: [], value: '9999' },
         bad_target: { eventId: 'x', domain: 'place', kind: 'reduced_desirability', durationMinutes: 60, targetIds: ['nope_nowhere'], value: '' },
         bad_window: { eventId: 'x', domain: 'network', kind: 'slow_mirrors', durationMinutes: 99999, targetIds: [], value: '' },
+        bad_env_condition: { eventId: 'x', domain: 'environment', kind: 'condition_override', durationMinutes: 60, targetIds: [], value: 'hurricane' },
+        bad_env_scalar: { eventId: 'x', domain: 'environment', kind: 'wind_delta', durationMinutes: 60, targetIds: [], value: '4' },
+        bad_env_number: { eventId: 'x', domain: 'environment', kind: 'temperature_delta', durationMinutes: 60, targetIds: [], value: 'warm' },
       },
     };
     const errors = validateContent(tables);
@@ -42,6 +45,9 @@ describe('Content event modifiers (#46)', () => {
     expect(errors.some((e) => e.includes('bad_value'))).toBe(true);
     expect(errors.some((e) => e.includes('bad_target'))).toBe(true);
     expect(errors.some((e) => e.includes('bad_window'))).toBe(true);
+    expect(errors.some((e) => e.includes('bad_env_condition'))).toBe(true);
+    expect(errors.some((e) => e.includes('bad_env_scalar'))).toBe(true);
+    expect(errors.some((e) => e.includes('bad_env_number'))).toBe(true);
   });
 
   it('Studio authoring builds valid rows and Studio tables round-trip the registry', () => {
@@ -56,6 +62,13 @@ describe('Content event modifiers (#46)', () => {
     });
     expect(() => buildEventModifierRow('x', 'weather', 'storm', 60, [], '')).toThrow();
     expect(() => buildEventModifierRow('x', 'delivery', 'teleport', 60, [], '')).toThrow();
+    expect(buildEventModifierRow('city_canal_festival', 'environment', 'wind_delta', 60, [], '0.4')).toMatchObject({
+      domain: 'environment',
+      kind: 'wind_delta',
+      value: '0.4',
+    });
+    expect(() => buildEventModifierRow('city_canal_festival', 'environment', 'wind_delta', 60, [], '4')).toThrow();
+    expect(() => buildEventModifierRow('city_canal_festival', 'environment', 'condition_override', 60, [], 'hurricane')).toThrow();
 
     const tables = worldTablesFromGenerated();
     const modifiers = (tables['eventModifiers'] ?? {}) as Record<string, Record<string, unknown>>;

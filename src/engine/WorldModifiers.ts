@@ -17,6 +17,7 @@ export const WORLD_MODIFIER_DOMAINS = [
   'delivery',
   'network',
   'life',
+  'environment',
 ] as const;
 
 export type WorldModifierDomain = (typeof WORLD_MODIFIER_DOMAINS)[number];
@@ -32,6 +33,13 @@ export const WORLD_MODIFIER_KINDS: Record<WorldModifierDomain, readonly string[]
   delivery: ['courier_backlog'],
   network: ['slow_mirrors'],
   life: ['festival_opportunity', 'upgrade_opportunity'],
+  environment: [
+    'condition_override',
+    'temperature_delta',
+    'precipitation_delta',
+    'wind_delta',
+    'visibility_delta',
+  ],
 };
 
 /** Active-window cap for authored specs: 3 days of game time. */
@@ -42,6 +50,10 @@ export const WORLD_MODIFIER_MAX_DELIVERY_EXTRA_MINUTES = 720;
 export const WORLD_MODIFIER_MAX_DELIVERY_TOTAL_EXTRA_MINUTES = 720;
 /** Default life-opportunity priority hint when a spec leaves value empty. */
 export const WORLD_MODIFIER_DEFAULT_OPPORTUNITY_PRIORITY = 50;
+export const WORLD_MODIFIER_ENV_TEMPERATURE_DELTA_MIN = -30;
+export const WORLD_MODIFIER_ENV_TEMPERATURE_DELTA_MAX = 30;
+export const WORLD_MODIFIER_ENV_SCALAR_DELTA_MIN = -1;
+export const WORLD_MODIFIER_ENV_SCALAR_DELTA_MAX = 1;
 
 /** Authored effect template (one content-store row → one generated spec). */
 export interface WorldModifierSpec {
@@ -127,6 +139,33 @@ export function parseModifierValue(
   raw: string,
 ): number | string | boolean | undefined {
   const text = (raw ?? '').trim();
+  if (domain === 'environment' && kind === 'condition_override') {
+    if (text === '') return undefined;
+    return text.slice(0, 40);
+  }
+  if (
+    domain === 'environment'
+    && (
+      kind === 'temperature_delta'
+      || kind === 'precipitation_delta'
+      || kind === 'wind_delta'
+      || kind === 'visibility_delta'
+    )
+  ) {
+    if (text === '') return undefined;
+    const rawNumber = Number(text);
+    if (!Number.isFinite(rawNumber)) return undefined;
+    if (kind === 'temperature_delta') {
+      return Math.max(
+        WORLD_MODIFIER_ENV_TEMPERATURE_DELTA_MIN,
+        Math.min(WORLD_MODIFIER_ENV_TEMPERATURE_DELTA_MAX, rawNumber),
+      );
+    }
+    return Math.max(
+      WORLD_MODIFIER_ENV_SCALAR_DELTA_MIN,
+      Math.min(WORLD_MODIFIER_ENV_SCALAR_DELTA_MAX, rawNumber),
+    );
+  }
   if (domain === 'delivery' && kind === 'courier_backlog') {
     if (text === '') return undefined;
     const minutes = Math.round(Number(text));

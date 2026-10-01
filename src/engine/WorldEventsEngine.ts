@@ -11,6 +11,7 @@ import {
   toModifierSpecs,
   type WorldModifier,
   type WorldModifierFilter,
+  type WorldModifierSpec,
 } from './WorldModifiers';
 
 // Re-export for convenience
@@ -125,7 +126,11 @@ export class WorldEventsEngine {
   }
   private buddyKnowledge: Map<string, BuddyEventKnowledge[]> = new Map(); // buddyId -> knowledge[]
 
-  constructor(eventBus: EventBus, initialState?: Partial<WorldEventsState>) {
+  constructor(
+    eventBus: EventBus,
+    initialState?: Partial<WorldEventsState>,
+    private readonly modifierSpecs: readonly WorldModifierSpec[] = toModifierSpecs(GENERATED_EVENT_MODIFIERS),
+  ) {
     this.eventBus = eventBus;
 
     // Load catalog into pending
@@ -319,7 +324,7 @@ export class WorldEventsEngine {
     const atMinute = options?.atMinute;
     if (!Number.isFinite(atMinute)) return [];
     return projectActiveModifiers(
-      toModifierSpecs(GENERATED_EVENT_MODIFIERS),
+      this.modifierSpecs,
       this.getTriggeredEvents(),
       atMinute,
       { domain: options.domain, kind: options.kind, targetId: options.targetId },

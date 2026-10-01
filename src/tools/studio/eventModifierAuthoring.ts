@@ -8,6 +8,10 @@ import {
   WORLD_MODIFIER_KINDS,
   WORLD_MODIFIER_MAX_DELIVERY_EXTRA_MINUTES,
   WORLD_MODIFIER_MAX_DURATION_MINUTES,
+  WORLD_MODIFIER_ENV_SCALAR_DELTA_MAX,
+  WORLD_MODIFIER_ENV_SCALAR_DELTA_MIN,
+  WORLD_MODIFIER_ENV_TEMPERATURE_DELTA_MAX,
+  WORLD_MODIFIER_ENV_TEMPERATURE_DELTA_MIN,
   type WorldModifierDomain,
 } from '../../engine/WorldModifiers';
 
@@ -48,6 +52,26 @@ export function buildEventModifierRow(
     if (typeof target !== 'string' || !target) throw new Error('Target ids must be non-empty strings.');
   }
   if (value.length > 80) throw new Error('value must be at most 80 chars.');
+  if (domain === 'environment' && value.trim() !== '') {
+    if (kind === 'condition_override') {
+      const allowed = ['rain', 'drizzle', 'overcast', 'fog', 'clear', 'heat', 'storm'];
+      if (!allowed.includes(value.trim())) {
+        throw new Error(`condition_override must be one of: ${allowed.join(', ')}.`);
+      }
+    } else {
+      const numeric = Number(value);
+      if (!Number.isFinite(numeric)) throw new Error(`${kind} value must be numeric.`);
+      const min = kind === 'temperature_delta'
+        ? WORLD_MODIFIER_ENV_TEMPERATURE_DELTA_MIN
+        : WORLD_MODIFIER_ENV_SCALAR_DELTA_MIN;
+      const max = kind === 'temperature_delta'
+        ? WORLD_MODIFIER_ENV_TEMPERATURE_DELTA_MAX
+        : WORLD_MODIFIER_ENV_SCALAR_DELTA_MAX;
+      if (numeric < min || numeric > max) {
+        throw new Error(`${kind} value must be within ${min}..${max}.`);
+      }
+    }
+  }
   if (domain === 'delivery' && kind === 'courier_backlog' && value.trim() !== '') {
     const minutes = Number(value);
     if (!Number.isFinite(minutes) || Math.round(minutes) < 0 || Math.round(minutes) > WORLD_MODIFIER_MAX_DELIVERY_EXTRA_MINUTES) {

@@ -20,6 +20,7 @@ import { SoftwareRegistry } from './SoftwareRegistry';
 import { SocialEngine } from './SocialEngine';
 import { TelemetryEngine } from './TelemetryEngine';
 import { WorldEventsEngine } from './WorldEventsEngine';
+import { EnvironmentEngine } from './EnvironmentEngine';
 import { totalDeliveryBacklogExtra } from './WorldModifiers';
 import { OsEngine } from './OsEngine';
 import { PulseEngine } from './PulseEngine';
@@ -64,6 +65,7 @@ export class SimulationEngine {
   public readonly social!: SocialEngine;
   public readonly telemetry!: TelemetryEngine;
   public readonly world!: WorldEventsEngine;
+  public readonly environment!: EnvironmentEngine;
 
   private activeView: 'pc' | 'room' | 'cafe' | 'work' | 'city' = 'room';
   private subscribers: Set<(state: Readonly<SimulationState>) => void> = new Set();
@@ -86,6 +88,11 @@ export class SimulationEngine {
     // World before OS so Os can sync from world
     const worldInitial = (initialState as any)?.world ?? (initialState as any)?.narrative;
     this.world = new WorldEventsEngine(this.events, worldInitial);
+    this.environment = new EnvironmentEngine(
+      this.events,
+      this.world,
+      () => this.clock.getTotalMinutes(),
+    );
     // OsEngine is core — sync with hardware osVersion
     const osInitial = (initialState as any)?.os ?? { currentOsId: initialState?.hardware?.osVersion };
     this.os = new OsEngine(this.events, { currentOsId: osInitial.currentOsId ?? initialState?.hardware?.osVersion, ...(osInitial as object) });
@@ -275,6 +282,7 @@ export class SimulationEngine {
       this.social.updatePresence(currentMinutes);
       this.sweepBusyLeaveLines(currentMinutes); // Character Lives polite goodbyes
       this.world.checkAndTriggerEvents(currentMinutes, tickResult.time.day);
+      this.environment.publishIfChanged({ atMinute: currentMinutes });
       try { this.os.syncFromWorldState({ triggeredEvents: this.world.getTriggeredEvents(), pendingEvents: this.world.getPendingEvents() } as any, tickResult.time.day); } catch {}
       try { this.myplace.syncFromWorldState({ triggeredEvents: this.world.getTriggeredEvents() } as any, tickResult.time.day, currentMinutes); } catch {}
       // MyPlace NPCs may change their profile and then message you about it (governed)
@@ -326,6 +334,7 @@ export class SimulationEngine {
     this.social.updatePresence(currentMinutes);
     this.sweepBusyLeaveLines(currentMinutes); // Character Lives polite goodbyes
     this.world.checkAndTriggerEvents(currentMinutes, jumpResult.newTime.day);
+    this.environment.publishIfChanged({ atMinute: currentMinutes });
     try { this.os.syncFromWorldState({ triggeredEvents: this.world.getTriggeredEvents(), pendingEvents: this.world.getPendingEvents() } as any, jumpResult.newTime.day); } catch {}
     try { this.myplace.syncFromWorldState({ triggeredEvents: this.world.getTriggeredEvents() } as any, jumpResult.newTime.day, currentMinutes); } catch {}
     if (jumpResult.dayChanged) {
