@@ -83,15 +83,15 @@ export const GENERATED_DISTRICTS: GeneratedDistrictDef[] = [
   },
 ];
 
-export const GENERATED_PLACES: GeneratedPlaceDef[
+export const GENERATED_PLACES: GeneratedPlaceDef[] = [
   {
     id: "place_a1",
     districtId: "district_a",
     name: "Place A1",
     transitAccess: [{ stopId: "stop_a", walkMinutes: 4 }],
     legacyIds: [],
-    spatialBounds: {"polygon":[{"x":15,"y":55},{"x":25,"y":55},{"x":25,"y":65},{"x":15,"y":65}],"minZ":0,"maxZ":0,"priority":0},
-    entryPosition: {"x":20,"y":60,"z":0},
+    spatialBounds: { polygon: [{ x: 15, y: 55 }, { x: 25, y: 55 }, { x: 25, y: 65 }, { x: 15, y: 65 }], minZ: 0, maxZ: 0, priority: 0 },
+    entryPosition: { x: 20, y: 60, z: 0 },
   },
   {
     id: "place_b1",
@@ -99,8 +99,8 @@ export const GENERATED_PLACES: GeneratedPlaceDef[
     name: "CornerMart",
     transitAccess: [{ stopId: "stop_b", walkMinutes: 5 }],
     legacyIds: [],
-    spatialBounds: {"polygon":[{"x":75,"y":35},{"x":85,"y":35},{"x":85,"y":45},{"x":75,"y":45}],"minZ":0,"maxZ":0,"priority":0},
-    entryPosition: {"x":80,"y":40,"z":0},
+    spatialBounds: { polygon: [{ x: 75, y: 35 }, { x: 85, y: 35 }, { x: 85, y: 45 }, { x: 75, y: 45 }], minZ: 0, maxZ: 0, priority: 0 },
+    entryPosition: { x: 80, y: 40, z: 0 },
   },
   {
     id: "room_104",
@@ -250,7 +250,7 @@ export interface GeneratedViewDef {
   tags: string[];
 }
 
-export const GENERATED_SPACES: GeneratedSpaceDef[
+export const GENERATED_SPACES: GeneratedSpaceDef[] = [
   {
     id: "room104_main",
     placeId: "room_104",
@@ -274,8 +274,8 @@ export const GENERATED_SPACES: GeneratedSpaceDef[
     placeId: "place_a1",
     name: "Space A1",
     tags: ["interior"],
-    spatialBounds: {"polygon":[{"x":17,"y":57},{"x":23,"y":57},{"x":23,"y":63},{"x":17,"y":63}],"minZ":0,"maxZ":0,"priority":0},
-    entryPosition: {"x":20,"y":60,"z":0},
+    spatialBounds: { polygon: [{ x: 17, y: 57 }, { x: 23, y: 57 }, { x: 23, y: 63 }, { x: 17, y: 63 }], minZ: 0, maxZ: 0, priority: 0 },
+    entryPosition: { x: 20, y: 60, z: 0 },
   },
   {
     id: "space_b1",
@@ -291,7 +291,7 @@ export const GENERATED_SPACES: GeneratedSpaceDef[
   },
 ];
 
-export const GENERATED_VIEWS: GeneratedViewDef[
+export const GENERATED_VIEWS: GeneratedViewDef[] = [
   {
     id: "room104_bed_wardrobe",
     spaceId: "room104_main",
@@ -383,7 +383,7 @@ export interface GeneratedInteractionDef {
   tags: string[];
 }
 
-export const GENERATED_ANCHORS: GeneratedAnchorDef[
+export const GENERATED_ANCHORS: GeneratedAnchorDef[] = [
   {
     id: "anchor_a1",
     viewId: "view_a1",
@@ -730,7 +730,7 @@ export const GENERATED_ANCHORS: GeneratedAnchorDef[
   },
 ];
 
-export const GENERATED_INTERACTIONS: GeneratedInteractionDef[
+export const GENERATED_INTERACTIONS: GeneratedInteractionDef[] = [
   {
     id: "corner_mart_cashier",
     anchorId: "fixture_shop_staff_anchor",
@@ -1268,7 +1268,7 @@ export const GENERATED_PHYSICAL_OBJECT_DEFS: GeneratedPhysicalObjectDef[] = [
   },
 ];
 
-export const GENERATED_PLACEMENT_SLOTS: GeneratedPlacementSlotDef[
+export const GENERATED_PLACEMENT_SLOTS: GeneratedPlacementSlotDef[] = [
   {
     id: "delivery_target_primary",
     name: "Primary Delivery Target",
@@ -1344,7 +1344,7 @@ export const GENERATED_OBJECT_PLACEMENTS: GeneratedObjectPlacementDef[] = [
   },
 ];
 
-export const GENERATED_PLACE_SERVICE_POLICIES: GeneratedPlaceServicePolicy[
+export const GENERATED_PLACE_SERVICE_POLICIES: GeneratedPlaceServicePolicy[] = [
   {
     id: "primary_delivery_policy",
     placeId: "room_104",
@@ -1408,7 +1408,7 @@ export const GENERATED_HOUSING_OFFERS: GeneratedHousingOfferDef[
     starterEligible: false,
     starterDefault: false,
   },
-];
+]
 
 export interface GeneratedVenueRoleDef {
   id: string;
