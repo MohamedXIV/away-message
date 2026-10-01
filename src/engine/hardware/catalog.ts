@@ -262,7 +262,7 @@ export const HARDWARE_STORE_INVENTORY: HardwareStoreItem[] = [
     name: 'The Scrap Yard Special (Refurbished)',
     category: 'bundle',
     price: 35.0,
-    description: 'A dusty beige tower with matching curved 14" CRT, plus the original Orion 4.8 setup CD. A complete starter package ready to take back to Room 104.',
+    description: 'A dusty beige tower with matching curved 14" CRT, plus the original Orion 4.8 setup CD. A complete starter package ready to take back to your current residence.',
     specsSummary: 'Cel-366 MHz · 64MB RAM · 2.1GB HDD · 14" Curved CRT · Orion 4.8 Setup CD',
     repeatable: false,
     contents: skuContents('chassis_scrapyard_beige_atx', 'mb_standard_atx', 'cpu_celeron_366', 'ram_sdram_64_a', 'hdd_quantum_2gb', 'optical_cdrom_24x', 'sound_sb16', 'modem_v90_56k', 'mon_beige_curved_14', 'media_orion_48_setup'),

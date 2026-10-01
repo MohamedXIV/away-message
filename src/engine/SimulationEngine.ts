@@ -338,10 +338,25 @@ export class SimulationEngine extends LegacySimulationEngine {
     });
   }
 
+  private currentResidenceOwnedItemAnchorId(): string {
+    const target = resolvePlaceDeliveryTarget(
+      this.getCurrentResidencePlaceId(),
+      GENERATED_PLACE_SERVICE_POLICIES,
+      PHYSICAL_RUNTIME_GRAPH,
+    );
+    if (!target.ok) {
+      throw new Error(
+        `Current residence '${this.getCurrentResidencePlaceId()}' has no authored owned-item/delivery anchor (${target.reason}).`,
+      );
+    }
+    return target.location.anchorId;
+  }
+
   private hydratePhysicalWorld(persisted?: PhysicalWorldState): PhysicalWorldState {
     const owned = bridgeOwnedInventoryIntoPhysicalWorld(
       persisted ? clonePhysicalWorld(persisted) : emptyPhysicalWorld(),
       this.inventory.getState(),
+      this.currentResidenceOwnedItemAnchorId(),
     );
     return bridgePhysicalObjectContainers(
       owned,
@@ -408,6 +423,10 @@ export class SimulationEngine extends LegacySimulationEngine {
           : 'That residence is already active.';
       return { success: false, error };
     }
+
+    // Reproject player-owned inventory into the new home's authored anchor.
+    // Property fixtures remain with their authored spaces.
+    this.physicalWorldState = this.hydratePhysicalWorld(this.currentPhysicalWorld());
 
     try {
       this.telemetry.logEvent('world', 'residence_changed', this.clock.getTotalMinutes(), {

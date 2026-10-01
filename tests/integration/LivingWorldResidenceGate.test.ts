@@ -46,8 +46,21 @@ describe('living-world housing choice and move gate (#29)', () => {
     const buddiesBefore = sim.social.getBuddies().map((buddy) => buddy.id);
     const needsBefore = sim.needs.getState();
     const hardwareBefore = sim.hardware.getState();
+    const preparedOwnedItem = sim.inventory.preparePurchase(
+      'housing-gate-owned-item',
+      [{ catalogItemId: 'chassis_scrapyard_beige_atx', quantity: 1 }],
+      { chassis_scrapyard_beige_atx: 'hardware' },
+    );
+    sim.inventory.commitPurchase(preparedOwnedItem);
+    sim.loadSnapshot(sim.exportSnapshot());
+
     const inventoryBefore = sim.inventory.getState();
     const objectsBefore = sim.getPhysicalObjectState();
+    const ownedItemId = preparedOwnedItem.items[0]!.instanceId;
+    expect(sim.getPhysicalWorldState().items[ownedItemId]?.location).toEqual({
+      kind: 'worldAnchor',
+      anchorId: 'room208_delivery',
+    });
 
     const initialProjection = createWorldSceneProjection({
       placeId: sim.getCurrentResidencePlaceId(),
@@ -70,6 +83,10 @@ describe('living-world housing choice and move gate (#29)', () => {
     expect(sim.hardware.getState()).toEqual(hardwareBefore);
     expect(sim.inventory.getState()).toEqual(inventoryBefore);
     expect(sim.getPhysicalObjectState()).toEqual(objectsBefore);
+    expect(sim.getPhysicalWorldState().items[ownedItemId]?.location).toEqual({
+      kind: 'worldAnchor',
+      anchorId: 'room305_delivery',
+    });
 
     const movedProjection = createWorldSceneProjection({
       placeId: sim.getCurrentResidencePlaceId(),
