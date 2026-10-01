@@ -5,7 +5,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useSimulationStore } from '../store/useSimulationStore';
 import { soundManager } from '../audio/SoundManager';
-import { PhysicalWorldHost } from './phaser/PhysicalWorldHost';
+import { PhysicalWorldBoundary } from './phaser/PhysicalWorldBoundary';
 import { createWorldSceneProjection } from './phaser/presentationAdapter';
 import { GENERATED_VENUE_SERVICES } from '../engine/worldContent.generated';
 import { CafeExpression } from './types';
@@ -319,7 +319,7 @@ export const CafeScene: React.FC<{ buddyId?: string }> = ({ buddyId: propBuddyId
 
       {/* Canonical authored physical-world renderer; dialogue remains a React overlay. */}
       <div className="flex-1 relative bg-black overflow-hidden min-h-0">
-        <PhysicalWorldHost
+        <PhysicalWorldBoundary
           projection={cafeProjection}
           visualMode="production"
           className="w-full h-full"

@@ -4,7 +4,7 @@ import React, { useMemo, useRef, useState } from 'react';
 import { useSimulationStore } from '../store/useSimulationStore';
 import { resolvePcBootState } from '../engine/SimulationEngine';
 import { soundManager } from '../audio/SoundManager';
-import { PhysicalWorldHost } from './phaser/PhysicalWorldHost';
+import { PhysicalWorldBoundary } from './phaser/PhysicalWorldBoundary';
 import { createWorldSceneProjection } from './phaser/presentationAdapter';
 import type { WorldInteractionIntent } from './phaser/types';
 import { getRoomDeskPresentation } from './RoomComputerPresentation';
@@ -407,7 +407,7 @@ export const RoomScene: React.FC = () => {
 
       {/* Canonical authored physical-world renderer. React owns overlays only. */}
       <div className="flex-1 relative bg-black overflow-hidden">
-        <PhysicalWorldHost
+        <PhysicalWorldBoundary
           projection={roomProjection}
           onIntent={handlePhysicalIntent}
           visualMode="production"
