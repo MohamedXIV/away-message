@@ -405,3 +405,32 @@ Small designed or systemic memory imperfections may exist, but major continuity 
 The sandbox may contain clear payoffs, ambiguous details and mundane recurring life without forcing every thread to resolve.
 
 The goal is a town that feels larger than any one save's discovered content—not a fixed story that all saves must complete.
+
+
+## 13. Optional scenarios and story threads
+
+Away Message may use optional semi-baked Scenarios to give a save authored personal context without restoring a mandatory global plot.
+
+The canonical rule is:
+
+```text
+authored situation
++ semantic roles
++ dynamic binding
++ canonical simulation
+= optional personal story
+```
+
+Scenario does not own relationship, location, job, item, knowledge, transit or Life Matrix truth.
+
+A Scenario may initialize appropriate pre-game history through the owning systems and then observe normal sandbox state for optional hooks.
+
+Example: `someone_from_before` may bind an `old_acquaintance` role to any compatible actor. The player may know that this person was associated with the town years ago while lacking current address/contact information. The person need not be Maya, need not still live locally, need not be found, and need not become a romance.
+
+The fake internet is a natural discovery surface: old usernames, archived posts, personal pages, directory clues, CityWire references and search results can expose scenario-safe facts only when normal knowledge/content rules permit them.
+
+Inner Voice may surface approved scenario cues, but still follows its own priority, cooldown, knowledge-safety and offline-fallback rules.
+
+A dedicated quest log or mini-quest UI is **not** part of the first framework. Player-facing projection is a later presentation decision.
+
+Canonical design: `13-SCENARIOS-AND-STORY-THREADS.md`.

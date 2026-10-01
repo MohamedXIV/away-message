@@ -1,6 +1,6 @@
 # Away Message — Open-Ended Sandbox Docs
 
-**This package contains exactly 14 core files.**
+**This package contains exactly 15 core files.**
 
 It defines the current open-ended sandbox product direction. Historical evaluation-era material must not be treated as current product authority.
 
@@ -19,8 +19,9 @@ It defines the current open-ended sandbox product direction. Historical evaluati
 11. `10-RESIDENCE-HOUSING-AND-SPACE-PROGRESSION.md`
 12. `11-SPATIAL-PRESENCE-VENUES-AND-ACTOR-PRESENTATION.md`
 13. `12-ENVIRONMENT-PLAYER-NEEDS-AND-MOOD.md`
+14. `13-SCENARIOS-AND-STORY-THREADS.md`
 
-This README is the fourteenth core file.
+This README is the fifteenth core file.
 
 Detailed implementation specs/plans under `docs/superpowers/` supplement these core documents and may grow independently.
 
@@ -30,12 +31,15 @@ Current cross-cutting architecture supplements:
 - `docs/superpowers/plans/2026-09-10-orion-salvage-roadmap.md`
 - `docs/superpowers/plans/2026-09-10-life-matrix-foundation.md`
 - `docs/superpowers/plans/2026-10-01-environment-needs-mood-foundation.md`
+- `docs/superpowers/plans/2026-10-01-scenario-story-thread-roadmap.md`
 
 ## Goal
 
 Build an open-ended life sandbox where the player can keep living, working, upgrading, browsing, moving, meeting people and changing relationships without a scripted final day.
 
 There is no mandatory named NPC, romance route, café meeting, or named-character progression path. Named characters may exist as ordinary authored inhabitants or temporary fixtures, but systems must resolve actors through roles, capabilities, relationships, location, knowledge and current state.
+
+Optional semi-baked **Scenarios** may give a save personal history, unresolved relationships, rumors, debts, memories or leads. They bind semantic roles dynamically and remain optional framing over the sandbox; they are not a fixed campaign or mandatory quest route. See `13-SCENARIOS-AND-STORY-THREADS.md`.
 
 ## Canonical stack
 
