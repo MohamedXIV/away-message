@@ -148,6 +148,48 @@ The exact filenames/classes may change during implementation. These ownership bo
 
 ---
 
+## 3B. Optional Scenario / Story Thread boundary
+
+The Scenario layer adds authored personal context without becoming a second simulation.
+
+Canonical design: `13-SCENARIOS-AND-STORY-THREADS.md`.
+
+Conceptual flow:
+
+```text
+authored ScenarioDefinition
+        ↓
+eligibility + deterministic dynamic role binding
+        ↓
+ScenarioInstance
+        ├─ role bindings
+        ├─ scenario-local provenance/lifecycle
+        └─ consumed optional hooks
+        ↓
+observe canonical simulation
+        ↓
+ScenarioProjection (optional read model)
+```
+
+Pre-game initialization may coordinate writes through existing authorities:
+
+```text
+Scenario initialization
+   ├─ SocialEngine / memories / relationship history
+   ├─ canonical Player Knowledge
+   └─ ScenarioInstance provenance + bindings
+```
+
+The Scenario layer must not copy ongoing canonical relationship/location/job/appointment/item/event/transit/knowledge state into a competing quest database.
+
+Semantic role IDs such as `old_acquaintance` are allowed. Sacred actor IDs such as `maya` are not product authority.
+
+Scenario hooks observe domain truth and may expose optional opportunities. They do not teleport actors, overwrite Life Matrix intent, force a relationship outcome, or create hidden knowledge.
+
+The first implementation requires no dedicated quest UI. A later ScenarioProjection consumer may choose hidden, journal, rumor, Inner Voice, soft-objective or mini-quest presentation.
+
+---
+
 ## 4. Golden rule
 
 > **Simulation never imports React, Phaser, or Ink runtime UI code.**
