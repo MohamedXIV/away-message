@@ -7,7 +7,7 @@ import { soundManager } from '../audio/SoundManager';
 import { RoomCanvasRenderer, getTimeOfDayFromHour } from './RoomCanvas';
 import { getRoomDeskPresentation } from './RoomComputerPresentation';
 import { RoomHotspotId, RoomActivityOption, WeatherType } from './types';
-import { getWeatherForDay, isWetWeather } from '../engine/WeatherEngine';
+import { projectEnvironmentPresentation } from './phaser/environment/environmentProjection';
 import { CITY_NODES, type CityNodeId, type TravelMode } from '../engine/CityMap';
 import { CityPlaceView } from './components/CityPlaceView';
 
@@ -42,6 +42,9 @@ export const RoomScene: React.FC = () => {
   const syncStateFromEngine = useSimulationStore((s) => s.syncStateFromEngine);
   const time = useSimulationStore((s) => s.state.time);
   const player = useSimulationStore((s) => s.state.player);
+  useSimulationStore((s) => s.state.needs);
+  useSimulationStore((s) => s.state.mood);
+  useSimulationStore((s) => s.state.world.triggeredEvents);
   const computer = useSimulationStore((s) => s.state.computer);
   const inventory = useSimulationStore((s) => s.state.inventory);
   const os = useSimulationStore((s) => s.state.os);
@@ -65,12 +68,11 @@ export const RoomScene: React.FC = () => {
     'window' | 'beverage' | 'door' | 'sleep' | 'hardware' | null
   >(null);
 
-  // Weather: live engine forecast mapped to the canvas vocabulary (was a hardcoded 3-day hack)
-  const liveCondition = getWeatherForDay(time.day).condition;
-  const weather: WeatherType =
-    liveCondition === 'rain' || liveCondition === 'drizzle' || liveCondition === 'storm' ? 'rain'
-    : liveCondition === 'overcast' || liveCondition === 'fog' ? 'cloudy'
-    : 'clear';
+  const environment = engine.gameContext.environment.current();
+  const environmentPresentation = projectEnvironmentPresentation(environment);
+  const weather: WeatherType = environmentPresentation.weather;
+  const needs = engine.gameContext.player.needs();
+  const mood = engine.gameContext.player.mood();
   const timeOfDay = getTimeOfDayFromHour(time.hour);
   const hasActiveDownloads = downloads.some((d) => d.status === 'downloading');
 
@@ -265,10 +267,10 @@ export const RoomScene: React.FC = () => {
           <DoorActionModal
             hour={time.hour}
             playerCash={player.cash}
-            playerEnergy={player.energy}
+            playerEnergy={needs.energy}
             playerLocation={playerLocation}
-            raining={isWetWeather(getWeatherForDay(time.day).condition)}
-            storming={getWeatherForDay(time.day).condition === 'storm'}
+            raining={environment.weather.tags.includes('wet')}
+            storming={environment.weather.condition === 'storm'}
             jobs={jobBoardEntries}
             onApplyGig={handleApplyGig}
             onTravel={dispatchTravel}
@@ -317,31 +319,31 @@ export const RoomScene: React.FC = () => {
           <div className="flex items-center gap-2">
             <div className="flex items-center gap-1 text-amber-300 font-mono text-[11px]">
               <Zap className="w-3 h-3" />
-              <span>{player.energy}%</span>
+              <span>{needs.energy}%</span>
             </div>
             <div className="w-16 h-2 bg-slate-800 rounded-full border border-slate-700 overflow-hidden">
               <div
                 className="h-full bg-gradient-to-r from-amber-600 to-green-500 transition-all duration-300"
-                style={{ width: `${player.energy}%` }}
+                style={{ width: `${needs.energy}%` }}
               />
             </div>
             {/* P6.6 hunger at a glance (fills as hunger rises — eat something!) */}
-            <div className="flex items-center gap-1 font-mono text-[11px]" title={`Hunger ${Math.round(player.hunger ?? 0)}%`}>
+            <div className="flex items-center gap-1 font-mono text-[11px]" title={`Hunger ${Math.round(needs.hunger ?? 0)}%`}>
               <span>🍜</span>
               <div className="w-12 h-2 bg-slate-800 rounded-full border border-slate-700 overflow-hidden">
                 <div
-                  className={`h-full transition-all duration-300 ${(player.hunger ?? 0) >= 80 ? 'bg-red-500' : (player.hunger ?? 0) >= 55 ? 'bg-amber-500' : 'bg-emerald-600'}`}
-                  style={{ width: `${Math.min(100, Math.round(player.hunger ?? 0))}%` }}
+                  className={`h-full transition-all duration-300 ${(needs.hunger ?? 0) >= 80 ? 'bg-red-500' : (needs.hunger ?? 0) >= 55 ? 'bg-amber-500' : 'bg-emerald-600'}`}
+                  style={{ width: `${Math.min(100, Math.round(needs.hunger ?? 0))}%` }}
                 />
               </div>
             </div>
             {/* Social battery at a glance (introvert meter — talking spends it, solitude repays it) */}
-            <div className="flex items-center gap-1 font-mono text-[11px]" title={`Social battery ${Math.round(player.socialBattery ?? 100)}% — bold talk costs extra`}>
+            <div className="flex items-center gap-1 font-mono text-[11px]" title={`Social battery ${Math.round(needs.socialBattery ?? 100)}% — bold talk costs extra`}>
               <span>💬</span>
               <div className="w-12 h-2 bg-slate-800 rounded-full border border-slate-700 overflow-hidden">
                 <div
-                  className={`h-full transition-all duration-300 ${(player.socialBattery ?? 100) <= 0 ? 'bg-red-500' : (player.socialBattery ?? 100) < 25 ? 'bg-amber-500' : 'bg-purple-500'}`}
-                  style={{ width: `${Math.min(100, Math.round(player.socialBattery ?? 100))}%` }}
+                  className={`h-full transition-all duration-300 ${(needs.socialBattery ?? 100) <= 0 ? 'bg-red-500' : (needs.socialBattery ?? 100) < 25 ? 'bg-amber-500' : 'bg-purple-500'}`}
+                  style={{ width: `${Math.min(100, Math.round(needs.socialBattery ?? 100))}%` }}
                 />
               </div>
             </div>
@@ -433,7 +435,7 @@ export const RoomScene: React.FC = () => {
           weather={weather}
           thoughtText={windowData.thought}
           entity={windowData.entity}
-          mood={windowData.mood}
+          mood={mood.band}
           sighting={streetSighting}
           onClose={() => setActiveModal(null)}
         />
@@ -451,10 +453,10 @@ export const RoomScene: React.FC = () => {
         <DoorActionModal
           hour={time.hour}
           playerCash={player.cash}
-          playerEnergy={player.energy}
+          playerEnergy={needs.energy}
           playerLocation={player.location ?? 'home'}
-          raining={isWetWeather(getWeatherForDay(time.day).condition)}
-          storming={getWeatherForDay(time.day).condition === 'storm'}
+          raining={environment.weather.tags.includes('wet')}
+          storming={environment.weather.condition === 'storm'}
           jobs={jobBoardEntries}
           onApplyGig={handleApplyGig}
           onTravel={dispatchTravel}

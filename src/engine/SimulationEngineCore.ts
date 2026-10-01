@@ -23,6 +23,7 @@ import { TelemetryEngine } from './TelemetryEngine';
 import { WorldEventsEngine } from './WorldEventsEngine';
 import { EnvironmentEngine } from './EnvironmentEngine';
 import { MoodEngine, type MoodContext } from './MoodEngine';
+import { createGameContextReadApi, type GameContextReadApi } from './GameContext';
 import { totalDeliveryBacklogExtra } from './WorldModifiers';
 import { OsEngine } from './OsEngine';
 import { PulseEngine } from './PulseEngine';
@@ -32,7 +33,6 @@ import { generateNewcomer, shouldAutoDiscover, NEWCOMER_METVIA_ROTATION } from '
 import { STRAINED_ANNOYANCE, DISTANT_ANNOYANCE, GONE_ANNOYANCE, traitCompatibility } from './SocialEngine';
 import { pickConfrontLine, pickFarewellLine, pickReturnLine, pickInitiativeText, pickRsvpLine, pickStoodUpLine, pickMeetingApologyLine, pickShiftWrapLine, pickGigWrapLine, pickArchiveWrapLine, pickGuestbookLine, pickGuestbookReplyLine, pickTop8NewsLine, pickOutingWarmLine, pickOutingReservedLine, pickRentReminderLine, pickRentSternLine, pickRentNudgeLine, pickRentThanksLine, pickJobAcceptLine, pickJobRejectLine, pickLeaveLine, pickMediationAskLine, pickMediationThanks, pickMyplaceUpdateLine, pickContactLine, pickContactBounce, pickBackstoryReintro, pickRuninSpot, pickRuninVerb, classifyScheduleBlock, AGENDA_LABELS, rollSeeded100, pickSeeded, spreadSeed, resolveArchetype } from './characterTemplates';
 import { parseMeetupProposal, isMeetupCancelText, decideRsvp, decideNpcShow, appointmentRoll, locationLabel, LOCATION_SLOTS, pickCoopDetail, SHIFT_WAGE } from './AppointmentDirector';
-import { getWeatherForDay, isSevereWeather, isWetWeather, shiftWageBonus } from './WeatherEngine';
 import { OUTINGS, isValidOutingId, isOutingOpen, outingHoursLabel, dinerStaffEncounter, canalRegularEncounter, buildLaundromatRumor, MIN_OUTING_ENERGY, type OutingId } from './OutingDirector';
 import { GIGS, jobRoll, replyDelayMinutes, decideApplication } from './JobDirector';
 import {
@@ -70,6 +70,7 @@ export class SimulationEngine {
   public readonly world!: WorldEventsEngine;
   public readonly environment!: EnvironmentEngine;
   public readonly mood!: MoodEngine;
+  public readonly gameContext!: GameContextReadApi;
 
   private activeView: 'pc' | 'room' | 'cafe' | 'work' | 'city' = 'room';
   private subscribers: Set<(state: Readonly<SimulationState>) => void> = new Set();
@@ -106,6 +107,14 @@ export class SimulationEngine {
       (initialState as any)?.mood,
       () => this.buildMoodContext(),
     );
+    this.gameContext = createGameContextReadApi({
+      getTime: () => this.clock.getTime(),
+      getCurrentEnvironment: (context) => this.environment.getCurrentSnapshot(context),
+      getEnvironmentAt: (query) => this.environment.getSnapshot(query),
+      getEnvironmentForecast: (query) => this.environment.getForecast(query),
+      getNeeds: () => this.needs.getSnapshot(),
+      getMood: () => this.mood.getCurrentSnapshot(),
+    });
     // OsEngine is core — sync with hardware osVersion
     const osInitial = (initialState as any)?.os ?? { currentOsId: initialState?.hardware?.osVersion };
     this.os = new OsEngine(this.events, { currentOsId: osInitial.currentOsId ?? initialState?.hardware?.osVersion, ...(osInitial as object) });
@@ -1232,7 +1241,16 @@ export class SimulationEngine {
             this.social.applySocialAction(buddy.id, action);
             this.social.applySocialAction(buddy.id, action);
             // P6.2 heat waves pay +$6 (thirsty town, busy cart); P6 gig shifts pay their wage
-            if (isShift) this.economy.earnCash((appt.wageOverride ?? SHIFT_WAGE) + shiftWageBonus(getWeatherForDay(appt.targetDay).condition), `Side shift with ${name}`);
+            if (isShift) {
+              const shiftEnvironment = this.gameContext.environment.at({
+                atMinute: (Math.max(1, appt.targetDay) - 1) * 1440 + 720,
+              });
+              const weatherBonus = shiftEnvironment.weather.tags.includes('hot') ? 6 : 0;
+              this.economy.earnCash(
+                (appt.wageOverride ?? SHIFT_WAGE) + weatherBonus,
+                `Side shift with ${name}`,
+              );
+            }
             this.social.addCoreMemory(buddy.id, {
               text: isShift
                 ? `Worked a side shift with ${name}, Day ${appt.targetDay}: ${detail}.`
@@ -1252,7 +1270,9 @@ export class SimulationEngine {
           }
         } else if (npcShowed && !playerShowed) {
           // P6.2 severe weather (fog/storm) is a legitimate excuse: missed, but no hard feelings
-          const excused = isSevereWeather(getWeatherForDay(appt.targetDay).condition);
+          const excused = this.gameContext.environment.at({
+            atMinute: (Math.max(1, appt.targetDay) - 1) * 1440 + 720,
+          }).weather.tags.includes('severe');
           if (excused) {
             this.world.updateAppointment(appt.id, { status: 'missed', isMissed: true, npcShowed: true, playerShowed: false });
             this.social.addCoreMemory(buddy.id, { text: `Severe weather kept you from ${label}, Day ${appt.targetDay}. No hard feelings.`, kind: 'fact', day: appt.targetDay });
@@ -1367,11 +1387,11 @@ export class SimulationEngine {
       const from = this.economy.getLocation();
       if (from === to) return { success: true, data: { summary: `Already at ${CITY_NODES[to].name}.`, minutes: 0, cost: 0 } };
       const day = this.clock.getTime().day;
-      const weather = getWeatherForDay(day);
-      if (to === 'canal' && weather.condition === 'storm') {
+      const environment = this.gameContext.environment.current();
+      if (to === 'canal' && environment.weather.condition === 'storm') {
         return { success: false, error: 'Canal walkway closed in the storm. Come back after the front passes.' };
       }
-      const quote = quoteTravel(from, to, mode, isWetWeather(weather.condition));
+      const quote = quoteTravel(from, to, mode, environment.weather.tags.includes('wet'));
       if (quote.busUsed && !this.economy.canAfford(BUS_FARE)) {
         return { success: false, error: `Bus fare is $${BUS_FARE.toFixed(2)} — walk it instead?` };
       }
@@ -1394,7 +1414,7 @@ export class SimulationEngine {
         const candidates = this.social.getBuddies()
           .filter((b) => b.status !== 'distant' && b.status !== 'gone' && b.status !== 'blocked')
           .map((b) => ({ id: b.id, name: b.displayName }));
-        const encounter = rollStreetEncounter(from, to, day, isWetWeather(weather.condition), candidates);
+        const encounter = rollStreetEncounter(from, to, day, environment.weather.tags.includes('wet'), candidates);
         if (encounter && encounter.kind !== 'quiet') {
           if (encounter.cashDelta !== 0) this.economy.earnCash(encounter.cashDelta, 'Street find');
           if (encounter.energyDelta !== 0) {
@@ -1674,8 +1694,8 @@ export class SimulationEngine {
       if (!isOutingOpen(outingId, hour)) {
         return { success: false, error: `${spec.label} is closed now (open ${outingHoursLabel(outingId)}).` };
       }
-      const weather = getWeatherForDay(day);
-      if (outingId === 'canal_walk' && weather.condition === 'storm') {
+      const environment = this.gameContext.environment.current();
+      if (outingId === 'canal_walk' && environment.weather.condition === 'storm') {
         return { success: false, error: 'Canal storm outside — the walkway is closed. Come back after the front passes.' };
       }
       if (spec.cost > 0) this.economy.spendCash(spec.cost, `City outing (${spec.label})`);
@@ -1711,7 +1731,7 @@ export class SimulationEngine {
       }
       if (outingId === 'canal_walk') {
         const walker = this.social.getBuddyWithRole('canal-regular');
-        const raining = isWetWeather(weather.condition);
+        const raining = environment.weather.tags.includes('wet');
         if (SimulationEngine.isBuddyAvailable(walker) && walker && canalRegularEncounter(hour, day, raining)) {
           const buddyId = walker.id;
           this.social.applySocialAction(buddyId, 'intellectual_curiosity');

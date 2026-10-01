@@ -1,10 +1,13 @@
 import React, { useState } from 'react';
 import { useSimulationStore } from '../../store/useSimulationStore';
-import { getForecast, gameDayName, type DayWeather } from '../../engine/WeatherEngine';
+import type { EnvironmentSnapshot } from '../../engine/EnvironmentEngine';
 
 export const WeatherBuddyApp: React.FC = () => {
-  const currentDay = useSimulationStore((s) => s.state.time.day);
+  const engine = useSimulationStore((s) => s.engine);
+  const currentTime = useSimulationStore((s) => s.state.time);
+  const worldEvents = useSimulationStore((s) => s.state.world.triggeredEvents);
   const installedSoftware = useSimulationStore((s) => s.state.installedSoftware || []);
+  void worldEvents;
 
   const [isCelsius, setIsCelsius] = useState(false);
   const selectedCity = 'Oakhaven - Industrial Canal';
@@ -21,10 +24,25 @@ export const WeatherBuddyApp: React.FC = () => {
     return `${c}°C`;
   };
 
-  // P6.2 live forecast: 6 real game days starting today (deterministic engine, not a static table)
-  const forecast: DayWeather[] = getForecast(currentDay, 6);
-  const currentCondition = forecast[0]!;
-  const dayLabel = (day: number): string => gameDayName(day);
+  const currentCondition = engine.gameContext.environment.current();
+  const forecast: EnvironmentSnapshot[] = engine.gameContext.environment.forecast({
+    atMinute: currentTime.totalMinutes + 1440,
+    count: 5,
+  });
+  const displayMeta = (condition: EnvironmentSnapshot['weather']['condition']) => ({
+    rain: { label: 'Canal Rain', icon: '🌧️' },
+    drizzle: { label: 'Light Drizzle', icon: '🌦️' },
+    overcast: { label: 'Heavy Overcast', icon: '☁️' },
+    fog: { label: 'Canal Fog', icon: '🌫️' },
+    clear: { label: 'Break in Clouds', icon: '⛅' },
+    heat: { label: 'Heat Wave', icon: '☀️' },
+    storm: { label: 'Canal Storm', icon: '⛈️' },
+  })[condition];
+  const dayLabel = (day: number): string => {
+    const names = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    return names[new Date(2006, 7, 21 + Math.max(1, day)).getDay()]!;
+  };
+  const currentMeta = displayMeta(currentCondition.weather.condition);
 
   return (
     <div className="w-full h-full bg-gradient-to-b from-sky-400 via-sky-200 to-amber-100 text-black font-sans text-xs select-none flex flex-col justify-between p-3 border-2 border-emerald-600 shadow-2xl relative overflow-hidden">
@@ -64,11 +82,11 @@ export const WeatherBuddyApp: React.FC = () => {
         {/* Current Weather Stats */}
         <div className="text-right">
           <div className="text-3xl font-extrabold text-slate-800 font-mono">
-            {toDisplayTemp(currentCondition.highF)}
+            {toDisplayTemp(currentCondition.weather.highF)}
           </div>
-          <div className="text-xs font-bold text-slate-700">{currentCondition.label}</div>
+          <div className="text-xs font-bold text-slate-700">{currentMeta.label}</div>
           <div className="text-[10px] text-slate-500">
-            Low: {toDisplayTemp(currentCondition.lowF)} | Humidity: 88%
+            Low: {toDisplayTemp(currentCondition.weather.lowF)} | Humidity: 88%
           </div>
         </div>
       </div>
@@ -79,15 +97,18 @@ export const WeatherBuddyApp: React.FC = () => {
           5-Day Forecast:
         </span>
         <div className="grid grid-cols-5 gap-1 text-center">
-          {forecast.slice(1, 6).map((d) => (
+          {forecast.map((d) => {
+            const meta = displayMeta(d.weather.condition);
+            return (
             <div key={d.day} className="bg-white/80 p-1 rounded border border-emerald-100 flex flex-col items-center">
               <span className="font-bold text-[10px] text-gray-700">{dayLabel(d.day)}</span>
-              <span className="text-base my-0.5">{d.icon}</span>
+              <span className="text-base my-0.5">{meta.icon}</span>
               <span className="font-mono text-[10px] font-bold text-gray-800">
-                {toDisplayTemp(d.highF)}
+                {toDisplayTemp(d.weather.highF)}
               </span>
             </div>
-          ))}
+            );
+          })}
         </div>
       </div>
 
