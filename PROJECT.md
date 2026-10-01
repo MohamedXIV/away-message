@@ -81,6 +81,36 @@ Online AI enriches surface dialogue and generated content; deterministic rules r
 
 ---
 
+## 2A. Current M4 authority foundation — #128–#132
+
+Before expanding more world/app behavior, M4 now includes an explicit authority correction:
+
+```text
+#129 Environment authority ──────┐
+                                 ├──> #131 Mood ──────┐
+#130 Player Needs authority ─────┘                    │
+                                                      ├──> #132 stable Game Context + consumer migration
+#129/#130 ────────────────────────────────────────────┘
+                                                               │
+                                                               ▼
+                                                              #29
+```
+
+This foundation is allowed to refactor/rebuild current seams.
+
+- Current `WeatherEngine` is not guaranteed to remain the public weather API.
+- Current `EconomyEngine` combining finance + body/social-resource state is not the desired final ownership.
+- New code must target separate Environment, Finance, Player Needs and Mood authorities.
+- Mood uses contextual influences plus bounded transient semantic effects, never arbitrary raw deltas from apps.
+- WeatherBuddy, Phaser/audio, Inner Voice and future systems ultimately read the same canonical state through Game Context.
+- #132 performs consumer migration and retires compatibility paths with no remaining consumers.
+
+Canonical design: `docs/12-ENVIRONMENT-PLAYER-NEEDS-AND-MOOD.md`.
+
+Execution roadmap: `docs/superpowers/plans/2026-10-01-environment-needs-mood-foundation.md`.
+
+---
+
 ## 3. Milestones Decomposition
 
 | # | Milestone Name | Scope & Key Deliverables | Dependencies | Status |
@@ -88,7 +118,7 @@ Online AI enriches surface dialogue and generated content; deterministic rules r
 | **M1** | Core Architecture & Simulation Engine | Package/build setup, pure TS `SimulationEngine`, GameClock, EventBus, VFS, Downloads, Software Registry, Economy, Schedules, Dexie persistence, Web Audio synth | None | DONE |
 | **M2** | Desktop Environment & OS Systems | Window Manager, Orion OS 4.8 / 6.x themes, Desktop Shell, Taskbar, Start Menu, CRT shader, Dial-up sim, Add/Remove Programs, Terminal, File Explorer, Control Panel | M1 | DONE |
 | **M3** | Fake Internet, Browser & Desktop Apps | Voyager Browser, 18 Fake Internet sites, search index, Pulse Messenger (AIM), RetroAmp, FlashFetch, ZipMate, PhotoBox 3.0, WeatherBuddy/SearchMate adware, SafeSweep, Notepad | M1, M2 | DONE |
-| **M4** | Sandbox World & 2D World | WorldEventsEngine, governed AI chat, generic authored places, dynamic characters, living interactions and optional in-person encounters | M1, M2, M3 | IN_PROGRESS |
+| **M4** | Sandbox World & 2D World | WorldEventsEngine, governed AI chat, generic authored places, dynamic characters, living interactions, optional in-person encounters, plus the #128 Environment/Player Needs/Mood/Game Context authority foundation | M1, M2, M3 | IN_PROGRESS |
 | **M5** | Integration & Adversarial Hardening | Sandbox-loop integration, E2E coverage, adversarial testing, telemetry/debug export and long-run continuity | M1, M2, M3, M4, E2E | PLANNED |
 | **E2E** | E2E Testing Track (Requirement-Driven) | Comprehensive Vitest + Playwright coverage for feature behavior, boundaries, combinations, persistence and long-running sandbox continuity | M1 (for test infra) | IN_PROGRESS |
 
