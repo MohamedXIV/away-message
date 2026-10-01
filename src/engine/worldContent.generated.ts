@@ -1,6 +1,6 @@
 // GENERATED — do not edit by hand.
-// Source: content/store.json (content vf16dc63a). Regenerate: npm run content:pull.
-export const WORLD_CONTENT_VERSION = 'f16dc63a';
+// Source: content/store.json (content vc122dd6b). Regenerate: npm run content:pull.
+export const WORLD_CONTENT_VERSION = 'c122dd6b';
 
 export interface GeneratedSpatialPoint {
   x: number;
@@ -785,6 +785,15 @@ export interface GeneratedEventModifierDef {
 
 export const GENERATED_EVENT_MODIFIERS: GeneratedEventModifierDef[] = [
   {
+    id: "canal_storm_front",
+    eventId: "canal_storm_warning",
+    domain: "environment",
+    kind: "condition_override",
+    durationMinutes: 180,
+    targetIds: [],
+    value: "storm",
+  },
+  {
     id: "festival_courier_backlog",
     eventId: "city_canal_festival",
     domain: "delivery",
@@ -810,15 +819,6 @@ export const GENERATED_EVENT_MODIFIERS: GeneratedEventModifierDef[] = [
     durationMinutes: 4320,
     targetIds: [],
     value: 40,
-  },
-  {
-    id: "canal_storm_front",
-    eventId: "canal_storm_warning",
-    domain: "environment",
-    kind: "condition_override",
-    durationMinutes: 180,
-    targetIds: [],
-    value: "storm",
   },
 ];
 
