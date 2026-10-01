@@ -648,6 +648,14 @@
       "durationMinutes": 4320,
       "targetIds": [],
       "value": "40"
+    },
+    "canal_storm_front": {
+      "eventId": "canal_storm_warning",
+      "domain": "environment",
+      "kind": "condition_override",
+      "durationMinutes": 180,
+      "targetIds": [],
+      "value": "storm"
     }
   },
   "items": {

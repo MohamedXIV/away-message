@@ -811,6 +811,15 @@ export const GENERATED_EVENT_MODIFIERS: GeneratedEventModifierDef[] = [
     targetIds: [],
     value: 40,
   },
+  {
+    id: "canal_storm_front",
+    eventId: "canal_storm_warning",
+    domain: "environment",
+    kind: "condition_override",
+    durationMinutes: 180,
+    targetIds: [],
+    value: "storm",
+  },
 ];
 
 export interface GeneratedPhysicalObjectDef {

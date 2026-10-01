@@ -46,6 +46,16 @@ export const GLOBAL_EVENTS_CATALOG: Omit<GlobalEvent, 'isTriggered' | 'triggered
     siteUrl: 'http://citywire.local/article/canal-festival',
   },
   {
+    id: 'canal_storm_warning',
+    title: 'Canal storm front warning',
+    description: 'CityWire posts a short-lived storm warning for the canal district and surrounding streets.',
+    category: 'city_news',
+    triggerDay: 4,
+    triggerHour: 15,
+    knowledgePrompt: 'A fast storm front is crossing Oakhaven; the canal paths and exposed streets are taking the worst of it.',
+    siteUrl: 'http://citywire.local/article/canal-storm-warning',
+  },
+  {
     id: 'orion_os_7_beta',
     title: 'Orion OS 7 Beta leaked screenshots',
     description: 'OrionSoft teased glossy screenshots of Orion OS 7 beta.',
