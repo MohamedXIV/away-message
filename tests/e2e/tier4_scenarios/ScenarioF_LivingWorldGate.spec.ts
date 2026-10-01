@@ -1,5 +1,5 @@
 import { test, expect } from '../fixtures/testFixture';
-import { GENERATED_HOUSING_OFFERS } from '../../src/engine/worldContent.generated';
+import { GENERATED_HOUSING_OFFERS } from '../../../src/engine/worldContent.generated';
 
 test.describe('Tier 4: Scenario F — Living-world integration gate (#29)', () => {
   test('current tenancy, canonical player context, and Phaser presentation stay composed', async ({
