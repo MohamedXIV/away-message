@@ -56,6 +56,13 @@ describe('Content event modifiers (#46)', () => {
     });
     expect(() => buildEventModifierRow('x', 'weather', 'storm', 60, [], '')).toThrow();
     expect(() => buildEventModifierRow('x', 'delivery', 'teleport', 60, [], '')).toThrow();
+    expect(buildEventModifierRow('city_canal_festival', 'environment', 'wind_delta', 60, [], '0.4')).toMatchObject({
+      domain: 'environment',
+      kind: 'wind_delta',
+      value: '0.4',
+    });
+    expect(() => buildEventModifierRow('city_canal_festival', 'environment', 'wind_delta', 60, [], '4')).toThrow();
+    expect(() => buildEventModifierRow('city_canal_festival', 'environment', 'condition_override', 60, [], 'hurricane')).toThrow();
 
     const tables = worldTablesFromGenerated();
     const modifiers = (tables['eventModifiers'] ?? {}) as Record<string, Record<string, unknown>>;

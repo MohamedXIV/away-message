@@ -9,6 +9,15 @@ import { projectEnvironmentAudio } from '../../src/audio/environmentMapping';
 const atDay = (day: number, minuteOfDay = 720) => (day - 1) * 1440 + minuteOfDay;
 
 describe('EnvironmentEngine (#129)', () => {
+  it('exposes current-time semantics without making consumers own clock math', () => {
+    const bus = new EventBus();
+    let currentMinute = atDay(3, 615);
+    const env = new EnvironmentEngine(bus, undefined, () => currentMinute);
+    expect(env.getCurrentSnapshot()).toEqual(env.getSnapshot({ atMinute: currentMinute }));
+    currentMinute += 1440;
+    expect(env.getCurrentForecast(2)).toEqual(env.getForecast({ atMinute: currentMinute, count: 2 }));
+  });
+
   it('resolves deterministic base environment without events', () => {
     const env = new EnvironmentEngine(new EventBus());
     const atMinute = atDay(2, 845);

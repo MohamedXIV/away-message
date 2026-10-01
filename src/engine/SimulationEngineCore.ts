@@ -88,7 +88,11 @@ export class SimulationEngine {
     // World before OS so Os can sync from world
     const worldInitial = (initialState as any)?.world ?? (initialState as any)?.narrative;
     this.world = new WorldEventsEngine(this.events, worldInitial);
-    this.environment = new EnvironmentEngine(this.events, this.world);
+    this.environment = new EnvironmentEngine(
+      this.events,
+      this.world,
+      () => this.clock.getTotalMinutes(),
+    );
     // OsEngine is core — sync with hardware osVersion
     const osInitial = (initialState as any)?.os ?? { currentOsId: initialState?.hardware?.osVersion };
     this.os = new OsEngine(this.events, { currentOsId: osInitial.currentOsId ?? initialState?.hardware?.osVersion, ...(osInitial as object) });

@@ -34,6 +34,8 @@ export interface EnvironmentSnapshot {
   sourceEventIds: string[];
 }
 
+export type EnvironmentContext = Omit<EnvironmentQuery, 'atMinute'>;
+
 export interface EnvironmentForecastQuery extends EnvironmentQuery {
   count: number;
 }
@@ -144,7 +146,15 @@ export class EnvironmentEngine {
   public constructor(
     private readonly eventBus: EventBus,
     private readonly modifierSource?: EnvironmentModifierSource,
+    private readonly currentMinute: () => number = () => 0,
   ) {}
+
+  public getCurrentSnapshot(context: EnvironmentContext = {}): EnvironmentSnapshot {
+    return this.getSnapshot({
+      ...context,
+      atMinute: this.currentMinute(),
+    });
+  }
 
   public getSnapshot(rawQuery: EnvironmentQuery): EnvironmentSnapshot {
     const query: EnvironmentQuery = { ...rawQuery, atMinute: normalizeMinute(rawQuery.atMinute) };
@@ -221,6 +231,17 @@ export class EnvironmentEngine {
       },
       sourceEventIds: [...new Set(applied.map((modifier) => modifier.sourceEventId))].sort(),
     };
+  }
+
+  public getCurrentForecast(
+    count: number,
+    context: EnvironmentContext = {},
+  ): EnvironmentSnapshot[] {
+    return this.getForecast({
+      ...context,
+      atMinute: this.currentMinute(),
+      count,
+    });
   }
 
   public getForecast(query: EnvironmentForecastQuery): EnvironmentSnapshot[] {
