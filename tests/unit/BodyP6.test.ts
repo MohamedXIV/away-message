@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { EventBus } from '../../src/engine/EventBus';
 import { EconomyEngine } from '../../src/engine/EconomyEngine';
+import { PlayerNeedsEngine } from '../../src/engine/PlayerNeedsEngine';
 import { SimulationEngine } from '../../src/engine/SimulationEngine';
 import { buildBodyHint } from '../../src/engine/BodyDirector';
 
@@ -32,7 +33,7 @@ describe('P6.1 hunger and meals', () => {
   });
 
   it('groceries feed well and heal a little', () => {
-    (economy as any).state.pantry.groceries = 1;
+    economy.addPantry('groceries', 1);
     economy.advanceTime(20 * 60); // hunger 90
     const healthBefore = economy.getState().health;
     expect(economy.eatMeal('groceries').success).toBe(true);
@@ -42,7 +43,9 @@ describe('P6.1 hunger and meals', () => {
   });
 
   it('empty pantry blocks meals (buy more first)', () => {
-    (economy as any).state.pantry.noodles = 0;
+    economy = new EconomyEngine(new EventBus(), {
+      pantry: { noodles: 0, groceries: 0 },
+    });
     const res = economy.eatMeal('noodles');
     expect(res.success).toBe(false);
     expect(res.error).toContain('pantry');
@@ -58,72 +61,65 @@ describe('P6.1 hunger and meals', () => {
 });
 
 describe('P6.1 sleep quality and debt', () => {
-  let economy: EconomyEngine;
-  beforeEach(() => { economy = makeEconomy(); });
+  let needs: PlayerNeedsEngine;
+  beforeEach(() => { needs = new PlayerNeedsEngine(new EventBus()); });
 
   it('good nights repay debt first, then restore to the improved ceiling', () => {
-    economy.consumeEnergy(60);
-    (economy as any).state.sleepDebt = 4;
-    economy.restOrSleep(8, 23);
-    expect(economy.getState().sleepDebt).toBe(1);
-    expect(economy.getState().energy).toBe(100 - 3); // ceiling with debt 1
+    needs = new PlayerNeedsEngine(new EventBus(), { energy: 40, sleepDebt: 4 });
+    needs.restOrSleep(8, 23);
+    expect(needs.getState().sleepDebt).toBe(1);
+    expect(needs.getState().energy).toBe(100 - 3);
   });
 
   it('post-2am crashes halve recovery and add debt', () => {
-    economy.consumeEnergy(60);
-    economy.restOrSleep(8, 3);
-    expect(economy.getState().energy).toBeLessThan(100);
-    expect(economy.getState().sleepDebt).toBe(2);
+    needs.consumeEnergy(60);
+    needs.restOrSleep(8, 3);
+    expect(needs.getState().energy).toBeLessThan(100);
+    expect(needs.getState().sleepDebt).toBe(2);
   });
 
   it('short naps repay proportionally', () => {
-    economy.consumeEnergy(50);
-    economy.restOrSleep(2, 14);
-    expect(economy.getState().energy).toBe(50 + 30);
-    expect(economy.getState().sleepDebt).toBe(1);
+    needs.consumeEnergy(50);
+    needs.restOrSleep(2, 14);
+    expect(needs.getState().energy).toBe(50 + 30);
+    expect(needs.getState().sleepDebt).toBe(1);
   });
 
   it('debt, hunger and health cap the energy ceiling (floor 40)', () => {
-    expect(economy.effectiveMaxEnergy()).toBe(100);
-    (economy as any).state.hunger = 85;
-    expect(economy.effectiveMaxEnergy()).toBe(80);
-    (economy as any).state.sleepDebt = 10;
-    (economy as any).state.health = 20;
-    expect(economy.effectiveMaxEnergy()).toBe(40); // 100-20-30-10 hits the floor exactly
+    expect(needs.effectiveMaxEnergy()).toBe(100);
+    needs = new PlayerNeedsEngine(new EventBus(), { hunger: 85 });
+    expect(needs.effectiveMaxEnergy()).toBe(80);
+    needs = new PlayerNeedsEngine(new EventBus(), {
+      hunger: 85,
+      sleepDebt: 10,
+      health: 20,
+    });
+    expect(needs.effectiveMaxEnergy()).toBe(40);
   });
 });
 
 describe('P6.1 day drift and care', () => {
-  let economy: EconomyEngine;
-  beforeEach(() => { economy = makeEconomy(); });
+  it('starvation requests cross-domain emergency food without owning cash', () => {
+    const needs = new PlayerNeedsEngine(new EventBus(), { hunger: 90, health: 90 });
+    const result = needs.handleDayTransition();
+    expect(result.emergencyFoodNeeded).toBe(true);
+    expect(needs.getState().health).toBe(87);
 
-  it('starving forces a sad chips run (or health loss when broke)', () => {
-    (economy as any).state.hunger = 90;
-    const cash = economy.getState().cash;
-    economy.handleDayTransition(2);
-    expect(economy.getState().hunger).toBe(70);
-    expect(economy.getState().cash).toBeLessThan(cash);
-
-    const broke = new EconomyEngine(new EventBus(), { cash: 0 });
-    (broke as any).state.hunger = 90;
-    const health = broke.getState().health;
-    broke.handleDayTransition(2);
-    expect(broke.getState().health).toBeLessThan(health);
+    needs.applyEmergencyFoodRelief();
+    expect(needs.getState().hunger).toBe(70);
   });
 
   it('eating well recovers health', () => {
-    (economy as any).state.hunger = 20;
-    (economy as any).state.health = 80;
-    economy.handleDayTransition(2);
-    expect(economy.getState().health).toBe(83);
+    const needs = new PlayerNeedsEngine(new EventBus(), { hunger: 20, health: 80 });
+    expect(needs.handleDayTransition().emergencyFoodNeeded).toBe(false);
+    expect(needs.getState().health).toBe(83);
   });
 
   it('showers help a little', () => {
-    (economy as any).state.health = 80;
-    economy.consumeEnergy(10);
-    economy.showerBoost();
-    expect(economy.getState().health).toBe(82);
-    expect(economy.getState().energy).toBe(93);
+    const needs = new PlayerNeedsEngine(new EventBus(), { energy: 90, health: 80 });
+    needs.showerBoost();
+    expect(needs.getState().health).toBe(82);
+    expect(needs.getState().energy).toBe(93);
   });
 });
 
@@ -151,7 +147,7 @@ describe('P6.1 simulation wiring', () => {
   });
 
   it('groceries work through the room action (UI button arrives in P6.3)', () => {
-    (sim.economy as any).state.pantry.groceries = 1;
+    sim.economy.addPantry('groceries', 1);
     sim.advanceGameMinutes(20 * 60, 'long day');
     const res = sim.dispatchAction({ type: 'PLAYER_INTERACT_ROOM', activity: 'groceries' });
     expect(res.success).toBe(true);
