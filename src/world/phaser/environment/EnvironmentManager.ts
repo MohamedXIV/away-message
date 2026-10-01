@@ -30,6 +30,7 @@ export class EnvironmentManager {
   private foregroundRainEmitter?: Phaser.GameObjects.Particles.ParticleEmitter;
   private windowDropletsEmitter?: Phaser.GameObjects.Particles.ParticleEmitter;
   private splashEmitter?: Phaser.GameObjects.Particles.ParticleEmitter;
+  private weatherResolution: WeatherLayerResolution | null = null;
 
   // Ambient Motion Targets & Base Transforms
   private motionTargets: Map<string, Phaser.GameObjects.GameObject> = new Map();
@@ -64,6 +65,7 @@ export class EnvironmentManager {
 
     // 2. Setup Weather Layer Emitters
     this.setupWeatherEmitters(width, height);
+    this.syncWeatherWindowZones(width, height);
 
     // 3. Setup Puddle Zones
     this.setupPuddleZones(width, height);
@@ -130,6 +132,9 @@ export class EnvironmentManager {
     this.currentDayPhaseParams = interpolateDayPhase(this.currentMinuteOfDay);
 
     this.applyAmbientLighting();
+    if (this.scene?.scale) {
+      this.syncWeatherWindowZones(this.scene.scale.width, this.scene.scale.height);
+    }
     this.applyWeatherResolution();
     this.refreshPuddleDefs();
     if (this.scene?.scale) {
@@ -138,7 +143,12 @@ export class EnvironmentManager {
   }
 
   public handleResize(width: number, height: number): void {
+    this.syncWeatherWindowZones(width, height);
     this.syncPuddleVisuals(width, height);
+  }
+
+  public getWeatherLayerResolution(): WeatherLayerResolution | null {
+    return this.weatherResolution ? { ...this.weatherResolution } : null;
   }
 
   public triggerLightning(durationMs = 300, peakIntensity = 3.5): void {
@@ -296,8 +306,10 @@ export class EnvironmentManager {
     // Background Rain (Visible behind scenery / through window)
     if (this.scene.textures.exists('fixture_rain')) {
       this.backgroundRainEmitter = this.scene.add.particles(0, 0, 'fixture_rain', {
-        x: { min: 80, max: Math.min(width, 500) },
-        y: -30,
+        // Position is owned by emit zones. Keeping x/y at zero avoids Phaser
+        // adding emitter ops on top of the authored window-zone point.
+        x: 0,
+        y: 0,
         speedX: { min: -100, max: -70 },
         speedY: { min: 400, max: 600 },
         lifespan: 1100,
@@ -326,8 +338,9 @@ export class EnvironmentManager {
     // Window droplets / runoff (Indoor only, on glass)
     if (this.scene.textures.exists('fixture_mote')) {
       this.windowDropletsEmitter = this.scene.add.particles(0, 0, 'fixture_mote', {
-        x: { min: 140, max: 440 }, // Window bounds
-        y: { min: 120, max: 540 },
+        // Position is owned by emit zones; see syncWeatherWindowZones.
+        x: 0,
+        y: 0,
         speedX: 0,
         speedY: { min: 20, max: 65 },
         scale: { start: 0.35, end: 0.2 },
@@ -354,16 +367,59 @@ export class EnvironmentManager {
     }
   }
 
+  private syncWeatherWindowZones(width: number, height: number): void {
+    const authoredZones = this.projection.weatherWindowZones ?? [];
+    const emitters = [this.backgroundRainEmitter, this.windowDropletsEmitter]
+      .filter((emitter): emitter is Phaser.GameObjects.Particles.ParticleEmitter => Boolean(emitter));
+
+    for (const emitter of emitters) {
+      emitter.clearEmitZones();
+
+      const zones = authoredZones.length > 0
+        ? authoredZones.map((zone) => ({
+            x: zone.x * width,
+            y: zone.y * height,
+            width: zone.width * width,
+            height: zone.height * height,
+          }))
+        : emitter === this.backgroundRainEmitter
+          ? [{ x: 80, y: -30, width: Math.max(1, Math.min(width, 500) - 80), height: 1 }]
+          : [{ x: 140, y: 120, width: 300, height: 420 }];
+
+      emitter.addEmitZone(zones.map((zone) => {
+        // Phaser applies an emit-zone point first and then adds particle x/y
+        // ops. These emitters deliberately use x=0/y=0, so this callback is
+        // the sole positional authority for window rain/droplets.
+        const source: {
+          getRandomPoint(point: Phaser.Types.Math.Vector2Like): void;
+        } = {
+          getRandomPoint(point) {
+            point.x = zone.x + Math.random() * zone.width;
+            point.y = zone.y + Math.random() * zone.height;
+          },
+        };
+
+        return {
+          type: 'random' as const,
+          source,
+        };
+      }));
+    }
+  }
+
   private applyWeatherResolution(): void {
     const isInterior = this.projection.isInterior ?? true;
+    const hasAuthoredWindowZone = (this.projection.weatherWindowZones?.length ?? 0) > 0;
     const resolution: WeatherLayerResolution = resolveWeatherLayers({
       weather: this.projection.weather,
       isInterior,
-      // Authored production backgrounds are opaque until a view-specific
-      // window mask/shader is supplied. Technical fixture projections have no
-      // assetId and retain the older window-rain probe behavior.
-      allowUnmaskedInteriorRain: this.allowFixtureWindowRain || !this.projection.assetId,
+      // Production interiors may opt into rain only when a bounded authored
+      // window zone exists. This keeps rain off opaque room pixels while
+      // allowing the exterior/window region to remain visibly weather-aware.
+      allowUnmaskedInteriorRain:
+        this.allowFixtureWindowRain || !this.projection.assetId || hasAuthoredWindowZone,
     });
+    this.weatherResolution = resolution;
 
     if (this.dustMoteEmitter) {
       if (resolution.dustMotes) this.dustMoteEmitter.start();

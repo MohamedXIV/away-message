@@ -15,6 +15,7 @@ export const PhysicalWorldHost: React.FC<PhysicalWorldHostProps> = ({
   overlaySlot,
   className = '',
   debug = false,
+  exposeRuntime = false,
   visualMode = 'production',
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -53,7 +54,7 @@ export const PhysicalWorldHost: React.FC<PhysicalWorldHostProps> = ({
       visualMode,
     });
     runtimeRef.current = runtime;
-    if (debug && typeof window !== 'undefined') {
+    if ((debug || exposeRuntime) && typeof window !== 'undefined') {
       (window as any).__awayPhysicalWorldRuntime = runtime;
     }
 
@@ -82,7 +83,7 @@ export const PhysicalWorldHost: React.FC<PhysicalWorldHostProps> = ({
       resizeObserver.disconnect();
       runtime.destroy();
       if (
-        debug
+        (debug || exposeRuntime)
         && typeof window !== 'undefined'
         && (window as any).__awayPhysicalWorldRuntime === runtime
       ) {

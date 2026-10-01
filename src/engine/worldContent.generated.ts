@@ -1,6 +1,6 @@
 // GENERATED — do not edit by hand.
-// Source: content/store.json (content v0e4b839a). Regenerate: npm run content:pull.
-export const WORLD_CONTENT_VERSION = '0e4b839a';
+// Source: content/store.json (content vf16dc63a). Regenerate: npm run content:pull.
+export const WORLD_CONTENT_VERSION = 'f16dc63a';
 
 export interface GeneratedSpatialPoint {
   x: number;
@@ -96,7 +96,7 @@ export const GENERATED_PLACES: GeneratedPlaceDef[] = [
   {
     id: "place_b1",
     districtId: "district_b",
-    name: "Place B1",
+    name: "CornerMart",
     transitAccess: [{ stopId: "stop_b", walkMinutes: 5 }],
     legacyIds: [],
     spatialBounds: { polygon: [{ x: 75, y: 35 }, { x: 85, y: 35 }, { x: 85, y: 45 }, { x: 75, y: 45 }], minZ: 0, maxZ: 0, priority: 0 },
@@ -247,8 +247,8 @@ export const GENERATED_SPACES: GeneratedSpaceDef[] = [
   {
     id: "space_b1",
     placeId: "place_b1",
-    name: "Space B1",
-    tags: ["interior"],
+    name: "CornerMart Floor",
+    tags: ["interior", "shop", "public"],
   },
 ];
 
@@ -296,10 +296,10 @@ export const GENERATED_VIEWS: GeneratedViewDef[] = [
   {
     id: "view_b1",
     spaceId: "space_b1",
-    name: "View B1",
+    name: "CornerMart Hero",
     neighbors: [],
-    assetId: null,
-    tags: ["fixture"],
+    assetId: "corner_mart_hero",
+    tags: ["shop", "hero", "single_view"],
   },
 ];
 
@@ -330,6 +330,62 @@ export const GENERATED_ANCHORS: GeneratedAnchorDef[] = [
     tags: ["hotspot"],
   },
   {
+    id: "corner_mart_door",
+    viewId: "view_b1",
+    name: "Front Door",
+    x: 0.91,
+    y: 0.67,
+    tags: ["hotspot", "door", "exit"],
+  },
+  {
+    id: "corner_mart_fan",
+    viewId: "view_b1",
+    name: "Ceiling Fan",
+    x: 0.52,
+    y: 0.17,
+    tags: ["ambient", "fan"],
+  },
+  {
+    id: "corner_mart_fridge",
+    viewId: "view_b1",
+    name: "Drink Fridge",
+    x: 0.8,
+    y: 0.43,
+    tags: ["hotspot", "shop", "fridge"],
+  },
+  {
+    id: "corner_mart_notice",
+    viewId: "view_b1",
+    name: "Notice Board",
+    x: 0.1,
+    y: 0.33,
+    tags: ["hotspot", "notice"],
+  },
+  {
+    id: "corner_mart_shelf_center",
+    viewId: "view_b1",
+    name: "Center Shelf",
+    x: 0.45,
+    y: 0.5,
+    tags: ["hotspot", "shop", "shelf"],
+  },
+  {
+    id: "corner_mart_shelf_left",
+    viewId: "view_b1",
+    name: "Left Shelf",
+    x: 0.22,
+    y: 0.52,
+    tags: ["hotspot", "shop", "shelf"],
+  },
+  {
+    id: "corner_mart_window",
+    viewId: "view_b1",
+    name: "Front Window",
+    x: 0.929,
+    y: 0.35,
+    tags: ["ambient", "window", "weather"],
+  },
+  {
     id: "fixture_cafe_customer_anchor",
     viewId: "view_a1",
     name: "Fixture Cafe Customer",
@@ -348,18 +404,18 @@ export const GENERATED_ANCHORS: GeneratedAnchorDef[] = [
   {
     id: "fixture_shop_customer_anchor",
     viewId: "view_b1",
-    name: "Fixture Shop Customer",
-    x: 0.65,
-    y: 0.5,
-    tags: ["fixture", "customer"],
+    name: "Checkout Queue",
+    x: 0.6,
+    y: 0.73,
+    tags: ["customer", "checkout"],
   },
   {
     id: "fixture_shop_staff_anchor",
     viewId: "view_b1",
-    name: "Fixture Shop Staff",
-    x: 0.35,
-    y: 0.5,
-    tags: ["fixture", "staff"],
+    name: "CornerMart Cashier",
+    x: 0.72,
+    y: 0.67,
+    tags: ["hotspot", "staff", "cashier", "npc"],
   },
   {
     id: "room104_bed",
@@ -444,6 +500,48 @@ export const GENERATED_ANCHORS: GeneratedAnchorDef[] = [
 ];
 
 export const GENERATED_INTERACTIONS: GeneratedInteractionDef[] = [
+  {
+    id: "corner_mart_cashier",
+    anchorId: "fixture_shop_staff_anchor",
+    capability: "cashier",
+    name: "Talk / Checkout",
+    tags: ["shop", "cashier"],
+  },
+  {
+    id: "corner_mart_focus_fridge",
+    anchorId: "corner_mart_fridge",
+    capability: "focus_fixture",
+    name: "Inspect fridge",
+    tags: ["shop", "focus"],
+  },
+  {
+    id: "corner_mart_focus_shelf_center",
+    anchorId: "corner_mart_shelf_center",
+    capability: "focus_fixture",
+    name: "Inspect center shelf",
+    tags: ["shop", "focus"],
+  },
+  {
+    id: "corner_mart_focus_shelf_left",
+    anchorId: "corner_mart_shelf_left",
+    capability: "focus_fixture",
+    name: "Inspect left shelf",
+    tags: ["shop", "focus"],
+  },
+  {
+    id: "corner_mart_leave",
+    anchorId: "corner_mart_door",
+    capability: "leave_store",
+    name: "Leave CornerMart",
+    tags: ["shop", "exit"],
+  },
+  {
+    id: "corner_mart_notice",
+    anchorId: "corner_mart_notice",
+    capability: "inspect",
+    name: "Read notice board",
+    tags: ["shop", "notice"],
+  },
   {
     id: "interaction_a1",
     anchorId: "anchor_a1",
@@ -557,6 +655,38 @@ export const GENERATED_ASSETS: GeneratedAssetDef[] = [
     normalMapAssetId: null,
     tags: [],
   },
+  {
+    id: "corner_mart_fan",
+    name: "CornerMart Ceiling Fan",
+    kind: "image",
+    uri: "assets/world/corner_mart_fan.svg",
+    normalMapAssetId: null,
+    tags: ["production", "shop", "prop"],
+  },
+  {
+    id: "corner_mart_hero",
+    name: "CornerMart Hero View",
+    kind: "image",
+    uri: "assets/world/corner_mart_hero.svg",
+    normalMapAssetId: "corner_mart_hero_normal",
+    tags: ["production", "shop", "hero"],
+  },
+  {
+    id: "corner_mart_hero_normal",
+    name: "CornerMart Hero Normal Map",
+    kind: "image",
+    uri: "assets/world/corner_mart_hero_normal.svg",
+    normalMapAssetId: null,
+    tags: ["production", "shop", "normal"],
+  },
+  {
+    id: "corner_mart_window_glass",
+    name: "CornerMart Window Glass",
+    kind: "image",
+    uri: "assets/world/corner_mart_window_glass.svg",
+    normalMapAssetId: null,
+    tags: ["production", "shop", "prop", "window"],
+  },
 ];
 
 export interface GeneratedLightProfileDef {
@@ -588,6 +718,22 @@ export interface GeneratedAmbientProfileDef {
 
 export const GENERATED_LIGHT_PROFILES: GeneratedLightProfileDef[] = [
   {
+    id: "corner_mart_fluorescent",
+    name: "CornerMart Fluorescent",
+    timeOfDay: null,
+    colorTint: "#e9f7ff",
+    intensity: 1.05,
+    tags: ["shop", "fluorescent", "normal-map"],
+  },
+  {
+    id: "corner_mart_fridge_light",
+    name: "CornerMart Fridge Light",
+    timeOfDay: null,
+    colorTint: "#d8f4ff",
+    intensity: 0.85,
+    tags: ["shop", "fridge", "subtle", "normal-map"],
+  },
+  {
     id: "light_a1",
     name: "Light A1",
     timeOfDay: "day",
@@ -605,6 +751,14 @@ export const GENERATED_AUDIO_PROFILES: GeneratedAudioProfileDef[] = [
     assetId: "asset_a2",
     volume: 0.6,
     tags: [],
+  },
+  {
+    id: "corner_mart_fridge_audio",
+    name: "CornerMart Fridge Compressor",
+    kind: "fridge",
+    assetId: null,
+    volume: 0.18,
+    tags: ["shop", "fridge", "loop"],
   },
 ];
 
@@ -939,5 +1093,151 @@ export const GENERATED_ACTIVITY_TEMPLATES: GeneratedVenueActivityTemplateDef[] =
     completionOwner: "shop",
     completionKind: "checkout_ready",
     tags: ["fixture", "shop"],
+  },
+];
+
+export interface GeneratedShopFixtureDef {
+  id: string;
+  placeId: string;
+  viewId: string;
+  anchorId: string;
+  name: string;
+  kind: string;
+  focusZoom: number;
+  lightProfileIds: string[];
+  audioProfileIds: string[];
+  effectTags: string[];
+}
+
+export interface GeneratedShopSlotDef {
+  id: string;
+  fixtureId: string;
+  eligibleSkuIds: string[];
+}
+
+export interface GeneratedScenePropDef {
+  id: string;
+  viewId: string;
+  anchorId: string;
+  assetId: string;
+  depth: number;
+  width: number;
+  height: number;
+  motionType: string | null;
+  motionSpeed: number;
+  motionAmplitude: number;
+  tags: string[];
+}
+
+export const GENERATED_SHOP_FIXTURES: GeneratedShopFixtureDef[] = [
+  {
+    id: "corner_mart_cashier_counter",
+    placeId: "place_b1",
+    viewId: "view_b1",
+    anchorId: "fixture_shop_staff_anchor",
+    name: "Cashier Counter",
+    kind: "cashierCounter",
+    focusZoom: 1.35,
+    lightProfileIds: ["corner_mart_fluorescent"],
+    audioProfileIds: [],
+    effectTags: [],
+  },
+  {
+    id: "corner_mart_fridge",
+    placeId: "place_b1",
+    viewId: "view_b1",
+    anchorId: "corner_mart_fridge",
+    name: "Refrigerated Case",
+    kind: "fridge",
+    focusZoom: 1.75,
+    lightProfileIds: ["corner_mart_fridge_light"],
+    audioProfileIds: ["corner_mart_fridge_audio"],
+    effectTags: ["condensation"],
+  },
+  {
+    id: "corner_mart_shelf_center",
+    placeId: "place_b1",
+    viewId: "view_b1",
+    anchorId: "corner_mart_shelf_center",
+    name: "Center Grocery Shelf",
+    kind: "shelf",
+    focusZoom: 1.65,
+    lightProfileIds: ["corner_mart_fluorescent"],
+    audioProfileIds: [],
+    effectTags: [],
+  },
+  {
+    id: "corner_mart_shelf_left",
+    placeId: "place_b1",
+    viewId: "view_b1",
+    anchorId: "corner_mart_shelf_left",
+    name: "Left Grocery Shelf",
+    kind: "shelf",
+    focusZoom: 1.65,
+    lightProfileIds: ["corner_mart_fluorescent"],
+    audioProfileIds: [],
+    effectTags: [],
+  },
+];
+
+export const GENERATED_SHOP_SLOTS: GeneratedShopSlotDef[] = [
+  {
+    id: "corner_mart_fridge_a",
+    fixtureId: "corner_mart_fridge",
+    eligibleSkuIds: ["grocery_bag"],
+  },
+  {
+    id: "corner_mart_fridge_b",
+    fixtureId: "corner_mart_fridge",
+    eligibleSkuIds: ["grocery_bag", "noodles_cup"],
+  },
+  {
+    id: "corner_mart_shelf_center_a",
+    fixtureId: "corner_mart_shelf_center",
+    eligibleSkuIds: ["grocery_bag", "noodle_6pack"],
+  },
+  {
+    id: "corner_mart_shelf_center_b",
+    fixtureId: "corner_mart_shelf_center",
+    eligibleSkuIds: ["noodles_cup", "grocery_bag"],
+  },
+  {
+    id: "corner_mart_shelf_left_a",
+    fixtureId: "corner_mart_shelf_left",
+    eligibleSkuIds: ["noodles_cup", "grocery_bag"],
+  },
+  {
+    id: "corner_mart_shelf_left_b",
+    fixtureId: "corner_mart_shelf_left",
+    eligibleSkuIds: ["noodle_6pack", "noodles_cup"],
+  },
+];
+
+export const GENERATED_SCENE_PROPS: GeneratedScenePropDef[] = [
+  {
+    id: "corner_mart_fan_prop",
+    viewId: "view_b1",
+    anchorId: "corner_mart_fan",
+    assetId: "corner_mart_fan",
+    depth: 24,
+    width: 0.11,
+    height: 0.2,
+    motionType: "rotation",
+    motionSpeed: 72,
+    motionAmplitude: 0,
+    tags: ["shop", "fan", "ambient"],
+  },
+  {
+    id: "corner_mart_window_prop",
+    viewId: "view_b1",
+    anchorId: "corner_mart_window",
+    assetId: "corner_mart_window_glass",
+    depth: 18,
+    width: 0.055,
+    height: 0.333,
+    motionType: null,
+    motionSpeed: 0,
+    motionAmplitude: 0,
+    tags: ["shop", "window", "weather-window"],
   },
 ];

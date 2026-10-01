@@ -10,6 +10,7 @@ import type { ContentTables } from '../shared';
 import { contentHash, tsString } from '../shared';
 import { generatePhysicalWorldSource } from './physical';
 import { generateVenueWorldSource } from './venue';
+import { generateShopWorldSource } from './shop';
 
 function spatialBoundsLiteral(value: unknown): string | null {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
@@ -504,6 +505,8 @@ export function generateWorldRegistrySource(tables: ContentTables): string {
   lines.push(generatePhysicalWorldSource(tables));
   lines.push('');
   lines.push(generateVenueWorldSource(tables));
+  lines.push('');
+  lines.push(generateShopWorldSource(tables));
   lines.push('');
 
   return lines.join('\n');

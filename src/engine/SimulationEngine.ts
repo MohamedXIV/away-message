@@ -26,6 +26,15 @@ import {
 } from './PhysicalItemEngine';
 import { GROCERY_SKUS, type DeliveryOrder, type Fulfillment } from './DeliveryEngine';
 import {
+  PhysicalShopEngine,
+  type PhysicalShopFixtureDefinition,
+  type PhysicalShopState,
+} from './PhysicalShopEngine';
+import {
+  checkoutPhysicalShop as commitPhysicalShopCheckout,
+  type PhysicalShopCheckoutResult,
+} from './PhysicalShopCheckout';
+import {
   bridgePhysicalObjectContainers,
   clonePhysicalObjectRuntimeState,
   detachPhysicalObject as detachRuntimePhysicalObject,
@@ -90,6 +99,7 @@ export * from './SimulationEngineLegacyFacade';
 export type LiveSimulationState = LegacyLiveSimulationState & {
   physicalWorld: PhysicalWorldState;
   physicalObjects: PhysicalObjectRuntimeState;
+  physicalShops: Record<string, PhysicalShopState>;
   venueOperations: VenueRuntimeState;
   activeTravel: ActiveTravelState | null;
 };
@@ -97,6 +107,7 @@ export type LiveSimulationState = LegacyLiveSimulationState & {
 type InitialSimulationState = Partial<TransportSimulationState> & {
   physicalWorld?: PhysicalWorldState;
   physicalObjects?: PhysicalObjectRuntimeState;
+  physicalShops?: Record<string, PhysicalShopState>;
   activeTravel?: ActiveTravelState | null;
 };
 
@@ -231,6 +242,21 @@ function clonePhysicalWorld(state: PhysicalWorldState): PhysicalWorldState {
   };
 }
 
+function clonePhysicalShopStates(
+  states: Readonly<Record<string, PhysicalShopState>>,
+): Record<string, PhysicalShopState> {
+  return Object.fromEntries(
+    Object.entries(states).map(([storeId, state]) => [
+      storeId,
+      {
+        stockBySlot: { ...state.stockBySlot },
+        ownershipByItemId: { ...state.ownershipByItemId },
+        originalSlotByItemId: { ...state.originalSlotByItemId },
+      },
+    ]),
+  );
+}
+
 function cloneActiveTravel(state: ActiveTravelState): ActiveTravelState {
   return parseActiveTravel(structuredClone(state));
 }
@@ -238,6 +264,7 @@ function cloneActiveTravel(state: ActiveTravelState): ActiveTravelState {
 export class SimulationEngine extends LegacySimulationEngine {
   private physicalWorldState: PhysicalWorldState | null = null;
   private physicalObjectState: PhysicalObjectRuntimeState = { objects: {} };
+  private physicalShopStates: Record<string, PhysicalShopState> = {};
   private venueState: VenueRuntimeState = { roleAssignments: {}, activities: {} };
   private activeTravelState: ActiveTravelState | null = null;
   /** Player Inner Voice rules gate (#23). Owns cooldown/notable-history only. */
@@ -254,6 +281,7 @@ export class SimulationEngine extends LegacySimulationEngine {
       GENERATED_VENUE_DEFINITIONS,
     );
     this.physicalWorldState = this.hydratePhysicalWorld(initialState?.physicalWorld);
+    this.physicalShopStates = clonePhysicalShopStates(initialState?.physicalShops ?? {});
     this.activeTravelState = initialState?.activeTravel ? cloneActiveTravel(initialState.activeTravel) : null;
     this.innerVoice = new InnerVoiceEngine(
       (initialState as TransportSimulationState | undefined)?.innerVoice ?? null,
@@ -297,6 +325,88 @@ export class SimulationEngine extends LegacySimulationEngine {
       PHYSICAL_ITEM_DEFINITIONS,
       PHYSICAL_CONTAINER_DEFINITIONS,
     );
+  }
+
+  private openPhysicalShop(
+    storeId: string,
+    worldSeed: string,
+    fixtures: readonly PhysicalShopFixtureDefinition[],
+  ): { shop: PhysicalShopEngine; physicalItems: PhysicalItemEngine } {
+    const physicalItems = this.physicalItems();
+    const shop = new PhysicalShopEngine({
+      storeId,
+      worldSeed,
+      physicalItems,
+      fixtures,
+      persistedState: this.physicalShopStates[storeId],
+    });
+    this.commitPhysicalShopSession(storeId, shop, physicalItems);
+    return { shop, physicalItems };
+  }
+
+  private commitPhysicalShopSession(
+    storeId: string,
+    shop: PhysicalShopEngine,
+    physicalItems: PhysicalItemEngine,
+  ): void {
+    this.physicalWorldState = physicalItems.getState();
+    this.physicalShopStates = {
+      ...this.physicalShopStates,
+      [storeId]: shop.getState(),
+    };
+  }
+
+  public getPhysicalShopState(
+    storeId: string,
+    worldSeed: string,
+    fixtures: readonly PhysicalShopFixtureDefinition[],
+  ): PhysicalShopState {
+    return this.openPhysicalShop(storeId, worldSeed, fixtures).shop.getState();
+  }
+
+  public getPhysicalShopCashierCapabilities(
+    storeId: string,
+    worldSeed: string,
+    fixtures: readonly PhysicalShopFixtureDefinition[],
+  ): { talk: true; checkout: boolean } {
+    return this.openPhysicalShop(storeId, worldSeed, fixtures).shop.getCashierCapabilities();
+  }
+
+  public takePhysicalShopItem(
+    storeId: string,
+    worldSeed: string,
+    fixtures: readonly PhysicalShopFixtureDefinition[],
+    instanceId: string,
+    destinationContainerInstanceId: string = PLAYER_INVENTORY_CONTAINER_ID,
+  ): ItemInstance {
+    const { shop, physicalItems } = this.openPhysicalShop(storeId, worldSeed, fixtures);
+    shop.take(instanceId, destinationContainerInstanceId);
+    this.commitPhysicalShopSession(storeId, shop, physicalItems);
+    return physicalItems.getItem(instanceId);
+  }
+
+  public returnPhysicalShopItem(
+    storeId: string,
+    worldSeed: string,
+    fixtures: readonly PhysicalShopFixtureDefinition[],
+    instanceId: string,
+  ): ItemInstance {
+    const { shop, physicalItems } = this.openPhysicalShop(storeId, worldSeed, fixtures);
+    shop.returnToStock(instanceId);
+    this.commitPhysicalShopSession(storeId, shop, physicalItems);
+    return physicalItems.getItem(instanceId);
+  }
+
+  public checkoutPhysicalShop(
+    storeId: string,
+    worldSeed: string,
+    fixtures: readonly PhysicalShopFixtureDefinition[],
+    pricesByDefinitionId: Readonly<Record<string, number>>,
+  ): PhysicalShopCheckoutResult {
+    const { shop, physicalItems } = this.openPhysicalShop(storeId, worldSeed, fixtures);
+    const result = commitPhysicalShopCheckout(this, shop, pricesByDefinitionId);
+    this.commitPhysicalShopSession(storeId, shop, physicalItems);
+    return result;
   }
 
   private synchronizeActiveTravel(): void {
@@ -729,6 +839,7 @@ export class SimulationEngine extends LegacySimulationEngine {
       ...super.getState(),
       physicalWorld: clonePhysicalWorld(this.currentPhysicalWorld()),
       physicalObjects: this.getPhysicalObjectState(),
+      physicalShops: clonePhysicalShopStates(this.physicalShopStates),
       venueOperations: this.getVenueRuntimeState(),
       activeTravel: this.getActiveTravel(),
       innerVoice: this.innerVoice.getPersistedState(),
@@ -740,6 +851,7 @@ export class SimulationEngine extends LegacySimulationEngine {
       ...super.exportSnapshot(),
       physicalWorld: clonePhysicalWorld(this.currentPhysicalWorld()),
       physicalObjects: this.getPhysicalObjectState(),
+      physicalShops: clonePhysicalShopStates(this.physicalShopStates),
       venueOperations: this.getVenueRuntimeState(),
       activeTravel: this.getActiveTravel(),
       innerVoice: this.innerVoice.getPersistedState(),
@@ -750,11 +862,13 @@ export class SimulationEngine extends LegacySimulationEngine {
     const extendedSnapshot = snapshot as TransportSimulationState & {
       physicalWorld?: PhysicalWorldState;
       physicalObjects?: unknown;
+      physicalShops?: Record<string, PhysicalShopState>;
       venueOperations?: unknown;
       activeTravel?: unknown;
     };
     const persistedPhysicalWorld = extendedSnapshot.physicalWorld;
     const persistedPhysicalObjects = extendedSnapshot.physicalObjects;
+    const persistedPhysicalShops = extendedSnapshot.physicalShops;
     const persistedVenueOperations = extendedSnapshot.venueOperations;
     const persistedActiveTravel = extendedSnapshot.activeTravel == null
       ? null
@@ -770,6 +884,7 @@ export class SimulationEngine extends LegacySimulationEngine {
       GENERATED_VENUE_DEFINITIONS,
     );
     this.physicalWorldState = this.hydratePhysicalWorld(persistedPhysicalWorld);
+    this.physicalShopStates = clonePhysicalShopStates(persistedPhysicalShops ?? {});
     this.activeTravelState = persistedActiveTravel;
     this.innerVoice.hydrate(snapshot.innerVoice ?? emptyInnerVoicePersistedState());
     this.delivery.setArrivalHandler((order) => this.materializeDeliveryParcel(order));

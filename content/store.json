@@ -546,7 +546,7 @@
     },
     "place_b1": {
       "districtId": "district_b",
-      "name": "Place B1",
+      "name": "CornerMart",
       "transitAccess": [
         {
           "stopId": "stop_b",
@@ -754,9 +754,11 @@
     },
     "space_b1": {
       "placeId": "place_b1",
-      "name": "Space B1",
+      "name": "CornerMart Floor",
       "tags": [
-        "interior"
+        "interior",
+        "shop",
+        "public"
       ]
     }
   },
@@ -822,11 +824,13 @@
     },
     "view_b1": {
       "spaceId": "space_b1",
-      "name": "View B1",
+      "name": "CornerMart Hero",
       "neighbors": [],
-      "assetId": "",
+      "assetId": "corner_mart_hero",
       "tags": [
-        "fixture"
+        "shop",
+        "hero",
+        "single_view"
       ]
     }
   },
@@ -973,22 +977,99 @@
     },
     "fixture_shop_staff_anchor": {
       "viewId": "view_b1",
-      "name": "Fixture Shop Staff",
-      "x": 0.35,
-      "y": 0.5,
+      "name": "CornerMart Cashier",
+      "x": 0.72,
+      "y": 0.67,
       "tags": [
-        "fixture",
-        "staff"
+        "hotspot",
+        "staff",
+        "cashier",
+        "npc"
       ]
     },
     "fixture_shop_customer_anchor": {
       "viewId": "view_b1",
-      "name": "Fixture Shop Customer",
-      "x": 0.65,
+      "name": "Checkout Queue",
+      "x": 0.6,
+      "y": 0.73,
+      "tags": [
+        "customer",
+        "checkout"
+      ]
+    },
+    "corner_mart_shelf_left": {
+      "viewId": "view_b1",
+      "name": "Left Shelf",
+      "x": 0.22,
+      "y": 0.52,
+      "tags": [
+        "hotspot",
+        "shop",
+        "shelf"
+      ]
+    },
+    "corner_mart_shelf_center": {
+      "viewId": "view_b1",
+      "name": "Center Shelf",
+      "x": 0.45,
       "y": 0.5,
       "tags": [
-        "fixture",
-        "customer"
+        "hotspot",
+        "shop",
+        "shelf"
+      ]
+    },
+    "corner_mart_fridge": {
+      "viewId": "view_b1",
+      "name": "Drink Fridge",
+      "x": 0.8,
+      "y": 0.43,
+      "tags": [
+        "hotspot",
+        "shop",
+        "fridge"
+      ]
+    },
+    "corner_mart_door": {
+      "viewId": "view_b1",
+      "name": "Front Door",
+      "x": 0.91,
+      "y": 0.67,
+      "tags": [
+        "hotspot",
+        "door",
+        "exit"
+      ]
+    },
+    "corner_mart_fan": {
+      "viewId": "view_b1",
+      "name": "Ceiling Fan",
+      "x": 0.52,
+      "y": 0.17,
+      "tags": [
+        "ambient",
+        "fan"
+      ]
+    },
+    "corner_mart_window": {
+      "viewId": "view_b1",
+      "name": "Front Window",
+      "x": 0.929,
+      "y": 0.35,
+      "tags": [
+        "ambient",
+        "window",
+        "weather"
+      ]
+    },
+    "corner_mart_notice": {
+      "viewId": "view_b1",
+      "name": "Notice Board",
+      "x": 0.1,
+      "y": 0.33,
+      "tags": [
+        "hotspot",
+        "notice"
       ]
     }
   },
@@ -1078,6 +1159,60 @@
       "tags": [
         "delivery"
       ]
+    },
+    "corner_mart_focus_shelf_left": {
+      "anchorId": "corner_mart_shelf_left",
+      "capability": "focus_fixture",
+      "name": "Inspect left shelf",
+      "tags": [
+        "shop",
+        "focus"
+      ]
+    },
+    "corner_mart_focus_shelf_center": {
+      "anchorId": "corner_mart_shelf_center",
+      "capability": "focus_fixture",
+      "name": "Inspect center shelf",
+      "tags": [
+        "shop",
+        "focus"
+      ]
+    },
+    "corner_mart_focus_fridge": {
+      "anchorId": "corner_mart_fridge",
+      "capability": "focus_fixture",
+      "name": "Inspect fridge",
+      "tags": [
+        "shop",
+        "focus"
+      ]
+    },
+    "corner_mart_cashier": {
+      "anchorId": "fixture_shop_staff_anchor",
+      "capability": "cashier",
+      "name": "Talk / Checkout",
+      "tags": [
+        "shop",
+        "cashier"
+      ]
+    },
+    "corner_mart_leave": {
+      "anchorId": "corner_mart_door",
+      "capability": "leave_store",
+      "name": "Leave CornerMart",
+      "tags": [
+        "shop",
+        "exit"
+      ]
+    },
+    "corner_mart_notice": {
+      "anchorId": "corner_mart_notice",
+      "capability": "inspect",
+      "name": "Read notice board",
+      "tags": [
+        "shop",
+        "notice"
+      ]
     }
   },
   "assets": {
@@ -1101,6 +1236,51 @@
       "uri": "assets/world/a2.mp3",
       "normalMapAssetId": "",
       "tags": []
+    },
+    "corner_mart_hero": {
+      "name": "CornerMart Hero View",
+      "kind": "image",
+      "uri": "assets/world/corner_mart_hero.svg",
+      "normalMapAssetId": "corner_mart_hero_normal",
+      "tags": [
+        "production",
+        "shop",
+        "hero"
+      ]
+    },
+    "corner_mart_hero_normal": {
+      "name": "CornerMart Hero Normal Map",
+      "kind": "image",
+      "uri": "assets/world/corner_mart_hero_normal.svg",
+      "normalMapAssetId": "",
+      "tags": [
+        "production",
+        "shop",
+        "normal"
+      ]
+    },
+    "corner_mart_fan": {
+      "name": "CornerMart Ceiling Fan",
+      "kind": "image",
+      "uri": "assets/world/corner_mart_fan.svg",
+      "normalMapAssetId": "",
+      "tags": [
+        "production",
+        "shop",
+        "prop"
+      ]
+    },
+    "corner_mart_window_glass": {
+      "name": "CornerMart Window Glass",
+      "kind": "image",
+      "uri": "assets/world/corner_mart_window_glass.svg",
+      "normalMapAssetId": "",
+      "tags": [
+        "production",
+        "shop",
+        "prop",
+        "window"
+      ]
     }
   },
   "lightProfiles": {
@@ -1110,6 +1290,29 @@
       "colorTint": "#fff2d9",
       "intensity": 1,
       "tags": []
+    },
+    "corner_mart_fluorescent": {
+      "name": "CornerMart Fluorescent",
+      "timeOfDay": "",
+      "colorTint": "#e9f7ff",
+      "intensity": 1.05,
+      "tags": [
+        "shop",
+        "fluorescent",
+        "normal-map"
+      ]
+    },
+    "corner_mart_fridge_light": {
+      "name": "CornerMart Fridge Light",
+      "timeOfDay": "",
+      "colorTint": "#d8f4ff",
+      "intensity": 0.85,
+      "tags": [
+        "shop",
+        "fridge",
+        "subtle",
+        "normal-map"
+      ]
     }
   },
   "audioProfiles": {
@@ -1119,6 +1322,17 @@
       "assetId": "asset_a2",
       "volume": 0.6,
       "tags": []
+    },
+    "corner_mart_fridge_audio": {
+      "name": "CornerMart Fridge Compressor",
+      "kind": "fridge",
+      "assetId": "",
+      "volume": 0.18,
+      "tags": [
+        "shop",
+        "fridge",
+        "loop"
+      ]
     }
   },
   "ambientProfiles": {
@@ -1397,6 +1611,141 @@
       "tags": [
         "fixture",
         "shop"
+      ]
+    }
+  },
+  "shopFixtures": {
+    "corner_mart_cashier_counter": {
+      "placeId": "place_b1",
+      "viewId": "view_b1",
+      "anchorId": "fixture_shop_staff_anchor",
+      "name": "Cashier Counter",
+      "kind": "cashierCounter",
+      "focusZoom": 1.35,
+      "lightProfileIds": [
+        "corner_mart_fluorescent"
+      ],
+      "audioProfileIds": [],
+      "effectTags": []
+    },
+    "corner_mart_fridge": {
+      "placeId": "place_b1",
+      "viewId": "view_b1",
+      "anchorId": "corner_mart_fridge",
+      "name": "Refrigerated Case",
+      "kind": "fridge",
+      "focusZoom": 1.75,
+      "lightProfileIds": [
+        "corner_mart_fridge_light"
+      ],
+      "audioProfileIds": [
+        "corner_mart_fridge_audio"
+      ],
+      "effectTags": [
+        "condensation"
+      ]
+    },
+    "corner_mart_shelf_center": {
+      "placeId": "place_b1",
+      "viewId": "view_b1",
+      "anchorId": "corner_mart_shelf_center",
+      "name": "Center Grocery Shelf",
+      "kind": "shelf",
+      "focusZoom": 1.65,
+      "lightProfileIds": [
+        "corner_mart_fluorescent"
+      ],
+      "audioProfileIds": [],
+      "effectTags": []
+    },
+    "corner_mart_shelf_left": {
+      "placeId": "place_b1",
+      "viewId": "view_b1",
+      "anchorId": "corner_mart_shelf_left",
+      "name": "Left Grocery Shelf",
+      "kind": "shelf",
+      "focusZoom": 1.65,
+      "lightProfileIds": [
+        "corner_mart_fluorescent"
+      ],
+      "audioProfileIds": [],
+      "effectTags": []
+    }
+  },
+  "shopSlots": {
+    "corner_mart_fridge_a": {
+      "fixtureId": "corner_mart_fridge",
+      "eligibleSkuIds": [
+        "grocery_bag"
+      ]
+    },
+    "corner_mart_fridge_b": {
+      "fixtureId": "corner_mart_fridge",
+      "eligibleSkuIds": [
+        "grocery_bag",
+        "noodles_cup"
+      ]
+    },
+    "corner_mart_shelf_center_a": {
+      "fixtureId": "corner_mart_shelf_center",
+      "eligibleSkuIds": [
+        "grocery_bag",
+        "noodle_6pack"
+      ]
+    },
+    "corner_mart_shelf_center_b": {
+      "fixtureId": "corner_mart_shelf_center",
+      "eligibleSkuIds": [
+        "noodles_cup",
+        "grocery_bag"
+      ]
+    },
+    "corner_mart_shelf_left_a": {
+      "fixtureId": "corner_mart_shelf_left",
+      "eligibleSkuIds": [
+        "noodles_cup",
+        "grocery_bag"
+      ]
+    },
+    "corner_mart_shelf_left_b": {
+      "fixtureId": "corner_mart_shelf_left",
+      "eligibleSkuIds": [
+        "noodle_6pack",
+        "noodles_cup"
+      ]
+    }
+  },
+  "sceneProps": {
+    "corner_mart_fan_prop": {
+      "viewId": "view_b1",
+      "anchorId": "corner_mart_fan",
+      "assetId": "corner_mart_fan",
+      "depth": 24,
+      "width": 0.11,
+      "height": 0.2,
+      "motionType": "rotation",
+      "motionSpeed": 72,
+      "motionAmplitude": 0,
+      "tags": [
+        "shop",
+        "fan",
+        "ambient"
+      ]
+    },
+    "corner_mart_window_prop": {
+      "viewId": "view_b1",
+      "anchorId": "corner_mart_window",
+      "assetId": "corner_mart_window_glass",
+      "depth": 18,
+      "width": 0.055,
+      "height": 0.333,
+      "motionType": "",
+      "motionSpeed": 0,
+      "motionAmplitude": 0,
+      "tags": [
+        "shop",
+        "window",
+        "weather-window"
       ]
     }
   }

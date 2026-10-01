@@ -11,6 +11,11 @@ const PhysicalWorldHost = React.lazy(() =>
     default: m.PhysicalWorldHost,
   }))
 );
+const StoreFixtureHarness = React.lazy(() =>
+  import('./world/phaser/StoreFixtureHarness').then((m) => ({
+    default: m.StoreFixtureHarness,
+  }))
+);
 import { resolveActiveOsPresentation } from './desktop/host/OsPresentation';
 import type { OsVersion } from './engine/types';
 import {
@@ -73,6 +78,34 @@ function usePhaserFixtureMode(): [boolean, (active: boolean) => void] {
   return [enabled, toggle];
 }
 
+function useStoreFixtureMode(): [boolean, (active: boolean) => void] {
+  const [enabled, setEnabled] = useState(false);
+  useEffect(() => {
+    try {
+      if (typeof window !== 'undefined') {
+        setEnabled(new URLSearchParams(window.location.search).get('fixture') === 'store');
+      }
+    } catch { /* best-effort */ }
+  }, []);
+
+  const toggle = (active: boolean) => {
+    setEnabled(active);
+    try {
+      if (typeof window !== 'undefined') {
+        const url = new URL(window.location.href);
+        if (active) {
+          url.searchParams.set('fixture', 'store');
+        } else if (url.searchParams.get('fixture') === 'store') {
+          url.searchParams.delete('fixture');
+        }
+        window.history.replaceState({}, '', url.toString());
+      }
+    } catch {}
+  };
+
+  return [enabled, toggle];
+}
+
 export function resolveAppTheme(osVersion: OsVersion | null): string | null {
   return resolveActiveOsPresentation(osVersion)?.themeId ?? null;
 }
@@ -94,6 +127,7 @@ export const App: React.FC = () => {
   const [savedFlash, setSavedFlash] = useState(false);
   const contentStudio = useContentStudio();
   const [phaserFixtureActive, setPhaserFixtureActive] = usePhaserFixtureMode();
+  const [storeFixtureActive, setStoreFixtureActive] = useStoreFixtureMode();
   const [fixtureProjection, setFixtureProjection] = useState(() => createTechnicalFixtureProjection());
 
   useEffect(() => {
@@ -175,7 +209,20 @@ export const App: React.FC = () => {
 
   return (
     <div data-theme={themeAttr ?? undefined} className="w-full h-full overflow-hidden select-none bg-black">
-      {phaserFixtureActive ? (
+      {storeFixtureActive ? (
+        <React.Suspense
+          fallback={
+            <div className="w-full h-full flex flex-col items-center justify-center gap-3 bg-black text-slate-300 font-sans">
+              <div className="text-4xl animate-pulse">🛒</div>
+              <div className="text-sm font-bold tracking-widest text-emerald-400">
+                INITIALIZING CORNERMART…
+              </div>
+            </div>
+          }
+        >
+          <StoreFixtureHarness onExit={() => setStoreFixtureActive(false)} />
+        </React.Suspense>
+      ) : phaserFixtureActive ? (
         <React.Suspense
           fallback={
             <div className="w-full h-full flex flex-col items-center justify-center gap-3 bg-black text-slate-300 font-sans">
@@ -249,7 +296,6 @@ export const App: React.FC = () => {
               >
                 ⚙ Phaser 4 Fixture
               </button>
-
 
               {/* Autosave badge */}
               {savedFlash && (
