@@ -78,6 +78,7 @@ Online AI enriches surface dialogue and generated content; deterministic rules r
 | 40 | E2E Playwright Suite (Tiers 1-4) | Automated coverage for features, boundaries, combinations and long-running sandbox continuity | E2E Track | docs/06, 07 |
 | 41 | Vitest Domain Unit/Integration Suites | 100% pure TS unit test coverage across clock, downloads, VFS, economy, schedules, persistence | E2E Track | docs/06, 07 |
 | 42 | Tier 5 Adversarial Coverage Hardening | White-box stress tests, chaos injection, memory leak checks, security audit | M5 | docs/07 |
+| 43 | Optional Scenario / Story Thread Framework | Semi-baked authored situations with dynamic role binding, pre-game context, optional hooks and no mandatory quest UI | M4 | docs/00, 04, 05, 13 |
 
 ---
 
@@ -111,6 +112,30 @@ Execution roadmap: `docs/superpowers/plans/2026-10-01-environment-needs-mood-fou
 
 ---
 
+## 2B. Optional Scenario / Story Thread direction
+
+After the living-world foundation, Away may add optional semi-baked Scenario threads that provide personal history and local narrative framing without restoring a fixed campaign.
+
+Core formula:
+
+```text
+ScenarioDefinition
+  → dynamic semantic role binding
+  → save-specific ScenarioInstance
+  → canonical Social/Knowledge/Life/Spatial systems
+  → optional ScenarioProjection
+```
+
+The reference example is **Someone From Before**: an unresolved old acquaintance associated with the town, represented by a dynamic `old_acquaintance` role rather than a fixed Maya actor.
+
+The framework must support failed/non-instantiation, unresolved/dormant threads, multiple compatible Scenarios, and no dedicated quest UI.
+
+Canonical design: `docs/13-SCENARIOS-AND-STORY-THREADS.md`.
+
+Execution roadmap: `docs/superpowers/plans/2026-10-01-scenario-story-thread-roadmap.md`.
+
+---
+
 ## 3. Milestones Decomposition
 
 | # | Milestone Name | Scope & Key Deliverables | Dependencies | Status |
@@ -118,7 +143,7 @@ Execution roadmap: `docs/superpowers/plans/2026-10-01-environment-needs-mood-fou
 | **M1** | Core Architecture & Simulation Engine | Package/build setup, pure TS `SimulationEngine`, GameClock, EventBus, VFS, Downloads, Software Registry, Economy, Schedules, Dexie persistence, Web Audio synth | None | DONE |
 | **M2** | Desktop Environment & OS Systems | Window Manager, Orion OS 4.8 / 6.x themes, Desktop Shell, Taskbar, Start Menu, CRT shader, Dial-up sim, Add/Remove Programs, Terminal, File Explorer, Control Panel | M1 | DONE |
 | **M3** | Fake Internet, Browser & Desktop Apps | Voyager Browser, 18 Fake Internet sites, search index, Pulse Messenger (AIM), RetroAmp, FlashFetch, ZipMate, PhotoBox 3.0, WeatherBuddy/SearchMate adware, SafeSweep, Notepad | M1, M2 | DONE |
-| **M4** | Sandbox World & 2D World | WorldEventsEngine, governed AI chat, generic authored places, dynamic characters, living interactions, optional in-person encounters, plus the #128 Environment/Player Needs/Mood/Game Context authority foundation | M1, M2, M3 | IN_PROGRESS |
+| **M4** | Sandbox World & 2D World | WorldEventsEngine, governed AI chat, generic authored places, dynamic characters, living interactions, optional in-person encounters, Environment/Player Needs/Mood/Game Context authority, and optional Scenario/Story Thread framing | M1, M2, M3 | IN_PROGRESS |
 | **M5** | Integration & Adversarial Hardening | Sandbox-loop integration, E2E coverage, adversarial testing, telemetry/debug export and long-run continuity | M1, M2, M3, M4, E2E | PLANNED |
 | **E2E** | E2E Testing Track (Requirement-Driven) | Comprehensive Vitest + Playwright coverage for feature behavior, boundaries, combinations, persistence and long-running sandbox continuity | M1 (for test infra) | IN_PROGRESS |
 
