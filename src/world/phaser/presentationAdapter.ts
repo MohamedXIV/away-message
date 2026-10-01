@@ -181,7 +181,7 @@ export function getDefaultSpatialAudioSources(
       bus: 'ambience',
       parameters: {
         rainIntensity: rainIntensity * (isInterior ? 0.35 : 1),
-        windIntensity: resolvedWindIntensity,
+        windIntensity,
         muffled: isInterior ? 1 : 0,
       },
     });
@@ -306,7 +306,7 @@ export function createWorldSceneProjection(
     focus,
     minuteOfDay: effectiveMinute,
     isInterior,
-    windIntensity,
+    windIntensity: resolvedWindIntensity,
     puddleZones,
     ambientMotions,
     authoredLights,
