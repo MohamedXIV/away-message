@@ -700,7 +700,7 @@ export class SimulationEngine extends LegacySimulationEngine {
     if (!this.economy.canAfford(total)) {
       return { success: false, error: `Cannot afford $${total.toFixed(2)} order.` };
     }
-    if (this.economy.getState().energy < 20) {
+    if (this.needs.getState().energy < 20) {
       return { success: false, error: 'Too tired for a store run (need 20% energy).' };
     }
 
@@ -716,7 +716,7 @@ export class SimulationEngine extends LegacySimulationEngine {
 
     this.economy.spendCash(total, 'CornerMart pickup');
     this.advanceGameMinutes(30, 'CornerMart pickup run');
-    this.economy.consumeEnergy(5);
+    this.needs.consumeEnergy(5);
     this.telemetry.logEvent('economy', 'order_pickup', this.clock.getTotalMinutes(), {
       orderId: order.id,
       total,
