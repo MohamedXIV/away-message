@@ -354,6 +354,20 @@ export function validatePhysicalGraph(tables: ContentTables): string[] {
     if (!hasHomeSpace) {
       errors.push(`housingOffers/${id}.placeId: residence place '${placeId}' needs at least one Space tagged 'home'.`);
     }
+    const servicePolicy = Object.values(policies).find((policy) => {
+      if (!policy || typeof policy !== 'object') return false;
+      return (policy as Record<string, unknown>)['placeId'] === placeId;
+    }) as Record<string, unknown> | undefined;
+    if (
+      !servicePolicy ||
+      servicePolicy['acceptsDelivery'] !== true ||
+      typeof servicePolicy['deliveryTargetSlotId'] !== 'string' ||
+      !servicePolicy['deliveryTargetSlotId']
+    ) {
+      errors.push(
+        `housingOffers/${id}.placeId: residence place '${placeId}' needs an authored delivery/owned-item target.`,
+      );
+    }
     if (record['starterDefault'] === true) {
       starterDefaultCount += 1;
       if (record['starterEligible'] !== true || record['available'] !== true) {
