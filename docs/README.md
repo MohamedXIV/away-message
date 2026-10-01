@@ -1,6 +1,6 @@
 # Away Message — Open-Ended Sandbox Docs
 
-**This package contains exactly 13 core files.**
+**This package contains exactly 14 core files.**
 
 It defines the current open-ended sandbox product direction. Historical evaluation-era material must not be treated as current product authority.
 
@@ -18,8 +18,9 @@ It defines the current open-ended sandbox product direction. Historical evaluati
 10. `09-MANUS-RUN-CONSTRAINTS.md`
 11. `10-RESIDENCE-HOUSING-AND-SPACE-PROGRESSION.md`
 12. `11-SPATIAL-PRESENCE-VENUES-AND-ACTOR-PRESENTATION.md`
+13. `12-ENVIRONMENT-PLAYER-NEEDS-AND-MOOD.md`
 
-This README is the thirteenth core file.
+This README is the fourteenth core file.
 
 Detailed implementation specs/plans under `docs/superpowers/` supplement these core documents and may grow independently.
 
@@ -28,6 +29,7 @@ Current cross-cutting architecture supplements:
 - `docs/superpowers/specs/2026-09-10-orion-salvage-life-matrix-design.md`
 - `docs/superpowers/plans/2026-09-10-orion-salvage-roadmap.md`
 - `docs/superpowers/plans/2026-09-10-life-matrix-foundation.md`
+- `docs/superpowers/plans/2026-10-01-environment-needs-mood-foundation.md`
 
 ## Goal
 
@@ -84,6 +86,22 @@ The pure TypeScript simulation owns:
 - coherent physical/transit/device/online presence projections.
 
 React, Phaser, and Ink present or interact with that truth.
+
+## Active authority correction — #128–#132
+
+The next foundation pass intentionally changes some current implementation boundaries before more systems depend on them.
+
+Target ownership:
+
+- **Environment** resolves deterministic base weather plus typed WorldEvents modifiers into one semantic snapshot/forecast.
+- **Finance** owns cash/rent/bills/payments rather than the player's body.
+- **Player Needs** owns energy, fatigue, hunger, health, sleep debt and social battery.
+- **Mood** is a separate explainable state built from contextual influences plus bounded transient semantic effects.
+- **Game Context** becomes the stable read-only boundary used by apps, Phaser/audio, Inner Voice and future systems.
+
+Current `WeatherEngine` and combined `EconomyEngine` behavior are migration input during this work, not permanent product authority. Do not build new consumers around those accidental seams.
+
+See `12-ENVIRONMENT-PLAYER-NEEDS-AND-MOOD.md`, the 2026-10-01 foundation roadmap, and #128–#132.
 
 ## Canonical residence model
 
