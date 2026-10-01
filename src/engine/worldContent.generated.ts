@@ -1,6 +1,6 @@
 // GENERATED — do not edit by hand.
-// Source: content/store.json (content vc122dd6b). Regenerate: npm run content:pull.
-export const WORLD_CONTENT_VERSION = 'c122dd6b';
+// Source: content/store.json (content vd26c5130). Regenerate: npm run content:pull.
+export const WORLD_CONTENT_VERSION = 'd26c5130';
 
 export interface GeneratedSpatialPoint {
   x: number;
@@ -857,6 +857,16 @@ export interface GeneratedPlaceServicePolicy {
   deliveryTargetSlotId: string | null;
 }
 
+export interface GeneratedHousingOfferDef {
+  id: string;
+  placeId: string;
+  available: boolean;
+  monthlyRent: number;
+  moveInCost: number;
+  starterEligible: boolean;
+  starterDefault: boolean;
+}
+
 export const GENERATED_PHYSICAL_OBJECT_DEFS: GeneratedPhysicalObjectDef[] = [
   {
     id: "fixture_drawer_def",
@@ -932,6 +942,18 @@ export const GENERATED_PLACE_SERVICE_POLICIES: GeneratedPlaceServicePolicy[] = [
     placeId: "room_104",
     acceptsDelivery: true,
     deliveryTargetSlotId: "delivery_target_primary",
+  },
+];
+
+export const GENERATED_HOUSING_OFFERS: GeneratedHousingOfferDef[] = [
+  {
+    id: "starter_room_104",
+    placeId: "room_104",
+    available: true,
+    monthlyRent: 140,
+    moveInCost: 0,
+    starterEligible: true,
+    starterDefault: true,
   },
 ];
 

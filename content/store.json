@@ -1756,5 +1756,15 @@
         "weather-window"
       ]
     }
+  },
+  "housingOffers": {
+    "starter_room_104": {
+      "placeId": "room_104",
+      "available": true,
+      "monthlyRent": 140,
+      "moveInCost": 0,
+      "starterEligible": true,
+      "starterDefault": true
+    }
   }
 }
