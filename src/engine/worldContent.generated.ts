@@ -1371,7 +1371,7 @@ export const GENERATED_PLACE_SERVICE_POLICIES: GeneratedPlaceServicePolicy[] = [
   },
 ];
 
-export const GENERATED_HOUSING_OFFERS: GeneratedHousingOfferDef[
+export const GENERATED_HOUSING_OFFERS: GeneratedHousingOfferDef[] = [
   {
     id: "better_room_305",
     placeId: "room_305",
