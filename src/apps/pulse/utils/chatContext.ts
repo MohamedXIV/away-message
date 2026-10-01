@@ -1,6 +1,5 @@
 import { getNpcStyle, getNpcMoodLabel, getNpcAvailabilityLabel, getNpcActivityLabel } from '../data/npcStyles';
 import { CHARACTER_ARCHETYPES } from '../../../engine/characterTemplates';
-import { CORE_BY_ID } from '../../../engine/coreBuddies';
 import type { BuddyCharacter, BuddyPresence, RelationshipDimensions } from '../../../engine/types';
 import { buildBodyHint } from '../../../engine/BodyDirector';
 import { weatherLineForDay } from '../../../engine/WeatherEngine';
@@ -82,10 +81,8 @@ export interface PulseMemorySlices {
   npcActivity?: Record<string, string>;
 }
 
-export function buddyPersonaLine(buddyId: string, buddy?: BuddyCharacter | null): string {
-  // Core voices come from the registry (content-owned, never hand-copied here).
-  const core = CORE_BY_ID[buddyId];
-  if (core) return core.persona;
+export function buddyPersonaLine(_buddyId: string, buddy?: BuddyCharacter | null): string {
+  if (buddy?.bio?.trim()) return buddy.bio.trim();
   const archetype = buddy?.archetype && CHARACTER_ARCHETYPES[buddy.archetype] ? buddy.archetype : undefined;
   if (archetype) {
     const template = CHARACTER_ARCHETYPES[archetype];
@@ -234,10 +231,10 @@ export function buildDmChatContext(input: DmContextInput): DmChatContext {
       sleepDebt: playerState?.sleepDebt ?? 0,
     });
   } catch { playerEnergy = 80; }
-  const style = getNpcStyle(buddyId);
+  const style = getNpcStyle(buddy ?? buddyId);
   const mood = getNpcMoodLabel(presence, relationship, gameHour, playerEnergy);
   const availability = getNpcAvailabilityLabel(presence, gameHour);
-  const activity = getNpcActivityLabel(presence, buddyId, gameHour);
+  const activity = getNpcActivityLabel(presence, buddy ?? buddyId, gameHour);
   const existingMemory = pulse.conversationMemory[buddyId] || [];
   const existingFacts = pulse.buddyFacts[buddyId] || [];
   const newFacts = extractFactsFromPlayerMessage(text);

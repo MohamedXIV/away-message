@@ -3,7 +3,7 @@
 
 import React, { useState } from 'react';
 import type { ContentModel } from '../content/model';
-import { CONTENT_VERSION } from '../../engine/coreBuddies.generated';
+import { CONTENT_VERSION } from '../../engine/seedCharacters.generated';
 import { useStudioStore } from './hooks/useStudioStore';
 import type { StudioTab } from './types';
 import { CharactersTab } from './tabs/CharactersTab';

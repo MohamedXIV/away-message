@@ -9,7 +9,6 @@ import { getRoomDeskPresentation } from './RoomComputerPresentation';
 import { RoomHotspotId, RoomActivityOption, WeatherType } from './types';
 import { getWeatherForDay, isWetWeather } from '../engine/WeatherEngine';
 import { CITY_NODES, type CityNodeId, type TravelMode } from '../engine/CityMap';
-import { buddyWithRole } from '../engine/coreBuddies';
 import { CityPlaceView } from './components/CityPlaceView';
 
 function playerLocationLabel(location: CityNodeId): string {
@@ -186,8 +185,7 @@ export const RoomScene: React.FC = () => {
     try {
       const engine = useSimulationStore.getState().engine;
       return engine.getJobBoard().map(({ gig, pending }) => {
-        const holder = buddyWithRole(gig.contactRole);
-        const contact = holder ? engine.social.getBuddy(holder.id) : undefined;
+        const contact = engine.social.getBuddyWithRole(gig.contactRole);
         return {
           gigId: gig.id,
           title: gig.title,
@@ -288,7 +286,7 @@ export const RoomScene: React.FC = () => {
         {/* Left: Location & Time */}
         <div className="flex items-center gap-3">
           <div className="font-bold text-amber-300 flex items-center gap-1.5">
-            <span>{playerLocation === 'home' ? 'Motel Room 104' : `📍 ${playerLocationLabel(playerLocation)}`}</span>
+            <span>{playerLocation === 'home' ? 'Current Residence' : `📍 ${playerLocationLabel(playerLocation)}`}</span>
           </div>
           <div className="h-3 w-[1px] bg-slate-700" />
           <div className="flex items-center gap-1.5 font-mono text-slate-300">
@@ -381,7 +379,7 @@ export const RoomScene: React.FC = () => {
                 setActiveModal('hardware');
               }}
               className="flex items-center gap-1 px-2.5 py-1 bg-stone-800 hover:bg-stone-700 border border-amber-800/70 rounded text-amber-100 text-xs font-bold transition-colors cursor-pointer"
-              title="Inspect and install owned hardware in Room 104"
+              title="Inspect and install owned hardware at your current residence"
             >
               <Wrench className="w-3.5 h-3.5" />
               <span>Hardware</span>

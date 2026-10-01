@@ -15,11 +15,11 @@ import { pickOsTemplate, templateToRelease } from '../../ai/osReleaseTemplates';
 import { generateNewcomer, NEWCOMER_METVIA_ROTATION } from '../../engine/CharacterDirector';
 import { getWeatherForDay } from '../../engine/WeatherEngine';
 import type { BuddyMetVia, CharacterArchetype } from '../../engine/types';
-import { CORE_BUDDIES, CORE_IDS } from '../../engine/coreBuddies';
 
 const TEST_HOST = 'midnight-board.local';
 
 export const AILabApp: React.FC = () => {
+  const engine = useSimulationStore((s) => s.engine);
   const [settings, setSettings] = useState<AISettings>(() => loadAISettings());
   const [keyInput, setKeyInput] = useState('');
   const [siteName, setSiteName] = useState(TEST_HOST);
@@ -27,13 +27,12 @@ export const AILabApp: React.FC = () => {
   const [running, setRunning] = useState(false);
   const [results, setResults] = useState<BenchmarkResult[]>([]);
   const [notice, setNotice] = useState('Ready. Benchmark mode bypasses the ten-day cache.');
-  const [imagePrompt, setImagePrompt] = useState('Maya at her desk with warm lamp light, small photo');
-  const [imageBuddy, setImageBuddy] = useState(CORE_BUDDIES[0]?.id ?? CORE_IDS.MAYA);
+  const [imagePrompt, setImagePrompt] = useState('character at their desk with warm lamp light, small period photo');
+  const [imageBuddy, setImageBuddy] = useState(() => engine.social.getBuddies()[0]?.id ?? '');
   const [imageRunning, setImageRunning] = useState(false);
   const [imageResult, setImageResult] = useState<{ url: string; provider: string; fallback: boolean; error?: string } | null>(null);
 
   // Procedural Director tuning
-  const engine = useSimulationStore((s) => s.engine);
   const worldDay = useSimulationStore((s) => s.state.time.day);
   const [procSeed, setProcSeed] = useState('oakhaven-lab');
   const [procTone, setProcTone] = useState<'grounded' | 'whimsical' | 'melancholy' | 'hopeful'>('grounded');
@@ -102,9 +101,9 @@ export const AILabApp: React.FC = () => {
     setImageResult(null);
     setNotice('Generating character image via Fal (small, era-appropriate)...');
     try {
-      const buddyNames: Record<string, string> = { maya: 'Maya', ryan: 'Ryan', nora: 'Nora', henderson: 'Mr. Henderson' };
+      const buddy = engine.social.getBuddy(imageBuddy);
       const res = await generateCharacterImage(
-        { buddyId: imageBuddy, buddyName: buddyNames[imageBuddy] || imageBuddy, prompt: imagePrompt, size: { width: 320, height: 240 } },
+        { buddyId: imageBuddy, buddyName: buddy?.displayName || imageBuddy || 'Character', prompt: imagePrompt, size: { width: 320, height: 240 } },
         settings
       );
       setImageResult({ url: res.url, provider: res.provider, fallback: res.fallback, error: res.error });
@@ -417,12 +416,12 @@ export const AILabApp: React.FC = () => {
       nextResults.push(siteResult);
       setResults([...nextResults]);
 
-      const first = CORE_BUDDIES[0];
+      const first = engine.social.getBuddies()[0];
       const chatResult = await aiService.benchmarkChat({
-        buddyId: first?.id ?? CORE_IDS.MAYA,
-        displayName: first?.displayName ?? 'Maya',
-        handle: first?.handle ?? 'starlight_maya',
-        persona: first?.persona ?? 'Quiet, observant, creative.',
+        buddyId: first?.id ?? 'fixture_actor',
+        displayName: first?.displayName ?? 'Fixture Actor',
+        handle: first?.handle ?? 'fixture_actor',
+        persona: first?.bio ?? 'A grounded period-appropriate local acquaintance.',
         relationshipSummary: 'familiarity 25, trust 35, comfort 40, respect 45, annoyance 2',
         recentMessages: [{ sender: 'buddy', text: 'the rain is loud tonight' }],
         playerMessage: chatPrompt,
@@ -473,7 +472,7 @@ export const AILabApp: React.FC = () => {
         <h2 className="mb-2 font-bold">Benchmark inputs</h2>
         <label className="mb-1 block font-semibold" htmlFor="site-host">Fictional site host</label>
         <input id="site-host" value={siteName} onChange={(event) => setSiteName(event.target.value)} className="mb-2 w-full border border-gray-500 px-2 py-1" />
-        <label className="mb-1 block font-semibold" htmlFor="chat-prompt">Maya chat prompt</label>
+        <label className="mb-1 block font-semibold" htmlFor="chat-prompt">Character chat prompt</label>
         <input id="chat-prompt" value={chatPrompt} onChange={(event) => setChatPrompt(event.target.value)} className="w-full border border-gray-500 px-2 py-1" />
         <button disabled={running} onClick={runBenchmarks} className="mt-3 border border-gray-700 bg-[#000080] px-4 py-1 font-bold text-white disabled:cursor-wait disabled:opacity-60">
           {running ? 'Running benchmark...' : 'Run all provider benchmarks'}
@@ -487,7 +486,7 @@ export const AILabApp: React.FC = () => {
         <div className="mt-2 flex flex-wrap items-center gap-2">
           <label className="font-semibold" htmlFor="image-buddy">Buddy:</label>
           <select id="image-buddy" value={imageBuddy} onChange={(e) => setImageBuddy(e.target.value)} className="border border-gray-500 bg-white px-2 py-1">
-            {CORE_BUDDIES.map((b) => (
+            {engine.social.getBuddies().map((b) => (
               <option key={b.id} value={b.id}>{b.displayName} — {b.handle}</option>
             ))}
           </select>

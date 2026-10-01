@@ -31,13 +31,13 @@ test.describe('Tier 4: Scenario D — In-Person Café Meeting & Narrative Shift'
     } else {
       // Direct completion trigger
       await page.evaluate(() => {
-        (window as any).__simStore.getState().setNarrativeFlag('maya_met_in_person', true);
+        (window as any).__simStore.getState().setNarrativeFlag('met_in_person', true);
         (window as any).__simStore.getState().switchView('room');
       });
     }
 
     // 4. Verify post-meeting status in simulation state
     const state = await sim.getState();
-    expect(state.narrative.flags.maya_met_in_person).toBe(true);
+    expect(state.narrative.flags.met_in_person).toBe(true);
   });
 });

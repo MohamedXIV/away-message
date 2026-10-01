@@ -2,7 +2,8 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { tokenizeEmoticons, renderEmoticonNodes } from '../../src/apps/pulse/utils/emoticonParser';
 import { formatSimulationTime } from '../../src/apps/pulse/utils/timeFormat';
 import { AWAY_MESSAGE_PRESETS } from '../../src/apps/pulse/data/awayMessagePresets';
-import { DIALOGUE_SCRIPTS } from '../../src/apps/pulse/data/dialogueTrees';
+import { DIALOGUE_SCRIPTS, validateDialogueScripts } from '../../src/apps/pulse/data/dialogueTrees';
+import type { NpcDialogueScript } from '../../src/apps/pulse/types';
 import { useSimulationStore } from '../../src/store/useSimulationStore';
 import { useWindowStore } from '../../src/store/useWindowStore';
 
@@ -111,26 +112,27 @@ describe('Adversarial M3 Stress & Quality Suite: Pulse Messenger & Ecosystem App
       expect(formatSimulationTime(-10)).toBe('12:00 AM'); // Negative offset clamps to 0 (12:00 AM)
     });
 
-    it('validates integrity of all authored dialogue scripts', () => {
-      expect(DIALOGUE_SCRIPTS.length).toBeGreaterThanOrEqual(3);
-      for (const script of DIALOGUE_SCRIPTS) {
-        expect(script.id).toBeTruthy();
-        expect(script.buddyId).toBeTruthy();
-        expect(Array.isArray(script.messages)).toBe(true);
-        expect(script.messages.length).toBeGreaterThan(0);
+    it('validates reusable dialogue structure without requiring production scripts to exist', () => {
+      expect(validateDialogueScripts(DIALOGUE_SCRIPTS)).toEqual([]);
 
-        for (const msg of script.messages) {
-          expect(msg.text).toBeTruthy();
-        }
-
-        if (script.playerChoices) {
-          for (const choice of script.playerChoices) {
-            expect(choice.id).toBeTruthy();
-            expect(choice.text).toBeTruthy();
-            expect(choice.socialAction).toBeTruthy();
-          }
-        }
-      }
+      const malformed: NpcDialogueScript[] = [
+        {
+          id: 'broken_fixture',
+          buddyId: '',
+          messages: [],
+          playerChoices: [{
+            id: '',
+            text: '',
+            socialAction: 'empathy',
+          }],
+        },
+      ];
+      expect(validateDialogueScripts(malformed)).toEqual([
+        'script[0].buddyId must be non-empty',
+        'script[0].messages must contain at least one message',
+        'script[0].playerChoices[0].id must be non-empty',
+        'script[0].playerChoices[0].text must be non-empty',
+      ]);
     });
 
     it('validates authenticity and metadata of away message presets', () => {

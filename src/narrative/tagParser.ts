@@ -1,5 +1,4 @@
 import { ParsedNarrativeTag, SocialActionType } from './types';
-import { CORE_IDS } from '../engine/coreBuddies';
 
 /**
  * Parses raw Ink or story tags into typed semantic commands.
@@ -93,7 +92,10 @@ export function parseNarrativeTag(rawTag: string, fallbackBuddyId?: string): Par
   // 3. # social:<buddyId>:<action>
   if (cleanTag.startsWith('social:')) {
     const parts = cleanTag.substring('social:'.length).trim().split(':');
-    const buddyId = parts[0] || fallbackBuddyId || CORE_IDS.MAYA;
+    const buddyId = parts[0] || fallbackBuddyId;
+    if (!buddyId) {
+      return { type: 'unknown', raw: trimmed };
+    }
     const action = (parts[1] || 'empathy') as SocialActionType;
     return {
       type: 'social',

@@ -57,7 +57,7 @@ Prefer:
 - character puppets/sprites/portraits,
 - small ambient loops.
 
-Do not require free walking for the evaluation build or later living-world architecture.
+Do not require free walking for the sandbox build or later living-world architecture.
 
 The desired language is closer to:
 - old adventure games,
@@ -225,7 +225,7 @@ At minimum support:
 - night
 - late night
 
-The visual implementation may use fewer unique painted backgrounds and more overlays in the evaluation build.
+The visual implementation may use fewer unique painted backgrounds and more overlays in the sandbox build.
 
 Simulation time of day must affect:
 - lighting,
@@ -266,7 +266,7 @@ Do not build a deep climate or traffic simulation.
 
 The normal job is intentionally mundane.
 
-The evaluation build may represent it through:
+The sandbox build may represent it through:
 - short location scene,
 - 20–40 second interaction montage,
 - quick-shift action after the first full introduction.
@@ -353,7 +353,7 @@ This can be:
 - online site;
 - or both.
 
-The evaluation build should demonstrate that a product seen online can have a physical-world consequence or vice versa.
+The sandbox build should demonstrate that a product seen online can have a physical-world consequence or vice versa.
 
 The mature physical-world architecture should allow the store to belong to a district and be reached through local walking/transit like any other canonical place.
 
@@ -443,7 +443,7 @@ This keeps the evaluation deterministic and testable.
 
 ## 1. Important status
 
-**Final art style is intentionally not frozen for the evaluation build.**
+**Final art style is intentionally not frozen for the sandbox build.**
 
 The evaluation may use:
 - pixel art;
@@ -455,7 +455,7 @@ The evaluation may use:
 
 The purpose is to discover what feels right through play.
 
-Do not treat the visual style chosen for the evaluation build as final art direction.
+Do not treat the visual style chosen for the sandbox build as final art direction.
 
 ---
 

@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import { soundManager } from '../../audio/SoundManager';
 import { useSimulationStore } from '../../store/useSimulationStore';
 import { buildNpcMailForDay, buildRentMailHistory, gameDayToMailDate, type NpcMail } from '../../engine/BoardDirector';
-import { buddyWithRole } from '../../engine/coreBuddies';
 import { locationLabel } from '../../engine/AppointmentDirector';
 
 interface EmailMessage {
@@ -23,40 +22,26 @@ interface EmailMessage {
 const INITIAL_EMAILS: EmailMessage[] = [
   {
     id: 'em_1',
-    sender: 'Mr. Henderson (Front Desk)',
+    sender: 'Starlite Motel Front Desk',
     senderEmail: 'desk@starlitemotel.local',
-    subject: 'Room 104 Check-In Notice & Rent Schedule',
+    subject: 'Check-In Notice & Rent Schedule',
     date: 'Aug 22, 2006 08:30 AM',
     folder: 'inbox',
     isRead: false,
-    body: `Welcome to Starlite Motel, Room 104.\n\nYour weekly rent of $140.00 is due every Sunday by 11:59 PM. Please make payment via TechMart cash deposit or directly at the front desk.\n\nNote: The DSL wall port is active on connection line 2. Do not tamper with the telephone junction box outside your door.\n\n- Front Desk Management`,
+    body: `Welcome to Starlite Motel.\n\nYour weekly rent of $140.00 is due every Sunday by 11:59 PM. Please make payment via TechMart cash deposit or directly at the front desk.\n\nNote: Your room's active connection line is managed by the property. Do not tamper with the telephone junction box outside your door.\n\n- Front Desk Management`,
   },
   {
     id: 'em_2',
-    sender: 'Maya Lin',
-    senderEmail: 'maya@myplace.local',
-    subject: 'diner shift / rain photos',
-    date: 'Aug 22, 2006 10:15 AM',
-    folder: 'inbox',
-    isRead: false,
-    body: `hey! hope you got settled into Room 104.\n\ni uploaded the 35mm photos of the motel neon sign to myplace.local/maya_x if you wanna see them. Also if you smell fried onion rings drifting across the parking lot later tonight, come over to 4th Street Diner and i will save you a seat!\n\n- maya`,
-    attachment: {
-      name: 'motel_neon_35mm.jpg',
-      sizeBytes: 840000,
-    },
-  },
-  {
-    id: 'em_3',
     sender: 'TechMart Online',
     senderEmail: 'orders@techmart.local',
     subject: 'Order #TM-89412 Confirmation',
     date: 'Aug 21, 2006 16:45 PM',
     folder: 'inbox',
     isRead: true,
-    body: `Thank you for shopping at TechMart!\n\nYour order TM-89412 has been processed and is scheduled for courier delivery to Starlite Motel Room 104.\n\nItems:\n- 1x 256MB High-Speed SDRAM Module ($45.00)\n- 1x FlashFetch Download Accelerator License ($0.00)\n\nThank you for choosing TechMart!`,
+    body: `Thank you for shopping at TechMart!\n\nYour order TM-89412 has been processed and is scheduled for courier delivery to your current residence.\n\nItems:\n- 1x 256MB High-Speed SDRAM Module ($45.00)\n- 1x FlashFetch Download Accelerator License ($0.00)\n\nThank you for choosing TechMart!`,
   },
   {
-    id: 'em_4',
+    id: 'em_3',
     sender: 'NightBoard Digest',
     senderEmail: 'mailer@nightboard.local',
     subject: '[NightBoard] Thread #104 New Replies',
@@ -65,7 +50,7 @@ const INITIAL_EMAILS: EmailMessage[] = [
     isRead: true,
     body: `3 new anonymous replies in Thread #104: "Sub-Canal Infrastructure Hum and Electrical Anomalies".\n\nVisit nightboard.local/thread/104 to view the thread.`,
   },
-];
+]
 
 export const MailboxApp: React.FC = () => {
   const [emails, setEmails] = useState<EmailMessage[]>(INITIAL_EMAILS);
@@ -107,8 +92,7 @@ export const MailboxApp: React.FC = () => {
       const trimmed = collected.slice(-10);
       // P6.4 rent paper trail (survives payment — reconstructed from flags; never trimmed away)
       try {
-        const landlord = buddyWithRole('landlord');
-        const landlordId = landlord ? engine.social.getBuddy(landlord.id)?.id : undefined;
+        const landlordId = engine.social.getBuddyWithRole('landlord')?.id;
         for (const rent of buildRentMailHistory(engine.world.getFlags(), landlordId)) {
           if (!trimmed.some((m) => m.key === rent.key)) trimmed.push(rent);
         }

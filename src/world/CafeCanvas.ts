@@ -1,10 +1,10 @@
 // src/world/CafeCanvas.ts
 
-import { MayaExpression, Particle } from './types';
+import { CafeExpression, Particle } from './types';
 
 export interface CafeCanvasOptions {
   canvas: HTMLCanvasElement;
-  expression: MayaExpression;
+  expression: CafeExpression;
 }
 
 export class CafeCanvasRenderer {
@@ -13,7 +13,7 @@ export class CafeCanvasRenderer {
   private animFrameId: number | null = null;
   private isDestroyed = false;
 
-  public expression: MayaExpression = 'smile';
+  public expression: CafeExpression = 'smile';
   private steamParticles: Particle[] = [];
   private lastTime = 0;
 
@@ -28,7 +28,7 @@ export class CafeCanvasRenderer {
     this.startLoop();
   }
 
-  public setExpression(expression: MayaExpression) {
+  public setExpression(expression: CafeExpression) {
     this.expression = expression;
   }
 
@@ -92,8 +92,8 @@ export class CafeCanvasRenderer {
     // 1. Café Background & Plate Glass Window
     this.drawCafeBackground(w, h);
 
-    // 2. Maya Character Portrait (Seated across the table)
-    this.drawMayaPortrait(w, h);
+    // 2. Guest placeholder portrait (seated across the table)
+    this.drawGuestPortrait(w, h);
 
     // 3. Foreground Booth Table, Coffee Mugs & Steam
     this.drawTableAndMugs(w, h);
@@ -145,7 +145,7 @@ export class CafeCanvasRenderer {
     ctx.lineTo(winX + winW * 0.66, winY + winH);
     ctx.stroke();
 
-    // Leather booth seat backrest behind Maya
+    // Leather booth seat backrest behind the guest
     const boothY = h * 0.32;
     ctx.fillStyle = '#4a151b'; // burgundy leather
     ctx.fillRect(w * 0.22, boothY, w * 0.56, h * 0.38);
@@ -160,7 +160,7 @@ export class CafeCanvasRenderer {
     }
   }
 
-  private drawMayaPortrait(w: number, h: number) {
+  private drawGuestPortrait(w: number, h: number) {
     const ctx = this.ctx;
     const centerX = w * 0.5;
     const centerY = h * 0.44;
@@ -347,7 +347,7 @@ export class CafeCanvasRenderer {
     ctx.fillStyle = '#f8fafc'; // white napkins
     ctx.fillRect(napkinX + 4, napkinY - 6, 16, 8);
 
-    // Maya's Ceramic Latte Mug (Left center table)
+    // Guest ceramic mug (left center table)
     const mug1X = w * 0.38;
     const mug1Y = tableY + 14;
     ctx.fillStyle = '#0284c7'; // turquoise ceramic

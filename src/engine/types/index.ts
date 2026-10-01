@@ -13,7 +13,7 @@ import type { VenueRuntimeState } from '../venue/VenueOperations';
 export type TimeOfDay = 'morning' | 'day' | 'evening' | 'night' | 'late_night';
 
 export interface GameTime {
-  day: number;           // 1..14 (and 15+ in free play)
+  day: number;           // 1..∞ open-ended sandbox
   hour: number;          // 0..23
   minute: number;        // 0..59
   totalMinutes: number;  // Monotonic elapsed simulation minutes from Day 1, 08:00 (base = 480)
@@ -46,7 +46,7 @@ export interface PlayerState {
   cash: number;              // Starting: $38.00
   energy: number;            // 0..100
   fatigue: number;           // 0..100
-  rentDueDay: number;        // Day 7, then Day 14
+  rentDueDay: number;        // Next recurring rent due day
   rentAmount: number;        // Current amount due, including temporary late fees
   recurringRentAmount?: number;// Contract rent before temporary late fees
   rentPaid: boolean;
@@ -358,7 +358,7 @@ export interface RelationshipDimensions {
 }
 
 // Character Lives — fixed temperament (Big5-lite). Set once at creation
-// (core 4 hand-authored, procedural from archetype + stable id jitter) and
+// (authored seeds and procedural actors from archetype + stable id jitter) and
 // never mutated afterwards, never chosen by AI. Rules read these to weight
 // rolls and pick template lines; AI only paraphrases inside chat.
 export interface CharacterTraits {
@@ -378,7 +378,7 @@ export interface ScheduleBlock {
 
 export type CharacterArchetype = 'coworker' | 'nightowl' | 'student' | 'trader' | 'artist' | 'regular' | (string & {});
 export type BuddyLifecycleStatus = 'stranger' | 'acquaintance' | 'friend' | 'close' | 'distant' | 'gone' | 'blocked';
-export type BuddyMetVia = 'nightboard' | 'myplace' | 'pulse-room' | 'work' | 'intro' | 'core';
+export type BuddyMetVia = 'nightboard' | 'myplace' | 'pulse-room' | 'work' | 'intro' | 'seed';
 
 export type HairColor = 'black' | 'dark_brown' | 'brown' | 'light_brown' | 'blonde' | 'auburn' | 'red' | 'grey' | 'dyed_blue' | 'dyed_pink' | 'dyed_green';
 export type EyeColor = 'brown' | 'dark_brown' | 'hazel' | 'blue' | 'green' | 'grey' | 'amber';
@@ -465,8 +465,12 @@ export interface SocialEngineState {
   relationships: Record<string, RelationshipDimensions>;
   presence: Record<string, BuddyPresence>;
   conversations: Record<string, MessageRecord[]>;
-  // Dynamic roster: buddy definitions (core 4 are code-owned; procedural ones persist here)
+  // Dynamic roster: non-registry actor definitions persist here.
   buddies?: Record<string, BuddyCharacter>;
+  // Authored seed actors are content defaults, not sacred identities. Optional
+  // lifecycle overrides/removals let a save diverge from the seed roster.
+  seedActorStatuses?: Record<string, BuddyLifecycleStatus>;
+  removedSeedActorIds?: string[];
   // P3 long-term memory: immortal facts + promises per buddy (persisted, capped)
   coreMemories?: Record<string, CoreMemory[]>;
   promises?: Record<string, PromiseRecord[]>;
@@ -702,8 +706,6 @@ export interface TelemetryStats {
   workShiftsCompleted: number;
   hardwareUpgradesCount: number;
   osUpgradedDay: number | null;
-  cafeMeetingAttended: boolean;
-  endingReached: string | null;
 }
 
 // ==========================================

@@ -118,7 +118,7 @@ describe('Persistence Integration Suite (Dexie + fake-indexeddb)', () => {
     narrativeState: [
       {
         key: 'current_knot',
-        value: 'day1_ryan_intro',
+        value: 'friend_intro_fixture',
         updatedAt: Date.now(),
       },
     ],

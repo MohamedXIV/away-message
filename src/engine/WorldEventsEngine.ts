@@ -5,7 +5,6 @@ import { EventBus } from './EventBus';
 import { Appointment, GlobalEvent, WorldState, BuddyAttitude, BuddyEventKnowledge, CharacterArchetype } from './types';
 import { normalizeBuddyId } from './SocialEngine';
 import { ARCHETYPE_ATTITUDES, resolveArchetype } from './characterTemplates';
-import { CORE_IDS, coreBuddyIds } from './coreBuddies';
 import { GENERATED_EVENT_MODIFIERS } from './worldContent.generated';
 import {
   projectActiveModifiers,
@@ -110,9 +109,9 @@ export class WorldEventsEngine {
       try {
         const ids = this.buddyProvider().map((b) => b.id);
         if (ids.length > 0) return ids;
-      } catch { /* fall through to legacy list */ }
+      } catch { /* no live roster available */ }
     }
-    return coreBuddyIds();
+    return [];
   }
 
   private archetypeFor(buddyId: string): CharacterArchetype {
@@ -206,19 +205,17 @@ export class WorldEventsEngine {
   private attitudeForBuddy(buddyId: string, evt: GlobalEvent): { attitude: BuddyAttitude; personalTake: string } {
     const cat = evt.category;
     const lower = (evt.title + ' ' + evt.knowledgePrompt).toLowerCase();
-    // Archetype palette keeps the original 4 voices byte-identical
-    // (coworker=ryan, artist=maya, nightowl=nora, regular=henderson).
+    // Archetype palette drives event reactions without named-character exceptions.
     const archetype = this.archetypeFor(buddyId);
     const buddyPalette = ARCHETYPE_ATTITUDES[archetype] ?? ARCHETYPE_ATTITUDES['regular'];
     const entry = (buddyPalette[cat] ?? buddyPalette['city_news'])!;
     // Deterministic pick among takes + slight variance by id hash
     const idx = this.hashStr(`${buddyId}:${evt.id}`) % entry.takes.length;
     const take = entry.takes[idx]!;
-    // Override for strong keywords (preserved from the legacy table)
-    if (lower.includes('glitter') && (buddyId === CORE_IDS.MAYA || archetype === 'artist')) {
+    if (lower.includes('glitter') && archetype === 'artist') {
       return { attitude: 'annoyed', personalTake: "glitter is pretty for 5 seconds then my 56k dies — " + take };
     }
-    if (lower.includes('orion 7') && (buddyId === CORE_IDS.NORA || archetype === 'nightowl')) {
+    if (lower.includes('orion 7') && archetype === 'nightowl') {
       return { attitude: 'skeptical', personalTake: take };
     }
     return { attitude: entry.att, personalTake: take };
