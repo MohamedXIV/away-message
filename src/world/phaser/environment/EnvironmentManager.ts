@@ -5,6 +5,7 @@ import type { WorldSceneProjection } from '../types';
 import { interpolateDayPhase, type DayPhaseParameters } from './dayPhases';
 import { updatePuddleZones, type PuddleZoneState } from './puddles';
 import { resolveWeatherLayers, type WeatherLayerResolution } from './weatherLayers';
+import { projectEnvironmentPresentation } from './environmentProjection';
 import { evaluateAmbientMotion } from './ambientMotion';
 import {
   evaluateAuthoredLight,
@@ -410,8 +411,13 @@ export class EnvironmentManager {
   private applyWeatherResolution(): void {
     const isInterior = this.projection.isInterior ?? true;
     const hasAuthoredWindowZone = (this.projection.weatherWindowZones?.length ?? 0) > 0;
+    const environmentPresentation = this.projection.environment
+      ? projectEnvironmentPresentation(this.projection.environment)
+      : null;
     const resolution: WeatherLayerResolution = resolveWeatherLayers({
-      weather: this.projection.weather,
+      weather: environmentPresentation?.weather ?? this.projection.weather,
+      rainIntensity: environmentPresentation?.rainIntensity
+        ?? (this.projection.weather === 'rain' ? 1 : 0),
       isInterior,
       // Production interiors may opt into rain only when a bounded authored
       // window zone exists. This keeps rain off opaque room pixels while
@@ -453,7 +459,9 @@ export class EnvironmentManager {
 
   private updateAmbientMotions(timeMs: number): void {
     if (!this.projection.ambientMotions) return;
-    const wind = this.projection.windIntensity ?? 0;
+    const wind = this.projection.environment
+      ? projectEnvironmentPresentation(this.projection.environment).windIntensity
+      : this.projection.windIntensity ?? 0;
 
     for (const motionDef of this.projection.ambientMotions) {
       const target = this.motionTargets.get(motionDef.targetName);

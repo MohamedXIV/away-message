@@ -35,6 +35,7 @@ const ALLOWED_KNOWLEDGE_KEYS: ReadonlySet<string> = new Set([
   'economyHint',
   'timeHint',
   'weatherHint',
+  'moodHint',
 ]);
 
 const ALLOWED_REF_PREFIXES = ['visible:', 'learned:', 'memory:', 'player:'];
@@ -96,6 +97,7 @@ function isRefBackedByKnowledge(ref: string, knowledge: PlayerKnowledgeView): bo
     if (domain === 'economy') return hintContainsKnowledgeToken(knowledge.economyHint, token);
     if (domain === 'time') return hintContainsKnowledgeToken(knowledge.timeHint, token);
     if (domain === 'weather') return hintContainsKnowledgeToken(knowledge.weatherHint, token);
+    if (domain === 'mood') return hintContainsKnowledgeToken(knowledge.moodHint, token);
     return false;
   }
 

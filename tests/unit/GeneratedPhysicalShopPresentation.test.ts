@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createGeneratedPhysicalShopProjection } from '../../src/world/phaser/GeneratedPhysicalShopPresentation';
+import { EventBus } from '../../src/engine/EventBus';
+import { EnvironmentEngine } from '../../src/engine/EnvironmentEngine';
 
 describe('generated physical shop presentation (#28)', () => {
   it('keeps CornerMart on one authored hero view while focus changes only camera projection', () => {
@@ -48,6 +50,19 @@ describe('generated physical shop presentation (#28)', () => {
         height: 0.333,
       }),
     ]);
+  });
+
+  it('uses canonical Environment semantics when supplied while preserving manual QA weather overrides', () => {
+    const environment = new EnvironmentEngine(new EventBus()).getSnapshot({
+      atMinute: (2 - 1) * 1440 + 720,
+    });
+    const canonical = createGeneratedPhysicalShopProjection('place_b1', { environment });
+    expect(canonical.environment).toEqual(environment);
+    expect(canonical.weather).toBe('rain');
+    expect(canonical.windIntensity).toBe(environment.weather.wind);
+    expect(canonical.spatialAudioSources?.find((source) =>
+      source.eventId === 'ambience.weather.rain'
+    )?.parameters?.rainIntensity).toBeCloseTo(environment.weather.precipitation * 0.35);
   });
 
   it('preserves generic day/weather environment truth for manual clear/rain phase smoke tests', () => {

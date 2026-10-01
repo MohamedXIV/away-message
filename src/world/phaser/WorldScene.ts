@@ -22,6 +22,7 @@ import {
 import { EnvironmentManager } from './environment/EnvironmentManager';
 import { audioService, type AudioService } from '../../audio/AudioService';
 import { mapViewCoordinatesToAudioPosition } from '../../audio/spatialMapping';
+import { projectEnvironmentAudio } from '../../audio/environmentMapping';
 import type { SpatialAudioSourceDef } from '../../audio/types';
 import { createTechnicalAwayPuppetCharacterGroup } from './TechnicalAwayPuppetRig';
 import {
@@ -782,9 +783,13 @@ export class WorldScene extends Phaser.Scene {
     if (this.projection.listenerOrientation) {
       audioService.setListenerOrientation(this.projection.listenerOrientation);
     }
+    const canonicalAudio = this.projection.environment
+      ? projectEnvironmentAudio(this.projection.environment)
+      : null;
     audioService.updateEnvironment({
-      rainIntensity: this.projection.weather === 'rain' ? 1.0 : 0.0,
-      windIntensity: this.projection.windIntensity ?? 0,
+      rainIntensity: canonicalAudio?.precipitation
+        ?? (this.projection.weather === 'rain' ? 1.0 : 0.0),
+      windIntensity: canonicalAudio?.wind ?? this.projection.windIntensity ?? 0,
       isInterior: this.projection.isInterior ?? true,
       timeOfDay: this.projection.timeOfDay,
     });

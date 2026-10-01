@@ -8,7 +8,6 @@ import { useSimulationStore } from '../../store/useSimulationStore';
 import { soundManager } from '../../audio/SoundManager';
 import { CITY_NODES, type CityNodeId } from '../../engine/CityMap';
 import { DOOR_OPTIONS } from '../data/roomInteractables';
-import { getWeatherForDay } from '../../engine/WeatherEngine';
 import type { RoomActivityOption } from '../types';
 import { SiliconSparesModal } from '../modals/SiliconSparesModal';
 
@@ -27,8 +26,11 @@ function formatDuration(totalMin: number): string {
 }
 
 export const CityPlaceView: React.FC<CityPlaceViewProps> = ({ location, onOpenMap }) => {
+  const engine = useSimulationStore((s) => s.engine);
   const time = useSimulationStore((s) => s.state.time);
   const player = useSimulationStore((s) => s.state.player);
+  useSimulationStore((s) => s.state.needs);
+  useSimulationStore((s) => s.state.world.triggeredEvents);
   const workShift = useSimulationStore((s) => s.workShift);
   const cityOuting = useSimulationStore((s) => s.cityOuting);
   const payRent = useSimulationStore((s) => s.payRent);
@@ -37,7 +39,17 @@ export const CityPlaceView: React.FC<CityPlaceViewProps> = ({ location, onOpenMa
   const [showShopModal, setShowShopModal] = useState(false);
 
   const node = CITY_NODES[location];
-  const weather = getWeatherForDay(time.day);
+  const environment = engine.gameContext.environment.current();
+  const needs = engine.gameContext.player.needs();
+  const weatherMeta = ({
+    rain: ['🌧️', 'Canal Rain'],
+    drizzle: ['🌦️', 'Light Drizzle'],
+    overcast: ['☁️', 'Heavy Overcast'],
+    fog: ['🌫️', 'Canal Fog'],
+    clear: ['⛅', 'Break in Clouds'],
+    heat: ['☀️', 'Heat Wave'],
+    storm: ['⛈️', 'Canal Storm'],
+  } as const)[environment.weather.condition];
 
   // Actions available at this node (data-driven from the old door options)
   const actions: RoomActivityOption[] = (() => {
@@ -80,11 +92,11 @@ export const CityPlaceView: React.FC<CityPlaceViewProps> = ({ location, onOpenMa
           <span className="text-base">{node.icon}</span>
           <span className="font-bold text-amber-300">{node.name}</span>
           <span className="font-mono text-slate-400">Day {time.day} • {formattedTime}</span>
-          <span className="text-slate-400">{weather.icon} {weather.label}</span>
+          <span className="text-slate-400">{weatherMeta[0]} {weatherMeta[1]}</span>
         </div>
         <div className="flex items-center gap-3 font-mono">
           <span className="font-bold text-green-400">${player.cash.toFixed(2)}</span>
-          <span className="text-amber-300">⚡{player.energy}%</span>
+          <span className="text-amber-300">⚡{needs.energy}%</span>
         </div>
       </div>
 

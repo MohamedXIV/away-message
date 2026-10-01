@@ -1,7 +1,10 @@
 import type { TimeOfDay, WeatherType } from '../world/types';
 import type { ThoughtIntent, ThoughtTrigger } from './innerVoice';
+import type { GameContextReadApi } from './GameContext';
+import { buildInnerVoiceKnowledgeFromGameContext } from './innerVoice/GameContextKnowledge';
 
 export interface PhysicalShopInnerVoiceSource {
+  readonly gameContext?: GameContextReadApi;
   requestInnerThought(
     trigger: ThoughtTrigger,
     nowMinute?: number,
@@ -25,11 +28,17 @@ export function requestPhysicalShopArrivalThought(
   source: PhysicalShopInnerVoiceSource,
   observation: PhysicalShopArrivalObservation,
 ): ThoughtIntent | null {
-  const rainy = observation.weather === 'rain';
-  const late = observation.timeOfDay === 'night' || observation.timeOfDay === 'late_night';
+  const currentEnvironment = source.gameContext?.environment.current();
+  const currentTime = source.gameContext?.time.current();
+  const observedWeather = currentEnvironment?.weather.condition ?? observation.weather;
+  const observedTimeOfDay = currentTime?.timeOfDay ?? observation.timeOfDay;
+  const rainy = currentEnvironment
+    ? currentEnvironment.weather.tags.includes('wet')
+    : observedWeather === 'rain';
+  const late = observedTimeOfDay === 'night' || observedTimeOfDay === 'late_night';
   const knowledgeRefs = [
     `visible:place:${observation.placeId}`,
-    ...(rainy ? [`visible:weather:${observation.weather}`] : []),
+    ...(rainy ? [`visible:weather:${observedWeather}`] : []),
   ];
   const atmosphere = rainy
     ? 'Rain against the storefront makes the small shop feel more enclosed.'
@@ -37,6 +46,15 @@ export function requestPhysicalShopArrivalThought(
       ? 'The neighborhood shop feels different this late, even with the same shelves and counter.'
       : `I can take in the layout of ${observation.placeName} before deciding what I need.`;
 
+  const publicKnowledge = source.gameContext
+    ? buildInnerVoiceKnowledgeFromGameContext(source.gameContext, {
+        visiblePlaceId: observation.placeId,
+      })
+    : {
+        visiblePlaceId: observation.placeId,
+        ...(rainy ? { weatherHint: String(observedWeather) } : {}),
+        timeHint: String(observedTimeOfDay),
+      };
   return source.requestInnerThought({
     kind: 'place_changed',
     topic: 'physical_shop_arrival',
@@ -44,13 +62,12 @@ export function requestPhysicalShopArrivalThought(
     tone: rainy || late ? 'curious' : 'neutral',
     priority: 24,
     source: 'world:physical_shop',
+    // Provenance names only the knowledge this particular thought actually uses.
+    // Game Context may provide bounded private-player hints for other thoughts, but
+    // a shop-arrival atmosphere line must not leak or imply Mood/Needs by default.
     knowledgeRefs,
     cooldownKey: `physical_shop_arrival:${observation.placeId}`,
     presentation: 'ambient',
-    knowledge: {
-      visiblePlaceId: observation.placeId,
-      ...(rainy ? { weatherHint: observation.weather } : {}),
-      timeHint: observation.timeOfDay,
-    },
+    knowledge: publicKnowledge,
   }, observation.nowMinute);
 }

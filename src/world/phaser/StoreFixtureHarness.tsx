@@ -14,6 +14,7 @@ import {
 } from '../../engine/venue/VenueCharacterBridge';
 import { sendInPersonChatTurn } from '../InPersonChat';
 import type { TimeOfDay, WeatherType } from '../types';
+import { projectEnvironmentPresentation } from './environment/environmentProjection';
 import { PhysicalWorldHost } from './PhysicalWorldHost';
 import { createGeneratedPhysicalShopProjection } from './GeneratedPhysicalShopPresentation';
 import {
@@ -82,7 +83,10 @@ export const StoreFixtureHarness: React.FC<StoreFixtureHarnessProps> = ({ onExit
   const shop = useMemo(() => getGeneratedPhysicalShop(STORE_PLACE_ID), []);
   const [revision, setRevision] = useState(0);
   const [timeOfDay, setTimeOfDay] = useState<TimeOfDay>('day');
-  const [weather, setWeather] = useState<WeatherType>('clear');
+  const [weatherOverride, setWeatherOverride] = useState<WeatherType | null>(null);
+  const canonicalEnvironment = simulation.gameContext.environment.current();
+  const canonicalWeather = projectEnvironmentPresentation(canonicalEnvironment).weather;
+  const weather = weatherOverride ?? canonicalWeather;
   const [arrivalThought] = useState(() => requestPhysicalShopArrivalThought(simulation, {
     placeId: STORE_PLACE_ID,
     placeName: 'CornerMart',
@@ -99,13 +103,15 @@ export const StoreFixtureHarness: React.FC<StoreFixtureHarnessProps> = ({ onExit
   const projection = useMemo(
     () => createGeneratedPhysicalShopProjection(STORE_PLACE_ID, {
       timeOfDay,
-      weather,
+      ...(weatherOverride
+        ? { weather: weatherOverride }
+        : { environment: canonicalEnvironment }),
       focusFixtureId,
       actorByAnchorId: {
         fixture_shop_staff_anchor: CASHIER_ACTOR_ID,
       },
     }),
-    [timeOfDay, weather, focusFixtureId],
+    [timeOfDay, weatherOverride, canonicalEnvironment, focusFixtureId],
   );
 
   const characters = useMemo(() => {
@@ -466,8 +472,8 @@ export const StoreFixtureHarness: React.FC<StoreFixtureHarnessProps> = ({ onExit
                 <button
                   key={nextWeather}
                   data-testid={'corner-mart-weather-' + nextWeather}
-                  onClick={() => setWeather(nextWeather)}
-                  className={`px-1.5 py-0.5 border rounded ${weather === nextWeather ? 'bg-blue-800 border-blue-500' : 'bg-slate-900 border-slate-700'}`}
+                  onClick={() => setWeatherOverride(nextWeather)}
+                  className={`px-1.5 py-0.5 border rounded ${weatherOverride === nextWeather ? 'bg-blue-800 border-blue-500' : 'bg-slate-900 border-slate-700'}`}
                 >
                   {nextWeather}
                 </button>

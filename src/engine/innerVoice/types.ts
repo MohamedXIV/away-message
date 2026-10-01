@@ -76,6 +76,8 @@ export interface PlayerKnowledgeView {
   economyHint?: string;
   timeHint?: string;
   weatherHint?: string;
+  /** Private player affect hint. Keep semantic/banded; never expose exact Mood value to NPCs. */
+  moodHint?: string;
 }
 
 /** Semantic trigger kinds. Renderers never invent these; systems request them. */

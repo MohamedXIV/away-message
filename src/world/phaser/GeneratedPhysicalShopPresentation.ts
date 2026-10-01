@@ -6,6 +6,8 @@ import {
   GENERATED_SHOP_FIXTURES,
 } from '../../engine/worldContent.generated';
 import type { TimeOfDay, WeatherType } from '../types';
+import type { EnvironmentSnapshot } from '../../engine/GameContext';
+import { projectEnvironmentPresentation } from './environment/environmentProjection';
 import type { AmbientMotionDef } from './environment/ambientMotion';
 import type { AuthoredLightDef } from './environment/lightingEngine';
 import {
@@ -24,6 +26,8 @@ import type { SpatialAudioSourceDef } from '../../audio/types';
 export interface GeneratedShopProjectionOptions {
   timeOfDay?: TimeOfDay;
   weather?: WeatherType;
+  /** Canonical runtime environment; explicit weather remains a QA/manual override. */
+  environment?: EnvironmentSnapshot;
   focusFixtureId?: string | null;
   actorByAnchorId?: Readonly<Record<string, string>>;
 }
@@ -147,11 +151,14 @@ export function createGeneratedPhysicalShopProjection(
   }
 
   const timeOfDay = options.timeOfDay ?? 'day';
-  const weather = options.weather ?? 'clear';
+  const environment = options.environment;
+  const weather = environment
+    ? projectEnvironmentPresentation(environment).weather
+    : options.weather ?? 'clear';
   const { props, motions, weatherWindowZones } = scenePropsForView(viewId);
   const authoredLights = fixtures.flatMap(lightForFixture);
   const spatialAudioSources = [
-    ...getDefaultSpatialAudioSources(weather, true),
+    ...getDefaultSpatialAudioSources(environment ?? weather, true),
     ...fixtures.flatMap(audioForFixture),
   ];
 
@@ -162,6 +169,7 @@ export function createGeneratedPhysicalShopProjection(
       timeOfDay,
       minuteOfDay: getMinuteForTimeOfDay(timeOfDay),
       weather,
+      ...(environment ? { environment } : {}),
       focus,
       authoredLights,
       ambientMotions: motions,

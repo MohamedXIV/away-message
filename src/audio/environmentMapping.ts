@@ -1,5 +1,5 @@
 // src/audio/environmentMapping.ts
-import type { EnvironmentSnapshot } from '../engine/EnvironmentEngine';
+import type { EnvironmentSnapshot } from '../engine/GameContext';
 
 export interface EnvironmentAudioParameters {
   precipitation: number;
