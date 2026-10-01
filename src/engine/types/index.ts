@@ -715,6 +715,11 @@ export interface TelemetryStats {
 export interface SimulationState {
   version: number;
   time: GameTime;  player: PlayerState;
+  /**
+   * Canonical Player Needs state (#130). Legacy player fields remain a
+   * read-only compatibility projection until #132 removes their consumers.
+   */
+  needs?: import('../PlayerNeedsEngine').PlayerNeedsState;
   hardware: HardwareState;
   computer: ComputerSetupState;
   display: DisplaySetupState;
@@ -858,7 +863,14 @@ export interface SimulationEventMap {
   'economy:shift_completed': { wage: number; hours: number; energySpent: number };
   'economy:rent_due': { day: number; amount: number };
   'economy:rent_paid': { day: number; amount: number };
+  /** @deprecated legacy compatibility; subscribe to needs:changed. */
   'economy:energy_changed': { previousEnergy: number; newEnergy: number; delta: number };
+  'needs:changed': {
+    previous: import('../PlayerNeedsEngine').PlayerNeedsState;
+    current: import('../PlayerNeedsEngine').PlayerNeedsState;
+    changed: Array<keyof import('../PlayerNeedsEngine').PlayerNeedsState>;
+    reason: string;
+  };
   'hardware:upgraded': { component: string; oldValue: unknown; newValue: unknown };
   'hardware:os_migrated': { from: OsVersion | null; to: OsVersion };
   'hardware:disc_inserted': { disc: import('../hardware/types').InsertedDisc };

@@ -74,7 +74,7 @@ describe('P6 job applications (SimulationEngine)', () => {
     expect(sim.dispatchAction({ type: 'JOB_APPLY', gigId: 'moon' }).success).toBe(false);
     expect(sim.dispatchAction({ type: 'JOB_APPLY', gigId: 'cart_helper' }).success).toBe(true);
     expect(sim.dispatchAction({ type: 'JOB_APPLY', gigId: 'cart_helper' }).success).toBe(false);
-    (sim.economy as any).state.energy = 10;
+    sim.needs.loadState({ ...sim.needs.getState(), energy: 10 });
     expect(sim.dispatchAction({ type: 'JOB_APPLY', gigId: 'flyer_run' }).success).toBe(false);
   });
 

@@ -7,6 +7,7 @@ import {
 import { GameClock } from './GameClock';
 import { EventBus } from './EventBus';
 import { EconomyEngine } from './EconomyEngine';
+import { PlayerNeedsEngine } from './PlayerNeedsEngine';
 import { HardwareEngine } from './HardwareEngine';
 import { FileSystemEngine } from './FileSystemEngine';
 import { DownloadManager } from './DownloadManager';
@@ -54,6 +55,7 @@ export class SimulationEngine {
   public readonly clock!: GameClock;
   public readonly events!: EventBus;
   public readonly economy!: EconomyEngine;
+  public readonly needs!: PlayerNeedsEngine;
   public readonly hardware!: HardwareEngine;
   public readonly os!: OsEngine;
   public readonly pulse!: PulseEngine;
@@ -82,7 +84,11 @@ export class SimulationEngine {
       initialHour: initialState?.time?.hour ?? 8,
       initialMinute: initialState?.time?.minute ?? 0,
     });
-    this.economy = new EconomyEngine(this.events, initialState?.player);
+    this.needs = new PlayerNeedsEngine(
+      this.events,
+      (initialState as any)?.needs ?? initialState?.player,
+    );
+    this.economy = new EconomyEngine(this.events, initialState?.player, this.needs);
     this.hardware = new HardwareEngine(this.events, initialState?.hardware);
     this.vfs = new FileSystemEngine(this.events, initialState?.vfs);
     // World before OS so Os can sync from world
@@ -146,6 +152,14 @@ export class SimulationEngine {
   private registerInternalEventHandlers(): void {
     this.events.on('time:day_changed', ({ newDay }) => {
       this.economy.handleDayTransition(newDay);
+      const needsDay = this.needs.handleDayTransition();
+      if (needsDay.emergencyFoodNeeded) {
+        if (this.economy.spendCash(4, `Late-night chips (too hungry to sleep, Day ${newDay})`)) {
+          this.needs.applyEmergencyFoodRelief();
+        } else {
+          this.needs.applyEmergencyFoodFailure();
+        }
+      }
       // P3 daily relationship pass: overdue promises + distant returns (rules only, no AI)
       this.processRelationshipDaily(newDay);
       // P5 daily meeting pass: RSVP for tomorrow + resolve the past (rules only, no AI)
@@ -245,6 +259,7 @@ export class SimulationEngine {
       version: 1,
       time: this.clock.getTime(),
       player: this.economy.getState(),
+      needs: this.needs.getState(),
       hardware: this.hardware.getState(),
       os: osState,
       pulse: pulseState,
@@ -276,7 +291,7 @@ export class SimulationEngine {
     if (tickResult.elapsedMinutes > 0) {
       const currentMinutes = this.clock.getTotalMinutes();
       this.downloads.advanceTime(tickResult.elapsedMinutes, currentMinutes);
-      this.economy.advanceTime(tickResult.elapsedMinutes); // P6.1 hunger rises with time
+      this.needs.advanceTime(tickResult.elapsedMinutes); // P6.1 hunger rises with time
       this.processDeliveries(); // P6 courier arrivals
       this.processJobReplies(); // P6 job board replies land here too
       this.social.updatePresence(currentMinutes);
@@ -328,7 +343,7 @@ export class SimulationEngine {
     const jumpResult = this.clock.advanceMinutes(minutes);
     const currentMinutes = this.clock.getTotalMinutes();
     this.downloads.advanceTime(minutes, currentMinutes);
-    this.economy.advanceTime(minutes); // P6.1 hunger rises with time
+    this.needs.advanceTime(minutes); // P6.1 hunger rises with time
     this.processDeliveries(); // P6 courier arrivals
     this.processJobReplies(); // P6 job board replies land here (never instant)
     this.social.updatePresence(currentMinutes);
@@ -830,14 +845,14 @@ export class SimulationEngine {
       });
       return { success: false, error: text };
     }
-    if (this.economy.getSocialBattery() < 2) {
+    if (this.needs.getSocialBattery() < 2) {
       return { success: false, error: pickInnerVoice('blocked', `add:${target.id}:${day}`) };
     }
     if (this.world.getFlag(`contactadd_${target.id}_${day}`)) {
       return { success: false, error: 'You already reached out today. Give it a day.' };
     }
     this.world.setFlag(`contactadd_${target.id}_${day}`, true);
-    this.economy.spendSocialBattery(2);
+    this.needs.spendSocialBattery(2);
     // Rules decide: close/friend always accept; others roll on warmth vs shyness.
     const stage = this.social.getRelationshipStage(target.id);
     const traits = this.social.getTraits(target.id);
@@ -867,10 +882,10 @@ export class SimulationEngine {
     if (this.world.getFlag(`nbmeet_${day}`)) {
       return { success: false, error: 'You already went looking tonight. Try again tomorrow.' };
     }
-    if (this.economy.getSocialBattery() < 6) {
+    if (this.needs.getSocialBattery() < 6) {
       return { success: false, error: pickInnerVoice('blocked', `nbmeet:${day}`) };
     }
-    this.economy.spendSocialBattery(6);
+    this.needs.spendSocialBattery(6);
     this.world.setFlag(`nbmeet_${day}`, true);
     const metVia = NEWCOMER_METVIA_ROTATION[this.social.getBuddies().filter((b) => b.isProcedural).length % NEWCOMER_METVIA_ROTATION.length]!;
     const existingIds = this.social.getBuddies().map((b) => b.id);
@@ -957,17 +972,17 @@ export class SimulationEngine {
         return { ok: false, error: pickInnerVoice('must_apologize', `${buddyId}:${day}`) };
       }
       this.world.setFlag(apologizeKey, false);
-      this.economy.rechargeSocialBattery(BATTERY_APOLOGY_REWARD);
+      this.needs.rechargeSocialBattery(BATTERY_APOLOGY_REWARD);
       this.social.applySocialAction(buddyId, 'apologize');
       // Owning it reads loyal and kind.
       this.social.observePlayerTrait(buddyId, { loyalty: 65, warmth: 60 }, day);
       return { ok: true };
     }
     const assessment = classifyPlayerTone(text);
-    if (this.economy.getSocialBattery() < assessment.upfrontCost) {
+    if (this.needs.getSocialBattery() < assessment.upfrontCost) {
       return { ok: false, error: pickInnerVoice('blocked', `${buddyId}:${day}`) };
     }
-    this.economy.spendSocialBattery(assessment.upfrontCost);
+    this.needs.spendSocialBattery(assessment.upfrontCost);
     // Every line teaches the buddy something: tone first, brevity second.
     if (assessment.tone === 'warm') {
       this.social.observePlayerTrait(buddyId, { warmth: 80 }, day);
@@ -996,12 +1011,12 @@ export class SimulationEngine {
       }, assessment.boldness);
       this.world.setFlag(`reception_${buddyId}_${day}`, reception);
       if (reception === 'warm') {
-        this.economy.rechargeSocialBattery(BATTERY_WARM_REFUND + BATTERY_WARM_BONUS);
+        this.needs.rechargeSocialBattery(BATTERY_WARM_REFUND + BATTERY_WARM_BONUS);
       } else if (reception === 'lukewarm') {
         // Short of the sting: spendSocialBattery leaves the balance (lenient).
-        this.economy.spendSocialBattery(BATTERY_LUKEWARM_EXTRA);
+        this.needs.spendSocialBattery(BATTERY_LUKEWARM_EXTRA);
       } else {
-        this.economy.drainSocialBattery();
+        this.needs.drainSocialBattery();
         this.world.setFlag(apologizeKey, true);
         this.telemetry.logEvent('social', 'bold_rejected', this.clock.getTotalMinutes(), { buddyId, tone: assessment.tone, reception });
       }
@@ -1031,7 +1046,7 @@ export class SimulationEngine {
     try {
       if (this.world.getFlag(`quietrecharge_${newDay}`)) return;
       if (!this.social.didPlayerWriteOnDay(newDay - 1)) {
-        this.economy.rechargeSocialBattery(10);
+        this.needs.rechargeSocialBattery(10);
         this.telemetry.logEvent('social', 'battery_solitude', this.clock.getTotalMinutes(), { day: newDay });
       }
       this.world.setFlag(`quietrecharge_${newDay}`, true);
@@ -1101,7 +1116,7 @@ export class SimulationEngine {
       const proposal = parseMeetupProposal(text);
       if (!proposal) return null;
       // Drained: no new plans (existing commitments are still honored).
-      if (this.economy.getSocialBattery() <= 0) return null;
+      if (this.needs.getSocialBattery() <= 0) return null;
       if (open.length > 0) return null; // one open plan per buddy
       const slot = LOCATION_SLOTS[proposal.locationId];
       const targetDay = safeDay + proposal.dayOffset;
@@ -1117,7 +1132,7 @@ export class SimulationEngine {
       });
       this.telemetry.logEvent('social', 'appointment_scheduled', this.clock.getTotalMinutes(), { buddyId, appointmentId: appt.id, location: proposal.locationId, targetDay });
       // Making plans costs presence too (the introvert pays to commit).
-      this.economy.spendSocialBattery(BATTERY_NEW_APPOINTMENT);
+      this.needs.spendSocialBattery(BATTERY_NEW_APPOINTMENT);
       // Near-term plans (tonight/tomorrow) get an immediate answer; farther plans
       // are answered by the daily pass. Either way the NPC replies exactly once.
       if (targetDay <= safeDay + 1) this.runRsvpPass(safeDay, [appt], targetDay <= safeDay ? 'tonight' : 'tomorrow');
@@ -1331,12 +1346,12 @@ export class SimulationEngine {
       }
       const walkCost = quote.mode === 'walk' ? walkEnergyCost(quote.minutes) : 0;
       // P7 leniency: the auto-trip home never strands the player, whatever the legs feel like
-      if (!options?.ignoreFatigue && this.economy.getState().energy < 10 && walkCost > 0) {
+      if (!options?.ignoreFatigue && this.needs.getState().energy < 10 && walkCost > 0) {
         return { success: false, error: 'Too tired to walk there (need 10% energy). Take the bus or rest.' };
       }
       if (quote.busUsed) this.economy.spendCash(BUS_FARE, `Bus to ${CITY_NODES[to].name}`);
       this.advanceGameMinutes(quote.minutes, `Travel: ${CITY_NODES[from].name} → ${CITY_NODES[to].name} (${quote.mode})`);
-      if (walkCost > 0) this.economy.consumeEnergy(walkCost);
+      if (walkCost > 0) this.needs.consumeEnergy(walkCost);
       this.economy.setLocation(to);
       // Arrival counts for meetings (same flags the legacy views raise)
       if (to === 'cafe' || to === 'cart') {
@@ -1352,8 +1367,8 @@ export class SimulationEngine {
         if (encounter && encounter.kind !== 'quiet') {
           if (encounter.cashDelta !== 0) this.economy.earnCash(encounter.cashDelta, 'Street find');
           if (encounter.energyDelta !== 0) {
-            if (encounter.energyDelta < 0) this.economy.consumeEnergy(-encounter.energyDelta);
-            else this.economy.restoreEnergy(encounter.energyDelta);
+            if (encounter.energyDelta < 0) this.needs.consumeEnergy(-encounter.energyDelta);
+            else this.needs.restoreEnergy(encounter.energyDelta);
           }
           if (encounter.familiarityBuddyId) {
             const rels = this.social.getRelationships(encounter.familiarityBuddyId);
@@ -1407,7 +1422,7 @@ export class SimulationEngine {
       if (typeof applied === 'number' && applied > 0 && !done) {
         return { success: false, error: 'Already applied — waiting to hear back.' };
       }
-      if (this.economy.getState().energy < gig.minEnergy) {
+      if (this.needs.getState().energy < gig.minEnergy) {
         return { success: false, error: `Too tired to take ${gig.title} (need ${gig.minEnergy}% energy to apply).` };
       }
       const now = this.clock.getTotalMinutes();
@@ -1485,12 +1500,12 @@ export class SimulationEngine {
         return { success: false, error: `Cannot afford $${total.toFixed(2)} order.` };
       }
       if (fulfillment === 'pickup') {
-        if (this.economy.getState().energy < 20) {
+        if (this.needs.getState().energy < 20) {
           return { success: false, error: 'Too tired for a store run (need 20% energy).' };
         }
         this.economy.spendCash(total, 'CornerMart pickup');
         this.advanceGameMinutes(30, 'CornerMart pickup run');
-        this.economy.consumeEnergy(5);
+        this.needs.consumeEnergy(5);
         for (const item of items) {
           const sku = GROCERY_SKUS[item.sku]!;
           this.economy.addPantry(sku.pantry, sku.qty * item.qty);
@@ -1612,8 +1627,8 @@ export class SimulationEngine {
       const day = this.clock.getTime().day;
       const hour = this.clock.getTime().hour;
       const minutes = this.clock.getTotalMinutes();
-      const player = this.economy.getState();
-      if (player.energy < MIN_OUTING_ENERGY) {
+      const needs = this.needs.getState();
+      if (needs.energy < MIN_OUTING_ENERGY) {
         return { success: false, error: `Too tired to head out (need ${MIN_OUTING_ENERGY}% energy). Rest first.` };
       }
       if (spec.cost > 0 && !this.economy.canAfford(spec.cost)) {
@@ -1621,7 +1636,7 @@ export class SimulationEngine {
       }
       // Social battery: going out costs presence (~1 per 6 minutes out).
       const outingBattery = batteryCostForOuting(spec.minutes);
-      if (this.economy.getSocialBattery() < outingBattery) {
+      if (this.needs.getSocialBattery() < outingBattery) {
         return { success: false, error: pickInnerVoice('outing', `${outingId}:${day}`) };
       }
       // P6 the city keeps time — closed places fail honestly (UI gates too)
@@ -1633,12 +1648,12 @@ export class SimulationEngine {
         return { success: false, error: 'Canal storm outside — the walkway is closed. Come back after the front passes.' };
       }
       if (spec.cost > 0) this.economy.spendCash(spec.cost, `City outing (${spec.label})`);
-      this.economy.spendSocialBattery(outingBattery);
+      this.needs.spendSocialBattery(outingBattery);
       this.advanceGameMinutes(spec.minutes, `City outing: ${spec.label}`);
-      if (spec.energyDelta < 0) this.economy.consumeEnergy(-spec.energyDelta);
-      else this.economy.restoreEnergy(spec.energyDelta);
-      this.economy.addHunger(spec.hungerDelta);
-      this.economy.addHealth(spec.healthDelta);
+      if (spec.energyDelta < 0) this.needs.consumeEnergy(-spec.energyDelta);
+      else this.needs.restoreEnergy(spec.energyDelta);
+      this.needs.addHunger(spec.hungerDelta);
+      this.needs.addHealth(spec.healthDelta);
 
       // Encounters (deterministic per day; buddies must be present and available).
       // Whoever holds the role shows up — voice pool follows temperament, not identity.
@@ -1878,9 +1893,25 @@ export class SimulationEngine {
         // P7 gating: shifts are worked at the food cart
         const cartErr = SimulationEngine.requireLocation(this.economy.getLocation(), 'cart');
         if (cartErr) return { success: false, error: cartErr };
-        const shiftRes = this.economy.performWorkShift(action.durationMinutes, action.wage);
-        if (!shiftRes.success) return { success: false, error: shiftRes.error };
-        this.advanceGameMinutes(action.durationMinutes ?? 240, 'Work Shift');
+        const durationMinutes = action.durationMinutes ?? 240;
+        const wage = action.wage ?? 62.0;
+        const needResult = this.needs.applyWorkShift();
+        if (!needResult.success) return { success: false, error: needResult.error };
+        const hours = durationMinutes / 60;
+        this.economy.earnCash(wage, `Work shift (${hours} hrs)`);
+        this.events.emit('economy:shift_completed', {
+          wage,
+          hours,
+          energySpent: needResult.energySpent,
+        });
+        const shiftRes = {
+          success: true,
+          hours,
+          earnedWage: wage,
+          energySpent: needResult.energySpent,
+          fatigueAdded: needResult.fatigueAdded,
+        };
+        this.advanceGameMinutes(durationMinutes, 'Work Shift');
         this.telemetry.logEvent('economy', 'shift_worked', currentMinutes, {
           wage: shiftRes.earnedWage,
           hours: shiftRes.hours,
@@ -1916,8 +1947,8 @@ export class SimulationEngine {
         const bedtimeHour = this.clock.getTime().hour; // P6.1 sleep quality needs bedtime
         const jump = this.clock.jumpToNextMorning(wakeHour, action.wakeMinute ?? 0);
         const hoursSlept = jump.elapsedMinutes / 60;
-        this.economy.restOrSleep(hoursSlept, bedtimeHour);
-        this.economy.advanceTime(jump.elapsedMinutes); // P6.1 you still get hungry overnight (slowly)
+        this.needs.restOrSleep(hoursSlept, bedtimeHour);
+        this.needs.advanceTime(jump.elapsedMinutes); // P6.1 you still get hungry overnight (slowly)
         this.processDeliveries(); // P6 couriers arrive while you sleep
         this.processJobReplies(); // P6 replies wait in the morning
         const newTotalMinutes = this.clock.getTotalMinutes();
@@ -1938,7 +1969,7 @@ export class SimulationEngine {
           wakeDay: jump.newTime.day,
         });
         // Social battery: a full night restores the introvert (+30, capped).
-        this.economy.rechargeSocialBattery(30);
+        this.needs.rechargeSocialBattery(30);
         this.notifySubscribers();
         return { success: true, data: jump };
       }
@@ -1967,17 +1998,17 @@ export class SimulationEngine {
         }
         this.advanceGameMinutes(dur, `Room interaction: ${action.activity}`);
         if (action.activity === 'tea' || action.activity === 'coffee') {
-          this.economy.restoreEnergy(5);
+          this.needs.restoreEnergy(5);
           // Quiet rituals repay the introvert a little (+3 tea/coffee, +2 window below)
-          this.economy.rechargeSocialBattery(3);
+          this.needs.rechargeSocialBattery(3);
         } else if (action.activity === 'meal' || action.activity === 'groceries') {
           // Energy already handled inside eatMeal; time still passes above
         } else if (action.activity === 'shower') {
-          this.economy.showerBoost();
+          this.needs.showerBoost();
         } else if (action.activity === 'window') {
           this.telemetry.recordWindowObservation();
           this.world.addWindowObservation(`window_day${this.clock.getTime().day}_${this.clock.getTotalMinutes()}`);
-          this.economy.rechargeSocialBattery(2);
+          this.needs.rechargeSocialBattery(2);
         }
         this.telemetry.logEvent('room', `interact_${action.activity}`, currentMinutes);
         // Room mutations land after advanceGameMinutes() already notified once
@@ -2540,6 +2571,7 @@ export class SimulationEngine {
 
   public loadSnapshot(snapshot: SimulationState): void {
     this.clock.setTotalMinutes(snapshot.time.totalMinutes);
+    this.needs.loadState((snapshot as any).needs ?? snapshot.player);
     this.economy.loadState(snapshot.player);
     this.hardware.loadState(snapshot.hardware);
     // OsEngine — load from dedicated os field or fallback to hardware osVersion

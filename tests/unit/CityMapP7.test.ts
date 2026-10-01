@@ -83,7 +83,7 @@ describe('P7 travel (SimulationEngine)', () => {
     expect(sim.dispatchAction({ type: 'TRAVEL_TO', to: 'moon' as any, mode: 'walk' }).success).toBe(false);
     sim.advanceGameMinutes(14 * 24 * 60, 'to storm day 15');
     expect(sim.dispatchAction({ type: 'TRAVEL_TO', to: 'canal', mode: 'walk' }).success).toBe(false);
-    (sim.economy as any).state.energy = 5;
+    sim.needs.loadState({ ...sim.needs.getState(), energy: 5 });
     expect(sim.dispatchAction({ type: 'TRAVEL_TO', to: 'laundry', mode: 'walk' }).success).toBe(false);
   });
 
@@ -104,7 +104,7 @@ describe('P7 travel (SimulationEngine)', () => {
 
   it('sitting at the PC walks you home (never stranded)', () => {
     sim.dispatchAction({ type: 'TRAVEL_TO', to: 'canal', mode: 'walk' });
-    (sim.economy as any).state.energy = 5; // exhausted — auto-trip ignores fatigue
+    sim.needs.loadState({ ...sim.needs.getState(), energy: 5 }); // exhausted — auto-trip ignores fatigue
     const res = sim.dispatchAction({ type: 'VIEW_SWITCH', view: 'pc' });
     expect(res.success).toBe(true);
     expect(sim.economy.getLocation()).toBe('home');
