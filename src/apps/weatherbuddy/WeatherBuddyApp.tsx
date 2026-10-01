@@ -1,34 +1,54 @@
 import React, { useState } from 'react';
 import { useSimulationStore } from '../../store/useSimulationStore';
-import { getForecast, gameDayName, type DayWeather } from '../../engine/WeatherEngine';
+import type { GameContextEnvironmentSnapshot } from '../../engine/GameContext';
+
+const CONDITION_PRESENTATION: Record<
+  GameContextEnvironmentSnapshot['weather']['condition'],
+  { icon: string; label: string }
+> = {
+  rain: { icon: '🌧️', label: 'Rain' },
+  drizzle: { icon: '🌦️', label: 'Drizzle' },
+  overcast: { icon: '☁️', label: 'Overcast' },
+  fog: { icon: '🌫️', label: 'Fog' },
+  clear: { icon: '☀️', label: 'Clear' },
+  heat: { icon: '🌡️', label: 'Hot' },
+  storm: { icon: '⛈️', label: 'Storm' },
+};
+
+function gameDayName(day: number): string {
+  return ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'][(day - 1) % 7] ?? `Day ${day}`;
+}
 
 export const WeatherBuddyApp: React.FC = () => {
-  const currentDay = useSimulationStore((s) => s.state.time.day);
+  const engine = useSimulationStore((s) => s.engine);
+  const totalMinutes = useSimulationStore((s) => s.state.time.totalMinutes);
   const installedSoftware = useSimulationStore((s) => s.state.installedSoftware || []);
 
   const [isCelsius, setIsCelsius] = useState(false);
   const selectedCity = 'Oakhaven - Industrial Canal';
 
-  // Adware check: SearchMate toolbar injection
   const softwareList = Array.isArray(installedSoftware) ? installedSoftware : Object.values(installedSoftware || {});
   const hasAdware = softwareList.some(
     (sw: any) => sw.appId === 'searchmate' || sw.isAdware || sw.adwarePayload?.toolbarInjected
   );
 
   const toDisplayTemp = (f: number) => {
-    if (!isCelsius) return `${f}°F`;
+    if (!isCelsius) return `${Math.round(f)}°F`;
     const c = Math.round(((f - 32) * 5) / 9);
     return `${c}°C`;
   };
 
-  // P6.2 live forecast: 6 real game days starting today (deterministic engine, not a static table)
-  const forecast: DayWeather[] = getForecast(currentDay, 6);
-  const currentCondition = forecast[0]!;
-  const dayLabel = (day: number): string => gameDayName(day);
+  // One canonical Environment truth: world-event modifiers and base climate
+  // resolve before this application receives its read-only forecast.
+  const forecast = engine.gameContext.environment.forecast({
+    atMinute: totalMinutes,
+    days: 6,
+  });
+  const current = forecast[0]!;
+  const currentPresentation = CONDITION_PRESENTATION[current.weather.condition];
 
   return (
     <div className="w-full h-full bg-gradient-to-b from-sky-400 via-sky-200 to-amber-100 text-black font-sans text-xs select-none flex flex-col justify-between p-3 border-2 border-emerald-600 shadow-2xl relative overflow-hidden">
-      {/* SearchMate Adware Injected Banner Hook */}
       {hasAdware && (
         <div className="bg-yellow-300 text-yellow-950 px-2 py-1 -mt-2 -mx-2 mb-2 border-b border-yellow-500 text-[10px] flex justify-between items-center animate-pulse">
           <span className="font-bold">⭐ SearchMate Deal: Cheap RAM & Dialup Modems!</span>
@@ -36,7 +56,6 @@ export const WeatherBuddyApp: React.FC = () => {
         </div>
       )}
 
-      {/* Header & City Selector */}
       <div className="flex justify-between items-center">
         <div>
           <h2 className="text-sm font-bold text-emerald-950 flex items-center gap-1">
@@ -53,45 +72,45 @@ export const WeatherBuddyApp: React.FC = () => {
         </button>
       </div>
 
-      {/* Animated Frog Mascot & Current Temp Pane */}
       <div className="flex items-center justify-around my-2 bg-white/60 backdrop-blur-xs p-3 rounded-lg border border-white/80 shadow-inner">
-        {/* Frog Mascot */}
         <div className="flex flex-col items-center">
           <div className="text-5xl animate-bounce duration-1000">🐸</div>
-          <span className="text-[10px] font-bold text-emerald-900 mt-1">"Ribbit! Rain ahead!"</span>
+          <span className="text-[10px] font-bold text-emerald-900 mt-1">
+            {current.weather.tags.includes('wet') ? '"Ribbit! Rain ahead!"' : '"Ribbit! Check the sky!"'}
+          </span>
         </div>
 
-        {/* Current Weather Stats */}
         <div className="text-right">
           <div className="text-3xl font-extrabold text-slate-800 font-mono">
-            {toDisplayTemp(currentCondition.highF)}
+            {toDisplayTemp(current.weather.highF)}
           </div>
-          <div className="text-xs font-bold text-slate-700">{currentCondition.label}</div>
+          <div className="text-xs font-bold text-slate-700">{currentPresentation.label}</div>
           <div className="text-[10px] text-slate-500">
-            Low: {toDisplayTemp(currentCondition.lowF)} | Humidity: 88%
+            Low: {toDisplayTemp(current.weather.lowF)} | Visibility: {Math.round(current.weather.visibility * 100)}%
           </div>
         </div>
       </div>
 
-      {/* 5-Day Forecast Grid */}
       <div className="bg-white/70 p-2 rounded border border-emerald-300">
         <span className="text-[10px] font-bold text-emerald-950 uppercase tracking-wide block mb-1">
           5-Day Forecast:
         </span>
         <div className="grid grid-cols-5 gap-1 text-center">
-          {forecast.slice(1, 6).map((d) => (
-            <div key={d.day} className="bg-white/80 p-1 rounded border border-emerald-100 flex flex-col items-center">
-              <span className="font-bold text-[10px] text-gray-700">{dayLabel(d.day)}</span>
-              <span className="text-base my-0.5">{d.icon}</span>
-              <span className="font-mono text-[10px] font-bold text-gray-800">
-                {toDisplayTemp(d.highF)}
-              </span>
-            </div>
-          ))}
+          {forecast.slice(1, 6).map((entry) => {
+            const presentation = CONDITION_PRESENTATION[entry.weather.condition];
+            return (
+              <div key={entry.day} className="bg-white/80 p-1 rounded border border-emerald-100 flex flex-col items-center">
+                <span className="font-bold text-[10px] text-gray-700">{gameDayName(entry.day)}</span>
+                <span className="text-base my-0.5">{presentation.icon}</span>
+                <span className="font-mono text-[10px] font-bold text-gray-800">
+                  {toDisplayTemp(entry.weather.highF)}
+                </span>
+              </div>
+            );
+          })}
         </div>
       </div>
 
-      {/* Footer Quote */}
       <div className="text-center text-[10px] text-emerald-950 font-serif italic">
         "Never leave the motel without an umbrella." — WeatherBuddy
       </div>
