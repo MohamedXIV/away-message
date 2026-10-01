@@ -1,10 +1,12 @@
 // src/world/RoomScene.tsx
 
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import { useSimulationStore } from '../store/useSimulationStore';
 import { resolvePcBootState } from '../engine/SimulationEngine';
 import { soundManager } from '../audio/SoundManager';
-import { RoomCanvasRenderer, getTimeOfDayFromHour } from './RoomCanvas';
+import { PhysicalWorldBoundary } from './phaser/PhysicalWorldBoundary';
+import { createWorldSceneProjection } from './phaser/presentationAdapter';
+import type { WorldInteractionIntent } from './phaser/types';
 import { getRoomDeskPresentation } from './RoomComputerPresentation';
 import { RoomHotspotId, RoomActivityOption, WeatherType } from './types';
 import { projectEnvironmentPresentation } from './phaser/environment/environmentProjection';
@@ -33,9 +35,7 @@ import {
 } from 'lucide-react';
 
 export const RoomScene: React.FC = () => {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const rendererRef = useRef<RoomCanvasRenderer | null>(null);
-  const hotspotClickRef = useRef<(id: RoomHotspotId) => void>(() => undefined);
+  const [physicalViewByPlace, setPhysicalViewByPlace] = useState<Record<string, string>>({});
 
   // Simulation Store selectors
   const engine = useSimulationStore((s) => s.engine);
@@ -48,8 +48,6 @@ export const RoomScene: React.FC = () => {
   const computer = useSimulationStore((s) => s.state.computer);
   const inventory = useSimulationStore((s) => s.state.inventory);
   const os = useSimulationStore((s) => s.state.os);
-  const osVersion = os.currentOsId;
-  const downloads = useSimulationStore((s) => s.state.downloads);
   const world = useSimulationStore((s) => s.state.world);
 
   const switchView = useSimulationStore((s) => s.switchView);
@@ -65,7 +63,7 @@ export const RoomScene: React.FC = () => {
 
   // Active Modals
   const [activeModal, setActiveModal] = useState<
-    'window' | 'beverage' | 'door' | 'sleep' | 'hardware' | null
+    'window' | 'beverage' | 'door' | 'sleep' | 'hardware' | 'housing' | null
   >(null);
 
   const environment = engine.gameContext.environment.current();
@@ -73,8 +71,7 @@ export const RoomScene: React.FC = () => {
   const weather: WeatherType = environmentPresentation.weather;
   const needs = engine.gameContext.player.needs();
   const mood = engine.gameContext.player.mood();
-  const timeOfDay = getTimeOfDayFromHour(time.hour);
-  const hasActiveDownloads = downloads.some((d) => d.status === 'downloading');
+  const timeOfDay = time.timeOfDay;
 
   // Outing result notice (city outings report back: encounters, rumors, failures)
   const [outingNotice, setOutingNotice] = useState<string | null>(null);
@@ -126,51 +123,61 @@ export const RoomScene: React.FC = () => {
         break;
     }
   };
-  hotspotClickRef.current = handleHotspotClick;
 
-  // Initialize and update Canvas Renderer
-  useEffect(() => {
-    if (!canvasRef.current) return;
+  const residencePlaceId = engine.getCurrentResidencePlaceId();
+  const preferredPhysicalViewId = physicalViewByPlace[residencePlaceId];
+  const roomProjection = useMemo(
+    () => createWorldSceneProjection({
+      placeId: residencePlaceId,
+      ...(preferredPhysicalViewId ? { viewId: preferredPhysicalViewId } : {}),
+      timeOfDay,
+      minuteOfDay: time.hour * 60 + time.minute,
+      environment,
+      isInterior: true,
+    }),
+    [
+      residencePlaceId,
+      preferredPhysicalViewId,
+      timeOfDay,
+      time.hour,
+      time.minute,
+      environment.atMinute,
+      environment.weather.condition,
+      environment.weather.precipitation,
+      environment.weather.wind,
+      environment.weather.visibility,
+      environment.sourceEventIds.join('|'),
+    ],
+  );
 
-    const canvas = canvasRef.current;
-    // Hi-DPI backing store: the renderer draws in relative 0..1 space, so a
-    // bigger buffer only sharpens — CSS aspect-contain guarantees no stretching.
-    canvas.width = 1600;
-    canvas.height = 900;
-
-    const renderer = new RoomCanvasRenderer({
-      canvas,
-      day: time.day,
-      hour: time.hour,
-      minute: time.minute,
-      weather,
-      osVersion: deskPresentation === 'assembled_on' ? osVersion : null,
-      hasActiveDownloads,
-      hasComputer: assembledComputer,
-      onHotspotClick: (id) => hotspotClickRef.current(id),
-    });
-    rendererRef.current = renderer;
-
-    return () => {
-      renderer.destroy();
-      rendererRef.current = null;
-    };
-  }, []);
-
-  // Sync simulation state to canvas renderer
-  useEffect(() => {
-    if (rendererRef.current) {
-      rendererRef.current.updateState({
-        day: time.day,
-        hour: time.hour,
-        minute: time.minute,
-        weather,
-        osVersion: deskPresentation === 'assembled_on' ? osVersion : null,
-        hasActiveDownloads,
-        hasComputer: assembledComputer,
-      });
+  const handlePhysicalIntent = (intent: WorldInteractionIntent) => {
+    if (intent.type === 'VIEW_TRANSITION' && intent.targetViewId) {
+      setPhysicalViewByPlace((current) => ({
+        ...current,
+        [residencePlaceId]: intent.targetViewId!,
+      }));
+      return;
     }
-  }, [time.day, time.hour, time.minute, weather, osVersion, hasActiveDownloads, assembledComputer, deskPresentation]);
+    if (intent.type !== 'INTERACTION') return;
+
+    const capabilityToHotspot: Partial<Record<string, RoomHotspotId>> = {
+      use_computer: 'pc',
+      prepare_drink: 'kettle',
+      shower: 'shower',
+      observe_window: 'window',
+      sleep: 'bed',
+      leave_room: 'door',
+    };
+    const hotspot = intent.capability ? capabilityToHotspot[intent.capability] : undefined;
+    if (hotspot) {
+      handleHotspotClick(hotspot);
+      return;
+    }
+
+    if (intent.capability?.startsWith('inspect_') || intent.capability?.startsWith('open_')) {
+      flashOutingNotice(intent.name ?? 'You inspect the physical space.');
+    }
+  };
 
   // Handle Beverage Selection (meal/grocery money is charged by the engine — never double-spend here)
   const handleSelectBeverage = (option: RoomActivityOption) => {
@@ -365,6 +372,17 @@ export const RoomScene: React.FC = () => {
           </button>
           <button
             onClick={() => {
+              soundManager.play('click');
+              setActiveModal('housing');
+            }}
+            className="flex items-center gap-1 px-2.5 py-1 bg-slate-800 hover:bg-slate-700 border border-slate-600 rounded text-slate-200 text-xs font-bold transition-colors cursor-pointer"
+            title="Review authored housing offers"
+          >
+            <span>⌂</span>
+            <span>Housing</span>
+          </button>
+          <button
+            onClick={() => {
               soundManager.play('door_open');
               setActiveModal('door');
             }}
@@ -398,13 +416,15 @@ export const RoomScene: React.FC = () => {
         </div>
       </div>
 
-      {/* Main 2D Canvas Container */}
-      <div className="flex-1 relative flex items-center justify-center p-2 bg-black overflow-hidden">
-        <canvas
-          ref={canvasRef}
-          className="max-w-full max-h-full aspect-[16/9] shadow-2xl object-contain border border-slate-800 rounded"
+      {/* Canonical authored physical-world renderer. React owns overlays only. */}
+      <div className="flex-1 relative bg-black overflow-hidden">
+        <PhysicalWorldBoundary
+          projection={roomProjection}
+          onIntent={handlePhysicalIntent}
+          visualMode="production"
+          className="w-full h-full"
         />
-        <div className="absolute top-4 left-4 max-w-xs bg-slate-950/90 border border-slate-700 rounded px-3 py-2 text-[11px] text-slate-200 shadow-xl">
+        <div className="pointer-events-auto absolute top-4 left-4 max-w-xs bg-slate-950/90 border border-slate-700 rounded px-3 py-2 text-[11px] text-slate-200 shadow-xl">
           {deskPresentation === 'empty' && <span>🪵 Desk: empty — no computer owned.</span>}
           {deskPresentation === 'package' && (
             <div className="flex items-center gap-2">
@@ -420,12 +440,78 @@ export const RoomScene: React.FC = () => {
           {deskPresentation === 'assembled_off' && <span>🖥️ Computer assembled — power off.</span>}
           {deskPresentation === 'assembled_on' && <span>🟢 Computer assembled — power on.</span>}
         </div>
+        {roomProjection.availableViews.length > 1 && (
+          <div className="pointer-events-auto absolute top-4 right-4 flex gap-1 rounded border border-slate-700 bg-slate-950/90 p-1.5 text-[10px] shadow-xl">
+            {roomProjection.availableViews.map((view) => (
+              <button
+                key={view.id}
+                type="button"
+                onClick={() => setPhysicalViewByPlace((current) => ({
+                  ...current,
+                  [residencePlaceId]: view.id,
+                }))}
+                className={`rounded border px-2 py-1 ${
+                  view.id === roomProjection.viewId
+                    ? 'border-amber-500 bg-amber-700 text-white'
+                    : 'border-slate-700 bg-slate-900 text-slate-300 hover:bg-slate-800'
+                }`}
+              >
+                {view.name}
+              </button>
+            ))}
+          </div>
+        )}
         {outingNotice && (
           <div className="absolute bottom-3 left-1/2 -translate-x-1/2 max-w-[90%] bg-slate-900/95 border border-amber-500/60 rounded px-3 py-1.5 text-[11px] text-amber-100 shadow-xl text-center">
             {outingNotice}
           </div>
         )}
       </div>
+
+      {activeModal === 'housing' && (
+        <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/65 p-4">
+          <div className="w-full max-w-md rounded-lg border border-slate-600 bg-slate-900 p-4 shadow-2xl">
+            <div className="mb-3 flex items-start justify-between gap-4">
+              <div>
+                <h2 className="text-sm font-black text-amber-300">Housing</h2>
+                <p className="text-[11px] text-slate-400">Authored rentals. Moving changes tenancy and recurring rent immediately.</p>
+              </div>
+              <button onClick={() => setActiveModal(null)} className="text-slate-400 hover:text-white">✕</button>
+            </div>
+            <div className="space-y-2">
+              {engine.getHousingOffers().map((offer) => (
+                <div key={offer.id} className="flex items-center justify-between gap-3 rounded border border-slate-700 bg-slate-800/80 p-2">
+                  <div className="min-w-0">
+                    <div className="truncate text-xs font-bold text-slate-100">
+                      {offer.placeName}{offer.current ? ' · Current' : ''}
+                    </div>
+                    <div className="text-[10px] text-slate-400">
+                      Rent ${offer.monthlyRent.toFixed(0)} · move-in ${offer.moveInCost.toFixed(0)}
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    disabled={offer.current || !offer.available || !offer.affordable}
+                    onClick={() => {
+                      const result = engine.moveResidenceToOffer(offer.id);
+                      if (result.success) {
+                        syncStateFromEngine();
+                        setActiveModal(null);
+                        flashOutingNotice(`Moved to ${offer.placeName}. New rent: ${offer.monthlyRent.toFixed(0)}.`);
+                      } else {
+                        flashOutingNotice(result.error ?? 'Could not move.');
+                      }
+                    }}
+                    className="rounded bg-amber-600 px-2.5 py-1 text-[10px] font-bold text-slate-950 hover:bg-amber-500 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    {offer.current ? 'Current' : !offer.available ? 'Unavailable' : !offer.affordable ? 'Need cash' : 'Move'}
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Modals */}
       {activeModal === 'window' && (

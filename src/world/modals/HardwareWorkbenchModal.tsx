@@ -36,7 +36,7 @@ export const HardwareWorkbenchModal: React.FC<HardwareWorkbenchModalProps> = ({
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4">
         <div className="w-full max-w-lg border border-amber-900 bg-[#15120d] p-5 text-sm text-stone-200 shadow-2xl">
-          <div className="mb-4 font-mono text-xs uppercase tracking-[0.18em] text-amber-500">Room 104 · Desk Workbench</div>
+          <div className="mb-4 font-mono text-xs uppercase tracking-[0.18em] text-amber-500">Residence · Desk Workbench</div>
           <p className="text-stone-300">{workbench.error ?? 'Hardware management is unavailable.'}</p>
           <button onClick={onClose} className="mt-5 border border-stone-600 bg-stone-800 px-3 py-1.5 text-xs font-bold text-stone-100 hover:bg-stone-700">Close</button>
         </div>
@@ -59,7 +59,7 @@ export const HardwareWorkbenchModal: React.FC<HardwareWorkbenchModalProps> = ({
       <div className="flex max-h-[88vh] w-full max-w-4xl flex-col overflow-hidden border border-amber-800/70 bg-[#15120d] text-stone-200 shadow-2xl">
         <div className="flex items-start justify-between border-b border-amber-900/60 bg-[#211a10] px-5 py-4">
           <div>
-            <div className="font-mono text-xs uppercase tracking-[0.2em] text-amber-500">Room 104 · Desk Workbench</div>
+            <div className="font-mono text-xs uppercase tracking-[0.2em] text-amber-500">Residence · Desk Workbench</div>
             <h2 className="mt-1 text-lg font-bold text-amber-100">Installed hardware</h2>
             <p className="mt-1 max-w-2xl text-xs text-stone-400">Silicon & Spares sells parts. This desk is where owned physical parts are installed. Compatibility and safety decisions come from the simulation engine.</p>
           </div>
@@ -101,7 +101,7 @@ export const HardwareWorkbenchModal: React.FC<HardwareWorkbenchModalProps> = ({
           </section>
 
           <section className="p-5">
-            <h3 className="mb-1 font-mono text-xs font-bold uppercase tracking-wider text-stone-400">Owned spares in Room 104</h3>
+            <h3 className="mb-1 font-mono text-xs font-bold uppercase tracking-wider text-stone-400">Owned spares at residence</h3>
             <p className="mb-3 text-[11px] text-stone-500">Parts remain separate physical instances until you install them here.</p>
             <div className="space-y-2">
               {workbench.data.spares.map((spare) => (

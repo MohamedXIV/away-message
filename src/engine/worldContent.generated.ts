@@ -1,6 +1,6 @@
 // GENERATED — do not edit by hand.
-// Source: content/store.json (content vf16dc63a). Regenerate: npm run content:pull.
-export const WORLD_CONTENT_VERSION = 'f16dc63a';
+// Source: content/store.json (content v47873895). Regenerate: npm run content:pull.
+export const WORLD_CONTENT_VERSION = '47873895';
 
 export interface GeneratedSpatialPoint {
   x: number;
@@ -108,6 +108,27 @@ export const GENERATED_PLACES: GeneratedPlaceDef[] = [
     name: "Motel Room 104",
     transitAccess: [],
     legacyIds: ["home"],
+  },
+  {
+    id: "room_208",
+    districtId: "district_a",
+    name: "Courtyard Room 208",
+    transitAccess: [],
+    legacyIds: [],
+  },
+  {
+    id: "room_305",
+    districtId: "district_a",
+    name: "Upstairs Room 305",
+    transitAccess: [],
+    legacyIds: [],
+  },
+  {
+    id: "tiny_apartment_1",
+    districtId: "district_a",
+    name: "Harbor Tiny Apartment",
+    transitAccess: [],
+    legacyIds: [],
   },
 ];
 
@@ -237,6 +258,18 @@ export const GENERATED_SPACES: GeneratedSpaceDef[] = [
     tags: ["interior", "home", "room104"],
   },
   {
+    id: "room208_main",
+    placeId: "room_208",
+    name: "Room 208",
+    tags: ["interior", "home", "motel_room", "starter_option"],
+  },
+  {
+    id: "room305_main",
+    placeId: "room_305",
+    name: "Room 305",
+    tags: ["interior", "home", "motel_room", "upgrade"],
+  },
+  {
     id: "space_a1",
     placeId: "place_a1",
     name: "Space A1",
@@ -249,6 +282,12 @@ export const GENERATED_SPACES: GeneratedSpaceDef[] = [
     placeId: "place_b1",
     name: "CornerMart Floor",
     tags: ["interior", "shop", "public"],
+  },
+  {
+    id: "tiny_apartment_main",
+    placeId: "tiny_apartment_1",
+    name: "Tiny Apartment",
+    tags: ["interior", "home", "apartment", "upgrade"],
   },
 ];
 
@@ -276,6 +315,30 @@ export const GENERATED_VIEWS: GeneratedViewDef[] = [
     neighbors: ["room104_desk_window", "room104_bed_wardrobe"],
     assetId: null,
     tags: ["room104", "main-view", "entrance", "kitchenette"],
+  },
+  {
+    id: "room208_main_view",
+    spaceId: "room208_main",
+    name: "Courtyard Room",
+    neighbors: [],
+    assetId: null,
+    tags: ["home", "single_view", "starter_option"],
+  },
+  {
+    id: "room305_main_view",
+    spaceId: "room305_main",
+    name: "Upstairs Room",
+    neighbors: [],
+    assetId: null,
+    tags: ["home", "single_view", "upgrade"],
+  },
+  {
+    id: "tiny_apartment_main_view",
+    spaceId: "tiny_apartment_main",
+    name: "Tiny Apartment",
+    neighbors: [],
+    assetId: null,
+    tags: ["home", "single_view", "upgrade"],
   },
   {
     id: "view_a1",
@@ -497,6 +560,174 @@ export const GENERATED_ANCHORS: GeneratedAnchorDef[] = [
     y: 0.34,
     tags: ["hotspot", "window", "exterior-view"],
   },
+  {
+    id: "room208_bed",
+    viewId: "room208_main_view",
+    name: "Bed",
+    x: 0.4,
+    y: 0.7,
+    tags: ["hotspot", "bed", "rest"],
+  },
+  {
+    id: "room208_delivery",
+    viewId: "room208_main_view",
+    name: "Delivery Spot",
+    x: 0.24,
+    y: 0.78,
+    tags: ["hotspot", "delivery", "world-anchor"],
+  },
+  {
+    id: "room208_door",
+    viewId: "room208_main_view",
+    name: "Door",
+    x: 0.12,
+    y: 0.52,
+    tags: ["hotspot", "door", "exit"],
+  },
+  {
+    id: "room208_kettle",
+    viewId: "room208_main_view",
+    name: "Kitchenette",
+    x: 0.62,
+    y: 0.5,
+    tags: ["hotspot", "kettle", "kitchenette"],
+  },
+  {
+    id: "room208_pc",
+    viewId: "room208_main_view",
+    name: "Computer Desk",
+    x: 0.7,
+    y: 0.62,
+    tags: ["hotspot", "computer", "surface"],
+  },
+  {
+    id: "room208_shower",
+    viewId: "room208_main_view",
+    name: "Shower",
+    x: 0.83,
+    y: 0.5,
+    tags: ["hotspot", "shower", "bathroom"],
+  },
+  {
+    id: "room208_window",
+    viewId: "room208_main_view",
+    name: "Window",
+    x: 0.25,
+    y: 0.32,
+    tags: ["hotspot", "window", "exterior-view"],
+  },
+  {
+    id: "room305_bed",
+    viewId: "room305_main_view",
+    name: "Bed",
+    x: 0.4,
+    y: 0.7,
+    tags: ["hotspot", "bed", "rest"],
+  },
+  {
+    id: "room305_delivery",
+    viewId: "room305_main_view",
+    name: "Delivery Spot",
+    x: 0.24,
+    y: 0.78,
+    tags: ["hotspot", "delivery", "world-anchor"],
+  },
+  {
+    id: "room305_door",
+    viewId: "room305_main_view",
+    name: "Door",
+    x: 0.12,
+    y: 0.52,
+    tags: ["hotspot", "door", "exit"],
+  },
+  {
+    id: "room305_kettle",
+    viewId: "room305_main_view",
+    name: "Kitchenette",
+    x: 0.62,
+    y: 0.5,
+    tags: ["hotspot", "kettle", "kitchenette"],
+  },
+  {
+    id: "room305_pc",
+    viewId: "room305_main_view",
+    name: "Computer Desk",
+    x: 0.7,
+    y: 0.62,
+    tags: ["hotspot", "computer", "surface"],
+  },
+  {
+    id: "room305_shower",
+    viewId: "room305_main_view",
+    name: "Shower",
+    x: 0.83,
+    y: 0.5,
+    tags: ["hotspot", "shower", "bathroom"],
+  },
+  {
+    id: "room305_window",
+    viewId: "room305_main_view",
+    name: "Window",
+    x: 0.25,
+    y: 0.32,
+    tags: ["hotspot", "window", "exterior-view"],
+  },
+  {
+    id: "tinyapt_bed",
+    viewId: "tiny_apartment_main_view",
+    name: "Bed",
+    x: 0.4,
+    y: 0.7,
+    tags: ["hotspot", "bed", "rest"],
+  },
+  {
+    id: "tinyapt_delivery",
+    viewId: "tiny_apartment_main_view",
+    name: "Delivery Spot",
+    x: 0.24,
+    y: 0.78,
+    tags: ["hotspot", "delivery", "world-anchor"],
+  },
+  {
+    id: "tinyapt_door",
+    viewId: "tiny_apartment_main_view",
+    name: "Door",
+    x: 0.12,
+    y: 0.52,
+    tags: ["hotspot", "door", "exit"],
+  },
+  {
+    id: "tinyapt_kettle",
+    viewId: "tiny_apartment_main_view",
+    name: "Kitchenette",
+    x: 0.62,
+    y: 0.5,
+    tags: ["hotspot", "kettle", "kitchenette"],
+  },
+  {
+    id: "tinyapt_pc",
+    viewId: "tiny_apartment_main_view",
+    name: "Computer Desk",
+    x: 0.7,
+    y: 0.62,
+    tags: ["hotspot", "computer", "surface"],
+  },
+  {
+    id: "tinyapt_shower",
+    viewId: "tiny_apartment_main_view",
+    name: "Shower",
+    x: 0.83,
+    y: 0.5,
+    tags: ["hotspot", "shower", "bathroom"],
+  },
+  {
+    id: "tinyapt_window",
+    viewId: "tiny_apartment_main_view",
+    name: "Window",
+    x: 0.25,
+    y: 0.32,
+    tags: ["hotspot", "window", "exterior-view"],
+  },
 ];
 
 export const GENERATED_INTERACTIONS: GeneratedInteractionDef[] = [
@@ -615,6 +846,153 @@ export const GENERATED_INTERACTIONS: GeneratedInteractionDef[] = [
   {
     id: "room104_use_computer",
     anchorId: "room104_pc",
+    capability: "use_computer",
+    name: "Use computer",
+    tags: ["computer"],
+  },
+  {
+    id: "room208_inspect_delivery",
+    anchorId: "room208_delivery",
+    capability: "inspect_delivery_anchor",
+    name: "Inspect deliveries",
+    tags: ["delivery"],
+  },
+  {
+    id: "room208_leave",
+    anchorId: "room208_door",
+    capability: "leave_room",
+    name: "Leave residence",
+    tags: ["exit"],
+  },
+  {
+    id: "room208_observe_window",
+    anchorId: "room208_window",
+    capability: "observe_window",
+    name: "Look outside",
+    tags: ["observe"],
+  },
+  {
+    id: "room208_prepare_drink",
+    anchorId: "room208_kettle",
+    capability: "prepare_drink",
+    name: "Use kitchenette",
+    tags: ["kitchenette"],
+  },
+  {
+    id: "room208_shower_interaction",
+    anchorId: "room208_shower",
+    capability: "shower",
+    name: "Take shower",
+    tags: ["bathroom"],
+  },
+  {
+    id: "room208_sleep",
+    anchorId: "room208_bed",
+    capability: "sleep",
+    name: "Sleep",
+    tags: ["rest"],
+  },
+  {
+    id: "room208_use_computer",
+    anchorId: "room208_pc",
+    capability: "use_computer",
+    name: "Use computer",
+    tags: ["computer"],
+  },
+  {
+    id: "room305_inspect_delivery",
+    anchorId: "room305_delivery",
+    capability: "inspect_delivery_anchor",
+    name: "Inspect deliveries",
+    tags: ["delivery"],
+  },
+  {
+    id: "room305_leave",
+    anchorId: "room305_door",
+    capability: "leave_room",
+    name: "Leave residence",
+    tags: ["exit"],
+  },
+  {
+    id: "room305_observe_window",
+    anchorId: "room305_window",
+    capability: "observe_window",
+    name: "Look outside",
+    tags: ["observe"],
+  },
+  {
+    id: "room305_prepare_drink",
+    anchorId: "room305_kettle",
+    capability: "prepare_drink",
+    name: "Use kitchenette",
+    tags: ["kitchenette"],
+  },
+  {
+    id: "room305_shower_interaction",
+    anchorId: "room305_shower",
+    capability: "shower",
+    name: "Take shower",
+    tags: ["bathroom"],
+  },
+  {
+    id: "room305_sleep",
+    anchorId: "room305_bed",
+    capability: "sleep",
+    name: "Sleep",
+    tags: ["rest"],
+  },
+  {
+    id: "room305_use_computer",
+    anchorId: "room305_pc",
+    capability: "use_computer",
+    name: "Use computer",
+    tags: ["computer"],
+  },
+  {
+    id: "tinyapt_inspect_delivery",
+    anchorId: "tinyapt_delivery",
+    capability: "inspect_delivery_anchor",
+    name: "Inspect deliveries",
+    tags: ["delivery"],
+  },
+  {
+    id: "tinyapt_leave",
+    anchorId: "tinyapt_door",
+    capability: "leave_room",
+    name: "Leave residence",
+    tags: ["exit"],
+  },
+  {
+    id: "tinyapt_observe_window",
+    anchorId: "tinyapt_window",
+    capability: "observe_window",
+    name: "Look outside",
+    tags: ["observe"],
+  },
+  {
+    id: "tinyapt_prepare_drink",
+    anchorId: "tinyapt_kettle",
+    capability: "prepare_drink",
+    name: "Use kitchenette",
+    tags: ["kitchenette"],
+  },
+  {
+    id: "tinyapt_shower_interaction",
+    anchorId: "tinyapt_shower",
+    capability: "shower",
+    name: "Take shower",
+    tags: ["bathroom"],
+  },
+  {
+    id: "tinyapt_sleep",
+    anchorId: "tinyapt_bed",
+    capability: "sleep",
+    name: "Sleep",
+    tags: ["rest"],
+  },
+  {
+    id: "tinyapt_use_computer",
+    anchorId: "tinyapt_pc",
     capability: "use_computer",
     name: "Use computer",
     tags: ["computer"],
@@ -785,6 +1163,15 @@ export interface GeneratedEventModifierDef {
 
 export const GENERATED_EVENT_MODIFIERS: GeneratedEventModifierDef[] = [
   {
+    id: "canal_storm_front",
+    eventId: "canal_storm_warning",
+    domain: "environment",
+    kind: "condition_override",
+    durationMinutes: 180,
+    targetIds: [],
+    value: "storm",
+  },
+  {
     id: "festival_courier_backlog",
     eventId: "city_canal_festival",
     domain: "delivery",
@@ -848,6 +1235,16 @@ export interface GeneratedPlaceServicePolicy {
   deliveryTargetSlotId: string | null;
 }
 
+export interface GeneratedHousingOfferDef {
+  id: string;
+  placeId: string;
+  available: boolean;
+  monthlyRent: number;
+  moveInCost: number;
+  starterEligible: boolean;
+  starterDefault: boolean;
+}
+
 export const GENERATED_PHYSICAL_OBJECT_DEFS: GeneratedPhysicalObjectDef[] = [
   {
     id: "fixture_drawer_def",
@@ -877,6 +1274,36 @@ export const GENERATED_PLACEMENT_SLOTS: GeneratedPlacementSlotDef[] = [
     name: "Primary Delivery Target",
     spaceId: "room104_main",
     anchorId: "room104_delivery_anchor",
+    parentPlacementId: null,
+    slotKind: "delivery",
+    allowedObjectKinds: [],
+    tags: ["delivery"],
+  },
+  {
+    id: "delivery_target_room208",
+    name: "Room 208 Delivery Target",
+    spaceId: "room208_main",
+    anchorId: "room208_delivery",
+    parentPlacementId: null,
+    slotKind: "delivery",
+    allowedObjectKinds: [],
+    tags: ["delivery"],
+  },
+  {
+    id: "delivery_target_room305",
+    name: "Room 305 Delivery Target",
+    spaceId: "room305_main",
+    anchorId: "room305_delivery",
+    parentPlacementId: null,
+    slotKind: "delivery",
+    allowedObjectKinds: [],
+    tags: ["delivery"],
+  },
+  {
+    id: "delivery_target_tiny_apartment",
+    name: "Tiny Apartment Delivery Target",
+    spaceId: "tiny_apartment_main",
+    anchorId: "tinyapt_delivery",
     parentPlacementId: null,
     slotKind: "delivery",
     allowedObjectKinds: [],
@@ -923,6 +1350,63 @@ export const GENERATED_PLACE_SERVICE_POLICIES: GeneratedPlaceServicePolicy[] = [
     placeId: "room_104",
     acceptsDelivery: true,
     deliveryTargetSlotId: "delivery_target_primary",
+  },
+  {
+    id: "room208_delivery_policy",
+    placeId: "room_208",
+    acceptsDelivery: true,
+    deliveryTargetSlotId: "delivery_target_room208",
+  },
+  {
+    id: "room305_delivery_policy",
+    placeId: "room_305",
+    acceptsDelivery: true,
+    deliveryTargetSlotId: "delivery_target_room305",
+  },
+  {
+    id: "tiny_apartment_delivery_policy",
+    placeId: "tiny_apartment_1",
+    acceptsDelivery: true,
+    deliveryTargetSlotId: "delivery_target_tiny_apartment",
+  },
+];
+
+export const GENERATED_HOUSING_OFFERS: GeneratedHousingOfferDef[] = [
+  {
+    id: "better_room_305",
+    placeId: "room_305",
+    available: true,
+    monthlyRent: 185,
+    moveInCost: 90,
+    starterEligible: false,
+    starterDefault: false,
+  },
+  {
+    id: "starter_room_104",
+    placeId: "room_104",
+    available: true,
+    monthlyRent: 140,
+    moveInCost: 0,
+    starterEligible: true,
+    starterDefault: true,
+  },
+  {
+    id: "starter_room_208",
+    placeId: "room_208",
+    available: true,
+    monthlyRent: 125,
+    moveInCost: 18,
+    starterEligible: true,
+    starterDefault: false,
+  },
+  {
+    id: "tiny_apartment_harbor",
+    placeId: "tiny_apartment_1",
+    available: true,
+    monthlyRent: 260,
+    moveInCost: 220,
+    starterEligible: false,
+    starterDefault: false,
   },
 ];
 

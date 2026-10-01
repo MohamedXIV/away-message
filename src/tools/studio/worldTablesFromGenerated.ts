@@ -16,6 +16,7 @@ import {
   GENERATED_PLACEMENT_SLOTS,
   GENERATED_OBJECT_PLACEMENTS,
   GENERATED_PLACE_SERVICE_POLICIES,
+  GENERATED_HOUSING_OFFERS,
   GENERATED_SPACES,
   GENERATED_TRANSIT_STOPS,
   GENERATED_VIEWS,
@@ -137,6 +138,14 @@ export function worldTablesFromGenerated(): Tables {
       placeId: policy.placeId,
       acceptsDelivery: policy.acceptsDelivery,
       deliveryTargetSlotId: optionalCell(policy.deliveryTargetSlotId),
+    })),
+    housingOffers: tableFrom(GENERATED_HOUSING_OFFERS, (offer) => ({
+      placeId: offer.placeId,
+      available: offer.available,
+      monthlyRent: offer.monthlyRent,
+      moveInCost: offer.moveInCost,
+      starterEligible: offer.starterEligible,
+      starterDefault: offer.starterDefault,
     })),
     venueRoles: tableFrom(GENERATED_VENUE_ROLES, (role) => ({
       placeId: role.placeId,

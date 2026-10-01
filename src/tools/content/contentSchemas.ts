@@ -165,6 +165,14 @@ export const CONTENT_ROW_SCHEMAS = {
     acceptsDelivery: booleanCell(false),
     deliveryTargetSlotId: stringCell(),
   }),
+  housingOffers: z.object({
+    placeId: stringCell(),
+    available: booleanCell(true),
+    monthlyRent: numberCell(0),
+    moveInCost: numberCell(0),
+    starterEligible: booleanCell(false),
+    starterDefault: booleanCell(false),
+  }),
   venueRoles: z.object({
     placeId: stringCell(),
     name: stringCell(),

@@ -11,6 +11,8 @@ import {
   commitHousingMove,
   commitHousingOffer,
   listEligibleHousingOffers,
+  listStarterHousingOffers,
+  resolveStarterHousingOffer,
   movePlayerOwnedHousingObjects,
   type HousingOffer,
   type HousingPropertyPackage,
@@ -36,6 +38,24 @@ describe('HousingProgression', () => {
   it('constrains starting choice by authored availability and affordability', () => {
     expect(listEligibleHousingOffers(offers, 60).map((offer) => offer.id)).toEqual(['offer_alpha']);
     expect(listEligibleHousingOffers(offers, 100).map((offer) => offer.id)).toEqual(['offer_alpha', 'offer_gamma']);
+  });
+
+  it('resolves starter housing only from authored eligible affordable offers', () => {
+    const authored: HousingOffer[] = [
+      { ...gammaOffer, available: true, starterEligible: true, starterDefault: false },
+      { ...alphaOffer, starterEligible: true, starterDefault: true },
+      { ...betaOffer, available: true, starterEligible: false, starterDefault: false },
+    ];
+
+    expect(listStarterHousingOffers(authored, 100).map((offer) => offer.id)).toEqual([
+      'offer_alpha',
+      'offer_gamma',
+    ]);
+    expect(resolveStarterHousingOffer(authored, 100).id).toBe('offer_alpha');
+    expect(resolveStarterHousingOffer(authored, 100, 'offer_gamma').id).toBe('offer_gamma');
+    expect(() => resolveStarterHousingOffer(authored, 20, 'offer_gamma')).toThrow(
+      'missing, unavailable, or unaffordable',
+    );
   });
 
   it('commits exactly one tenancy and charges move-in cost once', () => {

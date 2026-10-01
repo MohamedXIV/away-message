@@ -68,6 +68,7 @@ export function validatePhysicalGraph(tables: ContentTables): string[] {
   const slots = tables['placementSlots'] ?? {};
   const placements = tables['objectPlacements'] ?? {};
   const policies = tables['placeServicePolicies'] ?? {};
+  const housingOffers = tables['housingOffers'] ?? {};
 
   for (const [id, row] of Object.entries(objectDefs)) {
     if (!row || typeof row !== 'object') {
@@ -315,6 +316,66 @@ export function validatePhysicalGraph(tables: ContentTables): string[] {
       );
     }
   }
+
+  const housingPlaces = new Set<string>();
+  let starterDefaultCount = 0;
+  for (const [id, row] of Object.entries(housingOffers)) {
+    if (!row || typeof row !== 'object') {
+      errors.push(`housingOffers/${id}: must be an object.`);
+      continue;
+    }
+    const idCheck = validateWorldId(id);
+    if (!idCheck.ok) errors.push(`housingOffers/${id}: ${idCheck.error}`);
+    const record = row as Record<string, unknown>;
+    const placeId = record['placeId'];
+    if (typeof placeId !== 'string' || !places[placeId]) {
+      errors.push(`housingOffers/${id}.placeId: unknown place '${String(placeId)}'.`);
+      continue;
+    }
+    if (housingPlaces.has(placeId)) {
+      errors.push(`housingOffers/${id}.placeId: place '${placeId}' already has a housing offer.`);
+    }
+    housingPlaces.add(placeId);
+    for (const field of ['available', 'starterEligible', 'starterDefault'] as const) {
+      if (typeof record[field] !== 'boolean') errors.push(`housingOffers/${id}.${field}: must be a boolean.`);
+    }
+    for (const field of ['monthlyRent', 'moveInCost'] as const) {
+      const amount = record[field];
+      if (typeof amount !== 'number' || !Number.isFinite(amount) || amount < 0) {
+        errors.push(`housingOffers/${id}.${field}: must be a non-negative finite number.`);
+      }
+    }
+    const hasHomeSpace = Object.values(spaces).some((space) => {
+      const candidate = space as Record<string, unknown>;
+      return candidate['placeId'] === placeId
+        && Array.isArray(candidate['tags'])
+        && (candidate['tags'] as unknown[]).includes('home');
+    });
+    if (!hasHomeSpace) {
+      errors.push(`housingOffers/${id}.placeId: residence place '${placeId}' needs at least one Space tagged 'home'.`);
+    }
+    const servicePolicy = Object.values(policies).find((policy) => {
+      if (!policy || typeof policy !== 'object') return false;
+      return (policy as Record<string, unknown>)['placeId'] === placeId;
+    }) as Record<string, unknown> | undefined;
+    if (
+      !servicePolicy ||
+      servicePolicy['acceptsDelivery'] !== true ||
+      typeof servicePolicy['deliveryTargetSlotId'] !== 'string' ||
+      !servicePolicy['deliveryTargetSlotId']
+    ) {
+      errors.push(
+        `housingOffers/${id}.placeId: residence place '${placeId}' needs an authored delivery/owned-item target.`,
+      );
+    }
+    if (record['starterDefault'] === true) {
+      starterDefaultCount += 1;
+      if (record['starterEligible'] !== true || record['available'] !== true) {
+        errors.push(`housingOffers/${id}.starterDefault: default starter housing must also be available and starterEligible.`);
+      }
+    }
+  }
+  if (starterDefaultCount > 1) errors.push('housingOffers: at most one starterDefault offer is allowed.');
 
   // Every authored nesting chain must terminate at a root slot in a Space.
   for (const placementId of Object.keys(placements)) {

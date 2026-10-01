@@ -9,6 +9,13 @@ export class DesktopPage {
 
   async goto() {
     await this.page.goto('/');
+    // E2E starts from a clean browser with no boot request. Enter the live
+    // game explicitly rather than mutating simulation state behind MainMenu.
+    const skip = this.page.getByRole('button', { name: 'skip to desktop' });
+    if (await skip.isVisible({ timeout: 5_000 }).catch(() => false)) {
+      await skip.click();
+      await this.page.waitForTimeout(100);
+    }
   }
 
   async openApp(appId: string) {

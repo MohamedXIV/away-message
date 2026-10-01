@@ -55,7 +55,7 @@ export const ROOM_HOTSPOTS: HotspotBounds[] = [
   },
   {
     id: 'door',
-    label: 'Hallway Door (Room 104)',
+    label: 'Residence Door',
     sublabel: 'Food Cart Shift / Starlight Café / Walk outside',
     icon: '🚪',
     x: 0.02,

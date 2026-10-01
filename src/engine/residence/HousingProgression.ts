@@ -24,6 +24,8 @@ export interface HousingOffer {
   available: boolean;
   monthlyRent: number;
   moveInCost: number;
+  starterEligible?: boolean;
+  starterDefault?: boolean;
 }
 
 export interface HousingObjectMove {
@@ -48,6 +50,38 @@ export function calculateHousingRent(terms: Readonly<HousingRentTerms>): number 
 
 export function listEligibleHousingOffers(offers: readonly HousingOffer[], availableCash: number): HousingOffer[] {
   return offers.filter((offer) => offer.available && offer.moveInCost <= availableCash);
+}
+
+export function listStarterHousingOffers(
+  offers: readonly HousingOffer[],
+  availableCash: number,
+): HousingOffer[] {
+  return listEligibleHousingOffers(offers, availableCash)
+    .filter((offer) => offer.starterEligible === true)
+    .sort((a, b) =>
+      a.monthlyRent - b.monthlyRent
+      || a.moveInCost - b.moveInCost
+      || a.id.localeCompare(b.id)
+    );
+}
+
+export function resolveStarterHousingOffer(
+  offers: readonly HousingOffer[],
+  availableCash: number,
+  requestedOfferId?: string,
+): HousingOffer {
+  const eligible = listStarterHousingOffers(offers, availableCash);
+  if (requestedOfferId) {
+    const requested = eligible.find((offer) => offer.id === requestedOfferId);
+    if (!requested) {
+      throw new Error(`Starter housing offer '${requestedOfferId}' is missing, unavailable, or unaffordable.`);
+    }
+    return requested;
+  }
+  const authoredDefault = eligible.find((offer) => offer.starterDefault === true);
+  const selected = authoredDefault ?? eligible[0];
+  if (!selected) throw new Error('No affordable authored starter residence is available.');
+  return selected;
 }
 
 export function commitHousingOffer(input: {

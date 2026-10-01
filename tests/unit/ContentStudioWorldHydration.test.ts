@@ -48,5 +48,21 @@ describe('Content Studio world hydration', () => {
     expect(tables.lightProfiles?.light_a1).toBeDefined();
     expect(tables.audioProfiles?.audio_a1).toBeDefined();
     expect(tables.ambientProfiles?.ambient_a1).toBeDefined();
+    expect(tables.housingOffers?.starter_room_104).toMatchObject({
+      placeId: 'room_104',
+      available: true,
+      monthlyRent: 140,
+      moveInCost: 0,
+      starterEligible: true,
+      starterDefault: true,
+    });
+    expect(tables.housingOffers?.starter_room_208).toMatchObject({
+      placeId: 'room_208',
+      available: true,
+      monthlyRent: 125,
+      moveInCost: 18,
+      starterEligible: true,
+      starterDefault: false,
+    });
   });
 });

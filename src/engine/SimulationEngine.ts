@@ -75,8 +75,14 @@ import {
 } from './venue/VenueOperations';
 import { GENERATED_VENUE_DEFINITIONS } from './venue/GeneratedVenueDefinitions';
 import type { SimulationState as TransportSimulationState } from './types';
+import { ResidenceTenancy, type ResidenceState } from './ResidenceTenancy';
+import {
+  commitHousingOffer,
+  resolveStarterHousingOffer,
+} from './residence/HousingProgression';
 import {
   GENERATED_CONTAINERS,
+  GENERATED_HOUSING_OFFERS,
   GENERATED_ITEMS,
   GENERATED_OBJECT_PLACEMENTS,
   GENERATED_PHYSICAL_OBJECT_DEFS,
@@ -109,6 +115,7 @@ type InitialSimulationState = Partial<TransportSimulationState> & {
   physicalObjects?: PhysicalObjectRuntimeState;
   physicalShops?: Record<string, PhysicalShopState>;
   activeTravel?: ActiveTravelState | null;
+  starterHousingOfferId?: string;
 };
 
 const DELIVERY_PARCEL_DEFINITION_ID = 'delivery_parcel';
@@ -125,6 +132,20 @@ function resolveGeneratedPlaceId(rawId: string): string | null {
   const direct = GENERATED_PLACES.find((place) => place.id === rawId);
   if (direct) return direct.id;
   return GENERATED_PLACES.find((place) => place.legacyIds?.includes(rawId))?.id ?? null;
+}
+
+function fallbackResidenceState(): ResidenceState {
+  const offer =
+    GENERATED_HOUSING_OFFERS.find((candidate) => candidate.starterDefault)
+    ?? GENERATED_HOUSING_OFFERS.find((candidate) => candidate.starterEligible && candidate.available)
+    ?? GENERATED_HOUSING_OFFERS[0];
+  if (!offer) throw new Error('Generated world has no authored housing offer for residence recovery.');
+  return {
+    currentResidencePlaceId: offer.placeId,
+    tenancyId: `starter:${offer.id}`,
+    moveInMinute: 0,
+    currentRent: offer.monthlyRent,
+  };
 }
 
 function groceryDefinitionId(sku: string): string {
@@ -262,6 +283,7 @@ function cloneActiveTravel(state: ActiveTravelState): ActiveTravelState {
 }
 
 export class SimulationEngine extends LegacySimulationEngine {
+  private readonly residence: ResidenceTenancy;
   private physicalWorldState: PhysicalWorldState | null = null;
   private physicalObjectState: PhysicalObjectRuntimeState = { objects: {} };
   private physicalShopStates: Record<string, PhysicalShopState> = {};
@@ -272,6 +294,25 @@ export class SimulationEngine extends LegacySimulationEngine {
 
   public constructor(initialState?: InitialSimulationState) {
     super(initialState);
+    this.residence = new ResidenceTenancy(initialState?.residence);
+    if (!initialState?.residence) {
+      const starterOffer = resolveStarterHousingOffer(
+        GENERATED_HOUSING_OFFERS,
+        this.economy.getCash(),
+        initialState?.starterHousingOfferId,
+      );
+      const committed = commitHousingOffer({
+        offer: starterOffer,
+        residence: this.residence,
+        tenancyId: `starter:${starterOffer.id}`,
+        moveInMinute: this.clock.getTotalMinutes(),
+        spendMoveInCost: (amount) => this.economy.spendCash(amount, 'Starter residence move-in'),
+        setRecurringRentAmount: (amount) => this.economy.setRecurringRentAmount(amount),
+      });
+      if (!committed.ok) {
+        throw new Error(`Could not commit starter residence '${starterOffer.id}': ${committed.reason}.`);
+      }
+    }
     this.physicalObjectState = hydratePhysicalObjectRuntimeState(
       initialState?.physicalObjects,
       PHYSICAL_RUNTIME_GRAPH,
@@ -297,10 +338,25 @@ export class SimulationEngine extends LegacySimulationEngine {
     });
   }
 
+  private currentResidenceOwnedItemAnchorId(): string {
+    const target = resolvePlaceDeliveryTarget(
+      this.getCurrentResidencePlaceId(),
+      GENERATED_PLACE_SERVICE_POLICIES,
+      PHYSICAL_RUNTIME_GRAPH,
+    );
+    if (!target.ok) {
+      throw new Error(
+        `Current residence '${this.getCurrentResidencePlaceId()}' has no authored owned-item/delivery anchor (${target.reason}).`,
+      );
+    }
+    return target.location.anchorId;
+  }
+
   private hydratePhysicalWorld(persisted?: PhysicalWorldState): PhysicalWorldState {
     const owned = bridgeOwnedInventoryIntoPhysicalWorld(
       persisted ? clonePhysicalWorld(persisted) : emptyPhysicalWorld(),
       this.inventory.getState(),
+      this.currentResidenceOwnedItemAnchorId(),
     );
     return bridgePhysicalObjectContainers(
       owned,
@@ -309,10 +365,86 @@ export class SimulationEngine extends LegacySimulationEngine {
     );
   }
 
+  public getResidenceState(): ResidenceState {
+    const state = this.residence.getState();
+    if (!state) throw new Error('Simulation has no current residence tenancy.');
+    return state;
+  }
+
+  public getCurrentResidencePlaceId(): string {
+    return this.getResidenceState().currentResidencePlaceId;
+  }
+
+  public getHousingOffers(): Array<{
+    id: string;
+    placeId: string;
+    placeName: string;
+    available: boolean;
+    monthlyRent: number;
+    moveInCost: number;
+    starterEligible: boolean;
+    starterDefault: boolean;
+    current: boolean;
+    affordable: boolean;
+  }> {
+    const currentPlaceId = this.getCurrentResidencePlaceId();
+    const cash = this.economy.getCash();
+    return GENERATED_HOUSING_OFFERS
+      .map((offer) => ({
+        ...offer,
+        placeName: GENERATED_PLACES.find((place) => place.id === offer.placeId)?.name ?? offer.placeId,
+        current: offer.placeId === currentPlaceId,
+        affordable: offer.moveInCost <= cash,
+      }))
+      .sort((a, b) => a.monthlyRent - b.monthlyRent || a.id.localeCompare(b.id));
+  }
+
+  public moveResidenceToOffer(offerId: string): { success: boolean; error?: string } {
+    const offer = GENERATED_HOUSING_OFFERS.find((candidate) => candidate.id === offerId);
+    if (!offer) return { success: false, error: `Unknown housing offer '${offerId}'.` };
+    if (offer.placeId === this.getCurrentResidencePlaceId()) {
+      return { success: false, error: 'That residence is already your current home.' };
+    }
+
+    const beforeCash = this.economy.getCash();
+    const committed = commitHousingOffer({
+      offer,
+      residence: this.residence,
+      tenancyId: `tenancy:${offer.id}:${this.clock.getTotalMinutes()}`,
+      moveInMinute: this.clock.getTotalMinutes(),
+      spendMoveInCost: (amount) => this.economy.spendCash(amount, 'Residence move-in'),
+      setRecurringRentAmount: (amount) => this.economy.setRecurringRentAmount(amount),
+    });
+    if (!committed.ok) {
+      const error = committed.reason === 'unaffordable'
+        ? `Cannot afford the ${offer.moveInCost.toFixed(0)} move-in cost.`
+        : committed.reason === 'unavailable'
+          ? 'That residence is not currently available.'
+          : 'That residence is already active.';
+      return { success: false, error };
+    }
+
+    // Reproject player-owned inventory into the new home's authored anchor.
+    // Property fixtures remain with their authored spaces.
+    this.physicalWorldState = this.hydratePhysicalWorld(this.currentPhysicalWorld());
+
+    try {
+      this.telemetry.logEvent('world', 'residence_changed', this.clock.getTotalMinutes(), {
+        offerId: offer.id,
+        placeId: offer.placeId,
+        moveInCost: beforeCash - this.economy.getCash(),
+        monthlyRent: offer.monthlyRent,
+      });
+    } catch {}
+    return { success: true };
+  }
+
   private currentDeliveryPlaceId(): string | null {
     const spatialPlaceId = this.getActorSpatialProjection('player')?.membership.placeId;
     if (spatialPlaceId) return spatialPlaceId;
-    return resolveGeneratedPlaceId(this.economy.getLocation());
+    const legacyLocation = this.economy.getLocation();
+    if (legacyLocation === 'home') return this.residence.resolveHomePlaceId();
+    return resolveGeneratedPlaceId(legacyLocation);
   }
 
   private currentPhysicalWorld(): PhysicalWorldState {
@@ -568,7 +700,7 @@ export class SimulationEngine extends LegacySimulationEngine {
     if (!this.economy.canAfford(total)) {
       return { success: false, error: `Cannot afford $${total.toFixed(2)} order.` };
     }
-    if (this.economy.getState().energy < 20) {
+    if (this.needs.getState().energy < 20) {
       return { success: false, error: 'Too tired for a store run (need 20% energy).' };
     }
 
@@ -584,7 +716,7 @@ export class SimulationEngine extends LegacySimulationEngine {
 
     this.economy.spendCash(total, 'CornerMart pickup');
     this.advanceGameMinutes(30, 'CornerMart pickup run');
-    this.economy.consumeEnergy(5);
+    this.needs.consumeEnergy(5);
     this.telemetry.logEvent('economy', 'order_pickup', this.clock.getTotalMinutes(), {
       orderId: order.id,
       total,
@@ -842,6 +974,7 @@ export class SimulationEngine extends LegacySimulationEngine {
       physicalShops: clonePhysicalShopStates(this.physicalShopStates),
       venueOperations: this.getVenueRuntimeState(),
       activeTravel: this.getActiveTravel(),
+      residence: this.getResidenceState(),
       innerVoice: this.innerVoice.getPersistedState(),
     };
   }
@@ -854,6 +987,7 @@ export class SimulationEngine extends LegacySimulationEngine {
       physicalShops: clonePhysicalShopStates(this.physicalShopStates),
       venueOperations: this.getVenueRuntimeState(),
       activeTravel: this.getActiveTravel(),
+      residence: this.getResidenceState(),
       innerVoice: this.innerVoice.getPersistedState(),
     };
   }
@@ -865,6 +999,7 @@ export class SimulationEngine extends LegacySimulationEngine {
       physicalShops?: Record<string, PhysicalShopState>;
       venueOperations?: unknown;
       activeTravel?: unknown;
+      residence?: ResidenceState;
     };
     const persistedPhysicalWorld = extendedSnapshot.physicalWorld;
     const persistedPhysicalObjects = extendedSnapshot.physicalObjects;
@@ -873,8 +1008,10 @@ export class SimulationEngine extends LegacySimulationEngine {
     const persistedActiveTravel = extendedSnapshot.activeTravel == null
       ? null
       : parseActiveTravel(extendedSnapshot.activeTravel);
+    const persistedResidence = extendedSnapshot.residence;
 
     super.loadSnapshot(snapshot);
+    this.residence.restore(persistedResidence ?? fallbackResidenceState());
     this.physicalObjectState = hydratePhysicalObjectRuntimeState(
       persistedPhysicalObjects,
       PHYSICAL_RUNTIME_GRAPH,

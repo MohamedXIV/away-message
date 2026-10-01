@@ -3,12 +3,15 @@ import type { ItemInstance, PhysicalItemLocation, PhysicalWorldState } from './P
 
 export const PLAYER_INVENTORY_CONTAINER_ID = 'player-inventory';
 
-function locationForOwnedItem(item: OwnedItem): PhysicalItemLocation {
+function locationForOwnedItem(
+  item: OwnedItem,
+  roomPackageAnchorId: string,
+): PhysicalItemLocation {
   switch (item.location) {
     case 'inventory':
       return { kind: 'container', containerInstanceId: PLAYER_INVENTORY_CONTAINER_ID };
     case 'room_package':
-      return { kind: 'worldAnchor', anchorId: 'room104:hardware-package' };
+      return { kind: 'worldAnchor', anchorId: roomPackageAnchorId };
     case 'installed': {
       const slotId = typeof (item as OwnedItem & { installSlot?: unknown }).installSlot === 'string'
         ? String((item as OwnedItem & { installSlot?: string }).installSlot)
@@ -39,6 +42,7 @@ function clonePhysicalState(state: PhysicalWorldState): PhysicalWorldState {
 export function bridgeOwnedInventoryIntoPhysicalWorld(
   physical: PhysicalWorldState,
   inventory: PlayerInventoryState,
+  roomPackageAnchorId = 'player-home:owned-item-drop',
 ): PhysicalWorldState {
   const candidate = clonePhysicalState(physical);
 
@@ -50,13 +54,20 @@ export function bridgeOwnedInventoryIntoPhysicalWorld(
           `Physical ownership identity conflict for ${owned.instanceId}: ${existing.definitionId} != ${owned.catalogItemId}.`,
         );
       }
+      // Ownership authority wins over stale physical projection. In particular,
+      // room_package belongings follow the current residence's authored anchor
+      // after a move without allocating a second item identity.
+      candidate.items[owned.instanceId] = {
+        ...existing,
+        location: locationForOwnedItem(owned, roomPackageAnchorId),
+      };
       continue;
     }
 
     const bridged: ItemInstance = {
       instanceId: owned.instanceId,
       definitionId: owned.catalogItemId,
-      location: locationForOwnedItem(owned),
+      location: locationForOwnedItem(owned, roomPackageAnchorId),
     };
     candidate.items[owned.instanceId] = bridged;
   }

@@ -73,6 +73,7 @@ describe('Content event modifiers (#46)', () => {
     const tables = worldTablesFromGenerated();
     const modifiers = (tables['eventModifiers'] ?? {}) as Record<string, Record<string, unknown>>;
     expect(Object.keys(modifiers).sort()).toEqual([
+      'canal_storm_front',
       'festival_courier_backlog',
       'festival_night_opportunity',
       'os7_upgrade_opportunity',
@@ -81,6 +82,12 @@ describe('Content event modifiers (#46)', () => {
       eventId: 'city_canal_festival',
       domain: 'delivery',
       kind: 'courier_backlog',
+    });
+    expect(modifiers['canal_storm_front']).toMatchObject({
+      eventId: 'canal_storm_warning',
+      domain: 'environment',
+      kind: 'condition_override',
+      value: 'storm',
     });
   });
 });

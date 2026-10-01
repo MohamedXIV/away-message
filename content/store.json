@@ -590,6 +590,24 @@
       "legacyIds": [
         "home"
       ]
+    },
+    "room_208": {
+      "districtId": "district_a",
+      "name": "Courtyard Room 208",
+      "transitAccess": [],
+      "legacyIds": []
+    },
+    "room_305": {
+      "districtId": "district_a",
+      "name": "Upstairs Room 305",
+      "transitAccess": [],
+      "legacyIds": []
+    },
+    "tiny_apartment_1": {
+      "districtId": "district_a",
+      "name": "Harbor Tiny Apartment",
+      "transitAccess": [],
+      "legacyIds": []
     }
   },
   "transitStops": {
@@ -648,6 +666,14 @@
       "durationMinutes": 4320,
       "targetIds": [],
       "value": "40"
+    },
+    "canal_storm_front": {
+      "eventId": "canal_storm_warning",
+      "domain": "environment",
+      "kind": "condition_override",
+      "durationMinutes": 180,
+      "targetIds": [],
+      "value": "storm"
     }
   },
   "items": {
@@ -760,6 +786,36 @@
         "shop",
         "public"
       ]
+    },
+    "room208_main": {
+      "placeId": "room_208",
+      "name": "Room 208",
+      "tags": [
+        "interior",
+        "home",
+        "motel_room",
+        "starter_option"
+      ]
+    },
+    "room305_main": {
+      "placeId": "room_305",
+      "name": "Room 305",
+      "tags": [
+        "interior",
+        "home",
+        "motel_room",
+        "upgrade"
+      ]
+    },
+    "tiny_apartment_main": {
+      "placeId": "tiny_apartment_1",
+      "name": "Tiny Apartment",
+      "tags": [
+        "interior",
+        "home",
+        "apartment",
+        "upgrade"
+      ]
     }
   },
   "views": {
@@ -831,6 +887,36 @@
         "shop",
         "hero",
         "single_view"
+      ]
+    },
+    "room208_main_view": {
+      "spaceId": "room208_main",
+      "name": "Courtyard Room",
+      "neighbors": [],
+      "tags": [
+        "home",
+        "single_view",
+        "starter_option"
+      ]
+    },
+    "room305_main_view": {
+      "spaceId": "room305_main",
+      "name": "Upstairs Room",
+      "neighbors": [],
+      "tags": [
+        "home",
+        "single_view",
+        "upgrade"
+      ]
+    },
+    "tiny_apartment_main_view": {
+      "spaceId": "tiny_apartment_main",
+      "name": "Tiny Apartment",
+      "neighbors": [],
+      "tags": [
+        "home",
+        "single_view",
+        "upgrade"
       ]
     }
   },
@@ -1071,6 +1157,237 @@
         "hotspot",
         "notice"
       ]
+    },
+    "room208_pc": {
+      "viewId": "room208_main_view",
+      "name": "Computer Desk",
+      "x": 0.7,
+      "y": 0.62,
+      "tags": [
+        "hotspot",
+        "computer",
+        "surface"
+      ]
+    },
+    "room208_window": {
+      "viewId": "room208_main_view",
+      "name": "Window",
+      "x": 0.25,
+      "y": 0.32,
+      "tags": [
+        "hotspot",
+        "window",
+        "exterior-view"
+      ]
+    },
+    "room208_bed": {
+      "viewId": "room208_main_view",
+      "name": "Bed",
+      "x": 0.4,
+      "y": 0.7,
+      "tags": [
+        "hotspot",
+        "bed",
+        "rest"
+      ]
+    },
+    "room208_kettle": {
+      "viewId": "room208_main_view",
+      "name": "Kitchenette",
+      "x": 0.62,
+      "y": 0.5,
+      "tags": [
+        "hotspot",
+        "kettle",
+        "kitchenette"
+      ]
+    },
+    "room208_shower": {
+      "viewId": "room208_main_view",
+      "name": "Shower",
+      "x": 0.83,
+      "y": 0.5,
+      "tags": [
+        "hotspot",
+        "shower",
+        "bathroom"
+      ]
+    },
+    "room208_door": {
+      "viewId": "room208_main_view",
+      "name": "Door",
+      "x": 0.12,
+      "y": 0.52,
+      "tags": [
+        "hotspot",
+        "door",
+        "exit"
+      ]
+    },
+    "room208_delivery": {
+      "viewId": "room208_main_view",
+      "name": "Delivery Spot",
+      "x": 0.24,
+      "y": 0.78,
+      "tags": [
+        "hotspot",
+        "delivery",
+        "world-anchor"
+      ]
+    },
+    "room305_pc": {
+      "viewId": "room305_main_view",
+      "name": "Computer Desk",
+      "x": 0.7,
+      "y": 0.62,
+      "tags": [
+        "hotspot",
+        "computer",
+        "surface"
+      ]
+    },
+    "room305_window": {
+      "viewId": "room305_main_view",
+      "name": "Window",
+      "x": 0.25,
+      "y": 0.32,
+      "tags": [
+        "hotspot",
+        "window",
+        "exterior-view"
+      ]
+    },
+    "room305_bed": {
+      "viewId": "room305_main_view",
+      "name": "Bed",
+      "x": 0.4,
+      "y": 0.7,
+      "tags": [
+        "hotspot",
+        "bed",
+        "rest"
+      ]
+    },
+    "room305_kettle": {
+      "viewId": "room305_main_view",
+      "name": "Kitchenette",
+      "x": 0.62,
+      "y": 0.5,
+      "tags": [
+        "hotspot",
+        "kettle",
+        "kitchenette"
+      ]
+    },
+    "room305_shower": {
+      "viewId": "room305_main_view",
+      "name": "Shower",
+      "x": 0.83,
+      "y": 0.5,
+      "tags": [
+        "hotspot",
+        "shower",
+        "bathroom"
+      ]
+    },
+    "room305_door": {
+      "viewId": "room305_main_view",
+      "name": "Door",
+      "x": 0.12,
+      "y": 0.52,
+      "tags": [
+        "hotspot",
+        "door",
+        "exit"
+      ]
+    },
+    "room305_delivery": {
+      "viewId": "room305_main_view",
+      "name": "Delivery Spot",
+      "x": 0.24,
+      "y": 0.78,
+      "tags": [
+        "hotspot",
+        "delivery",
+        "world-anchor"
+      ]
+    },
+    "tinyapt_pc": {
+      "viewId": "tiny_apartment_main_view",
+      "name": "Computer Desk",
+      "x": 0.7,
+      "y": 0.62,
+      "tags": [
+        "hotspot",
+        "computer",
+        "surface"
+      ]
+    },
+    "tinyapt_window": {
+      "viewId": "tiny_apartment_main_view",
+      "name": "Window",
+      "x": 0.25,
+      "y": 0.32,
+      "tags": [
+        "hotspot",
+        "window",
+        "exterior-view"
+      ]
+    },
+    "tinyapt_bed": {
+      "viewId": "tiny_apartment_main_view",
+      "name": "Bed",
+      "x": 0.4,
+      "y": 0.7,
+      "tags": [
+        "hotspot",
+        "bed",
+        "rest"
+      ]
+    },
+    "tinyapt_kettle": {
+      "viewId": "tiny_apartment_main_view",
+      "name": "Kitchenette",
+      "x": 0.62,
+      "y": 0.5,
+      "tags": [
+        "hotspot",
+        "kettle",
+        "kitchenette"
+      ]
+    },
+    "tinyapt_shower": {
+      "viewId": "tiny_apartment_main_view",
+      "name": "Shower",
+      "x": 0.83,
+      "y": 0.5,
+      "tags": [
+        "hotspot",
+        "shower",
+        "bathroom"
+      ]
+    },
+    "tinyapt_door": {
+      "viewId": "tiny_apartment_main_view",
+      "name": "Door",
+      "x": 0.12,
+      "y": 0.52,
+      "tags": [
+        "hotspot",
+        "door",
+        "exit"
+      ]
+    },
+    "tinyapt_delivery": {
+      "viewId": "tiny_apartment_main_view",
+      "name": "Delivery Spot",
+      "x": 0.24,
+      "y": 0.78,
+      "tags": [
+        "hotspot",
+        "delivery",
+        "world-anchor"
+      ]
     }
   },
   "interactions": {
@@ -1212,6 +1529,174 @@
       "tags": [
         "shop",
         "notice"
+      ]
+    },
+    "room208_use_computer": {
+      "anchorId": "room208_pc",
+      "capability": "use_computer",
+      "name": "Use computer",
+      "tags": [
+        "computer"
+      ]
+    },
+    "room208_observe_window": {
+      "anchorId": "room208_window",
+      "capability": "observe_window",
+      "name": "Look outside",
+      "tags": [
+        "observe"
+      ]
+    },
+    "room208_sleep": {
+      "anchorId": "room208_bed",
+      "capability": "sleep",
+      "name": "Sleep",
+      "tags": [
+        "rest"
+      ]
+    },
+    "room208_prepare_drink": {
+      "anchorId": "room208_kettle",
+      "capability": "prepare_drink",
+      "name": "Use kitchenette",
+      "tags": [
+        "kitchenette"
+      ]
+    },
+    "room208_shower_interaction": {
+      "anchorId": "room208_shower",
+      "capability": "shower",
+      "name": "Take shower",
+      "tags": [
+        "bathroom"
+      ]
+    },
+    "room208_leave": {
+      "anchorId": "room208_door",
+      "capability": "leave_room",
+      "name": "Leave residence",
+      "tags": [
+        "exit"
+      ]
+    },
+    "room208_inspect_delivery": {
+      "anchorId": "room208_delivery",
+      "capability": "inspect_delivery_anchor",
+      "name": "Inspect deliveries",
+      "tags": [
+        "delivery"
+      ]
+    },
+    "room305_use_computer": {
+      "anchorId": "room305_pc",
+      "capability": "use_computer",
+      "name": "Use computer",
+      "tags": [
+        "computer"
+      ]
+    },
+    "room305_observe_window": {
+      "anchorId": "room305_window",
+      "capability": "observe_window",
+      "name": "Look outside",
+      "tags": [
+        "observe"
+      ]
+    },
+    "room305_sleep": {
+      "anchorId": "room305_bed",
+      "capability": "sleep",
+      "name": "Sleep",
+      "tags": [
+        "rest"
+      ]
+    },
+    "room305_prepare_drink": {
+      "anchorId": "room305_kettle",
+      "capability": "prepare_drink",
+      "name": "Use kitchenette",
+      "tags": [
+        "kitchenette"
+      ]
+    },
+    "room305_shower_interaction": {
+      "anchorId": "room305_shower",
+      "capability": "shower",
+      "name": "Take shower",
+      "tags": [
+        "bathroom"
+      ]
+    },
+    "room305_leave": {
+      "anchorId": "room305_door",
+      "capability": "leave_room",
+      "name": "Leave residence",
+      "tags": [
+        "exit"
+      ]
+    },
+    "room305_inspect_delivery": {
+      "anchorId": "room305_delivery",
+      "capability": "inspect_delivery_anchor",
+      "name": "Inspect deliveries",
+      "tags": [
+        "delivery"
+      ]
+    },
+    "tinyapt_use_computer": {
+      "anchorId": "tinyapt_pc",
+      "capability": "use_computer",
+      "name": "Use computer",
+      "tags": [
+        "computer"
+      ]
+    },
+    "tinyapt_observe_window": {
+      "anchorId": "tinyapt_window",
+      "capability": "observe_window",
+      "name": "Look outside",
+      "tags": [
+        "observe"
+      ]
+    },
+    "tinyapt_sleep": {
+      "anchorId": "tinyapt_bed",
+      "capability": "sleep",
+      "name": "Sleep",
+      "tags": [
+        "rest"
+      ]
+    },
+    "tinyapt_prepare_drink": {
+      "anchorId": "tinyapt_kettle",
+      "capability": "prepare_drink",
+      "name": "Use kitchenette",
+      "tags": [
+        "kitchenette"
+      ]
+    },
+    "tinyapt_shower_interaction": {
+      "anchorId": "tinyapt_shower",
+      "capability": "shower",
+      "name": "Take shower",
+      "tags": [
+        "bathroom"
+      ]
+    },
+    "tinyapt_leave": {
+      "anchorId": "tinyapt_door",
+      "capability": "leave_room",
+      "name": "Leave residence",
+      "tags": [
+        "exit"
+      ]
+    },
+    "tinyapt_inspect_delivery": {
+      "anchorId": "tinyapt_delivery",
+      "capability": "inspect_delivery_anchor",
+      "name": "Inspect deliveries",
+      "tags": [
+        "delivery"
       ]
     }
   },
@@ -1381,6 +1866,39 @@
       "tags": [
         "fixture"
       ]
+    },
+    "delivery_target_room208": {
+      "name": "Room 208 Delivery Target",
+      "spaceId": "room208_main",
+      "anchorId": "room208_delivery",
+      "parentPlacementId": "",
+      "slotKind": "delivery",
+      "allowedObjectKinds": [],
+      "tags": [
+        "delivery"
+      ]
+    },
+    "delivery_target_room305": {
+      "name": "Room 305 Delivery Target",
+      "spaceId": "room305_main",
+      "anchorId": "room305_delivery",
+      "parentPlacementId": "",
+      "slotKind": "delivery",
+      "allowedObjectKinds": [],
+      "tags": [
+        "delivery"
+      ]
+    },
+    "delivery_target_tiny_apartment": {
+      "name": "Tiny Apartment Delivery Target",
+      "spaceId": "tiny_apartment_main",
+      "anchorId": "tinyapt_delivery",
+      "parentPlacementId": "",
+      "slotKind": "delivery",
+      "allowedObjectKinds": [],
+      "tags": [
+        "delivery"
+      ]
     }
   },
   "placeServicePolicies": {
@@ -1388,6 +1906,21 @@
       "placeId": "room_104",
       "acceptsDelivery": true,
       "deliveryTargetSlotId": "delivery_target_primary"
+    },
+    "room208_delivery_policy": {
+      "placeId": "room_208",
+      "acceptsDelivery": true,
+      "deliveryTargetSlotId": "delivery_target_room208"
+    },
+    "room305_delivery_policy": {
+      "placeId": "room_305",
+      "acceptsDelivery": true,
+      "deliveryTargetSlotId": "delivery_target_room305"
+    },
+    "tiny_apartment_delivery_policy": {
+      "placeId": "tiny_apartment_1",
+      "acceptsDelivery": true,
+      "deliveryTargetSlotId": "delivery_target_tiny_apartment"
     }
   },
   "physicalObjectDefs": {
@@ -1747,6 +2280,40 @@
         "window",
         "weather-window"
       ]
+    }
+  },
+  "housingOffers": {
+    "starter_room_104": {
+      "placeId": "room_104",
+      "available": true,
+      "monthlyRent": 140,
+      "moveInCost": 0,
+      "starterEligible": true,
+      "starterDefault": true
+    },
+    "starter_room_208": {
+      "placeId": "room_208",
+      "available": true,
+      "monthlyRent": 125,
+      "moveInCost": 18,
+      "starterEligible": true,
+      "starterDefault": false
+    },
+    "better_room_305": {
+      "placeId": "room_305",
+      "available": true,
+      "monthlyRent": 185,
+      "moveInCost": 90,
+      "starterEligible": false,
+      "starterDefault": false
+    },
+    "tiny_apartment_harbor": {
+      "placeId": "tiny_apartment_1",
+      "available": true,
+      "monthlyRent": 260,
+      "moveInCost": 220,
+      "starterEligible": false,
+      "starterDefault": false
     }
   }
 }

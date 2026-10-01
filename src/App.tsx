@@ -142,7 +142,9 @@ export const App: React.FC = () => {
           await restoreSlotPulse(request.slotId);
           useSimulationStore.getState().setEngine(new SimulationEngine(snapshot as any));
         } else if (request.kind === 'new') {
-          useSimulationStore.getState().setEngine(new SimulationEngine());
+          useSimulationStore.getState().setEngine(new SimulationEngine({
+            starterHousingOfferId: request.housingOfferId,
+          }));
         }
         setPhase('game');
       } catch (error) {
@@ -253,7 +255,7 @@ export const App: React.FC = () => {
                   onClick={() => setPhaserFixtureActive(false)}
                   className="px-3 py-1 bg-slate-900/90 hover:bg-slate-800 text-amber-300 border border-slate-700 text-xs font-mono shadow-md rounded flex items-center gap-1.5 cursor-pointer"
                 >
-                  ← Return to Room 104 (Canvas2D)
+                  ← Return to Game
                 </button>
               </div>
             }
@@ -276,7 +278,7 @@ export const App: React.FC = () => {
           {phase === 'loading' && (
             <div className="w-full h-full flex flex-col items-center justify-center gap-3 bg-black text-slate-300 font-sans">
               <div className="text-4xl animate-pulse">💾</div>
-              <div className="text-sm font-bold tracking-widest">LOADING ROOM 104…</div>
+              <div className="text-sm font-bold tracking-widest">LOADING RESIDENCE…</div>
               {bootError && <div className="text-xs text-red-400">{bootError}</div>}
             </div>
           )}

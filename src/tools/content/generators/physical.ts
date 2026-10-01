@@ -17,6 +17,7 @@ export function generatePhysicalWorldSource(tables: ContentTables): string {
   const slots = tables['placementSlots'] ?? {};
   const placements = tables['objectPlacements'] ?? {};
   const policies = tables['placeServicePolicies'] ?? {};
+  const housingOffers = tables['housingOffers'] ?? {};
   const lines: string[] = [];
 
   lines.push('export interface GeneratedPhysicalObjectDef {');
@@ -54,6 +55,16 @@ export function generatePhysicalWorldSource(tables: ContentTables): string {
   lines.push('  placeId: string;');
   lines.push('  acceptsDelivery: boolean;');
   lines.push('  deliveryTargetSlotId: string | null;');
+  lines.push('}');
+  lines.push('');
+  lines.push('export interface GeneratedHousingOfferDef {');
+  lines.push('  id: string;');
+  lines.push('  placeId: string;');
+  lines.push('  available: boolean;');
+  lines.push('  monthlyRent: number;');
+  lines.push('  moveInCost: number;');
+  lines.push('  starterEligible: boolean;');
+  lines.push('  starterDefault: boolean;');
   lines.push('}');
   lines.push('');
 
@@ -111,6 +122,22 @@ export function generatePhysicalWorldSource(tables: ContentTables): string {
     lines.push(`    placeId: ${tsString(String(row['placeId'] ?? ''))},`);
     lines.push(`    acceptsDelivery: ${row['acceptsDelivery'] === true ? 'true' : 'false'},`);
     lines.push(`    deliveryTargetSlotId: ${optionalId(row['deliveryTargetSlotId'])},`);
+    lines.push('  },');
+  }
+  lines.push('];');
+  lines.push('');
+
+  lines.push('export const GENERATED_HOUSING_OFFERS: GeneratedHousingOfferDef[] = [');
+  for (const id of Object.keys(housingOffers).sort()) {
+    const row = housingOffers[id] as Record<string, unknown>;
+    lines.push('  {');
+    lines.push(`    id: ${tsString(id)},`);
+    lines.push(`    placeId: ${tsString(String(row['placeId'] ?? ''))},`);
+    lines.push(`    available: ${row['available'] === true ? 'true' : 'false'},`);
+    lines.push(`    monthlyRent: ${Number(row['monthlyRent'] ?? 0)},`);
+    lines.push(`    moveInCost: ${Number(row['moveInCost'] ?? 0)},`);
+    lines.push(`    starterEligible: ${row['starterEligible'] === true ? 'true' : 'false'},`);
+    lines.push(`    starterDefault: ${row['starterDefault'] === true ? 'true' : 'false'},`);
     lines.push('  },');
   }
   lines.push('];');

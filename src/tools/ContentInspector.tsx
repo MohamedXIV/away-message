@@ -39,6 +39,7 @@ const PHYSICAL_OBJECT_DEF_KEY_ORDER = ['name', 'kind', 'containerId', 'affordanc
 const PLACEMENT_SLOT_KEY_ORDER = ['name', 'spaceId', 'anchorId', 'parentPlacementId', 'slotKind', 'allowedObjectKinds', 'tags'];
 const OBJECT_PLACEMENT_KEY_ORDER = ['objectDefId', 'slotId'];
 const PLACE_SERVICE_POLICY_KEY_ORDER = ['placeId', 'acceptsDelivery', 'deliveryTargetSlotId'];
+const HOUSING_OFFER_KEY_ORDER = ['placeId', 'available', 'monthlyRent', 'moveInCost', 'starterEligible', 'starterDefault'];
 const VENUE_ROLE_KEY_ORDER = ['placeId', 'name', 'roleKind', 'stationIds', 'tags'];
 const VENUE_STATION_KEY_ORDER = ['placeId', 'spaceId', 'anchorId', 'name', 'capacity', 'roleKinds', 'tags'];
 const VENUE_SERVICE_KEY_ORDER = ['placeId', 'spaceId', 'name', 'intentKinds', 'activityTemplateId', 'requiredRoleKinds', 'requiredStationIds', 'contextRequirements', 'tags'];
@@ -72,6 +73,7 @@ const TABLE_KEY_ORDERS: Record<string, string[]> = {
   placementSlots: PLACEMENT_SLOT_KEY_ORDER,
   objectPlacements: OBJECT_PLACEMENT_KEY_ORDER,
   placeServicePolicies: PLACE_SERVICE_POLICY_KEY_ORDER,
+  housingOffers: HOUSING_OFFER_KEY_ORDER,
   venueRoles: VENUE_ROLE_KEY_ORDER,
   venueStations: VENUE_STATION_KEY_ORDER,
   venueServices: VENUE_SERVICE_KEY_ORDER,

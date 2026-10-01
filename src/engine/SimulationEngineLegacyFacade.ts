@@ -771,7 +771,7 @@ export class SimulationEngine extends SimulationEngineCore {
 
   public setComputerPower(poweredOn: boolean): ActionResult {
     if (!this.hardware.getComputerState().assembled) {
-      return { success: false, error: 'Set up the computer in Room 104 before powering it on.' };
+      return { success: false, error: 'Set up the computer at your current residence before powering it on.' };
     }
 
     this.hardware.setPower(poweredOn);
@@ -785,7 +785,7 @@ export class SimulationEngine extends SimulationEngineCore {
   ): ActionResult {
     const state = this.getState();
     if (state.player.location !== 'home') {
-      return { success: false, error: 'Hardware can only be installed at the Room 104 computer.' };
+      return { success: false, error: 'Hardware can only be installed at your current residence computer.' };
     }
     if (!state.computer.assembled) {
       return { success: false, error: 'Set up the computer before installing replacement hardware.' };
@@ -952,7 +952,7 @@ export class SimulationEngine extends SimulationEngineCore {
   public insertOwnedMediaAtHome(instanceId: string): ActionResult {
     const state = this.getState();
     if (state.player.location !== 'home') {
-      return { success: false, error: 'Physical media can only be inserted at the Room 104 computer.' };
+      return { success: false, error: 'Physical media can only be inserted at your current residence computer.' };
     }
     if (!state.computer.assembled || state.computer.opticalDrives.length === 0) {
       return { success: false, error: 'An assembled computer with an optical drive is required.' };
@@ -1003,7 +1003,7 @@ export class SimulationEngine extends SimulationEngineCore {
   public ejectOwnedMediaAtHome(): ActionResult<{ mediaInstanceId: string }> {
     const state = this.getState();
     if (state.player.location !== 'home') {
-      return { success: false, error: 'Physical media can only be ejected at the Room 104 computer.' };
+      return { success: false, error: 'Physical media can only be ejected at your current residence computer.' };
     }
     const mediaInstanceId = state.computer.insertedMediaId;
     if (!mediaInstanceId) {
@@ -1042,7 +1042,7 @@ export class SimulationEngine extends SimulationEngineCore {
   public prepareOsInstallFromInsertedMedia(): ActionResult<OsInstallPlan> {
     const state = this.getState();
     if (state.player.location !== 'home') {
-      return { success: false, error: 'OS installation is only available at the Room 104 computer.' };
+      return { success: false, error: 'OS installation is only available at your current residence computer.' };
     }
     if (!state.computer.assembled) {
       return { success: false, error: 'Set up the computer before installing an operating system.' };
@@ -1262,7 +1262,7 @@ export class SimulationEngine extends SimulationEngineCore {
   public setupComputerAtHome(): ActionResult {
     const state = this.getState();
     if (state.player.location !== 'home') {
-      return { success: false, error: 'Computer setup is only available in Room 104.' };
+      return { success: false, error: 'Computer setup is only available at your current residence.' };
     }
     if (state.computer.assembled) {
       return { success: false, error: 'A computer is already assembled.' };
@@ -1342,7 +1342,7 @@ export class SimulationEngine extends SimulationEngineCore {
     }
 
     this.invalidateV6Cache();
-    this.advanceGameMinutes(15, 'Set up computer in Room 104');
+    this.advanceGameMinutes(15, 'Set up computer at current residence');
     this.invalidateV6Cache();
     return { success: true };
   }
