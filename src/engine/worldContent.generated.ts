@@ -1408,7 +1408,7 @@ export const GENERATED_HOUSING_OFFERS: GeneratedHousingOfferDef[] = [
     starterEligible: false,
     starterDefault: false,
   },
-]
+];
 
 export interface GeneratedVenueRoleDef {
   id: string;
