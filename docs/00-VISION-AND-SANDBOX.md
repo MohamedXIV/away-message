@@ -325,6 +325,25 @@ Characters such as legacy authored examples may appear in current data during mi
 - any role should be resolved through role/capability/state bindings;
 - the player may never meet a particular authored character and the game remains valid.
 
+### Optional Scenarios / Story Threads
+
+The sandbox may begin with or acquire a small number of **optional semi-baked Scenarios** that give the player personal context without defining a campaign.
+
+Examples:
+- someone from the player's past may be somewhere in town;
+- a distant family connection may exist locally;
+- an old debt or awkward history may resurface;
+- the player may vaguely remember a place;
+- a friend-of-a-friend or job lead may have influenced the move.
+
+A Scenario is authored framing, not a mandatory quest. It binds semantic roles to compatible dynamic actors for that save. The same Scenario may bind to different people, fail to instantiate, remain unresolved indefinitely, or never become important.
+
+The old "Maya" direction may survive only as inspiration for a generic `old_acquaintance` role. No named person, romance, reunion or outcome is required.
+
+The first Scenario framework must work with **no dedicated quest UI**. A thread may be hidden or surface later through ordinary sandbox channels such as memory, Inner Voice, search, websites, rumor, dialogue or chance encounter.
+
+See `13-SCENARIOS-AND-STORY-THREADS.md`.
+
 ### Progression
 
 Progression is multi-axis and systemic rather than a fixed sequence:
