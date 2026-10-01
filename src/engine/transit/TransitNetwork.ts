@@ -4,7 +4,13 @@
 // this network plus caller inputs. Throws loudly on dangling references
 // (content validation is the primary gate; this is defense in depth).
 
-import type { GeneratedPlaceTransitAccess } from '../worldContent.generated';
+import {
+  type GeneratedPlaceTransitAccess,
+  GENERATED_DISTRICTS,
+  GENERATED_PLACES,
+  GENERATED_TRANSIT_STOPS,
+  GENERATED_BUS_LINES,
+} from '../worldContent.generated';
 import type {
   BusLineId,
   PlaceId,
@@ -83,4 +89,18 @@ export function buildTransitNetwork(input: TransitNetworkInput): TransitNetwork 
       return (stopIndex.get(stopId) ?? []).map((ref) => ({ ...ref }));
     },
   };
+}
+
+let generatedTransitNetworkInstance: TransitNetwork | null = null;
+
+export function getGeneratedTransitNetwork(): TransitNetwork {
+  if (!generatedTransitNetworkInstance) {
+    generatedTransitNetworkInstance = buildTransitNetwork({
+      districts: GENERATED_DISTRICTS,
+      places: GENERATED_PLACES,
+      stops: GENERATED_TRANSIT_STOPS,
+      lines: GENERATED_BUS_LINES,
+    });
+  }
+  return generatedTransitNetworkInstance;
 }
