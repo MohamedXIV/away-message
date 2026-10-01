@@ -77,7 +77,12 @@ import { GENERATED_VENUE_DEFINITIONS } from './venue/GeneratedVenueDefinitions';
 import type { SimulationState as TransportSimulationState } from './types';
 import { ResidenceTenancy, type ResidenceState } from './ResidenceTenancy';
 import {
+  commitHousingOffer,
+  resolveStarterHousingOffer,
+} from './residence/HousingProgression';
+import {
   GENERATED_CONTAINERS,
+  GENERATED_HOUSING_OFFERS,
   GENERATED_ITEMS,
   GENERATED_OBJECT_PLACEMENTS,
   GENERATED_PHYSICAL_OBJECT_DEFS,
@@ -111,6 +116,7 @@ type InitialSimulationState = Partial<TransportSimulationState> & {
   physicalObjects?: PhysicalObjectRuntimeState;
   physicalShops?: Record<string, PhysicalShopState>;
   activeTravel?: ActiveTravelState | null;
+  starterHousingOfferId?: string;
 };
 
 const DELIVERY_PARCEL_DEFINITION_ID = 'delivery_parcel';
@@ -129,20 +135,17 @@ function resolveGeneratedPlaceId(rawId: string): string | null {
   return GENERATED_PLACES.find((place) => place.legacyIds?.includes(rawId))?.id ?? null;
 }
 
-function defaultResidenceState(initialState?: InitialSimulationState): ResidenceState {
-  const authoredHomeSpace = GENERATED_SPACES.find((space) => space.tags.includes('home'));
-  if (!authoredHomeSpace) {
-    throw new Error('Generated world has no authored home space for the starter tenancy.');
-  }
-  const authoredHome = GENERATED_PLACES.find((place) => place.id === authoredHomeSpace.placeId);
-  if (!authoredHome) {
-    throw new Error(`Authored home space '${authoredHomeSpace.id}' references a missing Place.`);
-  }
+function fallbackResidenceState(): ResidenceState {
+  const offer =
+    GENERATED_HOUSING_OFFERS.find((candidate) => candidate.starterDefault)
+    ?? GENERATED_HOUSING_OFFERS.find((candidate) => candidate.starterEligible && candidate.available)
+    ?? GENERATED_HOUSING_OFFERS[0];
+  if (!offer) throw new Error('Generated world has no authored housing offer for residence recovery.');
   return {
-    currentResidencePlaceId: authoredHome.id,
-    tenancyId: `starter:${authoredHome.id}`,
+    currentResidencePlaceId: offer.placeId,
+    tenancyId: `starter:${offer.id}`,
     moveInMinute: 0,
-    currentRent: initialState?.player?.rentAmount ?? 140,
+    currentRent: offer.monthlyRent,
   };
 }
 
@@ -292,7 +295,25 @@ export class SimulationEngine extends LegacySimulationEngine {
 
   public constructor(initialState?: InitialSimulationState) {
     super(initialState);
-    this.residence = new ResidenceTenancy(initialState?.residence ?? defaultResidenceState(initialState));
+    this.residence = new ResidenceTenancy(initialState?.residence);
+    if (!initialState?.residence) {
+      const starterOffer = resolveStarterHousingOffer(
+        GENERATED_HOUSING_OFFERS,
+        this.economy.getCash(),
+        initialState?.starterHousingOfferId,
+      );
+      const committed = commitHousingOffer({
+        offer: starterOffer,
+        residence: this.residence,
+        tenancyId: `starter:${starterOffer.id}`,
+        moveInMinute: this.clock.getTotalMinutes(),
+        spendMoveInCost: (amount) => this.economy.spendCash(amount, 'Starter residence move-in'),
+        setRecurringRentAmount: (amount) => this.economy.setRecurringRentAmount(amount),
+      });
+      if (!committed.ok) {
+        throw new Error(`Could not commit starter residence '${starterOffer.id}': ${committed.reason}.`);
+      }
+    }
     this.physicalObjectState = hydratePhysicalObjectRuntimeState(
       initialState?.physicalObjects,
       PHYSICAL_RUNTIME_GRAPH,
@@ -912,7 +933,7 @@ export class SimulationEngine extends LegacySimulationEngine {
     const persistedResidence = extendedSnapshot.residence;
 
     super.loadSnapshot(snapshot);
-    this.residence.restore(persistedResidence ?? defaultResidenceState(snapshot));
+    this.residence.restore(persistedResidence ?? fallbackResidenceState());
     this.physicalObjectState = hydratePhysicalObjectRuntimeState(
       persistedPhysicalObjects,
       PHYSICAL_RUNTIME_GRAPH,

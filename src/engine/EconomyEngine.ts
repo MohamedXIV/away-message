@@ -6,9 +6,11 @@ import { PlayerNeedsEngine } from './PlayerNeedsEngine';
 type NeedsKey = 'energy' | 'fatigue' | 'hunger' | 'health' | 'sleepDebt' | 'socialBattery';
 type EconomyOwnedState = Omit<PlayerState, NeedsKey>;
 
+export const DEFAULT_STARTING_CASH = 38.0;
+
 function readOwnedState(initialState?: Partial<PlayerState>): EconomyOwnedState {
   return {
-    cash: initialState?.cash ?? 38.0,
+    cash: initialState?.cash ?? DEFAULT_STARTING_CASH,
     rentDueDay: initialState?.rentDueDay ?? 7,
     rentAmount: initialState?.rentAmount ?? initialState?.recurringRentAmount ?? 140.0,
     recurringRentAmount: initialState?.recurringRentAmount ?? initialState?.rentAmount ?? 140.0,
