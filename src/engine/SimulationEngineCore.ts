@@ -1627,8 +1627,8 @@ export class SimulationEngine {
       const day = this.clock.getTime().day;
       const hour = this.clock.getTime().hour;
       const minutes = this.clock.getTotalMinutes();
-      const player = this.economy.getState();
-      if (player.energy < MIN_OUTING_ENERGY) {
+      const needs = this.needs.getState();
+      if (needs.energy < MIN_OUTING_ENERGY) {
         return { success: false, error: `Too tired to head out (need ${MIN_OUTING_ENERGY}% energy). Rest first.` };
       }
       if (spec.cost > 0 && !this.economy.canAfford(spec.cost)) {
