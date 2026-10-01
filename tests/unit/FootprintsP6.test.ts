@@ -21,14 +21,14 @@ const AFF = (a: string, b: string): number => {
 describe('P6.5 street sightings (pure)', () => {
   it('spots visible buddies by time of day', () => {
     const sight = getStreetSighting(
-      [{ id: 'ryan', displayName: 'Ryan', presenceStatus: 'online' }],
+      [{ id: 'actor_evening', displayName: 'Alex', presenceStatus: 'online' }],
       'evening',
       3
     );
-    expect(sight).toContain('cart');
+    expect(sight).toContain('Alex');
     expect(getStreetSighting([], 'evening', 3)).toBeNull();
     expect(getStreetSighting(
-      [{ id: 'ryan', displayName: 'Ryan', presenceStatus: 'offline' }],
+      [{ id: 'actor_evening', displayName: 'Alex', presenceStatus: 'offline' }],
       'evening',
       3
     )).toBeNull();
@@ -36,19 +36,19 @@ describe('P6.5 street sightings (pure)', () => {
 
   it('notes the conspicuously absent across days', () => {
     const buddies = [
-      { id: 'ryan', displayName: 'Ryan', presenceStatus: 'online', lifecycleStatus: 'friend' },
-      { id: 'nora', displayName: 'Nora', presenceStatus: 'offline', lifecycleStatus: 'distant' },
+      { id: 'actor_visible', displayName: 'Alex', presenceStatus: 'online', lifecycleStatus: 'friend' },
+      { id: 'actor_absent', displayName: 'Sam', presenceStatus: 'offline', lifecycleStatus: 'distant' },
     ];
     let mentions = 0;
     for (let day = 1; day <= 100; day++) {
       const sight = getStreetSighting(buddies, 'evening', day);
-      if (sight && sight.includes('Nora')) mentions++;
+      if (sight && sight.includes('Sam')) mentions++;
     }
     expect(mentions).toBeGreaterThan(5); // ~30% absence notes name the missing buddy
   });
 
   it('is deterministic for the same inputs', () => {
-    const buddies = [{ id: 'maya', displayName: 'Maya', presenceStatus: 'away' }];
+    const buddies = [{ id: 'actor_night', displayName: 'Jordan', presenceStatus: 'away' }];
     expect(getStreetSighting(buddies, 'night', 5)).toBe(getStreetSighting(buddies, 'night', 5));
   });
 });

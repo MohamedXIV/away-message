@@ -120,9 +120,11 @@ describe('P3 long-term memory (SocialEngine)', () => {
     expect(social.getDailyMood('maya', 5)).toBe('cold');
   });
 
-  it('protects core buddies from distant/gone/blocked', () => {
-    expect(() => social.setBuddyStatus('maya', 'distant')).toThrow();
-    expect(() => social.setBuddyStatus('ryan', 'gone')).toThrow();
+  it('allows seed actors to be set to distant/gone/blocked without restriction', () => {
+    expect(() => social.setBuddyStatus('maya', 'distant')).not.toThrow();
+    expect(social.getBuddy('maya')?.status).toBe('distant');
+    expect(() => social.setBuddyStatus('ryan', 'gone')).not.toThrow();
+    expect(social.getBuddy('ryan')?.status).toBe('gone');
   });
 
   it('persists memories and promises across save/restore', () => {
@@ -223,12 +225,12 @@ describe('P3 sharp events (SimulationEngine)', () => {
     expect(sim.social.getRelationships('test_pal')!.annoyance).toBeLessThan(60);
   });
 
-  it('core buddies cap at strained — they never walk away', () => {
+  it('seed characters walk away when repeatedly dismissed without sacred protection', () => {
     dismiss('maya', 20); // annoy 100
-    expect(sim.social.getBuddy('maya')?.status).toBe('acquaintance');
+    expect(sim.social.getBuddy('maya')?.status).toBe('gone');
     const msgs = sim.social.getMessages('maya');
     expect(msgs.some((m) => m.tags?.includes('confrontation'))).toBe(true);
-    expect(msgs.some((m) => m.tags?.includes('farewell'))).toBe(false);
+    expect(msgs.some((m) => m.tags?.includes('farewell'))).toBe(true);
   });
 
   it('repairs silently when kindness cools a strained bond', () => {

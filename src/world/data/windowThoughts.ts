@@ -22,25 +22,25 @@ export const PERSISTENT_STREET_ENTITIES: PersistentStreetEntity[] = [
     activeTimes: ['day', 'evening', 'night'],
   },
   {
-    id: 'motel_clerk',
+    id: 'motel_caretaker',
     name: 'Motel Caretaker in Alley',
-    description: 'Mr. Henderson stands by the motel service entrance with a brass ring of keys and a glowing cigarette tip, staring out toward the canal bridge.',
+    description: 'A motel caretaker pauses by the service entrance with a brass ring of keys, looking out toward the canal bridge.',
     activeTimes: ['morning', 'late_night'],
   },
 ];
 
 export const WINDOW_THOUGHTS: WindowThought[] = [
-  // Early Days (1..3)
+  // Early-settling atmosphere
   {
-    id: 'day1_intro',
+    id: 'early_morning',
     minDay: 1,
     maxDay: 2,
     timeOfDay: ['morning', 'day'],
-    text: 'A quiet morning outside Room 104. Delivery vans rattle over the metal expansion joints on the canal bridge. The air smells of wet concrete and cheap diner roast.',
+    text: 'A quiet morning outside the motel. Delivery vans rattle over the metal expansion joints on the canal bridge. The air smells of wet concrete and cheap diner roast.',
     mood: 'melancholy',
   },
   {
-    id: 'day1_night',
+    id: 'early_night',
     minDay: 1,
     maxDay: 3,
     timeOfDay: ['night', 'late_night'],
@@ -54,7 +54,7 @@ export const WINDOW_THOUGHTS: WindowThought[] = [
     mood: 'melancholy',
   },
   {
-    id: 'mid_game_work',
+    id: 'settling_workday',
     minDay: 4,
     maxDay: 8,
     timeOfDay: ['morning', 'day'],
@@ -62,26 +62,18 @@ export const WINDOW_THOUGHTS: WindowThought[] = [
     mood: 'restless',
   },
   {
-    id: 'mid_game_night',
+    id: 'evening_connections',
     minDay: 5,
     maxDay: 9,
     timeOfDay: ['evening', 'night'],
-    text: 'Across the alley, the blinking amber tower lights atop the telecommunications antenna pulse in a steady rhythm. Somewhere across those copper wires, Ryan is closing the food cart and Maya is finishing her evening shift.',
+    text: 'Across the alley, the blinking amber tower lights atop the telecommunications antenna pulse in a steady rhythm. Somewhere across those copper wires, friends are closing their evening shifts and heading home.',
     mood: 'hopeful',
   },
   {
     id: 'post_cafe_thoughts',
-    minDay: 11,
-    maxDay: 14,
-    requiredFlags: ['maya_met_in_person'],
-    text: 'The street feels different after meeting Maya at Starlight Café. You recognize the crosswalk where she turned toward the subway, and the neon lights seem a little warmer than they did a week ago.',
-    mood: 'hopeful',
-  },
-  {
-    id: 'end_game_clarity',
-    minDay: 13,
-    maxDay: 14,
-    text: 'Two weeks in this room. The desk is covered in CD jewel cases, notes, and receipts. The hum of the computer fan has become as natural as breathing. Whatever comes next, you found a way to bridge both worlds.',
+    minDay: 5,
+    requiredFlags: ['met_in_person'],
+    text: 'The street feels different after catching up at Starlight Café. You recognize the crosswalk leading back toward the light rail, and the neon lights seem a little warmer than they did before.',
     mood: 'hopeful',
   },
   {
@@ -144,22 +136,26 @@ export interface SightingBuddy {
   lifecycleStatus?: string;
 }
 
-const STREET_SIGHTINGS: Record<string, Array<{ times: TimeOfDay[]; text: string }>> = {
-  ryan: [
-    { times: ['morning', 'day'], text: 'Ryan’s cart glows two blocks down, steam rolling off the grill.' },
-    { times: ['evening', 'night'], text: 'Ryan is closing the cart, counting the till under the awning light.' },
+const VISIBLE_SIGHTING_LINES: Record<TimeOfDay, string[]> = {
+  morning: [
+    '{name} crosses the street below with a coffee in hand.',
+    '{name} pauses near the corner before heading on.',
   ],
-  maya: [
-    { times: ['morning', 'day'], text: 'Maya hurries past with a camera bag, late for something as usual.' },
-    { times: ['evening', 'night'], text: 'Maya’s silhouette crosses the diner window across the street.' },
+  day: [
+    '{name} passes through the block, briefly visible between parked cars.',
+    '{name} waits at the crossing while traffic crawls past.',
   ],
-  nora: [
-    { times: ['night', 'late_night'], text: 'A figure with a small flashlight picks along the canal path — Nora, on another night round.' },
-    { times: ['evening'], text: 'Nora slips into the alley with a duffel bag full of God-knows-what.' },
+  evening: [
+    '{name} walks beneath the shop lights as the block starts to glow.',
+    '{name} lingers near the corner for a moment before moving on.',
   ],
-  henderson: [
-    { times: ['morning', 'day'], text: 'Mr. Henderson props the motel office door open and waters the plastic plant.' },
-    { times: ['evening'], text: 'Henderson does his evening round, keys jingling, checking every door twice.' },
+  night: [
+    '{name} appears under a sodium streetlight, then disappears into the next block.',
+    '{name} crosses the quiet street while most storefronts are already dark.',
+  ],
+  late_night: [
+    '{name} is one of the few familiar faces still moving through the sleeping block.',
+    '{name} passes below in the late-night quiet, footsteps carrying farther than usual.',
   ],
 };
 
@@ -191,18 +187,10 @@ export function getStreetSighting(
     return line.replaceAll('{name}', missing.displayName);
   }
   const visible = buddies.filter((b) => b.presenceStatus === 'online' || b.presenceStatus === 'away');
-  const options: string[] = [];
-  for (const buddy of visible) {
-    const pools = STREET_SIGHTINGS[buddy.id];
-    if (pools) {
-      for (const pool of pools) {
-        if (pool.times.includes(timeOfDay)) options.push(pool.text);
-      }
-    } else {
-      // Procedural friends get a generic but personal line
-      options.push(`A familiar face crosses the street below — ${buddy.displayName}, one of your newer friends.`);
-    }
-  }
-  if (options.length === 0) return null;
-  return options[hash(`seen:${seedDay}:${timeOfDay}`) % options.length]!;
+  if (visible.length === 0) return null;
+
+  const buddy = visible[hash(`who:${seedDay}:${timeOfDay}`) % visible.length]!;
+  const templates = VISIBLE_SIGHTING_LINES[timeOfDay];
+  const template = templates[hash(`seen:${buddy.id}:${seedDay}:${timeOfDay}`) % templates.length]!;
+  return template.replaceAll('{name}', buddy.displayName);
 }

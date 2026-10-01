@@ -1,5 +1,5 @@
 // tools/pull-content.ts — content/store.json → generated registries:
-//   src/engine/coreBuddies.generated.ts (characters) + src/engine/worldContent.generated.ts (town)
+//   src/engine/seedCharacters.generated.ts (characters) + src/engine/worldContent.generated.ts (town)
 // Run: npm run content:pull | Verify: npm run content:check
 // Validation failures exit non-zero with every error listed (fail loudly).
 
@@ -10,7 +10,7 @@ import { parseContentJson, validateContent, generateRegistrySource, generateWorl
 
 const root = new URL('..', import.meta.url);
 const storePath = new URL('content/store.json', root);
-const outPath = new URL('src/engine/coreBuddies.generated.ts', root);
+const outPath = new URL('src/engine/seedCharacters.generated.ts', root);
 const outWorldPath = new URL('src/engine/worldContent.generated.ts', root);
 
 const raw = readFileSync(storePath, 'utf8');
@@ -46,7 +46,7 @@ if (process.argv.includes('--check')) {
     process.exit(1);
   }
   if (current !== source) {
-    console.error('content:check failed — src/engine/coreBuddies.generated.ts is stale. Run npm run content:pull.');
+    console.error('content:check failed — src/engine/seedCharacters.generated.ts is stale. Run npm run content:pull.');
     process.exit(1);
   }
   if (currentWorld !== worldSource) {
@@ -64,6 +64,6 @@ if (process.argv.includes('--check')) {
   const stops = Object.keys(tables['transitStops'] ?? {}).length;
   const lines = Object.keys(tables['busLines'] ?? {}).length;
   const modifiers = Object.keys(tables['eventModifiers'] ?? {}).length;
-  console.log(`content:pull ok — ${ids} characters, ${pools} dialogue pools → src/engine/coreBuddies.generated.ts`);
+  console.log(`content:pull ok — ${ids} characters, ${pools} dialogue pools → src/engine/seedCharacters.generated.ts`);
   console.log(`content:pull ok — ${districts} districts, ${places} places, ${stops} stops, ${lines} bus lines, ${modifiers} event modifiers → src/engine/worldContent.generated.ts`);
 }

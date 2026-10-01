@@ -1,5 +1,5 @@
-import type { BuddyPresence } from '../../../engine/types';
-import { CORE_BY_ID, CORE_IDS } from '../../../engine/coreBuddies';
+import type { BuddyCharacter, BuddyPresence } from '../../../engine/types';
+
 export interface NpcStyleProfile {
   buddyId: string;
   displayName: string;
@@ -16,61 +16,76 @@ export interface NpcStyleProfile {
   summaryHint: string;
 }
 
-const coreIdentity = (id: string): { buddyId: string; displayName: string; handle: string } => {
-  const buddy = CORE_BY_ID[id];
-  return { buddyId: id, displayName: buddy?.displayName ?? id, handle: buddy?.handle ?? id };
-};
+type NpcStyleDetails = Omit<NpcStyleProfile, 'buddyId' | 'displayName' | 'handle'>;
 
-export const NPC_STYLE_PROFILES: Record<string, NpcStyleProfile> = {
-  [CORE_IDS.MAYA]: {
-    ...coreIdentity(CORE_IDS.MAYA),
-    persona: 'Quiet, observant, creative, and a little guarded. Uses lowercase, pauses, music references, and gentle honesty. She warms up slowly and remembers small details the player shares.',
-    vocabulary: ['hey...', 'umm', 'maybe', 'i think', 'soft', 'quiet', 'music', 'rain', 'coffee', '~'],
-    punctuation: 'lowercase, uses "..." and "~" softly, rarely caps, occasional :)',
-    quirks: ['lowercase-heavy', 'hesitant pauses ...', 'ends with ~ sometimes', 'music/rain references', 'remembers player details'],
-    typing: { wpm: 55, variance: 18, pauseStyle: 'hesitant with 300-800ms mid-sentence pauses' },
-    summaryHint: 'Maya speaks lowercase, hesitant, warm but reserved.',
-  },
-  [CORE_IDS.RYAN]: {
-    ...coreIdentity(CORE_IDS.RYAN),
-    persona: 'Warm, impulsive food-cart coworker. Uses casual slang, jokes, and short messages. He avoids heavy emotional talks unless trust is high. Fast, direct, friendly, uses lol and yo.',
-    vocabulary: ['yo', 'dude', 'lol', 'haha', 'brb', 'afk', 'yo', 'man', 'tacos', 'cart'],
-    punctuation: 'short bursts, uses ! and lol, abbreviations, caps for emphasis occasionally',
-    quirks: ['fast short messages', 'uses yo/lol/brb', 'food/cart slang', 'exclamation heavy when excited'],
-    typing: { wpm: 85, variance: 10, pauseStyle: 'bursty, quick send' },
-    summaryHint: 'Ryan is fast, slangy, direct, playful.',
-  },
-  [CORE_IDS.NORA]: {
-    ...coreIdentity(CORE_IDS.NORA),
-    persona: 'Night-owl archivist with dry humor. Curious about strange details, concise, slightly cryptic, but not supernatural. She notices patterns others miss and speaks in precise, slightly poetic fragments.',
-    vocabulary: ['quiet', 'indexing', 'logs', 'hum', 'canal', 'night', 'strange', 'observed', 'perhaps'],
-    punctuation: 'concise, precise, uses . and —, rarely emoticons, uses lowercase for style sometimes',
-    quirks: ['concise', 'dry humor', 'cryptic but grounded', 'references logs/nightboard', 'notices acoustic details'],
-    typing: { wpm: 88, variance: 12, pauseStyle: 'steady, deliberate' },
-    summaryHint: 'Nora is concise, dry, slightly cryptic, observant.',
-  },
-  [CORE_IDS.HENDERSON]: {
-    ...coreIdentity(CORE_IDS.HENDERSON),
-    persona: 'Professional motel manager. Formal, practical, and terse. He cares about rent, schedules, and keeping the property calm. Polite but never casual, uses proper capitalization and punctuation.',
-    vocabulary: ['Please', 'Regarding', 'Office', 'Account', 'Convenient', 'Regards', 'Notice', 'Policy'],
-    punctuation: 'formal, proper capitalization, periods, no slang, no emoticons',
-    quirks: ['formal/polite', 'references office hours/policy', 'terse', 'never slang'],
-    typing: { wpm: 42, variance: 8, pauseStyle: 'slow, deliberate, proper' },
-    summaryHint: 'Henderson is formal, terse, professional.',
-  },
-};
+/** Reusable behavioral voice profiles keyed by capability role, never actor identity. */
+export const NPC_STYLE_PROFILES: Record<string, NpcStyleDetails> = {};
 
-export function getNpcStyle(buddyId: string): NpcStyleProfile {
-  return NPC_STYLE_PROFILES[buddyId] || {
+function registerRoleStyle(role: string, details: NpcStyleDetails): void {
+  NPC_STYLE_PROFILES[role] = details;
+}
+
+registerRoleStyle('diner-staff', {
+  persona: 'Quiet, observant, creative, and a little guarded. Uses lowercase, pauses, music references, and gentle honesty. Warms up slowly and remembers small details.',
+  vocabulary: ['hey...', 'umm', 'maybe', 'i think', 'soft', 'quiet', 'music', 'rain', 'coffee', '~'],
+  punctuation: 'lowercase, uses "..." and "~" softly, rarely caps, occasional :)',
+  quirks: ['lowercase-heavy', 'hesitant pauses ...', 'music/rain references', 'remembers player details'],
+  typing: { wpm: 55, variance: 18, pauseStyle: 'hesitant with 300-800ms mid-sentence pauses' },
+  summaryHint: 'quiet, hesitant, warm but reserved',
+});
+
+registerRoleStyle('cart-owner', {
+  persona: 'Warm, impulsive coworker. Uses casual slang, jokes, and short messages. Avoids heavy emotional talks unless trust is high.',
+  vocabulary: ['yo', 'dude', 'lol', 'haha', 'brb', 'afk', 'man', 'tacos', 'cart'],
+  punctuation: 'short bursts, uses ! and lol, abbreviations, caps for emphasis occasionally',
+  quirks: ['fast short messages', 'slang-heavy', 'food/cart talk'],
+  typing: { wpm: 85, variance: 10, pauseStyle: 'bursty, quick send' },
+  summaryHint: 'fast, slangy, direct, playful',
+});
+
+registerRoleStyle('canal-regular', {
+  persona: 'Night-owl archivist with dry humor. Curious about strange details, concise, slightly cryptic, but grounded.',
+  vocabulary: ['quiet', 'indexing', 'logs', 'hum', 'canal', 'night', 'strange', 'observed', 'perhaps'],
+  punctuation: 'concise, precise, uses . and —, rarely emoticons',
+  quirks: ['concise', 'dry humor', 'cryptic but grounded', 'notices acoustic details'],
+  typing: { wpm: 88, variance: 12, pauseStyle: 'steady, deliberate' },
+  summaryHint: 'concise, dry, slightly cryptic, observant',
+});
+
+registerRoleStyle('landlord', {
+  persona: 'Professional property manager. Formal, practical, and terse. Cares about rent, schedules, and keeping the property calm.',
+  vocabulary: ['Please', 'Regarding', 'Office', 'Account', 'Convenient', 'Regards', 'Notice', 'Policy'],
+  punctuation: 'formal, proper capitalization, periods, no slang, no emoticons',
+  quirks: ['formal/polite', 'references office hours/policy', 'terse', 'never slang'],
+  typing: { wpm: 42, variance: 8, pauseStyle: 'slow, deliberate, proper' },
+  summaryHint: 'formal, terse, professional',
+});
+
+type NpcStyleSubject = Pick<BuddyCharacter, 'id' | 'displayName' | 'handle' | 'roles' | 'typingSpeedWpm' | 'archetype'>;
+
+function asStyleSubject(subject: string | NpcStyleSubject): NpcStyleSubject | null {
+  return typeof subject === 'string' ? null : subject;
+}
+
+export function getNpcStyle(subject: string | NpcStyleSubject): NpcStyleProfile {
+  const buddy = asStyleSubject(subject);
+  const buddyId = buddy?.id ?? subject as string;
+  const roleStyle = buddy?.roles
+    ?.map((role) => NPC_STYLE_PROFILES[role])
+    .find((profile): profile is NpcStyleDetails => !!profile);
+
+  return {
     buddyId,
-    displayName: buddyId,
-    handle: buddyId,
-    persona: `A believable online friend ${buddyId} with a distinct but grounded personality.`,
-    vocabulary: [],
-    punctuation: 'neutral',
-    quirks: [],
-    typing: { wpm: 65, variance: 10, pauseStyle: 'normal' },
-    summaryHint: 'neutral',
+    displayName: buddy?.displayName ?? buddyId,
+    handle: buddy?.handle ?? buddyId,
+    ...(roleStyle ?? {
+      persona: `A believable online friend ${buddy?.displayName ?? buddyId} with a distinct but grounded personality.`,
+      vocabulary: [],
+      punctuation: 'neutral',
+      quirks: [],
+      typing: { wpm: buddy?.typingSpeedWpm ?? 65, variance: 10, pauseStyle: 'normal' },
+      summaryHint: buddy?.archetype ? `${buddy.archetype} acquaintance` : 'neutral',
+    }),
   };
 }
 
@@ -98,14 +113,12 @@ export function getNpcAvailabilityLabel(presence: BuddyPresence | undefined, gam
   if (!presence) return 'unknown';
   if (presence.status === 'online') return 'available — actively checking Pulse';
   if (presence.status === 'away') {
-    if (gameHour >= 0 && gameHour <= 6) return 'away — may respond slowly (late night)';
-    return 'away — may respond after a short delay';
+    if (gameHour >= 23 || gameHour <= 5) return 'away — probably winding down';
+    return 'away — may reply slowly';
   }
-  if (presence.status === 'busy') return 'busy — unlikely to reply quickly';
   return 'offline — not expecting a prompt reply';
 }
 
-/** Generic online labels by archetype (no identity baked in). */
 const ARCHETYPE_ONLINE_LABELS: Record<string, string> = {
   artist: 'online — listening to music',
   coworker: 'online — chilling after shift',
@@ -115,12 +128,16 @@ const ARCHETYPE_ONLINE_LABELS: Record<string, string> = {
   trader: 'online — watching the tape',
 };
 
-export function getNpcActivityLabel(presence: BuddyPresence | undefined, buddyId: string, gameHour: number): string {
+export function getNpcActivityLabel(
+  presence: BuddyPresence | undefined,
+  subject: string | NpcStyleSubject,
+  gameHour: number,
+): string {
   if (presence?.awayMessage) return presence.awayMessage;
   if (presence?.status === 'online') {
-    const buddy = CORE_BY_ID[buddyId];
+    const buddy = asStyleSubject(subject);
     if (buddy?.roles?.includes('rain-lover') && gameHour >= 18) {
-      return `online — listening to rain / myplace/${buddy.myplace || buddyId}`;
+      return 'online — listening to rain';
     }
     const archetype = buddy?.archetype;
     return (archetype && ARCHETYPE_ONLINE_LABELS[archetype]) || 'online and checking messages';

@@ -50,7 +50,7 @@ describe('Content store (TinyBase source of truth)', () => {
 
   it('stays in sync: committed generated file matches content/store.json', () => {
     const tables = parseContentJson(loadStoreJson());
-    const committed = readFileSync(new URL('../../src/engine/coreBuddies.generated.ts', import.meta.url), 'utf8');
+    const committed = readFileSync(new URL('../../src/engine/seedCharacters.generated.ts', import.meta.url), 'utf8');
     expect(generateRegistrySource(tables)).toBe(committed);
   });
 
@@ -86,15 +86,15 @@ describe('Content store editor renames (no code changes needed)', () => {
     expect(validateContent(renamedTables())).toEqual([]);
   });
 
-  it('rejects duplicate roles', () => {
+  it('rejects unknown roles referenced by affinity seeds', () => {
     const dup = renamedTables();
-    (dup['characters']!['maya'] as Record<string, unknown>)['role'] = 'ryan';
-    expect(validateContent(dup).some((e) => e.includes('duplicate role'))).toBe(true);
+    (dup['affinitySeeds']!['invalid'] as unknown) = { roleA: 'nonexistent-role', roleB: 'cart-owner', value: 0 };
+    expect(validateContent(dup).some((e) => e.includes('unknown role'))).toBe(true);
   });
 
-  it('emits role into the generated registry', () => {
+  it('emits renamed character definition into the generated registry', () => {
     const source = generateRegistrySource(renamedTables());
-    expect(source).toContain(`role: "ryan"`);
+    expect(source).toContain(`roles: ["cart-owner"]`);
     expect(source).toContain(`id: "rayan"`);
   });
 });

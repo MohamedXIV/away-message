@@ -28,7 +28,7 @@ test.describe('Tier 2: Time Advancement & Midnight Rollovers', () => {
     expect(state.time.minute).toBeLessThanOrEqual(59);
   });
 
-  test('TC-TMR-03: Fast-forwarding to Day 14 triggers evaluation milestone', async ({ sim }) => {
+  test('TC-TMR-03: Fast-forwarding across multiple weeks advances simulation day', async ({ sim }) => {
     await sim.jumpToDay(14);
     const state = await sim.getState();
     expect(state.time.day).toBeGreaterThanOrEqual(14);

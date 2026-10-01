@@ -81,7 +81,6 @@ export function generateRegistrySource(tables: ContentTables): string {
   // Emit Character definitions
   lines.push('export interface GeneratedCharacterDef {');
   lines.push('  id: string;');
-  lines.push('  role: string;');
   lines.push('  displayName: string;');
   lines.push('  archetypeId: string;');
   lines.push('  roles: string[];');
@@ -110,7 +109,6 @@ export function generateRegistrySource(tables: ContentTables): string {
 
     lines.push('  {');
     lines.push(`    id: ${tsString(id)},`);
-    lines.push(`    role: ${tsString(String(row['role'] ?? ''))},`);
     lines.push(`    displayName: ${tsString(String(row['displayName'] ?? ''))},`);
     lines.push(`    archetypeId: ${tsString(String(row['archetypeId'] ?? 'regular'))},`);
     const roles = Array.isArray(row['roles'])

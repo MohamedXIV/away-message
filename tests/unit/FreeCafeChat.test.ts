@@ -33,64 +33,69 @@ function stubStorage() {
 
 describe('P8 shared chat context (headless engine)', () => {
   let sim: SimulationEngine;
+  let actorId: string;
+  let actorName: string;
 
   beforeEach(() => {
     sim = new SimulationEngine();
+    const actor = sim.social.getBuddies()[0];
+    if (!actor) throw new Error('Expected at least one authored fixture actor for chat tests.');
+    actorId = actor.id;
+    actorName = actor.displayName;
   });
 
   it('builds identical DM-grade context for any surface', () => {
-    sim.dispatchAction({ type: 'SOCIAL_SEND_MESSAGE', buddyId: 'maya', text: 'hey, rain today huh' });
+    sim.dispatchAction({ type: 'SOCIAL_SEND_MESSAGE', buddyId: actorId, text: 'hey, rain today huh' });
     const ctx = buildDmChatContext({
       engine: sim as any,
-      buddyId: 'maya',
+      buddyId: actorId,
       playerText: 'hey, rain today huh',
       pulse: EMPTY_SLICES,
       day: 1,
       totalMinutes: 600,
     });
-    expect(ctx.displayName).toBe('Maya');
-    expect(ctx.persona.toLowerCase()).toContain('quiet, observant');
+    expect(ctx.displayName).toBe(actorName);
     expect(ctx.relationshipSummary).toContain('Stage:');
     expect(ctx.relationshipSummary).toContain('DailyMood:');
     expect(ctx.relationshipSummary).toContain('Memory:');
     expect(ctx.recentMessages.length).toBeGreaterThan(0);
-    expect(ctx.preSendPatch.conversationMemory.maya?.length).toBe(1);
-    expect(ctx.preSendPatch.buddyFacts.maya).toBeDefined();
+    expect(ctx.preSendPatch.conversationMemory[actorId]?.length).toBe(1);
+    expect(ctx.preSendPatch.buddyFacts[actorId]).toBeDefined();
   });
 
-  it('appends scene context and persona suffix for in-person meetings', () => {
+  it('appends generic scene context and persona suffix for in-person meetings', () => {
     const ctx = buildDmChatContext({
       engine: sim as any,
-      buddyId: 'maya',
+      buddyId: actorId,
       playerText: 'hi',
       pulse: EMPTY_SLICES,
       day: 2,
       totalMinutes: 1500,
-      sceneContext: 'In-person meeting at Starlight Café, booth 4, Day 2.',
-      personaSuffix: 'You are sitting across from the player at Starlight Café.',
+      sceneContext: 'In-person meeting at a local café.',
+      personaSuffix: 'You are sitting across from the player in person over coffee.',
     });
-    expect(ctx.relationshipSummary).toContain('Scene: In-person meeting at Starlight Café');
+    expect(ctx.relationshipSummary).toContain('Scene: In-person meeting at a local café');
     expect(ctx.persona).toContain('sitting across from the player');
   });
 
   it('ledger records promises and resolves follow-through (rules only)', () => {
-    sim.dispatchAction({ type: 'SOCIAL_SEND_MESSAGE', buddyId: 'ryan', text: "i promise i'll call tomorrow" });
-    runChatLedger(sim as any, 'ryan', "i promise i'll call tomorrow", 600);
-    expect(sim.social.getOpenPromises('ryan').length).toBe(1);
-    sim.dispatchAction({ type: 'SOCIAL_SEND_MESSAGE', buddyId: 'ryan', text: 'did it, called!' });
-    runChatLedger(sim as any, 'ryan', 'did it, called!', 601);
-    expect(sim.social.getOpenPromises('ryan').length).toBe(0);
+    sim.dispatchAction({ type: 'SOCIAL_SEND_MESSAGE', buddyId: actorId, text: "i promise i'll call tomorrow" });
+    runChatLedger(sim as any, actorId, "i promise i'll call tomorrow", 600);
+    expect(sim.social.getOpenPromises(actorId).length).toBe(1);
+    sim.dispatchAction({ type: 'SOCIAL_SEND_MESSAGE', buddyId: actorId, text: 'did it, called!' });
+    runChatLedger(sim as any, actorId, 'did it, called!', 601);
+    expect(sim.social.getOpenPromises(actorId).length).toBe(0);
   });
 
-  it('honours governed social actions, ignores the rest', () => {
-    const before = sim.social.getRelationships('maya')!;
-    honorSocialAction(sim as any, 'maya', 'empathy', true);
-    expect(sim.social.getRelationships('maya')!.trust).toBeGreaterThan(before.trust);
-    const mid = sim.social.getRelationships('maya')!;
-    honorSocialAction(sim as any, 'maya', 'none', true);
-    honorSocialAction(sim as any, 'maya', 'modify_money', true);
-    honorSocialAction(sim as any, 'maya', 'empathy', false);
-    expect(sim.social.getRelationships('maya')).toEqual(mid);
+  it('honours governed social actions, ignores invalid/untrusted ones', () => {
+    const before = sim.social.getRelationships(actorId)!;
+    honorSocialAction(sim as any, actorId, 'empathy', true);
+    expect(sim.social.getRelationships(actorId)!.trust).toBeGreaterThan(before.trust);
+    const mid = sim.social.getRelationships(actorId)!;
+    honorSocialAction(sim as any, actorId, 'none', true);
+    honorSocialAction(sim as any, actorId, 'modify_money', true);
+    honorSocialAction(sim as any, actorId, 'empathy', false);
+    expect(sim.social.getRelationships(actorId)).toEqual(mid);
   });
 
   it('computes post-reply updates and captures links once', () => {
@@ -100,8 +105,8 @@ describe('P8 shared chat context (headless engine)', () => {
       previousSummary: 'No summary.',
       recentMessages: [{ sender: 'player', text: 'hey' }],
       detectedLinks: [{ url: 'http://rain-archive.local/', host: 'rain-archive.local', href: '/', raw: 'http://rain-archive.local/' }],
-      displayName: 'Maya',
-      buddyId: 'maya',
+      displayName: actorName,
+      buddyId: actorId,
       totalMinutes: 600,
       existingSharedLinks: [],
       existingDiscoveredHosts: [],
@@ -109,15 +114,15 @@ describe('P8 shared chat context (headless engine)', () => {
     expect(first.mergedReplies.length).toBe(1);
     expect(first.mergedSharedLinks.length).toBe(1);
     expect(first.mergedDiscoveredHosts).toContain('rain-archive.local');
-    // Same link again → deduped against the now-existing list
+
     const second = computeExchangeUpdate({
       npcTexts: ['again http://rain-archive.local/'],
       existingReplies: first.mergedReplies,
       previousSummary: first.postReplySummary,
       recentMessages: [{ sender: 'player', text: 'hey' }],
       detectedLinks: [{ url: 'http://rain-archive.local/', host: 'rain-archive.local', href: '/', raw: 'http://rain-archive.local/' }],
-      displayName: 'Maya',
-      buddyId: 'maya',
+      displayName: actorName,
+      buddyId: actorId,
       totalMinutes: 601,
       existingSharedLinks: first.mergedSharedLinks,
       existingDiscoveredHosts: first.mergedDiscoveredHosts,
@@ -136,8 +141,8 @@ describe('P8 reply suggestions', () => {
 
   it('falls back offline without a key (3 generic player-voiced lines)', async () => {
     const result = await aiService.suggestReplies({
-      buddyId: 'maya',
-      displayName: 'Maya',
+      buddyId: 'fixture_actor',
+      displayName: 'Fixture Actor',
       relationshipSummary: 'new friendship',
       recentMessages: [{ sender: 'buddy', text: 'hey' }],
     });
@@ -157,15 +162,15 @@ describe('P8 memory bridge (persisted slices)', () => {
     vi.unstubAllGlobals();
   });
 
-  it('round-trips slices through storage', () => {
+  it('round-trips actor-keyed slices through storage', () => {
     expect(readMemorySlices().conversationMemory).toEqual({});
     writeMemorySlices({
-      conversationMemory: { maya: ['Player said: hi'] },
-      conversationSummaries: { maya: 'Hi exchanged.' },
+      conversationMemory: { fixture_actor: ['Player said: hi'] },
+      conversationSummaries: { fixture_actor: 'Hi exchanged.' },
     });
     const back = readMemorySlices();
-    expect(back.conversationMemory.maya).toEqual(['Player said: hi']);
-    expect(back.conversationSummaries.maya).toBe('Hi exchanged.');
+    expect(back.conversationMemory.fixture_actor).toEqual(['Player said: hi']);
+    expect(back.conversationSummaries.fixture_actor).toBe('Hi exchanged.');
     expect(back.buddyFacts).toEqual({});
   });
 });

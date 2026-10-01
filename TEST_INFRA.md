@@ -15,7 +15,7 @@
 | 5 | Fake Internet (18 Sites) & Search | docs/04 | 5 tests | 5 tests | ✓ | ✓ |
 | 6 | Social Schedules & Relationships | docs/01, docs/04 | 5 tests | 5 tests | ✓ | ✓ |
 | 7 | Desktop OS & Window Manager | docs/02, docs/03 | 5 tests | 5 tests | ✓ | ✓ |
-| 8 | 14-Day Narrative & Ink Scripts | docs/00, docs/04, docs/06 | 5 tests | 5 tests | ✓ | ✓ |
+| 8 | Governed Narrative & Dynamic Social State | docs/00, docs/04, docs/06 | actor-generic tests | actor-generic tests | ✓ | ✓ |
 | 9 | 2D Room & Interactables | docs/01, docs/02 | 5 tests | 5 tests | ✓ | ✓ |
 | 10 | Dexie Persistence & Telemetry | docs/05, docs/07 | 5 tests | 5 tests | ✓ | ✓ |
 
@@ -35,7 +35,7 @@
 ## 4. Real-World Application Scenarios (Tier 4)
 | # | Scenario | Features Exercised | Complexity |
 |---|----------|--------------------|------------|
-| 1 | Canonical Golden Path (Days 1–14) | Full 14-day loop: job shifts, Pulse chat with Ryan/Maya/Nora, RAM upgrade, OS 6 upgrade, PhotoBox unlock, café meeting, mystery thread, evaluation modal | High |
+| 1 | Long-Running Sandbox Continuity | Residence, work, Pulse/social state, hardware/software progression, travel, optional encounters, persistence, and continued play over extended simulated time | High |
 | 2 | Frugal Survival Path | Minimal tech spend, motel rent priority, alternate dialogue choices, economic resilience | High |
 | 3 | Tech Enthusiast Speedrun | Rapid downloads, toolbar infection remediation via SafeSweep, terminal exploration, multiple browser rabbit holes | High |
 
@@ -43,4 +43,4 @@
 - Tier 1: $\ge 50$ test cases across all features
 - Tier 2: $\ge 50$ test cases covering boundary values, error conditions, and resource limits
 - Tier 3: Pairwise combination suites covering major multi-subsystem interactions
-- Tier 4: $\ge 3$ full 14-day end-to-end playthrough scenarios
+- Tier 4: multiple long-running sandbox continuity scenarios with different casts, priorities, residences, and progression paths

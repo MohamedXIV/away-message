@@ -7,7 +7,7 @@ import { PulseRoomWindow, PulseRoomMessage } from './components/PulseRoomWindow'
 import { PulseProfileCard } from './components/PulseProfileCard';
 import { PulseFriendRequest } from './components/PulseFriendRequest';
 import type { PulseListView } from './components/BuddyListWindow';
-import { getPulseRoom, PULSE_ROOMS } from './data/pulseRooms';
+import { getPulseRoom, PULSE_ROOMS, resolvePulseRoomParticipantIds } from './data/pulseRooms';
 import { usePulseAudio } from './hooks/usePulseAudio';
 import { useSimulatedTyping } from './hooks/useSimulatedTyping';
 import { usePulseNotifications } from './hooks/usePulseNotifications';
@@ -32,7 +32,6 @@ import {
   subscribePulseMemoryChanged,
 } from './utils/chatContext';
 import { CHARACTER_ARCHETYPES, pickTemplateOfflineLine, pickRoomExitLine } from '../../engine/characterTemplates';
-import { CORE_BY_ID, CORE_IDS } from '../../engine/coreBuddies';
 import { planInitiatives } from './utils/initiatives';
 import { toneSuggestion } from '../../engine/PlayerActs';
 import type { ReplySuggestionItem } from './hooks/useReplySuggestions';
@@ -40,29 +39,18 @@ import { computeRoomMood, pickDirectTarget, buildRoomContext, roomMoodInstructio
 import type { BuddyCharacter } from '../../engine/types';
 
 function getBuddyPersona(buddyId: string, buddy?: BuddyCharacter | null): string {
-  // Core voices come from the registry (same source as buddyPersonaLine).
-  const core = CORE_BY_ID[buddyId];
-  if (core) return core.persona;
-  // Dynamic buddies speak from their archetype template (governed, offline-safe).
-  const archetype = buddy?.archetype && CHARACTER_ARCHETYPES[buddy.archetype] ? buddy.archetype : undefined;
-  if (archetype) {
-    const template = CHARACTER_ARCHETYPES[archetype];
-    if (template) {
-      return `${template.personaHint} Vocabulary hints: ${template.vocabulary.join(', ')}. Quirks: ${template.quirks.join(', ')}.`;
-    }
-  }
-  return 'A believable online friend with a distinct but grounded personality.';
+  return buddyPersonaLine(buddyId, buddy);
 }
 
-function getRoomReply(roomId: string): { senderId: string; text: string } {
-  if (roomId === 'pc-help') return { senderId: CORE_IDS.RYAN, text: 'drop the specs and someone will probably have a mirror link' };
-  if (roomId === 'night-shift') return { senderId: CORE_IDS.MAYA, text: 'hold on... i have a track for exactly that mood' };
-  return { senderId: CORE_IDS.NORA, text: 'hello, new arrival. please observe the room etiquette.' };
+function getRoomFallbackText(roomId: string): string {
+  if (roomId === 'pc-help') return 'drop the specs and someone will probably have a mirror link';
+  if (roomId === 'night-shift') return 'hold on... i have a track for exactly that mood';
+  return 'hello, new arrival. please observe the room etiquette.';
 }
 export function getRoomResponderId(roomId: string, participantIds: string[], messageCount: number): string {
-  if (participantIds.length === 0) return CORE_IDS.NORA;
+  if (participantIds.length === 0) return '';
   const offset = roomId.split('').reduce((sum, character) => sum + character.charCodeAt(0), 0);
-  return participantIds[(offset + messageCount) % participantIds.length] ?? participantIds[0] ?? 'nora';
+  return participantIds[(offset + messageCount) % participantIds.length] ?? participantIds[0] ?? '';
 }
 
 // Offline-delivery guard shared across mounts (desktop window + web client):
@@ -196,8 +184,9 @@ export function collectMissedPresenceActivities(
 }
 
 export function getRoomResponderSequence(roomId: string, participantIds: string[], messageCount: number, playerText: string): string[] {
-  if (participantIds.length === 0) return [CORE_IDS.NORA];
+  if (participantIds.length === 0) return [];
   const primary = getRoomResponderId(roomId, participantIds, messageCount);
+  if (!primary) return [];
   const hash = hashString(`${roomId}:${messageCount}:${playerText}`);
   const roll = hash % 100;
   let count = 1;
@@ -227,9 +216,10 @@ export const PulseMessengerApp: React.FC = () => {
 
   usePulseAudio();
 
+  const initialBuddyId = engine.social.getBuddies()[0]?.id ?? '';
   const [session, setSession] = useState<PulseLoginSession | null>(() => tryAutoSign());
-  const [openBuddyIds, setOpenBuddyIds] = useState<string[]>([CORE_IDS.MAYA]);
-  const [activeBuddyId, setActiveBuddyId] = useState<string>(CORE_IDS.MAYA);
+  const [openBuddyIds, setOpenBuddyIds] = useState<string[]>(initialBuddyId ? [initialBuddyId] : []);
+  const [activeBuddyId, setActiveBuddyId] = useState<string>(initialBuddyId);
   const [view, setView] = useState<PulseListView>('contacts');
   const [activeRoomId, setActiveRoomId] = useState<string | null>(null);
   const [selectedBuddyId, setSelectedBuddyId] = useState<string | null>(null);
@@ -831,7 +821,8 @@ export const PulseMessengerApp: React.FC = () => {
     setPulseState((previous) => ({ ...previous, roomMessages: { ...previous.roomMessages, [room.id]: [...(previous.roomMessages[room.id] || []), playerMessage].slice(-80) } }));
     setRoomTyping(true);
 
-    const responderIds = getRoomResponderSequence(room.id, room.participantIds, existingMessages.length, text);
+    const liveParticipantIds = resolvePulseRoomParticipantIds(room, engine.social.getBuddies());
+    const responderIds = getRoomResponderSequence(room.id, liveParticipantIds, existingMessages.length, text);
     const roomTopic = roomTopics[room.id] || room.topic;
     let recentMessages = [...existingMessages, playerMessage].slice(-10).map((message) => ({
       sender: message.senderId === 'player' ? 'player' : message.senderName,
@@ -841,7 +832,7 @@ export const PulseMessengerApp: React.FC = () => {
     // P5.3 room physics: group mood from buddy-to-buddy affinities (rules only, computed once per turn)
     const roomPairs: RoomPair[] = [];
     try {
-      const parts = room.participantIds
+      const parts = liveParticipantIds
         .map((id) => ({ id, name: engine.social.getBuddy(id)?.displayName || id }))
         .filter((p) => engine.social.getBuddy(p.id));
       for (let i = 0; i < parts.length; i++) {
@@ -862,12 +853,12 @@ export const PulseMessengerApp: React.FC = () => {
       for (let responderIndex = 0; responderIndex < responderIds.length; responderIndex++) {
         const responderId = responderIds[responderIndex]!;
         const responder = engine.social.getBuddy(responderId);
-        const style = getNpcStyle(responderId);
+        const style = getNpcStyle(responder ?? responderId);
         // P5.3 direct address: rules pick the target + tone, AI only phrases it
         let directTarget: DirectTarget | null = null;
         let responderStage = 'acquaintance';
         try {
-          const others = room.participantIds
+          const others = liveParticipantIds
             .filter((id) => id !== responderId)
             .map((id) => ({ id, name: engine.social.getBuddy(id)?.displayName || id, affinity: engine.social.getAffinity(responderId, id) }));
           directTarget = pickDirectTarget(responderId, others, hashString(`${room.id}:${responderId}:${text}:${currentDay}`) % 100);
@@ -901,9 +892,8 @@ export const PulseMessengerApp: React.FC = () => {
         let generatedText = result.data.messages[0]?.text?.trim() || '';
         let finalText = generatedText;
         if (!finalText || result.meta.fallback) {
-          const fallback = getRoomReply(room.id);
           if (responderIndex === 0) {
-            finalText = fallback.text;
+            finalText = getRoomFallbackText(room.id);
           } else {
             const fallbackPools: Record<string, string[]> = {
               'orion-lounge': ['lol yeah, that tracks', 'i was just thinking the same', 'anyone else getting that vibe?'],
@@ -1000,7 +990,7 @@ export const PulseMessengerApp: React.FC = () => {
   const handleWhisper = async (targetId: string, text: string) => {
     if (!activeRoomId || !session) return;
     const room = getPulseRoom(activeRoomId);
-    if (!room || !room.participantIds.includes(targetId)) return;
+    if (!room || !resolvePulseRoomParticipantIds(room, engine.social.getBuddies()).includes(targetId)) return;
     const target = engine.social.getBuddy(targetId);
     const whisper: PulseRoomMessage = { id: `whisper_${Date.now()}`, senderId: 'player', senderName: session.username, text, minute: totalMinutes, kind: 'whisper', targetId };
     setPulseState((previous) => ({ ...previous, roomMessages: { ...previous.roomMessages, [room.id]: [...(previous.roomMessages[room.id] || []), whisper].slice(-80) }, roomReadThrough: { ...previous.roomReadThrough, [room.id]: (previous.roomMessages[room.id]?.length ?? 0) + 1 } }));
@@ -1064,12 +1054,13 @@ export const PulseMessengerApp: React.FC = () => {
     pendingRooms.forEach((room) => {
       const existingMessages = pulseState.roomMessages[room.id] || [];
       const ambientCount = hashString(`${room.id}:${activityBucket}`) % 100 < 22 ? 2 : 1;
-      const responderSequence = getRoomResponderSequence(room.id, room.participantIds, existingMessages.length + activityBucket, `ambient-${activityBucket}`);
+      const liveParticipantIds = resolvePulseRoomParticipantIds(room, engine.social.getBuddies());
+      const responderSequence = getRoomResponderSequence(room.id, liveParticipantIds, existingMessages.length + activityBucket, `ambient-${activityBucket}`);
       const selectedResponders = responderSequence.slice(0, ambientCount);
       selectedResponders.forEach((responderId, responderIndex) => {
         const responder = engine.social.getBuddy(responderId);
         const recentMessages = existingMessages.slice(-8).map((message) => ({ sender: message.senderId === 'player' ? 'player' : message.senderName, text: message.text }));
-        const ambientStyle = getNpcStyle(responderId);
+        const ambientStyle = getNpcStyle(responder ?? responderId);
         let ambientWorldKnowledge = '';
         try {
           const eAny2 = engine as unknown as { world?: { getKnowledgeContextForBuddy: (bid:string, day:number)=>string; getKnowledgeContext: (day:number)=>string } };

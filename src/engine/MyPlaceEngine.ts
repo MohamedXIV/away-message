@@ -11,7 +11,7 @@ import {
   type MyPlaceRelease,
 } from './MyPlaceCatalog';
 import { CHARACTER_ARCHETYPES } from './characterTemplates';
-import { CORE_BUDDIES } from './coreBuddies';
+import { SEED_CHARACTERS } from './seedCharacters';
 import type { CharacterArchetype } from './types';
 
 export interface MyPlaceProfile {
@@ -42,10 +42,10 @@ export interface MyPlaceEngineState {
 /**
  * P5.4 legacy handle aliases: engine buddy ids/handles predate these profile keys
  * (buddy 'maya' / handle 'starlight_maya' ↔ profile 'maya_x'). Used to resolve
- * which profile page belongs to a buddy. Derived from the registry.
+ * which profile page belongs to a buddy. Derived from the seed content.
  */
-export const CORE_PROFILE_ALIASES: Record<string, string> = Object.fromEntries(
-  CORE_BUDDIES.flatMap((b) => (b.myplace ? [[b.id, b.myplace], [b.handle, b.myplace]] : []))
+export const SEED_PROFILE_ALIASES: Record<string, string> = Object.fromEntries(
+  SEED_CHARACTERS.flatMap((b) => (b.myplace ? [[b.id, b.myplace], [b.handle, b.myplace]] : []))
 );
 
 const DEFAULT_PROFILE: MyPlaceProfile = {
@@ -62,7 +62,7 @@ const DEFAULT_PROFILE: MyPlaceProfile = {
 };
 
 /**
- * Roster-driven NPC pages: every registry buddy with a myplace username gets
+ * Roster-driven NPC pages: every seed character with a myplace username gets
  * a generated page (archetype template × backstory flavor). No hand-authored
  * profiles — rename the data and the pages follow. Top 8 starts empty and
  * fills through the affinity refresh; guestbooks start empty and fill
@@ -111,7 +111,7 @@ export class MyPlaceEngine {
     if (initialState?.npcProfiles) {
       for (const [k, v] of Object.entries(initialState.npcProfiles)) this.npcProfiles.set(k, { ...v, top8: v.top8.map((t) => ({ ...t })) });
     } else {
-      for (const b of CORE_BUDDIES) {
+      for (const b of SEED_CHARACTERS) {
         if (!b.myplace) continue;
         this.npcProfiles.set(b.myplace, buildRosterProfile({
           username: b.myplace,

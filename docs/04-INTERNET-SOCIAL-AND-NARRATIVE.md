@@ -269,7 +269,7 @@ The simulation owns progress.
 
 ## 11. Website changes over time
 
-Some pages should update across the 14 days:
+Some pages should update as sandbox time and world state advance:
 - software version release,
 - forum thread gains replies,
 - classified listing disappears,
@@ -295,307 +295,113 @@ The fake internet should feel fragmented, hand-made, commercial, messy, and pers
 
 ---
 
-## Characters, Social Simulation, and Narrative — SANDBOX UPDATE (AI-heavy)
+## Characters, Social Simulation, and Narrative — OPEN-ENDED SANDBOX
 
-> **Deprecated:** Sections 1, 2, 10, 11, 12 in this file describe the old Ink deterministic model. The game is now a **sandbox AI experiment**: Ink beats are removed; `src/engine/WorldEventsEngine.ts` owns global events and every NPC's shared knowledge bank; all chat is via `src/ai/service.ts` with `worldKnowledge` injection. This doc is kept for historical reference; see `PROJECT.md` and `AI_LAB.md`.
+## 1. Narrative philosophy
 
-## 1. Narrative philosophy (sandbox)
+There is no mandatory global story arc.
 
-The game now uses **sandbox generative dialogue grounded by world state**, not authored Ink beats.
+Characters live in the same simulated town, maintain relationships and memories, follow governed routines/intents, and may create local stories through truthful state. AI may phrase dialogue, but rules own facts, knowledge, timing and consequences.
 
-The player can still trust that:
-- relationship changes via closed `socialAction` enum applied deterministically (`SocialEngine.applySocialAction()`),
-- world events are shared identically to all NPCs via `WorldEventsEngine.getKnowledgeContext(day)`,
-- contradictions are now emergent from AI memory/context, not authored branches.
+No named person is required. Legacy authored names may remain as ordinary content while migration continues.
 
-AI is now **runtime-core**, not dev-only.
+## 2. World ownership
 
----
+Simulation/domain systems own:
+- world events and knowledge;
+- relationships, memories and promises;
+- schedules, obligations and CharacterIntent;
+- physical location, transit and appointments;
+- money, items and ownership.
 
-## 2. World ownership (sandbox — replaces Ink)
+AI owns only bounded surface text within approved context.
 
-WorldEventsEngine owns:
-- global event catalog and trigger timing (`GLOBAL_EVENTS_CATALOG`, `checkAndTriggerEvents`),
-- world flags and appointment scheduling,
-- knowledge bank exposed to AI (`getKnowledgeContext`).
+## 3. Dynamic character model
 
-AI owns:
-- surface dialogue text within those world constraints.
+Characters are data-driven actors with:
+- stable identity for that save;
+- archetype/temperament;
+- roles/capabilities;
+- schedule/routine pressure;
+- local or remote reach;
+- relationships and memories;
+- knowledge/disclosure state;
+- physical/device/online presence;
+- optional art/presentation profile.
 
-TypeScript simulation still owns:
-- money, time, PC hardware, downloads, schedules, installed software, authoritative relationship values, world truth.
-
----
-
-## 3. Character model
-
-A meaningful character should have structured state.
-
-Suggested domains:
-
-```text
-Identity
-- name
-- handles
-- age
-- job
-- known locations
-
-Communication
-- typical message length
-- capitalization
-- emoticons
-- abbreviations
-- typing speed
-- response-delay pattern
-
-Schedule
-- work
-- online windows
-- physical availability
-
-Relationship
-- familiarity
-- trust
-- comfort
-- respect
-- annoyance
-- optional attraction
-
-Knowledge
-- facts the character knows
-
-Beliefs
-- things the character thinks are true
-
-Disclosure
-- facts the character is willing to reveal
-
-Story
-- arc stage
-- event flags
-```
-
-Not every NPC needs all fields.
-
----
+The product must remain valid when any legacy authored actor is absent.
 
 ## 4. Hidden relationship dimensions
 
-Do not use one `relationshipScore`.
+Relationship state remains multidimensional and hidden from the player.
 
-Recommended hidden dimensions:
-- familiarity
-- trust
-- comfort
-- respect
-- annoyance
-- attraction (only where relevant)
+Useful dimensions include familiarity, trust, comfort, respect, annoyance, affection, attraction, suspicion and resentment where implemented.
 
-Values should change through deterministic semantic actions.
+UI should communicate these through behavior, tone, availability and remembered history rather than a visible score.
 
-Example:
+## 5. Messenger conversation UX
 
-```text
-Player choice tagged:
-social_action=remembered_detail
-target=maya
+Pulse is one surface into the same person.
 
-Simulation:
-+ familiarity
-+ comfort
-possible + trust
-```
+A contact can:
+- be online, away or offline from truthful presence/device state;
+- initiate conversation;
+- send messages while the player is elsewhere;
+- remember relevant exchanges;
+- share links, places or people subject to knowledge rules;
+- react differently as relationships evolve.
 
-Ink should not directly write arbitrary numeric deltas.
+## 6. Typing style and AI
 
----
+Typing style/persona may vary by actor.
 
-## 5. Player-facing relationship feedback
+AI output must:
+- use only allowed knowledge;
+- never invent canonical state changes;
+- pass schema validation;
+- degrade to bounded template fallback on failure;
+- never make a specific authored NPC necessary for progression.
 
-The player reads state through:
+## 7. Schedules and Life Matrix
 
-- contact starts conversation,
-- contact stays online to keep talking,
-- longer/shorter replies,
-- teasing changes,
-- more personal topics,
-- sharing real name,
-- sharing a photo,
-- inviting player out,
-- silence after a bad interaction,
-- changed profile/status.
+Schedules create pressure and intent, not scripted beats.
 
-No hearts. No percentage.
+Characters may prepare, depart, travel, work, rest, socialize, shop or pursue goals according to authoritative systems. Local encounters become possible when actors truthfully overlap in place/time and their state permits interaction.
 
----
+## 8. Messages while away
 
-## 6. Messenger conversation UX
+The player can miss messages and return later. Conversation continuity, unread state and memories survive UI closure and time advancement.
 
-Period-inspired, not a modern chat app.
+## 9. Emergent social encounters
 
-Contact list:
-- handle/display name
-- online / away / busy / offline
-- status line
-- unread marker
+Physical meetings are optional sandbox events, not campaign checkpoints.
 
-Conversation:
-- compact log
-- timestamps where useful
-- typing indicator
-- authored choices
-- optional player "typing animation" after choosing a line
+An encounter may arise from:
+- an appointment created by either party;
+- work or venue overlap;
+- local friendship/relationship state;
+- shared transit;
+- a discovered event/place;
+- chance bounded by deterministic/seeded rules.
 
-The player selects meaning, then the selected message can appear to be typed before sending.
+No café, romance, character or day is mandatory.
 
-Free typing remains available in:
-- search,
-- terminal,
-- filenames/usernames,
-- selected forms,
-not general story dialogue.
-
----
-
-## 7. Typing style as characterization
-
-Each major character should be recognizable through text.
-
-Examples of differentiators:
-- `yeah lol`
-- `Hahaha, no way :D`
-- `ye`
-- multi-message bursts
-- paragraphs
-- correct punctuation
-- all lowercase
-- frequent `brb`
-- sends `?` after waiting
-
-Avoid making everyone sound like the same writer.
-
----
-
-## 8. Schedules
-
-Characters exist outside active conversations.
-
-A schedule can include:
-- work,
-- commute,
-- online,
-- away,
-- sleep,
-- meeting.
-
-Status must update whether Messenger is visible or not.
-
-A character can go offline mid-conversation because the schedule or authored event says so.
-
-That can be meaningful.
-
----
-
-## 9. Messages while away
-
-The player can return to:
-- offline message,
-- new email,
-- changed status,
-- profile update,
-- missed invitation.
-
-The world should not wait for the player to open Messenger.
-
----
-
-## 10. Narrative beats — DEPRECATED (sandbox)
-
-Beats are removed. Sandbox uses global events instead:
-
-```text
-GlobalEvent: MyPlace v2 launch
-
-Trigger:
-- day 3, 14:00
-
-Knowledge injected to all NPCs:
-- "MyPlace just relaunched as v2 with profile songs and Top 8"
-
-Outcome:
-- NPCs may reference it naturally when relevant; no scripted branch.
-```
-
----
-
-## 11. Major evaluation arc
-
-### Ryan
-Arc:
-coworker → practical online friend → physical/social bridge
-
-### Maya
-Arc:
-unknown contact → recurring conversation → personal disclosure → invitation/meeting → changed online relationship after meeting
-
-### Nora / NightOwl87
-Arc:
-forum handle → rabbit-hole guide → person with partial/uncertain identity → small unresolved thread
-
-The build should conclude these evaluation arcs enough to feel intentional without pretending to be the final commercial story.
-
----
-
-## 12. Physical meetings
-
-A meeting must:
-- be scheduled in simulation,
-- consume time,
-- occur at a location,
-- use authored Ink content,
-- read hidden relationship state,
-- write semantic consequences back to simulation.
-
-After the meeting, the online relationship should visibly change.
-
----
-
-## 13. Secrets and knowledge
+## 10. Secrets and knowledge
 
 Separate:
-- world facts,
-- character knowledge,
-- character disclosure.
+- world facts;
+- actor knowledge;
+- player knowledge;
+- willingness to disclose.
 
-A character can know a fact without being willing to tell the player.
+AI and UI must not expose a fact merely because it exists globally.
 
-The narrative adapter should only expose to Ink what the current beat is allowed to use.
+## 11. Imperfect memory
 
-This prevents accidental early reveals.
+Small designed or systemic memory imperfections may exist, but major continuity should remain coherent and explainable.
 
----
+## 12. Narrative uncertainty
 
-## 14. Imperfect memory
+The sandbox may contain clear payoffs, ambiguous details and mundane recurring life without forcing every thread to resolve.
 
-The evaluation build may include a very small amount of designed imperfect memory.
-
-Example:
-- character remembers approximate date incorrectly,
-- player corrects them,
-- correction becomes state.
-
-Do not use randomness to make major continuity unreliable.
-
----
-
-## 15. Narrative uncertainty
-
-Some strange details should remain unresolved.
-
-The evaluation build should contain:
-- at least one clear authored payoff,
-- at least one ambiguous detail,
-- at least one mundane repeated detail that never becomes a quest.
-
-This preserves the feeling that the world is larger than the authored plot.
+The goal is a town that feels larger than any one save's discovered content—not a fixed story that all saves must complete.

@@ -15,7 +15,7 @@ export type SocialActionType =
 
 export interface DialogueLine {
   id: string;
-  speaker: string; // 'player' | 'ryan' | 'maya' | 'nora' | 'henderson' | 'system'
+  speaker: string; // 'player' | actor id | 'system'
   text: string;
   delaySeconds?: number;
   tags?: string[];
@@ -118,27 +118,6 @@ export interface NarrativeContextSnapshot {
   sim_buddies_comfort: Record<string, number>;
   sim_buddies_respect: Record<string, number>;
   sim_buddies_annoyance: Record<string, number>;
-  // Character individual metrics
-  sim_maya_familiarity: number;
-  sim_maya_trust: number;
-  sim_maya_comfort: number;
-  sim_maya_respect: number;
-  sim_maya_annoyance: number;
-  sim_ryan_familiarity: number;
-  sim_ryan_trust: number;
-  sim_ryan_comfort: number;
-  sim_ryan_respect: number;
-  sim_ryan_annoyance: number;
-  sim_nora_familiarity: number;
-  sim_nora_trust: number;
-  sim_nora_comfort: number;
-  sim_nora_respect: number;
-  sim_nora_annoyance: number;
-  sim_henderson_familiarity: number;
-  sim_henderson_trust: number;
-  sim_henderson_comfort: number;
-  sim_henderson_respect: number;
-  sim_henderson_annoyance: number;
   flags: Record<string, boolean | number | string>;
   completedBeats: string[];
 }

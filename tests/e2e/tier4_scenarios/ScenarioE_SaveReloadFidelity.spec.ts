@@ -9,7 +9,7 @@ test.describe('Tier 4: Scenario E — Save/Reload Persistence Fidelity', () => {
     await sim.earnCash(125, 'Mid-game shift');
     await sim.upgradeRam(1024, 0);
     await sim.upgradeOs('Orion_6.0', 0);
-    await sim.setNarrativeFlag('maya_met_in_person', true);
+    await sim.setNarrativeFlag('met_in_person', true);
     await sim.setNarrativeFlag('custom_marker_key', 'persisted_value_123');
 
     const stateBefore = await sim.getState();

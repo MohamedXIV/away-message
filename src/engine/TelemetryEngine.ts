@@ -25,8 +25,6 @@ export class TelemetryEngine {
       workShiftsCompleted: initialStats?.workShiftsCompleted ?? 0,
       hardwareUpgradesCount: initialStats?.hardwareUpgradesCount ?? 0,
       osUpgradedDay: initialStats?.osUpgradedDay ?? null,
-      cafeMeetingAttended: initialStats?.cafeMeetingAttended ?? false,
-      endingReached: initialStats?.endingReached ?? null,
     };
     this.logs = initialLogs ? [...initialLogs] : [];
 
@@ -96,13 +94,6 @@ export class TelemetryEngine {
     this.stats.windowObservationsCount += 1;
   }
 
-  public recordCafeMeeting(): void {
-    this.stats.cafeMeetingAttended = true;
-  }
-
-  public recordEnding(endingId: string): void {
-    this.stats.endingReached = endingId;
-  }
 
   public logEvent(
     category: TelemetryRecord['category'],

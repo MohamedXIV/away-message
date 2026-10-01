@@ -15,7 +15,7 @@ import type {
   RelationshipStage,
   ScheduleBlock,
 } from './types';
-import { CORE_BUDDIES, CORE_BY_ID } from './coreBuddies';
+import { SEED_CHARACTERS, SEED_BY_ID } from './seedCharacters';
 
 export interface ScheduleBlockSpec {
   start: number; // minute of day 0..1439
@@ -353,14 +353,14 @@ export function pickTemplateIntroLine(archetype: CharacterArchetype, seed: strin
   return line.replaceAll('{name}', displayName);
 }
 
-/** Core ids → archetype, derived from the registry (single source of truth). */
-export const CORE_ID_TO_ARCHETYPE: Record<string, CharacterArchetype> = Object.fromEntries(
-  CORE_BUDDIES.map((b) => [b.id, b.archetype])
+/** Seed ids → archetype, derived from the registry (single source of truth). */
+export const SEED_ID_TO_ARCHETYPE: Record<string, CharacterArchetype> = Object.fromEntries(
+  SEED_CHARACTERS.map((b) => [b.id, b.archetype])
 );
 
 export function resolveArchetype(buddyId: string, stored?: CharacterArchetype): CharacterArchetype {
   if (stored && CHARACTER_ARCHETYPES[stored]) return stored;
-  return CORE_ID_TO_ARCHETYPE[buddyId] ?? 'regular';
+  return SEED_ID_TO_ARCHETYPE[buddyId] ?? 'regular';
 }
 
 export interface AttitudeEntry {
@@ -370,8 +370,7 @@ export interface AttitudeEntry {
 
 /**
  * Per-archetype attitude palettes for world events.
- * coworker/artist/nightowl/regular carry the original ryan/maya/nora/henderson
- * voices verbatim; student/trader are new but follow the same shape.
+ * Archetype palettes are reusable behavioral voices independent of actor identity.
  */
 export const ARCHETYPE_ATTITUDES: Record<CharacterArchetype, Record<GlobalEventCategory, AttitudeEntry>> = {
   coworker: {
@@ -532,7 +531,7 @@ export const ARCHETYPE_CONFRONT_LINES: Record<CharacterArchetype, string[]> = {
   ],
 };
 
-/** Farewell lines when a buddy goes distant (procedural buddies only, core 4 never leave). */
+/** Farewell lines when a buddy goes distant (procedural buddies only, seed characters never leave). */
 export const ARCHETYPE_FAREWELL_LINES: Record<CharacterArchetype, string[]> = {
   coworker: [
     'alright. i need some space for a while. dont take it personal... actually, take it a little personal.',
@@ -725,7 +724,7 @@ export function pickMeetingApologyLine(seed: string, location: string): string {
 // P5.2 — CO-OP WRAP-UP LINES ({detail} = the night's deterministic mini-event)
 // ==========================================
 
-/** Side-shift wrap-ups (Ryan-flavoured, used for work meetings that happen). */
+/** Side-shift wrap-ups used for work meetings that happen. */
 export const SHIFT_WRAP_LINES: string[] = [
   'yo that shift was WILD. {detail} — we survived tho lol. you earned that pay',
   'we make a good crew lol. {detail} — see? told you it would be fun',
@@ -736,7 +735,7 @@ export const GIG_WRAP_LINES: string[] = [
   'good work today. {detail} — you earned every cent of that pay.',
   'shift done, and honestly? you were great. {detail} — come back anytime.',
 ];
-/** Archive-night wrap-ups (Nora-flavoured, used for archive meetings that happen). */
+/** Archive-night wrap-ups for quiet/observant archive meetings. */
 export const ARCHIVE_WRAP_LINES: string[] = [
   'productive night. {detail} — filing it under unsolved. thanks for the hands.',
   'found something. {detail} — you have good eyes for this.',
@@ -943,50 +942,50 @@ export function pickMailWelcome(seed: string): string {
 // P6.3 — OUTING ENCOUNTER LINES (sent on chance meetings out in the city)
 // ==========================================
 
-/** Maya spots you at the diner during her shift. */
-export const OUTING_MAYA_LINES: string[] = [
+/** Warm/open outing encounter lines. */
+export const OUTING_WARM_LINES: string[] = [
   'hey!! you came to the diner?? shouldve told me, i wouldve saved you the good booth lol',
   'omg hi!! on my break in like ten — dont you dare leave before i sit down',
   'you have great timing, slow hour. sit, i will bring you coffee on the house ~',
 ];
-/** Nora crosses paths with you on the late canal walk. */
-export const OUTING_NORA_LINES: string[] = [
+/** Reserved/observant outing encounter lines. */
+export const OUTING_RESERVED_LINES: string[] = [
   'oh. it is you. walking the canal too? the hum is louder tonight.',
   'couldnt sleep either? walk with me a bit. i found something weird upstream.',
   'hey. good night for it — quiet water, loud wires. stay a while?',
 ];
 
-export function pickOutingMayaLine(seed: string): string {
-  return pickFromPool(OUTING_MAYA_LINES, `${seed}:outingmaya`);
+export function pickOutingWarmLine(seed: string): string {
+  return pickFromPool(OUTING_WARM_LINES, `${seed}:outingwarm`);
 }
 
-export function pickOutingNoraLine(seed: string): string {
-  return pickFromPool(OUTING_NORA_LINES, `${seed}:outingnora`);
+export function pickOutingReservedLine(seed: string): string {
+  return pickFromPool(OUTING_RESERVED_LINES, `${seed}:outingreserved`);
 }
 
 // ==========================================
-// P6.4 — RENT LADDER LINES (Henderson: formal, escalating, never cruel)
+// P6.4 — RENT LADDER LINES (property-management voice: formal, escalating, never cruel)
 // ==========================================
 
 /** Gentle reminder two days before rent is due. */
 export const RENT_REMINDER_LINES: string[] = [
-  'Good morning. A friendly reminder that Room 104 rent (${amount}) is due on day {day}. Front desk, anytime before 8pm.',
+  'Good morning. A friendly reminder that your rent (${amount}) is due on day {day}. Front desk, anytime before 8pm.',
   'Hello — rent of ${amount} comes due on day {day}. Pay at the desk when convenient. Thank you.',
 ];
 /** Stern same-day warning. */
 export const RENT_STERN_LINES: string[] = [
-  'Room 104: rent of ${amount} is due TODAY. Please settle at the front desk to avoid a late fee.',
-  'Final courtesy notice: ${amount} due today for Room 104. The ledger waits for no one.',
+  'Your rent of ${amount} is due TODAY. Please settle with property management to avoid a late fee.',
+  'Final courtesy notice: ${amount} is due today for your residence. The ledger waits for no one.',
 ];
 /** Daily overdue nudge (capped 1/day, kind but firm). */
 export const RENT_NUDGE_LINES: string[] = [
-  'Room 104 account is past due (${amount}). I have paused your download line until we settle. The desk is open.',
-  'A reminder that Room 104 remains unpaid (${amount}). Downloads are paused meantime — come see me.',
+  'Your residence account is past due (${amount}). I have paused your download line until we settle. The desk is open.',
+  'A reminder that your residence account remains unpaid (${amount}). Downloads are paused meantime — contact property management.',
 ];
 /** Thank-you on payment. */
 export const RENT_THANKS_LINES: string[] = [
-  'Payment received for Room 104. Thank you — a pleasure doing business. Download line restored.',
-  'Room 104 is settled. Much appreciated. Your line is back to full speed.',
+  'Payment received for your residence. Thank you — a pleasure doing business. Download line restored.',
+  'Your residence account is settled. Much appreciated. Your line is back to full speed.',
 ];
 
 function fillRent(text: string, amount: number, day: number): string {
@@ -1125,17 +1124,17 @@ export function clampTraits(traits: Partial<CharacterTraits> | undefined): Chara
 }
 
 /**
- * Hand-authored temperament for the core 4 (code-owned, never persisted).
+ * Hand-authored temperament for the seed characters (code-owned, never persisted).
  * Derived from the registry — edit content/store.json, never this map.
  */
-export const CORE_TRAITS: Record<string, CharacterTraits> = Object.fromEntries(
-  CORE_BUDDIES.map((b) => [b.id, { ...b.traits }])
+export const SEED_TRAITS: Record<string, CharacterTraits> = Object.fromEntries(
+  SEED_CHARACTERS.map((b) => [b.id, { ...b.traits }])
 );
 
-/** Traits for a buddy id: core hand-authored wins, everyone else inherits their archetype. */
+/** Traits for a buddy id: seed-authored wins, everyone else inherits their archetype. */
 export function traitsForBuddy(buddyId: string, archetype: CharacterArchetype): CharacterTraits {
-  const core = CORE_BY_ID[buddyId];
-  if (core) return { ...core.traits };
+  const seed = SEED_BY_ID[buddyId];
+  if (seed) return { ...seed.traits };
   return { ...(CHARACTER_ARCHETYPES[archetype]?.defaultTraits ?? CHARACTER_ARCHETYPES['regular'].defaultTraits) };
 }
 
@@ -1290,8 +1289,8 @@ export function pickTemplateAppearance(seed: string): { hair: string; eyes: stri
 }
 
 /** MSN-era signature colors: derived from the registry (edit content, not this map). */
-export const CORE_SIGNATURE_COLORS: Record<string, string> = Object.fromEntries(
-  CORE_BUDDIES.map((b) => [b.id, b.color])
+export const SEED_SIGNATURE_COLORS: Record<string, string> = Object.fromEntries(
+  SEED_CHARACTERS.map((b) => [b.id, b.color])
 );
 
 export const ARCHETYPE_SIGNATURE_COLORS: Record<CharacterArchetype, string> = {
@@ -1303,10 +1302,10 @@ export const ARCHETYPE_SIGNATURE_COLORS: Record<CharacterArchetype, string> = {
   regular: '#6e6e6e',
 };
 
-/** Signature chat color for a buddy id (core fixed, procedural by archetype). */
+/** Signature chat color for a buddy id (seed-authored, procedural by archetype). */
 export function buddySignatureColor(buddyId: string, archetype: CharacterArchetype): string {
-  const core = CORE_BY_ID[buddyId];
-  if (core) return core.color;
+  const seed = SEED_BY_ID[buddyId];
+  if (seed) return seed.color;
   return ARCHETYPE_SIGNATURE_COLORS[archetype] ?? '#800080';
 }
 /** Thank-you lines when the player helps with a mediation (rules-picked, capped). */
