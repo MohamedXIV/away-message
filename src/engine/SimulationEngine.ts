@@ -89,7 +89,6 @@ import {
   GENERATED_PLACE_SERVICE_POLICIES,
   GENERATED_PLACEMENT_SLOTS,
   GENERATED_PLACES,
-  GENERATED_SPACES,
 } from './worldContent.generated';
 import {
   InnerVoiceEngine,
