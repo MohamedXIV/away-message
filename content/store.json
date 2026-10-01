@@ -1,7 +1,6 @@
 {
   "characters": {
     "ryan": {
-      "role": "ryan",
       "displayName": "Ryan",
       "archetypeId": "coworker",
       "roles": [
@@ -21,7 +20,6 @@
       ]
     },
     "maya": {
-      "role": "maya",
       "displayName": "Maya",
       "archetypeId": "artist",
       "roles": [
@@ -42,7 +40,6 @@
       ]
     },
     "nora": {
-      "role": "nora",
       "displayName": "Nora",
       "archetypeId": "nightowl",
       "roles": [
@@ -62,7 +59,6 @@
       ]
     },
     "henderson": {
-      "role": "henderson",
       "displayName": "Mr. Henderson",
       "archetypeId": "regular",
       "roles": [

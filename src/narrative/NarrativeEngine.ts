@@ -11,7 +11,6 @@ import {
   ParsedNarrativeTag,
 } from './types';
 import { parseAllNarrativeTags } from './tagParser';
-import { CORE_IDS } from '../engine/coreBuddies';
 
 export class NarrativeEngine {
   private knots: Map<string, StoryKnot> = new Map();
@@ -143,26 +142,6 @@ export class NarrativeEngine {
       sim_buddies_comfort,
       sim_buddies_respect,
       sim_buddies_annoyance,
-      sim_maya_familiarity: sim_buddies_familiarity[CORE_IDS.MAYA] ?? 10,
-      sim_maya_trust: sim_buddies_trust[CORE_IDS.MAYA] ?? 20,
-      sim_maya_comfort: sim_buddies_comfort[CORE_IDS.MAYA] ?? 30,
-      sim_maya_respect: sim_buddies_respect[CORE_IDS.MAYA] ?? 40,
-      sim_maya_annoyance: sim_buddies_annoyance[CORE_IDS.MAYA] ?? 0,
-      sim_ryan_familiarity: sim_buddies_familiarity[CORE_IDS.RYAN] ?? 40,
-      sim_ryan_trust: sim_buddies_trust[CORE_IDS.RYAN] ?? 50,
-      sim_ryan_comfort: sim_buddies_comfort[CORE_IDS.RYAN] ?? 50,
-      sim_ryan_respect: sim_buddies_respect[CORE_IDS.RYAN] ?? 40,
-      sim_ryan_annoyance: sim_buddies_annoyance[CORE_IDS.RYAN] ?? 0,
-      sim_nora_familiarity: sim_buddies_familiarity[CORE_IDS.NORA] ?? 5,
-      sim_nora_trust: sim_buddies_trust[CORE_IDS.NORA] ?? 15,
-      sim_nora_comfort: sim_buddies_comfort[CORE_IDS.NORA] ?? 20,
-      sim_nora_respect: sim_buddies_respect[CORE_IDS.NORA] ?? 50,
-      sim_nora_annoyance: sim_buddies_annoyance[CORE_IDS.NORA] ?? 0,
-      sim_henderson_familiarity: sim_buddies_familiarity[CORE_IDS.HENDERSON] ?? 30,
-      sim_henderson_trust: sim_buddies_trust[CORE_IDS.HENDERSON] ?? 30,
-      sim_henderson_comfort: sim_buddies_comfort[CORE_IDS.HENDERSON] ?? 20,
-      sim_henderson_respect: sim_buddies_respect[CORE_IDS.HENDERSON] ?? 40,
-      sim_henderson_annoyance: sim_buddies_annoyance[CORE_IDS.HENDERSON] ?? 10,
       flags,
       completedBeats: Array.from(new Set([...(state.narrative?.completedBeats ?? state.world?.triggeredEvents?.map((e: any) => e.id) ?? []), ...this.completedBeats])),
     };
@@ -307,14 +286,20 @@ export class NarrativeEngine {
     const snap = snapshot || this.contextSnapshot;
     if (!snap) return true;
 
+    const activeActorId = this.currentKnotId
+      ? this.knots.get(this.currentKnotId)?.characterId
+      : undefined;
+
     if (choice.requiredFamiliarity !== undefined) {
-      const fam = snap.sim_maya_familiarity;
+      if (!activeActorId) return false;
+      const fam = snap.sim_buddies_familiarity[activeActorId] ?? 0;
       if (fam < choice.requiredFamiliarity) return false;
     }
 
     if (choice.requiredTrust !== undefined) {
-      const tr = snap.sim_maya_trust;
-      if (tr < choice.requiredTrust) return false;
+      if (!activeActorId) return false;
+      const trust = snap.sim_buddies_trust[activeActorId] ?? 0;
+      if (trust < choice.requiredTrust) return false;
     }
 
     if (choice.conditionFlag && !snap.flags[choice.conditionFlag]) {

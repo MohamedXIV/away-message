@@ -23,14 +23,14 @@ import { WorldEventsEngine } from './WorldEventsEngine';
 import { totalDeliveryBacklogExtra } from './WorldModifiers';
 import { OsEngine } from './OsEngine';
 import { PulseEngine } from './PulseEngine';
-import { MyPlaceEngine, CORE_PROFILE_ALIASES } from './MyPlaceEngine';
+import { MyPlaceEngine, SEED_PROFILE_ALIASES } from './MyPlaceEngine';
 import { validatePersistedBuddy } from './CharacterEngine';
 import { generateNewcomer, shouldAutoDiscover, NEWCOMER_METVIA_ROTATION } from './CharacterDirector';
 import { STRAINED_ANNOYANCE, DISTANT_ANNOYANCE, GONE_ANNOYANCE, traitCompatibility } from './SocialEngine';
-import { pickConfrontLine, pickFarewellLine, pickReturnLine, pickInitiativeText, pickRsvpLine, pickStoodUpLine, pickMeetingApologyLine, pickShiftWrapLine, pickGigWrapLine, pickArchiveWrapLine, pickGuestbookLine, pickGuestbookReplyLine, pickTop8NewsLine, pickOutingMayaLine, pickOutingNoraLine, pickRentReminderLine, pickRentSternLine, pickRentNudgeLine, pickRentThanksLine, pickJobAcceptLine, pickJobRejectLine, pickLeaveLine, pickMediationAskLine, pickMediationThanks, pickMyplaceUpdateLine, pickContactLine, pickContactBounce, pickBackstoryReintro, pickRuninSpot, pickRuninVerb, classifyScheduleBlock, AGENDA_LABELS, rollSeeded100, pickSeeded, spreadSeed, resolveArchetype } from './characterTemplates';
+import { pickConfrontLine, pickFarewellLine, pickReturnLine, pickInitiativeText, pickRsvpLine, pickStoodUpLine, pickMeetingApologyLine, pickShiftWrapLine, pickGigWrapLine, pickArchiveWrapLine, pickGuestbookLine, pickGuestbookReplyLine, pickTop8NewsLine, pickOutingWarmLine, pickOutingReservedLine, pickRentReminderLine, pickRentSternLine, pickRentNudgeLine, pickRentThanksLine, pickJobAcceptLine, pickJobRejectLine, pickLeaveLine, pickMediationAskLine, pickMediationThanks, pickMyplaceUpdateLine, pickContactLine, pickContactBounce, pickBackstoryReintro, pickRuninSpot, pickRuninVerb, classifyScheduleBlock, AGENDA_LABELS, rollSeeded100, pickSeeded, spreadSeed, resolveArchetype } from './characterTemplates';
 import { parseMeetupProposal, isMeetupCancelText, decideRsvp, decideNpcShow, appointmentRoll, locationLabel, LOCATION_SLOTS, pickCoopDetail, SHIFT_WAGE } from './AppointmentDirector';
 import { getWeatherForDay, isSevereWeather, isWetWeather, shiftWageBonus } from './WeatherEngine';
-import { OUTINGS, isValidOutingId, isOutingOpen, outingHoursLabel, mayaDinerEncounter, noraCanalEncounter, buildLaundromatRumor, MIN_OUTING_ENERGY, type OutingId } from './OutingDirector';
+import { OUTINGS, isValidOutingId, isOutingOpen, outingHoursLabel, dinerStaffEncounter, canalRegularEncounter, buildLaundromatRumor, MIN_OUTING_ENERGY, type OutingId } from './OutingDirector';
 import { GIGS, jobRoll, replyDelayMinutes, decideApplication } from './JobDirector';
 import {
   classifyPlayerTone,
@@ -47,7 +47,7 @@ import {
 } from './PlayerActs';
 import { CITY_NODES, isCityNodeId, quoteTravel, walkEnergyCost, rollStreetEncounter, BUS_FARE, type CityNodeId, type TravelMode } from './CityMap';
 import { pulseHasFeature, getAllPulseReleases } from './PulseCatalog';
-import { CORE_BY_ID, CORE_IDS, buddyWithRole, isRegistryBuddy } from './coreBuddies';
+import { SEED_BY_ID } from './seedCharacters';
 
 export class SimulationEngine {
   public readonly clock!: GameClock;
@@ -283,7 +283,7 @@ export class SimulationEngine {
           if (res) {
             const link = `http://myplace.local/${res.username}`;
             // Voice follows the announcer's temperament (rename-proof).
-            const announcer = Object.values(CORE_BY_ID).find((b) => b.myplace === res.username);
+            const announcer = Object.values(SEED_BY_ID).find((b) => b.myplace === res.username);
             const traits = announcer ? this.social.getTraits(announcer.id) : { shyness: 50, discipline: 50 };
             const text = pickMyplaceUpdateLine(traits.shyness, traits.discipline, link);
             try { this.social.sendMessage(res.username, res.username, 'player', text, currentMinutes, false, ['myplace_update']); } catch {}
@@ -333,7 +333,7 @@ export class SimulationEngine {
         if (res) {
           const link = `http://myplace.local/${res.username}`;
           // Voice follows the announcer's temperament (rename-proof).
-          const announcer = Object.values(CORE_BY_ID).find((b) => b.myplace === res.username);
+          const announcer = Object.values(SEED_BY_ID).find((b) => b.myplace === res.username);
           const traits = announcer ? this.social.getTraits(announcer.id) : { shyness: 50, discipline: 50 };
           const text = pickMyplaceUpdateLine(traits.shyness, traits.discipline, link);
           try { this.social.sendMessage(res.username, res.username, 'player', text, currentMinutes, false, ['myplace_update']); } catch {}
@@ -426,7 +426,7 @@ export class SimulationEngine {
   // ==========================================
   // P3 — SHARP RELATIONSHIP EVENTS (governed, rules-only, template-voiced)
   // Ladder for sustained dismissiveness: confrontation → distant (7 days) → gone.
-  // Core 4 are protected: they cap at a strained confrontation, they never leave.
+  // Any actor may progress through strained, distant, gone, or blocked lifecycle states.
   // Governor: a single active sharp event at a time (world flag 'sharp_active').
   // ==========================================
 
@@ -465,9 +465,6 @@ export class SimulationEngine {
         this.telemetry.logEvent('social', 'relationship_confrontation', currentMinutes, { buddyId, annoyance: rels.annoyance, witnesses: this.shiftWitnessAffinities(buddyId, -4) });
         return;
       }
-
-      // Registry village characters cap at strained — they never walk away
-      if (isRegistryBuddy(buddyId)) return;
 
       if (sharpState === 'confronted' && rels.annoyance >= DISTANT_ANNOYANCE) {
         const active = this.world.getFlag('sharp_active');
@@ -1172,7 +1169,7 @@ export class SimulationEngine {
           this.world.updateAppointment(appt.id, { status: 'happened', isCompleted: true, npcShowed: true, playerShowed: true });
           // P5.2 co-op enrichment: joint work pays more (dims x2 + wage/flavor), cafe stays intimate
           // P6 gig shifts ride the same path (marked by gig_ id prefix, any contact)
-          const isShift = appt.locationId === 'work' && (buddy.id === CORE_IDS.RYAN || buddy.archetype === 'coworker' || appt.id.startsWith('gig_'));
+          const isShift = appt.locationId === 'work' && (buddy.archetype === 'coworker' || appt.id.startsWith('gig_'));
           const isArchive = appt.locationId === 'archive';
           if (isShift || isArchive) {
             const detail = pickCoopDetail(appt.id, isShift ? 'shift' : 'archive');
@@ -1243,7 +1240,7 @@ export class SimulationEngine {
       if (appointmentRoll(`${username}:${day}:gbco`) >= 50) return;
       const owner = this.social.getBuddies().find((b) =>
         b.handle === username || b.id === username
-        || CORE_PROFILE_ALIASES[b.id] === username || CORE_PROFILE_ALIASES[b.handle] === username);
+        || SEED_PROFILE_ALIASES[b.id] === username || SEED_PROFILE_ALIASES[b.handle] === username);
       const candidates = this.social.getBuddies().filter((b) => {
         if (owner && b.id === owner.id) return false;
         if (b.status === 'distant' || b.status === 'gone' || b.status === 'blocked') return false;
@@ -1263,12 +1260,12 @@ export class SimulationEngine {
   private ensureMyPlaceStub(buddy: { handle?: string; id: string; displayName: string; archetype?: any; backstory?: { label?: string; bioSeed?: string } }): void {
     try {
       // One page per buddy: prefer the registry myplace username so links stay canonical.
-      const username = CORE_BY_ID[buddy.id]?.myplace || buddy.handle || buddy.id;
+      const username = SEED_BY_ID[buddy.id]?.myplace || buddy.handle || buddy.id;
       this.myplace.ensureNpcProfile({
         username,
         displayName: buddy.displayName,
         archetype: buddy.archetype,
-        backstory: buddy.backstory ?? CORE_BY_ID[buddy.id]?.backstory ?? undefined,
+        backstory: buddy.backstory ?? SEED_BY_ID[buddy.id]?.backstory ?? undefined,
       });
       // Also index by raw id so MyPlace routing works with either key
       if (buddy.handle && buddy.handle !== buddy.id) {
@@ -1276,7 +1273,7 @@ export class SimulationEngine {
           username: buddy.id,
           displayName: buddy.displayName,
           archetype: buddy.archetype,
-          backstory: buddy.backstory ?? CORE_BY_ID[buddy.id]?.backstory ?? undefined,
+          backstory: buddy.backstory ?? SEED_BY_ID[buddy.id]?.backstory ?? undefined,
         });
       }
     } catch { /* MyPlace stub is best-effort */ }
@@ -1425,8 +1422,7 @@ export class SimulationEngine {
         const done = this.world.getFlag(`jobapp_${gig.id}_done`);
         if (typeof applied !== 'number' || applied <= 0 || done) continue;
         if (now < applied + replyDelayMinutes(gig.id, applied)) continue;
-        const holder = buddyWithRole(gig.contactRole);
-        const contact = holder ? this.social.getBuddy(holder.id) : undefined;
+        const contact = this.social.getBuddyWithRole(gig.contactRole);
         const gone = !contact || contact.status === 'distant' || contact.status === 'gone' || contact.status === 'blocked';
         const stage = contact ? this.social.getRelationshipStage(contact.id) : 'stranger';
         const { accepted, odds } = decideApplication({
@@ -1535,24 +1531,19 @@ export class SimulationEngine {
   }
 
   // ==========================================
-  // P6.4 — RENT LADDER (Henderson: remind → warn → pause downloads → thanks)
+  // P6.4 — RENT LADDER (role-driven property contact: remind → warn → pause downloads → thanks)
   // Lenient teeth: browsing works, new downloads nap until paid. Paper trail
   // goes to Mailbox via rentmail_* flags; Pulse carries the human voice.
   // ==========================================
 
-  // Rent notes come from whoever holds the landlord role (rename-proof).
-  // No landlord on the roster → the economy still ticks, the DM is skipped.
-  // (Availability is NOT required — rent is owed even to a distant landlord.)
+  // Rent notes may use an available actor carrying the landlord role.
+  // The economy and Mailbox paper trail remain authoritative even when no such
+  // actor is currently available, so NPC lifecycle never blocks tenancy.
   private sendRentNote(text: string, tags: string[], currentMinutes: number, event: string, extra?: Record<string, unknown>): void {
-    const holder = buddyWithRole('landlord');
-    const landlord = holder ? this.social.getBuddy(holder.id) : undefined;
-    if (!landlord) return;
+    const landlord = this.social.getBuddyWithRole('landlord');
+    if (!SimulationEngine.isBuddyAvailable(landlord)) return;
     this.social.sendMessage(landlord.id, landlord.id, 'player', text, currentMinutes, false, ['rent', ...tags]);
     this.telemetry.logEvent('economy', event, currentMinutes, { buddyId: landlord.id, ...(extra ?? {}) });
-  }
-
-  private sendHendersonNote(text: string, tags: string[], currentMinutes: number, event: string, extra?: Record<string, unknown>): void {
-    this.sendRentNote(text, tags, currentMinutes, event, extra);
   }
 
   /** Daily rent pass: gentle reminder → stern warning → overdue nudges. Rules only. */
@@ -1567,10 +1558,10 @@ export class SimulationEngine {
       if (newDay === dueDay - 2 && !this.world.getFlag(`rent_reminded_${dueDay}`)) {
         this.world.setFlag(`rent_reminded_${dueDay}`, true);
         this.world.setFlag(`rentmail_due_${dueDay}`, Math.round(amount * 100));
-        this.sendHendersonNote(pickRentReminderLine(`${dueDay}`, amount, dueDay), ['reminder'], minutes, 'rent_reminded', { dueDay });
+        this.sendRentNote(pickRentReminderLine(`${dueDay}`, amount, dueDay), ['reminder'], minutes, 'rent_reminded', { dueDay });
       } else if (newDay === dueDay && !this.world.getFlag(`rent_warned_${dueDay}`)) {
         this.world.setFlag(`rent_warned_${dueDay}`, true);
-        this.sendHendersonNote(pickRentSternLine(`${dueDay}`, amount, dueDay), ['warning'], minutes, 'rent_warned', { dueDay });
+        this.sendRentNote(pickRentSternLine(`${dueDay}`, amount, dueDay), ['warning'], minutes, 'rent_warned', { dueDay });
       } else if (newDay > dueDay) {
         // Catch-up for multi-day jumps: stamp the paper trail silently
         // (messages stay current-rung only — no backdated nag spam)
@@ -1582,7 +1573,7 @@ export class SimulationEngine {
         }
         if (!this.world.getFlag(`rent_nudge_${newDay}`)) {
           this.world.setFlag(`rent_nudge_${newDay}`, true);
-          this.sendHendersonNote(pickRentNudgeLine(`${newDay}`, amount), ['nudge'], minutes, 'rent_nudged', { dueDay });
+          this.sendRentNote(pickRentNudgeLine(`${newDay}`, amount), ['nudge'], minutes, 'rent_nudged', { dueDay });
         }
       }
     } catch { /* rent never breaks the tick */ }
@@ -1594,7 +1585,7 @@ export class SimulationEngine {
   // the laundromat returns a rumor in the action result (UI notice).
   // ==========================================
 
-  private static isBuddyAvailable(buddy: { status?: string } | undefined): boolean {
+  private static isBuddyAvailable<T extends { status?: string }>(buddy: T | undefined): buddy is T {
     return !!buddy && buddy.status !== 'distant' && buddy.status !== 'gone' && buddy.status !== 'blocked';
   }
 
@@ -1643,32 +1634,30 @@ export class SimulationEngine {
       // Encounters (deterministic per day; buddies must be present and available).
       // Whoever holds the role shows up — voice pool follows temperament, not identity.
       if (outingId === 'diner_soup' || outingId === 'diner_platter' || outingId === 'diner_pie') {
-        const staffer = buddyWithRole('diner-staff');
-        const maya = staffer ? this.social.getBuddy(staffer.id) : undefined;
-        if (SimulationEngine.isBuddyAvailable(maya) && maya && mayaDinerEncounter(hour, day)) {
-          const buddyId = maya.id;
+        const staffBuddy = this.social.getBuddyWithRole('diner-staff');
+        if (SimulationEngine.isBuddyAvailable(staffBuddy) && staffBuddy && dinerStaffEncounter(hour, day)) {
+          const buddyId = staffBuddy.id;
           this.social.applySocialAction(buddyId, 'remembered_detail');
-          this.social.addCoreMemory(buddyId, { text: `Ran into ${maya.displayName} working the diner, Day ${day}.`, kind: 'shared_moment', day });
+          this.social.addCoreMemory(buddyId, { text: `Ran into ${staffBuddy.displayName} working the diner, Day ${day}.`, kind: 'shared_moment', day });
           // Face to face: you learn their handle on the spot.
-          this.social.learnHandle(buddyId, maya.handle);
+          this.social.learnHandle(buddyId, staffBuddy.handle);
           // Showing up in person reads spontaneous.
           this.social.observePlayerTrait(buddyId, { spontaneity: 70 }, day);
           const shy = this.social.getTraits(buddyId).shyness >= 60;
-          const line = shy ? pickOutingNoraLine(`${outingId}:${day}`) : pickOutingMayaLine(`${outingId}:${day}`);
+          const line = shy ? pickOutingReservedLine(`${outingId}:${day}`) : pickOutingWarmLine(`${outingId}:${day}`);
           this.social.sendMessage(buddyId, buddyId, 'player', line, this.clock.getTotalMinutes(), false, ['outing', 'diner']);
           this.telemetry.logEvent('social', 'outing_encounter', minutes, { buddyId, outing: outingId });
           this.notifySubscribers();
-          return { success: true, data: { summary: `Hearty ${spec.label} at the diner — and ${maya.displayName} was on shift!`, encounterBuddyId: buddyId } };
+          return { success: true, data: { summary: `Hearty ${spec.label} at the diner — and ${staffBuddy.displayName} was on shift!`, encounterBuddyId: buddyId } };
         }
         this.telemetry.logEvent('room', 'outing_diner', minutes, { outing: outingId });
         this.notifySubscribers();
         return { success: true, data: { summary: `Hearty ${spec.label} at the diner. Quiet tables, good coffee.` } };
       }
       if (outingId === 'canal_walk') {
-        const regular = buddyWithRole('canal-regular');
-        const walker = regular ? this.social.getBuddy(regular.id) : undefined;
+        const walker = this.social.getBuddyWithRole('canal-regular');
         const raining = isWetWeather(weather.condition);
-        if (SimulationEngine.isBuddyAvailable(walker) && walker && noraCanalEncounter(hour, day, raining)) {
+        if (SimulationEngine.isBuddyAvailable(walker) && walker && canalRegularEncounter(hour, day, raining)) {
           const buddyId = walker.id;
           this.social.applySocialAction(buddyId, 'intellectual_curiosity');
           this.social.addCoreMemory(buddyId, { text: `Walked the canal with ${walker.displayName}, Day ${day}${raining ? ' in the rain' : ''}.`, kind: 'shared_moment', day });
@@ -1677,7 +1666,7 @@ export class SimulationEngine {
           // Showing up in person reads spontaneous.
           this.social.observePlayerTrait(buddyId, { spontaneity: 70 }, day);
           const shy = this.social.getTraits(buddyId).shyness >= 60;
-          const line = shy ? pickOutingNoraLine(`${outingId}:${day}`) : pickOutingMayaLine(`${outingId}:${day}`);
+          const line = shy ? pickOutingReservedLine(`${outingId}:${day}`) : pickOutingWarmLine(`${outingId}:${day}`);
           this.social.sendMessage(buddyId, buddyId, 'player', line, this.clock.getTotalMinutes(), false, ['outing', 'canal']);
           this.telemetry.logEvent('social', 'outing_encounter', minutes, { buddyId, outing: outingId });
           this.notifySubscribers();
@@ -1709,11 +1698,11 @@ export class SimulationEngine {
 
   /**
    * Which profile page belongs to a buddy. Legacy rich profiles win over stubs:
-   * alias (maya_x) → handle → id, so notes land where players actually look.
+   * profile alias → handle → id, so notes land where players actually look.
    */
   private resolveProfileUsername(buddy: { id: string; handle: string }): string | null {
     try {
-      const alias = CORE_PROFILE_ALIASES[buddy.id] ?? CORE_PROFILE_ALIASES[buddy.handle];
+      const alias = SEED_PROFILE_ALIASES[buddy.id] ?? SEED_PROFILE_ALIASES[buddy.handle];
       if (alias && this.myplace.getNpcProfile(alias)) return alias;
       if (this.myplace.getNpcProfile(buddy.handle)) return buddy.handle;
       if (this.myplace.getNpcProfile(buddy.id)) return buddy.id;
@@ -1893,10 +1882,10 @@ export class SimulationEngine {
       case 'PLAYER_PAY_RENT': {
         const rentRes = this.economy.payRent();
         if (!rentRes.success) return { success: false, error: rentRes.error };
-        // P6.4 kindness restored: line unpaused + Henderson says thanks
+        // P6.4 kindness restored: line unpaused + the active property contact says thanks
         if (this.world.getFlag('rent_overdue')) this.world.setFlag('rent_overdue', false);
         try {
-          this.sendHendersonNote(pickRentThanksLine(`paid${this.clock.getTime().day}`), ['thanks'], currentMinutes, 'rent_thanked', {});
+          this.sendRentNote(pickRentThanksLine(`paid${this.clock.getTime().day}`), ['thanks'], currentMinutes, 'rent_thanked', {});
         } catch { /* thanks is best-effort */ }
         this.telemetry.logEvent('economy', 'rent_paid', currentMinutes, {
           day: this.clock.getTime().day,
@@ -1946,7 +1935,7 @@ export class SimulationEngine {
       }
 
       case 'PLAYER_INTERACT_ROOM': {
-        // P7 gating: room comforts live in Room 104
+        // P7 gating: room comforts require the player's current home
         const roomErr = SimulationEngine.requireLocation(this.economy.getLocation(), 'home');
         if (roomErr) return { success: false, error: roomErr };
         const durations: Record<string, number> = {
@@ -2080,7 +2069,7 @@ export class SimulationEngine {
       case 'DOWNLOAD_START': {
         // P6.4 lenient teeth: overdue rent pauses NEW downloads (browsing still works)
         if (this.world.getFlag('rent_overdue')) {
-          return { success: false, error: 'Download line paused by the front desk — settle Room 104 rent to resume.' };
+          return { success: false, error: 'Download line paused by property management — settle your residence rent to resume.' };
         }
         try {
           const task = this.downloads.startDownload({

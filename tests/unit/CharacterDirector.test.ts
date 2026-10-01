@@ -122,13 +122,14 @@ describe('SOCIAL_ADD_BUDDY / SOCIAL_REMOVE_BUDDY actions', () => {
     expect(res.success).toBe(false);
   });
 
-  it('removes procedural buddies but refuses core ones', () => {
+  it('removes procedural buddies and allows seed characters to be removed', () => {
     const engine = new SimulationEngine();
     const { definition } = buildCharacter({ id: 'sam_guitar', displayName: 'Sam', handle: 'sam_guitar' });
     engine.dispatchAction({ type: 'SOCIAL_ADD_BUDDY', buddy: definition, silent: true });
     expect(engine.dispatchAction({ type: 'SOCIAL_REMOVE_BUDDY', buddyId: 'sam_guitar' }).success).toBe(true);
     expect(engine.social.getBuddy('sam_guitar')).toBeUndefined();
-    const core = engine.dispatchAction({ type: 'SOCIAL_REMOVE_BUDDY', buddyId: 'maya' });
-    expect(core.success).toBe(false);
+    const seed = engine.dispatchAction({ type: 'SOCIAL_REMOVE_BUDDY', buddyId: 'maya' });
+    expect(seed.success).toBe(true);
+    expect(engine.social.getBuddy('maya')).toBeUndefined();
   });
 });

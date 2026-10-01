@@ -196,7 +196,7 @@ describe('Adversarial Stress Test Suite — Milestone 1 Engine', () => {
       expect(economy.getState().rentAmount).toBe(245.0);
     });
 
-    it('resets rent cycle and amount to $140 for Day 14 when Day 7 rent is successfully paid', () => {
+    it('resets rent cycle and amount to $140 for subsequent cycle when Day 7 rent is successfully paid', () => {
       economy.earnCash(200.0, 'Payday');
       const paid = economy.payRent();
       expect(paid.success).toBe(true);
@@ -629,8 +629,8 @@ describe('Adversarial Stress Test Suite — Milestone 1 Engine', () => {
   // =========================================================================
   // 5. INTEGRATED SIMULATION & MULTI-SYSTEM STRESS
   // =========================================================================
-  describe('SimulationEngine: Integrated High-Entropy 14-Day Simulation Stress', () => {
-    it('executes a full 14-day continuous lifecycle with mixed work shifts, rent payments, downloads and sleep cycles', () => {
+  describe('SimulationEngine: Integrated High-Entropy Multi-Week Simulation Stress', () => {
+    it('executes a continuous multi-week lifecycle with mixed work shifts, rent payments, downloads and sleep cycles', () => {
       const sim = makeNetworkedEngine();
 
       expect(sim.getState().time.day).toBe(1);

@@ -23,11 +23,20 @@ import { EnvironmentManager } from './environment/EnvironmentManager';
 import { audioService, type AudioService } from '../../audio/AudioService';
 import { mapViewCoordinatesToAudioPosition } from '../../audio/spatialMapping';
 import type { SpatialAudioSourceDef } from '../../audio/types';
+import { createTechnicalAwayPuppetCharacterGroup } from './TechnicalAwayPuppetRig';
+import {
+  destroyWorldSceneCharacterMounts,
+  disposeRemovedWorldSceneCharacters,
+  syncWorldSceneCharacterMounts,
+  updateWorldSceneCharacterMounts,
+  type WorldSceneCharacterMount,
+} from './WorldSceneCharacters';
 
 export interface WorldSceneInitData {
   projection: WorldSceneProjection;
   onIntent?: (intent: WorldInteractionIntent) => void;
   visualMode?: 'production' | 'technical-fixture';
+  characters?: readonly WorldSceneCharacterMount[];
 }
 
 export function resolveSceneBackgroundTexture(
@@ -91,6 +100,7 @@ export class WorldScene extends Phaser.Scene {
   private visualMode: 'production' | 'technical-fixture' = 'production';
   private environmentManager?: EnvironmentManager;
   private audioHandles: Map<string, { handle: string; eventId: string }> = new Map();
+  private characterMounts: readonly WorldSceneCharacterMount[] = [];
 
   // Visual Display Layers
   private layerBackground?: Phaser.GameObjects.Container;
@@ -137,6 +147,11 @@ export class WorldScene extends Phaser.Scene {
     }
     if (data?.visualMode) {
       this.visualMode = data.visualMode;
+    }
+    // Missing `characters` means "preserve Scene-owned/default mounts".
+    // An explicit [] remains meaningful and clears the roster.
+    if (data && Object.prototype.hasOwnProperty.call(data, 'characters')) {
+      this.characterMounts = data.characters ?? [];
     }
   }
 
@@ -185,6 +200,10 @@ export class WorldScene extends Phaser.Scene {
     this.layerActors = this.add.container(0, 0).setDepth(30);
     this.layerForeground = this.add.container(0, 0).setDepth(40);
 
+    if (this.visualMode === 'technical-fixture' && this.characterMounts.length === 0) {
+      this.characterMounts = createTechnicalAwayPuppetCharacterGroup();
+    }
+
     this.setupLighting();
     this.setupSprites(width, height);
     this.setupParticles(width, height);
@@ -199,6 +218,7 @@ export class WorldScene extends Phaser.Scene {
     this.registerFixtureMotionTargets();
 
     this.setupHotspots(width, height);
+    this.syncCharacterMounts(width, height);
     this.setupPointerTracking();
 
     const initialCamera = resolveProjectionCameraTarget(this.projection, width, height);
@@ -216,8 +236,67 @@ export class WorldScene extends Phaser.Scene {
     this.events.once(Phaser.Scenes.Events.DESTROY, this.handleDestroy, this);
   }
 
+  /** Reprojects live actors without restarting the scene or changing simulation identity. */
+  public setCharacterMounts(next: readonly WorldSceneCharacterMount[]): void {
+    disposeRemovedWorldSceneCharacters(this.characterMounts, next);
+    this.characterMounts = next;
+    if (this.layerActors) this.syncCharacterMounts(this.scale.width, this.scale.height);
+  }
+
+  private characterUpdateSamples = 0;
+  private characterUpdateTotalMs = 0;
+  private characterUpdateMaxMs = 0;
+
   public override update(time: number, delta: number): void {
     this.environmentManager?.update(time, delta);
+    const started = typeof performance !== 'undefined' ? performance.now() : 0;
+    updateWorldSceneCharacterMounts(this.characterMounts, delta);
+    if (started > 0 && typeof performance !== 'undefined') {
+      const elapsed = performance.now() - started;
+      this.characterUpdateSamples += 1;
+      this.characterUpdateTotalMs += elapsed;
+      this.characterUpdateMaxMs = Math.max(this.characterUpdateMaxMs, elapsed);
+    }
+  }
+
+  /** Debug-only evidence surface for #25 browser/performance verification. */
+  public getCharacterRuntimeStats(): {
+    actorCount: number;
+    surfaceCount: number;
+    visibleSurfaceCount: number;
+    meshCount: number;
+    surfaceNames: string[];
+    sampleCount: number;
+    averageUpdateMs: number;
+    maxUpdateMs: number;
+    actualFps: number;
+  } {
+    const surfaces = (this.layerActors?.list ?? []).filter(
+      (object): object is Phaser.GameObjects.Container =>
+        object instanceof Phaser.GameObjects.Container
+        && typeof object.name === 'string'
+        && object.name.startsWith('away-puppet-surface-'),
+    );
+    const meshCount = surfaces.reduce((total, object) => {
+      const children = object.list ?? [];
+      return total + children.filter(
+        (child) => typeof child.name === 'string' && child.name.startsWith('away-puppet-mesh-'),
+      ).length;
+    }, 0);
+
+    return {
+      actorCount: this.characterMounts.length,
+      surfaceCount: surfaces.length,
+      visibleSurfaceCount: surfaces.filter((surface) => surface.visible).length,
+      meshCount,
+      surfaceNames: surfaces.map((surface) => surface.name),
+      sampleCount: this.characterUpdateSamples,
+      averageUpdateMs: this.characterUpdateSamples > 0
+        ? this.characterUpdateTotalMs / this.characterUpdateSamples
+        : 0,
+      maxUpdateMs: this.characterUpdateMaxMs,
+      actualFps: this.game.loop.actualFps,
+    };
   }
 
   /**
@@ -539,6 +618,7 @@ export class WorldScene extends Phaser.Scene {
     }
 
     this.setupHotspots(this.scale.width, this.scale.height);
+    this.syncCharacterMounts(this.scale.width, this.scale.height);
 
     const cameraTarget = resolveProjectionCameraTarget(
       newProjection,
@@ -586,6 +666,7 @@ export class WorldScene extends Phaser.Scene {
     };
 
     this.setupHotspots(width, height);
+    this.syncCharacterMounts(width, height);
     this.refreshRenderTextureReflection();
     this.environmentManager?.handleResize(width, height);
   }
@@ -744,6 +825,15 @@ export class WorldScene extends Phaser.Scene {
       audioService.stop(handle, 0);
     }
     this.audioHandles.clear();
+    destroyWorldSceneCharacterMounts(this.characterMounts);
+    this.characterMounts = [];
+  }
+
+  private syncCharacterMounts(width: number, height: number): void {
+    if (this.layerActors) {
+      for (const mount of this.characterMounts) mount.attach?.(this, this.layerActors);
+    }
+    syncWorldSceneCharacterMounts(this.projection, width, height, this.characterMounts);
   }
 
   private handleDestroy(): void {

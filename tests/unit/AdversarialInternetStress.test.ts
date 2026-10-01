@@ -459,7 +459,7 @@ describe('Adversarial Stress Test Suite — Milestone 3 Fake Internet & Voyager 
       expect(day1Nora.some((r) => r.id === 'search_myplace_nightowl')).toBe(false);
     });
 
-    it('unlocks Day 2+ content on Day 2 through Day 14', () => {
+    it('unlocks Day 2+ content on Day 2 onward', () => {
       const daysToCheck = [2, 3, 5, 7, 10, 14];
 
       for (const day of daysToCheck) {
@@ -474,13 +474,13 @@ describe('Adversarial Stress Test Suite — Milestone 3 Fake Internet & Voyager 
       }
     });
 
-    it('monotonic discovery growth: total indexed pages available at Day 14 >= Day 1', () => {
+    it('monotonic discovery growth: total indexed pages available at later days >= Day 1', () => {
       const day1Total = SearchEngine.search('a e i o u y', { currentDay: 1, limit: 100 }).totalMatches;
       const day2Total = SearchEngine.search('a e i o u y', { currentDay: 2, limit: 100 }).totalMatches;
-      const day14Total = SearchEngine.search('a e i o u y', { currentDay: 14, limit: 100 }).totalMatches;
+      const laterDayTotal = SearchEngine.search('a e i o u y', { currentDay: 14, limit: 100 }).totalMatches;
 
       expect(day2Total).toBeGreaterThanOrEqual(day1Total);
-      expect(day14Total).toBeGreaterThanOrEqual(day2Total);
+      expect(laterDayTotal).toBeGreaterThanOrEqual(day2Total);
     });
 
     it('handles negative or Day 0 edge cases gracefully without returning Day 1+ content', () => {

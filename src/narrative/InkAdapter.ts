@@ -7,7 +7,6 @@ import {
   BeatTriggerEvaluationResult,
 } from './types';
 import { parseNarrativeTag } from './tagParser';
-import { CORE_IDS } from '../engine/coreBuddies';
 
 export class InkAdapter {
   public readonly engine: SimulationEngine;
@@ -263,11 +262,13 @@ export class InkAdapter {
       }
 
       case 'schedule_appointment': {
+        const characterId = tag.characterId || this.engine.social.getBuddies()[0]?.id;
+        if (!characterId) break;
         this.engine.dispatchAction({
           type: 'NARRATIVE_SCHEDULE_APPOINTMENT',
           appointment: {
             id: tag.appointmentId,
-            characterId: tag.characterId || this.engine.social.getBuddies()[0]?.id || CORE_IDS.MAYA,
+            characterId,
             locationId: tag.location,
             targetDay: tag.day,
             startMinute: tag.startMinute,

@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { EventBus } from '../../src/engine/EventBus';
 import { TelemetryEngine } from '../../src/engine/TelemetryEngine';
 
-describe('TelemetryEngine (Metrics Recording, Evaluation Summary & JSON Exporter)', () => {
+describe('TelemetryEngine (sandbox metrics & JSON exporter)', () => {
   let eventBus: EventBus;
   let telemetry: TelemetryEngine;
 
@@ -41,19 +41,15 @@ describe('TelemetryEngine (Metrics Recording, Evaluation Summary & JSON Exporter
     expect(stats.minutesInRoomView).toBe(1);
   });
 
-  it('logs events and exports valid evaluation JSON', () => {
-    telemetry.logEvent('narrative', 'beat_completed', 500, { beatId: 'day1_intro' });
-    telemetry.recordCafeMeeting();
-    telemetry.recordEnding('ending_golden_path');
+  it('logs sandbox events and exports diagnostics', () => {
+    telemetry.logEvent('world', 'place_discovered', 500, { placeId: 'corner_mart' });
 
     const jsonStr = telemetry.exportTelemetryJson();
     expect(typeof jsonStr).toBe('string');
 
     const parsed = JSON.parse(jsonStr);
     expect(parsed.schemaVersion).toBe('1.0.0');
-    expect(parsed.stats.cafeMeetingAttended).toBe(true);
-    expect(parsed.stats.endingReached).toBe('ending_golden_path');
     expect(parsed.recentLogs.length).toBeGreaterThan(0);
-    expect(parsed.recentLogs[0].action).toBe('beat_completed');
+    expect(parsed.recentLogs[0].action).toBe('place_discovered');
   });
 });

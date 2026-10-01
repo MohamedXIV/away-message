@@ -18,9 +18,9 @@ import {
   GENERATED_ARCHETYPES,
   GENERATED_AFFINITY_SEEDS,
   GENERATED_DIALOGUE_POOLS,
-} from '../engine/coreBuddies.generated';
+} from '../engine/seedCharacters.generated';
 
-const CHARACTER_KEY_ORDER = ['role', 'displayName', 'archetypeId', 'reach', 'hair', 'eyes', 'chatColor', 'bio', 'typingSpeedWpm', 'languages', 'roles'];
+const CHARACTER_KEY_ORDER = ['displayName', 'archetypeId', 'reach', 'hair', 'eyes', 'chatColor', 'bio', 'typingSpeedWpm', 'languages', 'roles'];
 const ARCHETYPE_KEY_ORDER = ['label', 'description', 'personaHint', 'vocabulary', 'defaultInterests', 'defaultSong', 'typingSpeedWpm'];
 const TEMPERAMENT_KEY_ORDER = ['shyness', 'warmth', 'discipline', 'spontaneity', 'loyalty'];
 const AFFINITY_KEY_ORDER = ['familiarity', 'trust', 'comfort', 'respect', 'annoyance', 'affection', 'attraction', 'suspicion', 'resentment'];
@@ -119,7 +119,6 @@ export function tablesFromGenerated(): Tables {
 
   for (const c of GENERATED_CHARACTERS) {
     characters[c.id] = {
-      role: c.role,
       displayName: c.displayName,
       archetypeId: c.archetypeId,
       reach: c.reach,

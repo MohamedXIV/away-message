@@ -8,6 +8,13 @@ import {
   type InochiWebSourceLoader,
 } from './InochiWebLifecycle';
 import { createAwayPuppetToolService, type AwayPuppetToolService } from './McpSemanticTools';
+import {
+  copyInochiDrawList,
+  convertInochiDrawListToCharacterFrame,
+  decodeInochiTextureRgba,
+  type InochiDrawListRawApi,
+} from './InochiDrawListBridge';
+import type { CharacterMeshFrame, CharacterMeshTexture } from '../../world/characterRenderer';
 
 export interface InochiWasmRuntimeExports extends InochiWebBootstrapExports {
   readonly memory: WebAssembly.Memory;
@@ -28,7 +35,23 @@ export interface InochiWasmRuntimeExports extends InochiWebBootstrapExports {
   in_node_get_children(pointer: number, countPointer: number): number | bigint;
   in_as_part?(pointer: number): number | bigint;
   in_texture_cache_get_texture?(pointer: number, slot: number): number | bigint;
+  in_part_get_texture?(pointer: number, attachment: number): number | bigint;
   in_part_set_texture?(pointer: number, attachment: number, texturePointer: number): boolean;
+  in_part_get_tint?(pointer: number, rPointer: number, gPointer: number, bPointer: number): void;
+  in_part_set_tint?(pointer: number, r: number, g: number, b: number): boolean;
+  in_puppet_update?(pointer: number, deltaSeconds: number): void;
+  in_puppet_draw?(pointer: number, deltaSeconds: number): void;
+  in_puppet_get_drawlist?(pointer: number): number | bigint;
+  in_drawlist_get_use_base_vertex?(pointer: number): boolean;
+  in_drawlist_get_commands?(pointer: number, countPointer: number): number | bigint;
+  in_drawlist_get_vertex_data?(pointer: number, byteCountPointer: number): number | bigint;
+  in_drawlist_get_index_data?(pointer: number, byteCountPointer: number): number | bigint;
+  in_drawlist_get_allocations?(pointer: number, countPointer: number): number | bigint;
+  in_texture_cache_get_size?(pointer: number): number;
+  in_texture_get_width?(pointer: number): number;
+  in_texture_get_height?(pointer: number): number;
+  in_texture_get_channels?(pointer: number): number;
+  in_texture_get_pixels?(pointer: number): number | bigint;
 }
 
 function requirePointer(pointer: number | bigint, operation: string): number {
@@ -79,6 +102,17 @@ function readFloatArray(exports: InochiWasmRuntimeExports, pointer: number | big
   if (!Number.isSafeInteger(start) || start <= 0) throw new Error('Inochi WASM float array is null');
   const view = new DataView(exports.memory.buffer);
   return Array.from({ length: count }, (_, index) => view.getFloat32(start + index * 4, true));
+}
+
+function parseHexRgb(color: string): readonly [number, number, number] {
+  const match = /^#([0-9a-fA-F]{6})$/.exec(color);
+  if (!match) throw new Error(`Inochi tint must be #RRGGBB: ${color}`);
+  const value = Number.parseInt(match[1]!, 16);
+  return [
+    ((value >> 16) & 0xff) / 255,
+    ((value >> 8) & 0xff) / 255,
+    (value & 0xff) / 255,
+  ];
 }
 
 function findNodePointer(exports: InochiWasmRuntimeExports, pointer: number, name: string): number {
@@ -166,6 +200,7 @@ export function createInochiWasmRuntimeModule(exports: InochiWasmRuntimeExports)
       readonly parameters: readonly InochiWebRuntimeParameter[];
       readonly root: InochiWebRuntimeNode | null;
       private disposed = false;
+      private readonly renderTextures = new Map<number, CharacterMeshTexture>();
 
       constructor(bytes: ArrayBufferLike) {
         const source = new Uint8Array(bytes);
@@ -198,6 +233,77 @@ export function createInochiWasmRuntimeModule(exports: InochiWasmRuntimeExports)
         }
       }
 
+      captureRenderFrame(deltaMs: number): CharacterMeshFrame {
+        if (this.disposed) throw new Error('Inochi WASM puppet is disposed');
+        if (!Number.isFinite(deltaMs) || deltaMs < 0) throw new Error('Inochi render delta must be a finite non-negative number');
+        const required = [
+          exports.in_puppet_update,
+          exports.in_puppet_draw,
+          exports.in_puppet_get_drawlist,
+          exports.in_drawlist_get_use_base_vertex,
+          exports.in_drawlist_get_commands,
+          exports.in_drawlist_get_vertex_data,
+          exports.in_drawlist_get_index_data,
+          exports.in_drawlist_get_allocations,
+          exports.in_puppet_get_texture_cache,
+          exports.in_texture_cache_get_size,
+          exports.in_texture_cache_get_texture,
+          exports.in_texture_get_width,
+          exports.in_texture_get_height,
+          exports.in_texture_get_channels,
+          exports.in_texture_get_pixels,
+        ];
+        if (required.some((candidate) => typeof candidate !== 'function')) {
+          throw new Error('Renderer capture is unavailable through this Inochi WASM build');
+        }
+
+        const deltaSeconds = deltaMs / 1000;
+        exports.in_puppet_update!(this.pointer, deltaSeconds);
+        exports.in_puppet_draw!(this.pointer, deltaSeconds);
+        const drawListPointer = requirePointer(exports.in_puppet_get_drawlist!(this.pointer), 'draw-list lookup');
+
+        const raw: InochiDrawListRawApi = {
+          memory: exports.memory,
+          alloc: (bytes) => allocate(exports, bytes, 'draw-list scratch allocation'),
+          free: (ptr) => exports.nu_free(ptr),
+          getUseBaseVertex: (ptr) => exports.in_drawlist_get_use_base_vertex!(ptr),
+          getCommands: (ptr, out) => Number(exports.in_drawlist_get_commands!(ptr, out)),
+          getVertexData: (ptr, out) => Number(exports.in_drawlist_get_vertex_data!(ptr, out)),
+          getIndexData: (ptr, out) => Number(exports.in_drawlist_get_index_data!(ptr, out)),
+          getAllocations: (ptr, out) => Number(exports.in_drawlist_get_allocations!(ptr, out)),
+        };
+        const copied = copyInochiDrawList(raw, drawListPointer);
+
+        const cachePointer = requirePointer(exports.in_puppet_get_texture_cache!(this.pointer), 'texture cache lookup');
+        const textureCount = exports.in_texture_cache_get_size!(cachePointer);
+        if (!Number.isSafeInteger(textureCount) || textureCount < 0) throw new Error('Inochi texture cache returned an invalid size');
+
+        const textures = new Map<number, CharacterMeshTexture>();
+        for (let slot = 0; slot < textureCount; slot += 1) {
+          const texturePointer = requirePointer(exports.in_texture_cache_get_texture!(cachePointer, slot), `texture ${slot} lookup`);
+          let texture = this.renderTextures.get(texturePointer);
+          if (!texture) {
+            const width = exports.in_texture_get_width!(texturePointer);
+            const height = exports.in_texture_get_height!(texturePointer);
+            const channels = exports.in_texture_get_channels!(texturePointer);
+            if (!Number.isSafeInteger(width) || width <= 0 || !Number.isSafeInteger(height) || height <= 0) {
+              throw new Error(`Inochi texture ${slot} has invalid dimensions`);
+            }
+            if (![1, 2, 3, 4].includes(channels)) throw new Error(`Inochi texture ${slot} has unsupported channel count ${channels}`);
+            const byteLength = width * height * channels;
+            if (!Number.isSafeInteger(byteLength) || byteLength <= 0) throw new Error(`Inochi texture ${slot} byte length overflow`);
+            const pixelsPointer = requirePointer(exports.in_texture_get_pixels!(texturePointer), `texture ${slot} pixels`);
+            if (pixelsPointer + byteLength > exports.memory.buffer.byteLength) throw new Error(`Inochi texture ${slot} pixels exceed WASM memory`);
+            const pixels = new Uint8Array(new Uint8Array(exports.memory.buffer, pixelsPointer, byteLength));
+            texture = decodeInochiTextureRgba(`inochi-texture-${slot}`, width, height, channels, pixels);
+            this.renderTextures.set(texturePointer, texture);
+          }
+          textures.set(texturePointer, texture);
+        }
+
+        return convertInochiDrawListToCharacterFrame(copied, textures);
+      }
+
       assignPartTexture(nodeName: string, textureIndex: number, attachment: number): void {
         if (this.disposed) throw new Error('Inochi WASM puppet is disposed');
         if (
@@ -218,11 +324,50 @@ export function createInochiWasmRuntimeModule(exports: InochiWasmRuntimeExports)
         if (!exports.in_part_set_texture(partPointer, attachment, texturePointer)) {
           throw new Error(`Inochi WASM part texture assignment failed for ${nodeName}`);
         }
+        if (typeof exports.in_part_get_texture === 'function') {
+          const observed = Number(exports.in_part_get_texture(partPointer, attachment));
+          if (observed !== texturePointer) {
+            throw new Error(`Inochi WASM part texture assignment readback failed for ${nodeName}`);
+          }
+        }
+      }
+
+      assignPartTint(nodeName: string, color: string): void {
+        if (this.disposed) throw new Error('Inochi WASM puppet is disposed');
+        if (typeof exports.in_as_part !== 'function' || typeof exports.in_part_set_tint !== 'function') {
+          throw new Error('Part tint is unavailable through this Inochi WASM build');
+        }
+        const rootPointer = requirePointer(exports.in_puppet_get_root_node(this.pointer), 'root node lookup');
+        const nodePointer = findNodePointer(exports, rootPointer, nodeName);
+        if (nodePointer <= 0) throw new Error(`Unknown Inochi node: ${nodeName}`);
+        const partPointer = requirePointer(exports.in_as_part(nodePointer), `part cast for ${nodeName}`);
+        const [r, g, b] = parseHexRgb(color);
+        if (!exports.in_part_set_tint(partPointer, r, g, b)) {
+          throw new Error(`Inochi WASM part tint assignment failed for ${nodeName}`);
+        }
+        if (typeof exports.in_part_get_tint === 'function') {
+          const readbackPointer = allocate(exports, 12, 'part tint readback allocation');
+          try {
+            exports.in_part_get_tint(partPointer, readbackPointer, readbackPointer + 4, readbackPointer + 8);
+            const view = new DataView(exports.memory.buffer);
+            const observed = [
+              view.getFloat32(readbackPointer, true),
+              view.getFloat32(readbackPointer + 4, true),
+              view.getFloat32(readbackPointer + 8, true),
+            ];
+            if (observed.some((value, index) => Math.abs(value - [r, g, b][index]!) > 1e-5)) {
+              throw new Error(`Inochi WASM part tint assignment readback failed for ${nodeName}`);
+            }
+          } finally {
+            exports.nu_free(readbackPointer);
+          }
+        }
       }
 
       free(): void {
         if (this.disposed) return;
         this.disposed = true;
+        this.renderTextures.clear();
         exports.in_puppet_free(this.pointer);
       }
     },

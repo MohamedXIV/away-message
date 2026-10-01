@@ -791,7 +791,7 @@ Town/district map presentation does not become a second clock.
 
 ## 28. No external dependency for core play
 
-The evaluation build must remain playable if:
+The sandbox build must remain playable if:
 - public internet is unavailable;
 - external AI service is unavailable;
 - analytics is unavailable.

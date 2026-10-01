@@ -1,7 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { parseEmoticons } from '../../src/apps/pulse/utils/emoticonParser';
 import { AWAY_MESSAGE_PRESETS } from '../../src/apps/pulse/data/awayMessagePresets';
-import { DIALOGUE_SCRIPTS } from '../../src/apps/pulse/data/dialogueTrees';
 import { formatSimulationTime } from '../../src/apps/pulse/utils/timeFormat';
 import { loadPulseState, makeDefaultPulseState, savePulseState } from '../../src/apps/pulse/persistence';
 
@@ -60,14 +59,4 @@ describe('Pulse Messenger Subsystem Test Suite', () => {
     vi.unstubAllGlobals();
   });
 
-  it('has structured branching dialogue scripts with narrative action impacts', () => {
-    const mayaScript = DIALOGUE_SCRIPTS.find((s) => s.id === 'maya_day1_greeting');
-    expect(mayaScript).toBeDefined();
-    expect(mayaScript?.messages.length).toBeGreaterThan(0);
-    expect(mayaScript?.playerChoices?.length).toBeGreaterThan(0);
-
-    const firstChoice = mayaScript?.playerChoices?.[0];
-    expect(firstChoice?.socialAction).toBe('empathy');
-    expect(firstChoice?.nextScriptId).toBe('maya_day1_fast');
-  });
 });

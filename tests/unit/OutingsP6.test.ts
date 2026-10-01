@@ -3,11 +3,12 @@ import { SimulationEngine } from '../../src/engine/SimulationEngine';
 import {
   OUTINGS,
   isValidOutingId,
-  mayaDinerEncounter,
-  noraCanalEncounter,
+  dinerStaffEncounter,
+  canalRegularEncounter,
   buildLaundromatRumor,
 } from '../../src/engine/OutingDirector';
 import { getWeatherForDay, isWetWeather } from '../../src/engine/WeatherEngine';
+import { seedCharacterWithRole } from '../../src/engine/seedCharacters';
 
 describe('P6.3 outing rules (pure)', () => {
   it('defines five priced outings', () => {
@@ -19,22 +20,22 @@ describe('P6.3 outing rules (pure)', () => {
   });
 
   it('gates encounters by hour and rolls deterministically', () => {
-    expect(mayaDinerEncounter(8, 1)).toBe(false); // before shift
-    expect(mayaDinerEncounter(12, 1)).toBe(mayaDinerEncounter(12, 1));
-    expect(noraCanalEncounter(14, 1, false)).toBe(false); // daytime
-    expect(noraCanalEncounter(23, 1, true)).toBe(noraCanalEncounter(23, 1, true));
+    expect(dinerStaffEncounter(8, 1)).toBe(false); // before shift
+    expect(dinerStaffEncounter(12, 1)).toBe(dinerStaffEncounter(12, 1));
+    expect(canalRegularEncounter(14, 1, false)).toBe(false); // daytime
+    expect(canalRegularEncounter(23, 1, true)).toBe(canalRegularEncounter(23, 1, true));
   });
 
   it('builds laundromat rumors: tense pair → clipping → folklore', () => {
     const tense = buildLaundromatRumor(
-      [{ aName: 'Ryan', bName: 'Nora', affinity: -30 }, { aName: 'Maya', bName: 'Ryan', affinity: 15 }],
+      [{ aName: 'Alex', bName: 'Jordan', affinity: -30 }, { aName: 'Casey', bName: 'Alex', affinity: 15 }],
       ['Orion 7 released'],
       's1'
     );
-    expect(tense).toContain('Ryan');
-    expect(tense).toContain('Nora');
+    expect(tense).toContain('Alex');
+    expect(tense).toContain('Jordan');
     const clipping = buildLaundromatRumor(
-      [{ aName: 'Maya', bName: 'Ryan', affinity: 15 }],
+      [{ aName: 'Casey', bName: 'Alex', affinity: 15 }],
       ['Orion 7 released'],
       's1'
     );
@@ -58,7 +59,7 @@ describe('P6.3 city outings (SimulationEngine)', () => {
     (sim.economy as any).state.cash = 1;
     expect(sim.doCityOuting('diner_platter').success).toBe(false);
     // Day 15 is a storm: the canal path itself is closed
-    sim.advanceGameMinutes(14 * 24 * 60, 'two weeks pass');
+    sim.advanceGameMinutes(14 * 24 * 60, 'advance to storm window');
     expect(getWeatherForDay(sim.clock.getTime().day).condition).toBe('storm');
     (sim.economy as any).state.energy = 100;
     const res = sim.dispatchAction({ type: 'TRAVEL_TO', to: 'canal', mode: 'walk' });
@@ -66,7 +67,7 @@ describe('P6.3 city outings (SimulationEngine)', () => {
     expect(res.error).toContain('storm');
   });
 
-  it('diner lunch applies costs and Maya encounters by rule', () => {
+  it('diner lunch applies costs and role-bound staff encounters by rule', () => {
     sim.advanceGameMinutes(4 * 60, 'morning to noon'); // 08:00 → 12:00 day 1
     expect(sim.dispatchAction({ type: 'TRAVEL_TO', to: 'diner', mode: 'walk' }).success).toBe(true);
     const hungerBefore = sim.getState().player.hunger;
@@ -75,25 +76,31 @@ describe('P6.3 city outings (SimulationEngine)', () => {
     expect(res.success).toBe(true);
     expect(sim.getState().player.cash).toBe(cashBefore - 5);
     expect(sim.getState().player.hunger).toBeLessThan(hungerBefore);
-    if (mayaDinerEncounter(12, 1)) {
-      expect(sim.social.getCoreMemories('maya').some((m) => m.text.includes('diner'))).toBe(true);
-      expect(sim.social.getMessages('maya').some((m) => m.tags?.includes('outing'))).toBe(true);
+    const dinerStaffId = seedCharacterWithRole('diner-staff')?.id;
+    expect(dinerStaffId).toBeTruthy();
+    if (!dinerStaffId) return;
+    if (dinerStaffEncounter(12, 1)) {
+      expect(sim.social.getCoreMemories(dinerStaffId).some((m) => m.text.includes('diner'))).toBe(true);
+      expect(sim.social.getMessages(dinerStaffId).some((m) => m.tags?.includes('outing'))).toBe(true);
     } else {
-      expect(sim.social.getMessages('maya').some((m) => m.tags?.includes('outing'))).toBe(false);
+      expect(sim.social.getMessages(dinerStaffId).some((m) => m.tags?.includes('outing'))).toBe(false);
     }
   });
 
-  it('late canal walks can cross Nora', () => {
+  it('late canal walks can cross the role-bound canal regular', () => {
     sim.advanceGameMinutes(14 * 60, 'to 22:00'); // 08:00 → 22:00 day 1
     expect(sim.dispatchAction({ type: 'TRAVEL_TO', to: 'canal', mode: 'walk' }).success).toBe(true);
     const raining = isWetWeather(getWeatherForDay(1).condition);
     const res = sim.dispatchAction({ type: 'PLAYER_CITY_OUTING', outingId: 'canal_walk' });
     expect(res.success).toBe(true);
-    if (noraCanalEncounter(22, 1, raining)) {
-      expect(sim.social.getCoreMemories('nora').some((m) => m.text.includes('canal'))).toBe(true);
-      expect(sim.social.getMessages('nora').some((m) => m.tags?.includes('outing'))).toBe(true);
+    const canalRegularId = seedCharacterWithRole('canal-regular')?.id;
+    expect(canalRegularId).toBeTruthy();
+    if (!canalRegularId) return;
+    if (canalRegularEncounter(22, 1, raining)) {
+      expect(sim.social.getCoreMemories(canalRegularId).some((m) => m.text.includes('canal'))).toBe(true);
+      expect(sim.social.getMessages(canalRegularId).some((m) => m.tags?.includes('outing'))).toBe(true);
     } else {
-      expect(sim.social.getMessages('nora').some((m) => m.tags?.includes('outing'))).toBe(false);
+      expect(sim.social.getMessages(canalRegularId).some((m) => m.tags?.includes('outing'))).toBe(false);
     }
   });
 

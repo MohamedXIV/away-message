@@ -1,19 +1,11 @@
 import { StoryKnot } from '../types';
-import { RYAN_14DAY_KNOTS } from './ryanArcs';
-import { MAYA_14DAY_KNOTS } from './mayaArcs';
-import { NORA_14DAY_KNOTS } from './noraArcs';
-import { HENDERSON_14DAY_KNOTS } from './hendersonArcs';
-import { CAFE_MEETING_KNOTS } from './cafeMeetingArc';
-import { EVALUATION_ENDING_KNOTS } from './evaluationEndingArc';
 
-export const ALL_STORY_KNOTS: StoryKnot[] = [
-  ...RYAN_14DAY_KNOTS,
-  ...MAYA_14DAY_KNOTS,
-  ...NORA_14DAY_KNOTS,
-  ...HENDERSON_14DAY_KNOTS,
-  ...CAFE_MEETING_KNOTS,
-  ...EVALUATION_ENDING_KNOTS,
-];
+/**
+ * Optional authored narrative content may register actor/state-driven knots at
+ * runtime/content boundaries. The sandbox intentionally provides no mandatory
+ * global story sequence or required named cast.
+ */
+export const ALL_STORY_KNOTS: StoryKnot[] = [];
 
 export function getStoryKnotsByCharacter(characterId: string): StoryKnot[] {
   return ALL_STORY_KNOTS.filter((k) => k.characterId === characterId);

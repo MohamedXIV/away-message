@@ -6,7 +6,6 @@ import { DIALOGUE_SCRIPTS } from '../data/dialogueTrees';
 import { parseNarrativeTag } from '../../../narrative/tagParser';
 import type { GeneratedChatResponse } from '../../../ai/types';
 import { getNpcStyle } from '../data/npcStyles';
-import { CORE_IDS } from '../../../engine/coreBuddies';
 
 export interface TypingState {
   isTyping: boolean;
@@ -80,18 +79,22 @@ export function useSimulatedTyping(_activeConversationBuddyId: string | null) {
           engine.dispatchAction({ type: 'SOCIAL_APPLY_ACTION', buddyId: parsed.buddyId, socialAction: parsed.action });
           break;
         case 'schedule_appointment':
-          engine.dispatchAction({
-            type: 'NARRATIVE_SCHEDULE_APPOINTMENT',
-            appointment: {
-              id: parsed.appointmentId,
-              characterId: parsed.characterId || CORE_IDS.MAYA,
-              locationId: parsed.location,
-              targetDay: parsed.day,
-              startMinute: parsed.startMinute,
-              endMinute: parsed.endMinute,
-              description: parsed.description,
-            },
-          });
+          {
+            const characterId = parsed.characterId || _activeConversationBuddyId;
+            if (!characterId) break;
+            engine.dispatchAction({
+              type: 'NARRATIVE_SCHEDULE_APPOINTMENT',
+              appointment: {
+                id: parsed.appointmentId,
+                characterId,
+                locationId: parsed.location,
+                targetDay: parsed.day,
+                startMinute: parsed.startMinute,
+                endMinute: parsed.endMinute,
+                description: parsed.description,
+              },
+            });
+          }
           break;
         case 'unlock':
           engine.dispatchAction({
@@ -102,12 +105,12 @@ export function useSimulatedTyping(_activeConversationBuddyId: string | null) {
           break;
       }
     }
-  }, [engine]);
+  }, [engine, _activeConversationBuddyId]);
 
   const triggerNpcScript = useCallback((script: NpcDialogueScript) => {
     clearTimeouts();
     const buddy = engine.social.getBuddy(script.buddyId);
-    const style = getNpcStyle(script.buddyId);
+    const style = getNpcStyle(buddy ?? script.buddyId);
     const traits = engine.social.getTraits(script.buddyId);
     // Prefer style profile wpm but respect engine's buddy speed if it exists; apply variance for human feel
     const baseWpm = style.typing.wpm ?? buddy?.typingSpeedWpm ?? 60;

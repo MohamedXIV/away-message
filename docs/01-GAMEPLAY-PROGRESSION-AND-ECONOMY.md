@@ -84,7 +84,7 @@ This is one of the strongest progression axes.
 
 `unknown user → recognizable handle in a few small communities`
 
-This can be light in the evaluation build.
+This can be light in the sandbox build.
 
 ### Knowledge
 
@@ -152,7 +152,7 @@ Some actions perform authored time jumps:
 | Look through window | 4 min |
 | Quick errand | 20–45 min |
 | Work shift | several hours |
-| Café meeting | 45–90 min |
+| In-person social outing | 45–90 min |
 | Sleep | jump to chosen/required wake time |
 
 These are action defaults, not guarantees that every residence provides every action. A room without a kitchenette or private bathroom must use another valid facility path rather than exposing fake local actions.
@@ -294,7 +294,7 @@ Never schedule a major story beat every day.
 
 The player should not need a perfect build.
 
-The ending must tolerate:
+Long-running progression must tolerate:
 - old OS still installed but upgrade path clearly available,
 - lower cash,
 - different software choices,
@@ -302,7 +302,7 @@ The ending must tolerate:
 - weaker relationship with one contact,
 - skipped optional internet arc.
 
-The evaluation build tests the fantasy, not optimization mastery.
+The sandbox build tests the fantasy, not optimization mastery.
 
 ---
 
@@ -321,13 +321,13 @@ The player should frequently think:
 - Is the nicer room worth higher recurring rent?
 - Do I buy reliable new hardware or gamble on used?
 
-The evaluation build must not become a poverty punishment simulator.
+The sandbox build must not become a poverty punishment simulator.
 
 ---
 
 ## 2. Canonical default values
 
-These are tuning defaults for the evaluation build and are subject to rebalance as the new housing system lands.
+These are tuning defaults for the sandbox build and are subject to rebalance as the new housing system lands.
 
 Starting cash:
 `$38`
@@ -366,7 +366,7 @@ Rent/motel payment is the strongest recurring obligation.
 
 Evaluation schedule:
 - first meaningful due point around Day 7
-- second due point around Day 14
+- subsequent due points follow the active tenancy cadence
 
 Housing cost should come from the current tenancy/residence terms, not one global motel constant.
 
@@ -385,7 +385,7 @@ Possible consequences of late payment:
 - awkward motel/landlord interaction,
 - reduced cash buffer.
 
-Do not hard fail the whole evaluation build for one missed payment.
+Do not hard fail the whole sandbox build for one missed payment.
 
 ---
 
@@ -398,7 +398,7 @@ The game can show:
 - payment date,
 - faster plan.
 
-For the evaluation build, missed payment can create warning/pressure rather than completely disabling the core game.
+For the sandbox build, missed payment can create warning/pressure rather than completely disabling the core game.
 
 ---
 
@@ -534,7 +534,7 @@ Avoid purely numerical upgrades.
 
 ## 12. No exponential wealth curve
 
-The evaluation arc is:
+The intended economy shape is:
 
 ```text
 broke
