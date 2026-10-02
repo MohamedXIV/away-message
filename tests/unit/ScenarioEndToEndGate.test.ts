@@ -78,6 +78,17 @@ describe('Scenario / Story Thread end-to-end sandbox gate (#148)', () => {
     expect(engine.getScenarioState().instances[debt!.id]?.lifecycle).toBe('dormant');
   });
 
+  it('restores exactly the persisted Scenario set without selecting new authored threads', () => {
+    const engine = new SimulationEngine({ scenarioSeed: 'e2e-reload-source' });
+    expect(Object.keys(engine.getScenarioState().instances)).toHaveLength(3);
+
+    const snapshot = structuredClone(engine.exportSnapshot());
+    snapshot.scenarios = emptyScenarioState();
+    engine.loadSnapshot(snapshot as never);
+
+    expect(engine.getScenarioState()).toEqual(emptyScenarioState());
+  });
+
   it('keeps the core sandbox progressing with zero Scenarios', () => {
     const engine = new SimulationEngine({ scenarios: emptyScenarioState() } as never);
     const beforeMinute = engine.clock.getTotalMinutes();
