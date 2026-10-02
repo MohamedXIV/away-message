@@ -1050,12 +1050,9 @@ export class SimulationEngine extends LegacySimulationEngine {
     this.physicalWorldState = this.hydratePhysicalWorld(persistedPhysicalWorld);
     this.physicalShopStates = clonePhysicalShopStates(persistedPhysicalShops ?? {});
     this.activeTravelState = persistedActiveTravel;
+    // Current-format reload restores exactly the persisted Scenario set.
+    // Authored selection happens only when a true new save is created.
     this.scenarioDirector.hydrate(persistedScenarios);
-    this.scenarioDirector.initialize(GENERATED_SCENARIOS, {
-      seed: 'default',
-      atMinute: this.clock.getTotalMinutes(),
-      maxInstances: 3,
-    });
     this.innerVoice.hydrate(snapshot.innerVoice ?? emptyInnerVoicePersistedState());
     this.delivery.setArrivalHandler((order) => this.materializeDeliveryParcel(order));
   }

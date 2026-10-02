@@ -74,7 +74,9 @@ export function projectScenarios(
 
     const roles = definition.roles.map((role) => ({
       roleId: role.id,
-      actor: knownActor(social, instance.bindings[role.id] ?? null),
+      // A hidden thread must not reveal the binding relationship merely
+      // because the actor is known through some unrelated canonical path.
+      actor: visible ? knownActor(social, instance.bindings[role.id] ?? null) : null,
     }));
     const availableHooks = (hooksByInstance.get(instance.id) ?? [])
       .sort((a, b) => a.hookId.localeCompare(b.hookId))
