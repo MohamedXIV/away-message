@@ -7,7 +7,9 @@ import {
 } from './ScenarioState';
 import type {
   ScenarioDefinition,
+  ScenarioHookDefinition,
   ScenarioInstance,
+  ScenarioLifecycle,
   ScenarioRoleDefinition,
   ScenarioSeedFact,
 } from './types';
@@ -17,6 +19,22 @@ export interface ScenarioInitializationOptions {
   worldTags?: readonly string[];
   maxInstances?: number;
   atMinute?: number;
+}
+
+export interface ScenarioObservation {
+  knowledgeFacts?: readonly string[];
+  playerPlaceId?: string | null;
+  colocatedActorIds?: readonly string[];
+  searchTerms?: readonly string[];
+}
+
+export interface ScenarioHookOpportunity {
+  instanceId: string;
+  definitionId: string;
+  hookId: string;
+  presentationCue: string;
+  roleId: string;
+  boundActorId: string | null;
 }
 
 const RELATIONSHIP_KEYS = new Set<keyof RelationshipDimensions>([
@@ -184,6 +202,91 @@ export class ScenarioDirector {
 
     this.state.attemptedDefinitionIds = [...attempted].sort();
     return created;
+  }
+
+  /**
+   * Read-only hook projection over canonical observations. Eligibility never
+   * moves actors or mutates Social/Knowledge/Spatial owners.
+   */
+  public getAvailableHooks(
+    definitions: readonly ScenarioDefinition[],
+    observation: ScenarioObservation,
+  ): ScenarioHookOpportunity[] {
+    const definitionsById = new Map(definitions.map((definition) => [definition.id, definition]));
+    const knowledge = new Set(observation.knowledgeFacts ?? []);
+    const colocated = new Set(observation.colocatedActorIds ?? []);
+    const searches = new Set((observation.searchTerms ?? []).map((term) => term.trim().toLowerCase()).filter(Boolean));
+    const opportunities: ScenarioHookOpportunity[] = [];
+
+    for (const instance of Object.values(this.state.instances).sort((a, b) => a.id.localeCompare(b.id))) {
+      if (instance.lifecycle === 'resolved' || instance.lifecycle === 'abandoned') continue;
+      const definition = definitionsById.get(instance.definitionId);
+      if (!definition) continue;
+      const consumed = new Set(instance.consumedHookIds);
+      for (const hook of [...definition.hooks].sort((a, b) => a.id.localeCompare(b.id))) {
+        if (hook.oneShot && consumed.has(hook.id)) continue;
+        if (!this.hookEligible(hook, instance, {
+          knowledge,
+          colocated,
+          searches,
+          playerPlaceId: observation.playerPlaceId ?? null,
+        })) continue;
+        opportunities.push({
+          instanceId: instance.id,
+          definitionId: instance.definitionId,
+          hookId: hook.id,
+          presentationCue: hook.presentationCue,
+          roleId: hook.roleId,
+          boundActorId: hook.roleId ? instance.bindings[hook.roleId] ?? null : null,
+        });
+      }
+    }
+    return opportunities;
+  }
+
+  public consumeHook(
+    definitions: readonly ScenarioDefinition[],
+    instanceId: string,
+    hookId: string,
+  ): boolean {
+    const instance = this.state.instances[instanceId];
+    if (!instance || instance.lifecycle === 'resolved' || instance.lifecycle === 'abandoned') return false;
+    const definition = definitions.find((candidate) => candidate.id === instance.definitionId);
+    const hook = definition?.hooks.find((candidate) => candidate.id === hookId);
+    if (!hook) return false;
+    if (hook.oneShot && instance.consumedHookIds.includes(hookId)) return false;
+    if (!instance.consumedHookIds.includes(hookId)) {
+      instance.consumedHookIds = [...instance.consumedHookIds, hookId].sort();
+    }
+    return true;
+  }
+
+  public setLifecycle(instanceId: string, lifecycle: ScenarioLifecycle): boolean {
+    const instance = this.state.instances[instanceId];
+    if (!instance) return false;
+    if (instance.lifecycle === lifecycle) return true;
+    instance.lifecycle = lifecycle;
+    return true;
+  }
+
+  private hookEligible(
+    hook: ScenarioHookDefinition,
+    instance: ScenarioInstance,
+    observation: {
+      knowledge: ReadonlySet<string>;
+      colocated: ReadonlySet<string>;
+      searches: ReadonlySet<string>;
+      playerPlaceId: string | null;
+    },
+  ): boolean {
+    if (hook.kind === 'knowledge_fact') return observation.knowledge.has(hook.factKey);
+    if (hook.kind === 'player_entered_place') return Boolean(hook.factKey) && observation.playerPlaceId === hook.factKey;
+    if (hook.kind === 'search_term') return Boolean(hook.factKey) && observation.searches.has(hook.factKey.trim().toLowerCase());
+    if (hook.kind === 'bound_actor_colocated') {
+      const actorId = hook.roleId ? instance.bindings[hook.roleId] ?? null : null;
+      return Boolean(actorId && observation.colocated.has(actorId));
+    }
+    return false;
   }
 
   private applyInitialFacts(
