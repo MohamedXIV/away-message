@@ -337,11 +337,15 @@ export class SimulationEngine extends LegacySimulationEngine {
     this.physicalShopStates = clonePhysicalShopStates(initialState?.physicalShops ?? {});
     this.activeTravelState = initialState?.activeTravel ? cloneActiveTravel(initialState.activeTravel) : null;
     this.scenarioDirector = new ScenarioDirector(this.social, initialState?.scenarios);
-    this.scenarioDirector.initialize(GENERATED_SCENARIOS, {
-      seed: initialState?.scenarioSeed ?? 'default',
-      atMinute: this.clock.getTotalMinutes(),
-      maxInstances: 3,
-    });
+    // Generated authored scenarios are selected only for a true new save. Loading a
+    // persisted Scenario state must never silently add newly-authored definitions.
+    if (initialState?.scenarios === undefined) {
+      this.scenarioDirector.initialize(GENERATED_SCENARIOS, {
+        seed: initialState?.scenarioSeed ?? 'default',
+        atMinute: this.clock.getTotalMinutes(),
+        maxInstances: 3,
+      });
+    }
     this.innerVoice = new InnerVoiceEngine(
       (initialState as TransportSimulationState | undefined)?.innerVoice ?? null,
     );
