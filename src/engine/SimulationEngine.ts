@@ -99,6 +99,7 @@ import {
   type ThoughtIntent,
   type ThoughtTrigger,
 } from './innerVoice/index';
+import { cloneScenarioState, emptyScenarioState, hydrateScenarioState, type ScenarioRuntimeState } from './scenario/ScenarioState';
 
 export * from './SimulationEngineLegacyFacade';
 
@@ -108,6 +109,7 @@ export type LiveSimulationState = LegacyLiveSimulationState & {
   physicalShops: Record<string, PhysicalShopState>;
   venueOperations: VenueRuntimeState;
   activeTravel: ActiveTravelState | null;
+  scenarios: ScenarioRuntimeState;
 };
 
 type InitialSimulationState = Partial<TransportSimulationState> & {
@@ -289,6 +291,7 @@ export class SimulationEngine extends LegacySimulationEngine {
   private physicalShopStates: Record<string, PhysicalShopState> = {};
   private venueState: VenueRuntimeState = { roleAssignments: {}, activities: {} };
   private activeTravelState: ActiveTravelState | null = null;
+  private scenarioState: ScenarioRuntimeState = emptyScenarioState();
   /** Player Inner Voice rules gate (#23). Owns cooldown/notable-history only. */
   private readonly innerVoice: InnerVoiceEngine;
 
@@ -324,6 +327,7 @@ export class SimulationEngine extends LegacySimulationEngine {
     this.physicalWorldState = this.hydratePhysicalWorld(initialState?.physicalWorld);
     this.physicalShopStates = clonePhysicalShopStates(initialState?.physicalShops ?? {});
     this.activeTravelState = initialState?.activeTravel ? cloneActiveTravel(initialState.activeTravel) : null;
+    this.scenarioState = hydrateScenarioState(initialState?.scenarios);
     this.innerVoice = new InnerVoiceEngine(
       (initialState as TransportSimulationState | undefined)?.innerVoice ?? null,
     );
@@ -974,6 +978,7 @@ export class SimulationEngine extends LegacySimulationEngine {
       physicalShops: clonePhysicalShopStates(this.physicalShopStates),
       venueOperations: this.getVenueRuntimeState(),
       activeTravel: this.getActiveTravel(),
+      scenarios: cloneScenarioState(this.scenarioState),
       residence: this.getResidenceState(),
       innerVoice: this.innerVoice.getPersistedState(),
     };
@@ -987,6 +992,7 @@ export class SimulationEngine extends LegacySimulationEngine {
       physicalShops: clonePhysicalShopStates(this.physicalShopStates),
       venueOperations: this.getVenueRuntimeState(),
       activeTravel: this.getActiveTravel(),
+      scenarios: cloneScenarioState(this.scenarioState),
       residence: this.getResidenceState(),
       innerVoice: this.innerVoice.getPersistedState(),
     };
@@ -1000,6 +1006,7 @@ export class SimulationEngine extends LegacySimulationEngine {
       venueOperations?: unknown;
       activeTravel?: unknown;
       residence?: ResidenceState;
+      scenarios?: ScenarioRuntimeState;
     };
     const persistedPhysicalWorld = extendedSnapshot.physicalWorld;
     const persistedPhysicalObjects = extendedSnapshot.physicalObjects;
@@ -1009,6 +1016,7 @@ export class SimulationEngine extends LegacySimulationEngine {
       ? null
       : parseActiveTravel(extendedSnapshot.activeTravel);
     const persistedResidence = extendedSnapshot.residence;
+    const persistedScenarios = extendedSnapshot.scenarios;
 
     super.loadSnapshot(snapshot);
     this.residence.restore(persistedResidence ?? fallbackResidenceState());
@@ -1023,8 +1031,13 @@ export class SimulationEngine extends LegacySimulationEngine {
     this.physicalWorldState = this.hydratePhysicalWorld(persistedPhysicalWorld);
     this.physicalShopStates = clonePhysicalShopStates(persistedPhysicalShops ?? {});
     this.activeTravelState = persistedActiveTravel;
+    this.scenarioState = hydrateScenarioState(persistedScenarios);
     this.innerVoice.hydrate(snapshot.innerVoice ?? emptyInnerVoicePersistedState());
     this.delivery.setArrivalHandler((order) => this.materializeDeliveryParcel(order));
+  }
+
+  public getScenarioState(): ScenarioRuntimeState {
+    return cloneScenarioState(this.scenarioState);
   }
 
   public getInnerVoiceEngine(): InnerVoiceEngine {

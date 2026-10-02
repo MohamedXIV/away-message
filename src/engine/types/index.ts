@@ -722,6 +722,8 @@ export interface SimulationState {
   needs?: import('../PlayerNeedsEngine').PlayerNeedsState;
   /** Canonical semantic player Mood state (#131). */
   mood?: import('../MoodEngine').MoodState;
+  /** Scenario-local bindings/lifecycle only; canonical domains retain their truth. */
+  scenarios?: import('../scenario/ScenarioState').ScenarioRuntimeState;
   hardware: HardwareState;
   computer: ComputerSetupState;
   display: DisplaySetupState;

@@ -44,6 +44,44 @@ const venueActivityPhaseSchema = z.object({
   stationId: z.string().default(''),
 });
 
+const scenarioScalarSchema = z.union([z.string(), z.number(), z.boolean()]);
+const scenarioEligibilitySchema = z.object({
+  requiredWorldTags: z.array(z.string()).default([]),
+  excludedWorldTags: z.array(z.string()).default([]),
+  selectionWeight: z.number().min(0).default(1),
+  exclusiveGroup: stringCell(),
+});
+const scenarioRoleSchema = z.object({
+  id: z.string(),
+  required: booleanCell(true),
+  allowSharedActor: booleanCell(false),
+  actorRolesAny: z.array(z.string()).default([]),
+  actorTagsAll: z.array(z.string()).default([]),
+  actorTagsNone: z.array(z.string()).default([]),
+  reachesAny: z.array(z.string()).default([]),
+});
+const scenarioSeedFactSchema = z.object({
+  id: z.string(),
+  kind: z.enum(['social_history', 'player_knowledge', 'scenario_fact']),
+  roleId: stringCell(),
+  factKey: z.string(),
+  value: scenarioScalarSchema,
+  sourceRef: z.string(),
+});
+const scenarioHookSchema = z.object({
+  id: z.string(),
+  kind: z.enum(['knowledge_fact', 'player_entered_place', 'bound_actor_colocated', 'search_term']),
+  roleId: stringCell(),
+  factKey: stringCell(),
+  oneShot: booleanCell(true),
+  presentationCue: stringCell(),
+});
+const scenarioPresentationSchema = z.object({
+  titleKey: stringCell(),
+  summaryKey: stringCell(),
+  hiddenUntilHookId: stringCell(),
+});
+
 /**
  * Single authored-content row-shape catalog.
  *
@@ -322,6 +360,16 @@ export const CONTENT_ROW_SCHEMAS = {
     headwayMinutes: numberCell(20),
     segmentMinutes: z.array(z.number()).default([]),
     fare: numberCell(2),
+  }),
+  scenarios: z.object({
+    tags: z.array(z.string()).default([]),
+    eligibility: scenarioEligibilitySchema.default({
+      requiredWorldTags: [], excludedWorldTags: [], selectionWeight: 1, exclusiveGroup: '',
+    }),
+    roles: z.array(scenarioRoleSchema).default([]),
+    initialFacts: z.array(scenarioSeedFactSchema).default([]),
+    hooks: z.array(scenarioHookSchema).default([]),
+    presentation: scenarioPresentationSchema.optional(),
   }),
   eventModifiers: z.object({
     eventId: stringCell(),

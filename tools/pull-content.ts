@@ -6,12 +6,13 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import type { Tables } from 'tinybase';
 import { createContentStore } from '../src/tools/content/schema';
-import { parseContentJson, validateContent, generateRegistrySource, generateWorldRegistrySource } from '../src/tools/content/codegen';
+import { parseContentJson, validateContent, generateRegistrySource, generateWorldRegistrySource, generateScenarioRegistrySource } from '../src/tools/content/codegen';
 
 const root = new URL('..', import.meta.url);
 const storePath = new URL('content/store.json', root);
 const outPath = new URL('src/engine/seedCharacters.generated.ts', root);
 const outWorldPath = new URL('src/engine/worldContent.generated.ts', root);
+const outScenarioPath = new URL('src/engine/scenarioContent.generated.ts', root);
 
 const raw = readFileSync(storePath, 'utf8');
 const tables = parseContentJson(raw);
@@ -35,6 +36,7 @@ if (errors.length > 0) {
 
 const source = generateRegistrySource(tables);
 const worldSource = generateWorldRegistrySource(tables);
+const scenarioSource = generateScenarioRegistrySource(tables);
 
 function reportFirstDiff(label: string, actual: string, expected: string): void {
   const actualLines = actual.split('\n');
@@ -52,9 +54,11 @@ function reportFirstDiff(label: string, actual: string, expected: string): void 
 if (process.argv.includes('--check')) {
   let current = '';
   let currentWorld = '';
+  let currentScenarios = '';
   try {
     current = readFileSync(outPath, 'utf8');
     currentWorld = readFileSync(outWorldPath, 'utf8');
+    currentScenarios = readFileSync(outScenarioPath, 'utf8');
   } catch {
     console.error('content:check failed — generated file missing. Run npm run content:pull.');
     process.exit(1);
@@ -69,10 +73,16 @@ if (process.argv.includes('--check')) {
     reportFirstDiff('worldContent.generated.ts', currentWorld, worldSource);
     process.exit(1);
   }
+  if (currentScenarios !== scenarioSource) {
+    console.error('content:check failed — src/engine/scenarioContent.generated.ts is stale. Run npm run content:pull.');
+    reportFirstDiff('scenarioContent.generated.ts', currentScenarios, scenarioSource);
+    process.exit(1);
+  }
   console.log('content:check ok — generated registries match content/store.json.');
 } else {
   writeFileSync(outPath, source);
   writeFileSync(outWorldPath, worldSource);
+  writeFileSync(outScenarioPath, scenarioSource);
   const ids = Object.keys(tables['characters'] ?? {}).length;
   const pools = Object.keys(tables['dialoguePools'] ?? {}).length;
   const districts = Object.keys(tables['districts'] ?? {}).length;
@@ -80,6 +90,8 @@ if (process.argv.includes('--check')) {
   const stops = Object.keys(tables['transitStops'] ?? {}).length;
   const lines = Object.keys(tables['busLines'] ?? {}).length;
   const modifiers = Object.keys(tables['eventModifiers'] ?? {}).length;
+  const scenarios = Object.keys(tables['scenarios'] ?? {}).length;
   console.log(`content:pull ok — ${ids} characters, ${pools} dialogue pools → src/engine/seedCharacters.generated.ts`);
   console.log(`content:pull ok — ${districts} districts, ${places} places, ${stops} stops, ${lines} bus lines, ${modifiers} event modifiers → src/engine/worldContent.generated.ts`);
+  console.log(`content:pull ok — ${scenarios} scenarios → src/engine/scenarioContent.generated.ts`);
 }

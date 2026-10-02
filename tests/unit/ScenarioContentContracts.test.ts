@@ -66,7 +66,7 @@ function validScenarioTables(): ContentTables {
 
 describe('Scenario contracts + authored content pipeline (#143)', () => {
   it('loads Scenario definitions through the shared TinyBase schema', () => {
-    const row = validScenarioTables().scenarios.someone_from_before;
+    const row = validScenarioTables()['scenarios']!['someone_from_before']!;
     const store = createContentStore();
 
     expect(() => store.setRow('scenarios', 'someone_from_before', row as never)).not.toThrow();
@@ -77,8 +77,9 @@ describe('Scenario contracts + authored content pipeline (#143)', () => {
     expect(validateScenarioContent(validScenarioTables())).toEqual([]);
 
     const malformed = validScenarioTables();
-    malformed.scenarios.someone_from_before.roles = [
-      ...malformed.scenarios.someone_from_before.roles as unknown[],
+    const scenario = malformed['scenarios']!['someone_from_before']!;
+    scenario['roles'] = [
+      ...scenario['roles'] as unknown[],
       {
         id: 'old_acquaintance',
         required: false,
@@ -89,7 +90,7 @@ describe('Scenario contracts + authored content pipeline (#143)', () => {
         reachesAny: [],
       },
     ];
-    malformed.scenarios.someone_from_before.hooks = [
+    scenario['hooks'] = [
       {
         id: 'impossible_clue',
         kind: 'knowledge_fact',
