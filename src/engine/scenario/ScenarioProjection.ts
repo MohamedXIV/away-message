@@ -98,16 +98,20 @@ export function projectScenarios(input: {
       const roles = definition.roles
         .map((role): ScenarioProjectionRole => ({
           roleId: role.id,
-          actor: actorIfKnown(instance.bindings[role.id] ?? null, input.knowledge),
+          actor: state === 'hidden'
+            ? null
+            : actorIfKnown(instance.bindings[role.id] ?? null, input.knowledge),
         }))
         .sort((a, b) => a.roleId.localeCompare(b.roleId));
 
-      const safeHooks: ScenarioProjectionHook[] = available.map((hook) => ({
-        id: hook.hookId,
-        presentationCue: hook.presentationCue,
-        roleId: hook.roleId,
-        actor: actorIfKnown(hook.boundActorId, input.knowledge),
-      }));
+      const safeHooks: ScenarioProjectionHook[] = state === 'hidden'
+        ? []
+        : available.map((hook) => ({
+          id: hook.hookId,
+          presentationCue: hook.presentationCue,
+          roleId: hook.roleId,
+          actor: actorIfKnown(hook.boundActorId, input.knowledge),
+        }));
 
       return [{
         instanceId: instance.id,
