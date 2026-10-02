@@ -100,8 +100,12 @@ import {
   type ThoughtTrigger,
 } from './innerVoice/index';
 import { type ScenarioRuntimeState } from './scenario/ScenarioState';
-import { ScenarioDirector } from './scenario/ScenarioDirector';
-import type { ScenarioDefinition, ScenarioInstance } from './scenario/types';
+import {
+  ScenarioDirector,
+  type ScenarioHookOpportunity,
+  type ScenarioObservation,
+} from './scenario/ScenarioDirector';
+import type { ScenarioDefinition, ScenarioInstance, ScenarioLifecycle } from './scenario/types';
 import { GENERATED_SCENARIOS } from './scenarioContent.generated';
 
 export * from './SimulationEngineLegacyFacade';
@@ -1066,6 +1070,25 @@ export class SimulationEngine extends LegacySimulationEngine {
       atMinute: this.clock.getTotalMinutes(),
       maxInstances,
     });
+  }
+
+  public getScenarioHookOpportunities(
+    observation: ScenarioObservation,
+    definitions: readonly ScenarioDefinition[] = GENERATED_SCENARIOS,
+  ): ScenarioHookOpportunity[] {
+    return this.scenarioDirector.getAvailableHooks(definitions, observation);
+  }
+
+  public consumeScenarioHook(
+    instanceId: string,
+    hookId: string,
+    definitions: readonly ScenarioDefinition[] = GENERATED_SCENARIOS,
+  ): boolean {
+    return this.scenarioDirector.consumeHook(definitions, instanceId, hookId);
+  }
+
+  public setScenarioLifecycle(instanceId: string, lifecycle: ScenarioLifecycle): boolean {
+    return this.scenarioDirector.setLifecycle(instanceId, lifecycle);
   }
 
   public getInnerVoiceEngine(): InnerVoiceEngine {
