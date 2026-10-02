@@ -139,14 +139,15 @@ describe('Scenario dynamic role binding + initialization (#144)', () => {
   it('persists bindings through the current SimulationEngine snapshot seam', () => {
     const engine = new SimulationEngine();
     engine.social.removeBuddy('maya');
-    const [created] = engine.initializeScenarios([someoneFromBefore()], 'snapshot-seed');
+    const probe = { ...someoneFromBefore(), id: 'binding_snapshot_probe' };
+    const [created] = engine.initializeScenarios([probe], 'snapshot-seed');
     expect(created).toBeDefined();
     expect(created!.bindings.old_acquaintance).toBe('nora');
 
     const snapshot = engine.exportSnapshot();
     const restored = new SimulationEngine(snapshot);
     const before = restored.getScenarioState();
-    expect(restored.initializeScenarios([someoneFromBefore()], 'different-seed')).toEqual([]);
+    expect(restored.initializeScenarios([probe], 'different-seed')).toEqual([]);
     expect(restored.getScenarioState()).toEqual(before);
     expect(restored.social.getRelationships('nora')?.familiarity).toBeGreaterThanOrEqual(35);
     expect(restored.social.isKnown('nora')).toBe(true);
