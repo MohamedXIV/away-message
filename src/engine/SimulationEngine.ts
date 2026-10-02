@@ -99,7 +99,10 @@ import {
   type ThoughtIntent,
   type ThoughtTrigger,
 } from './innerVoice/index';
-import { cloneScenarioState, emptyScenarioState, hydrateScenarioState, type ScenarioRuntimeState } from './scenario/ScenarioState';
+import { type ScenarioRuntimeState } from './scenario/ScenarioState';
+import { ScenarioDirector } from './scenario/ScenarioDirector';
+import type { ScenarioDefinition, ScenarioInstance } from './scenario/types';
+import { GENERATED_SCENARIOS } from './scenarioContent.generated';
 
 export * from './SimulationEngineLegacyFacade';
 
@@ -118,6 +121,8 @@ type InitialSimulationState = Partial<TransportSimulationState> & {
   physicalShops?: Record<string, PhysicalShopState>;
   activeTravel?: ActiveTravelState | null;
   starterHousingOfferId?: string;
+  /** Optional deterministic new-save Scenario selection seed. Persisted bindings prevent rerolls. */
+  scenarioSeed?: string;
 };
 
 const DELIVERY_PARCEL_DEFINITION_ID = 'delivery_parcel';
@@ -291,7 +296,7 @@ export class SimulationEngine extends LegacySimulationEngine {
   private physicalShopStates: Record<string, PhysicalShopState> = {};
   private venueState: VenueRuntimeState = { roleAssignments: {}, activities: {} };
   private activeTravelState: ActiveTravelState | null = null;
-  private scenarioState: ScenarioRuntimeState = emptyScenarioState();
+  private readonly scenarioDirector: ScenarioDirector;
   /** Player Inner Voice rules gate (#23). Owns cooldown/notable-history only. */
   private readonly innerVoice: InnerVoiceEngine;
 
@@ -327,7 +332,12 @@ export class SimulationEngine extends LegacySimulationEngine {
     this.physicalWorldState = this.hydratePhysicalWorld(initialState?.physicalWorld);
     this.physicalShopStates = clonePhysicalShopStates(initialState?.physicalShops ?? {});
     this.activeTravelState = initialState?.activeTravel ? cloneActiveTravel(initialState.activeTravel) : null;
-    this.scenarioState = hydrateScenarioState(initialState?.scenarios);
+    this.scenarioDirector = new ScenarioDirector(this.social, initialState?.scenarios);
+    this.scenarioDirector.initialize(GENERATED_SCENARIOS, {
+      seed: initialState?.scenarioSeed ?? 'default',
+      atMinute: this.clock.getTotalMinutes(),
+      maxInstances: 3,
+    });
     this.innerVoice = new InnerVoiceEngine(
       (initialState as TransportSimulationState | undefined)?.innerVoice ?? null,
     );
@@ -978,7 +988,7 @@ export class SimulationEngine extends LegacySimulationEngine {
       physicalShops: clonePhysicalShopStates(this.physicalShopStates),
       venueOperations: this.getVenueRuntimeState(),
       activeTravel: this.getActiveTravel(),
-      scenarios: cloneScenarioState(this.scenarioState),
+      scenarios: this.scenarioDirector.getState(),
       residence: this.getResidenceState(),
       innerVoice: this.innerVoice.getPersistedState(),
     };
@@ -992,7 +1002,7 @@ export class SimulationEngine extends LegacySimulationEngine {
       physicalShops: clonePhysicalShopStates(this.physicalShopStates),
       venueOperations: this.getVenueRuntimeState(),
       activeTravel: this.getActiveTravel(),
-      scenarios: cloneScenarioState(this.scenarioState),
+      scenarios: this.scenarioDirector.getState(),
       residence: this.getResidenceState(),
       innerVoice: this.innerVoice.getPersistedState(),
     };
@@ -1031,13 +1041,31 @@ export class SimulationEngine extends LegacySimulationEngine {
     this.physicalWorldState = this.hydratePhysicalWorld(persistedPhysicalWorld);
     this.physicalShopStates = clonePhysicalShopStates(persistedPhysicalShops ?? {});
     this.activeTravelState = persistedActiveTravel;
-    this.scenarioState = hydrateScenarioState(persistedScenarios);
+    this.scenarioDirector.hydrate(persistedScenarios);
+    this.scenarioDirector.initialize(GENERATED_SCENARIOS, {
+      seed: 'default',
+      atMinute: this.clock.getTotalMinutes(),
+      maxInstances: 3,
+    });
     this.innerVoice.hydrate(snapshot.innerVoice ?? emptyInnerVoicePersistedState());
     this.delivery.setArrivalHandler((order) => this.materializeDeliveryParcel(order));
   }
 
   public getScenarioState(): ScenarioRuntimeState {
-    return cloneScenarioState(this.scenarioState);
+    return this.scenarioDirector.getState();
+  }
+
+  /** Test/tooling seam for authored definitions; production new saves use the generated registry. */
+  public initializeScenarios(
+    definitions: readonly ScenarioDefinition[],
+    seed = 'default',
+    maxInstances = 3,
+  ): ScenarioInstance[] {
+    return this.scenarioDirector.initialize(definitions, {
+      seed,
+      atMinute: this.clock.getTotalMinutes(),
+      maxInstances,
+    });
   }
 
   public getInnerVoiceEngine(): InnerVoiceEngine {
