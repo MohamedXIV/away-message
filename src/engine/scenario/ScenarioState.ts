@@ -2,10 +2,12 @@ import type { ScenarioInstance, ScenarioLifecycle, ScenarioScalar } from './type
 
 export interface ScenarioRuntimeState {
   instances: Record<string, ScenarioInstance>;
+  /** Definitions already considered for this save; failed/filtered bindings never reroll on reload. */
+  attemptedDefinitionIds: string[];
 }
 const LIFECYCLES = new Set<ScenarioLifecycle>(['active', 'dormant', 'resolved', 'abandoned']);
 const ID = /^[a-zA-Z0-9][a-zA-Z0-9:_-]{0,159}$/;
-export function emptyScenarioState(): ScenarioRuntimeState { return { instances: {} }; }
+export function emptyScenarioState(): ScenarioRuntimeState { return { instances: {}, attemptedDefinitionIds: [] }; }
 function scalar(value: unknown): value is ScenarioScalar {
   return typeof value === 'string' || typeof value === 'boolean'
     || (typeof value === 'number' && Number.isFinite(value));
@@ -15,7 +17,8 @@ function record(value: unknown): Record<string, unknown> | null {
 }
 /** Current-format boundary; invalid rows are refused instead of inventing canonical state. */
 export function hydrateScenarioState(input: unknown): ScenarioRuntimeState {
-  const rows = record(record(input)?.['instances']);
+  const root = record(input);
+  const rows = record(root?.['instances']);
   if (!rows) return emptyScenarioState();
   const instances: Record<string, ScenarioInstance> = {};
   for (const key of Object.keys(rows).sort()) {
@@ -47,7 +50,12 @@ export function hydrateScenarioState(input: unknown): ScenarioRuntimeState {
     instances[key] = { id, definitionId, bindings, startedAtMinute: Math.floor(startedAtMinute),
       lifecycle: lifecycle as ScenarioLifecycle, consumedHookIds, facts };
   }
-  return { instances };
+  const attemptedDefinitionIds = Array.from(new Set(
+    (Array.isArray(root?.['attemptedDefinitionIds']) ? root?.['attemptedDefinitionIds'] : [])
+      .filter((value): value is string => typeof value === 'string' && ID.test(value))
+      .slice(0, 256),
+  )).sort();
+  return { instances, attemptedDefinitionIds };
 }
 export function cloneScenarioState(state: ScenarioRuntimeState): ScenarioRuntimeState {
   return hydrateScenarioState(state);
