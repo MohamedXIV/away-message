@@ -72,13 +72,14 @@ describe('knowledge-safe ScenarioProjection (#147)', () => {
     const definition = hiddenThread();
     const [instance] = engine.initializeScenarios([definition], 'projection-known');
     expect(instance).toBeDefined();
-    engine.social.learnHandle('nora', 'nora');
+    const noraHandle = engine.social.getBuddy('nora')!.handle;
+    engine.social.learnHandle('nora', noraHandle);
 
     const [known] = engine.getScenarioProjection({ colocatedActorIds: ['nora'] }, [definition]);
     expect(known?.roles[0]?.actor).toEqual({
       id: 'nora',
       displayName: 'Nora',
-      knownHandles: ['nora'],
+      knownHandles: [noraHandle],
     });
     expect(known?.availableHooks[0]?.actor?.id).toBe('nora');
     expect(known?.roles[0]?.actor).not.toHaveProperty('location');
