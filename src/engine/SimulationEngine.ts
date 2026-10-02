@@ -106,6 +106,10 @@ import {
   type ScenarioObservation,
 } from './scenario/ScenarioDirector';
 import type { ScenarioDefinition, ScenarioInstance, ScenarioLifecycle } from './scenario/types';
+import {
+  projectScenarios,
+  type ScenarioProjectionEntry,
+} from './scenario/ScenarioProjection';
 import { GENERATED_SCENARIOS } from './scenarioContent.generated';
 
 export * from './SimulationEngineLegacyFacade';
@@ -1049,12 +1053,9 @@ export class SimulationEngine extends LegacySimulationEngine {
     this.physicalWorldState = this.hydratePhysicalWorld(persistedPhysicalWorld);
     this.physicalShopStates = clonePhysicalShopStates(persistedPhysicalShops ?? {});
     this.activeTravelState = persistedActiveTravel;
+    // Loading a current-format save restores exactly the persisted Scenario
+    // set. Authored definitions are selected only at true new-save creation.
     this.scenarioDirector.hydrate(persistedScenarios);
-    this.scenarioDirector.initialize(GENERATED_SCENARIOS, {
-      seed: 'default',
-      atMinute: this.clock.getTotalMinutes(),
-      maxInstances: 3,
-    });
     this.innerVoice.hydrate(snapshot.innerVoice ?? emptyInnerVoicePersistedState());
     this.delivery.setArrivalHandler((order) => this.materializeDeliveryParcel(order));
   }
@@ -1081,6 +1082,27 @@ export class SimulationEngine extends LegacySimulationEngine {
     definitions: readonly ScenarioDefinition[] = GENERATED_SCENARIOS,
   ): ScenarioHookOpportunity[] {
     return this.scenarioDirector.getAvailableHooks(definitions, observation);
+  }
+
+  public getScenarioProjection(
+    observation: ScenarioObservation,
+    definitions: readonly ScenarioDefinition[] = GENERATED_SCENARIOS,
+  ): readonly ScenarioProjectionEntry[] {
+    const availableHooks = this.scenarioDirector.getAvailableHooks(definitions, observation);
+    return projectScenarios({
+      definitions,
+      state: this.scenarioDirector.getState(),
+      availableHooks,
+      knowledge: {
+        isActorKnown: (actorId) => this.social.isKnown(actorId),
+        getActorPresentation: (actorId) => {
+          const actor = this.social.getBuddy(actorId);
+          return actor
+            ? { id: actor.id, displayName: actor.displayName, handle: actor.handle }
+            : null;
+        },
+      },
+    });
   }
 
   public consumeScenarioHook(
