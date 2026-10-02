@@ -3,6 +3,7 @@ import { EventBus } from '../../src/engine/EventBus';
 import { SimulationEngine } from '../../src/engine/SimulationEngine';
 import { SocialEngine } from '../../src/engine/SocialEngine';
 import { ScenarioDirector } from '../../src/engine/scenario/ScenarioDirector';
+import { emptyScenarioState } from '../../src/engine/scenario/ScenarioState';
 import type { ScenarioDefinition } from '../../src/engine/scenario/types';
 
 function someoneFromBefore(): ScenarioDefinition {
@@ -137,7 +138,7 @@ describe('Scenario dynamic role binding + initialization (#144)', () => {
   });
 
   it('persists bindings through the current SimulationEngine snapshot seam', () => {
-    const engine = new SimulationEngine();
+    const engine = new SimulationEngine({ scenarios: emptyScenarioState() } as never);
     engine.social.removeBuddy('maya');
     const [created] = engine.initializeScenarios([someoneFromBefore()], 'snapshot-seed');
     expect(created).toBeDefined();
