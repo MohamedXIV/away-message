@@ -75,23 +75,30 @@ describe('knowledge-safe ScenarioProjection (#147)', () => {
     const noraHandle = engine.social.getBuddy('nora')!.handle;
     engine.social.learnHandle('nora', noraHandle);
 
-    const [known] = engine.getScenarioProjection({ colocatedActorIds: ['nora'] }, [definition]);
-    expect(known?.roles[0]?.actor).toEqual({
-      id: 'nora',
-      displayName: 'Nora',
-      knownHandles: [noraHandle],
-    });
-    expect(known?.availableHooks[0]?.actor?.id).toBe('nora');
-    expect(known?.roles[0]?.actor).not.toHaveProperty('location');
-    expect(known?.roles[0]?.actor).not.toHaveProperty('job');
-    expect(known?.roles[0]?.actor).not.toHaveProperty('relationship');
-    expect(known).not.toHaveProperty('address');
+    const [knownButHidden] = engine.getScenarioProjection(
+      { colocatedActorIds: ['nora'] },
+      [definition],
+    );
+    expect(knownButHidden?.presentationState).toBe('hidden');
+    expect(knownButHidden?.roles[0]?.actor).toBeNull();
+    // The currently observed hook may surface the already-known actor, but the
+    // hidden Scenario-to-role binding itself remains opaque until discovery.
+    expect(knownButHidden?.availableHooks[0]?.actor?.id).toBe('nora');
 
     expect(engine.consumeScenarioHook(instance!.id, 'contact_nearby', [definition])).toBe(true);
     const [visible] = engine.getScenarioProjection({}, [definition]);
     expect(visible?.presentationState).toBe('active');
     expect(visible?.titleKey).toBe('scenario.projection_probe.title');
     expect(visible?.summaryKey).toBe('scenario.projection_probe.summary');
+    expect(visible?.roles[0]?.actor).toEqual({
+      id: 'nora',
+      displayName: 'Nora',
+      knownHandles: [noraHandle],
+    });
+    expect(visible?.roles[0]?.actor).not.toHaveProperty('location');
+    expect(visible?.roles[0]?.actor).not.toHaveProperty('job');
+    expect(visible?.roles[0]?.actor).not.toHaveProperty('relationship');
+    expect(visible).not.toHaveProperty('address');
   });
 
   it('requires no visible Scenario UI and cleanly projects zero scenarios', () => {
