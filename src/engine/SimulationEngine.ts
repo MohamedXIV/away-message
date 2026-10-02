@@ -106,6 +106,7 @@ import {
   type ScenarioObservation,
 } from './scenario/ScenarioDirector';
 import type { ScenarioDefinition, ScenarioInstance, ScenarioLifecycle } from './scenario/types';
+import { projectScenarios, type ScenarioProjection } from './scenario/ScenarioProjection';
 import { GENERATED_SCENARIOS } from './scenarioContent.generated';
 
 export * from './SimulationEngineLegacyFacade';
@@ -1081,6 +1082,19 @@ export class SimulationEngine extends LegacySimulationEngine {
     definitions: readonly ScenarioDefinition[] = GENERATED_SCENARIOS,
   ): ScenarioHookOpportunity[] {
     return this.scenarioDirector.getAvailableHooks(definitions, observation);
+  }
+
+  public getScenarioProjection(
+    observation: ScenarioObservation,
+    definitions: readonly ScenarioDefinition[] = GENERATED_SCENARIOS,
+  ): ScenarioProjection[] {
+    const opportunities = this.scenarioDirector.getAvailableHooks(definitions, observation);
+    return projectScenarios(
+      definitions,
+      this.scenarioDirector.getState(),
+      this.social,
+      opportunities,
+    );
   }
 
   public consumeScenarioHook(
