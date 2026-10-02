@@ -4,11 +4,6 @@ import { SimulationEngine } from '../../src/engine/SimulationEngine';
 import { emptyScenarioState } from '../../src/engine/scenario/ScenarioState';
 import { GENERATED_SCENARIOS } from '../../src/engine/scenarioContent.generated';
 
-const byId = (id: string) => {
-  const definition = GENERATED_SCENARIOS.find((scenario) => scenario.id === id);
-  if (!definition) throw new Error(`Missing generated Scenario '${id}'.`);
-  return definition;
-};
 
 describe('Scenario / Story Thread end-to-end sandbox gate (#148)', () => {
   it('deterministically selects eligible authored Scenarios for a true new save', () => {
