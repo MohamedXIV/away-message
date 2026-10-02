@@ -337,11 +337,13 @@ export class SimulationEngine extends LegacySimulationEngine {
     this.physicalShopStates = clonePhysicalShopStates(initialState?.physicalShops ?? {});
     this.activeTravelState = initialState?.activeTravel ? cloneActiveTravel(initialState.activeTravel) : null;
     this.scenarioDirector = new ScenarioDirector(this.social, initialState?.scenarios);
-    this.scenarioDirector.initialize(GENERATED_SCENARIOS, {
-      seed: initialState?.scenarioSeed ?? 'default',
-      atMinute: this.clock.getTotalMinutes(),
-      maxInstances: 3,
-    });
+    if (initialState?.scenarios === undefined) {
+      this.scenarioDirector.initialize(GENERATED_SCENARIOS, {
+        seed: initialState?.scenarioSeed ?? 'default',
+        atMinute: this.clock.getTotalMinutes(),
+        maxInstances: 3,
+      });
+    }
     this.innerVoice = new InnerVoiceEngine(
       (initialState as TransportSimulationState | undefined)?.innerVoice ?? null,
     );
@@ -1046,11 +1048,6 @@ export class SimulationEngine extends LegacySimulationEngine {
     this.physicalShopStates = clonePhysicalShopStates(persistedPhysicalShops ?? {});
     this.activeTravelState = persistedActiveTravel;
     this.scenarioDirector.hydrate(persistedScenarios);
-    this.scenarioDirector.initialize(GENERATED_SCENARIOS, {
-      seed: 'default',
-      atMinute: this.clock.getTotalMinutes(),
-      maxInstances: 3,
-    });
     this.innerVoice.hydrate(snapshot.innerVoice ?? emptyInnerVoicePersistedState());
     this.delivery.setArrivalHandler((order) => this.materializeDeliveryParcel(order));
   }
