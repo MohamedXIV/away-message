@@ -66,13 +66,14 @@ describe('Scenario dynamic role binding + initialization (#144)', () => {
     });
 
     expect(instance).toBeDefined();
-    expect(instance.bindings.old_acquaintance).toBe('nora');
-    expect(instance.bindings.old_acquaintance).not.toBe('maya');
+    const bound = instance!;
+    expect(bound.bindings.old_acquaintance).toBe('nora');
+    expect(bound.bindings.old_acquaintance).not.toBe('maya');
     expect(social.getRelationships('nora')?.familiarity).toBeGreaterThanOrEqual(35);
     expect(social.isKnown('nora')).toBe(true);
-    expect(instance.facts).toEqual({ origin: 'nearby_village' });
-    expect(instance.facts).not.toHaveProperty('familiarity');
-    expect(instance.facts).not.toHaveProperty('known_handle');
+    expect(bound.facts).toEqual({ origin: 'nearby_village' });
+    expect(bound.facts).not.toHaveProperty('familiarity');
+    expect(bound.facts).not.toHaveProperty('known_handle');
   });
 
   it('resolves role conflicts deterministically and allows optional roles to remain unbound', () => {
@@ -105,8 +106,9 @@ describe('Scenario dynamic role binding + initialization (#144)', () => {
     const director = new ScenarioDirector(social);
     const [instance] = director.initialize([definition], { seed: 'conflict-seed' });
 
-    expect(instance.bindings.required_local).toBe('henderson');
-    expect(instance.bindings.optional_same_pool).toBeNull();
+    expect(instance).toBeDefined();
+    expect(instance!.bindings.required_local).toBe('henderson');
+    expect(instance!.bindings.optional_same_pool).toBeNull();
   });
 
   it('records failed required binding so reload/time advancement cannot reroll it', () => {
@@ -138,7 +140,8 @@ describe('Scenario dynamic role binding + initialization (#144)', () => {
     const engine = new SimulationEngine();
     engine.social.removeBuddy('maya');
     const [created] = engine.initializeScenarios([someoneFromBefore()], 'snapshot-seed');
-    expect(created.bindings.old_acquaintance).toBe('nora');
+    expect(created).toBeDefined();
+    expect(created!.bindings.old_acquaintance).toBe('nora');
 
     const snapshot = engine.exportSnapshot();
     const restored = new SimulationEngine(snapshot);
