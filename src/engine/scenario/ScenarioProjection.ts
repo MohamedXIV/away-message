@@ -1,5 +1,5 @@
 import type { SocialEngine } from '../SocialEngine';
-import type { ScenarioHookOpportunity, ScenarioObservation } from './ScenarioDirector';
+import type { ScenarioHookOpportunity } from './ScenarioDirector';
 import type { ScenarioRuntimeState } from './ScenarioState';
 import type { ScenarioDefinition, ScenarioLifecycle } from './types';
 
@@ -55,7 +55,6 @@ export function projectScenarios(
   state: ScenarioRuntimeState,
   social: SocialEngine,
   opportunities: readonly ScenarioHookOpportunity[],
-  _observation?: ScenarioObservation,
 ): ScenarioProjection[] {
   const definitionsById = new Map(definitions.map((definition) => [definition.id, definition]));
   const hooksByInstance = new Map<string, ScenarioHookOpportunity[]>();
