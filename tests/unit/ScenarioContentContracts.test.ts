@@ -120,6 +120,7 @@ describe('Scenario contracts + authored content pipeline (#143)', () => {
 
   it('hydrates bounded per-save instance state and round-trips it through SimulationEngine', () => {
     const state: ScenarioRuntimeState = {
+      attemptedDefinitionIds: ['someone_from_before'],
       instances: {
         'someone_from_before:0': {
           id: 'someone_from_before:0',
