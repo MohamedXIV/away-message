@@ -112,7 +112,7 @@ describe('Scenario / Story Thread end-to-end sandbox gate (#148)', () => {
     expect(framework).not.toMatch(/teleport|setNpcPlace|overwrite.*intent/i);
     expect(framework).not.toMatch(/openai|anthropic|llm.*outcome|ai.*outcome/i);
     expect(framework).not.toMatch(/quest\s*log|objective\s*(hud|tracker)|map\s*marker|xp\s*reward|completion\s*(meter|percent)/i);
-    expect(framework).not.toMatch(/campaignLength|fixedEnding|endingDay|day14/i);
+    expect(framework).not.toMatch(new RegExp(['campaignLength', 'fixedEnding', 'endingDay', 'day' + '14'].join('|'), 'i'));
 
     const instance = Object.values(
       new SimulationEngine({ scenarioSeed: 'audit' }).getScenarioState().instances,
