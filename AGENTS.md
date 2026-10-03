@@ -27,6 +27,8 @@ The approved living-character direction is a **Life Matrix orchestration layer o
 
 The approved narrative-framing direction supports **optional semi-baked Scenarios / Story Threads**. A Scenario is authored situation + dynamic semantic role binding + optional hooks over canonical simulation. It is not a fixed campaign, quest authority, named-character requirement, or replacement for Social/Life Matrix/Knowledge/WorldEvents. A Scenario may fail to instantiate, remain dormant forever, or resolve without a dedicated quest UI.
 
+The approved next production direction is **Production Phase A — First Production Art & Playable Slice**. Stop treating new engine architecture as the default next step. Build one representative residence → public place → transit → home loop with real modular assets, one production character kit, and systemic atmosphere. The asset architecture is frozen; the final whole-game art style is not. Prove a repeatable solo-dev production pipeline before scaling content.
+
 The approved spatial-presence direction keeps **WHERE**, **WHY/WHAT**, and **HOW IT IS SHOWN** separate. Local physical actors may have canonical future-ready `(x,y,z)` town-space positions; Place/Space membership is derived from authored containment; purpose/activity/role is separate state; venue operations execute already-approved local intent; actor representation (full puppet/silhouette/background/hidden) is transient presentation driven by the authored camera/view, not simulation identity.
 
 ## Commands (run from repo root)
@@ -65,6 +67,7 @@ Read the relevant core docs before changing a system.
 - Spatial presence / venue activities / actor presentation: `docs/11-SPATIAL-PRESENCE-VENUES-AND-ACTOR-PRESENTATION.md` plus #92–#95.
 - Environment/weather, Player Needs, Mood, and public Game Context authority: `docs/12-ENVIRONMENT-PLAYER-NEEDS-AND-MOOD.md`, execution roadmap `docs/superpowers/plans/2026-10-01-environment-needs-mood-foundation.md`, plus #128–#132.
 - Optional Scenarios / Story Threads: `docs/13-SCENARIOS-AND-STORY-THREADS.md` plus `docs/superpowers/plans/2026-10-01-scenario-story-thread-roadmap.md`.
+- Production Phase A / first real art playable slice: `docs/14-FIRST-PRODUCTION-ART-AND-PLAYABLE-SLICE.md` plus `docs/superpowers/plans/2026-10-03-first-production-art-playable-slice.md`.
 - Living characters / Life Matrix / Orion salvage: `docs/superpowers/specs/2026-09-10-orion-salvage-life-matrix-design.md` plus `docs/superpowers/plans/2026-09-10-orion-salvage-roadmap.md`.
 - First Life Matrix implementation slice: `docs/superpowers/plans/2026-09-10-life-matrix-foundation.md`.
 
@@ -91,6 +94,10 @@ If a useful Orion concept overlaps an existing Away system, follow the salvage d
 - **Scenario is framing, not authority.** Scenario definitions bind semantic roles and optional hooks; normal domain systems still own relationships, knowledge, location, jobs, appointments, items, events, transit and outcomes. Store references/provenance instead of copies.
 - **Scenario roles are dynamic.** Never require `maya`, another sacred actor ID, a mandatory romance, or a fixed encounter. Failed role binding may legitimately mean the Scenario does not instantiate for that save.
 - **Scenario presentation is optional.** A thread may remain hidden, surface through Inner Voice/search/dialogue, or later gain journal/mini-quest UX. Do not build a mandatory quest tracker unless explicitly approved.
+- **Production art must prove the generic runtime, not bypass it.** Asset IDs live in content definitions; gameplay rules do not hard-code production asset paths, one residence renderer, one actor, or one public-place implementation.
+- **Mutable visuals stay modular.** Beds, desks, rugs, lamps, PCs, parcels, player decor and other stateful/replaceable objects must remain separate from the static room image when gameplay changes them.
+- **Evaluate art in runtime.** Do not freeze the whole-game visual style from concept sheets alone. Compare at most a small number of serious treatments inside the real Phaser/React composition with lighting, weather, characters and interaction.
+- **Production Phase A is a slice, not content completion.** One strong residence, one modular prop kit, one production character, one hero public place, one street/bus-stop set and one bus interior are enough to prove the pipeline. Do not expand to every district/character/place before the slice gate passes.
 - **WHERE is not WHY/WHAT.** Canonical physical location/spatial position is separate from actor purpose, activity, role, intent and consequence. Do not encode `AtWork`/`AtStore`/`AtCafe` as a substitute for both physical position and activity state.
 - **XYZ is simulation geography, not a free-roam mandate.** Local physical actors may use canonical `{x,y,z}` town-space positions; include `z` now for future floors/height while current content normally uses `0`. Do not infer that this requires continuous movement, a navmesh, or realtime 3D.
 - **Containment decides membership; triggers report change.** Place/Space membership is derived deterministically from authored spatial bounds/footprints and canonical position. Enter/Exit triggers/events are consequences for consumers, never the sole source of physical-location truth. Phaser overlap/render state cannot create canonical presence.
