@@ -1,6 +1,6 @@
 # Away Message — Open-Ended Sandbox Docs
 
-**This package contains exactly 15 core files.**
+**This package contains exactly 16 core files.**
 
 It defines the current open-ended sandbox product direction. Historical evaluation-era material must not be treated as current product authority.
 
@@ -20,8 +20,9 @@ It defines the current open-ended sandbox product direction. Historical evaluati
 12. `11-SPATIAL-PRESENCE-VENUES-AND-ACTOR-PRESENTATION.md`
 13. `12-ENVIRONMENT-PLAYER-NEEDS-AND-MOOD.md`
 14. `13-SCENARIOS-AND-STORY-THREADS.md`
+15. `14-FIRST-PRODUCTION-ART-AND-PLAYABLE-SLICE.md`
 
-This README is the fifteenth core file.
+This README is the sixteenth core file.
 
 Detailed implementation specs/plans under `docs/superpowers/` supplement these core documents and may grow independently.
 
@@ -32,6 +33,7 @@ Current cross-cutting architecture supplements:
 - `docs/superpowers/plans/2026-09-10-life-matrix-foundation.md`
 - `docs/superpowers/plans/2026-10-01-environment-needs-mood-foundation.md`
 - `docs/superpowers/plans/2026-10-01-scenario-story-thread-roadmap.md`
+- `docs/superpowers/plans/2026-10-03-first-production-art-playable-slice.md`
 
 ## Goal
 
@@ -40,6 +42,8 @@ Build an open-ended life sandbox where the player can keep living, working, upgr
 There is no mandatory named NPC, romance route, café meeting, or named-character progression path. Named characters may exist as ordinary authored inhabitants or temporary fixtures, but systems must resolve actors through roles, capabilities, relationships, location, knowledge and current state.
 
 Optional semi-baked **Scenarios** may give a save personal history, unresolved relationships, rumors, debts, memories or leads. They bind semantic roles dynamically and remain optional framing over the sandbox; they are not a fixed campaign or mandatory quest route. See `13-SCENARIOS-AND-STORY-THREADS.md`.
+
+**Production Phase A** now moves the architecture-complete sandbox into a first real modular art/playable slice before broad content scaling. The asset architecture is frozen; the final global visual style is still evaluated in runtime. See `14-FIRST-PRODUCTION-ART-AND-PLAYABLE-SLICE.md`.
 
 ## Canonical stack
 
