@@ -79,6 +79,7 @@ Online AI enriches surface dialogue and generated content; deterministic rules r
 | 41 | Vitest Domain Unit/Integration Suites | 100% pure TS unit test coverage across clock, downloads, VFS, economy, schedules, persistence | E2E Track | docs/06, 07 |
 | 42 | Tier 5 Adversarial Coverage Hardening | White-box stress tests, chaos injection, memory leak checks, security audit | M5 | docs/07 |
 | 43 | Optional Scenario / Story Thread Framework | Semi-baked authored situations with dynamic role binding, pre-game context, optional hooks and no mandatory quest UI | M4 | docs/00, 04, 05, 13 |
+| 44 | First Production Art & Playable Slice | Real modular residence/props/character/public-place/transit art plus atmosphere and a representative playable loop | PA | docs/02, 07, 14 |
 
 ---
 
@@ -136,6 +137,42 @@ Execution roadmap: `docs/superpowers/plans/2026-10-01-scenario-story-thread-road
 
 ---
 
+## 2C. Production Phase A — First Production Art & Playable Slice
+
+The next approved phase is a **production proof**, not another architecture expansion.
+
+Build one representative playable loop using real production-intent assets:
+
+```text
+cheap starter residence
+→ modular furniture / belongings / PC
+→ window + street
+→ hero public place + persistent character
+→ bus stop + bus interior
+→ return home
+→ time / weather / audio / ambient motion
+```
+
+This phase freezes the production **asset architecture and pipeline**, not the final visual style of the whole game.
+
+Use simple 3D blockouts where valuable to lock spatial relationships/cameras, then Gen-AI and/or paint/edit passes, then separate stateful layers and author them through existing Place/View/asset contracts.
+
+The Phase A result must prove:
+- modular fixture/player-item presentation;
+- a Western/non-anime stylized-realism production character through CharacterRenderer/Away Puppet;
+- one strong public-place composition;
+- one connected street/transit presentation set;
+- systemic time/weather/light/audio response;
+- local playable acceptance sufficient to make #140 meaningful.
+
+Canonical design: `docs/14-FIRST-PRODUCTION-ART-AND-PLAYABLE-SLICE.md`.
+
+Execution roadmap: `docs/superpowers/plans/2026-10-03-first-production-art-playable-slice.md`.
+
+Do not scale production art across the full town/roster until this slice proves a repeatable direction.
+
+---
+
 ## 3. Milestones Decomposition
 
 | # | Milestone Name | Scope & Key Deliverables | Dependencies | Status |
@@ -144,6 +181,7 @@ Execution roadmap: `docs/superpowers/plans/2026-10-01-scenario-story-thread-road
 | **M2** | Desktop Environment & OS Systems | Window Manager, Orion OS 4.8 / 6.x themes, Desktop Shell, Taskbar, Start Menu, CRT shader, Dial-up sim, Add/Remove Programs, Terminal, File Explorer, Control Panel | M1 | DONE |
 | **M3** | Fake Internet, Browser & Desktop Apps | Voyager Browser, 18 Fake Internet sites, search index, Pulse Messenger (AIM), RetroAmp, FlashFetch, ZipMate, PhotoBox 3.0, WeatherBuddy/SearchMate adware, SafeSweep, Notepad | M1, M2 | DONE |
 | **M4** | Sandbox World & 2D World | WorldEventsEngine, governed AI chat, generic authored places, dynamic characters, living interactions, optional in-person encounters, Environment/Player Needs/Mood/Game Context authority, and optional Scenario/Story Thread framing | M1, M2, M3 | IN_PROGRESS |
+| **PA** | First Production Art & Playable Slice | Production-intent modular art pipeline and one real residence/public-place/transit playable loop; establishes a scalable visual baseline before broad content production | M4 core foundations | PLANNED |
 | **M5** | Integration & Adversarial Hardening | Sandbox-loop integration, E2E coverage, adversarial testing, telemetry/debug export and long-run continuity | M1, M2, M3, M4, E2E | PLANNED |
 | **E2E** | E2E Testing Track (Requirement-Driven) | Comprehensive Vitest + Playwright coverage for feature behavior, boundaries, combinations, persistence and long-running sandbox continuity | M1 (for test infra) | IN_PROGRESS |
 
