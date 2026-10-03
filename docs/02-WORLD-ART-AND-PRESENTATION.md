@@ -772,3 +772,37 @@ For this build:
 6. final polish
 
 A beautiful image that blocks modular time/weather/interaction/furniture changes is less valuable than a slightly rougher scene that supports the game's life.
+
+---
+
+## Production Phase A — First Production Art & Playable Slice
+
+The architecture above now moves into its first production proof.
+
+The objective is **not** to create final art for the whole town. It is to prove a repeatable solo-developer art pipeline inside the actual game.
+
+Required representative slice:
+- one cheap starter residence using modular fixture/belonging layers;
+- a small reusable furniture/prop kit;
+- at least one production-quality Western/non-anime stylized-realism modular character;
+- one hero public place from existing canonical content;
+- one residence window/street composition;
+- one bus stop/street-corner presentation;
+- one reusable bus interior;
+- representative time/weather/lighting/ambient-motion/audio states.
+
+Use the documented blockout → authored 2D pipeline where useful.
+
+Before scaling assets, test a maximum of a few serious art treatments in runtime. The chosen treatment becomes the Phase A production baseline only after proving readability, atmosphere, modularity, period coherence, character/environment compatibility and repeatability.
+
+The same production assets must survive real gameplay state:
+- fixture swaps;
+- movable belongings;
+- actor identity continuity;
+- time/weather changes;
+- navigation;
+- save/reload where state matters.
+
+Do not hide state problems by repainting whole scenes.
+
+Canonical detail: `14-FIRST-PRODUCTION-ART-AND-PLAYABLE-SLICE.md`.

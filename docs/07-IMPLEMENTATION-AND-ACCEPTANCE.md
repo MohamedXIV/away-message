@@ -168,3 +168,41 @@ Across different saves:
 10. Is there a reason to keep playing because the sandbox keeps generating meaningful situations?
 
 If the answer requires a specific named character or fixed day, the system is too scripted.
+
+
+## 14. Production Phase A playable-art gate
+
+Before broad final-art/content scaling, prove one representative production slice.
+
+The slice should include:
+- a real cheap residence with modular stateful fixtures/props;
+- visible PC/belonging setup;
+- window/street atmosphere;
+- one production modular character through the real CharacterRenderer seam;
+- one hero public place;
+- bus stop + bus interior;
+- time/weather/lighting/ambient-motion/audio integration.
+
+Acceptance should exercise a short real loop:
+
+```text
+home → PC/window → leave → public place → actor → transit → home → time/weather change → save/reload
+```
+
+The gate is both technical and experiential.
+
+Automated evidence should cover deterministic state and runtime integration where possible.
+
+Local evidence should judge:
+- visual readability/coherence;
+- character/environment fit;
+- fixture-swap correctness;
+- weather/wetness/light behavior;
+- audible ambience/spatial behavior;
+- no obvious duplicate canvases/audio/listeners;
+- acceptable target-browser frame pacing;
+- console sanity.
+
+Issue #140 remains the canonical local living-world visual/audio/target-device acceptance gate and should be completed against this representative production slice rather than placeholders where practical.
+
+Passing this gate authorizes **content scaling**, not a declaration that every future asset/style choice is frozen.
