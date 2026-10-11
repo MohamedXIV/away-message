@@ -60,6 +60,35 @@ Measure:
 
 Do not optimize the fixture while measuring it.
 
+#### Recorded pre-refactor evidence (2026-10-11)
+
+Measured on PR #189 head `59a3f84acdd173775be49f22cf3dc4d3cb991e5a` with Node `v22.23.3` on Linux `6.18.44`, x64, AMD EPYC 9V74 80-Core Processor (3 CPUs reported by the VM). The runner used 7 samples and 2 warmups by default; 60-minute advancement and `exportSnapshot()` used 3 samples and 1 warmup. Times are median / nearest-rank p95 in milliseconds. With these sample counts, p95 is the maximum sample.
+
+| Actors | Local / remote | Zero-minute realtime | +1 game minute | +60 game minutes | All-actor intent pass |
+| ---: | ---: | ---: | ---: | ---: | ---: |
+| 20 | 16 / 4 | 0.981 / 1.082 | 1.735 / 2.411 | 1.788 / 1.890 | 0.700 / 2.461 |
+| 100 | 76 / 24 | 5.178 / 7.109 | 10.043 / 13.523 | 10.949 / 11.193 | 4.382 / 4.982 |
+| 250 | 189 / 61 | 22.330 / 32.991 | 47.556 / 63.298 | 45.232 / 45.726 | 19.978 / 34.322 |
+| 500 | 376 / 124 | 76.524 / 77.753 | 164.223 / 180.296 | 174.225 / 195.385 | 72.924 / 76.329 |
+
+| Actors | Cold `getState()` | Cached `getState()` | `SocialEngine.getState()` | `exportSnapshot()` | Serialized snapshot bytes | Heap used after setup bytes |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 20 | 0.367 / 0.686 | 0.017 / 0.042 | 0.084 / 0.085 | 1.630 / 1.671 | 106,943 | 22,258,288 |
+| 100 | 0.521 / 1.347 | 0.012 / 0.015 | 0.249 / 0.318 | 8.241 / 9.579 | 570,609 | 29,375,976 |
+| 250 | 1.592 / 2.678 | 0.012 / 0.014 | 0.719 / 0.904 | 20.065 / 20.228 | 1,440,843 | 33,234,672 |
+| 500 | 5.883 / 11.164 | 0.012 / 0.013 | 1.407 / 2.127 | 41.758 / 45.480 | 2,891,299 | 96,102,616 |
+
+| Messages | `SocialEngine.getState()` median / p95 ms | Serialized social snapshot bytes |
+| ---: | ---: | ---: |
+| 0 | 0.042 / 0.081 | 70,746 |
+| 100 | 0.046 / 0.069 | 97,036 |
+| 1,000 | 0.121 / 0.127 | 334,206 |
+| 5,000 | 0.175 / 2.537 | 1,390,086 |
+
+Interpretation: a single zero-minute realtime call rises from 0.981 ms at 20 actors to 76.524 ms at 500; the 500-actor intent pass is 72.924 ms. Cold state construction and export also grow with population, while cached `getState()` stays near 0.012 ms at 100–500 actors. At 5,000 messages the serialized social snapshot is about 1.39 MB. These results support the RAF population-work, Life Matrix scaling, broad snapshot, history-growth, and export-cost risks above.
+
+Caveats: pressure and NPC mobility planning/progression are included in the realtime and game-minute totals, not isolated as separate timings. Heap used is the process's absolute reading after fixture setup, not a per-fixture allocation delta; it varied across repeat runs. A second run on the same VM produced identical serialized sizes and similar 500-actor medians (zero-minute 77.234 ms, +1 minute 162.303 ms, +60 minutes 170.525 ms), but tail samples and heap readings varied, so the first run is the recorded baseline and values are comparative rather than publication-grade. No production simulation optimization was included.
+
 ### #170 — RAF decoupling
 
 The first behavioral refactor.
