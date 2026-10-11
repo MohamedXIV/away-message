@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { SimulationEngine } from '../../src/engine/SimulationEngine';
 import {
   countBenchmarkMessages,
   createSimulationBenchmarkFixture,
@@ -28,6 +29,28 @@ describe('SimulationBenchmarkFixture', () => {
     for (const actorId of fixture.localActorIds) {
       expect(fixture.engine.getFidelityTier(actorId)).toBe('important_local');
     }
+  });
+
+  it('keeps the RAF benchmark call below a game-minute boundary', () => {
+    const fixture = createSimulationBenchmarkFixture(20);
+    const before = fixture.engine.clock.getTotalMinutes();
+
+    fixture.engine.advanceRealTime(1 / 60);
+
+    expect(fixture.engine.clock.getTotalMinutes()).toBe(before);
+  });
+
+  it('round-trips the prepared benchmark snapshot without changing roster size', () => {
+    const fixture = createSimulationBenchmarkFixture(20);
+    for (const actorId of fixture.actorIds) fixture.engine.getLifeSnapshot(actorId);
+
+    const restored = new SimulationEngine(
+      structuredClone(fixture.engine.exportSnapshot()),
+    );
+
+    expect(restored.social.getBuddies()).toHaveLength(20);
+    expect(restored.social.getBuddies().map((buddy) => buddy.id).sort())
+      .toEqual(fixture.actorIds);
   });
 
   it('populates the requested synthetic conversation count through normal social writes', () => {
