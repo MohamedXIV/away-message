@@ -26,6 +26,7 @@ interface PopulationResult {
   oneGameMinute: SampleStats;
   sixtyGameMinutes: SampleStats;
   allActorIntentPass: SampleStats;
+  coldGetState: SampleStats;
   cachedGetState: SampleStats;
   socialGetState: SampleStats;
   exportSnapshot: SampleStats;
@@ -97,6 +98,35 @@ function measure(
   };
 }
 
+function measureIsolated<T>(
+  setup: () => T,
+  action: (subject: T) => void,
+  options?: { samples?: number; warmups?: number },
+): SampleStats {
+  const localSamples = options?.samples ?? samples;
+  const localWarmups = options?.warmups ?? warmups;
+  const durations: number[] = [];
+
+  for (let index = 0; index < localWarmups + localSamples; index += 1) {
+    const subject = setup();
+    const started = nowMs();
+    action(subject);
+    const duration = nowMs() - started;
+    if (index >= localWarmups) durations.push(duration);
+  }
+
+  const sorted = [...durations].sort((a, b) => a - b);
+  const total = durations.reduce((sum, value) => sum + value, 0);
+  return {
+    samples: durations.length,
+    minMs: round(sorted[0] ?? 0),
+    medianMs: round(percentile(sorted, 0.5)),
+    meanMs: round(total / Math.max(1, durations.length)),
+    p95Ms: round(percentile(sorted, 0.95)),
+    maxMs: round(sorted[sorted.length - 1] ?? 0),
+  };
+}
+
 function benchmarkPopulation(population: number): PopulationResult {
   const fixture = createSimulationBenchmarkFixture(population);
   const { engine, actorIds } = fixture;
@@ -108,6 +138,12 @@ function benchmarkPopulation(population: number): PopulationResult {
   }
 
   const heapUsedBytesAfterSetup = process.memoryUsage().heapUsed;
+  const preparedSnapshot = engine.exportSnapshot();
+
+  const freshEngine = () =>
+    new (engine.constructor as typeof engine.constructor)(
+      structuredClone(preparedSnapshot),
+    ) as typeof engine;
 
   // 9 default calls (2 warmups + 7 samples) at 1/60 sec remain below one
   // accumulated real second, so this captures the current zero-game-minute
@@ -122,8 +158,15 @@ function benchmarkPopulation(population: number): PopulationResult {
     }
   });
 
-  // Cached read: useful control showing the cheap path once a full state
-  // publication has already been assembled.
+  // Cold and cached reads are separated. Isolated setup happens outside the
+  // timed region so constructor/rehydration cost does not contaminate getState.
+  const coldGetState = measureIsolated(
+    freshEngine,
+    (fresh) => {
+      fresh.getState();
+    },
+  );
+
   engine.getState();
   const cachedGetState = measure(() => {
     engine.getState();
@@ -133,17 +176,20 @@ function benchmarkPopulation(population: number): PopulationResult {
     engine.social.getState();
   });
 
-  // advanceGameMinutes includes current canonical minute work, subscriber
-  // publication/getState rebuild, NPC pressure evolution and mobility.
-  const oneGameMinute = measure(() => {
-    engine.advanceGameMinutes(1, 'benchmark:one-minute');
-  });
+  // Mutating time samples run from the exact same prepared snapshot every
+  // time. This avoids later samples observing trips/events created by earlier
+  // samples and makes before/after comparisons reproducible.
+  const oneGameMinute = measureIsolated(
+    freshEngine,
+    (fresh) => {
+      fresh.advanceGameMinutes(1, 'benchmark:one-minute');
+    },
+  );
 
-  // Fewer coarse-jump samples keep the benchmark bounded while still
-  // recording the current skip-ahead cost.
-  const sixtyGameMinutes = measure(
-    () => {
-      engine.advanceGameMinutes(60, 'benchmark:sixty-minutes');
+  const sixtyGameMinutes = measureIsolated(
+    freshEngine,
+    (fresh) => {
+      fresh.advanceGameMinutes(60, 'benchmark:sixty-minutes');
     },
     { samples: Math.min(3, samples), warmups: 1 },
   );
@@ -155,7 +201,7 @@ function benchmarkPopulation(population: number): PopulationResult {
     { samples: Math.min(3, samples), warmups: 1 },
   );
 
-  const serializedSnapshot = JSON.stringify(engine.exportSnapshot());
+  const serializedSnapshot = JSON.stringify(preparedSnapshot);
 
   return {
     population,
@@ -167,6 +213,7 @@ function benchmarkPopulation(population: number): PopulationResult {
     oneGameMinute,
     sixtyGameMinutes,
     allActorIntentPass,
+    coldGetState,
     cachedGetState,
     socialGetState,
     exportSnapshot,
