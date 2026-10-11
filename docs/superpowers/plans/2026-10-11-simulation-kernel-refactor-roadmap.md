@@ -99,7 +99,22 @@ Normal RAF frames with no elapsed simulation minute must not run population-wide
 
 Preserve existing transit commitments and coarse-jump determinism.
 
-This issue should produce the first direct before/after benchmark win.
+#### Recorded before/after evidence (2026-10-11)
+
+Compared #169 measured code head `d3cca57f68e63b0d9cb46c1ce33934f3a8380316` with #170 measured code head `4331939457f720158fd52f10c03417b886626501`. Both runs used Node `v22.23.3` on Linux `6.18.44`, x64, AMD EPYC 9V74 80-Core Processor (3 CPUs reported). Benchmark configuration was unchanged: 7 samples / 2 warmups, median / nearest-rank p95 in milliseconds. With seven samples, p95 is the maximum sample.
+
+| Actors | Local / remote | #169 zero-minute realtime | #170 zero-minute realtime | Median reduction |
+| ---: | ---: | ---: | ---: | ---: |
+| 20 | 16 / 4 | 0.852 / 3.784 | 0.006 / 0.148 | 99.30% |
+| 100 | 76 / 24 | 6.988 / 8.991 | 0.008 / 0.206 | 99.89% |
+| 250 | 189 / 61 | 25.928 / 36.981 | 0.009 / 0.009 | 99.97% |
+| 500 | 376 / 124 | 84.569 / 89.131 | 0.009 / 0.010 | 99.99% |
+
+A second run on the #170 code head returned zero-minute medians / p95 of 0.007 / 0.090, 0.004 / 0.005, 0.008 / 0.008, and 0.009 / 0.010 ms at 20 / 100 / 250 / 500 actors. The 500-actor median fell from 84.569 ms to 0.009 ms, a 99.99% reduction. The sub-millisecond tails varied between runs, while the 500-actor result repeated exactly. These measurements show the RAF path now avoids the population-wide pressure and mobility passes.
+
+At 500 actors, the separate +1 minute and +60 minute medians were 157.253 ms and 160.862 ms after the change (178.687 ms and 169.787 ms in #169); the all-actor intent pass was 75.864 ms (82.663 ms in #169). The absolute snapshot sizes and conversation serialization sizes matched the #169 run. The local/remote partitions, synthetic mobility fixture and benchmark setup were unchanged. Mobility planning/progression logic itself was not modified; the new regression test confirms equivalent NPC state and one boundary pass across different realtime chunk sizes.
+
+Caveats: the same Node/VM and default sample configuration were used, but these remain comparative microbenchmarks. The recorded p95 is the maximum of seven samples, and the near-zero RAF path is sensitive to sub-millisecond scheduling noise. No Rust, workers, Life Matrix rules, transit rules, pressure logic, or NPC mobility logic were changed; this issue changes only when existing NPC passes run.
 
 ---
 
