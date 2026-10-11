@@ -62,32 +62,34 @@ Do not optimize the fixture while measuring it.
 
 #### Recorded pre-refactor evidence (2026-10-11)
 
-Measured on PR #189 head `59a3f84acdd173775be49f22cf3dc4d3cb991e5a` with Node `v22.23.3` on Linux `6.18.44`, x64, AMD EPYC 9V74 80-Core Processor (3 CPUs reported by the VM). The runner used 7 samples and 2 warmups by default; 60-minute advancement and `exportSnapshot()` used 3 samples and 1 warmup. Times are median / nearest-rank p95 in milliseconds. With these sample counts, p95 is the maximum sample.
+Measured on PR #189 code head `d3cca57f68e63b0d9cb46c1ce33934f3a8380316` with Node `v22.23.3` on Linux `6.18.44`, x64, AMD EPYC 9V74 80-Core Processor (3 CPUs reported by the VM). The runner used the default 7 samples and 2 warmups; 60-minute advancement and `exportSnapshot()` used 3 samples and 1 warmup. Times are median / nearest-rank p95 in milliseconds. At these sample counts p95 is the maximum sample. The total roster includes authored seed actors; mobility samples cover the local actors only.
 
-| Actors | Local / remote | Zero-minute realtime | +1 game minute | +60 game minutes | All-actor intent pass |
-| ---: | ---: | ---: | ---: | ---: | ---: |
-| 20 | 16 / 4 | 0.981 / 1.082 | 1.735 / 2.411 | 1.788 / 1.890 | 0.700 / 2.461 |
-| 100 | 76 / 24 | 5.178 / 7.109 | 10.043 / 13.523 | 10.949 / 11.193 | 4.382 / 4.982 |
-| 250 | 189 / 61 | 22.330 / 32.991 | 47.556 / 63.298 | 45.232 / 45.726 | 19.978 / 34.322 |
-| 500 | 376 / 124 | 76.524 / 77.753 | 164.223 / 180.296 | 174.225 / 195.385 | 72.924 / 76.329 |
+| Actors | Local / remote | Zero-minute realtime | +1 game minute | +60 game minutes | All-actor intent pass | NPC mobility planning | NPC mobility progression |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 20 | 16 / 4 | 0.852 / 3.784 | 2.023 / 4.290 | 1.845 / 1.983 | 0.588 / 2.057 | 0.343 / 0.863 | 0.096 / 0.113 |
+| 100 | 76 / 24 | 6.988 / 8.991 | 11.044 / 12.362 | 9.529 / 10.389 | 6.232 / 7.599 | 1.684 / 3.021 | 0.479 / 0.669 |
+| 250 | 189 / 61 | 25.928 / 36.981 | 51.435 / 61.498 | 50.267 / 50.654 | 20.988 / 24.113 | 2.743 / 6.170 | 1.113 / 2.007 |
+| 500 | 376 / 124 | 84.569 / 89.131 | 178.687 / 185.847 | 169.787 / 175.859 | 82.663 / 93.123 | 4.687 / 5.267 | 2.807 / 3.628 |
 
 | Actors | Cold `getState()` | Cached `getState()` | `SocialEngine.getState()` | `exportSnapshot()` | Serialized snapshot bytes | Heap used after setup bytes |
 | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| 20 | 0.367 / 0.686 | 0.017 / 0.042 | 0.084 / 0.085 | 1.630 / 1.671 | 106,943 | 22,258,288 |
-| 100 | 0.521 / 1.347 | 0.012 / 0.015 | 0.249 / 0.318 | 8.241 / 9.579 | 570,609 | 29,375,976 |
-| 250 | 1.592 / 2.678 | 0.012 / 0.014 | 0.719 / 0.904 | 20.065 / 20.228 | 1,440,843 | 33,234,672 |
-| 500 | 5.883 / 11.164 | 0.012 / 0.013 | 1.407 / 2.127 | 41.758 / 45.480 | 2,891,299 | 96,102,616 |
+| 20 | 0.341 / 0.558 | 0.017 / 0.080 | 0.089 / 0.166 | 1.927 / 1.951 | 106,943 | 17,968,192 |
+| 100 | 0.562 / 1.012 | 0.012 / 0.016 | 0.255 / 0.811 | 8.468 / 9.423 | 570,609 | 32,462,520 |
+| 250 | 1.822 / 2.837 | 0.011 / 0.013 | 0.845 / 1.442 | 21.268 / 22.001 | 1,440,843 | 27,226,840 |
+| 500 | 6.839 / 10.496 | 0.011 / 0.014 | 1.559 / 2.017 | 48.181 / 67.379 | 2,891,299 | 65,163,072 |
 
 | Messages | `SocialEngine.getState()` median / p95 ms | Serialized social snapshot bytes |
 | ---: | ---: | ---: |
-| 0 | 0.042 / 0.081 | 70,746 |
-| 100 | 0.046 / 0.069 | 97,036 |
-| 1,000 | 0.121 / 0.127 | 334,206 |
-| 5,000 | 0.175 / 2.537 | 1,390,086 |
+| 0 | 0.043 / 0.068 | 70,746 |
+| 100 | 0.047 / 0.051 | 97,036 |
+| 1,000 | 0.093 / 0.113 | 334,206 |
+| 5,000 | 0.223 / 1.850 | 1,390,086 |
 
-Interpretation: a single zero-minute realtime call rises from 0.981 ms at 20 actors to 76.524 ms at 500; the 500-actor intent pass is 72.924 ms. Cold state construction and export also grow with population, while cached `getState()` stays near 0.012 ms at 100–500 actors. At 5,000 messages the serialized social snapshot is about 1.39 MB. These results support the RAF population-work, Life Matrix scaling, broad snapshot, history-growth, and export-cost risks above.
+Interpretation: the zero-minute realtime median grows from 0.852 ms at 20 actors to 84.569 ms at 500, and the all-actor intent pass reaches 82.663 ms at 500. This supports the RAF population-work and Life Matrix scaling risks. Cold state construction and export grow with roster size while cached `getState()` stays near 0.011–0.017 ms. Isolated mobility planning and progression also scale with local actors. At 5,000 messages the serialized social snapshot is about 1.39 MB, supporting the history-growth risk. Export reaches 48.181 ms at 500, supporting the serialization-cost risk.
 
-Caveats: pressure and NPC mobility planning/progression are included in the realtime and game-minute totals, not isolated as separate timings. Heap used is the process's absolute reading after fixture setup, not a per-fixture allocation delta; it varied across repeat runs. A second run on the same VM produced identical serialized sizes and similar 500-actor medians (zero-minute 77.234 ms, +1 minute 162.303 ms, +60 minutes 170.525 ms), but tail samples and heap readings varied, so the first run is the recorded baseline and values are comparative rather than publication-grade. No production simulation optimization was included.
+Two runs on the same VM had identical serialized sizes. At 500 actors, repeat medians were similar: zero-minute realtime 84.569 / 86.802 ms; +1 minute 178.687 / 177.826 ms; +60 minutes 169.787 / 179.147 ms; intent pass 82.663 / 81.692 ms; mobility planning 4.687 / 4.100 ms; mobility progression 2.807 / 2.343 ms; cold state 6.839 / 7.857 ms; export 48.181 / 47.529 ms. Heap readings varied (65.2 MB / 77.4 MB at 500 actors) and tail samples sometimes varied, so the first run is the recorded baseline and these results are comparative rather than publication-grade.
+
+Caveats: isolated mobility timings use deterministic synthetic route-backed intents for local actors and measure pure planning/progression separately; fixture construction and state cloning are outside each timed region. Realtime/game-minute timings include current engine work, including pressure and mobility. Heap used is the process's absolute reading after setup, not a per-fixture allocation delta. No production simulation optimization was included.
 
 ### #170 — RAF decoupling
 
