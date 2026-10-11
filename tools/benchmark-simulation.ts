@@ -1,5 +1,6 @@
 import { writeFileSync } from 'node:fs';
 import { arch, cpus, platform, release } from 'node:os';
+import { SimulationEngine } from '../src/engine/SimulationEngine';
 import {
   BENCHMARK_POPULATIONS,
   countBenchmarkMessages,
@@ -141,9 +142,7 @@ function benchmarkPopulation(population: number): PopulationResult {
   const preparedSnapshot = engine.exportSnapshot();
 
   const freshEngine = () =>
-    new (engine.constructor as typeof engine.constructor)(
-      structuredClone(preparedSnapshot),
-    ) as typeof engine;
+    new SimulationEngine(structuredClone(preparedSnapshot));
 
   // 9 default calls (2 warmups + 7 samples) at 1/60 sec remain below one
   // accumulated real second, so this captures the current zero-game-minute
