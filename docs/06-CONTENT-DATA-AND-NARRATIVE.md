@@ -219,6 +219,32 @@ Organize optional content by capability, place, event, archetype or reusable int
 
 Avoid directory/file layouts that imply a fixed mandatory cast or linear day-by-day campaign.
 
+## 13.1 Ink authoring direction
+
+After the #179–#185 migration, real Ink/inkjs is the preferred authoring format for substantial conversational/narrative flow.
+
+Use Ink for:
+- branching and weave/recombination;
+- authored dialogue structure;
+- local flow variables;
+- semantic utterance plans;
+- optional Scenario-hook presentation;
+- reusable school/work/social/romance interaction flows.
+
+Keep TypeScript for:
+- domain systems;
+- policies;
+- validation;
+- bounded context projection;
+- semantic-effect contracts;
+- runtime integration.
+
+The current TypeScript `StoryKnot` data and legacy-named `InkAdapter` are migration input, not the long-term authoring target.
+
+Ink content must read bounded canonical projections and submit validated semantic effect requests. It must not mirror canonical money, relationship, location, knowledge, item, transit, school/work or world-event state into a competing variable universe.
+
+Every canonical authored flow must have a usable offline/default realization. Optional AI may rewrite or realize approved meaning but cannot alter semantic effect payloads.
+
 ## 14. Narrative testing
 
 Test:
