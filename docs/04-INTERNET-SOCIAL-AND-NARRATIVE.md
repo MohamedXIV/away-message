@@ -331,6 +331,17 @@ Characters are data-driven actors with:
 
 The product must remain valid when any legacy authored actor is absent.
 
+### Local, remote, and surface-only identities
+
+Current runtime already distinguishes physical reach without forking social identity:
+
+- a local `BuddyCharacter` may participate in town/spatial/transit/in-person life;
+- a remote `BuddyCharacter` is the same canonical social actor model, with relationships/memories/chat but no local physical projection while remote;
+- the same actor may move remote → local → remote without losing identity/history;
+- forum authors, anonymous tripcodes, generated-site voices and other surface identities may remain content only and need not become `BuddyCharacter` records.
+
+An online surface becomes a persistent social actor only through an explicit governed promotion/binding path. Online origin alone must never imply that the person is local.
+
 ## 4. Hidden relationship dimensions
 
 Relationship state remains multidimensional and hidden from the player.
@@ -361,6 +372,22 @@ AI output must:
 - pass schema validation;
 - degrade to bounded template fallback on failure;
 - never make a specific authored NPC necessary for progression.
+
+### Authored meaning and Ink
+
+The preferred direction for authored conversations is real Ink/inkjs through the governed NarrativeHost described in `16-INK-NARRATIVE-AUTHORING-AND-GENERATIVE-INTERNET.md`.
+
+The contract is:
+
+```text
+simulation/domain rules → truth and allowed outcomes
+Ink                    → authored flow + intended meaning
+AI                     → optional wording realization
+```
+
+Canonical local/remote characters normally use exact authored text, style rewrites, or constrained realization where required facts and forbidden claims are explicit. Offline/default wording must carry the same gameplay meaning.
+
+Generated fake-internet surfaces may grant AI wider freedom for flavor, rumors, opinions and ambient identities, but generated claims are not canonical facts merely because they appear on a page or forum.
 
 ## 7. Schedules and Life Matrix
 

@@ -1,6 +1,6 @@
 # Away Message — Open-Ended Sandbox Docs
 
-**This package contains exactly 16 core files.**
+**This package contains exactly 18 core files.**
 
 It defines the current open-ended sandbox product direction. Historical evaluation-era material must not be treated as current product authority.
 
@@ -21,8 +21,10 @@ It defines the current open-ended sandbox product direction. Historical evaluati
 13. `12-ENVIRONMENT-PLAYER-NEEDS-AND-MOOD.md`
 14. `13-SCENARIOS-AND-STORY-THREADS.md`
 15. `14-FIRST-PRODUCTION-ART-AND-PLAYABLE-SLICE.md`
+16. `15-SIMULATION-KERNEL-AND-RUNTIME-BOUNDARY.md`
+17. `16-INK-NARRATIVE-AUTHORING-AND-GENERATIVE-INTERNET.md`
 
-This README is the sixteenth core file.
+This README is the eighteenth core file.
 
 Detailed implementation specs/plans under `docs/superpowers/` supplement these core documents and may grow independently.
 
@@ -34,6 +36,8 @@ Current cross-cutting architecture supplements:
 - `docs/superpowers/plans/2026-10-01-environment-needs-mood-foundation.md`
 - `docs/superpowers/plans/2026-10-01-scenario-story-thread-roadmap.md`
 - `docs/superpowers/plans/2026-10-03-first-production-art-playable-slice.md`
+- `docs/superpowers/plans/2026-10-11-simulation-kernel-refactor-roadmap.md`
+- `docs/superpowers/plans/2026-10-11-ink-narrative-runtime-roadmap.md`
 
 ## Goal
 
@@ -44,6 +48,8 @@ There is no mandatory named NPC, romance route, café meeting, or named-characte
 Optional semi-baked **Scenarios** may give a save personal history, unresolved relationships, rumors, debts, memories or leads. They bind semantic roles dynamically and remain optional framing over the sandbox; they are not a fixed campaign or mandatory quest route. See `13-SCENARIOS-AND-STORY-THREADS.md`.
 
 **Production Phase A** now moves the architecture-complete sandbox into a first real modular art/playable slice before broad content scaling. The asset architecture is frozen; the final global visual style is still evaluated in runtime. See `14-FIRST-PRODUCTION-ART-AND-PLAYABLE-SLICE.md`.
+
+The current approved pre-Education technical work is the bounded **Simulation Kernel refactor** followed by the **Ink narrative/runtime restoration**. The simulation refactor removes render-frame-driven population work and establishes `SimulationHost`/Worker-ready boundaries. Ink then becomes the text-first authored conversation/narrative language over bounded simulation truth, with AI optional as a realization layer and with the existing local/remote character identity model preserved. See `15-SIMULATION-KERNEL-AND-RUNTIME-BOUNDARY.md` and `16-INK-NARRATIVE-AUTHORING-AND-GENERATIVE-INTERNET.md`.
 
 ## Canonical stack
 
@@ -314,10 +320,12 @@ Examples:
 - world-event modifiers consumed through domain boundaries
 
 **Governed narrative / AI surfaces**
-- optional authored prose and semantic narrative data
-- AI-paraphrased dialogue where enabled
-- validated semantic effects only
-- no ownership of canonical simulation truth
+- real Ink/inkjs is the target authored conversation/narrative flow language after #179–#185;
+- simulation/domain projections provide truth and allowed outcomes;
+- Ink owns authored branching/recombination, local flow state and intended meaning only;
+- AI may optionally realize/rephrase approved meaning, with wider freedom only on explicitly generative fake-net surfaces;
+- validated semantic effects only;
+- no ownership of canonical simulation truth.
 
 ### Narrative text is not the world database
 
