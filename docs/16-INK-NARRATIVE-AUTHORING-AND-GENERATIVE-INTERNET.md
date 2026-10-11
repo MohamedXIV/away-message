@@ -10,6 +10,8 @@ Execution roadmap: `docs/superpowers/plans/2026-10-11-ink-narrative-runtime-road
 
 Companion simulation refactor: #168–#177
 
+Semantic model: `docs/17-SEMANTIC-WORLD-AND-CHARACTER-MODEL.md`
+
 ## Purpose
 
 Restore real Ink/inkjs as Away Message's preferred authored narrative and conversational flow language while preserving the open-ended sandbox, current character identity model, offline playability, and deterministic simulation authority.
@@ -303,6 +305,8 @@ Exact API is implementation detail.
 ## 7. Narrative context
 
 Ink reads projections, not the whole universe.
+
+The preferred projection/query vocabulary comes from the semantic model in `docs/17-SEMANTIC-WORLD-AND-CHARACTER-MODEL.md`. Ink should ask for stable meaning such as `actor.is_student`, `actor.knows(fact)`, `relationship.is(trusted)` or `interaction.can(study_together)` rather than bind authored content to raw engine storage fields.
 
 Examples:
 - current day/time band;
