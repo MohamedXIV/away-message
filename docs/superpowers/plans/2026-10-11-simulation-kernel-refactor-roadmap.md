@@ -4,6 +4,8 @@ Date: 2026-10-11
 
 Canonical design: `docs/15-SIMULATION-KERNEL-AND-RUNTIME-BOUNDARY.md`
 
+Semantic model: `docs/17-SEMANTIC-WORLD-AND-CHARACTER-MODEL.md`
+
 Tracking epic: #168
 
 ## Goal
@@ -20,17 +22,19 @@ This roadmap preserves the good pure domain logic and replaces the runtime shell
 #170 Remove population work from RAF
   ↓
 #171 Composed SimulationKernel
-  ├─────────────┐
-  ↓             ↓
-#172 Projections #173 Social/history split
-  └──────┬──────┘
-         ↓
+  ↓
+#187 Semantic world/character model
+  ├──────────────────┐
+  ↓                  ↓
+#172 Projections   #173 Social/history split
+  └──────────┬───────┘
+             ↓
 #174 Persistence + deterministic identity
-         ↓
+             ↓
 #175 SimulationHost + Dedicated Worker
-         ↓
+             ↓
 #176 Rust/WASM/native spike + decision
-         ↓
+             ↓
 #177 School-ready integration gate
 ```
 
@@ -77,6 +81,21 @@ Replace historical inheritance growth with a composed kernel and explicit domain
 Do not rewrite pure subsystems merely to move files.
 
 Temporary compatibility facades are allowed only with named deletion conditions.
+
+### #187 — Semantic world/character model
+
+Establish the typed meaning layer over canonical domain truth before UI/Ink/Worker consumers hard-code another generation of engine internals.
+
+Required separations include:
+- actor lifecycle/contact state vs derived relationship stage;
+- world fact vs actor knowledge vs claim/rumor vs player knowledge;
+- structured semantic memory vs prose presentation;
+- canonical state vs derived semantics;
+- meaningful fidelity tiers for local/background/remote actors.
+
+Use small typed TypeScript contracts for semantic context, pure queries, validated commands/effects, typed influences and semantic events **only where real consumers need them**.
+
+Do not build a general-purpose scripting language, GOAP planner or universal ModifierEngine.
 
 ### #172 — Bounded publication
 
@@ -165,6 +184,8 @@ Re-run the scale suite and prove:
 - no render-frame-driven population simulation;
 - one canonical writer;
 - composition-first ownership;
+- semantic truth/knowledge/memory/relationship boundaries from #187;
+- fidelity-aware character simulation with no remote physical work;
 - bounded UI projections;
 - chat history not hot snapshot baggage;
 - clean current persistence;
@@ -234,6 +255,9 @@ Where possible:
 
 When #177 closes, the project should be ready to create the Senior Year / Education epic on top of:
 - generic obligations/scheduler;
+- semantic context/query/command boundaries;
+- structured knowledge/memory and derived relationship semantics;
+- fidelity-aware character simulation;
 - scalable social state;
 - bounded history;
 - worker-isolated simulation;

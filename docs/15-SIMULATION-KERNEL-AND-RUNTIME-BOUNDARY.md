@@ -8,6 +8,8 @@ Tracking epic: #168
 
 Execution roadmap: `docs/superpowers/plans/2026-10-11-simulation-kernel-refactor-roadmap.md`
 
+Semantic model: `docs/17-SEMANTIC-WORLD-AND-CHARACTER-MODEL.md`
+
 ## Purpose
 
 Refactor Away Message's simulation runtime before Senior Year / Education expansion so the game can scale to a materially larger life-sim population without coupling canonical simulation work to render FPS, whole-world snapshot cloning, or the historical `SimulationEngine` inheritance stack.
@@ -188,6 +190,20 @@ Phaser 4 / CharacterRenderer / Audio
 ```
 
 The canonical simulation has one writer.
+
+Between domain truth and consumers, the refactor also establishes the bounded semantic model defined in `docs/17-SEMANTIC-WORLD-AND-CHARACTER-MODEL.md`:
+
+```text
+canonical domain truth
+        ↓
+semantic context / queries / influences
+        ↓
+bounded projections + validated commands
+        ↓
+Ink / React / Phaser / AI realization
+```
+
+This is a typed TypeScript contract layer, **not** a new scripting language or duplicate simulation.
 
 Presentation may subscribe to bounded projections and semantic change notifications, but React/Phaser never become state authorities.
 
@@ -386,12 +402,13 @@ Tracked under #168:
 1. #169 — capture scaling/snapshot baseline;
 2. #170 — remove full-population work from RAF;
 3. #171 — replace engine inheritance with composition;
-4. #172 — revisions + bounded projections;
-5. #173 — split SocialEngine / cold conversation history;
-6. #174 — simplify persistence + deterministic identity;
-7. #175 — SimulationHost + Dedicated Worker;
-8. #176 — Rust/WASM/native benchmark spike and decision;
-9. #177 — school-ready integration gate.
+4. #187 — establish semantic world/character model and derived-state laws;
+5. #172 — revisions + bounded projections;
+6. #173 — split SocialEngine / cold conversation history;
+7. #174 — simplify persistence + deterministic identity;
+8. #175 — SimulationHost + Dedicated Worker;
+9. #176 — Rust/WASM/native benchmark spike and decision;
+10. #177 — school-ready integration gate.
 
 Some P1 work may overlap after P0 invariants are pinned, but avoid competing changes to the same engine shell without an explicit dependency plan.
 
@@ -419,6 +436,9 @@ This phase is complete when:
 - zero-minute RAF frames do not perform full-population simulation planning;
 - representative 20/100/250/500 NPC benchmark fixtures exist before and after;
 - canonical orchestration is composition-first;
+- lifecycle/contact/relationship semantics do not duplicate authority;
+- important memory/knowledge/claim truth is structurally distinguishable;
+- simulation fidelity differentiates important local/background local/remote work;
 - UI/renderers consume bounded serializable projections;
 - historical chat is not normal hot-world snapshot baggage;
 - current persistence is simplified under pre-freeze policy;
