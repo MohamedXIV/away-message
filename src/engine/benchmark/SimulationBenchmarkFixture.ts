@@ -1,5 +1,13 @@
 import { buildCharacter } from '../CharacterEngine';
 import { SimulationEngine } from '../SimulationEngine';
+import type { CharacterIntent } from '../life/types';
+import {
+  getSharedPlaceAliases,
+  getSharedTransitNetwork,
+  type NpcMobilityState,
+} from '../transit/NpcTrips';
+import { planTravel } from '../transit/TravelPlanner';
+import type { TransitNetwork } from '../transit/TransitNetwork';
 import type { BuddyCharacter, CharacterArchetype } from '../types';
 
 export const BENCHMARK_POPULATIONS = [20, 100, 250, 500] as const;
@@ -12,11 +20,79 @@ export interface SimulationBenchmarkFixture {
   seedActorCount: number;
 }
 
+export interface SimulationBenchmarkMobilityFixture {
+  actorIds: string[];
+  state: NpcMobilityState;
+  intents: Map<string, CharacterIntent>;
+  nowMinute: number;
+  network: TransitNetwork;
+  aliases: Record<string, string>;
+}
+
 /** Rehydrate every mutating sample from the same prepared benchmark state. */
 export function createSimulationBenchmarkEngineFactory(
   preparedSnapshot: ReturnType<SimulationEngine['exportSnapshot']>,
 ): () => SimulationEngine {
   return () => new SimulationEngine(structuredClone(preparedSnapshot));
+}
+
+export function createSimulationBenchmarkMobilityFixture(
+  fixture: SimulationBenchmarkFixture,
+): SimulationBenchmarkMobilityFixture {
+  const network = getSharedTransitNetwork();
+  if (!network) throw new Error('The generated transit network is unavailable for mobility benchmarking.');
+
+  const nowMinute = fixture.engine.clock.getTotalMinutes();
+  const placeIds = [...network.places.keys()].sort();
+  let route: { originPlaceId: string; destinationPlaceId: string } | undefined;
+
+  for (const originPlaceId of placeIds) {
+    for (const destinationPlaceId of placeIds) {
+      if (originPlaceId === destinationPlaceId) continue;
+      const planned = planTravel(network, {
+        originPlaceId,
+        destinationPlaceId,
+        departAtMinute: nowMinute,
+        policy: 'fastest',
+      });
+      if (planned.ok) {
+        route = { originPlaceId, destinationPlaceId };
+        break;
+      }
+    }
+    if (route) break;
+  }
+
+  if (!route) throw new Error('No route is available for mobility benchmarking.');
+
+  const actorIds = [...fixture.localActorIds];
+  const intents = new Map<string, CharacterIntent>();
+  for (const actorId of actorIds) {
+    intents.set(actorId, {
+      actorId,
+      kind: 'travel_to_place',
+      sourceId: `benchmark:mobility:${actorId}`,
+      targetPlaceId: route.destinationPlaceId,
+      priority: 50,
+      reasons: ['benchmark_mobility'],
+      blockers: [],
+      earliestAt: nowMinute + 60,
+      latestAt: nowMinute + 120,
+      reevaluateAtMinute: nowMinute + 60,
+    });
+  }
+
+  return {
+    actorIds,
+    state: {
+      trips: {},
+      places: Object.fromEntries(actorIds.map((actorId) => [actorId, route!.originPlaceId])),
+    },
+    intents,
+    nowMinute,
+    network,
+    aliases: getSharedPlaceAliases(),
+  };
 }
 
 const ARCHETYPES: readonly CharacterArchetype[] = [

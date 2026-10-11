@@ -4,8 +4,10 @@ import {
   countBenchmarkMessages,
   createSimulationBenchmarkFixture,
   createSimulationBenchmarkEngineFactory,
+  createSimulationBenchmarkMobilityFixture,
   populateBenchmarkMessages,
 } from '../../src/engine/benchmark/SimulationBenchmarkFixture';
+import { planDueNpcTrips, progressNpcTrips } from '../../src/engine/transit/NpcTrips';
 
 describe('SimulationBenchmarkFixture', () => {
   it('builds a deterministic target-sized roster with stable reach partitioning', () => {
@@ -55,6 +57,25 @@ describe('SimulationBenchmarkFixture', () => {
     expect(nextSample).not.toBe(firstSample);
     expect(firstSample.exportSnapshot()).not.toEqual(untouchedSample.exportSnapshot());
     expect(nextSample.exportSnapshot()).toEqual(untouchedSample.exportSnapshot());
+  });
+
+  it('builds route-backed local mobility work for isolated planning and progression baselines', () => {
+    const fixture = createSimulationBenchmarkFixture(20);
+    const mobility = createSimulationBenchmarkMobilityFixture(fixture);
+    expect(mobility.actorIds).toEqual(fixture.localActorIds);
+    expect(Object.keys(mobility.state.places).sort()).toEqual(fixture.localActorIds);
+
+    const planned = planDueNpcTrips(
+      mobility.state,
+      mobility.intents,
+      mobility.nowMinute,
+      { network: mobility.network, aliases: mobility.aliases },
+    );
+    expect(planned.planned).toHaveLength(fixture.localActorIds.length);
+    expect(planned.failed).toHaveLength(0);
+
+    const progressed = progressNpcTrips(planned.state, mobility.nowMinute + 60);
+    expect(progressed.arrivals).toHaveLength(fixture.localActorIds.length);
   });
 
   it('round-trips the prepared benchmark snapshot without changing roster size', () => {

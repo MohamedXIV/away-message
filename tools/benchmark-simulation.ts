@@ -1,10 +1,12 @@
 import { writeFileSync } from 'node:fs';
 import { arch, cpus, platform, release } from 'node:os';
+import { planDueNpcTrips, progressNpcTrips } from '../src/engine/transit/NpcTrips';
 import {
   BENCHMARK_POPULATIONS,
   countBenchmarkMessages,
   createSimulationBenchmarkFixture,
   createSimulationBenchmarkEngineFactory,
+  createSimulationBenchmarkMobilityFixture,
   populateBenchmarkMessages,
 } from '../src/engine/benchmark/SimulationBenchmarkFixture';
 
@@ -21,12 +23,15 @@ interface PopulationResult {
   population: number;
   localActors: number;
   remoteActors: number;
+  mobilityActors: number;
   seedActors: number;
   heapUsedBytesAfterSetup: number;
   zeroMinuteRealtime: SampleStats;
   oneGameMinute: SampleStats;
   sixtyGameMinutes: SampleStats;
   allActorIntentPass: SampleStats;
+  npcMobilityPlanning: SampleStats;
+  npcMobilityProgression: SampleStats;
   coldGetState: SampleStats;
   cachedGetState: SampleStats;
   socialGetState: SampleStats;
@@ -200,18 +205,70 @@ function benchmarkPopulation(population: number): PopulationResult {
     { samples: Math.min(3, samples), warmups: 1 },
   );
 
+  const mobilityFixture = createSimulationBenchmarkMobilityFixture(fixture);
+  const mobilityDependencies = {
+    network: mobilityFixture.network,
+    aliases: mobilityFixture.aliases,
+  };
+  const plannedMobility = planDueNpcTrips(
+    structuredClone(mobilityFixture.state),
+    mobilityFixture.intents,
+    mobilityFixture.nowMinute,
+    mobilityDependencies,
+  );
+  if (
+    plannedMobility.planned.length !== mobilityFixture.actorIds.length ||
+    plannedMobility.failed.length !== 0
+  ) {
+    throw new Error(
+      `Mobility fixture expected ${mobilityFixture.actorIds.length} local trips, planned ${plannedMobility.planned.length}, failed ${plannedMobility.failed.length}.`,
+    );
+  }
+
+  const progressedMobility = progressNpcTrips(
+    plannedMobility.state,
+    mobilityFixture.nowMinute + 60,
+  );
+  if (progressedMobility.arrivals.length !== mobilityFixture.actorIds.length) {
+    throw new Error(
+      `Mobility fixture expected ${mobilityFixture.actorIds.length} trip arrivals, found ${progressedMobility.arrivals.length}.`,
+    );
+  }
+
+  const npcMobilityPlanning = measureIsolated(
+    () => structuredClone(mobilityFixture.state),
+    (state) => {
+      planDueNpcTrips(
+        state,
+        mobilityFixture.intents,
+        mobilityFixture.nowMinute,
+        mobilityDependencies,
+      );
+    },
+  );
+
+  const npcMobilityProgression = measureIsolated(
+    () => structuredClone(plannedMobility.state),
+    (state) => {
+      progressNpcTrips(state, mobilityFixture.nowMinute + 60);
+    },
+  );
+
   const serializedSnapshot = JSON.stringify(preparedSnapshot);
 
   return {
     population,
     localActors: fixture.localActorIds.length,
     remoteActors: fixture.remoteActorIds.length,
+    mobilityActors: mobilityFixture.actorIds.length,
     seedActors: fixture.seedActorCount,
     heapUsedBytesAfterSetup,
     zeroMinuteRealtime,
     oneGameMinute,
     sixtyGameMinutes,
     allActorIntentPass,
+    npcMobilityPlanning,
+    npcMobilityProgression,
     coldGetState,
     cachedGetState,
     socialGetState,
