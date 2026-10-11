@@ -429,6 +429,13 @@ export class SimulationEngine extends SimulationEngineCore {
     }
   }
 
+  /** Run population-wide NPC work only after authoritative game time moves. */
+  private settleAtAuthoritativeMinuteBoundary(previousMinute: number): void {
+    if (this.clock.getTotalMinutes() === previousMinute) return;
+    this.advanceAllNpcPressuresToNow();
+    this.progressNpcMobility();
+  }
+
   /**
    * Before a coarse clock jump, commit only actors that do not already have
    * a mobility record. Existing planned/active commitments must remain under
@@ -465,16 +472,16 @@ export class SimulationEngine extends SimulationEngineCore {
   }
 
   public override advanceGameMinutes(minutes: number, reason?: string): void {
-    this.primeMissingNpcMobility();
+    const previousMinute = this.clock.getTotalMinutes();
+    if (minutes > 0) this.primeMissingNpcMobility();
     super.advanceGameMinutes(minutes, reason);
-    this.advanceAllNpcPressuresToNow();
-    this.progressNpcMobility();
+    this.settleAtAuthoritativeMinuteBoundary(previousMinute);
   }
 
   public override advanceRealTime(deltaRealSeconds: number): void {
+    const previousMinute = this.clock.getTotalMinutes();
     super.advanceRealTime(deltaRealSeconds);
-    this.advanceAllNpcPressuresToNow();
-    this.progressNpcMobility();
+    this.settleAtAuthoritativeMinuteBoundary(previousMinute);
   }
 
   public getNpcPressure(actorId: string): LifePressureView | null {
@@ -1363,10 +1370,7 @@ export class SimulationEngine extends SimulationEngineCore {
     // Any clock movement evolves coarse NPC pressure (idempotent at a minute).
     const beforeMinute = this.clock.getTotalMinutes();
     const result = super.dispatchAction(action);
-    if (this.clock.getTotalMinutes() !== beforeMinute) {
-      this.advanceAllNpcPressuresToNow();
-      this.progressNpcMobility();
-    }
+    this.settleAtAuthoritativeMinuteBoundary(beforeMinute);
     return result;
   }
 
