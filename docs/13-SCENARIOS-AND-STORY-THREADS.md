@@ -512,6 +512,36 @@ That choice is separate from Scenario authority.
 
 ---
 
+## 14.1 Ink presentation integration
+
+The Scenario framework remains the authority for definition eligibility, semantic role binding, ScenarioInstance lifecycle, consumed hooks and safe ScenarioProjection.
+
+Real Ink/inkjs, restored under #179–#185, is a **presentation/authoring layer over those hooks**, not a replacement Scenario engine.
+
+Canonical flow:
+
+```text
+Scenario observes canonical state
+        ↓
+ScenarioHookAvailable
+        ↓
+NarrativeCoordinator starts/binds an Ink flow
+        ↓
+Ink authors the interaction/discovery flow
+        ↓
+validated semantic effect request
+        ↓
+owning domain validates and commits
+```
+
+Scenario role bindings must be supplied to Ink as safe context/reference data rather than copied into an Ink-owned identity system.
+
+Ink may keep only local flow state. It must not duplicate Scenario lifecycle/bindings or canonical relationship/location/knowledge truth.
+
+AI may optionally realize Ink-approved wording under the narrative freedom policy; an offline authored/default realization remains required for canonical Scenario interactions.
+
+---
+
 ## 15. Inner Voice integration
 
 Inner Voice is a natural presentation surface, but Scenario does not bypass its governance.
