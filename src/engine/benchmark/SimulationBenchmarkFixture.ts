@@ -12,6 +12,13 @@ export interface SimulationBenchmarkFixture {
   seedActorCount: number;
 }
 
+/** Rehydrate every mutating sample from the same prepared benchmark state. */
+export function createSimulationBenchmarkEngineFactory(
+  preparedSnapshot: ReturnType<SimulationEngine['exportSnapshot']>,
+): () => SimulationEngine {
+  return () => new SimulationEngine(structuredClone(preparedSnapshot));
+}
+
 const ARCHETYPES: readonly CharacterArchetype[] = [
   'student',
   'coworker',

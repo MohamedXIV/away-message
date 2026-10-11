@@ -1,10 +1,10 @@
 import { writeFileSync } from 'node:fs';
 import { arch, cpus, platform, release } from 'node:os';
-import { SimulationEngine } from '../src/engine/SimulationEngine';
 import {
   BENCHMARK_POPULATIONS,
   countBenchmarkMessages,
   createSimulationBenchmarkFixture,
+  createSimulationBenchmarkEngineFactory,
   populateBenchmarkMessages,
 } from '../src/engine/benchmark/SimulationBenchmarkFixture';
 
@@ -141,14 +141,14 @@ function benchmarkPopulation(population: number): PopulationResult {
   const heapUsedBytesAfterSetup = process.memoryUsage().heapUsed;
   const preparedSnapshot = engine.exportSnapshot();
 
-  const freshEngine = () =>
-    new SimulationEngine(structuredClone(preparedSnapshot));
+  const freshEngine = createSimulationBenchmarkEngineFactory(preparedSnapshot);
 
-  // 9 default calls (2 warmups + 7 samples) at 1/60 sec remain below one
-  // accumulated real second, so this captures the current zero-game-minute
-  // RAF path that #170 is explicitly intended to eliminate.
-  const zeroMinuteRealtime = measure(() => {
-    engine.advanceRealTime(1 / 60);
+  // Each RAF-style sample starts from the same snapshot. Even without a game
+  // minute, advanceRealTime updates realtime telemetry and runs legacy NPC
+  // pressure/mobility work, so reusing the engine would contaminate later
+  // samples. Rehydration remains outside the timed action.
+  const zeroMinuteRealtime = measureIsolated(freshEngine, (fresh) => {
+    fresh.advanceRealTime(1 / 60);
   });
 
   const allActorIntentPass = measure(() => {

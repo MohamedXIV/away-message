@@ -3,6 +3,7 @@ import { SimulationEngine } from '../../src/engine/SimulationEngine';
 import {
   countBenchmarkMessages,
   createSimulationBenchmarkFixture,
+  createSimulationBenchmarkEngineFactory,
   populateBenchmarkMessages,
 } from '../../src/engine/benchmark/SimulationBenchmarkFixture';
 
@@ -38,6 +39,22 @@ describe('SimulationBenchmarkFixture', () => {
     fixture.engine.advanceRealTime(1 / 60);
 
     expect(fixture.engine.clock.getTotalMinutes()).toBe(before);
+  });
+
+  it('creates independent realtime samples from the same prepared snapshot', () => {
+    const fixture = createSimulationBenchmarkFixture(20);
+    for (const actorId of fixture.actorIds) fixture.engine.getLifeSnapshot(actorId);
+    const preparedSnapshot = fixture.engine.exportSnapshot();
+    const createFreshEngine = createSimulationBenchmarkEngineFactory(preparedSnapshot);
+    const firstSample = createFreshEngine();
+    firstSample.advanceRealTime(1 / 60);
+
+    const nextSample = createFreshEngine();
+    const untouchedSample = createFreshEngine();
+
+    expect(nextSample).not.toBe(firstSample);
+    expect(firstSample.exportSnapshot()).not.toEqual(untouchedSample.exportSnapshot());
+    expect(nextSample.exportSnapshot()).toEqual(untouchedSample.exportSnapshot());
   });
 
   it('round-trips the prepared benchmark snapshot without changing roster size', () => {
