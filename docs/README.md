@@ -1,6 +1,6 @@
 # Away Message — Open-Ended Sandbox Docs
 
-**This package contains exactly 18 core files.**
+**This package contains exactly 19 core files.**
 
 It defines the current open-ended sandbox product direction. Historical evaluation-era material must not be treated as current product authority.
 
@@ -23,8 +23,9 @@ It defines the current open-ended sandbox product direction. Historical evaluati
 15. `14-FIRST-PRODUCTION-ART-AND-PLAYABLE-SLICE.md`
 16. `15-SIMULATION-KERNEL-AND-RUNTIME-BOUNDARY.md`
 17. `16-INK-NARRATIVE-AUTHORING-AND-GENERATIVE-INTERNET.md`
+18. `17-SEMANTIC-WORLD-AND-CHARACTER-MODEL.md`
 
-This README is the eighteenth core file.
+This README is the nineteenth core file.
 
 Detailed implementation specs/plans under `docs/superpowers/` supplement these core documents and may grow independently.
 
@@ -50,6 +51,8 @@ Optional semi-baked **Scenarios** may give a save personal history, unresolved r
 **Production Phase A** now moves the architecture-complete sandbox into a first real modular art/playable slice before broad content scaling. The asset architecture is frozen; the final global visual style is still evaluated in runtime. See `14-FIRST-PRODUCTION-ART-AND-PLAYABLE-SLICE.md`.
 
 The current approved pre-Education technical work is the bounded **Simulation Kernel refactor** followed by the **Ink narrative/runtime restoration**. The simulation refactor removes render-frame-driven population work and establishes `SimulationHost`/Worker-ready boundaries. Ink then becomes the text-first authored conversation/narrative language over bounded simulation truth, with AI optional as a realization layer and with the existing local/remote character identity model preserved. See `15-SIMULATION-KERNEL-AND-RUNTIME-BOUNDARY.md` and `16-INK-NARRATIVE-AUTHORING-AND-GENERATIVE-INTERNET.md`.
+
+The simulation refactor also establishes the **Semantic World & Character Model**: small canonical truth, derived semantics, structured knowledge/memory, explainable queries/effects/influences and fidelity-aware actors. This is a typed contract layer, not a new scripting language. See `17-SEMANTIC-WORLD-AND-CHARACTER-MODEL.md`.
 
 ## Canonical stack
 
