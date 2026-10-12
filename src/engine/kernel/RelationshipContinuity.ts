@@ -140,5 +140,4 @@ export class RelationshipContinuity {
     } catch { /* witness shifts never break the tick */ }
     return count;
   }
-
-
+}
