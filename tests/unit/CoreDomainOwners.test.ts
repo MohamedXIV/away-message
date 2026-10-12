@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { SimulationEngine } from '../../src/engine/SimulationEngine';
 import { createCoreDomainOwners } from '../../src/engine/kernel/CoreDomainOwners';
+import { projectCoreState } from '../../src/engine/kernel/CoreStateProjection';
 
 describe('CoreDomainOwners', () => {
   it('composes one event bus and coherent read-only game context', () => {
@@ -26,6 +27,19 @@ describe('CoreDomainOwners', () => {
       .toEqual(source.social.getBuddies().map((buddy) => buddy.id).sort());
     expect(domains.gameContext.time.current()).toEqual(domains.clock.getTime());
     expect(domains.os.getCurrentOsId()).toEqual(source.os.getCurrentOsId());
+  });
+
+  it('projects current-format Core reads from the same domain authority graph', () => {
+    const source = new SimulationEngine();
+    const state = source.getState();
+    const owners = createCoreDomainOwners(source.exportSnapshot());
+    const projected = projectCoreState(owners, state.activeView);
+
+    expect(projected.time).toEqual(state.time);
+    expect(projected.social).toEqual(state.social);
+    expect(projected.world).toEqual(state.world);
+    expect(projected.player).toEqual(state.player);
+    expect(projected.activeView).toBe(state.activeView);
   });
 
   it('does not duplicate domain owners across a single runtime graph', () => {
