@@ -31,10 +31,10 @@ import { MyPlaceEngine, SEED_PROFILE_ALIASES } from './MyPlaceEngine';
 import { validatePersistedBuddy } from './CharacterEngine';
 import { generateNewcomer, shouldAutoDiscover, NEWCOMER_METVIA_ROTATION } from './CharacterDirector';
 import { STRAINED_ANNOYANCE, DISTANT_ANNOYANCE, GONE_ANNOYANCE, traitCompatibility } from './SocialEngine';
-import { pickConfrontLine, pickFarewellLine, pickReturnLine, pickInitiativeText, pickRsvpLine, pickStoodUpLine, pickMeetingApologyLine, pickShiftWrapLine, pickGigWrapLine, pickArchiveWrapLine, pickGuestbookLine, pickGuestbookReplyLine, pickTop8NewsLine, pickOutingWarmLine, pickOutingReservedLine, pickRentReminderLine, pickRentSternLine, pickRentNudgeLine, pickRentThanksLine, pickJobAcceptLine, pickJobRejectLine, pickLeaveLine, pickMediationAskLine, pickMediationThanks, pickMyplaceUpdateLine, pickContactLine, pickContactBounce, pickBackstoryReintro, pickRuninSpot, pickRuninVerb, classifyScheduleBlock, AGENDA_LABELS, rollSeeded100, pickSeeded, spreadSeed, resolveArchetype } from './characterTemplates';
+import { pickConfrontLine, pickFarewellLine, pickReturnLine, pickInitiativeText, pickRsvpLine, pickStoodUpLine, pickMeetingApologyLine, pickShiftWrapLine, pickGigWrapLine, pickArchiveWrapLine, pickGuestbookLine, pickGuestbookReplyLine, pickTop8NewsLine, pickOutingWarmLine, pickOutingReservedLine, pickRentReminderLine, pickRentSternLine, pickRentNudgeLine, pickRentThanksLine, pickLeaveLine, pickMediationAskLine, pickMediationThanks, pickMyplaceUpdateLine, pickContactLine, pickContactBounce, pickBackstoryReintro, pickRuninSpot, pickRuninVerb, classifyScheduleBlock, AGENDA_LABELS, rollSeeded100, pickSeeded, spreadSeed, resolveArchetype } from './characterTemplates';
 import { parseMeetupProposal, isMeetupCancelText, decideRsvp, decideNpcShow, appointmentRoll, locationLabel, LOCATION_SLOTS, pickCoopDetail, SHIFT_WAGE } from './AppointmentDirector';
 import { OUTINGS, isValidOutingId, isOutingOpen, outingHoursLabel, dinerStaffEncounter, canalRegularEncounter, buildLaundromatRumor, MIN_OUTING_ENERGY, type OutingId } from './OutingDirector';
-import { GIGS, jobRoll, replyDelayMinutes, decideApplication } from './JobDirector';
+
 import {
   classifyPlayerTone,
   receptionForBoldAct,
@@ -54,6 +54,7 @@ import { SEED_BY_ID } from './seedCharacters';
 import { createCoreDomainOwners, type CoreDomainOwners } from './kernel/CoreDomainOwners';
 import { TimeAdvancement, type TimeAdvanceMode } from './kernel/TimeAdvancement';
 import { projectCoreState } from './kernel/CoreStateProjection';
+import { JobBoardCoordination } from './kernel/JobBoardCoordination';
 
 export class SimulationEngine {
   public readonly clock!: GameClock;
@@ -76,6 +77,7 @@ export class SimulationEngine {
   public readonly gameContext!: GameContextReadApi;
   private readonly timeAdvancement: TimeAdvancement;
   private readonly coreOwners: CoreDomainOwners;
+  private readonly jobBoard: JobBoardCoordination;
 
   private activeView: 'pc' | 'room' | 'cafe' | 'work' | 'city' = 'room';
   private subscribers: Set<(state: Readonly<SimulationState>) => void> = new Set();
@@ -91,6 +93,7 @@ export class SimulationEngine {
     // must be removed before the atomic production cutover is merged.
     const owners = createCoreDomainOwners(initialState);
     this.coreOwners = owners;
+    this.jobBoard = new JobBoardCoordination(owners, () => this.notifySubscribers());
     this.events = owners.events;
     this.clock = owners.clock;
     this.needs = owners.needs;
@@ -1305,81 +1308,20 @@ export class SimulationEngine {
   // rejection is a kind Pulse note with zero penalty. State in world flags.
   // ==========================================
 
-  /** Job board for UI: gigs + pending/resolved status per gig. */
-  public getJobBoard(): Array<{ gig: import('./JobDirector').Gig; pending: boolean; appliedMinute: number }> {
-    try {
-      return Object.values(GIGS).map((gig) => {
-        const applied = this.world.getFlag(`jobapp_${gig.id}`);
-        const done = this.world.getFlag(`jobapp_${gig.id}_done`);
-        const pending = typeof applied === 'number' && applied > 0 && !done;
-        return { gig, pending, appliedMinute: pending ? (applied as number) : 0 };
-      });
-    } catch { return []; }
+  public getJobBoard(): Array<{
+    gig: import('./JobDirector').Gig;
+    pending: boolean;
+    appliedMinute: number;
+  }> {
+    return this.jobBoard.getJobBoard();
   }
 
   private applyForGig(gigId: string): ActionResult {
-    try {
-      const gig = GIGS[gigId];
-      if (!gig) return { success: false, error: `Unknown gig: ${gigId}` };
-      const applied = this.world.getFlag(`jobapp_${gigId}`);
-      const done = this.world.getFlag(`jobapp_${gigId}_done`);
-      if (typeof applied === 'number' && applied > 0 && !done) {
-        return { success: false, error: 'Already applied — waiting to hear back.' };
-      }
-      if (this.needs.getState().energy < gig.minEnergy) {
-        return { success: false, error: `Too tired to take ${gig.title} (need ${gig.minEnergy}% energy to apply).` };
-      }
-      const now = this.clock.getTotalMinutes();
-      this.world.setFlag(`jobapp_${gigId}`, now);
-      this.world.setFlag(`jobapp_${gigId}_done`, false);
-      this.telemetry.logEvent('economy', 'job_applied', now, { gigId });
-      this.notifySubscribers();
-      return { success: true };
-    } catch {
-      return { success: false, error: 'Application failed.' };
-    }
+    return this.jobBoard.applyForGig(gigId);
   }
 
-  /** Resolve due applications: accept → appointment + note; reject → kind note. */
   private processJobReplies(): void {
-    try {
-      const now = this.clock.getTotalMinutes();
-      const day = this.clock.getTime().day;
-      for (const gig of Object.values(GIGS)) {
-        const applied = this.world.getFlag(`jobapp_${gig.id}`);
-        const done = this.world.getFlag(`jobapp_${gig.id}_done`);
-        if (typeof applied !== 'number' || applied <= 0 || done) continue;
-        if (now < applied + replyDelayMinutes(gig.id, applied)) continue;
-        const contact = this.social.getBuddyWithRole(gig.contactRole);
-        const gone = !contact || contact.status === 'distant' || contact.status === 'gone' || contact.status === 'blocked';
-        const stage = contact ? this.social.getRelationshipStage(contact.id) : 'stranger';
-        const { accepted, odds } = decideApplication({
-          baseOdds: gig.baseOdds, contactStage: stage, contactGone: gone, roll: jobRoll(`job:${gig.id}:${applied}`),
-        });
-        this.world.setFlag(`jobapp_${gig.id}_done`, true);
-        if (accepted && contact) {
-          const targetDay = day + 1;
-          this.world.scheduleAppointment({
-            id: `gig_${gig.id}_${targetDay}_${applied % 1000}`.slice(0, 60),
-            characterId: contact.id,
-            locationId: 'work',
-            targetDay,
-            startMinute: 9 * 60,
-            endMinute: Math.min(9 * 60 + gig.durationMin, 12 * 60),
-            description: `${gig.title} (job board, $${gig.pay})`,
-            status: 'confirmed',
-            rsvp: 'yes',
-            wageOverride: gig.pay,
-            origin: { kind: 'job', id: gig.id },
-          });
-          this.social.sendMessage(contact.id, contact.id, 'player', pickJobAcceptLine(`${gig.id}:${day}`, gig.title, 'tomorrow'), now, false, ['job', 'accepted']);
-          this.telemetry.logEvent('economy', 'job_accepted', now, { gigId: gig.id, odds });
-        } else if (contact) {
-          this.social.sendMessage(contact.id, contact.id, 'player', pickJobRejectLine(`${gig.id}:${day}`, gig.title), now, false, ['job', 'rejected']);
-          this.telemetry.logEvent('economy', 'job_rejected', now, { gigId: gig.id, odds });
-        }
-      }
-    } catch { /* job replies never break the tick */ }
+    this.jobBoard.processJobReplies();
   }
 
   // ==========================================
