@@ -76,7 +76,7 @@ describe('AppointmentCoordination', () => {
     expect(meetings.handleMeetupChat(actorId, 'gotta cancel', 1)).toBeNull();
     expect(owners.world.getAppointments()
       .find((record) => record.id === meeting!.id)?.status).toBe('cancelled');
-    expect(owners.social.getBuddy(actorId)?.memories?.some(
+    expect(owners.social.getCoreMemories(actorId).some(
       (memory) => memory.kind === 'fact' && memory.text.includes('Cancelled'),
     )).toBe(true);
   });
