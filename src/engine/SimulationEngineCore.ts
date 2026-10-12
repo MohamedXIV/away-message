@@ -30,7 +30,7 @@ import { MyPlaceEngine, SEED_PROFILE_ALIASES } from './MyPlaceEngine';
 import { validatePersistedBuddy } from './CharacterEngine';
 import { generateNewcomer, shouldAutoDiscover, NEWCOMER_METVIA_ROTATION } from './CharacterDirector';
 import { STRAINED_ANNOYANCE, DISTANT_ANNOYANCE, GONE_ANNOYANCE, traitCompatibility } from './SocialEngine';
-import { pickConfrontLine, pickFarewellLine, pickReturnLine, pickInitiativeText, pickGuestbookLine, pickOutingWarmLine, pickOutingReservedLine, pickLeaveLine, pickMediationAskLine, pickMediationThanks, pickMyplaceUpdateLine, pickContactLine, pickContactBounce, pickBackstoryReintro, pickRuninSpot, pickRuninVerb, classifyScheduleBlock, AGENDA_LABELS, rollSeeded100, pickSeeded, spreadSeed, resolveArchetype } from './characterTemplates';
+import { pickConfrontLine, pickFarewellLine, pickReturnLine, pickInitiativeText, pickGuestbookLine, pickOutingWarmLine, pickOutingReservedLine, pickMediationAskLine, pickMediationThanks, pickMyplaceUpdateLine, pickContactLine, pickContactBounce, pickBackstoryReintro, pickRuninSpot, pickRuninVerb, classifyScheduleBlock, AGENDA_LABELS, rollSeeded100, pickSeeded, spreadSeed, resolveArchetype } from './characterTemplates';
 import { appointmentRoll, SHIFT_WAGE } from './AppointmentDirector';
 import { OUTINGS, isValidOutingId, isOutingOpen, outingHoursLabel, dinerStaffEncounter, canalRegularEncounter, buildLaundromatRumor, MIN_OUTING_ENERGY, type OutingId } from './OutingDirector';
 
@@ -57,6 +57,7 @@ import { GroceryDeliveryCoordination } from './kernel/GroceryDeliveryCoordinatio
 import { MyPlaceSocialCycle } from './kernel/MyPlaceSocialCycle';
 import { RentCoordination } from './kernel/RentCoordination';
 import { AppointmentCoordination } from './kernel/AppointmentCoordination';
+import { SocialPresenceCycle } from './kernel/SocialPresenceCycle';
 
 export class SimulationEngine {
   public readonly clock!: GameClock;
@@ -84,6 +85,7 @@ export class SimulationEngine {
   private readonly myplaceSocial: MyPlaceSocialCycle;
   private readonly rentCoordination: RentCoordination;
   private readonly appointmentCoordination: AppointmentCoordination;
+  private readonly socialPresence: SocialPresenceCycle;
 
   private activeView: 'pc' | 'room' | 'cafe' | 'work' | 'city' = 'room';
   private subscribers: Set<(state: Readonly<SimulationState>) => void> = new Set();
@@ -103,6 +105,7 @@ export class SimulationEngine {
     this.myplaceSocial = new MyPlaceSocialCycle(owners);
     this.rentCoordination = new RentCoordination(owners, () => this.notifySubscribers());
     this.appointmentCoordination = new AppointmentCoordination(owners);
+    this.socialPresence = new SocialPresenceCycle(owners);
     this.groceryDelivery = new GroceryDeliveryCoordination(
       owners,
       (minutes, reason) => this.advanceGameMinutes(minutes, reason),
@@ -133,7 +136,7 @@ export class SimulationEngine {
       currentView: () => this.activeView,
       processDeliveries: () => this.processDeliveries(),
       processJobReplies: () => this.processJobReplies(),
-      sweepBusyLeaveLines: (atMinute) => this.sweepBusyLeaveLines(atMinute),
+      sweepBusyLeaveLines: (atMinute) => this.socialPresence.sweepBusyLeaveLines(atMinute),
       scheduleDailyProfileUpdate: (mode, day, atMinute) =>
         this.scheduleDailyProfileUpdate(mode, day, atMinute),
       processNewDay: (day) => {
@@ -172,7 +175,7 @@ export class SimulationEngine {
       // Character Lives daily pass: agenda planning, NPC run-ins, romance, mediation asks (rules only)
       this.processCharacterLivesDaily(newDay);
       // Social battery: a quiet yesterday repays solitude (rules only)
-      this.processPlayerBatteryDaily(newDay);
+      this.socialPresence.processPlayerBatteryDaily(newDay);
     });
 
     this.events.on('economy:cash_changed', ({ newCash }) => {
@@ -951,39 +954,6 @@ export class SimulationEngine {
   }
 
   /** Daily battery pass: a quiet yesterday (no player messages) repays solitude. */
-  private processPlayerBatteryDaily(newDay: number): void {
-    try {
-      if (this.world.getFlag(`quietrecharge_${newDay}`)) return;
-      if (!this.social.didPlayerWriteOnDay(newDay - 1)) {
-        this.needs.rechargeSocialBattery(10);
-        this.telemetry.logEvent('social', 'battery_solitude', this.clock.getTotalMinutes(), { day: newDay });
-      }
-      this.world.setFlag(`quietrecharge_${newDay}`, true);
-    } catch { /* recharge never breaks the tick */ }
-  }
-
-  /**
-   * Polite goodbyes: when a sleep/work block is active and the player was in
-   * touch recently (<= 90 min), the buddy sends one leave line, once per day.
-   * Called after every presence update — never from chat paths.
-   */  private sweepBusyLeaveLines(currentMinutes: number): void {
-    const day = Math.floor(currentMinutes / 1440) + 1;
-    for (const buddy of this.social.getBuddies()) {
-      if (!SimulationEngine.isBuddyAvailable(buddy)) continue;
-      if (this.world.getFlag(`leave_${buddy.id}_${day}`)) continue;
-      const pres = this.social.getPresence(buddy.id);
-      if (!pres || pres.status !== 'offline') continue;
-      const kind = classifyScheduleBlock(pres.awayMessage);
-      if (!kind) continue;
-      const last = this.social.getLastActivityMinute(buddy.id);
-      if (last <= 0 || currentMinutes - last > 90) continue;
-      const traits = this.social.getTraits(buddy.id);
-      const text = pickLeaveLine(kind, traits.shyness, `${buddy.id}:${day}`);
-      this.social.sendMessage(buddy.id, buddy.id, 'player', text, currentMinutes, false, ['leave', kind]);
-      this.world.setFlag(`leave_${buddy.id}_${day}`, true);
-    }
-  }
-
   // ==========================================
   // P5 — LIVE MEETINGS (RSVP + show/resolve, rules-only, template-voiced)
   // Appointments emerge from natural chat ("lets meet at the cafe tomorrow").
