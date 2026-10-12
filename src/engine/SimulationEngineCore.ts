@@ -30,8 +30,8 @@ import { MyPlaceEngine, SEED_PROFILE_ALIASES } from './MyPlaceEngine';
 import { validatePersistedBuddy } from './CharacterEngine';
 import { generateNewcomer, shouldAutoDiscover, NEWCOMER_METVIA_ROTATION } from './CharacterDirector';
 import { STRAINED_ANNOYANCE, DISTANT_ANNOYANCE, GONE_ANNOYANCE, traitCompatibility } from './SocialEngine';
-import { pickConfrontLine, pickFarewellLine, pickReturnLine, pickInitiativeText, pickRsvpLine, pickStoodUpLine, pickMeetingApologyLine, pickShiftWrapLine, pickGigWrapLine, pickArchiveWrapLine, pickGuestbookLine, pickOutingWarmLine, pickOutingReservedLine, pickLeaveLine, pickMediationAskLine, pickMediationThanks, pickMyplaceUpdateLine, pickContactLine, pickContactBounce, pickBackstoryReintro, pickRuninSpot, pickRuninVerb, classifyScheduleBlock, AGENDA_LABELS, rollSeeded100, pickSeeded, spreadSeed, resolveArchetype } from './characterTemplates';
-import { parseMeetupProposal, isMeetupCancelText, decideRsvp, decideNpcShow, appointmentRoll, locationLabel, LOCATION_SLOTS, pickCoopDetail, SHIFT_WAGE } from './AppointmentDirector';
+import { pickConfrontLine, pickFarewellLine, pickReturnLine, pickInitiativeText, pickGuestbookLine, pickOutingWarmLine, pickOutingReservedLine, pickLeaveLine, pickMediationAskLine, pickMediationThanks, pickMyplaceUpdateLine, pickContactLine, pickContactBounce, pickBackstoryReintro, pickRuninSpot, pickRuninVerb, classifyScheduleBlock, AGENDA_LABELS, rollSeeded100, pickSeeded, spreadSeed, resolveArchetype } from './characterTemplates';
+import { appointmentRoll, SHIFT_WAGE } from './AppointmentDirector';
 import { OUTINGS, isValidOutingId, isOutingOpen, outingHoursLabel, dinerStaffEncounter, canalRegularEncounter, buildLaundromatRumor, MIN_OUTING_ENERGY, type OutingId } from './OutingDirector';
 
 import {
@@ -45,8 +45,7 @@ import {
   BATTERY_WARM_REFUND,
   BATTERY_WARM_BONUS,
   BATTERY_APOLOGY_REWARD,
-  BATTERY_NEW_APPOINTMENT,
-} from './PlayerActs';
+  } from './PlayerActs';
 import { CITY_NODES, isCityNodeId, quoteTravel, walkEnergyCost, rollStreetEncounter, BUS_FARE, type CityNodeId, type TravelMode } from './CityMap';
 import { pulseHasFeature, getAllPulseReleases } from './PulseCatalog';
 import { SEED_BY_ID } from './seedCharacters';
@@ -57,6 +56,7 @@ import { JobBoardCoordination } from './kernel/JobBoardCoordination';
 import { GroceryDeliveryCoordination } from './kernel/GroceryDeliveryCoordination';
 import { MyPlaceSocialCycle } from './kernel/MyPlaceSocialCycle';
 import { RentCoordination } from './kernel/RentCoordination';
+import { AppointmentCoordination } from './kernel/AppointmentCoordination';
 
 export class SimulationEngine {
   public readonly clock!: GameClock;
@@ -83,6 +83,7 @@ export class SimulationEngine {
   private readonly groceryDelivery: GroceryDeliveryCoordination;
   private readonly myplaceSocial: MyPlaceSocialCycle;
   private readonly rentCoordination: RentCoordination;
+  private readonly appointmentCoordination: AppointmentCoordination;
 
   private activeView: 'pc' | 'room' | 'cafe' | 'work' | 'city' = 'room';
   private subscribers: Set<(state: Readonly<SimulationState>) => void> = new Set();
@@ -101,6 +102,7 @@ export class SimulationEngine {
     this.jobBoard = new JobBoardCoordination(owners, () => this.notifySubscribers());
     this.myplaceSocial = new MyPlaceSocialCycle(owners);
     this.rentCoordination = new RentCoordination(owners, () => this.notifySubscribers());
+    this.appointmentCoordination = new AppointmentCoordination(owners);
     this.groceryDelivery = new GroceryDeliveryCoordination(
       owners,
       (minutes, reason) => this.advanceGameMinutes(minutes, reason),
@@ -989,191 +991,10 @@ export class SimulationEngine {
   // outcomes move dims + immortal memories + feed the sharp/gossip machinery.
   // ==========================================
 
-  private static isOpenAppointment(a: Appointment, fromDay: number): boolean {
-    const st = a.status ?? 'scheduled';
-    return (st === 'scheduled' || st === 'confirmed') && a.targetDay >= fromDay;
-  }
-
-  /**
-   * Parse a player chat line for meetup proposals or cancellations.
-   * Called from Pulse after the promise ledger. Never throws, never double-books.
-   */
-  public handleMeetupChat(rawBuddyId: string, text: string, day: number): Appointment | null {
-    try {
-      const buddy = this.social.getBuddy(rawBuddyId);
-      if (!buddy) return null;
-      const buddyId = buddy.id;
-      if (buddy.status === 'distant' || buddy.status === 'gone' || buddy.status === 'blocked') return null;
-      const safeDay = Math.max(1, Math.floor(day) || 1);
-      const open = this.world.getAppointments().filter((a) => a.characterId === buddyId && SimulationEngine.isOpenAppointment(a, safeDay));
-      if (isMeetupCancelText(text)) {
-        const target = open[open.length - 1];
-        if (!target) return null;
-        this.world.updateAppointment(target.id, { status: 'cancelled' });
-        this.social.addCoreMemory(buddyId, {
-          text: `Cancelled ${locationLabel(target.locationId)} plans, Day ${safeDay}.`,
-          kind: 'fact',
-          day: safeDay,
-        });
-        // Cancelling reads flaky and a little disloyal.
-        this.social.observePlayerTrait(buddyId, { discipline: 35, loyalty: 45 }, safeDay);
-        this.telemetry.logEvent('social', 'appointment_cancelled', this.clock.getTotalMinutes(), { buddyId, appointmentId: target.id });
-        return null;
-      }
-      const proposal = parseMeetupProposal(text);
-      if (!proposal) return null;
-      // Drained: no new plans (existing commitments are still honored).
-      if (this.needs.getSocialBattery() <= 0) return null;
-      if (open.length > 0) return null; // one open plan per buddy
-      const slot = LOCATION_SLOTS[proposal.locationId];
-      const targetDay = safeDay + proposal.dayOffset;
-      const appt = this.world.scheduleAppointment({
-        id: `appt_${buddyId}_${targetDay}_${slot.start}`.slice(0, 60),
-        characterId: buddyId,
-        locationId: proposal.locationId,
-        targetDay,
-        startMinute: slot.start,
-        endMinute: slot.end,
-        description: `Meet ${buddy.displayName} at ${locationLabel(proposal.locationId)}`,
-        status: 'scheduled',
-      });
-      this.telemetry.logEvent('social', 'appointment_scheduled', this.clock.getTotalMinutes(), { buddyId, appointmentId: appt.id, location: proposal.locationId, targetDay });
-      // Making plans costs presence too (the introvert pays to commit).
-      this.needs.spendSocialBattery(BATTERY_NEW_APPOINTMENT);
-      // Near-term plans (tonight/tomorrow) get an immediate answer; farther plans
-      // are answered by the daily pass. Either way the NPC replies exactly once.
-      if (targetDay <= safeDay + 1) this.runRsvpPass(safeDay, [appt], targetDay <= safeDay ? 'tonight' : 'tomorrow');
-      return appt;
-    } catch { return null; }
-  }
-
-  /** NPC confirm/decline pass. Daily: answers farther-future plans not yet answered. Rules only. */
-  private runRsvpPass(newDay: number, only?: Appointment[], dayRef?: string): void {
-    try {
-      const minutes = this.clock.getTotalMinutes();
-      const due = (only ?? this.world.getAppointments()).filter((a) => {
-        if (a.status !== undefined && a.status !== 'scheduled') return false;
-        if (a.rsvp) return false;
-        if (only) return true;
-        return a.targetDay > newDay;
-      });
-      for (const appt of due) {
-        const buddy = this.social.getBuddy(appt.characterId);
-        if (!buddy || buddy.status === 'distant' || buddy.status === 'gone' || buddy.status === 'blocked') continue;
-        const stage = this.social.getRelationshipStage(buddy.id);
-        const mood = this.social.getDailyMood(buddy.id, newDay);
-        const rsvp = decideRsvp({ stage, mood, roll: appointmentRoll(`${appt.id}:rsvp`) });
-        const label = locationLabel(appt.locationId);
-        const ref = dayRef ?? (appt.targetDay === newDay + 1 ? 'tomorrow' : `on day ${appt.targetDay}`);
-        if (rsvp === 'no') {
-          this.world.updateAppointment(appt.id, { rsvp: 'no', status: 'cancelled' });
-          this.social.sendMessage(buddy.id, buddy.id, 'player', pickRsvpLine('no', appt.id, label, ref), minutes, false, ['appointment', 'rsvp']);
-          this.telemetry.logEvent('social', 'appointment_declined', minutes, { buddyId: buddy.id, appointmentId: appt.id });
-        } else {
-          this.world.updateAppointment(appt.id, { rsvp, status: 'confirmed' });
-          this.social.sendMessage(buddy.id, buddy.id, 'player', pickRsvpLine(rsvp, appt.id, label, ref), minutes, false, ['appointment', 'rsvp']);
-          this.telemetry.logEvent('social', 'appointment_confirmed', minutes, { buddyId: buddy.id, appointmentId: appt.id, rsvp });
-        }
-      }
-    } catch { /* RSVP never breaks the tick */ }
-  }
-
-  /** Resolve past-due meetings: happened / stood-up / flaked / mutual miss. Rules only. */
-  private resolveDueAppointments(newDay: number): void {
-    try {
-      const minutes = this.clock.getTotalMinutes();
-      const due = this.world.getAppointments().filter((a) => {
-        const st = a.status ?? 'scheduled';
-        return (st === 'scheduled' || st === 'confirmed') && a.targetDay < newDay;
-      });
-      for (const appt of due) {
-        const buddy = this.social.getBuddy(appt.characterId);
-        if (!buddy) { this.world.updateAppointment(appt.id, { status: 'cancelled' }); continue; }
-        const label = locationLabel(appt.locationId);
-        const name = buddy.displayName;
-        const playerShowed = this.didPlayerAttend(appt, buddy.id);
-        const stage = this.social.getRelationshipStage(buddy.id);
-        const mood = this.social.getDailyMood(buddy.id, appt.targetDay);
-        const npcShowed = buddy.status !== 'distant' && buddy.status !== 'gone' && buddy.status !== 'blocked'
-          && decideNpcShow({ rsvp: appt.rsvp, stage, mood, roll: appointmentRoll(`${appt.id}:show`) });
-        if (npcShowed && playerShowed) {
-          this.world.updateAppointment(appt.id, { status: 'happened', isCompleted: true, npcShowed: true, playerShowed: true });
-          // P5.2 co-op enrichment: joint work pays more (dims x2 + wage/flavor), cafe stays intimate
-          // P6 gig shifts ride the same path (marked by gig_ id prefix, any contact)
-          const isShift = appt.locationId === 'work' && (buddy.archetype === 'coworker' || appt.id.startsWith('gig_'));
-          const isArchive = appt.locationId === 'archive';
-          if (isShift || isArchive) {
-            const detail = pickCoopDetail(appt.id, isShift ? 'shift' : 'archive');
-            const action = isShift ? 'work_camaraderie' : 'intellectual_curiosity';
-            this.social.applySocialAction(buddy.id, action);
-            this.social.applySocialAction(buddy.id, action);
-            // P6.2 heat waves pay +$6 (thirsty town, busy cart); P6 gig shifts pay their wage
-            if (isShift) {
-              const shiftEnvironment = this.gameContext.environment.at({
-                atMinute: (Math.max(1, appt.targetDay) - 1) * 1440 + 720,
-              });
-              const weatherBonus = shiftEnvironment.weather.tags.includes('hot') ? 6 : 0;
-              this.economy.earnCash(
-                (appt.wageOverride ?? SHIFT_WAGE) + weatherBonus,
-                `Side shift with ${name}`,
-              );
-            }
-            this.social.addCoreMemory(buddy.id, {
-              text: isShift
-                ? `Worked a side shift with ${name}, Day ${appt.targetDay}: ${detail}.`
-                : `Indexed the archive with ${name}, Day ${appt.targetDay}: ${detail}.`,
-              kind: 'shared_moment',
-              day: appt.targetDay,
-            });
-            const wrap = appt.id.startsWith('gig_')
-              ? pickGigWrapLine(appt.id, detail)
-              : isShift ? pickShiftWrapLine(appt.id, detail) : pickArchiveWrapLine(appt.id, detail);
-            this.social.sendMessage(buddy.id, buddy.id, 'player', wrap, minutes, false, ['appointment', isShift ? 'shift' : 'archive']);
-            this.telemetry.logEvent('social', 'appointment_happened', minutes, { buddyId: buddy.id, appointmentId: appt.id, coop: isShift ? 'shift' : 'archive' });
-          } else {
-            this.social.applySocialAction(buddy.id, appt.locationId === 'cafe' ? 'vulnerable_share' : 'work_camaraderie');
-            this.social.addCoreMemory(buddy.id, { text: `Met ${name} at ${label}, Day ${appt.targetDay}.`, kind: 'shared_moment', day: appt.targetDay });
-            this.telemetry.logEvent('social', 'appointment_happened', minutes, { buddyId: buddy.id, appointmentId: appt.id });
-          }
-        } else if (npcShowed && !playerShowed) {
-          // P6.2 severe weather (fog/storm) is a legitimate excuse: missed, but no hard feelings
-          const excused = this.gameContext.environment.at({
-            atMinute: (Math.max(1, appt.targetDay) - 1) * 1440 + 720,
-          }).weather.tags.includes('severe');
-          if (excused) {
-            this.world.updateAppointment(appt.id, { status: 'missed', isMissed: true, npcShowed: true, playerShowed: false });
-            this.social.addCoreMemory(buddy.id, { text: `Severe weather kept you from ${label}, Day ${appt.targetDay}. No hard feelings.`, kind: 'fact', day: appt.targetDay });
-            this.telemetry.logEvent('social', 'appointment_excused', minutes, { buddyId: buddy.id, appointmentId: appt.id });
-          } else {
-            this.world.updateAppointment(appt.id, { status: 'missed', isMissed: true, npcShowed: true, playerShowed: false });
-            this.social.applySocialAction(buddy.id, 'dismissive');
-            this.social.addCoreMemory(buddy.id, { text: `Stood up ${name} at ${label}, Day ${appt.targetDay}.`, kind: 'fact', day: appt.targetDay });
-            this.social.sendMessage(buddy.id, buddy.id, 'player', pickStoodUpLine(appt.id, label), minutes, false, ['appointment', 'missed']);
-            this.telemetry.logEvent('social', 'appointment_missed', minutes, { buddyId: buddy.id, appointmentId: appt.id });
-          }
-        } else if (!npcShowed && playerShowed) {
-          this.world.updateAppointment(appt.id, { status: 'missed', isMissed: true, npcShowed: false, playerShowed: true });
-          this.social.applySocialAction(buddy.id, 'dismissive');
-          this.social.addCoreMemory(buddy.id, { text: `${name} flaked on ${label}, Day ${appt.targetDay}.`, kind: 'fact', day: appt.targetDay });
-          this.social.sendMessage(buddy.id, buddy.id, 'player', pickMeetingApologyLine(appt.id, label), minutes, false, ['appointment', 'apology']);
-          this.telemetry.logEvent('social', 'appointment_flaked', minutes, { buddyId: buddy.id, appointmentId: appt.id });
-        } else {
-          this.world.updateAppointment(appt.id, { status: 'missed', isMissed: true, npcShowed: false, playerShowed: false });
-          this.telemetry.logEvent('social', 'appointment_missed', minutes, { buddyId: buddy.id, appointmentId: appt.id, bothAbsent: true });
-        }
-      }
-    } catch { /* resolution never breaks the tick */ }
-  }
-
-  /** Player attendance: cafe/work = visited the view that day; lobby = DM'd; archive = real joint effort (2+ DMs). */
-  private didPlayerAttend(appt: Appointment, buddyId: string): boolean {
-    if (appt.locationId === 'cafe' || appt.locationId === 'work') {
-      return this.world.getFlag(`visited_${appt.locationId}_${appt.targetDay}`) === true;
-    }
-    try {
-      const playerMsgs = this.social.getMessages(buddyId).filter((m) => m.senderId === 'player' && m.day === appt.targetDay);
-      return appt.locationId === 'archive' ? playerMsgs.length >= 2 : playerMsgs.length >= 1;
-    } catch { return false; }
+  public handleMeetupChat(
+    rawBuddyId: string, text: string, day: number,
+  ): Appointment | null {
+    return this.appointmentCoordination.handleMeetupChat(rawBuddyId, text, day);
   }
 
   /** P5.4 co-comment: when an NPC refreshes their page, a mutual friend may sign the guestbook. */
@@ -1221,10 +1042,8 @@ export class SimulationEngine {
     } catch { /* MyPlace stub is best-effort */ }
   }
 
-  /** P5 daily pass: RSVP for tomorrow + resolve the past. Rules only, no AI. */
   private processAppointmentsDaily(newDay: number): void {
-    this.runRsvpPass(newDay);
-    this.resolveDueAppointments(newDay);
+    this.appointmentCoordination.processAppointmentsDaily(newDay);
   }
 
   // ==========================================
