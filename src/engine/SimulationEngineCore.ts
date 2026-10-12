@@ -30,7 +30,7 @@ import { MyPlaceEngine, SEED_PROFILE_ALIASES } from './MyPlaceEngine';
 import { validatePersistedBuddy } from './CharacterEngine';
 import { generateNewcomer, shouldAutoDiscover, NEWCOMER_METVIA_ROTATION } from './CharacterDirector';
 import { STRAINED_ANNOYANCE, DISTANT_ANNOYANCE, GONE_ANNOYANCE, traitCompatibility } from './SocialEngine';
-import { pickConfrontLine, pickFarewellLine, pickReturnLine, pickInitiativeText, pickRsvpLine, pickStoodUpLine, pickMeetingApologyLine, pickShiftWrapLine, pickGigWrapLine, pickArchiveWrapLine, pickGuestbookLine, pickGuestbookReplyLine, pickTop8NewsLine, pickOutingWarmLine, pickOutingReservedLine, pickRentReminderLine, pickRentSternLine, pickRentNudgeLine, pickRentThanksLine, pickLeaveLine, pickMediationAskLine, pickMediationThanks, pickMyplaceUpdateLine, pickContactLine, pickContactBounce, pickBackstoryReintro, pickRuninSpot, pickRuninVerb, classifyScheduleBlock, AGENDA_LABELS, rollSeeded100, pickSeeded, spreadSeed, resolveArchetype } from './characterTemplates';
+import { pickConfrontLine, pickFarewellLine, pickReturnLine, pickInitiativeText, pickRsvpLine, pickStoodUpLine, pickMeetingApologyLine, pickShiftWrapLine, pickGigWrapLine, pickArchiveWrapLine, pickGuestbookLine, pickOutingWarmLine, pickOutingReservedLine, pickRentReminderLine, pickRentSternLine, pickRentNudgeLine, pickRentThanksLine, pickLeaveLine, pickMediationAskLine, pickMediationThanks, pickMyplaceUpdateLine, pickContactLine, pickContactBounce, pickBackstoryReintro, pickRuninSpot, pickRuninVerb, classifyScheduleBlock, AGENDA_LABELS, rollSeeded100, pickSeeded, spreadSeed, resolveArchetype } from './characterTemplates';
 import { parseMeetupProposal, isMeetupCancelText, decideRsvp, decideNpcShow, appointmentRoll, locationLabel, LOCATION_SLOTS, pickCoopDetail, SHIFT_WAGE } from './AppointmentDirector';
 import { OUTINGS, isValidOutingId, isOutingOpen, outingHoursLabel, dinerStaffEncounter, canalRegularEncounter, buildLaundromatRumor, MIN_OUTING_ENERGY, type OutingId } from './OutingDirector';
 
@@ -55,6 +55,7 @@ import { TimeAdvancement, type TimeAdvanceMode } from './kernel/TimeAdvancement'
 import { projectCoreState } from './kernel/CoreStateProjection';
 import { JobBoardCoordination } from './kernel/JobBoardCoordination';
 import { GroceryDeliveryCoordination } from './kernel/GroceryDeliveryCoordination';
+import { MyPlaceSocialCycle } from './kernel/MyPlaceSocialCycle';
 
 export class SimulationEngine {
   public readonly clock!: GameClock;
@@ -79,6 +80,7 @@ export class SimulationEngine {
   private readonly coreOwners: CoreDomainOwners;
   private readonly jobBoard: JobBoardCoordination;
   private readonly groceryDelivery: GroceryDeliveryCoordination;
+  private readonly myplaceSocial: MyPlaceSocialCycle;
 
   private activeView: 'pc' | 'room' | 'cafe' | 'work' | 'city' = 'room';
   private subscribers: Set<(state: Readonly<SimulationState>) => void> = new Set();
@@ -95,6 +97,7 @@ export class SimulationEngine {
     const owners = createCoreDomainOwners(initialState);
     this.coreOwners = owners;
     this.jobBoard = new JobBoardCoordination(owners, () => this.notifySubscribers());
+    this.myplaceSocial = new MyPlaceSocialCycle(owners);
     this.groceryDelivery = new GroceryDeliveryCoordination(
       owners,
       (minutes, reason) => this.advanceGameMinutes(minutes, reason),
@@ -158,8 +161,7 @@ export class SimulationEngine {
       // P5 daily meeting pass: RSVP for tomorrow + resolve the past (rules only, no AI)
       this.processAppointmentsDaily(newDay);
       // P5.4 daily MyPlace life: Top 8 re-rank + guestbook notes and replies (rules only)
-      this.refreshTop8Periodic(newDay);
-      this.processGuestbookDaily(newDay);
+      this.myplaceSocial.processDay(newDay);
       // P6.4 daily rent ladder: reminders, warnings, overdue nudges (rules only)
       this.processRentDaily(newDay);
       // Character Lives daily pass: agenda planning, NPC run-ins, romance, mediation asks (rules only)
@@ -1187,7 +1189,7 @@ export class SimulationEngine {
       if (candidates.length === 0) return;
       const commenter = candidates[appointmentRoll(`${username}:${day}:gbco2`) % candidates.length]!;
       const ownerProfile = this.myplace.getNpcProfile(username);
-      const authorKey = this.resolveProfileUsername(commenter) ?? commenter.handle;
+      const authorKey = this.myplaceSocial.resolveProfileUsername(commenter) ?? commenter.handle;
       this.myplace.addGuestbookComment(username, authorKey, pickGuestbookLine(`${username}:${day}:gbco`, ownerProfile?.displayName ?? username), currentMinutes);
       this.telemetry.logEvent('social', 'myplace_guestbook', currentMinutes, { from: commenter.id, to: username });
     } catch { /* co-comments never break the tick */ }
@@ -1521,107 +1523,6 @@ export class SimulationEngine {
    * Which profile page belongs to a buddy. Legacy rich profiles win over stubs:
    * profile alias → handle → id, so notes land where players actually look.
    */
-  private resolveProfileUsername(buddy: { id: string; handle: string }): string | null {
-    try {
-      const alias = SEED_PROFILE_ALIASES[buddy.id] ?? SEED_PROFILE_ALIASES[buddy.handle];
-      if (alias && this.myplace.getNpcProfile(alias)) return alias;
-      if (this.myplace.getNpcProfile(buddy.handle)) return buddy.handle;
-      if (this.myplace.getNpcProfile(buddy.id)) return buddy.id;
-    } catch { /* resolution is best-effort */ }
-    return null;
-  }
-
-  private static top8StageBonus(stage: string): number {
-    if (stage === 'close') return 30;
-    if (stage === 'friend') return 20;
-    if (stage === 'acquaintance') return 10;
-    if (stage === 'stranger') return 0;
-    return -50; // strained: out of the running
-  }
-
-  /** Periodic Top 8 re-rank from live affinities (days 4, 7, 10, ...). Rules only. */
-  private refreshTop8Periodic(newDay: number): void {
-    if (newDay <= 1 || newDay % 3 !== 1) return;
-    try {
-      const minutes = this.clock.getTotalMinutes();
-      for (const buddy of this.social.getBuddies()) {
-        if (buddy.status === 'distant' || buddy.status === 'gone' || buddy.status === 'blocked') continue;
-        const profileKey = this.resolveProfileUsername(buddy);
-        if (!profileKey) continue;
-        const ranked = this.social.getBuddies()
-          .filter((o) => o.id !== buddy.id && o.status !== 'distant' && o.status !== 'gone' && o.status !== 'blocked')
-          .map((o) => ({
-            buddy: o,
-            score: this.social.getAffinity(buddy.id, o.id) + SimulationEngine.top8StageBonus(this.social.getRelationshipStage(o.id)),
-          }))
-          .sort((x, y) => y.score - x.score || (x.buddy.id < y.buddy.id ? -1 : 1))
-          .slice(0, 8);
-        const prevTop3 = String(this.world.getFlag(`top3_${profileKey}`) || '').split(',').filter(Boolean);
-        const nextTop3 = ranked.slice(0, 3).map((s) => s.buddy.id);
-        this.myplace.setNpcTop8(profileKey, ranked.map((s) => {
-          const uname = this.resolveProfileUsername(s.buddy) ?? s.buddy.handle;
-          const avatar = this.myplace.getNpcProfile(uname)?.avatarGlyph || '📷';
-          return { handle: uname, name: s.buddy.displayName, avatar };
-        }));
-        this.world.setFlag(`top3_${profileKey}`, nextTop3.join(','));
-        // Entries celebrate (positive-only news, one per day max)
-        const entered = nextTop3.filter((id) => !prevTop3.includes(id));
-        if (entered.length > 0 && !this.world.getFlag(`top8news_${newDay}`)) {
-          const entering = this.social.getBuddy(entered[0]!);
-          if (entering) {
-            const stage = this.social.getRelationshipStage(entering.id);
-            if (stage === 'friend' || stage === 'close') {
-              this.world.setFlag(`top8news_${newDay}`, true);
-              const rank = nextTop3.indexOf(entering.id) + 1;
-              this.social.sendMessage(entering.id, entering.id, 'player', pickTop8NewsLine(`${profileKey}:${newDay}`, buddy.displayName, rank), minutes, false, ['myplace', 'top8']);
-              this.telemetry.logEvent('social', 'myplace_top8_news', minutes, { buddyId: entering.id, owner: profileKey, rank });
-            }
-          }
-        }
-      }
-    } catch { /* Top 8 never breaks the tick */ }
-  }
-
-  /** Daily guestbook life: NPC→NPC notes (max 2) + owner replies to yesterday's player notes (max 2). */
-  private processGuestbookDaily(newDay: number): void {
-    try {
-      const minutes = this.clock.getTotalMinutes();
-      const active = this.social.getBuddies().filter((b) => b.status !== 'distant' && b.status !== 'gone' && b.status !== 'blocked');
-      if (active.length >= 2) {
-        for (let slot = 0; slot < 2; slot++) {
-          const writer = active[appointmentRoll(`${newDay}:gbw:${slot}`) % active.length]!;
-          const others = active.filter((b) => b.id !== writer.id);
-          if (others.length === 0) continue;
-          const target = others[appointmentRoll(`${newDay}:gbt:${slot}`) % others.length]!;
-          const targetKey = this.resolveProfileUsername(target);
-          if (!targetKey) continue;
-          // Guestbook culture is casual: any active, non-strained buddy signs
-          if (this.social.getRelationshipStage(writer.id) === 'strained') continue;
-          const writerKey = this.resolveProfileUsername(writer) ?? writer.handle;
-          this.myplace.addGuestbookComment(targetKey, writerKey, pickGuestbookLine(`${targetKey}:${newDay}:${slot}`, target.displayName), minutes);
-          this.telemetry.logEvent('social', 'myplace_guestbook', minutes, { from: writer.id, to: targetKey });
-        }
-      }
-      let replies = 0;
-      for (const buddy of this.social.getBuddies()) {
-        if (replies >= 2) break;
-        if (buddy.status === 'distant' || buddy.status === 'gone' || buddy.status === 'blocked') continue;
-        const key = this.resolveProfileUsername(buddy);
-        if (!key) continue;
-        const entries = this.myplace.getGuestbook(key);
-        const playerNote = entries.find((e) => e.author === 'wanderer06' && Math.floor(e.minute / 1440) + 1 === newDay - 1);
-        if (!playerNote) continue;
-        const alreadyReplied = entries.some((e) => e.minute > playerNote.minute
-          && (e.author === key || e.author === buddy.handle || e.author === buddy.id));
-        if (alreadyReplied) continue;
-        if (appointmentRoll(`${key}:${newDay}:gbreply`) >= 60) continue;
-        this.myplace.addGuestbookComment(key, key, pickGuestbookReplyLine(`${key}:${newDay}`), minutes);
-        replies++;
-        this.telemetry.logEvent('social', 'myplace_guestbook_reply', minutes, { to: key });
-      }
-    } catch { /* guestbook never breaks the tick */ }
-  }
-
   public async generateProceduralEventsNow(options?: { maxEvents?: number; useAI?: boolean }): Promise<import('./types').GlobalEvent[]> {
     const currentDay = this.clock.getTime().day;
     const totalMinutes = this.clock.getTotalMinutes();
