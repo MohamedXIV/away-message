@@ -57,9 +57,16 @@ These are *logical owner boundaries*. No `SimulationKernel` mega-file should clo
 - [x] `src/engine/kernel/TimeAdvancement.ts`: composed time coordinator for zero-minute RAF gating, realtime and jump ordering, minute-boundary domain work, and daily event publication. No second clock or tick owner.
 - [x] The legacy Core realtime/jump methods now delegate to the coordinator. Its authored MyPlace announcement callback remains in the old social orchestration until that owner is extracted; realtime and jump behavior remain intentionally distinct.
 - [x] `src/engine/kernel/CoreStateProjection.ts`: Core-compatible read state projection assembled from the single domain graph. It does not persist or own an independent snapshot; the old cache remains until #172 bounded state publication.
-- [x] Focused `CoreDomainOwners.test.ts` and `TimeAdvancement.test.ts`: cover construction/rehydration, source projection, no duplicate owner instances, zero-minute/no-work, paused realtime, jump/realtime day-boundary event order.
-- [ ] **Exact-head verification**: no connected executable repository environment is currently available. ShellWarden tunnel is offline; GitHub Actions runner terminates before any job step executes. Do not claim PASS or publish numbers.
-- [ ] **Remaining full orchestration migration:** commands, daily Social/appointments/jobs/economy, life NPC pressures, mobility/spatial, physical/venue/residence, Scenario, snapshots/load/export, consumer cutover, deletion of all old inherited execution classes.
+- [x] `JobBoardCoordination.ts`: uses World-owned application flags and appointments, Social messages, Needs eligibility, deterministic delayed replies.
+- [x] `GroceryDeliveryCoordination.ts`: uses Economy/pantry, DeliveryEngine courier orders and existing time advancement; no duplicate settlement.
+- [x] `MyPlaceSocialCycle.ts`: owns the Top 8/guestbook daily policy over the canonical Social/MyPlace/World owners.
+- [x] `AppointmentCoordination.ts`: the complete meeting lifecycle — parse/RSVP, scheduling, attendance, climate excuses, social consequences and wages — is no longer implemented inside the inherited Core.
+- [x] `RentCoordination.ts`: daily reminder/overdue trail and payment messaging over the single Economy/World/Social owners.
+- [x] `SocialPresenceCycle.ts`: owns polite offline leave lines and the one-per-day solitude recharge using the existing needs and Social state.
+- [x] `RelationshipContinuity.ts`: moves sharp relationship escalation, witnessed affinity changes, due promises and distant returns to one cohesive Social/World policy.
+- [x] Focused tests for all of the modules above, in addition to `CoreDomainOwners.test.ts` and `TimeAdvancement.test.ts`: test single-authority behavior, idempotence, current-format hydration, zero-minute rule, job timing, delivery settlements, MyPlace and relationship lifecycle.
+- [x] **Verified implementation head:** `456d4785a7cf37bf530bf33bba76e4c1b3c50a0a`, GitHub Actions [Verify run 38283813813](https://github.com/MohamedXIV/away-message/actions/runs/38283813813) **SUCCESS**. Generated content, typecheck, build, full baseline guard, **237/237 files and 1,521/1,521 tests**, plus Browser living-world smoke all passed.
+- [ ] **Remaining full orchestration migration:** Core command routing, character daily lives/agenda, NPC Life Matrix/pressure, NPC mobility/spatial, physical/venue/residence, Scenario/Inner Voice, the merged current-format snapshot/export/load authority, remaining UI consumers, and deletion of both inherited engine implementations. A green intermediate verification run is not cutover proof.
 
 ### Known migration-era coupling to remove before #171 merges
 
