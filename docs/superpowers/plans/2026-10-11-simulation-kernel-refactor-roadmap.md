@@ -6,6 +6,8 @@ Canonical design: `docs/15-SIMULATION-KERNEL-AND-RUNTIME-BOUNDARY.md`
 
 Semantic model: `docs/17-SEMANTIC-WORLD-AND-CHARACTER-MODEL.md`
 
+**Superseding #171 architecture decision (2026-10-12):** `docs/18-SIMULATION-CLEAN-REPLACEMENT-DECISION.md` — complete replacement + atomic production cutover. Do not merge an old/new engine hybrid.
+
 Tracking epic: #168
 
 ## Goal
@@ -120,13 +122,25 @@ Caveats: the same Node/VM and default sample configuration were used, but these 
 
 ## P1 — rebuild the runtime shell, not the game rules
 
-### #171 — Composition-first kernel
+### #171 — Clean composition replacement, atomic production cutover
 
-Replace historical inheritance growth with a composed kernel and explicit domain ownership.
+**Updated user decision, 2026-10-12: This is a clean architecture replacement, not an incremental/strangler refactor allowed to leave old engine behavior alive on `main`.**
 
-Do not rewrite pure subsystems merely to move files.
+Rebuild the historical inherited orchestration as a composed, headless single-writer kernel with explicit domain owners. Reuse already-good pure domain rules; rewrite tangled orchestration or incorrect ownership as needed. Do not generate another enormous kernel monolith or micro-file explosion.
 
-Temporary compatibility facades are allowed only with named deletion conditions.
+Mandatory implementation stages **within the same isolated canonical branch/PR**:
+
+1. Inventory production entrypoints, runtime call graph, owners, consumers and obsolete methods.
+2. Agree on #187 semantic and #173 social target ownership seams before shaping the new kernel.
+3. Build composed modules with coherent ownership and small explicit interfaces.
+4. Route production commands, ticks, queries, subscriptions, export/load and presentation consumers exclusively to the new kernel.
+5. Remove obsolete inherited `SimulationEngineCore`/`SimulationEngineLegacyFacade` live implementations, shadow/fallback runtimes, dead adapters and abandoned paths. A required public import alias must be a genuinely stateless forwarding-only module, **not** a legacy engine.
+6. Prove single writer, deterministic rules, current-save-format safety, zero-minute RAF invariant, full test suite and the recorded benchmark comparison.
+7. Include a legacy-retirement proof table in the PR before merging.
+
+Temporary dual-run scaffolding is permitted only *while developing in the unmerged branch*; **none may be merged as production**. If cutover is incomplete, keep #171 open and the PR unmerged. Separately complete #187/#172/#173/#174/#175 without reopening this old engine chain.
+
+Do not confuse one atomic production cutover with one giant undifferentiated commit: use cohesive internal commits. Independent preparatory PRs are fine only if they cannot leave a second world authority or hybrid active runtime.
 
 ### #187 — Semantic world/character model
 
@@ -229,7 +243,7 @@ A result of "stay TypeScript" is a successful spike.
 Re-run the scale suite and prove:
 - no render-frame-driven population simulation;
 - one canonical writer;
-- composition-first ownership;
+- composition-first ownership **with #171's atomic cutover complete and no surviving old engine execution path**;
 - semantic truth/knowledge/memory/relationship boundaries from #187;
 - fidelity-aware character simulation with no remote physical work;
 - bounded UI projections;
@@ -262,23 +276,17 @@ Performance tests should record measurements rather than use fragile wall-clock 
 
 ---
 
-## Migration strategy
+## Migration strategy — superseded by clean replacement decision
 
-Prefer strangler-style replacement:
+**No hybrid new-kernel + legacy-facade architecture may merge.** The previous strangler suggestion is revoked as a production outcome for #171.
 
-```text
-old facade
-   ↓
-new kernel boundary underneath
-   ↓
-move one owner/path at a time
-   ↓
-delete compatibility seam
-```
+Develop through coherent commits on an isolated branch, with temporary migration scaffolding **only inside that branch**, then switch every production entrypoint to the composed kernel and delete obsolete inheritance and shim behavior **before merging**.
 
-Avoid a long-lived second simulation engine.
+A retained stateless public import alias must only forward to the composed kernel. It must not contain legacy domain rules, state, ticking or fallback execution.
 
-Do not let old and new systems both own the same state.
+Keep clean pure domain algorithms, not historical ownership boundaries. Full cutover evidence is required, and #171 must stay open if that evidence or wiring is missing.
+
+Canonical contract: `docs/18-SIMULATION-CLEAN-REPLACEMENT-DECISION.md`.
 
 ---
 
