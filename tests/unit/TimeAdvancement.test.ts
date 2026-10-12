@@ -4,12 +4,13 @@ import {
   TimeAdvancement,
   type TimeAdvancementHooks,
   type TimeAdvanceMode,
+  type TimeView,
 } from '../../src/engine/kernel/TimeAdvancement';
 
 function fixture() {
   const owners = createCoreDomainOwners();
   const calls: string[] = [];
-  let view: TimeAdvancementHooks['currentView'] extends () => infer T ? T : never = 'room';
+  let view: TimeView = 'room';
 
   const hooks: TimeAdvancementHooks = {
     currentView: () => view,
