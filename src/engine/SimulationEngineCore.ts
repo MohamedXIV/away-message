@@ -29,8 +29,8 @@ import { PulseEngine } from './PulseEngine';
 import { MyPlaceEngine, SEED_PROFILE_ALIASES } from './MyPlaceEngine';
 import { validatePersistedBuddy } from './CharacterEngine';
 import { generateNewcomer, shouldAutoDiscover, NEWCOMER_METVIA_ROTATION } from './CharacterDirector';
-import { STRAINED_ANNOYANCE, DISTANT_ANNOYANCE, GONE_ANNOYANCE, traitCompatibility } from './SocialEngine';
-import { pickConfrontLine, pickFarewellLine, pickReturnLine, pickInitiativeText, pickGuestbookLine, pickOutingWarmLine, pickOutingReservedLine, pickMediationAskLine, pickMediationThanks, pickMyplaceUpdateLine, pickContactLine, pickContactBounce, pickBackstoryReintro, pickRuninSpot, pickRuninVerb, classifyScheduleBlock, AGENDA_LABELS, rollSeeded100, pickSeeded, spreadSeed, resolveArchetype } from './characterTemplates';
+import { traitCompatibility } from './SocialEngine';
+import { pickGuestbookLine, pickOutingWarmLine, pickOutingReservedLine, pickMediationAskLine, pickMediationThanks, pickMyplaceUpdateLine, pickContactLine, pickContactBounce, pickBackstoryReintro, pickRuninSpot, pickRuninVerb, classifyScheduleBlock, AGENDA_LABELS, rollSeeded100, pickSeeded, spreadSeed, resolveArchetype } from './characterTemplates';
 import { appointmentRoll } from './AppointmentDirector';
 import { OUTINGS, isValidOutingId, isOutingOpen, outingHoursLabel, dinerStaffEncounter, canalRegularEncounter, buildLaundromatRumor, MIN_OUTING_ENERGY, type OutingId } from './OutingDirector';
 
@@ -58,6 +58,7 @@ import { MyPlaceSocialCycle } from './kernel/MyPlaceSocialCycle';
 import { RentCoordination } from './kernel/RentCoordination';
 import { AppointmentCoordination } from './kernel/AppointmentCoordination';
 import { SocialPresenceCycle } from './kernel/SocialPresenceCycle';
+import { RelationshipContinuity } from './kernel/RelationshipContinuity';
 
 export class SimulationEngine {
   public readonly clock!: GameClock;
@@ -86,6 +87,7 @@ export class SimulationEngine {
   private readonly rentCoordination: RentCoordination;
   private readonly appointmentCoordination: AppointmentCoordination;
   private readonly socialPresence: SocialPresenceCycle;
+  private readonly relationshipContinuity: RelationshipContinuity;
 
   private activeView: 'pc' | 'room' | 'cafe' | 'work' | 'city' = 'room';
   private subscribers: Set<(state: Readonly<SimulationState>) => void> = new Set();
@@ -106,6 +108,7 @@ export class SimulationEngine {
     this.rentCoordination = new RentCoordination(owners, () => this.notifySubscribers());
     this.appointmentCoordination = new AppointmentCoordination(owners);
     this.socialPresence = new SocialPresenceCycle(owners);
+    this.relationshipContinuity = new RelationshipContinuity(owners);
     this.groceryDelivery = new GroceryDeliveryCoordination(
       owners,
       (minutes, reason) => this.advanceGameMinutes(minutes, reason),
@@ -165,7 +168,7 @@ export class SimulationEngine {
         }
       }
       // P3 daily relationship pass: overdue promises + distant returns (rules only, no AI)
-      this.processRelationshipDaily(newDay);
+      this.relationshipContinuity.processRelationshipDaily(newDay);
       // P5 daily meeting pass: RSVP for tomorrow + resolve the past (rules only, no AI)
       this.processAppointmentsDaily(newDay);
       // P5.4 daily MyPlace life: Top 8 re-rank + guestbook notes and replies (rules only)
@@ -365,120 +368,6 @@ export class SimulationEngine {
   // Any actor may progress through strained, distant, gone, or blocked lifecycle states.
   // Governor: a single active sharp event at a time (world flag 'sharp_active').
   // ==========================================
-
-  private checkSharpRelationship(rawBuddyId: string, currentMinutes: number): void {
-    try {
-      const buddy = this.social.getBuddy(rawBuddyId);
-      if (!buddy) return;
-      const buddyId = buddy.id;
-      const rels = this.social.getRelationships(buddyId);
-      if (!rels) return;
-      const day = this.clock.getTime().day;
-      const strainedKey = `strained_${buddyId}`;
-      const sharpKey = `sharp_${buddyId}`;
-      const sharpState = this.world.getFlag(sharpKey);
-
-      // Repair: strained flag set but annoyance cooled well below the line → silent repair
-      if (this.world.getFlag(strainedKey) && rels.annoyance < STRAINED_ANNOYANCE - 10) {
-        this.world.setFlag(strainedKey, false);
-        if (this.world.getFlag('sharp_active') === buddyId) this.world.setFlag('sharp_active', '');
-        if (sharpState === 'confronted') this.world.setFlag(sharpKey, '');
-        this.telemetry.logEvent('social', 'relationship_repaired', currentMinutes, { buddyId });
-        return;
-      }
-      if (rels.annoyance < STRAINED_ANNOYANCE) return;
-
-      // Confrontation (once per strained episode)
-      if (!this.world.getFlag(strainedKey)) {
-        const active = this.world.getFlag('sharp_active');
-        if (active && active !== buddyId && active !== '') return; // governor: wait your turn
-        this.world.setFlag(strainedKey, true);
-        this.world.setFlag(sharpKey, 'confronted');
-        this.world.setFlag(`${sharpKey}_day`, day);
-        if (!active || active === '') this.world.setFlag('sharp_active', buddyId);
-        const text = pickConfrontLine(resolveArchetype(buddyId, buddy.archetype), `${buddyId}:${day}:sharp`);
-        this.social.sendMessage(buddyId, buddyId, 'player', text, currentMinutes, false, ['sharp', 'confrontation']);
-        this.telemetry.logEvent('social', 'relationship_confrontation', currentMinutes, { buddyId, annoyance: rels.annoyance, witnesses: this.shiftWitnessAffinities(buddyId, -4) });
-        return;
-      }
-
-      if (sharpState === 'confronted' && rels.annoyance >= DISTANT_ANNOYANCE) {
-        const active = this.world.getFlag('sharp_active');
-        if (active && active !== buddyId && active !== '') return;
-        this.social.setBuddyStatus(buddyId, 'distant');
-        this.world.setFlag(sharpKey, 'distant');
-        this.world.setFlag(`${sharpKey}_day`, day);
-        this.world.setFlag(`distant_${buddyId}_until`, day + 7);
-        this.world.setFlag('sharp_active', buddyId);
-        const text = pickFarewellLine(resolveArchetype(buddyId, buddy.archetype), `${buddyId}:${day}:sharp`);
-        this.social.sendMessage(buddyId, buddyId, 'player', text, currentMinutes, false, ['sharp', 'farewell']);
-        this.telemetry.logEvent('social', 'buddy_distant', currentMinutes, { buddyId, witnesses: this.shiftWitnessAffinities(buddyId, -10) });
-        return;
-      }
-      if (sharpState === 'distant' && rels.annoyance >= GONE_ANNOYANCE) {
-        // Genuinely gone: stays in roster as epitaph (memories kept), presence forced dark
-        this.social.setBuddyStatus(buddyId, 'gone');
-        this.world.setFlag(sharpKey, 'gone');
-        this.world.setFlag(`${sharpKey}_day`, day);
-        if (this.world.getFlag('sharp_active') === buddyId) this.world.setFlag('sharp_active', '');
-        const text = pickFarewellLine(resolveArchetype(buddyId, buddy.archetype), `${buddyId}:${day}:sharp:gone`);
-        this.social.sendMessage(buddyId, buddyId, 'player', text, currentMinutes, false, ['sharp', 'gone']);
-        this.telemetry.logEvent('social', 'buddy_gone', currentMinutes, { buddyId, witnesses: this.shiftWitnessAffinities(buddyId, -10) });
-      }
-    } catch { /* sharp events never break the tick */ }
-  }
-
-  /** P3 daily pass: overdue promises break + distant buddies return. Rules only, no AI. */
-  private processRelationshipDaily(newDay: number): void {
-    const currentMinutes = this.clock.getTotalMinutes();
-    try {
-      const broken = this.social.checkPromiseDues(newDay);
-      for (const { buddyId, promise } of broken) {
-        const stage = this.social.getRelationshipStage(buddyId);
-        // Only friend+ buddies complain out loud, and only once per day per buddy
-        if ((stage === 'friend' || stage === 'close') && !this.world.getFlag(`promise_nag_${buddyId}_${newDay}`)) {
-          this.world.setFlag(`promise_nag_${buddyId}_${newDay}`, true);
-          const buddy = this.social.getBuddy(buddyId);
-          const text = pickInitiativeText(resolveArchetype(buddyId, buddy?.archetype), 'promise_reminder', `${buddyId}:${newDay}:nag`, { promiseText: promise.text });
-          this.social.sendMessage(buddyId, buddyId, 'player', text, currentMinutes, false, ['promise', 'broken']);
-        }
-        this.telemetry.logEvent('social', 'promise_broken', currentMinutes, { buddyId, promiseId: promise.id, witnesses: this.shiftWitnessAffinities(buddyId, -4) });
-      }
-    } catch { /* promises never break the tick */ }
-    try {
-      for (const buddy of this.social.getBuddies()) {
-        if (buddy.status !== 'distant') continue;
-        const until = this.world.getFlag(`distant_${buddy.id}_until`);
-        if (typeof until === 'number' && newDay < until) continue;
-        this.social.setBuddyStatus(buddy.id, 'acquaintance');
-        const rels = this.social.getRelationships(buddy.id);
-        if (rels) this.social.adjustRelationship(buddy.id, { annoyance: 25, trust: Math.max(5, rels.trust - 10) });
-        this.world.setFlag(`sharp_${buddy.id}`, 'returned');
-        this.world.setFlag(`sharp_${buddy.id}_day`, newDay);
-        this.world.setFlag(`strained_${buddy.id}`, false);
-        if (this.world.getFlag('sharp_active') === buddy.id) this.world.setFlag('sharp_active', '');
-        const text = pickReturnLine(resolveArchetype(buddy.id, buddy.archetype), `${buddy.id}:${newDay}:return`);
-        this.social.sendMessage(buddy.id, buddy.id, 'player', text, currentMinutes, false, ['sharp', 'return']);
-        this.telemetry.logEvent('social', 'buddy_returned', currentMinutes, { buddyId: buddy.id, witnesses: this.shiftWitnessAffinities(buddy.id, 8) });
-      }
-    } catch { /* returns never break the tick */ }
-  }
-
-  /** P4 — the player's close friends notice what happens to their mutuals (affinity witness shift). */
-  private shiftWitnessAffinities(targetId: string, delta: number): number {
-    let count = 0;
-    try {
-      for (const buddy of this.social.getBuddies()) {
-        if (buddy.id === targetId) continue;
-        if (buddy.status === 'distant' || buddy.status === 'gone' || buddy.status === 'blocked') continue;
-        const stage = this.social.getRelationshipStage(buddy.id);
-        if (stage !== 'friend' && stage !== 'close') continue;
-        this.social.adjustAffinity(buddy.id, targetId, delta);
-        count++;
-      }
-    } catch { /* witness shifts never break the tick */ }
-    return count;
-  }
 
   // ==========================================
   // CHARACTER LIVES — daily passes (rules-only, template-voiced)
@@ -1713,7 +1602,7 @@ export class SimulationEngine {
         try {
           const rels = this.social.applySocialAction(action.buddyId, action.socialAction);
           // P3 sharp-event ladder: sustained dismissiveness has consequences (rules only)
-          this.checkSharpRelationship(action.buddyId, currentMinutes);
+          this.relationshipContinuity.checkSharpRelationship(action.buddyId, currentMinutes);
           this.notifySubscribers();
           return { success: true, data: rels };
         } catch (err: unknown) {
