@@ -22,8 +22,8 @@ import { SocialEngine } from './SocialEngine';
 import { TelemetryEngine } from './TelemetryEngine';
 import { WorldEventsEngine } from './WorldEventsEngine';
 import { EnvironmentEngine } from './EnvironmentEngine';
-import { MoodEngine, type MoodContext } from './MoodEngine';
-import { createGameContextReadApi, type GameContextReadApi } from './GameContext';
+import { MoodEngine } from './MoodEngine';
+import type { GameContextReadApi } from './GameContext';
 import { totalDeliveryBacklogExtra } from './WorldModifiers';
 import { OsEngine } from './OsEngine';
 import { PulseEngine } from './PulseEngine';
@@ -51,6 +51,7 @@ import {
 import { CITY_NODES, isCityNodeId, quoteTravel, walkEnergyCost, rollStreetEncounter, BUS_FARE, type CityNodeId, type TravelMode } from './CityMap';
 import { pulseHasFeature, getAllPulseReleases } from './PulseCatalog';
 import { SEED_BY_ID } from './seedCharacters';
+import { createCoreDomainOwners } from './kernel/CoreDomainOwners';
 
 export class SimulationEngine {
   public readonly clock!: GameClock;
@@ -81,104 +82,32 @@ export class SimulationEngine {
   private _stateVersion = 0;
 
   constructor(initialState?: Partial<SimulationState>) {
-    this.events = new EventBus();
-    this.clock = new GameClock({
-      initialDay: initialState?.time?.day ?? 1,
-      initialHour: initialState?.time?.hour ?? 8,
-      initialMinute: initialState?.time?.minute ?? 0,
-    });
-    this.needs = new PlayerNeedsEngine(
-      this.events,
-      (initialState as any)?.needs ?? initialState?.player,
-    );
-    this.economy = new EconomyEngine(this.events, initialState?.player, this.needs);
-    this.hardware = new HardwareEngine(this.events, initialState?.hardware);
-    this.vfs = new FileSystemEngine(this.events, initialState?.vfs);
-    // World before OS so Os can sync from world
-    const worldInitial = (initialState as any)?.world ?? (initialState as any)?.narrative;
-    this.world = new WorldEventsEngine(this.events, worldInitial);
-    this.environment = new EnvironmentEngine(
-      this.events,
-      this.world,
-      () => this.clock.getTotalMinutes(),
-    );
-    this.mood = new MoodEngine(
-      this.events,
-      (initialState as any)?.mood,
-      () => this.buildMoodContext(),
-    );
-    this.gameContext = createGameContextReadApi({
-      getTime: () => this.clock.getTime(),
-      getCurrentEnvironment: (context) => this.environment.getCurrentSnapshot(context),
-      getEnvironmentAt: (query) => this.environment.getSnapshot(query),
-      getEnvironmentForecast: (query) => this.environment.getForecast(query),
-      getNeeds: () => this.needs.getSnapshot(),
-      getMood: () => this.mood.getCurrentSnapshot(),
-    });
-    // OsEngine is core — sync with hardware osVersion
-    const osInitial = (initialState as any)?.os ?? { currentOsId: initialState?.hardware?.osVersion };
-    this.os = new OsEngine(this.events, { currentOsId: osInitial.currentOsId ?? initialState?.hardware?.osVersion, ...(osInitial as object) });
-    // PulseEngine — mirrors OsEngine for the IM client
-    const pulseInitial = (initialState as any)?.pulse ?? { currentPulseId: 'pulse_5.2' };
-    this.pulse = new PulseEngine(this.events, pulseInitial);
-    // MyPlaceEngine — heavy, versioned like Orion OS
-    const myplaceInitial = (initialState as any)?.myplace;
-    this.myplace = new MyPlaceEngine(this.events, myplaceInitial);
-    // Keep hardware.osVersion in sync with OsEngine (source of truth)
-    (this.hardware as any).state.osVersion = this.os.getCurrentOsId();
-    // Restore any procedural OS releases that were world-generated (for old saves)
-    try { this.os.syncFromWorldState({ triggeredEvents: this.world.getTriggeredEvents(), pendingEvents: this.world.getPendingEvents() } as any, this.clock.getTime().day); } catch {}
-    this.downloads = new DownloadManager(
-      {
-        eventBus: this.events,
-        vfs: this.vfs,
-        getConnectionSpeedKbps: () => this.hardware.getState().connectionSpeedKbps,
-      },
-      initialState?.downloads ? { tasks: initialState.downloads, maxConcurrentBrowser: 1, maxConcurrentFlashFetch: 4 } : undefined
-    );
-    // P6 CornerMart parcels (persisted order history)
-    this.delivery = new DeliveryEngine((initialState as any)?.deliveries);
-    this.software = new SoftwareRegistry(
-      this.events,
-      this.vfs,
-      {
-        getOsVersion: () => this.os.getCurrentOsId() as any,
-        getRamMb: () => this.hardware.getState().ramMB,
-        getCpuTier: () => this.hardware.getState().cpuTier,
-      },
-      initialState?.installedSoftware
-    );
-    this.social = new SocialEngine(this.events, initialState?.social);
-    this.telemetry = new TelemetryEngine(
-      this.events,
-      initialState?.telemetry?.stats,
-      initialState?.telemetry?.logs
-    );
+    // #171 transitional wiring on the unmerged feature branch. This is one
+    // owner graph, not a parallel second engine. The inherited runtime below
+    // must be removed before the atomic production cutover is merged.
+    const owners = createCoreDomainOwners(initialState);
+    this.events = owners.events;
+    this.clock = owners.clock;
+    this.needs = owners.needs;
+    this.economy = owners.economy;
+    this.hardware = owners.hardware;
+    this.vfs = owners.vfs;
+    this.world = owners.world;
+    this.environment = owners.environment;
+    this.mood = owners.mood;
+    this.gameContext = owners.gameContext;
+    this.os = owners.os;
+    this.pulse = owners.pulse;
+    this.myplace = owners.myplace;
+    this.downloads = owners.downloads;
+    this.delivery = owners.delivery;
+    this.software = owners.software;
+    this.social = owners.social;
+    this.telemetry = owners.telemetry;
 
-    // Rehydrate world events that may have been due before load
-    try {
-      this.world.checkAndTriggerEvents(this.clock.getTotalMinutes(), this.clock.getTime().day);
-      this.os.syncFromWorldState({ triggeredEvents: this.world.getTriggeredEvents(), pendingEvents: this.world.getPendingEvents() } as any, this.clock.getTime().day);
-    } catch {}
-    this.activeView = initialState?.activeView ?? (this.hardware.getState().hasComputer ? 'pc' : 'room');
-
+    this.activeView = initialState?.activeView
+      ?? (this.hardware.getState().hasComputer ? 'pc' : 'room');
     this.registerInternalEventHandlers();
-  }
-
-  private buildMoodContext(): MoodContext {
-    const finance = this.economy.getState();
-    return {
-      atMinute: this.clock.getTotalMinutes(),
-      needs: this.needs.getSnapshot(),
-      environment: this.environment.getCurrentSnapshot(),
-      finance: {
-        cash: finance.cash,
-        rentDueDay: finance.rentDueDay,
-        rentAmount: finance.rentAmount,
-        rentPaid: finance.rentPaid,
-        currentDay: this.clock.getTime().day,
-      },
-    };
   }
 
   private registerInternalEventHandlers(): void {
