@@ -36,6 +36,22 @@ describe('MyPlaceSocialCycle', () => {
 
     expect(a.owners.myplace.getState()).toEqual(b.owners.myplace.getState());
     expect(a.owners.world.getState()).toEqual(b.owners.world.getState());
-    expect(a.owners.social.getState()).toEqual(b.owners.social.getState());
+
+    // #174 owns deterministic message IDs. Compare canonical social outcomes,
+    // conversation ordering and content, but not wall-clock/random message IDs.
+    const aSocial = a.owners.social.getState();
+    const bSocial = b.owners.social.getState();
+    const normalizeConversations = (conversations: typeof aSocial.conversations) =>
+      Object.fromEntries(
+        Object.entries(conversations).map(([contactId, messages]) => [
+          contactId,
+          messages.map(({ id: _runtimeId, ...message }) => message),
+        ]),
+      );
+
+    expect(aSocial.relationships).toEqual(bSocial.relationships);
+    expect(aSocial.buddies).toEqual(bSocial.buddies);
+    expect(normalizeConversations(aSocial.conversations))
+      .toEqual(normalizeConversations(bSocial.conversations));
   });
 });
