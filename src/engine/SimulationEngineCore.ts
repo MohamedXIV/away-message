@@ -30,7 +30,7 @@ import { MyPlaceEngine, SEED_PROFILE_ALIASES } from './MyPlaceEngine';
 import { validatePersistedBuddy } from './CharacterEngine';
 import { generateNewcomer, shouldAutoDiscover, NEWCOMER_METVIA_ROTATION } from './CharacterDirector';
 import { STRAINED_ANNOYANCE, DISTANT_ANNOYANCE, GONE_ANNOYANCE, traitCompatibility } from './SocialEngine';
-import { pickConfrontLine, pickFarewellLine, pickReturnLine, pickInitiativeText, pickRsvpLine, pickStoodUpLine, pickMeetingApologyLine, pickShiftWrapLine, pickGigWrapLine, pickArchiveWrapLine, pickGuestbookLine, pickOutingWarmLine, pickOutingReservedLine, pickRentReminderLine, pickRentSternLine, pickRentNudgeLine, pickRentThanksLine, pickLeaveLine, pickMediationAskLine, pickMediationThanks, pickMyplaceUpdateLine, pickContactLine, pickContactBounce, pickBackstoryReintro, pickRuninSpot, pickRuninVerb, classifyScheduleBlock, AGENDA_LABELS, rollSeeded100, pickSeeded, spreadSeed, resolveArchetype } from './characterTemplates';
+import { pickConfrontLine, pickFarewellLine, pickReturnLine, pickInitiativeText, pickRsvpLine, pickStoodUpLine, pickMeetingApologyLine, pickShiftWrapLine, pickGigWrapLine, pickArchiveWrapLine, pickGuestbookLine, pickOutingWarmLine, pickOutingReservedLine, pickLeaveLine, pickMediationAskLine, pickMediationThanks, pickMyplaceUpdateLine, pickContactLine, pickContactBounce, pickBackstoryReintro, pickRuninSpot, pickRuninVerb, classifyScheduleBlock, AGENDA_LABELS, rollSeeded100, pickSeeded, spreadSeed, resolveArchetype } from './characterTemplates';
 import { parseMeetupProposal, isMeetupCancelText, decideRsvp, decideNpcShow, appointmentRoll, locationLabel, LOCATION_SLOTS, pickCoopDetail, SHIFT_WAGE } from './AppointmentDirector';
 import { OUTINGS, isValidOutingId, isOutingOpen, outingHoursLabel, dinerStaffEncounter, canalRegularEncounter, buildLaundromatRumor, MIN_OUTING_ENERGY, type OutingId } from './OutingDirector';
 
@@ -56,6 +56,7 @@ import { projectCoreState } from './kernel/CoreStateProjection';
 import { JobBoardCoordination } from './kernel/JobBoardCoordination';
 import { GroceryDeliveryCoordination } from './kernel/GroceryDeliveryCoordination';
 import { MyPlaceSocialCycle } from './kernel/MyPlaceSocialCycle';
+import { RentCoordination } from './kernel/RentCoordination';
 
 export class SimulationEngine {
   public readonly clock!: GameClock;
@@ -81,6 +82,7 @@ export class SimulationEngine {
   private readonly jobBoard: JobBoardCoordination;
   private readonly groceryDelivery: GroceryDeliveryCoordination;
   private readonly myplaceSocial: MyPlaceSocialCycle;
+  private readonly rentCoordination: RentCoordination;
 
   private activeView: 'pc' | 'room' | 'cafe' | 'work' | 'city' = 'room';
   private subscribers: Set<(state: Readonly<SimulationState>) => void> = new Set();
@@ -98,6 +100,7 @@ export class SimulationEngine {
     this.coreOwners = owners;
     this.jobBoard = new JobBoardCoordination(owners, () => this.notifySubscribers());
     this.myplaceSocial = new MyPlaceSocialCycle(owners);
+    this.rentCoordination = new RentCoordination(owners, () => this.notifySubscribers());
     this.groceryDelivery = new GroceryDeliveryCoordination(
       owners,
       (minutes, reason) => this.advanceGameMinutes(minutes, reason),
@@ -1362,44 +1365,8 @@ export class SimulationEngine {
   // Rent notes may use an available actor carrying the landlord role.
   // The economy and Mailbox paper trail remain authoritative even when no such
   // actor is currently available, so NPC lifecycle never blocks tenancy.
-  private sendRentNote(text: string, tags: string[], currentMinutes: number, event: string, extra?: Record<string, unknown>): void {
-    const landlord = this.social.getBuddyWithRole('landlord');
-    if (!SimulationEngine.isBuddyAvailable(landlord)) return;
-    this.social.sendMessage(landlord.id, landlord.id, 'player', text, currentMinutes, false, ['rent', ...tags]);
-    this.telemetry.logEvent('economy', event, currentMinutes, { buddyId: landlord.id, ...(extra ?? {}) });
-  }
-
-  /** Daily rent pass: gentle reminder → stern warning → overdue nudges. Rules only. */
   private processRentDaily(newDay: number): void {
-    try {
-      const minutes = this.clock.getTotalMinutes();
-      const { rentDueDay: dueDay, rentPaid: paid, rentAmount: amount } = this.economy.getState();
-      if (paid) {
-        if (this.world.getFlag('rent_overdue')) this.world.setFlag('rent_overdue', false);
-        return;
-      }
-      if (newDay === dueDay - 2 && !this.world.getFlag(`rent_reminded_${dueDay}`)) {
-        this.world.setFlag(`rent_reminded_${dueDay}`, true);
-        this.world.setFlag(`rentmail_due_${dueDay}`, Math.round(amount * 100));
-        this.sendRentNote(pickRentReminderLine(`${dueDay}`, amount, dueDay), ['reminder'], minutes, 'rent_reminded', { dueDay });
-      } else if (newDay === dueDay && !this.world.getFlag(`rent_warned_${dueDay}`)) {
-        this.world.setFlag(`rent_warned_${dueDay}`, true);
-        this.sendRentNote(pickRentSternLine(`${dueDay}`, amount, dueDay), ['warning'], minutes, 'rent_warned', { dueDay });
-      } else if (newDay > dueDay) {
-        // Catch-up for multi-day jumps: stamp the paper trail silently
-        // (messages stay current-rung only — no backdated nag spam)
-        if (!this.world.getFlag(`rent_reminded_${dueDay}`)) this.world.setFlag(`rent_reminded_${dueDay}`, true);
-        if (!this.world.getFlag(`rentmail_due_${dueDay}`)) this.world.setFlag(`rentmail_due_${dueDay}`, Math.round(amount * 100));
-        if (!this.world.getFlag('rent_overdue')) {
-          this.world.setFlag('rent_overdue', true);
-          this.world.setFlag(`rentmail_overdue_${dueDay}`, Math.round(amount * 100));
-        }
-        if (!this.world.getFlag(`rent_nudge_${newDay}`)) {
-          this.world.setFlag(`rent_nudge_${newDay}`, true);
-          this.sendRentNote(pickRentNudgeLine(`${newDay}`, amount), ['nudge'], minutes, 'rent_nudged', { dueDay });
-        }
-      }
-    } catch { /* rent never breaks the tick */ }
+    this.rentCoordination.processRentDaily(newDay);
   }
 
   // ==========================================
@@ -1618,18 +1585,7 @@ export class SimulationEngine {
       }
 
       case 'PLAYER_PAY_RENT': {
-        const rentRes = this.economy.payRent();
-        if (!rentRes.success) return { success: false, error: rentRes.error };
-        // P6.4 kindness restored: line unpaused + the active property contact says thanks
-        if (this.world.getFlag('rent_overdue')) this.world.setFlag('rent_overdue', false);
-        try {
-          this.sendRentNote(pickRentThanksLine(`paid${this.clock.getTime().day}`), ['thanks'], currentMinutes, 'rent_thanked', {});
-        } catch { /* thanks is best-effort */ }
-        this.telemetry.logEvent('economy', 'rent_paid', currentMinutes, {
-          day: this.clock.getTime().day,
-        });
-        this.notifySubscribers();
-        return { success: true };
+        return this.rentCoordination.payRent();
       }
 
       case 'PLAYER_PAY_INTERNET': {
