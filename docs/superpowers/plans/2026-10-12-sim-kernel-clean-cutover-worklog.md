@@ -50,17 +50,28 @@ These are *logical owner boundaries*. No `SimulationKernel` mega-file should clo
 - [ ] **Scenario/Inner Voice:** persisted Scenario instances and InnerVoice state must round-trip and be governed by existing owners.
 - [ ] **Presentation/Ink/UI:** existing direct engine call sites must all be routed to new APIs, with no old executor fallback.
 
-## 4. First implemented code slice on this branch
+## 4. Implementation progress — unmerged canonical branch
 
-- [x] `src/engine/kernel/CoreDomainOwners.ts`: composition root constructing each of the 18 existing core authorities **once**, with explicit dependencies/shared EventBus and no own mutable shadow world.
-- [x] `SimulationEngineCore` constructor temporarily delegates owner construction to this factory; historical orchestration still exists **only on the unmerged branch**.
-- [x] `tests/unit/CoreDomainOwners.test.ts`: construction, current snapshot hydration and identity-of-domain-owners checks.
-- [ ] Exact-head focused/full tests — no executable repository environment currently connected in this ChatGPT session. Do not claim PASS.
-- [ ] Subsequent extraction/cutover and deletion of all old inherited engine runtime.
+- [x] `src/engine/kernel/CoreDomainOwners.ts`: explicit single shared domain-owner graph for the 18 current Core authorities, with no separate mutable world.
+- [x] The old `SimulationEngineCore` constructor now temporarily delegates domain construction to that graph.
+- [x] `src/engine/kernel/TimeAdvancement.ts`: composed time coordinator for zero-minute RAF gating, realtime and jump ordering, minute-boundary domain work, and daily event publication. No second clock or tick owner.
+- [x] The legacy Core realtime/jump methods now delegate to the coordinator. Its authored MyPlace announcement callback remains in the old social orchestration until that owner is extracted; realtime and jump behavior remain intentionally distinct.
+- [x] `src/engine/kernel/CoreStateProjection.ts`: Core-compatible read state projection assembled from the single domain graph. It does not persist or own an independent snapshot; the old cache remains until #172 bounded state publication.
+- [x] Focused `CoreDomainOwners.test.ts` and `TimeAdvancement.test.ts`: cover construction/rehydration, source projection, no duplicate owner instances, zero-minute/no-work, paused realtime, jump/realtime day-boundary event order.
+- [ ] **Exact-head verification**: no connected executable repository environment is currently available. ShellWarden tunnel is offline; GitHub Actions runner terminates before any job step executes. Do not claim PASS or publish numbers.
+- [ ] **Remaining full orchestration migration:** commands, daily Social/appointments/jobs/economy, life NPC pressures, mobility/spatial, physical/venue/residence, Scenario, snapshots/load/export, consumer cutover, deletion of all old inherited execution classes.
+
+### Known migration-era coupling to remove before #171 merges
+
+- `SimulationEngineCore` is still an inherited executable class; **temporary on this Draft branch only**.
+- `CoreStateProjection` currently retains the old hardware.osVersion compatibility mirror mutation to reproduce existing reads. Move this to an explicit OS/hardware synchronization write boundary before final cutover; do not treat it as a semantic pure projection forever.
+- Existing daily MyPlace callback still lives in Core and invokes social authorship/render events. Extract an owned Social/day coordinator rather than importing named content seed identity into the core time scheduler.
+- `getState()` still rebuilds broad Core shape and inherited upper layers; #171 must replace the super-call state layering before merging, while #172 later narrows publication.
+- `#170` invariant must remain true after the inherited LegacyFacade time overrides are removed.
 
 ### Why this intermediate form is acceptable only on the branch
 
-The old Core/LegacyFacade/Engine still orchestrate runtime calls at this stage, so **the code is not complete by the accepted ADR**. It must remain an open DRAFT PR until their live implementations have been retired and verified. Do not create a second live SimulationKernel alongside them, and do not merge this slice on its own.
+The old Core/LegacyFacade/Engine still orchestrate much of the runtime after the newly extracted stages. **The code does not yet satisfy the accepted ADR.** It must remain an open DRAFT PR until their live implementations have been retired and exact-head verification has passed. Do not merge this slice on its own.
 
 ## 5. No-hybrid merge proof required
 
