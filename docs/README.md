@@ -1,6 +1,6 @@
 # Away Message — Open-Ended Sandbox Docs
 
-**This package contains exactly 19 core files.**
+**This package contains exactly 20 core files.**
 
 It defines the current open-ended sandbox product direction. Historical evaluation-era material must not be treated as current product authority.
 
@@ -24,8 +24,9 @@ It defines the current open-ended sandbox product direction. Historical evaluati
 16. `15-SIMULATION-KERNEL-AND-RUNTIME-BOUNDARY.md`
 17. `16-INK-NARRATIVE-AUTHORING-AND-GENERATIVE-INTERNET.md`
 18. `17-SEMANTIC-WORLD-AND-CHARACTER-MODEL.md`
+19. `18-SIMULATION-CLEAN-REPLACEMENT-DECISION.md`
 
-This README is the nineteenth core file.
+This README is the twentieth core file.
 
 Detailed implementation specs/plans under `docs/superpowers/` supplement these core documents and may grow independently.
 
@@ -53,6 +54,8 @@ Optional semi-baked **Scenarios** may give a save personal history, unresolved r
 The current approved pre-Education technical work is the bounded **Simulation Kernel refactor** followed by the **Ink narrative/runtime restoration**. The simulation refactor removes render-frame-driven population work and establishes `SimulationHost`/Worker-ready boundaries. Ink then becomes the text-first authored conversation/narrative language over bounded simulation truth, with AI optional as a realization layer and with the existing local/remote character identity model preserved. See `15-SIMULATION-KERNEL-AND-RUNTIME-BOUNDARY.md` and `16-INK-NARRATIVE-AUTHORING-AND-GENERATIVE-INTERNET.md`.
 
 The simulation refactor also establishes the **Semantic World & Character Model**: small canonical truth, derived semantics, structured knowledge/memory, explainable queries/effects/influences and fidelity-aware actors. This is a typed contract layer, not a new scripting language. See `17-SEMANTIC-WORLD-AND-CHARACTER-MODEL.md`.
+
+**New accepted decision (2026-10-12):** #171 must be a **clean replacement of the inherited simulation runtime with an atomic production cutover**. The obsolete Core/LegacyFacade execution architecture must be deleted before #171 merges, rather than left as a long-lived hybrid. Correct domain algorithms are kept; tangled orchestration may be rewritten. This overrides the prior incremental/strangler migration recommendation. Read `18-SIMULATION-CLEAN-REPLACEMENT-DECISION.md` **before #171 work**.
 
 ## Canonical stack
 
