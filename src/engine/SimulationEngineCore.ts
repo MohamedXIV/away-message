@@ -13,7 +13,6 @@ import { FileSystemEngine } from './FileSystemEngine';
 import { DownloadManager } from './DownloadManager';
 import {
   DeliveryEngine,
-  GROCERY_SKUS,
   type Fulfillment,
   type PlaceDeliveryOptions,
 } from './DeliveryEngine';
@@ -24,7 +23,7 @@ import { WorldEventsEngine } from './WorldEventsEngine';
 import { EnvironmentEngine } from './EnvironmentEngine';
 import { MoodEngine } from './MoodEngine';
 import type { GameContextReadApi } from './GameContext';
-import { totalDeliveryBacklogExtra } from './WorldModifiers';
+
 import { OsEngine } from './OsEngine';
 import { PulseEngine } from './PulseEngine';
 import { MyPlaceEngine, SEED_PROFILE_ALIASES } from './MyPlaceEngine';
@@ -55,6 +54,7 @@ import { createCoreDomainOwners, type CoreDomainOwners } from './kernel/CoreDoma
 import { TimeAdvancement, type TimeAdvanceMode } from './kernel/TimeAdvancement';
 import { projectCoreState } from './kernel/CoreStateProjection';
 import { JobBoardCoordination } from './kernel/JobBoardCoordination';
+import { GroceryDeliveryCoordination } from './kernel/GroceryDeliveryCoordination';
 
 export class SimulationEngine {
   public readonly clock!: GameClock;
@@ -78,6 +78,7 @@ export class SimulationEngine {
   private readonly timeAdvancement: TimeAdvancement;
   private readonly coreOwners: CoreDomainOwners;
   private readonly jobBoard: JobBoardCoordination;
+  private readonly groceryDelivery: GroceryDeliveryCoordination;
 
   private activeView: 'pc' | 'room' | 'cafe' | 'work' | 'city' = 'room';
   private subscribers: Set<(state: Readonly<SimulationState>) => void> = new Set();
@@ -94,6 +95,11 @@ export class SimulationEngine {
     const owners = createCoreDomainOwners(initialState);
     this.coreOwners = owners;
     this.jobBoard = new JobBoardCoordination(owners, () => this.notifySubscribers());
+    this.groceryDelivery = new GroceryDeliveryCoordination(
+      owners,
+      (minutes, reason) => this.advanceGameMinutes(minutes, reason),
+      () => this.notifySubscribers(),
+    );
     this.events = owners.events;
     this.clock = owners.clock;
     this.needs = owners.needs;
@@ -1336,68 +1342,13 @@ export class SimulationEngine {
     nowMinute: number,
     deliveryOptions?: PlaceDeliveryOptions,
   ): ActionResult & { data?: { orderId: string; etaMinute: number; summary: string } } {
-    try {
-      const items = (rawItems || [])
-        .filter((i) => i && GROCERY_SKUS[i.sku] && Number.isFinite(i.qty) && i.qty >= 1)
-        .map((i) => ({ sku: i.sku, qty: Math.min(9, Math.floor(i.qty)) }));
-      if (items.length === 0) return { success: false, error: 'Cart is empty.' };
-      const total = items.reduce((sum, i) => sum + GROCERY_SKUS[i.sku]!.price * i.qty, 0);
-      if (!this.economy.canAfford(total)) {
-        return { success: false, error: `Cannot afford $${total.toFixed(2)} order.` };
-      }
-      if (fulfillment === 'pickup') {
-        if (this.needs.getState().energy < 20) {
-          return { success: false, error: 'Too tired for a store run (need 20% energy).' };
-        }
-        this.economy.spendCash(total, 'CornerMart pickup');
-        this.advanceGameMinutes(30, 'CornerMart pickup run');
-        this.needs.consumeEnergy(5);
-        for (const item of items) {
-          const sku = GROCERY_SKUS[item.sku]!;
-          this.economy.addPantry(sku.pantry, sku.qty * item.qty);
-        }
-        const order = this.delivery.recordPickup(items, total, this.clock.getTotalMinutes());
-        this.telemetry.logEvent('economy', 'order_pickup', this.clock.getTotalMinutes(), { orderId: order.id, total });
-        this.notifySubscribers();
-        return { success: true, data: { orderId: order.id, etaMinute: this.clock.getTotalMinutes(), summary: 'Picked up from CornerMart — pantry stocked.' } };
-      }
-      this.economy.spendCash(total, 'CornerMart delivery');
-      // World-event courier backlog (#46): the event engine only publishes the
-      // semantic effect; DeliveryEngine owns readyMinute via placeDelivery.
-      let backlogExtra = 0;
-      try {
-        backlogExtra = totalDeliveryBacklogExtra(
-          this.world.queryActiveModifiers({ domain: 'delivery', atMinute: nowMinute }),
-        );
-      } catch { backlogExtra = 0; }
-      const order = this.delivery.placeDelivery(items, total, nowMinute, {
-        ...deliveryOptions,
-        etaExtraMinutes: backlogExtra,
-      });
-      this.telemetry.logEvent('economy', 'order_placed', nowMinute, { orderId: order.id, total, etaMinute: order.readyMinute });
-      this.notifySubscribers();
-      const etaH = Math.round((order.readyMinute - nowMinute) / 60);
-      return { success: true, data: { orderId: order.id, etaMinute: order.readyMinute, summary: `Courier on the way — about ${etaH}h. Check Mailbox parcels.` } };
-    } catch {
-      return { success: false, error: 'Order failed.' };
-    }
+    return this.groceryDelivery.placeGroceryOrder(
+      rawItems, fulfillment, nowMinute, deliveryOptions,
+    );
   }
 
-  /** Credit arrived courier orders to the pantry (called from every time path). */
   private processDeliveries(): void {
-    try {
-      const now = this.clock.getTotalMinutes();
-      const arrived = this.delivery.completeDue(now);
-      for (const order of arrived) {
-        for (const item of order.items) {
-          const sku = GROCERY_SKUS[item.sku];
-          if (sku) this.economy.addPantry(sku.pantry, sku.qty * item.qty);
-        }
-        this.world.setFlag(`delivery_arrived_${order.id}`, true);
-        this.telemetry.logEvent('economy', 'order_delivered', now, { orderId: order.id });
-      }
-      if (arrived.length > 0) this.notifySubscribers();
-    } catch { /* deliveries never break the tick */ }
+    this.groceryDelivery.processDeliveries();
   }
 
   // ==========================================
