@@ -29,7 +29,7 @@ export class MyPlaceSocialCycle {
     this.processGuestbookDaily(day);
   }
 
-  private resolveProfileUsername(buddy: { id: string; handle: string }): string | null {
+  public resolveProfileUsername(buddy: { id: string; handle: string }): string | null {
     try {
       const alias = SEED_PROFILE_ALIASES[buddy.id] ?? SEED_PROFILE_ALIASES[buddy.handle];
       if (alias && this.owners.myplace.getNpcProfile(alias)) return alias;
