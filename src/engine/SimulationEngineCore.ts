@@ -51,8 +51,9 @@ import {
 import { CITY_NODES, isCityNodeId, quoteTravel, walkEnergyCost, rollStreetEncounter, BUS_FARE, type CityNodeId, type TravelMode } from './CityMap';
 import { pulseHasFeature, getAllPulseReleases } from './PulseCatalog';
 import { SEED_BY_ID } from './seedCharacters';
-import { createCoreDomainOwners } from './kernel/CoreDomainOwners';
+import { createCoreDomainOwners, type CoreDomainOwners } from './kernel/CoreDomainOwners';
 import { TimeAdvancement, type TimeAdvanceMode } from './kernel/TimeAdvancement';
+import { projectCoreState } from './kernel/CoreStateProjection';
 
 export class SimulationEngine {
   public readonly clock!: GameClock;
@@ -74,6 +75,7 @@ export class SimulationEngine {
   public readonly mood!: MoodEngine;
   public readonly gameContext!: GameContextReadApi;
   private readonly timeAdvancement: TimeAdvancement;
+  private readonly coreOwners: CoreDomainOwners;
 
   private activeView: 'pc' | 'room' | 'cafe' | 'work' | 'city' = 'room';
   private subscribers: Set<(state: Readonly<SimulationState>) => void> = new Set();
@@ -88,6 +90,7 @@ export class SimulationEngine {
     // owner graph, not a parallel second engine. The inherited runtime below
     // must be removed before the atomic production cutover is merged.
     const owners = createCoreDomainOwners(initialState);
+    this.coreOwners = owners;
     this.events = owners.events;
     this.clock = owners.clock;
     this.needs = owners.needs;
@@ -214,53 +217,7 @@ export class SimulationEngine {
     if (this._cachedState && this._cachedStateVersion === this._stateVersion) {
       return this._cachedState;
     }
-    const vfsState = this.vfs.getState();
-    const downloadState = this.downloads.getState();
-    const deliveryState = this.delivery.getState();
-    const worldState = this.world.getState();
-    const osState = this.os.getState();
-    const pulseState = this.pulse.getState();
-    const myplaceState = this.myplace.getState();
-    // Sync hardware osVersion to OsEngine truth
-    const hwState = this.hardware.getState();
-    if ((hwState as any).osVersion !== osState.currentOsId) {
-      (this.hardware as any).state.osVersion = osState.currentOsId;
-    }
-
-    // Sandbox world state is canonical; narrative is deprecated alias (kept with buddyKnowledge for compat)
-    const narrativeAlias = {
-      activeBeatId: null as string | null,
-      completedBeats: [] as string[],
-      flags: { ...worldState.flags },
-      appointments: worldState.appointments.map((a) => ({ ...a })),
-      windowObservationHistory: [...worldState.windowObservationHistory],
-      triggeredEvents: [...worldState.triggeredEvents],
-      buddyKnowledge: { ...worldState.buddyKnowledge },
-    };
-
-    const newState: Readonly<SimulationState> = {
-      version: 1,
-      time: this.clock.getTime(),
-      player: this.economy.getState(),
-      needs: this.needs.getState(),
-      mood: this.mood.getState(),
-      hardware: this.hardware.getState(),
-      os: osState,
-      pulse: pulseState,
-      myplace: myplaceState,
-      vfs: vfsState,
-      downloads: downloadState.tasks,
-      deliveries: deliveryState,
-      installedSoftware: this.software.getInstalledSoftware(),
-      social: this.social.getState(),
-      world: worldState,
-      narrative: narrativeAlias,
-      telemetry: {
-        stats: this.telemetry.getStats(),
-        logs: [...this.telemetry.getLogs()],
-      },
-      activeView: this.activeView,
-    };
+    const newState = projectCoreState(this.coreOwners, this.activeView);
     this._cachedState = newState;
     this._cachedStateVersion = this._stateVersion;
     return newState;
