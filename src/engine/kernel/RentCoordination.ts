@@ -63,7 +63,7 @@ export class RentCoordination {
       } else if (newDay === dueDay && !world.getFlag(`rent_warned_${dueDay}`)) {
         world.setFlag(`rent_warned_${dueDay}`, true);
         this.sendRentNote(
-          pickRentSternLine(`${dueDay}`, amount),
+          pickRentSternLine(`${dueDay}`, amount, dueDay),
           ['warning'], minutes, 'rent_warned', { dueDay },
         );
       } else if (newDay > dueDay) {
