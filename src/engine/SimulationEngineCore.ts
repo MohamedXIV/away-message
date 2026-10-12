@@ -52,6 +52,7 @@ import { CITY_NODES, isCityNodeId, quoteTravel, walkEnergyCost, rollStreetEncoun
 import { pulseHasFeature, getAllPulseReleases } from './PulseCatalog';
 import { SEED_BY_ID } from './seedCharacters';
 import { createCoreDomainOwners } from './kernel/CoreDomainOwners';
+import { TimeAdvancement, type TimeAdvanceMode } from './kernel/TimeAdvancement';
 
 export class SimulationEngine {
   public readonly clock!: GameClock;
@@ -72,6 +73,7 @@ export class SimulationEngine {
   public readonly environment!: EnvironmentEngine;
   public readonly mood!: MoodEngine;
   public readonly gameContext!: GameContextReadApi;
+  private readonly timeAdvancement: TimeAdvancement;
 
   private activeView: 'pc' | 'room' | 'cafe' | 'work' | 'city' = 'room';
   private subscribers: Set<(state: Readonly<SimulationState>) => void> = new Set();
@@ -107,6 +109,19 @@ export class SimulationEngine {
 
     this.activeView = initialState?.activeView
       ?? (this.hardware.getState().hasComputer ? 'pc' : 'room');
+    this.timeAdvancement = new TimeAdvancement(owners, {
+      currentView: () => this.activeView,
+      processDeliveries: () => this.processDeliveries(),
+      processJobReplies: () => this.processJobReplies(),
+      sweepBusyLeaveLines: (atMinute) => this.sweepBusyLeaveLines(atMinute),
+      scheduleDailyProfileUpdate: (mode, day, atMinute) =>
+        this.scheduleDailyProfileUpdate(mode, day, atMinute),
+      processNewDay: (day) => {
+        this.maybeScheduleProceduralGeneration();
+        this.maybeAutoDiscoverNewcomer(day);
+      },
+      publishState: () => this.notifySubscribers(),
+    });
     this.registerInternalEventHandlers();
   }
 
@@ -251,106 +266,58 @@ export class SimulationEngine {
     return newState;
   }
 
+  /**
+   * The migration branch delegates timing to one composed coordinator. This
+   * inherited caller must be removed at the #171 atomic production cutover.
+   */
   public advanceRealTime(deltaRealSeconds: number): void {
-    if (deltaRealSeconds <= 0 || this.clock.isPaused()) return;
-
-    this.telemetry.recordPlayTime(deltaRealSeconds, this.activeView);
-    const tickResult = this.clock.tickRealTime(deltaRealSeconds);
-
-    if (tickResult.elapsedMinutes > 0) {
-      const currentMinutes = this.clock.getTotalMinutes();
-      this.downloads.advanceTime(tickResult.elapsedMinutes, currentMinutes);
-      this.needs.advanceTime(tickResult.elapsedMinutes); // P6.1 hunger rises with time
-      this.processDeliveries(); // P6 courier arrivals
-      this.processJobReplies(); // P6 job board replies land here too
-      this.social.updatePresence(currentMinutes);
-      this.sweepBusyLeaveLines(currentMinutes); // Character Lives polite goodbyes
-      this.world.checkAndTriggerEvents(currentMinutes, tickResult.time.day);
-      this.environment.publishIfChanged({ atMinute: currentMinutes });
-      try { this.os.syncFromWorldState({ triggeredEvents: this.world.getTriggeredEvents(), pendingEvents: this.world.getPendingEvents() } as any, tickResult.time.day); } catch {}
-      try { this.myplace.syncFromWorldState({ triggeredEvents: this.world.getTriggeredEvents() } as any, tickResult.time.day, currentMinutes); } catch {}
-      // MyPlace NPCs may change their profile and then message you about it (governed)
-      if (tickResult.dayChanged) {
-        void this.myplace.maybeUpdateRandomNpcProfile(tickResult.time.day, currentMinutes).then((res) => {
-          if (res) {
-            const link = `http://myplace.local/${res.username}`;
-            // Voice follows the announcer's temperament (rename-proof).
-            const announcer = Object.values(SEED_BY_ID).find((b) => b.myplace === res.username);
-            const traits = announcer ? this.social.getTraits(announcer.id) : { shyness: 50, discipline: 50 };
-            const text = pickMyplaceUpdateLine(traits.shyness, traits.discipline, link);
-            try { this.social.sendMessage(res.username, res.username, 'player', text, currentMinutes, false, ['myplace_update']); } catch {}
-            this.maybeCoCommentProfileUpdate(res.username, tickResult.time.day, currentMinutes);
-            try { this.events.emit('social:message_received' as any, { message: { senderId: res.username, text } }); } catch {}
-            this.maybeCoCommentProfileUpdate(res.username, tickResult.time.day, currentMinutes);
-          }
-        }).catch(() => {});
-      }
-
-      this.events.emit('time:tick', {
-        time: tickResult.time,
-        deltaMinutes: tickResult.elapsedMinutes,
-      });
-
-      if (tickResult.dayChanged) {
-        const prevDay = tickResult.time.day - 1;
-        this.events.emit('time:day_changed', {
-          newDay: tickResult.time.day,
-          previousDay: prevDay,
-          time: tickResult.time,
-        });
-        this.maybeScheduleProceduralGeneration();
-        this.maybeAutoDiscoverNewcomer(tickResult.time.day);
-      }
-
-      this.notifySubscribers();
-    }
+    this.timeAdvancement.advanceRealTime(deltaRealSeconds);
   }
 
   public advanceGameMinutes(minutes: number, reason?: string): void {
-    if (minutes <= 0) return;
+    this.timeAdvancement.advanceGameMinutes(minutes, reason);
+  }
 
-    const jumpResult = this.clock.advanceMinutes(minutes);
-    const currentMinutes = this.clock.getTotalMinutes();
-    this.downloads.advanceTime(minutes, currentMinutes);
-    this.needs.advanceTime(minutes); // P6.1 hunger rises with time
-    this.processDeliveries(); // P6 courier arrivals
-    this.processJobReplies(); // P6 job board replies land here (never instant)
-    this.social.updatePresence(currentMinutes);
-    this.sweepBusyLeaveLines(currentMinutes); // Character Lives polite goodbyes
-    this.world.checkAndTriggerEvents(currentMinutes, jumpResult.newTime.day);
-    this.environment.publishIfChanged({ atMinute: currentMinutes });
-    try { this.os.syncFromWorldState({ triggeredEvents: this.world.getTriggeredEvents(), pendingEvents: this.world.getPendingEvents() } as any, jumpResult.newTime.day); } catch {}
-    try { this.myplace.syncFromWorldState({ triggeredEvents: this.world.getTriggeredEvents() } as any, jumpResult.newTime.day, currentMinutes); } catch {}
-    if (jumpResult.dayChanged) {
-      void this.myplace.maybeUpdateRandomNpcProfile(jumpResult.newTime.day, currentMinutes).then((res) => {
-        if (res) {
-          const link = `http://myplace.local/${res.username}`;
-          // Voice follows the announcer's temperament (rename-proof).
-          const announcer = Object.values(SEED_BY_ID).find((b) => b.myplace === res.username);
-          const traits = announcer ? this.social.getTraits(announcer.id) : { shyness: 50, discipline: 50 };
-          const text = pickMyplaceUpdateLine(traits.shyness, traits.discipline, link);
-          try { this.social.sendMessage(res.username, res.username, 'player', text, currentMinutes, false, ['myplace_update']); } catch {}
+  /**
+   * Authored MyPlace voice is still part of Social coordination. Keep the
+   * original realtime/jump presentation behavior until that owner is
+   * replaced; it is never allowed to control the clock or domain scheduling.
+   */
+  private scheduleDailyProfileUpdate(
+    mode: TimeAdvanceMode,
+    day: number,
+    currentMinutes: number,
+  ): void {
+    void this.myplace.maybeUpdateRandomNpcProfile(day, currentMinutes).then((res) => {
+      if (!res) return;
+      const link = `http://myplace.local/${res.username}`;
+      const announcer = Object.values(SEED_BY_ID).find((b) => b.myplace === res.username);
+      const traits = announcer
+        ? this.social.getTraits(announcer.id)
+        : { shyness: 50, discipline: 50 };
+      const text = pickMyplaceUpdateLine(traits.shyness, traits.discipline, link);
+      try {
+        this.social.sendMessage(
+          res.username, res.username, 'player',
+          text, currentMinutes, false, ['myplace_update'],
+        );
+      } catch {
+        // Existing profile announcers are best effort.
+      }
+      if (mode === 'realtime') {
+        // Preserve the original realtime-only notification/co-comment behavior
+        // until a dedicated Social side-effect cutover owns it.
+        this.maybeCoCommentProfileUpdate(res.username, day, currentMinutes);
+        try {
+          this.events.emit('social:message_received' as any, {
+            message: { senderId: res.username, text },
+          });
+        } catch {
+          // Non-critical UI event.
         }
-      }).catch(() => {});
-    }
-
-    this.events.emit('time:jump', {
-      jumpMinutes: minutes,
-      time: jumpResult.newTime,
-      reason,
-    });
-
-    if (jumpResult.dayChanged) {
-      this.events.emit('time:day_changed', {
-        newDay: jumpResult.newTime.day,
-        previousDay: jumpResult.previousTime.day,
-        time: jumpResult.newTime,
-      });
-      this.maybeScheduleProceduralGeneration();
-      this.maybeAutoDiscoverNewcomer(jumpResult.newTime.day);
-    }
-
-    this.notifySubscribers();
+        this.maybeCoCommentProfileUpdate(res.username, day, currentMinutes);
+      }
+    }).catch(() => {});
   }
 
   // Governed procedural queue — keeps 2-3 future days filled. Throttled, non-blocking, template fallback if AI unavailable.
