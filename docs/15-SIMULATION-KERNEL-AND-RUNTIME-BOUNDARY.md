@@ -10,11 +10,13 @@ Execution roadmap: `docs/superpowers/plans/2026-10-11-simulation-kernel-refactor
 
 Semantic model: `docs/17-SEMANTIC-WORLD-AND-CHARACTER-MODEL.md`
 
+**Superseding implementation decision (2026-10-12):** `docs/18-SIMULATION-CLEAN-REPLACEMENT-DECISION.md`. #171 now requires complete replacement/atomic production cutover of the old inheritance-based runtime. Any earlier permission in this document to keep a long-lived legacy engine after #171 is revoked.
+
 ## Purpose
 
 Refactor Away Message's simulation runtime before Senior Year / Education expansion so the game can scale to a materially larger life-sim population without coupling canonical simulation work to render FPS, whole-world snapshot cloning, or the historical `SimulationEngine` inheritance stack.
 
-This is a bounded architecture phase. It is not a rewrite of the product, Phaser renderer, React OS, or existing good domain logic.
+This is a bounded architecture phase. It is not a rewrite of the product, Phaser renderer or React OS. **Rewriting the orchestration and any badly owned domain glue is explicitly authorized**, while existing correct pure domain algorithms should normally be reused.
 
 The user explicitly approved this refactor as a priority even though the previous Production Phase A guidance said not to default to another engine-foundation phase. Production Phase A remains valid work; this document records the newer explicit decision that the simulation runtime should be strengthened before adding the larger school/university life layer.
 
@@ -43,7 +45,7 @@ Together these represent roughly 5200 lines of simulation orchestration/compatib
 
 The historical layering is understandable: each generation preserved previous behavior while adding new canonical authorities. It is no longer a good growth shape for Education, larger populations, or a worker boundary.
 
-### 1.2 Population-wide work is tied to requestAnimationFrame
+### 1.2 Historical finding: population-wide work was tied to requestAnimationFrame (#170 completed)
 
 `src/store/useSimulationStore.ts` drives realtime simulation from `requestAnimationFrame`.
 
@@ -154,6 +156,22 @@ The current presentation boundary is good:
 - actor presentation tiers.
 
 Phaser remains presentation, not canonical world truth.
+
+---
+
+## 2.1 Clean replacement authority (#171, approved 2026-10-12)
+
+The user rejects a hybrid future where a new `SimulationKernel` coexists in merged production with `SimulationEngineCore`, `SimulationEngineLegacyFacade`, or an old `SimulationEngine` performing independent domain work. Treat the previous incremental/strangler advice as **superseded for the merge gate**.
+
+- Internal migration can be incremental on an **unmerged** branch, but the **production cutover must be atomic**.
+- All production dispatch/tick/query/load/save/subscription entrypoints move to the composed implementation before the PR merges.
+- Delete obsolete old engine implementations and unused adapters. The only permitted retained public entrypoint alias is a forwarding-only module with no old state or behavior.
+- Reuse valid pure Life Matrix, transit, spatial, residence, Scenario and environment rules; freely rewrite tangled orchestration and incorrect ownership.
+- Do not build a replacement mega-kernel, nor dozens of tiny files without cohesive responsibilities.
+- Design #171's domain seams with #187 semantic model and #173 social decomposition in mind. Do not pull full school, Worker or Rust work into #171.
+- Final PR must include a concrete legacy-retirement/wiring audit and current-format/behavior/determinism tests. **A partly connected old/new hybrid cannot close #171.**
+
+See `docs/18-SIMULATION-CLEAN-REPLACEMENT-DECISION.md` for the complete decision, exceptions and verification contract.
 
 ---
 
@@ -435,7 +453,7 @@ This phase does not:
 This phase is complete when:
 - zero-minute RAF frames do not perform full-population simulation planning;
 - representative 20/100/250/500 NPC benchmark fixtures exist before and after;
-- canonical orchestration is composition-first;
+- canonical orchestration is composition-first, with the **obsolete inheritance runtime deleted and production cutover complete in #171** (no dual-running legacy engine);
 - lifecycle/contact/relationship semantics do not duplicate authority;
 - important memory/knowledge/claim truth is structurally distinguishable;
 - simulation fidelity differentiates important local/background local/remote work;
