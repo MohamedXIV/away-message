@@ -11,6 +11,7 @@ import { getReleaseById } from './OsCatalog';
 import { SimulationEngine as SimulationEngineCore } from './SimulationEngineCore';
 import { NpcLifeRuntime } from './kernel/NpcLifeRuntime';
 import { NpcMovementRuntime } from './kernel/NpcMovementRuntime';
+import { EncounterRuntime } from './kernel/EncounterRuntime';
 import {
 
   type CharacterIntent,
@@ -30,9 +31,6 @@ import {
   legacyModularToCanonical,
 } from './hardware/state';
 import {
-  getSharedPlaceAliases,
-  getSharedTransitNetwork,
-  resolveTransitPlaceId,
   type NpcCoLocation,
   type NpcMobilityState,
   type NpcPlaceQuery,
@@ -40,16 +38,12 @@ import {
 } from './transit/NpcTrips';
 import type { ActorSpatialPositions, ActorSpatialProjection } from './spatial/ActorSpatialState';
 import type { SpatialPosition } from './spatial/SpatialPresence';
-import {
-  collectEncounterCandidates,
-  decideEncounter as decideEncounterPure,
-  emptyEncounterDirectorState,
-  hydrateEncounterDirectorState,
-  type EncounterCandidate,
-  type EncounterDecision,
-  type EncounterDecisionInput,
-  type EncounterDirectorState,
-  type EncounterPlayerTransitRead,
+import type {
+  EncounterCandidate,
+  EncounterDecision,
+  EncounterDecisionInput,
+  EncounterDirectorState,
+  EncounterPlayerTransitRead,
 } from './encounters';
 export type {
   EncounterCandidate,
@@ -119,12 +113,8 @@ export class SimulationEngine extends SimulationEngineCore {
   private readonly npcLife: NpcLifeRuntime;
   /** One canonical trip + actor spatial position authority. */
   private readonly movement: NpcMovementRuntime;
-  /**
-   * Encounter Director cooldowns + surfaced one-shot identities (#47). The
-   * only mutable home for that state — candidates are recomputed from
-   * canonical systems on every decision, never stored here.
-   */
-  private encounterDirector: EncounterDirectorState = emptyEncounterDirectorState();
+  /** One owner for encounter cooldowns and one-shot marks. */
+  private readonly encounter: EncounterRuntime;
 
 
   constructor(initialState?: Partial<TransportSimulationState>) {
@@ -171,7 +161,18 @@ export class SimulationEngine extends SimulationEngineCore {
       initialState?.npcMobility,
       initialState?.actorSpatialPositions,
     );
-    this.encounterDirector = hydrateEncounterDirectorState(initialState?.encounters ?? {});
+    this.encounter = new EncounterRuntime(
+      { clock: this.clock, social: this.social, world: this.world, economy: this.economy },
+      {
+        getNpcMobilityState: () => this.movement.getNpcMobilityState(),
+        getNpcPlaceState: (id, atMinute) => this.movement.getNpcPlaceState(id, atMinute),
+        getCharacterIntent: (id) => this.npcLife.getCharacterIntent(id),
+        getCharacterObligations: (id) => this.npcLife.getCharacterObligations(id),
+        getLifeSnapshot: (id) => this.npcLife.getLifeSnapshot(id),
+      },
+      () => this.invalidateV6Cache(),
+      initialState?.encounters,
+    );
   }
 
   public override getState(): Readonly<LiveSimulationState> {
@@ -313,71 +314,26 @@ export class SimulationEngine extends SimulationEngineCore {
     return this.movement.getNpcCoLocation();
   }
 
-  /** Encounter Director slice as plain snapshot data (deep copy, bounded). */
   public getEncounterDirectorState(): EncounterDirectorState {
-    return JSON.parse(JSON.stringify(this.encounterDirector)) as EncounterDirectorState;
+    return this.encounter.getEncounterDirectorState();
   }
 
-  /**
-   * Assemble the read-only Encounter Director input from canonical systems
-   * (#47). Pure reads — no NPC, transit, relationship, event, or economy
-   * writes. Subclasses may supply live player transit; the default (null)
-   * settles the player at their authoritative location.
-   */
-  protected buildEncounterInput(playerTransit: EncounterPlayerTransitRead | null = null): EncounterDecisionInput {
-    const nowMinute = this.clock.getTotalMinutes();
-    const network = getSharedTransitNetwork();
-    const aliases = getSharedPlaceAliases();
-    const playerPlaceId =
-      playerTransit !== null || !network
-        ? null
-        : resolveTransitPlaceId(this.economy.getLocation(), network, aliases);
-    const mobility = this.getNpcMobilityState();
-    const actors = this.social.getBuddies().map((buddy) => ({
-      actorId: buddy.id,
-      place: this.getNpcPlaceState(buddy.id, nowMinute),
-      intent: this.getCharacterIntent(buddy.id),
-      obligations: this.getCharacterObligations(buddy.id),
-      relationship: this.social.getRelationships(buddy.id) ?? null,
-      knownToPlayer: this.social.isKnown(buddy.id),
-      eventEffects: this.getLifeSnapshot(buddy.id)?.eventEffects ?? [],
-    }));
-    return {
-      nowMinute,
-      playerPlaceId,
-      playerTransit,
-      actors,
-      trips: mobility.trips,
-      network,
-      activeModifiers: this.world.queryActiveModifiers({ atMinute: nowMinute }),
-    };
+  protected buildEncounterInput(
+    playerTransit: EncounterPlayerTransitRead | null = null,
+  ): EncounterDecisionInput {
+    return this.encounter.buildEncounterInput(playerTransit);
   }
 
-  /**
-   * Renderer-safe candidate collection (#47): pure surfacing read, marks
-   * nothing, so opening a view can never create an encounter.
-   */
   public collectEncounterCandidates(
     playerTransit: EncounterPlayerTransitRead | null = null,
   ): EncounterCandidate[] {
-    return collectEncounterCandidates(this.buildEncounterInput(playerTransit));
+    return this.encounter.collectEncounterCandidates(playerTransit);
   }
 
-  /**
-   * Decide the encounter worth surfacing right now (#47). Records cooldown /
-   * one-shot marks in the director's own slice only — source authorities
-   * (mobility, obligations, events, relationships) are never written.
-   */
   public decideEncounter(
     playerTransit: EncounterPlayerTransitRead | null = null,
   ): EncounterDecision {
-    const { decision, nextState } = decideEncounterPure(
-      this.buildEncounterInput(playerTransit),
-      this.encounterDirector,
-    );
-    this.encounterDirector = nextState;
-    if (decision.kind === 'encounter') this.invalidateV6Cache();
-    return decision;
+    return this.encounter.decideEncounter(playerTransit);
   }
 
   // NPC trip state now belongs to the composed movement owner.
@@ -1005,6 +961,6 @@ export class SimulationEngine extends SimulationEngineCore {
     // Missing slices (old saves) become empty defaults — planning resumes
     // deterministically on the next tick.
     this.movement.loadState(snapshot.npcMobility, snapshot.actorSpatialPositions);
-    this.encounterDirector = hydrateEncounterDirectorState(snapshot.encounters ?? {});
+    this.encounter.loadState(snapshot.encounters);
   }
 }
