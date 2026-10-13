@@ -28,24 +28,12 @@ import { OsEngine } from './OsEngine';
 import { PulseEngine } from './PulseEngine';
 import { MyPlaceEngine } from './MyPlaceEngine';
 import { validatePersistedBuddy } from './CharacterEngine';
-import { generateNewcomer, NEWCOMER_METVIA_ROTATION } from './CharacterDirector';
 
-import { pickOutingWarmLine, pickOutingReservedLine, pickMediationThanks, pickContactLine, pickContactBounce, rollSeeded100, } from './characterTemplates';
+import { pickOutingWarmLine, pickOutingReservedLine, pickMediationThanks } from './characterTemplates';
 
 import { OUTINGS, isValidOutingId, isOutingOpen, outingHoursLabel, dinerStaffEncounter, canalRegularEncounter, buildLaundromatRumor, MIN_OUTING_ENERGY, type OutingId } from './OutingDirector';
 
-import {
-  classifyPlayerTone,
-  receptionForBoldAct,
-  receptionHintFor,
-  isApology,
-  pickInnerVoice,
-  batteryCostForOuting,
-  BATTERY_LUKEWARM_EXTRA,
-  BATTERY_WARM_REFUND,
-  BATTERY_WARM_BONUS,
-  BATTERY_APOLOGY_REWARD,
-  } from './PlayerActs';
+import { pickInnerVoice, batteryCostForOuting } from './PlayerActs';
 import { CITY_NODES, isCityNodeId, quoteTravel, walkEnergyCost, rollStreetEncounter, BUS_FARE, type CityNodeId, type TravelMode } from './CityMap';
 import { pulseHasFeature, getAllPulseReleases } from './PulseCatalog';
 
@@ -61,6 +49,7 @@ import { SocialPresenceCycle } from './kernel/SocialPresenceCycle';
 import { RelationshipContinuity } from './kernel/RelationshipContinuity';
 import { NpcSocialLifeCycle } from './kernel/NpcSocialLifeCycle';
 import { ProceduralWorldCycle } from './kernel/ProceduralWorldCycle';
+import { PlayerContactCoordination } from './kernel/PlayerContactCoordination';
 
 export class SimulationEngine {
   public readonly clock!: GameClock;
@@ -92,6 +81,7 @@ export class SimulationEngine {
   private readonly relationshipContinuity: RelationshipContinuity;
   private readonly npcSocialLife: NpcSocialLifeCycle;
   private readonly proceduralWorld: ProceduralWorldCycle;
+  private readonly playerContacts: PlayerContactCoordination;
 
   private activeView: 'pc' | 'room' | 'cafe' | 'work' | 'city' = 'room';
   private subscribers: Set<(state: Readonly<SimulationState>) => void> = new Set();
@@ -157,6 +147,11 @@ export class SimulationEngine {
       processNewDay: (day) => this.proceduralWorld.processNewDay(day),
       publishState: () => this.notifySubscribers(),
     });
+    this.playerContacts = new PlayerContactCoordination(
+      owners,
+      (action) => this.dispatchAction(action),
+      () => this.notifySubscribers(),
+    );
     this.registerInternalEventHandlers();
   }
 
@@ -295,177 +290,6 @@ export class SimulationEngine {
    * an immortal memory. Accepted strangers introduce themselves (handle learned
    * both ways); declined strangers stay strangers. Costs 2 battery.
    */
-  private addContactByHandle(rawHandle: string, currentMinutes: number): { success: boolean; error?: string; data?: unknown } {
-    const handle = String(rawHandle || '').trim().slice(0, 40);
-    if (!handle) return { success: false, error: 'Type a Pulse ID first.' };
-    const day = this.clock.getTime().day;
-    const lower = handle.toLowerCase();
-    const buddy = this.social.getBuddies().find((b) => b.handle.toLowerCase() === lower);
-    let candidate: { buddyId: string; status: string } | null = null;
-    if (!buddy) {
-      for (const b of this.social.getBuddies()) {
-        const hit = (b.backstory?.candidates ?? []).find((c) => c.handle.toLowerCase() === lower);
-        if (hit) {
-          candidate = { buddyId: b.id, status: hit.status };
-          break;
-        }
-      }
-    }
-    const target = buddy ?? (candidate ? this.social.getBuddy(candidate.buddyId) : undefined);
-    if (!target) return { success: false, error: `No Pulse ID '${handle}' exists. Check the spelling.` };
-    if (this.social.getKnownHandles(target.id).some((h) => h.toLowerCase() === lower)) {
-      return { success: true, data: { buddyId: target.id, already: true } };
-    }
-    if (candidate && candidate.status !== 'active') {
-      const text = pickContactBounce(candidate.status === 'changed' ? 'changed' : 'dead', `${target.id}:${day}`);
-      this.social.addCoreMemory(target.id, {
-        text: `Tried old handle "${handle}" — dead ID (day ${day}).`,
-        kind: 'fact',
-        day,
-      });
-      return { success: false, error: text };
-    }
-    if (this.needs.getSocialBattery() < 2) {
-      return { success: false, error: pickInnerVoice('blocked', `add:${target.id}:${day}`) };
-    }
-    if (this.world.getFlag(`contactadd_${target.id}_${day}`)) {
-      return { success: false, error: 'You already reached out today. Give it a day.' };
-    }
-    this.world.setFlag(`contactadd_${target.id}_${day}`, true);
-    this.needs.spendSocialBattery(2);
-    // Rules decide: close/friend always accept; others roll on warmth vs shyness.
-    const stage = this.social.getRelationshipStage(target.id);
-    const traits = this.social.getTraits(target.id);
-    const roll = rollSeeded100(`contact:${target.id}:${day}:${handle.length}`);
-    const accepted = stage === 'close' || stage === 'friend'
-      || roll < 10 + traits.warmth * 0.3 - traits.shyness * 0.2 + (target.backstory && target.backstory.relationship !== 'stranger' ? 25 : 0);
-    if (!accepted) {
-      this.social.sendMessage(target.id, target.id, 'player', pickContactLine('decline', `${target.id}:${day}`), currentMinutes, false, ['contact', 'declined']);
-      this.telemetry.logEvent('social', 'contact_declined', currentMinutes, { buddyId: target.id });
-      this.notifySubscribers();
-      return { success: true, data: { buddyId: target.id, accepted: false } };
-    }
-    this.social.learnHandle(target.id, target.handle);
-    this.social.sendMessage(target.id, target.id, 'player', pickContactLine('accept', `${target.id}:${day}`), currentMinutes, false, ['contact', 'accepted']);
-    this.telemetry.logEvent('social', 'contact_added', currentMinutes, { buddyId: target.id });
-    this.notifySubscribers();
-    return { success: true, data: { buddyId: target.id, accepted: true } };
-  }
-
-  /**
-   * Player-initiated NightBoard meet (rules-throttled newcomer source for the
-   * unbounded online roster). Costs 6 battery, once per day. The meeting
-   * itself is async (AI-or-template intro) — the dispatch only starts it.
-   */
-  private meetOnNightBoard(currentMinutes: number): { success: boolean; error?: string; data?: unknown } {
-    const day = this.clock.getTime().day;
-    if (this.world.getFlag(`nbmeet_${day}`)) {
-      return { success: false, error: 'You already went looking tonight. Try again tomorrow.' };
-    }
-    if (this.needs.getSocialBattery() < 6) {
-      return { success: false, error: pickInnerVoice('blocked', `nbmeet:${day}`) };
-    }
-    this.needs.spendSocialBattery(6);
-    this.world.setFlag(`nbmeet_${day}`, true);
-    const metVia = NEWCOMER_METVIA_ROTATION[this.social.getBuddies().filter((b) => b.isProcedural).length % NEWCOMER_METVIA_ROTATION.length]!;
-    const existingIds = this.social.getBuddies().map((b) => b.id);
-    void generateNewcomer({ metVia, day, seed: `nbmeet-day-${day}`, useAI: true }, { existingIds })
-      .then((res) => {
-        const added = this.dispatchAction({ type: 'SOCIAL_ADD_BUDDY', buddy: res.definition, introText: res.introText });
-        if (added.success) this.notifySubscribers();
-      })
-      .catch(() => {});
-    this.telemetry.logEvent('social', 'nightboard_meet', currentMinutes, { day });
-    this.notifySubscribers();
-    return { success: true, data: { day } };
-  }
-
-  /**
-   * Mediation asks: warm buddies occasionally ask the player to introduce them,
-   * strengthen a fraying tie, or share what someone is like. One ask per buddy
-   * per 4 days, max 2 asks/day. The ask arrives as a DM; the player answers
-   * via MEDIATION_RESPOND (UI follow-up dispatches it).
-   */
-  // ==========================================
-  // SOCIAL BATTERY — the introvert protagonist's meter (rules-only accounting)
-  // Every player send costs; bold sends cost more and are judged at send time
-  // (stage gate + seeded reception roll). Outcomes land immediately: warmth
-  // refunds, awkwardness stings, rejection drains to zero and demands an
-  // apology before that buddy hears another word. The AI only paraphrases
-  // the stored reception hint — it never prices or judges.
-  // ==========================================
-
-  /**
-   * Gate a player DM (pure rules; called before the message is stored).
-   * { ok:false } carries an inner-voice line for the UI notice.
-   * The 'scripted' tag (authored dialogue choices) bypasses the gate so
-   * pre-battery story beats can never stall on an empty meter.
-   */
-  private gatePlayerMessage(rawBuddyId: string, text: string, tags?: string[]): { ok: boolean; error?: string } {
-    const buddy = this.social.getBuddy(rawBuddyId);
-    if (!buddy) return { ok: true }; // system paths without a buddy stay ungated
-    if ((tags ?? []).includes('scripted')) return { ok: true };
-    const buddyId = buddy.id;
-    const day = this.clock.getTime().day;
-    const apologizeKey = `must_apologize_${buddyId}`;
-    // Owed apology: only an apology gets through (and it heals a little).
-    if (this.world.getFlag(apologizeKey)) {
-      if (!isApology(text)) {
-        return { ok: false, error: pickInnerVoice('must_apologize', `${buddyId}:${day}`) };
-      }
-      this.world.setFlag(apologizeKey, false);
-      this.needs.rechargeSocialBattery(BATTERY_APOLOGY_REWARD);
-      this.social.applySocialAction(buddyId, 'apologize');
-      // Owning it reads loyal and kind.
-      this.social.observePlayerTrait(buddyId, { loyalty: 65, warmth: 60 }, day);
-      return { ok: true };
-    }
-    const assessment = classifyPlayerTone(text);
-    if (this.needs.getSocialBattery() < assessment.upfrontCost) {
-      return { ok: false, error: pickInnerVoice('blocked', `${buddyId}:${day}`) };
-    }
-    this.needs.spendSocialBattery(assessment.upfrontCost);
-    // Every line teaches the buddy something: tone first, brevity second.
-    if (assessment.tone === 'warm') {
-      this.social.observePlayerTrait(buddyId, { warmth: 80 }, day);
-    } else if (assessment.tone === 'cold') {
-      this.social.observePlayerTrait(buddyId, { warmth: 15 }, day);
-    } else if (assessment.boldness > 0) {
-      this.social.observePlayerTrait(buddyId, { spontaneity: 75, warmth: 70 }, day);
-    } else {
-      this.social.observePlayerTrait(buddyId, {
-        shyness: text.length < 25 ? 75 : text.length > 120 ? 35 : 55,
-        warmth: 55,
-      }, day);
-    }
-    if (assessment.boldness > 0) {
-      const rels = this.social.getRelationships(buddyId);
-      const reception = receptionForBoldAct({
-        buddyId,
-        stage: this.social.getRelationshipStage(buddyId),
-        dims: rels ?? {
-          familiarity: 0, trust: 0, comfort: 0, respect: 0, annoyance: 0,
-          affection: 0, attraction: 0, suspicion: 0, resentment: 0,
-        },
-        traits: this.social.getTraits(buddyId),
-        day,
-        seed: `${text.length}:${text.slice(0, 12)}`,
-      }, assessment.boldness);
-      this.world.setFlag(`reception_${buddyId}_${day}`, reception);
-      if (reception === 'warm') {
-        this.needs.rechargeSocialBattery(BATTERY_WARM_REFUND + BATTERY_WARM_BONUS);
-      } else if (reception === 'lukewarm') {
-        // Short of the sting: spendSocialBattery leaves the balance (lenient).
-        this.needs.spendSocialBattery(BATTERY_LUKEWARM_EXTRA);
-      } else {
-        this.needs.drainSocialBattery();
-        this.world.setFlag(apologizeKey, true);
-        this.telemetry.logEvent('social', 'bold_rejected', this.clock.getTotalMinutes(), { buddyId, tone: assessment.tone, reception });
-      }
-    }
-    return { ok: true };
-  }
-
   /** True when the installed Pulse release is the 6.x generation (colors, motion). */
   public isPulse6(): boolean {
     try {
@@ -473,14 +297,8 @@ export class SimulationEngine {
     } catch { return false; }
   }
 
-  /** Prompt direction for a bold player line sent today (rules-stored, AI paraphrases). */
-  public getReceptionHint(rawBuddyId: string, day: number): string {    try {
-      const buddy = this.social.getBuddy(rawBuddyId);
-      if (!buddy) return '';
-      const outcome = this.world.getFlag(`reception_${buddy.id}_${Math.max(1, Math.floor(day) || 1)}`);
-      if (outcome !== 'warm' && outcome !== 'lukewarm' && outcome !== 'reject' && outcome !== 'offlimits') return '';
-      return receptionHintFor(outcome, buddy.displayName);
-    } catch { return ''; }
+  public getReceptionHint(rawBuddyId: string, day: number): string {
+    return this.playerContacts.getReceptionHint(rawBuddyId, day);
   }
 
   /** Daily battery pass: a quiet yesterday (no player messages) repays solitude. */
@@ -1156,7 +974,7 @@ export class SimulationEngine {
         try {
           // Social battery gate (introvert meter): every send costs, bold sends
           // cost more, and an empty meter refuses (apologies always pass).
-          const gate = this.gatePlayerMessage(action.buddyId, action.text, action.tags);
+          const gate = this.playerContacts.gatePlayerMessage(action.buddyId, action.text, action.tags);
           if (!gate.ok) return { success: false, error: gate.error };
           const msg = this.social.sendMessage(
             action.buddyId,
@@ -1224,7 +1042,7 @@ export class SimulationEngine {
 
       case 'ADD_CONTACT': {
         try {
-          return this.addContactByHandle(String((action as { handle?: unknown }).handle ?? ''), currentMinutes);
+          return this.playerContacts.addContactByHandle(String((action as { handle?: unknown }).handle ?? ''), currentMinutes);
         } catch (err: unknown) {
           return { success: false, error: (err as Error).message };
         }
@@ -1232,7 +1050,7 @@ export class SimulationEngine {
 
       case 'NIGHTBOARD_MEET': {
         try {
-          return this.meetOnNightBoard(currentMinutes);
+          return this.playerContacts.meetOnNightBoard(currentMinutes);
         } catch (err: unknown) {
           return { success: false, error: (err as Error).message };
         }
