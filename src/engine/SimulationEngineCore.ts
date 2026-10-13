@@ -51,6 +51,7 @@ import { NpcSocialLifeCycle } from './kernel/NpcSocialLifeCycle';
 import { ProceduralWorldCycle } from './kernel/ProceduralWorldCycle';
 import { PlayerContactCoordination } from './kernel/PlayerContactCoordination';
 import { CityActivityCoordination } from './kernel/CityActivityCoordination';
+import { DesktopStorageCommands } from './kernel/DesktopStorageCommands';
 
 export class SimulationEngine {
   public readonly clock!: GameClock;
@@ -84,6 +85,7 @@ export class SimulationEngine {
   private readonly proceduralWorld: ProceduralWorldCycle;
   private readonly playerContacts: PlayerContactCoordination;
   private readonly cityActivity: CityActivityCoordination;
+  private readonly desktopCommands: DesktopStorageCommands;
 
   private activeView: 'pc' | 'room' | 'cafe' | 'work' | 'city' = 'room';
   private subscribers: Set<(state: Readonly<SimulationState>) => void> = new Set();
@@ -159,6 +161,7 @@ export class SimulationEngine {
       (minutes, reason) => this.advanceGameMinutes(minutes, reason),
       () => this.notifySubscribers(),
     );
+    this.desktopCommands = new DesktopStorageCommands(owners, () => this.notifySubscribers());
     this.registerInternalEventHandlers();
   }
 
@@ -428,6 +431,8 @@ export class SimulationEngine {
 
   public dispatchAction(action: SimulationAction): ActionResult {
     const currentMinutes = this.clock.getTotalMinutes();
+    const desktopResult = this.desktopCommands.dispatch(action, currentMinutes);
+    if (desktopResult !== null) return desktopResult;
 
     switch (action.type) {
       case 'TIME_ADVANCE_MINUTES': {
@@ -681,124 +686,6 @@ export class SimulationEngine {
         });
         this.notifySubscribers();
         return { success: true, data: { ...res, release: targetRel, installMinutes } };
-      }
-
-      case 'DOWNLOAD_START': {
-        // P6.4 lenient teeth: overdue rent pauses NEW downloads (browsing still works)
-        if (this.world.getFlag('rent_overdue')) {
-          return { success: false, error: 'Download line paused by property management — settle your residence rent to resume.' };
-        }
-        try {
-          const task = this.downloads.startDownload({
-            sourceId: action.sourceId,
-            sourceUrl: action.url,
-            fileName: action.fileName,
-            totalBytes: action.totalBytes,
-            sourceMaxKbps: action.sourceMaxKbps,
-            fileKind: action.fileKind,
-            appAssociation: action.appAssociation,
-            manager: action.manager,
-            currentMinute: currentMinutes,
-          });
-          this.notifySubscribers();
-          return { success: true, data: task };
-        } catch (err: unknown) {
-          return { success: false, error: (err as Error).message };
-        }
-      }
-
-      case 'DOWNLOAD_PAUSE': {
-        const ok = this.downloads.pauseDownload(action.taskId);
-        this.notifySubscribers();
-        return { success: ok };
-      }
-
-      case 'DOWNLOAD_RESUME': {
-        const ok = this.downloads.resumeDownload(action.taskId);
-        this.notifySubscribers();
-        return { success: ok };
-      }
-
-      case 'DOWNLOAD_CANCEL': {
-        const ok = this.downloads.cancelDownload(action.taskId);
-        this.notifySubscribers();
-        return { success: ok };
-      }
-
-      case 'VFS_CREATE_FILE': {
-        try {
-          const file = this.vfs.createFile(action.file, currentMinutes);
-          this.notifySubscribers();
-          return { success: true, data: file };
-        } catch (err: unknown) {
-          return { success: false, error: (err as Error).message };
-        }
-      }
-
-      case 'VFS_DELETE_FILE': {
-        const ok = this.vfs.deletePermanently(action.path);
-        this.notifySubscribers();
-        return { success: ok };
-      }
-
-      case 'VFS_MOVE_TRASH': {
-        try {
-          const trashed = this.vfs.moveToTrash(action.path, currentMinutes);
-          this.notifySubscribers();
-          return { success: true, data: trashed };
-        } catch (err: unknown) {
-          return { success: false, error: (err as Error).message };
-        }
-      }
-
-      case 'VFS_RESTORE_TRASH': {
-        try {
-          const restored = this.vfs.restoreFromTrash(action.trashPath, currentMinutes);
-          this.notifySubscribers();
-          return { success: true, data: restored };
-        } catch (err: unknown) {
-          return { success: false, error: (err as Error).message };
-        }
-      }
-
-      case 'VFS_EMPTY_TRASH': {
-        const reclaimed = this.vfs.emptyTrash();
-        this.notifySubscribers();
-        return { success: true, data: { bytesReclaimed: reclaimed } };
-      }
-
-      case 'SOFTWARE_INSTALL': {
-        try {
-          const wizard = this.software.startInstallerWizard(action.softwareId);
-          if (!wizard.compatibilityResult.isCompatible) {
-            return {
-              success: false,
-              error: 'Software incompatible with current system specifications.',
-            };
-          }
-          if (action.selectedOptions) {
-            for (const [k, v] of Object.entries(action.selectedOptions)) {
-              wizard.selectedOptions.acceptedBundledOffers[k] = v;
-            }
-          }
-          const installed = this.software.completeInstallation(wizard.sessionId, currentMinutes);
-          this.telemetry.logEvent('software', 'installed', currentMinutes, {
-            softwareId: action.softwareId,
-          });
-          this.notifySubscribers();
-          return { success: true, data: installed };
-        } catch (err: unknown) {
-          return { success: false, error: (err as Error).message };
-        }
-      }
-
-      case 'SOFTWARE_UNINSTALL': {
-        const ok = this.software.uninstallSoftware(action.installedId);
-        this.telemetry.logEvent('software', 'uninstalled', currentMinutes, {
-          installedId: action.installedId,
-        });
-        this.notifySubscribers();
-        return { success: ok };
       }
 
       case 'SOCIAL_SEND_MESSAGE': {
