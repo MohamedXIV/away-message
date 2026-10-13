@@ -24,11 +24,12 @@ describe('PlayerContactCoordination — one Social roster and Needs battery', ()
   it('rejects unknown handles without creating actors, messages or spent battery', () => {
     const engine = new SimulationEngine();
     const before = engine.exportSnapshot();
+    const rosterSize = engine.social.getBuddies().length;
     const result = engine.dispatchAction({
       type: 'ADD_CONTACT', handle: 'no-such-online-handle',
     });
     expect(result.success).toBe(false);
-    expect(engine.social.getBuddies()).toHaveLength(before.social.buddies.length);
+    expect(engine.social.getBuddies()).toHaveLength(rosterSize);
     expect(engine.economy.getSocialBattery()).toBe(before.player.socialBattery);
   });
 
