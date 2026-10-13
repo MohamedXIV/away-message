@@ -55,7 +55,7 @@ export class ResidenceCoordination {
     this.residence.restore(state ?? fallbackResidenceState());
   }
 
-  public resolveHomePlaceId(): string {
+  public resolveHomePlaceId(): string | null {
     return this.residence.resolveHomePlaceId();
   }
 
