@@ -29,8 +29,8 @@ import { PulseEngine } from './PulseEngine';
 import { MyPlaceEngine, SEED_PROFILE_ALIASES } from './MyPlaceEngine';
 import { validatePersistedBuddy } from './CharacterEngine';
 import { generateNewcomer, shouldAutoDiscover, NEWCOMER_METVIA_ROTATION } from './CharacterDirector';
-import { traitCompatibility } from './SocialEngine';
-import { pickGuestbookLine, pickOutingWarmLine, pickOutingReservedLine, pickMediationAskLine, pickMediationThanks, pickMyplaceUpdateLine, pickContactLine, pickContactBounce, pickBackstoryReintro, pickRuninSpot, pickRuninVerb, classifyScheduleBlock, AGENDA_LABELS, rollSeeded100, pickSeeded, spreadSeed, } from './characterTemplates';
+
+import { pickGuestbookLine, pickOutingWarmLine, pickOutingReservedLine, pickMediationThanks, pickMyplaceUpdateLine, pickContactLine, pickContactBounce, rollSeeded100, } from './characterTemplates';
 import { appointmentRoll } from './AppointmentDirector';
 import { OUTINGS, isValidOutingId, isOutingOpen, outingHoursLabel, dinerStaffEncounter, canalRegularEncounter, buildLaundromatRumor, MIN_OUTING_ENERGY, type OutingId } from './OutingDirector';
 
