@@ -17,7 +17,7 @@ import type {
   PhysicalItemLocation,
   PhysicalWorldState,
 } from './PhysicalItemEngine';
-import { GROCERY_SKUS, type DeliveryOrder, type Fulfillment } from './DeliveryEngine';
+import type { Fulfillment } from './DeliveryEngine';
 import type {
   PhysicalShopFixtureDefinition,
   PhysicalShopState,
@@ -33,7 +33,8 @@ import type {
 import { resolvePlaceDeliveryTarget } from './physical/PhysicalContextRuntime';
 import { parseActiveTravel } from './transit/ActiveTravel';
 import { ActiveTravelRuntime } from './kernel/ActiveTravelRuntime';
-import { MaterialWorldRuntime, PHYSICAL_RUNTIME_GRAPH, resolveGeneratedPlaceId, DELIVERY_PARCEL_DEFINITION_ID, SHOPPING_BAG_DEFINITION_ID } from './kernel/MaterialWorldRuntime';
+import { MaterialWorldRuntime, PHYSICAL_RUNTIME_GRAPH, resolveGeneratedPlaceId } from './kernel/MaterialWorldRuntime';
+import { PhysicalGroceryFulfillment } from './kernel/PhysicalGroceryFulfillment';
 import type { ActiveTravelState, TravelPlan } from './transit/types';
 import type { CharacterIntent } from './life/types';
 import type {
@@ -94,6 +95,7 @@ export class SimulationEngine extends LegacySimulationEngine {
   private readonly material: MaterialWorldRuntime;
 
   private readonly physicalShop: PhysicalShopSessionRuntime;
+  private readonly physicalGrocery: PhysicalGroceryFulfillment;
   private readonly venueRuntime: VenueOperationsRuntime;
   private readonly activeTravel: ActiveTravelRuntime;
   /** Single composed owner for authored Scenario instances and presentation-only Inner Voice. */
@@ -146,7 +148,29 @@ export class SimulationEngine extends LegacySimulationEngine {
       initialState?.scenarioSeed ?? 'default',
       (initialState as TransportSimulationState | undefined)?.innerVoice ?? null,
     );
-    this.delivery.setArrivalHandler((order) => this.materializeDeliveryParcel(order));
+    this.physicalGrocery = new PhysicalGroceryFulfillment(
+      {
+        clock: this.clock,
+        economy: this.economy,
+        needs: this.needs,
+        delivery: this.delivery,
+        world: this.world,
+        telemetry: this.telemetry,
+      },
+      this.material,
+      () => {
+        const spatialPlaceId = this.getActorSpatialProjection('player')?.membership.placeId;
+        if (spatialPlaceId) return spatialPlaceId;
+        const legacyLocation = this.economy.getLocation();
+        return legacyLocation === 'home'
+          ? this.residenceCoordination.resolveHomePlaceId()
+          : resolveGeneratedPlaceId(legacyLocation);
+      },
+      (items, fulfillment, minute, options) =>
+        super.placeGroceryOrder(items, fulfillment, minute, options),
+      (minutes, reason) => this.advanceGameMinutes(minutes, reason),
+    );
+    this.physicalGrocery.bindArrivalHandler();
     this.events.on('time:tick', () => {
       this.activeTravel.synchronizeActiveTravel();
       this.venueRuntime.synchronizeVenueActivities();
@@ -185,14 +209,6 @@ export class SimulationEngine extends LegacySimulationEngine {
 
   public moveResidenceToOffer(offerId: string): { success: boolean; error?: string } {
     return this.residenceCoordination.moveResidenceToOffer(offerId);
-  }
-
-  private currentDeliveryPlaceId(): string | null {
-    const spatialPlaceId = this.getActorSpatialProjection('player')?.membership.placeId;
-    if (spatialPlaceId) return spatialPlaceId;
-    const legacyLocation = this.economy.getLocation();
-    if (legacyLocation === 'home') return this.residenceCoordination.resolveHomePlaceId();
-    return resolveGeneratedPlaceId(legacyLocation);
   }
 
   public getPhysicalShopState(
@@ -241,116 +257,12 @@ export class SimulationEngine extends LegacySimulationEngine {
     return this.physicalShop.checkoutPhysicalShop(storeId, worldSeed, fixtures, pricesByDefinitionId);
   }
 
-  private materializeGroceryContainer(
-    order: DeliveryOrder,
-    containerId: string,
-    containerDefinitionId: string,
-    shellLocation: PhysicalItemLocation,
-    itemIdPrefix: string,
-  ): void {
-    this.material.materializeGroceryContainer(
-      order, containerId, containerDefinitionId, shellLocation, itemIdPrefix,
-    );
-  }
-
-  private materializeDeliveryParcel(order: DeliveryOrder): boolean {
-    if (!order.deliveryTarget) {
-      throw new Error(`Delivery order ${order.id} has no explicit authored target.`);
-    }
-
-    const parcelId = `parcel:${order.id}`;
-    this.materializeGroceryContainer(
-      order,
-      parcelId,
-      DELIVERY_PARCEL_DEFINITION_ID,
-      { kind: 'worldAnchor', anchorId: order.deliveryTarget.anchorId },
-      'order-item',
-    );
-
-    try { this.world.setFlag(`delivery_arrived_${order.id}`, true); } catch {}
-    try {
-      this.telemetry.logEvent('economy', 'order_delivered', this.clock.getTotalMinutes(), {
-        orderId: order.id,
-        parcelId,
-        placeId: order.deliveryTarget.placeId,
-        deliveryTargetSlotId: order.deliveryTarget.slotId,
-      });
-    } catch {}
-    return true;
-  }
-
   public override placeGroceryOrder(
     rawItems: Array<{ sku: string; qty: number }>,
     fulfillment: Fulfillment,
     nowMinute: number,
   ) {
-    if (fulfillment !== 'pickup') {
-      const placeId = this.currentDeliveryPlaceId();
-      if (!placeId) {
-        return { success: false, error: 'No canonical delivery place is available.' };
-      }
-
-      const target = resolvePlaceDeliveryTarget(
-        placeId,
-        GENERATED_PLACE_SERVICE_POLICIES,
-        PHYSICAL_RUNTIME_GRAPH,
-      );
-      if (!target.ok) {
-        return {
-          success: false,
-          error: `Delivery is unavailable here (${target.reason}).`,
-        };
-      }
-
-      return super.placeGroceryOrder(rawItems, fulfillment, nowMinute, {
-        deliveryTarget: {
-          placeId,
-          slotId: target.slotId,
-          anchorId: target.location.anchorId,
-        },
-      });
-    }
-
-    const items = (rawItems || [])
-      .filter((item) => item && GROCERY_SKUS[item.sku] && Number.isFinite(item.qty) && item.qty >= 1)
-      .map((item) => ({ sku: item.sku, qty: Math.min(9, Math.floor(item.qty)) }));
-    if (items.length === 0) return { success: false, error: 'Cart is empty.' };
-
-    const total = items.reduce((sum, item) => sum + GROCERY_SKUS[item.sku]!.price * item.qty, 0);
-    if (!this.economy.canAfford(total)) {
-      return { success: false, error: `Cannot afford $${total.toFixed(2)} order.` };
-    }
-    if (this.needs.getState().energy < 20) {
-      return { success: false, error: 'Too tired for a store run (need 20% energy).' };
-    }
-
-    const order = this.delivery.recordPickup(items, total, this.clock.getTotalMinutes());
-    const bagId = `shopping-bag:${order.id}`;
-    this.materializeGroceryContainer(
-      order,
-      bagId,
-      SHOPPING_BAG_DEFINITION_ID,
-      { kind: 'container', containerInstanceId: PLAYER_INVENTORY_CONTAINER_ID },
-      'pickup-item',
-    );
-
-    this.economy.spendCash(total, 'CornerMart pickup');
-    this.advanceGameMinutes(30, 'CornerMart pickup run');
-    this.needs.consumeEnergy(5);
-    this.telemetry.logEvent('economy', 'order_pickup', this.clock.getTotalMinutes(), {
-      orderId: order.id,
-      total,
-      bagId,
-    });
-
-    return {
-      success: true,
-      data: {
-        orderId: order.id,
-        etaMinute: this.clock.getTotalMinutes(),
-        summary: 'Picked up from CornerMart — shopping bag is being carried.',
-      },
-    };
+    return this.physicalGrocery.placeGroceryOrder(rawItems, fulfillment, nowMinute);
   }
 
   public getPhysicalWorldState(): PhysicalWorldState {
@@ -504,7 +416,7 @@ export class SimulationEngine extends LegacySimulationEngine {
     this.activeTravel.loadState(persistedActiveTravel);
     // Hydrate only the persisted authored bindings and presentation history.
     this.story.loadState(persistedScenarios, snapshot.innerVoice);
-    this.delivery.setArrivalHandler((order) => this.materializeDeliveryParcel(order));
+    this.physicalGrocery.bindArrivalHandler();
   }
 
   public getScenarioState(): ScenarioRuntimeState {
