@@ -72,7 +72,7 @@ export class ComputerOwnershipRuntime {
     this.inventory = new InventoryEngine(initialInventory ?? createEmptyInventoryState());
   }
 
-  public loadInventory(state?: Partial<PlayerInventoryState>): void {
+  public loadInventory(state?: PlayerInventoryState): void {
     this.inventory.loadState(state ?? createEmptyInventoryState());
     this.invalidate();
   }
