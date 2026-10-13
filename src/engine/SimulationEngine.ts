@@ -58,22 +58,15 @@ import {
 } from './transit/ActiveTravel';
 import type { ActiveTravelState, TravelPlan } from './transit/types';
 import type { CharacterIntent } from './life/types';
-import {
-  advanceVenueActivities,
-  cloneVenueRuntimeState,
-  evaluateVenueService,
-  hydrateVenueRuntimeState,
-  resolveIntentToVenueActivity,
-  setVenueRoleAssignment as setVenueRoleAssignmentState,
-  startVenueActivity,
-  type ResolveVenueActivityResult,
-  type StartVenueActivityResult,
-  type VenueActivityInstance,
-  type VenueRoleAssignment,
-  type VenueRuntimeState,
-  type VenueServiceAvailability,
+import type {
+  ResolveVenueActivityResult,
+  StartVenueActivityResult,
+  VenueActivityInstance,
+  VenueRoleAssignment,
+  VenueRuntimeState,
+  VenueServiceAvailability,
 } from './venue/VenueOperations';
-import { GENERATED_VENUE_DEFINITIONS } from './venue/GeneratedVenueDefinitions';
+import { VenueOperationsRuntime } from './kernel/VenueOperationsRuntime';
 import type { SimulationState as TransportSimulationState } from './types';
 import type { ResidenceState } from './ResidenceTenancy';
 import { ResidenceCoordination } from './kernel/ResidenceCoordination';
@@ -281,7 +274,7 @@ export class SimulationEngine extends LegacySimulationEngine {
   private physicalWorldState: PhysicalWorldState | null = null;
   private physicalObjectState: PhysicalObjectRuntimeState = { objects: {} };
   private physicalShopStates: Record<string, PhysicalShopState> = {};
-  private venueState: VenueRuntimeState = { roleAssignments: {}, activities: {} };
+  private readonly venueRuntime: VenueOperationsRuntime;
   private activeTravelState: ActiveTravelState | null = null;
   /** Single composed owner for authored Scenario instances and presentation-only Inner Voice. */
   private readonly story: StoryExperienceRuntime;
@@ -300,9 +293,12 @@ export class SimulationEngine extends LegacySimulationEngine {
       initialState?.physicalObjects,
       PHYSICAL_RUNTIME_GRAPH,
     );
-    this.venueState = hydrateVenueRuntimeState(
+    this.venueRuntime = new VenueOperationsRuntime(
+      { clock: this.clock, events: this.events },
+      (actorId) => this.getActorSpatialProjection(actorId)?.membership.placeId ?? null,
+      (spaceId, requirements) => this.resolvePhysicalContextRequirements(spaceId, requirements),
+      (actorId) => this.getCharacterIntent(actorId),
       initialState?.venueOperations,
-      GENERATED_VENUE_DEFINITIONS,
     );
     this.physicalWorldState = this.hydratePhysicalWorld(initialState?.physicalWorld);
     this.physicalShopStates = clonePhysicalShopStates(initialState?.physicalShops ?? {});
@@ -316,11 +312,11 @@ export class SimulationEngine extends LegacySimulationEngine {
     this.delivery.setArrivalHandler((order) => this.materializeDeliveryParcel(order));
     this.events.on('time:tick', () => {
       this.synchronizeActiveTravel();
-      this.synchronizeVenueActivities();
+      this.venueRuntime.synchronizeVenueActivities();
     });
     this.events.on('time:jump', () => {
       this.synchronizeActiveTravel();
-      this.synchronizeVenueActivities();
+      this.venueRuntime.synchronizeVenueActivities();
     });
   }
 
@@ -499,35 +495,6 @@ export class SimulationEngine extends LegacySimulationEngine {
     }
   }
 
-  private venueActorPlaceIds(extraActorIds: readonly string[] = []): Record<string, string | null> {
-    const actorIds = new Set<string>(extraActorIds);
-    for (const assignment of Object.values(this.venueState.roleAssignments)) {
-      actorIds.add(assignment.actorId);
-    }
-    for (const activity of Object.values(this.venueState.activities)) {
-      if (activity.status === 'active') actorIds.add(activity.actorId);
-    }
-
-    return Object.fromEntries(
-      [...actorIds].sort().map((actorId) => [
-        actorId,
-        this.getActorSpatialProjection(actorId)?.membership.placeId ?? null,
-      ]),
-    );
-  }
-
-  private synchronizeVenueActivities(): void {
-    const advanced = advanceVenueActivities(
-      this.venueState,
-      this.clock.getTotalMinutes(),
-      GENERATED_VENUE_DEFINITIONS,
-    );
-    this.venueState = advanced.state;
-    for (const command of advanced.completed) {
-      this.events.emit('venue:activity_completed', command);
-    }
-  }
-
   private materializeGroceryContainer(
     order: DeliveryOrder,
     containerId: string,
@@ -670,75 +637,31 @@ export class SimulationEngine extends LegacySimulationEngine {
   }
 
   public getVenueRuntimeState(): VenueRuntimeState {
-    return cloneVenueRuntimeState(this.venueState);
+    return this.venueRuntime.getVenueRuntimeState();
   }
 
   public setVenueRoleAssignment(assignment: VenueRoleAssignment): void {
-    this.venueState = setVenueRoleAssignmentState(
-      this.venueState,
-      assignment,
-      GENERATED_VENUE_DEFINITIONS,
-    );
+    this.venueRuntime.setVenueRoleAssignment(assignment);
   }
 
   public getVenueServiceAvailability(serviceId: string): VenueServiceAvailability {
-    const service = GENERATED_VENUE_DEFINITIONS.services.find(
-      (candidate) => candidate.id === serviceId,
-    );
-    if (!service) return { available: false, blockers: ['unknown_service'] };
-
-    return evaluateVenueService({
-      serviceId,
-      definitions: GENERATED_VENUE_DEFINITIONS,
-      state: this.venueState,
-      actorPlaceIds: this.venueActorPlaceIds(),
-      contextResult: this.resolvePhysicalContextRequirements(
-        service.spaceId,
-        service.contextRequirements,
-      ),
-    });
+    return this.venueRuntime.getVenueServiceAvailability(serviceId);
   }
 
   public resolveVenueActivityIntent(intent: CharacterIntent): ResolveVenueActivityResult {
-    return resolveIntentToVenueActivity({
-      intent,
-      actorPlaceId:
-        this.getActorSpatialProjection(intent.actorId)?.membership.placeId ?? null,
-      definitions: GENERATED_VENUE_DEFINITIONS,
-      state: this.venueState,
-      actorPlaceIds: this.venueActorPlaceIds([intent.actorId]),
-      resolveContext: (spaceId, requirements) =>
-        this.resolvePhysicalContextRequirements(spaceId, requirements),
-    });
+    return this.venueRuntime.resolveVenueActivityIntent(intent);
   }
 
   public startVenueActivityFromIntent(intent: CharacterIntent): StartVenueActivityResult {
-    const resolved = this.resolveVenueActivityIntent(intent);
-    if (!resolved.ok) return { ok: false, reason: resolved.reason };
-
-    const started = startVenueActivity(
-      this.venueState,
-      resolved.proposal,
-      GENERATED_VENUE_DEFINITIONS,
-      this.clock.getTotalMinutes(),
-    );
-    if (started.ok) this.venueState = started.state;
-    return started;
+    return this.venueRuntime.startVenueActivityFromIntent(intent);
   }
 
   public startCurrentVenueActivity(actorId: string): StartVenueActivityResult {
-    const intent = this.getCharacterIntent(actorId);
-    if (!intent) return { ok: false, reason: 'no_character_intent' };
-    return this.startVenueActivityFromIntent(intent);
+    return this.venueRuntime.startCurrentVenueActivity(actorId);
   }
 
   public getActiveVenueActivity(actorId: string): VenueActivityInstance | null {
-    const state = this.getVenueRuntimeState();
-    return (
-      Object.values(state.activities)
-        .filter((activity) => activity.actorId === actorId && activity.status === 'active')
-        .sort((a, b) => a.id.localeCompare(b.id))[0] ?? null
-    );
+    return this.venueRuntime.getActiveVenueActivity(actorId);
   }
 
   public getReachablePhysicalAffordances(spaceId: string): ReachableAffordance[] {
@@ -948,10 +871,7 @@ export class SimulationEngine extends LegacySimulationEngine {
       persistedPhysicalObjects,
       PHYSICAL_RUNTIME_GRAPH,
     );
-    this.venueState = hydrateVenueRuntimeState(
-      persistedVenueOperations,
-      GENERATED_VENUE_DEFINITIONS,
-    );
+    this.venueRuntime.loadState(persistedVenueOperations as VenueRuntimeState);
     this.physicalWorldState = this.hydratePhysicalWorld(persistedPhysicalWorld);
     this.physicalShopStates = clonePhysicalShopStates(persistedPhysicalShops ?? {});
     this.activeTravelState = persistedActiveTravel;
