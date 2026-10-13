@@ -34,7 +34,7 @@ export class CityActivityCoordination {
     return null;
   }
 
-  private static requireLocation(have: CityNodeId, want: CityNodeId): string | null {
+  public static requireLocation(have: CityNodeId, want: CityNodeId): string | null {
     if (have === want) return null;
     return `You're at ${CITY_NODES[have].name} — travel to ${CITY_NODES[want].name} first.`;
   }
