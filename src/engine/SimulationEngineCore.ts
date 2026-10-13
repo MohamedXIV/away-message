@@ -26,11 +26,11 @@ import type { GameContextReadApi } from './GameContext';
 
 import { OsEngine } from './OsEngine';
 import { PulseEngine } from './PulseEngine';
-import { MyPlaceEngine, SEED_PROFILE_ALIASES } from './MyPlaceEngine';
+import { MyPlaceEngine } from './MyPlaceEngine';
 import { validatePersistedBuddy } from './CharacterEngine';
 import { generateNewcomer, shouldAutoDiscover, NEWCOMER_METVIA_ROTATION } from './CharacterDirector';
 
-import { pickGuestbookLine, pickOutingWarmLine, pickOutingReservedLine, pickMediationThanks, pickMyplaceUpdateLine, pickContactLine, pickContactBounce, rollSeeded100, } from './characterTemplates';
+import { pickOutingWarmLine, pickOutingReservedLine, pickMediationThanks, pickContactLine, pickContactBounce, rollSeeded100, } from './characterTemplates';
 import { appointmentRoll } from './AppointmentDirector';
 import { OUTINGS, isValidOutingId, isOutingOpen, outingHoursLabel, dinerStaffEncounter, canalRegularEncounter, buildLaundromatRumor, MIN_OUTING_ENERGY, type OutingId } from './OutingDirector';
 
@@ -48,9 +48,9 @@ import {
   } from './PlayerActs';
 import { CITY_NODES, isCityNodeId, quoteTravel, walkEnergyCost, rollStreetEncounter, BUS_FARE, type CityNodeId, type TravelMode } from './CityMap';
 import { pulseHasFeature, getAllPulseReleases } from './PulseCatalog';
-import { SEED_BY_ID } from './seedCharacters';
+
 import { createCoreDomainOwners, type CoreDomainOwners } from './kernel/CoreDomainOwners';
-import { TimeAdvancement, type TimeAdvanceMode } from './kernel/TimeAdvancement';
+import { TimeAdvancement } from './kernel/TimeAdvancement';
 import { projectCoreState } from './kernel/CoreStateProjection';
 import { JobBoardCoordination } from './kernel/JobBoardCoordination';
 import { GroceryDeliveryCoordination } from './kernel/GroceryDeliveryCoordination';
@@ -144,7 +144,7 @@ export class SimulationEngine {
       processJobReplies: () => this.processJobReplies(),
       sweepBusyLeaveLines: (atMinute) => this.socialPresence.sweepBusyLeaveLines(atMinute),
       scheduleDailyProfileUpdate: (mode, day, atMinute) =>
-        this.scheduleDailyProfileUpdate(mode, day, atMinute),
+        this.myplaceSocial.scheduleDailyProfileUpdate(mode, day, atMinute),
       processNewDay: (day) => {
         this.maybeScheduleProceduralGeneration();
         this.maybeAutoDiscoverNewcomer(day);
@@ -194,12 +194,12 @@ export class SimulationEngine {
     );
     // Core buddies never pass through registerBuddy — stub their pages up front
     // (procedural ones are stubbed by the handler below as they arrive).
-    for (const buddy of this.social.getBuddies()) this.ensureMyPlaceStub(buddy);
+    for (const buddy of this.social.getBuddies()) this.myplaceSocial.ensureMyPlaceStub(buddy);
     this.events.on('social:buddy_registered', ({ buddy }: any) => {
       try {
         this.world.ensureAttitudesForBuddy(buddy.id, this.clock.getTotalMinutes());
       } catch { /* attitudes are best-effort */ }
-      this.ensureMyPlaceStub(buddy);
+      this.myplaceSocial.ensureMyPlaceStub(buddy);
     });
 
     // Keep PulseEngine in sync when Pulse is installed via SoftwareRegistry
@@ -265,43 +265,6 @@ export class SimulationEngine {
    * original realtime/jump presentation behavior until that owner is
    * replaced; it is never allowed to control the clock or domain scheduling.
    */
-  private scheduleDailyProfileUpdate(
-    mode: TimeAdvanceMode,
-    day: number,
-    currentMinutes: number,
-  ): void {
-    void this.myplace.maybeUpdateRandomNpcProfile(day, currentMinutes).then((res) => {
-      if (!res) return;
-      const link = `http://myplace.local/${res.username}`;
-      const announcer = Object.values(SEED_BY_ID).find((b) => b.myplace === res.username);
-      const traits = announcer
-        ? this.social.getTraits(announcer.id)
-        : { shyness: 50, discipline: 50 };
-      const text = pickMyplaceUpdateLine(traits.shyness, traits.discipline, link);
-      try {
-        this.social.sendMessage(
-          res.username, res.username, 'player',
-          text, currentMinutes, false, ['myplace_update'],
-        );
-      } catch {
-        // Existing profile announcers are best effort.
-      }
-      if (mode === 'realtime') {
-        // Preserve the original realtime-only notification/co-comment behavior
-        // until a dedicated Social side-effect cutover owns it.
-        this.maybeCoCommentProfileUpdate(res.username, day, currentMinutes);
-        try {
-          this.events.emit('social:message_received' as any, {
-            message: { senderId: res.username, text },
-          });
-        } catch {
-          // Non-critical UI event.
-        }
-        this.maybeCoCommentProfileUpdate(res.username, day, currentMinutes);
-      }
-    }).catch(() => {});
-  }
-
   // Governed procedural queue — keeps 2-3 future days filled. Throttled, non-blocking, template fallback if AI unavailable.
   private maybeScheduleProceduralGeneration(): void {
     const pending = this.world.getPendingEvents().length;
@@ -588,51 +551,6 @@ export class SimulationEngine {
     rawBuddyId: string, text: string, day: number,
   ): Appointment | null {
     return this.appointmentCoordination.handleMeetupChat(rawBuddyId, text, day);
-  }
-
-  /** P5.4 co-comment: when an NPC refreshes their page, a mutual friend may sign the guestbook. */
-  private maybeCoCommentProfileUpdate(username: string, day: number, currentMinutes: number): void {
-    try {
-      if (appointmentRoll(`${username}:${day}:gbco`) >= 50) return;
-      const owner = this.social.getBuddies().find((b) =>
-        b.handle === username || b.id === username
-        || SEED_PROFILE_ALIASES[b.id] === username || SEED_PROFILE_ALIASES[b.handle] === username);
-      const candidates = this.social.getBuddies().filter((b) => {
-        if (owner && b.id === owner.id) return false;
-        if (b.status === 'distant' || b.status === 'gone' || b.status === 'blocked') return false;
-        const stage = this.social.getRelationshipStage(b.id);
-        return stage === 'friend' || stage === 'close';
-      });
-      if (candidates.length === 0) return;
-      const commenter = candidates[appointmentRoll(`${username}:${day}:gbco2`) % candidates.length]!;
-      const ownerProfile = this.myplace.getNpcProfile(username);
-      const authorKey = this.myplaceSocial.resolveProfileUsername(commenter) ?? commenter.handle;
-      this.myplace.addGuestbookComment(username, authorKey, pickGuestbookLine(`${username}:${day}:gbco`, ownerProfile?.displayName ?? username), currentMinutes);
-      this.telemetry.logEvent('social', 'myplace_guestbook', currentMinutes, { from: commenter.id, to: username });
-    } catch { /* co-comments never break the tick */ }
-  }
-
-  /** P5.4 stub MyPlace pages for a buddy (myplace username when known, else handle/id). */
-  private ensureMyPlaceStub(buddy: { handle?: string; id: string; displayName: string; archetype?: any; backstory?: { label?: string; bioSeed?: string } }): void {
-    try {
-      // One page per buddy: prefer the registry myplace username so links stay canonical.
-      const username = SEED_BY_ID[buddy.id]?.myplace || buddy.handle || buddy.id;
-      this.myplace.ensureNpcProfile({
-        username,
-        displayName: buddy.displayName,
-        archetype: buddy.archetype,
-        backstory: buddy.backstory ?? SEED_BY_ID[buddy.id]?.backstory ?? undefined,
-      });
-      // Also index by raw id so MyPlace routing works with either key
-      if (buddy.handle && buddy.handle !== buddy.id) {
-        this.myplace.ensureNpcProfile({
-          username: buddy.id,
-          displayName: buddy.displayName,
-          archetype: buddy.archetype,
-          backstory: buddy.backstory ?? SEED_BY_ID[buddy.id]?.backstory ?? undefined,
-        });
-      }
-    } catch { /* MyPlace stub is best-effort */ }
   }
 
   private processAppointmentsDaily(newDay: number): void {
