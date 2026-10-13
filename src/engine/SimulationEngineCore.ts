@@ -28,7 +28,7 @@ import { OsEngine } from './OsEngine';
 import { PulseEngine } from './PulseEngine';
 import { MyPlaceEngine } from './MyPlaceEngine';
 import { validatePersistedBuddy } from './CharacterEngine';
-import { generateNewcomer, shouldAutoDiscover, NEWCOMER_METVIA_ROTATION } from './CharacterDirector';
+import { generateNewcomer, NEWCOMER_METVIA_ROTATION } from './CharacterDirector';
 
 import { pickOutingWarmLine, pickOutingReservedLine, pickMediationThanks, pickContactLine, pickContactBounce, rollSeeded100, } from './characterTemplates';
 
@@ -60,6 +60,7 @@ import { AppointmentCoordination } from './kernel/AppointmentCoordination';
 import { SocialPresenceCycle } from './kernel/SocialPresenceCycle';
 import { RelationshipContinuity } from './kernel/RelationshipContinuity';
 import { NpcSocialLifeCycle } from './kernel/NpcSocialLifeCycle';
+import { ProceduralWorldCycle } from './kernel/ProceduralWorldCycle';
 
 export class SimulationEngine {
   public readonly clock!: GameClock;
@@ -90,11 +91,10 @@ export class SimulationEngine {
   private readonly socialPresence: SocialPresenceCycle;
   private readonly relationshipContinuity: RelationshipContinuity;
   private readonly npcSocialLife: NpcSocialLifeCycle;
+  private readonly proceduralWorld: ProceduralWorldCycle;
 
   private activeView: 'pc' | 'room' | 'cafe' | 'work' | 'city' = 'room';
   private subscribers: Set<(state: Readonly<SimulationState>) => void> = new Set();
-  private _procGenPending = false;
-  private _procGenLastDay = 0;
   private _cachedState: Readonly<SimulationState> | null = null;
   private _cachedStateVersion = -1;
   private _stateVersion = 0;
@@ -112,6 +112,15 @@ export class SimulationEngine {
     this.socialPresence = new SocialPresenceCycle(owners);
     this.relationshipContinuity = new RelationshipContinuity(owners);
     this.npcSocialLife = new NpcSocialLifeCycle(owners);
+    this.proceduralWorld = new ProceduralWorldCycle(
+      owners,
+      (buddy, introText) => this.dispatchAction({
+        type: 'SOCIAL_ADD_BUDDY',
+        buddy,
+        introText,
+      }).success,
+      () => this.notifySubscribers(),
+    );
     this.groceryDelivery = new GroceryDeliveryCoordination(
       owners,
       (minutes, reason) => this.advanceGameMinutes(minutes, reason),
@@ -145,10 +154,7 @@ export class SimulationEngine {
       sweepBusyLeaveLines: (atMinute) => this.socialPresence.sweepBusyLeaveLines(atMinute),
       scheduleDailyProfileUpdate: (mode, day, atMinute) =>
         this.myplaceSocial.scheduleDailyProfileUpdate(mode, day, atMinute),
-      processNewDay: (day) => {
-        this.maybeScheduleProceduralGeneration();
-        this.maybeAutoDiscoverNewcomer(day);
-      },
+      processNewDay: (day) => this.proceduralWorld.processNewDay(day),
       publishState: () => this.notifySubscribers(),
     });
     this.registerInternalEventHandlers();
@@ -266,68 +272,6 @@ export class SimulationEngine {
    * replaced; it is never allowed to control the clock or domain scheduling.
    */
   // Governed procedural queue — keeps 2-3 future days filled. Throttled, non-blocking, template fallback if AI unavailable.
-  private maybeScheduleProceduralGeneration(): void {
-    const pending = this.world.getPendingEvents().length;
-    if (pending >= 3) return;
-    const currentDay = this.clock.getTime().day;
-    if (this._procGenPending || this._procGenLastDay === currentDay) return;
-    this._procGenPending = true;
-    this._procGenLastDay = currentDay;
-    const totalMinutes = this.clock.getTotalMinutes();
-    // Fire-and-forget, never blocks simulation
-    import('./ProceduralDirector')
-      .then(({ ProceduralDirector }) => {
-        const dir = new ProceduralDirector(this.world);
-        return dir.generateNextBatch(currentDay, totalMinutes, { maxEvents: 2, useAI: true });
-      })
-      .catch(() => {})
-      .finally(() => {
-        this._procGenPending = false;
-        // Notify so UI (CityWire) updates pending count
-        try { this.notifySubscribers(); } catch {}
-      });
-  }
-
-  /**
-   * Sandbox auto-discovery: every few days a stranger can appear from the net
-   * or work, register as a buddy, and say hi. Throttled + deterministic
-   * (see shouldAutoDiscover); AI enriches when a key exists, templates otherwise.
-   * Fire-and-forget — never blocks the simulation tick.
-   */
-  private maybeAutoDiscoverNewcomer(day: number): void {
-    try {
-      const lastRaw = this.world.getFlag('newcomer_last_day');
-      const lastDay = typeof lastRaw === 'number' ? lastRaw : 0;
-      if (!shouldAutoDiscover(day, lastDay)) return;
-      const proceduralCount = this.social.getBuddies().filter((b) => b.isProcedural).length;
-      const metVia = NEWCOMER_METVIA_ROTATION[proceduralCount % NEWCOMER_METVIA_ROTATION.length]!;
-      const existingIds = this.social.getBuddies().map((b) => b.id);
-      void generateNewcomer({ metVia, day, seed: `auto-day-${day}`, useAI: true }, { existingIds })
-        .then((res) => {
-          const added = this.dispatchAction({ type: 'SOCIAL_ADD_BUDDY', buddy: res.definition, introText: res.introText });
-          if (!added.success) return;
-          // NightBoard meetings leave a public trace → auto thread via existing machinery
-          if (metVia === 'nightboard') {
-            try {
-              this.world.injectProceduralEvents([{
-                id: `met_${res.definition.id}`.replace(/[^a-z0-9_]/g, '_').slice(0, 40),
-                title: `New voice on NightBoard: ${res.definition.displayName}`,
-                description: `${res.definition.displayName} (${res.definition.handle}) showed up asking about the canal hum thread.`,
-                category: 'city_news',
-                triggerDay: day,
-                triggerHour: 22,
-                knowledgePrompt: `A newcomer (${res.definition.displayName}) appeared on NightBoard and added you on Pulse.`,
-                siteUrl: 'http://nightboard.local/',
-              }]);
-            } catch { /* trace is best-effort */ }
-          }
-          this.world.setFlag('newcomer_last_day', day);
-          this.notifySubscribers();
-        })
-        .catch(() => {});
-    } catch { /* auto-discovery never breaks the tick */ }
-  }
-
   // ==========================================
   // P3 — SHARP RELATIONSHIP EVENTS (governed, rules-only, template-voiced)
   // Ladder for sustained dismissiveness: confrontation → distant (7 days) → gone.
