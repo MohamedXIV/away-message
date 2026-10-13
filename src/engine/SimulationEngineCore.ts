@@ -479,7 +479,7 @@ export class SimulationEngine {
 
       case 'PLAYER_WORK_SHIFT': {
         // P7 gating: shifts are worked at the food cart
-        const cartErr = SimulationEngine.requireLocation(this.economy.getLocation(), 'cart');
+        const cartErr = CityActivityCoordination.requireLocation(this.economy.getLocation(), 'cart');
         if (cartErr) return { success: false, error: cartErr };
         const durationMinutes = action.durationMinutes ?? 240;
         const wage = action.wage ?? 62.0;
@@ -553,7 +553,7 @@ export class SimulationEngine {
 
       case 'PLAYER_INTERACT_ROOM': {
         // P7 gating: room comforts require the player's current home
-        const roomErr = SimulationEngine.requireLocation(this.economy.getLocation(), 'home');
+        const roomErr = CityActivityCoordination.requireLocation(this.economy.getLocation(), 'home');
         if (roomErr) return { success: false, error: roomErr };
         const durations: Record<string, number> = {
           tea: 6,
