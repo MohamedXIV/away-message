@@ -19,11 +19,6 @@ export function projectCoreState(
   const osState = owners.os.getState();
   const pulseState = owners.pulse.getState();
   const myplaceState = owners.myplace.getState();
-  // Sync hardware osVersion to OsEngine truth
-  const hwState = owners.hardware.getState();
-  if ((hwState as any).osVersion !== osState.currentOsId) {
-    (owners.hardware as any).state.osVersion = osState.currentOsId;
-  }
 
   // Sandbox world state is canonical; narrative is deprecated alias (kept with buddyKnowledge for compat)
   const narrativeAlias = {
