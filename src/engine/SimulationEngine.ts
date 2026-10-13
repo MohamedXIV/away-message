@@ -34,6 +34,7 @@ import type {
   PhysicalObjectRuntimeState,
   ReachableAffordance,
 } from './physical/PhysicalContextRuntime';
+import { resolvePlaceDeliveryTarget } from './physical/PhysicalContextRuntime';
 import { parseActiveTravel } from './transit/ActiveTravel';
 import { ActiveTravelRuntime } from './kernel/ActiveTravelRuntime';
 import { MaterialWorldRuntime, PHYSICAL_RUNTIME_GRAPH, resolveGeneratedPlaceId, DELIVERY_PARCEL_DEFINITION_ID, SHOPPING_BAG_DEFINITION_ID } from './kernel/MaterialWorldRuntime';
