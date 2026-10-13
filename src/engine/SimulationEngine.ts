@@ -92,7 +92,6 @@ import {
 } from './worldContent.generated';
 import {
   InnerVoiceEngine,
-  emptyInnerVoicePersistedState,
   type InnerVoicePersistedState,
   type InnerVoiceUiState,
   type InspectThoughtRequest,
@@ -100,13 +99,13 @@ import {
   type ThoughtTrigger,
 } from './innerVoice/index';
 import { type ScenarioRuntimeState } from './scenario/ScenarioState';
-import {
-  ScenarioDirector,
-  type ScenarioHookOpportunity,
-  type ScenarioObservation,
+import { StoryExperienceRuntime } from './kernel/StoryExperienceRuntime';
+import type {
+  ScenarioHookOpportunity,
+  ScenarioObservation,
 } from './scenario/ScenarioDirector';
 import type { ScenarioDefinition, ScenarioInstance, ScenarioLifecycle } from './scenario/types';
-import { projectScenarios, type ScenarioProjection } from './scenario/ScenarioProjection';
+import type { ScenarioProjection } from './scenario/ScenarioProjection';
 import { GENERATED_SCENARIOS } from './scenarioContent.generated';
 
 export * from './SimulationEngineLegacyFacade';
@@ -301,9 +300,8 @@ export class SimulationEngine extends LegacySimulationEngine {
   private physicalShopStates: Record<string, PhysicalShopState> = {};
   private venueState: VenueRuntimeState = { roleAssignments: {}, activities: {} };
   private activeTravelState: ActiveTravelState | null = null;
-  private readonly scenarioDirector: ScenarioDirector;
-  /** Player Inner Voice rules gate (#23). Owns cooldown/notable-history only. */
-  private readonly innerVoice: InnerVoiceEngine;
+  /** Single composed owner for authored Scenario instances and presentation-only Inner Voice. */
+  private readonly story: StoryExperienceRuntime;
 
   public constructor(initialState?: InitialSimulationState) {
     super(initialState);
@@ -337,17 +335,10 @@ export class SimulationEngine extends LegacySimulationEngine {
     this.physicalWorldState = this.hydratePhysicalWorld(initialState?.physicalWorld);
     this.physicalShopStates = clonePhysicalShopStates(initialState?.physicalShops ?? {});
     this.activeTravelState = initialState?.activeTravel ? cloneActiveTravel(initialState.activeTravel) : null;
-    this.scenarioDirector = new ScenarioDirector(this.social, initialState?.scenarios);
-    // Generated authored scenarios are selected only for a true new save. Loading a
-    // persisted Scenario state must never silently add newly-authored definitions.
-    if (initialState?.scenarios === undefined) {
-      this.scenarioDirector.initialize(GENERATED_SCENARIOS, {
-        seed: initialState?.scenarioSeed ?? 'default',
-        atMinute: this.clock.getTotalMinutes(),
-        maxInstances: 3,
-      });
-    }
-    this.innerVoice = new InnerVoiceEngine(
+    this.story = new StoryExperienceRuntime(
+      { clock: this.clock, social: this.social },
+      initialState?.scenarios,
+      initialState?.scenarioSeed ?? 'default',
       (initialState as TransportSimulationState | undefined)?.innerVoice ?? null,
     );
     this.delivery.setArrivalHandler((order) => this.materializeDeliveryParcel(order));
@@ -997,9 +988,9 @@ export class SimulationEngine extends LegacySimulationEngine {
       physicalShops: clonePhysicalShopStates(this.physicalShopStates),
       venueOperations: this.getVenueRuntimeState(),
       activeTravel: this.getActiveTravel(),
-      scenarios: this.scenarioDirector.getState(),
+      scenarios: this.story.getScenarioState(),
       residence: this.getResidenceState(),
-      innerVoice: this.innerVoice.getPersistedState(),
+      innerVoice: this.story.getInnerVoiceState(),
     };
   }
 
@@ -1011,9 +1002,9 @@ export class SimulationEngine extends LegacySimulationEngine {
       physicalShops: clonePhysicalShopStates(this.physicalShopStates),
       venueOperations: this.getVenueRuntimeState(),
       activeTravel: this.getActiveTravel(),
-      scenarios: this.scenarioDirector.getState(),
+      scenarios: this.story.getScenarioState(),
       residence: this.getResidenceState(),
-      innerVoice: this.innerVoice.getPersistedState(),
+      innerVoice: this.story.getInnerVoiceState(),
     };
   }
 
@@ -1050,48 +1041,35 @@ export class SimulationEngine extends LegacySimulationEngine {
     this.physicalWorldState = this.hydratePhysicalWorld(persistedPhysicalWorld);
     this.physicalShopStates = clonePhysicalShopStates(persistedPhysicalShops ?? {});
     this.activeTravelState = persistedActiveTravel;
-    // Current-format reload restores exactly the persisted Scenario set.
-    // Authored selection happens only when a true new save is created.
-    this.scenarioDirector.hydrate(persistedScenarios);
-    this.innerVoice.hydrate(snapshot.innerVoice ?? emptyInnerVoicePersistedState());
+    // Hydrate only the persisted authored bindings and presentation history.
+    this.story.loadState(persistedScenarios, snapshot.innerVoice);
     this.delivery.setArrivalHandler((order) => this.materializeDeliveryParcel(order));
   }
 
   public getScenarioState(): ScenarioRuntimeState {
-    return this.scenarioDirector.getState();
+    return this.story.getScenarioState();
   }
 
-  /** Test/tooling seam for authored definitions; production new saves use the generated registry. */
   public initializeScenarios(
     definitions: readonly ScenarioDefinition[],
     seed = 'default',
     maxInstances = 3,
   ): ScenarioInstance[] {
-    return this.scenarioDirector.initialize(definitions, {
-      seed,
-      atMinute: this.clock.getTotalMinutes(),
-      maxInstances,
-    });
+    return this.story.initializeScenarios(definitions, seed, maxInstances);
   }
 
   public getScenarioHookOpportunities(
     observation: ScenarioObservation,
     definitions: readonly ScenarioDefinition[] = GENERATED_SCENARIOS,
   ): ScenarioHookOpportunity[] {
-    return this.scenarioDirector.getAvailableHooks(definitions, observation);
+    return this.story.getScenarioHookOpportunities(observation, definitions);
   }
 
   public getScenarioProjection(
     observation: ScenarioObservation,
     definitions: readonly ScenarioDefinition[] = GENERATED_SCENARIOS,
   ): ScenarioProjection[] {
-    const opportunities = this.scenarioDirector.getAvailableHooks(definitions, observation);
-    return projectScenarios(
-      definitions,
-      this.scenarioDirector.getState(),
-      this.social,
-      opportunities,
-    );
+    return this.story.getScenarioProjection(observation, definitions);
   }
 
   public consumeScenarioHook(
@@ -1099,19 +1077,19 @@ export class SimulationEngine extends LegacySimulationEngine {
     hookId: string,
     definitions: readonly ScenarioDefinition[] = GENERATED_SCENARIOS,
   ): boolean {
-    return this.scenarioDirector.consumeHook(definitions, instanceId, hookId);
+    return this.story.consumeScenarioHook(instanceId, hookId, definitions);
   }
 
   public setScenarioLifecycle(instanceId: string, lifecycle: ScenarioLifecycle): boolean {
-    return this.scenarioDirector.setLifecycle(instanceId, lifecycle);
+    return this.story.setScenarioLifecycle(instanceId, lifecycle);
   }
 
   public getInnerVoiceEngine(): InnerVoiceEngine {
-    return this.innerVoice;
+    return this.story.getInnerVoiceEngine();
   }
 
   public getInnerVoiceState(): InnerVoicePersistedState {
-    return this.innerVoice.getPersistedState();
+    return this.story.getInnerVoiceState();
   }
 
   public requestInnerThought(
@@ -1119,17 +1097,18 @@ export class SimulationEngine extends LegacySimulationEngine {
     nowMinute?: number,
     ui?: InnerVoiceUiState,
   ): ThoughtIntent | null {
-    return this.innerVoice.request(trigger, nowMinute ?? this.clock.getTotalMinutes(), ui);
+    return this.story.requestInnerThought(trigger, nowMinute, ui);
   }
 
   public requestInspectThought(
     request: InspectThoughtRequest,
     nowMinute?: number,
   ): ThoughtIntent | null {
-    return this.innerVoice.requestInspect(request, nowMinute ?? this.clock.getTotalMinutes());
+    return this.story.requestInspectThought(request, nowMinute);
   }
 
   public dismissInnerThought(): void {
-    this.innerVoice.dismissActive();
+    this.story.dismissInnerThought();
   }
+
 }
