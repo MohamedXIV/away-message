@@ -12,22 +12,18 @@ import {
   type LiveSimulationState as LegacyLiveSimulationState,
 } from './SimulationEngineLegacyFacade';
 import { PLAYER_INVENTORY_CONTAINER_ID } from './PhysicalItemBridge';
-import {
-  PhysicalItemEngine,
-  type ItemInstance,
-  type PhysicalItemLocation,
-  type PhysicalWorldState,
+import type {
+  ItemInstance,
+  PhysicalItemLocation,
+  PhysicalWorldState,
 } from './PhysicalItemEngine';
 import { GROCERY_SKUS, type DeliveryOrder, type Fulfillment } from './DeliveryEngine';
-import {
-  PhysicalShopEngine,
-  type PhysicalShopFixtureDefinition,
-  type PhysicalShopState,
+import type {
+  PhysicalShopFixtureDefinition,
+  PhysicalShopState,
 } from './PhysicalShopEngine';
-import {
-  checkoutPhysicalShop as commitPhysicalShopCheckout,
-  type PhysicalShopCheckoutResult,
-} from './PhysicalShopCheckout';
+import { PhysicalShopSessionRuntime } from './kernel/PhysicalShopSessionRuntime';
+import type { PhysicalShopCheckoutResult } from './PhysicalShopCheckout';
 import type {
   ContextRequirement,
   ContextRequirementResult,
@@ -93,26 +89,11 @@ type InitialSimulationState = Partial<TransportSimulationState> & {
   scenarioSeed?: string;
 };
 
-function clonePhysicalShopStates(
-  states: Readonly<Record<string, PhysicalShopState>>,
-): Record<string, PhysicalShopState> {
-  return Object.fromEntries(
-    Object.entries(states).map(([storeId, state]) => [
-      storeId,
-      {
-        stockBySlot: { ...state.stockBySlot },
-        ownershipByItemId: { ...state.ownershipByItemId },
-        originalSlotByItemId: { ...state.originalSlotByItemId },
-      },
-    ]),
-  );
-}
-
 export class SimulationEngine extends LegacySimulationEngine {
   private readonly residenceCoordination: ResidenceCoordination;
   private readonly material: MaterialWorldRuntime;
 
-  private physicalShopStates: Record<string, PhysicalShopState> = {};
+  private readonly physicalShop: PhysicalShopSessionRuntime;
   private readonly venueRuntime: VenueOperationsRuntime;
   private readonly activeTravel: ActiveTravelRuntime;
   /** Single composed owner for authored Scenario instances and presentation-only Inner Voice. */
@@ -140,7 +121,16 @@ export class SimulationEngine extends LegacySimulationEngine {
       initialState?.venueOperations,
     );
 
-    this.physicalShopStates = clonePhysicalShopStates(initialState?.physicalShops ?? {});
+    this.physicalShop = new PhysicalShopSessionRuntime(
+      this.material,
+      {
+        canAfford: (amount) => this.economy.canAfford(amount),
+        spendCash: (amount, reason) => this.dispatchAction({
+          type: 'PLAYER_SPEND_CASH', amount, reason,
+        }),
+      },
+      initialState?.physicalShops,
+    );
     this.activeTravel = new ActiveTravelRuntime(
       { clock: this.clock, economy: this.economy, telemetry: this.telemetry },
       (actorId) => this.clearActorSpatialForTravel(actorId),
@@ -205,45 +195,12 @@ export class SimulationEngine extends LegacySimulationEngine {
     return resolveGeneratedPlaceId(legacyLocation);
   }
 
-  private physicalItems(): PhysicalItemEngine {
-    return this.material.physicalItems();
-  }
-
-  private openPhysicalShop(
-    storeId: string,
-    worldSeed: string,
-    fixtures: readonly PhysicalShopFixtureDefinition[],
-  ): { shop: PhysicalShopEngine; physicalItems: PhysicalItemEngine } {
-    const physicalItems = this.physicalItems();
-    const shop = new PhysicalShopEngine({
-      storeId,
-      worldSeed,
-      physicalItems,
-      fixtures,
-      persistedState: this.physicalShopStates[storeId],
-    });
-    this.commitPhysicalShopSession(storeId, shop, physicalItems);
-    return { shop, physicalItems };
-  }
-
-  private commitPhysicalShopSession(
-    storeId: string,
-    shop: PhysicalShopEngine,
-    physicalItems: PhysicalItemEngine,
-  ): void {
-    this.material.commitWorld(physicalItems.getState());
-    this.physicalShopStates = {
-      ...this.physicalShopStates,
-      [storeId]: shop.getState(),
-    };
-  }
-
   public getPhysicalShopState(
     storeId: string,
     worldSeed: string,
     fixtures: readonly PhysicalShopFixtureDefinition[],
   ): PhysicalShopState {
-    return this.openPhysicalShop(storeId, worldSeed, fixtures).shop.getState();
+    return this.physicalShop.getPhysicalShopState(storeId, worldSeed, fixtures);
   }
 
   public getPhysicalShopCashierCapabilities(
@@ -251,7 +208,7 @@ export class SimulationEngine extends LegacySimulationEngine {
     worldSeed: string,
     fixtures: readonly PhysicalShopFixtureDefinition[],
   ): { talk: true; checkout: boolean } {
-    return this.openPhysicalShop(storeId, worldSeed, fixtures).shop.getCashierCapabilities();
+    return this.physicalShop.getPhysicalShopCashierCapabilities(storeId, worldSeed, fixtures);
   }
 
   public takePhysicalShopItem(
@@ -259,12 +216,11 @@ export class SimulationEngine extends LegacySimulationEngine {
     worldSeed: string,
     fixtures: readonly PhysicalShopFixtureDefinition[],
     instanceId: string,
-    destinationContainerInstanceId: string = PLAYER_INVENTORY_CONTAINER_ID,
+    destinationContainerInstanceId = PLAYER_INVENTORY_CONTAINER_ID,
   ): ItemInstance {
-    const { shop, physicalItems } = this.openPhysicalShop(storeId, worldSeed, fixtures);
-    shop.take(instanceId, destinationContainerInstanceId);
-    this.commitPhysicalShopSession(storeId, shop, physicalItems);
-    return physicalItems.getItem(instanceId);
+    return this.physicalShop.takePhysicalShopItem(
+      storeId, worldSeed, fixtures, instanceId, destinationContainerInstanceId,
+    );
   }
 
   public returnPhysicalShopItem(
@@ -273,10 +229,7 @@ export class SimulationEngine extends LegacySimulationEngine {
     fixtures: readonly PhysicalShopFixtureDefinition[],
     instanceId: string,
   ): ItemInstance {
-    const { shop, physicalItems } = this.openPhysicalShop(storeId, worldSeed, fixtures);
-    shop.returnToStock(instanceId);
-    this.commitPhysicalShopSession(storeId, shop, physicalItems);
-    return physicalItems.getItem(instanceId);
+    return this.physicalShop.returnPhysicalShopItem(storeId, worldSeed, fixtures, instanceId);
   }
 
   public checkoutPhysicalShop(
@@ -285,10 +238,7 @@ export class SimulationEngine extends LegacySimulationEngine {
     fixtures: readonly PhysicalShopFixtureDefinition[],
     pricesByDefinitionId: Readonly<Record<string, number>>,
   ): PhysicalShopCheckoutResult {
-    const { shop, physicalItems } = this.openPhysicalShop(storeId, worldSeed, fixtures);
-    const result = commitPhysicalShopCheckout(this, shop, pricesByDefinitionId);
-    this.commitPhysicalShopSession(storeId, shop, physicalItems);
-    return result;
+    return this.physicalShop.checkoutPhysicalShop(storeId, worldSeed, fixtures, pricesByDefinitionId);
   }
 
   private materializeGroceryContainer(
@@ -503,7 +453,7 @@ export class SimulationEngine extends LegacySimulationEngine {
       ...super.getState(),
       physicalWorld: this.getPhysicalWorldState(),
       physicalObjects: this.getPhysicalObjectState(),
-      physicalShops: clonePhysicalShopStates(this.physicalShopStates),
+      physicalShops: this.physicalShop.getState(),
       venueOperations: this.getVenueRuntimeState(),
       activeTravel: this.getActiveTravel(),
       scenarios: this.story.getScenarioState(),
@@ -517,7 +467,7 @@ export class SimulationEngine extends LegacySimulationEngine {
       ...super.exportSnapshot(),
       physicalWorld: this.getPhysicalWorldState(),
       physicalObjects: this.getPhysicalObjectState(),
-      physicalShops: clonePhysicalShopStates(this.physicalShopStates),
+      physicalShops: this.physicalShop.getState(),
       venueOperations: this.getVenueRuntimeState(),
       activeTravel: this.getActiveTravel(),
       scenarios: this.story.getScenarioState(),
@@ -550,7 +500,7 @@ export class SimulationEngine extends LegacySimulationEngine {
     this.residenceCoordination.loadState(persistedResidence);
     this.material.loadState(persistedPhysicalWorld, persistedPhysicalObjects as PhysicalObjectRuntimeState);
     this.venueRuntime.loadState(persistedVenueOperations as VenueRuntimeState);
-    this.physicalShopStates = clonePhysicalShopStates(persistedPhysicalShops ?? {});
+    this.physicalShop.loadState(persistedPhysicalShops);
     this.activeTravel.loadState(persistedActiveTravel);
     // Hydrate only the persisted authored bindings and presentation history.
     this.story.loadState(persistedScenarios, snapshot.innerVoice);
