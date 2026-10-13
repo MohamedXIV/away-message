@@ -11,15 +11,10 @@ import {
   type EncounterDecision,
   type LiveSimulationState as LegacyLiveSimulationState,
 } from './SimulationEngineLegacyFacade';
-import {
-  bridgeOwnedInventoryIntoPhysicalWorld,
-  PLAYER_INVENTORY_CONTAINER_ID,
-} from './PhysicalItemBridge';
+import { PLAYER_INVENTORY_CONTAINER_ID } from './PhysicalItemBridge';
 import {
   PhysicalItemEngine,
   type ItemInstance,
-  type PhysicalContainerDefinition,
-  type PhysicalItemDefinition,
   type PhysicalItemLocation,
   type PhysicalWorldState,
 } from './PhysicalItemEngine';
@@ -33,24 +28,15 @@ import {
   checkoutPhysicalShop as commitPhysicalShopCheckout,
   type PhysicalShopCheckoutResult,
 } from './PhysicalShopCheckout';
-import {
-  bridgePhysicalObjectContainers,
-  clonePhysicalObjectRuntimeState,
-  detachPhysicalObject as detachRuntimePhysicalObject,
-  getReachableAffordances,
-  hydratePhysicalObjectRuntimeState,
-  movePhysicalObject as moveRuntimePhysicalObject,
-  resolveContextRequirements,
-  resolvePlaceDeliveryTarget,
-  type ContextRequirement,
-  type ContextRequirementResult,
-  type PhysicalObjectRuntimeState,
-  type PhysicalRuntimeGraph,
-  type ReachableAffordance,
+import type {
+  ContextRequirement,
+  ContextRequirementResult,
+  PhysicalObjectRuntimeState,
+  ReachableAffordance,
 } from './physical/PhysicalContextRuntime';
-import { PHYSICAL_ITEM_CATALOG } from './hardware/catalog';
 import { parseActiveTravel } from './transit/ActiveTravel';
 import { ActiveTravelRuntime } from './kernel/ActiveTravelRuntime';
+import { MaterialWorldRuntime, PHYSICAL_RUNTIME_GRAPH, resolveGeneratedPlaceId, DELIVERY_PARCEL_DEFINITION_ID, SHOPPING_BAG_DEFINITION_ID } from './kernel/MaterialWorldRuntime';
 import type { ActiveTravelState, TravelPlan } from './transit/types';
 import type { CharacterIntent } from './life/types';
 import type {
@@ -66,15 +52,7 @@ import type { SimulationState as TransportSimulationState } from './types';
 import type { ResidenceState } from './ResidenceTenancy';
 import { ResidenceCoordination } from './kernel/ResidenceCoordination';
 
-import {
-  GENERATED_CONTAINERS,
-  GENERATED_ITEMS,
-  GENERATED_OBJECT_PLACEMENTS,
-  GENERATED_PHYSICAL_OBJECT_DEFS,
-  GENERATED_PLACE_SERVICE_POLICIES,
-  GENERATED_PLACEMENT_SLOTS,
-  GENERATED_PLACES,
-} from './worldContent.generated';
+import { GENERATED_PLACE_SERVICE_POLICIES } from './worldContent.generated';
 import {
   InnerVoiceEngine,
   type InnerVoicePersistedState,
@@ -114,137 +92,6 @@ type InitialSimulationState = Partial<TransportSimulationState> & {
   scenarioSeed?: string;
 };
 
-const DELIVERY_PARCEL_DEFINITION_ID = 'delivery_parcel';
-const SHOPPING_BAG_DEFINITION_ID = 'corner_mart_shopping_bag';
-const CORNER_MART_ITEM_KIND = 'corner-mart-item';
-
-const PHYSICAL_RUNTIME_GRAPH: PhysicalRuntimeGraph = {
-  objectDefs: GENERATED_PHYSICAL_OBJECT_DEFS,
-  slots: GENERATED_PLACEMENT_SLOTS,
-  placements: GENERATED_OBJECT_PLACEMENTS,
-};
-
-function resolveGeneratedPlaceId(rawId: string): string | null {
-  const direct = GENERATED_PLACES.find((place) => place.id === rawId);
-  if (direct) return direct.id;
-  return GENERATED_PLACES.find((place) => place.legacyIds?.includes(rawId))?.id ?? null;
-}
-
-function groceryDefinitionId(sku: string): string {
-  return `corner-mart:${sku}`;
-}
-
-const PHYSICAL_ITEM_DEFINITIONS: Readonly<Record<string, PhysicalItemDefinition>> =
-  Object.fromEntries([
-    ...GENERATED_ITEMS.map((item) => [
-      item.id,
-      {
-        id: item.id,
-        kind: item.kind,
-        portable: item.portable,
-        volume: item.volume,
-      } satisfies PhysicalItemDefinition,
-    ] as const),
-    ...Object.values(PHYSICAL_ITEM_CATALOG).map((item) => [
-      item.id,
-      {
-        id: item.id,
-        kind: item.kind,
-        portable: true,
-        volume: 1,
-      } satisfies PhysicalItemDefinition,
-    ] as const),
-    [
-      DELIVERY_PARCEL_DEFINITION_ID,
-      {
-        id: DELIVERY_PARCEL_DEFINITION_ID,
-        kind: 'container',
-        portable: true,
-        volume: 1,
-      } satisfies PhysicalItemDefinition,
-    ] as const,
-    [
-      SHOPPING_BAG_DEFINITION_ID,
-      {
-        id: SHOPPING_BAG_DEFINITION_ID,
-        kind: 'container',
-        portable: true,
-        volume: 1,
-      } satisfies PhysicalItemDefinition,
-    ] as const,
-    ...Object.keys(GROCERY_SKUS).map((sku) => [
-      groceryDefinitionId(sku),
-      {
-        id: groceryDefinitionId(sku),
-        kind: CORNER_MART_ITEM_KIND,
-        portable: true,
-        volume: 1,
-      } satisfies PhysicalItemDefinition,
-    ] as const),
-  ]);
-
-const PHYSICAL_CONTAINER_DEFINITIONS: Readonly<Record<string, PhysicalContainerDefinition>> =
-  Object.fromEntries([
-    ...GENERATED_CONTAINERS.map((container) => [
-      container.id,
-      {
-        id: container.id,
-        capacity: container.capacity,
-        allowedItemKinds: container.allowedItemKinds,
-      } satisfies PhysicalContainerDefinition,
-    ] as const),
-    [
-      'player_inventory',
-      {
-        id: 'player_inventory',
-        capacity: Number.MAX_SAFE_INTEGER,
-        allowedItemKinds: [],
-      } satisfies PhysicalContainerDefinition,
-    ] as const,
-    [
-      DELIVERY_PARCEL_DEFINITION_ID,
-      {
-        id: DELIVERY_PARCEL_DEFINITION_ID,
-        capacity: 64,
-        allowedItemKinds: [CORNER_MART_ITEM_KIND],
-      } satisfies PhysicalContainerDefinition,
-    ] as const,
-    [
-      SHOPPING_BAG_DEFINITION_ID,
-      {
-        id: SHOPPING_BAG_DEFINITION_ID,
-        capacity: 64,
-        allowedItemKinds: [CORNER_MART_ITEM_KIND],
-      } satisfies PhysicalContainerDefinition,
-    ] as const,
-  ]);
-
-function emptyPhysicalWorld(): PhysicalWorldState {
-  return {
-    items: {},
-    containers: {
-      [PLAYER_INVENTORY_CONTAINER_ID]: {
-        instanceId: PLAYER_INVENTORY_CONTAINER_ID,
-        definitionId: 'player_inventory',
-      },
-    },
-  };
-}
-
-function clonePhysicalWorld(state: PhysicalWorldState): PhysicalWorldState {
-  return {
-    items: Object.fromEntries(
-      Object.entries(state.items).map(([id, item]) => [
-        id,
-        { ...item, location: { ...item.location } },
-      ]),
-    ),
-    containers: Object.fromEntries(
-      Object.entries(state.containers).map(([id, container]) => [id, { ...container }]),
-    ),
-  };
-}
-
 function clonePhysicalShopStates(
   states: Readonly<Record<string, PhysicalShopState>>,
 ): Record<string, PhysicalShopState> {
@@ -262,8 +109,8 @@ function clonePhysicalShopStates(
 
 export class SimulationEngine extends LegacySimulationEngine {
   private readonly residenceCoordination: ResidenceCoordination;
-  private physicalWorldState: PhysicalWorldState | null = null;
-  private physicalObjectState: PhysicalObjectRuntimeState = { objects: {} };
+  private readonly material: MaterialWorldRuntime;
+
   private physicalShopStates: Record<string, PhysicalShopState> = {};
   private readonly venueRuntime: VenueOperationsRuntime;
   private readonly activeTravel: ActiveTravelRuntime;
@@ -274,15 +121,15 @@ export class SimulationEngine extends LegacySimulationEngine {
     super(initialState);
     this.residenceCoordination = new ResidenceCoordination(
       { economy: this.economy, clock: this.clock, telemetry: this.telemetry },
-      () => {
-        this.physicalWorldState = this.hydratePhysicalWorld(this.currentPhysicalWorld());
-      },
+      () => this.material.reanchorOwnedItems(),
       initialState?.residence,
       initialState?.starterHousingOfferId,
     );
-    this.physicalObjectState = hydratePhysicalObjectRuntimeState(
+    this.material = new MaterialWorldRuntime(
+      () => this.inventory.getState(),
+      () => this.currentResidenceOwnedItemAnchorId(),
+      initialState?.physicalWorld,
       initialState?.physicalObjects,
-      PHYSICAL_RUNTIME_GRAPH,
     );
     this.venueRuntime = new VenueOperationsRuntime(
       { clock: this.clock, events: this.events },
@@ -291,7 +138,7 @@ export class SimulationEngine extends LegacySimulationEngine {
       (actorId) => this.getCharacterIntent(actorId),
       initialState?.venueOperations,
     );
-    this.physicalWorldState = this.hydratePhysicalWorld(initialState?.physicalWorld);
+
     this.physicalShopStates = clonePhysicalShopStates(initialState?.physicalShops ?? {});
     this.activeTravel = new ActiveTravelRuntime(
       { clock: this.clock, economy: this.economy, telemetry: this.telemetry },
@@ -333,19 +180,6 @@ export class SimulationEngine extends LegacySimulationEngine {
     return target.location.anchorId;
   }
 
-  private hydratePhysicalWorld(persisted?: PhysicalWorldState): PhysicalWorldState {
-    const owned = bridgeOwnedInventoryIntoPhysicalWorld(
-      persisted ? clonePhysicalWorld(persisted) : emptyPhysicalWorld(),
-      this.inventory.getState(),
-      this.currentResidenceOwnedItemAnchorId(),
-    );
-    return bridgePhysicalObjectContainers(
-      owned,
-      this.physicalObjectState,
-      PHYSICAL_RUNTIME_GRAPH,
-    );
-  }
-
   public getResidenceState(): ResidenceState {
     return this.residenceCoordination.getResidenceState();
   }
@@ -370,16 +204,8 @@ export class SimulationEngine extends LegacySimulationEngine {
     return resolveGeneratedPlaceId(legacyLocation);
   }
 
-  private currentPhysicalWorld(): PhysicalWorldState {
-    return this.physicalWorldState ?? emptyPhysicalWorld();
-  }
-
   private physicalItems(): PhysicalItemEngine {
-    return new PhysicalItemEngine(
-      this.currentPhysicalWorld(),
-      PHYSICAL_ITEM_DEFINITIONS,
-      PHYSICAL_CONTAINER_DEFINITIONS,
-    );
+    return this.material.physicalItems();
   }
 
   private openPhysicalShop(
@@ -404,7 +230,7 @@ export class SimulationEngine extends LegacySimulationEngine {
     shop: PhysicalShopEngine,
     physicalItems: PhysicalItemEngine,
   ): void {
-    this.physicalWorldState = physicalItems.getState();
+    this.material.commitWorld(physicalItems.getState());
     this.physicalShopStates = {
       ...this.physicalShopStates,
       [storeId]: shop.getState(),
@@ -471,30 +297,9 @@ export class SimulationEngine extends LegacySimulationEngine {
     shellLocation: PhysicalItemLocation,
     itemIdPrefix: string,
   ): void {
-    const physicalItems = this.physicalItems();
-    const skuOrdinals = new Map<string, number>();
-    const contents = order.items.flatMap((line) => {
-      const start = skuOrdinals.get(line.sku) ?? 0;
-      skuOrdinals.set(line.sku, start + line.qty);
-      return Array.from({ length: line.qty }, (_, offset) => ({
-        instanceId: `${itemIdPrefix}:${order.id}:${line.sku}:${start + offset}`,
-        definitionId: groceryDefinitionId(line.sku),
-        location: { kind: 'container' as const, containerInstanceId: containerId },
-      }));
-    });
-
-    physicalItems.materializeBatch({
-      containers: [{ instanceId: containerId, definitionId: containerDefinitionId }],
-      items: [
-        {
-          instanceId: containerId,
-          definitionId: containerDefinitionId,
-          location: shellLocation,
-        },
-        ...contents,
-      ],
-    });
-    this.physicalWorldState = physicalItems.getState();
+    this.material.materializeGroceryContainer(
+      order, containerId, containerDefinitionId, shellLocation, itemIdPrefix,
+    );
   }
 
   private materializeDeliveryParcel(order: DeliveryOrder): boolean {
@@ -598,11 +403,11 @@ export class SimulationEngine extends LegacySimulationEngine {
   }
 
   public getPhysicalWorldState(): PhysicalWorldState {
-    return clonePhysicalWorld(this.currentPhysicalWorld());
+    return this.material.getPhysicalWorldState();
   }
 
   public getPhysicalObjectState(): PhysicalObjectRuntimeState {
-    return clonePhysicalObjectRuntimeState(this.physicalObjectState);
+    return this.material.getPhysicalObjectState();
   }
 
   public getVenueRuntimeState(): VenueRuntimeState {
@@ -634,63 +439,38 @@ export class SimulationEngine extends LegacySimulationEngine {
   }
 
   public getReachablePhysicalAffordances(spaceId: string): ReachableAffordance[] {
-    return getReachableAffordances(
-      spaceId,
-      this.physicalObjectState,
-      PHYSICAL_RUNTIME_GRAPH,
-    );
+    return this.material.getReachablePhysicalAffordances(spaceId);
   }
 
   public resolvePhysicalContextRequirements(
     spaceId: string,
     requirements: readonly ContextRequirement[],
   ): ContextRequirementResult {
-    return resolveContextRequirements({
-      spaceId,
-      objectState: this.physicalObjectState,
-      graph: PHYSICAL_RUNTIME_GRAPH,
-      physicalWorld: this.currentPhysicalWorld(),
-      itemDefinitions: PHYSICAL_ITEM_DEFINITIONS,
-      playerInventoryContainerId: PLAYER_INVENTORY_CONTAINER_ID,
-      requirements,
-    });
+    return this.material.resolvePhysicalContextRequirements(spaceId, requirements);
   }
 
   public movePhysicalObject(instanceId: string, targetSlotId: string): void {
-    this.physicalObjectState = moveRuntimePhysicalObject(
-      this.physicalObjectState,
-      instanceId,
-      targetSlotId,
-      PHYSICAL_RUNTIME_GRAPH,
-    );
+    this.material.movePhysicalObject(instanceId, targetSlotId);
   }
 
   public detachPhysicalObject(instanceId: string): void {
-    this.physicalObjectState = detachRuntimePhysicalObject(
-      this.physicalObjectState,
-      instanceId,
-      PHYSICAL_RUNTIME_GRAPH,
-    );
+    this.material.detachPhysicalObject(instanceId);
   }
 
   public transferPhysicalItem(
     instanceId: string,
     destination: PhysicalItemLocation,
   ): ItemInstance {
-    const physicalItems = this.physicalItems();
-    const transferred = physicalItems.transfer(instanceId, destination);
-    this.physicalWorldState = physicalItems.getState();
-    return transferred;
+    return this.material.transferPhysicalItem(instanceId, destination);
   }
 
   public openPhysicalContainer(
     containerInstanceId: string,
     destinationContainerInstanceId: string = PLAYER_INVENTORY_CONTAINER_ID,
   ): ItemInstance[] {
-    const physicalItems = this.physicalItems();
-    const moved = physicalItems.unpackContainer(containerInstanceId, destinationContainerInstanceId);
-    this.physicalWorldState = physicalItems.getState();
-    return moved;
+    return this.material.openPhysicalContainer(
+      containerInstanceId, destinationContainerInstanceId,
+    );
   }
 
   public setActiveTravel(state: ActiveTravelState | null): void {
@@ -720,7 +500,7 @@ export class SimulationEngine extends LegacySimulationEngine {
   public override getState(): Readonly<LiveSimulationState> {
     return {
       ...super.getState(),
-      physicalWorld: clonePhysicalWorld(this.currentPhysicalWorld()),
+      physicalWorld: this.getPhysicalWorldState(),
       physicalObjects: this.getPhysicalObjectState(),
       physicalShops: clonePhysicalShopStates(this.physicalShopStates),
       venueOperations: this.getVenueRuntimeState(),
@@ -734,7 +514,7 @@ export class SimulationEngine extends LegacySimulationEngine {
   public override exportSnapshot(): LiveSimulationState {
     return {
       ...super.exportSnapshot(),
-      physicalWorld: clonePhysicalWorld(this.currentPhysicalWorld()),
+      physicalWorld: this.getPhysicalWorldState(),
       physicalObjects: this.getPhysicalObjectState(),
       physicalShops: clonePhysicalShopStates(this.physicalShopStates),
       venueOperations: this.getVenueRuntimeState(),
@@ -767,12 +547,8 @@ export class SimulationEngine extends LegacySimulationEngine {
 
     super.loadSnapshot(snapshot);
     this.residenceCoordination.loadState(persistedResidence);
-    this.physicalObjectState = hydratePhysicalObjectRuntimeState(
-      persistedPhysicalObjects,
-      PHYSICAL_RUNTIME_GRAPH,
-    );
+    this.material.loadState(persistedPhysicalWorld, persistedPhysicalObjects as PhysicalObjectRuntimeState);
     this.venueRuntime.loadState(persistedVenueOperations as VenueRuntimeState);
-    this.physicalWorldState = this.hydratePhysicalWorld(persistedPhysicalWorld);
     this.physicalShopStates = clonePhysicalShopStates(persistedPhysicalShops ?? {});
     this.activeTravel.loadState(persistedActiveTravel);
     // Hydrate only the persisted authored bindings and presentation history.
