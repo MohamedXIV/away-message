@@ -29,12 +29,12 @@ import { PulseEngine } from './PulseEngine';
 import { MyPlaceEngine } from './MyPlaceEngine';
 import { validatePersistedBuddy } from './CharacterEngine';
 
-import { pickOutingWarmLine, pickOutingReservedLine, pickMediationThanks } from './characterTemplates';
+import { pickMediationThanks } from './characterTemplates';
 
-import { OUTINGS, isValidOutingId, isOutingOpen, outingHoursLabel, dinerStaffEncounter, canalRegularEncounter, buildLaundromatRumor, MIN_OUTING_ENERGY, type OutingId } from './OutingDirector';
 
-import { pickInnerVoice, batteryCostForOuting } from './PlayerActs';
-import { CITY_NODES, isCityNodeId, quoteTravel, walkEnergyCost, rollStreetEncounter, BUS_FARE, type CityNodeId, type TravelMode } from './CityMap';
+
+
+
 import { pulseHasFeature, getAllPulseReleases } from './PulseCatalog';
 
 import { createCoreDomainOwners, type CoreDomainOwners } from './kernel/CoreDomainOwners';
@@ -50,6 +50,7 @@ import { RelationshipContinuity } from './kernel/RelationshipContinuity';
 import { NpcSocialLifeCycle } from './kernel/NpcSocialLifeCycle';
 import { ProceduralWorldCycle } from './kernel/ProceduralWorldCycle';
 import { PlayerContactCoordination } from './kernel/PlayerContactCoordination';
+import { CityActivityCoordination } from './kernel/CityActivityCoordination';
 
 export class SimulationEngine {
   public readonly clock!: GameClock;
@@ -82,6 +83,7 @@ export class SimulationEngine {
   private readonly npcSocialLife: NpcSocialLifeCycle;
   private readonly proceduralWorld: ProceduralWorldCycle;
   private readonly playerContacts: PlayerContactCoordination;
+  private readonly cityActivity: CityActivityCoordination;
 
   private activeView: 'pc' | 'room' | 'cafe' | 'work' | 'city' = 'room';
   private subscribers: Set<(state: Readonly<SimulationState>) => void> = new Set();
@@ -150,6 +152,11 @@ export class SimulationEngine {
     this.playerContacts = new PlayerContactCoordination(
       owners,
       (action) => this.dispatchAction(action),
+      () => this.notifySubscribers(),
+    );
+    this.cityActivity = new CityActivityCoordination(
+      owners,
+      (minutes, reason) => this.advanceGameMinutes(minutes, reason),
       () => this.notifySubscribers(),
     );
     this.registerInternalEventHandlers();
@@ -326,83 +333,8 @@ export class SimulationEngine {
   // ==========================================
 
   /** Where an outing must happen (null = anywhere/legacy). */
-  private static outingHomeNode(outingId: string): CityNodeId | null {
-    if (outingId === 'diner_soup' || outingId === 'diner_platter' || outingId === 'diner_pie') return 'diner';
-    if (outingId === 'canal_walk') return 'canal';
-    if (outingId === 'laundromat') return 'laundry';
-    return null;
-  }
-
-  private static requireLocation(have: CityNodeId, want: CityNodeId): string | null {
-    if (have === want) return null;
-    return `You're at ${CITY_NODES[have].name} — travel to ${CITY_NODES[want].name} first.`;
-  }
-
   public travelTo(rawTo: unknown, rawMode: unknown, options?: { ignoreFatigue?: boolean }): ActionResult & { data?: { summary: string; encounter?: string; minutes: number; cost: number } } {
-    try {
-      if (!isCityNodeId(rawTo)) return { success: false, error: `Unknown destination.` };
-      const to: CityNodeId = rawTo;
-      const mode: TravelMode = rawMode === 'bus' ? 'bus' : 'walk';
-      const from = this.economy.getLocation();
-      if (from === to) return { success: true, data: { summary: `Already at ${CITY_NODES[to].name}.`, minutes: 0, cost: 0 } };
-      const day = this.clock.getTime().day;
-      const environment = this.gameContext.environment.current();
-      if (to === 'canal' && environment.weather.condition === 'storm') {
-        return { success: false, error: 'Canal walkway closed in the storm. Come back after the front passes.' };
-      }
-      const quote = quoteTravel(from, to, mode, environment.weather.tags.includes('wet'));
-      if (quote.busUsed && !this.economy.canAfford(BUS_FARE)) {
-        return { success: false, error: `Bus fare is $${BUS_FARE.toFixed(2)} — walk it instead?` };
-      }
-      const walkCost = quote.mode === 'walk' ? walkEnergyCost(quote.minutes) : 0;
-      // P7 leniency: the auto-trip home never strands the player, whatever the legs feel like
-      if (!options?.ignoreFatigue && this.needs.getState().energy < 10 && walkCost > 0) {
-        return { success: false, error: 'Too tired to walk there (need 10% energy). Take the bus or rest.' };
-      }
-      if (quote.busUsed) this.economy.spendCash(BUS_FARE, `Bus to ${CITY_NODES[to].name}`);
-      this.advanceGameMinutes(quote.minutes, `Travel: ${CITY_NODES[from].name} → ${CITY_NODES[to].name} (${quote.mode})`);
-      if (walkCost > 0) this.needs.consumeEnergy(walkCost);
-      this.economy.setLocation(to);
-      // Arrival counts for meetings (same flags the legacy views raise)
-      if (to === 'cafe' || to === 'cart') {
-        try { this.world.setFlag(`visited_${to === 'cafe' ? 'cafe' : 'work'}_${day}`, true); } catch { /* attendance is best-effort */ }
-      }
-      // One street encounter per trip (deterministic, capped by design)
-      let encounterText: string | undefined;
-      try {
-        const candidates = this.social.getBuddies()
-          .filter((b) => b.status !== 'distant' && b.status !== 'gone' && b.status !== 'blocked')
-          .map((b) => ({ id: b.id, name: b.displayName }));
-        const encounter = rollStreetEncounter(from, to, day, environment.weather.tags.includes('wet'), candidates);
-        if (encounter && encounter.kind !== 'quiet') {
-          if (encounter.cashDelta !== 0) this.economy.earnCash(encounter.cashDelta, 'Street find');
-          if (encounter.energyDelta !== 0) {
-            if (encounter.energyDelta < 0) this.needs.consumeEnergy(-encounter.energyDelta);
-            else this.needs.restoreEnergy(encounter.energyDelta);
-          }
-          if (encounter.familiarityBuddyId) {
-            const rels = this.social.getRelationships(encounter.familiarityBuddyId);
-            if (rels) this.social.adjustRelationship(encounter.familiarityBuddyId, { familiarity: Math.min(100, rels.familiarity + 3) });
-          }
-          encounterText = encounter.text;
-          this.telemetry.logEvent('room', 'street_encounter', this.clock.getTotalMinutes(), { kind: encounter.kind, from, to });
-        }
-      } catch { /* encounters never break travel */ }
-      const route = quote.path.map((n) => CITY_NODES[n].name).join(' → ');
-      this.telemetry.logEvent('room', 'travel', this.clock.getTotalMinutes(), { from, to, mode: quote.mode, minutes: quote.minutes });
-      this.notifySubscribers();
-      return {
-        success: true,
-        data: {
-          summary: `${route} (${quote.minutes}m${quote.busUsed ? `, bus $${BUS_FARE.toFixed(2)}` : ', on foot'}) — now at ${CITY_NODES[to].name}.`,
-          encounter: encounterText,
-          minutes: quote.minutes,
-          cost: quote.cost,
-        },
-      };
-    } catch {
-      return { success: false, error: 'Travel failed.' };
-    }
+    return this.cityActivity.travelTo(rawTo, rawMode, options);
   }
 
   // ==========================================
@@ -467,109 +399,8 @@ export class SimulationEngine {
   // the laundromat returns a rumor in the action result (UI notice).
   // ==========================================
 
-  private static isBuddyAvailable<T extends { status?: string }>(buddy: T | undefined): buddy is T {
-    return !!buddy && buddy.status !== 'distant' && buddy.status !== 'gone' && buddy.status !== 'blocked';
-  }
-
   public doCityOuting(rawOutingId: string): ActionResult & { data?: { summary: string; encounterBuddyId?: string; rumor?: string } } {
-    try {
-      if (!isValidOutingId(rawOutingId)) return { success: false, error: `Unknown outing: ${rawOutingId}` };
-      const outingId: OutingId = rawOutingId;
-      const spec = OUTINGS[outingId];
-      // P7 gating: outings happen where they happen
-      const homeNode = SimulationEngine.outingHomeNode(outingId);
-      if (homeNode) {
-        const err = SimulationEngine.requireLocation(this.economy.getLocation(), homeNode);
-        if (err) return { success: false, error: err };
-      }
-      const day = this.clock.getTime().day;
-      const hour = this.clock.getTime().hour;
-      const minutes = this.clock.getTotalMinutes();
-      const needs = this.needs.getState();
-      if (needs.energy < MIN_OUTING_ENERGY) {
-        return { success: false, error: `Too tired to head out (need ${MIN_OUTING_ENERGY}% energy). Rest first.` };
-      }
-      if (spec.cost > 0 && !this.economy.canAfford(spec.cost)) {
-        return { success: false, error: `Cannot afford ${spec.label} ($${spec.cost.toFixed(2)}).` };
-      }
-      // Social battery: going out costs presence (~1 per 6 minutes out).
-      const outingBattery = batteryCostForOuting(spec.minutes);
-      if (this.needs.getSocialBattery() < outingBattery) {
-        return { success: false, error: pickInnerVoice('outing', `${outingId}:${day}`) };
-      }
-      // P6 the city keeps time — closed places fail honestly (UI gates too)
-      if (!isOutingOpen(outingId, hour)) {
-        return { success: false, error: `${spec.label} is closed now (open ${outingHoursLabel(outingId)}).` };
-      }
-      const environment = this.gameContext.environment.current();
-      if (outingId === 'canal_walk' && environment.weather.condition === 'storm') {
-        return { success: false, error: 'Canal storm outside — the walkway is closed. Come back after the front passes.' };
-      }
-      if (spec.cost > 0) this.economy.spendCash(spec.cost, `City outing (${spec.label})`);
-      this.needs.spendSocialBattery(outingBattery);
-      this.advanceGameMinutes(spec.minutes, `City outing: ${spec.label}`);
-      if (spec.energyDelta < 0) this.needs.consumeEnergy(-spec.energyDelta);
-      else this.needs.restoreEnergy(spec.energyDelta);
-      this.needs.addHunger(spec.hungerDelta);
-      this.needs.addHealth(spec.healthDelta);
-
-      // Encounters (deterministic per day; buddies must be present and available).
-      // Whoever holds the role shows up — voice pool follows temperament, not identity.
-      if (outingId === 'diner_soup' || outingId === 'diner_platter' || outingId === 'diner_pie') {
-        const staffBuddy = this.social.getBuddyWithRole('diner-staff');
-        if (SimulationEngine.isBuddyAvailable(staffBuddy) && staffBuddy && dinerStaffEncounter(hour, day)) {
-          const buddyId = staffBuddy.id;
-          this.social.applySocialAction(buddyId, 'remembered_detail');
-          this.social.addCoreMemory(buddyId, { text: `Ran into ${staffBuddy.displayName} working the diner, Day ${day}.`, kind: 'shared_moment', day });
-          // Face to face: you learn their handle on the spot.
-          this.social.learnHandle(buddyId, staffBuddy.handle);
-          // Showing up in person reads spontaneous.
-          this.social.observePlayerTrait(buddyId, { spontaneity: 70 }, day);
-          const shy = this.social.getTraits(buddyId).shyness >= 60;
-          const line = shy ? pickOutingReservedLine(`${outingId}:${day}`) : pickOutingWarmLine(`${outingId}:${day}`);
-          this.social.sendMessage(buddyId, buddyId, 'player', line, this.clock.getTotalMinutes(), false, ['outing', 'diner']);
-          this.telemetry.logEvent('social', 'outing_encounter', minutes, { buddyId, outing: outingId });
-          this.notifySubscribers();
-          return { success: true, data: { summary: `Hearty ${spec.label} at the diner — and ${staffBuddy.displayName} was on shift!`, encounterBuddyId: buddyId } };
-        }
-        this.telemetry.logEvent('room', 'outing_diner', minutes, { outing: outingId });
-        this.notifySubscribers();
-        return { success: true, data: { summary: `Hearty ${spec.label} at the diner. Quiet tables, good coffee.` } };
-      }
-      if (outingId === 'canal_walk') {
-        const walker = this.social.getBuddyWithRole('canal-regular');
-        const raining = environment.weather.tags.includes('wet');
-        if (SimulationEngine.isBuddyAvailable(walker) && walker && canalRegularEncounter(hour, day, raining)) {
-          const buddyId = walker.id;
-          this.social.applySocialAction(buddyId, 'intellectual_curiosity');
-          this.social.addCoreMemory(buddyId, { text: `Walked the canal with ${walker.displayName}, Day ${day}${raining ? ' in the rain' : ''}.`, kind: 'shared_moment', day });
-          // Face to face: you learn their handle on the spot.
-          this.social.learnHandle(buddyId, walker.handle);
-          // Showing up in person reads spontaneous.
-          this.social.observePlayerTrait(buddyId, { spontaneity: 70 }, day);
-          const shy = this.social.getTraits(buddyId).shyness >= 60;
-          const line = shy ? pickOutingReservedLine(`${outingId}:${day}`) : pickOutingWarmLine(`${outingId}:${day}`);
-          this.social.sendMessage(buddyId, buddyId, 'player', line, this.clock.getTotalMinutes(), false, ['outing', 'canal']);
-          this.telemetry.logEvent('social', 'outing_encounter', minutes, { buddyId, outing: outingId });
-          this.notifySubscribers();
-          return { success: true, data: { summary: `Canal walk${raining ? ' in the rain' : ''} — crossed paths with ${walker.displayName}.`, encounterBuddyId: buddyId } };
-        }
-        this.telemetry.logEvent('room', 'outing_walk', minutes, { outing: outingId });
-        this.notifySubscribers();
-        return { success: true, data: { summary: `Canal walk${raining ? ' in the rain' : ''}. Cleared your head.` } };
-      }
-      // laundromat: rumor for the UI notice (no NPC message — dryers, not drama)
-      const pairs = this.social.getBuddies()
-        .filter((b) => SimulationEngine.isBuddyAvailable(b))
-        .flatMap((a, i, list) => list.slice(i + 1).map((b) => ({ aName: a.displayName, bName: b.displayName, affinity: this.social.getAffinity(a.id, b.id) })));
-      const titles = this.world.getTriggeredEvents().map((e) => e.title);
-      const rumor = buildLaundromatRumor(pairs, titles, `${day}`);
-      this.telemetry.logEvent('room', 'outing_laundromat', minutes, { rumor });
-      this.notifySubscribers();
-      return { success: true, data: { summary: 'Laundromat: warm dryers, folded clothes.', rumor } };
-    } catch {
-      return { success: false, error: 'Outing failed.' };
-    }
+    return this.cityActivity.doCityOuting(rawOutingId);
   }
 
   // ==========================================
