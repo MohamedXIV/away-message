@@ -38,6 +38,8 @@ These are *logical owner boundaries*. No `SimulationKernel` mega-file should clo
 
 ## 3. Production path inventory
 
+**Update 2026-10-13:** the NPC Life, Mobility/Spatial and Encounter canonical *state fields* have moved into independent composed owners and are tested, but their public entrypoints still pass through the inherited LegacyFacade on this **unmerged** branch. Those production paths are not marked complete until the final kernel and all consumers are fully cut over.
+
 - [ ] **Construction and startup:** React `src/store/useSimulationStore.ts` creates one `SimulationEngine`; persistence/fixtures may create more independent game sessions, not duplicate authorities in one game.
 - [ ] **Time:** `advanceRealTime` / `advanceGameMinutes` and time events must advance each canonical domain once and preserve #170 zero-minute gating.
 - [ ] **Commands:** `dispatchAction` currently resides in `SimulationEngineCore`; public PC/physical/venue/travel commands are spread across upper layers. Route through one coherent command owner/API.
@@ -66,7 +68,13 @@ These are *logical owner boundaries*. No `SimulationKernel` mega-file should clo
 - [x] `RelationshipContinuity.ts`: moves sharp relationship escalation, witnessed affinity changes, due promises and distant returns to one cohesive Social/World policy.
 - [x] Focused tests for all of the modules above, in addition to `CoreDomainOwners.test.ts` and `TimeAdvancement.test.ts`: test single-authority behavior, idempotence, current-format hydration, zero-minute rule, job timing, delivery settlements, MyPlace and relationship lifecycle.
 - [x] **Verified implementation head:** `456d4785a7cf37bf530bf33bba76e4c1b3c50a0a`, GitHub Actions [Verify run 38283813813](https://github.com/MohamedXIV/away-message/actions/runs/38283813813) **SUCCESS**. Generated content, typecheck, build, full baseline guard, **237/237 files and 1,521/1,521 tests**, plus Browser living-world smoke all passed.
-- [ ] **Remaining full orchestration migration:** Core command routing, character daily lives/agenda, NPC Life Matrix/pressure, NPC mobility/spatial, physical/venue/residence, Scenario/Inner Voice, the merged current-format snapshot/export/load authority, remaining UI consumers, and deletion of both inherited engine implementations. A green intermediate verification run is not cutover proof.
+- [x] **NPC Life owner replacement:** `kernel/NpcLifeRuntime.ts` now owns NPC pressure/goals and all Life Matrix/intent/obligation reads. LegacyFacade's `npcLivesCache` field, hydration and population pass implementation were removed; wrappers use the single composed owner. Test: `NpcLifeRuntime.test.ts`.
+- [x] **NPC mobility + spatial owner replacement:** `kernel/NpcMovementRuntime.ts` owns trip commitments, planned/departed/arrived progression, NPC place cache, actor XYZ, spatial transition emission and state hydration. Removed inherited `npcMobility` and `actorSpatialPositions` fields. Test: `NpcMovementRuntime.test.ts`.
+- [x] **Encounter decision owner replacement:** `kernel/EncounterRuntime.ts` owns cooldown/one-shot encounter marks with explicit read-only access to NPC Life/Mobility/Social/World; `encounterDirector` no longer lives in the inherited façade. Test: `EncounterRuntime.test.ts`.
+- [x] **#170 scheduling regression migrated to the composed owners:** `SimulationRealtimeScheduling.test.ts` now spies `NpcLifeRuntime.advanceAllNpcPressuresToNow` and `NpcMovementRuntime.progressNpcMobility` on the actual engine graph instead of deleted LegacyFacade private method names; no weakening of assertions about zero-minute population passes.
+- [x] **Latest exact-code-head verification:** `d12ef635ccf85f577df3423cbc433f29871ede4c`, GitHub Actions [Verify run 38390902639](https://github.com/MohamedXIV/away-message/actions/runs/38390902639) **SUCCESS**: content check, typecheck, build, baseline guard, **240/240 test files, 1,529/1,529 tests**, and browser living-world smoke all pass.
+- [ ] **Remaining after current state-owner migration:** inherited PC/Inventory/OS command orchestration, Core Character Lives/day passes, physical/residence/venue/Scenario, one final command/read/subscribe/save/load contract, all consumer cutover, obsolete inherited class deletion and exact-final-head scale benchmarks.
+- [ ] **Atomic runtime cutover still open:** Core's remaining large daily/dispatch handlers, LegacyFacade PC/Inventory/OS commands, the top-level physical/residence/venue/Scenario/InnerVoice runtime, unified state/save/load, publication and complete UI call graph. All three inheritance-based runtime implementations must be deleted/retired before merge, despite green intermediate tests.
 
 ### Known migration-era coupling to remove before #171 merges
 
