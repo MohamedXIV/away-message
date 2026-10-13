@@ -18,7 +18,10 @@ export class CorePersistenceCoordinator {
     activeView: SimulationState['activeView'],
   ): SimulationState {
     const projected = projectCoreState(owners, activeView);
-    return JSON.parse(JSON.stringify(projected)) as SimulationState;
+    const result = JSON.parse(JSON.stringify(projected)) as SimulationState;
+    (result as any).isPaused = owners.clock.isPaused();
+    (result.time as any).isPaused = owners.clock.isPaused();
+    return result;
   }
 
   public exportFullSnapshot(
@@ -167,6 +170,13 @@ export class CorePersistenceCoordinator {
     snapshot: SimulationState,
   ): SimulationState['activeView'] {
     owners.clock.setTotalMinutes(snapshot.time.totalMinutes);
+    const isPaused =
+      (snapshot as any).isPaused ??
+      (snapshot as any).time?.isPaused ??
+      (snapshot as any).clockState?.isPaused;
+    if (typeof isPaused === 'boolean') {
+      owners.clock.setPaused(isPaused);
+    }
     owners.needs.loadState((snapshot as any).needs ?? snapshot.player);
     owners.economy.loadState(snapshot.player);
     owners.mood.loadState((snapshot as any).mood);

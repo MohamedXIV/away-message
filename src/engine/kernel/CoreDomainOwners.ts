@@ -37,6 +37,13 @@ export function createCoreDomainOwners(initialState?: Partial<SimulationState>) 
     initialHour: initialState?.time?.hour ?? 8,
     initialMinute: initialState?.time?.minute ?? 0,
   });
+  const initialPaused =
+    (initialState as any)?.isPaused ??
+    (initialState as any)?.time?.isPaused ??
+    (initialState as any)?.clockState?.isPaused;
+  if (typeof initialPaused === 'boolean') {
+    clock.setPaused(initialPaused);
+  }
 
   const needs = new PlayerNeedsEngine(
     events,
