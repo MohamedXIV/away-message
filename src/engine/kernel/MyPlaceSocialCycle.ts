@@ -1,15 +1,18 @@
 import type { CoreDomainOwners } from './CoreDomainOwners';
 import { SEED_PROFILE_ALIASES } from '../MyPlaceEngine';
+import { SEED_BY_ID } from '../seedCharacters';
+import type { TimeAdvanceMode } from './TimeAdvancement';
 import { appointmentRoll } from '../AppointmentDirector';
 import {
   pickGuestbookLine,
   pickGuestbookReplyLine,
   pickTop8NewsLine,
+  pickMyplaceUpdateLine,
 } from '../characterTemplates';
 
 type SocialSiteOwners = Pick<
   CoreDomainOwners,
-  'clock' | 'social' | 'world' | 'myplace' | 'telemetry'
+  'clock' | 'social' | 'world' | 'myplace' | 'telemetry' | 'events'
 >;
 
 /**
@@ -129,5 +132,88 @@ export class MyPlaceSocialCycle {
       }
     } catch { /* guestbook never breaks the tick */ }
   }
+
+  public scheduleDailyProfileUpdate(
+    mode: TimeAdvanceMode,
+    day: number,
+    currentMinutes: number,
+  ): void {
+    void this.owners.myplace.maybeUpdateRandomNpcProfile(day, currentMinutes).then((res) => {
+      if (!res) return;
+      const link = `http://myplace.local/${res.username}`;
+      const announcer = Object.values(SEED_BY_ID).find((b) => b.myplace === res.username);
+      const traits = announcer
+        ? this.owners.social.getTraits(announcer.id)
+        : { shyness: 50, discipline: 50 };
+      const text = pickMyplaceUpdateLine(traits.shyness, traits.discipline, link);
+      try {
+        this.owners.social.sendMessage(
+          res.username, res.username, 'player',
+          text, currentMinutes, false, ['myplace_update'],
+        );
+      } catch {
+        // Existing profile announcers are best effort.
+      }
+      if (mode === 'realtime') {
+        // Preserve the original realtime-only notification/co-comment behavior
+        // until a dedicated Social side-effect cutover owns it.
+        this.maybeCoCommentProfileUpdate(res.username, day, currentMinutes);
+        try {
+          this.owners.events.emit('social:message_received' as any, {
+            message: { senderId: res.username, text },
+          });
+        } catch {
+          // Non-critical UI event.
+        }
+        this.maybeCoCommentProfileUpdate(res.username, day, currentMinutes);
+      }
+    }).catch(() => {});
+  }
+
+  /** P5.4 co-comment: when an NPC refreshes their page, a mutual friend may sign the guestbook. */
+  private maybeCoCommentProfileUpdate(username: string, day: number, currentMinutes: number): void {
+    try {
+      if (appointmentRoll(`${username}:${day}:gbco`) >= 50) return;
+      const owner = this.owners.social.getBuddies().find((b) =>
+        b.handle === username || b.id === username
+        || SEED_PROFILE_ALIASES[b.id] === username || SEED_PROFILE_ALIASES[b.handle] === username);
+      const candidates = this.owners.social.getBuddies().filter((b) => {
+        if (owner && b.id === owner.id) return false;
+        if (b.status === 'distant' || b.status === 'gone' || b.status === 'blocked') return false;
+        const stage = this.owners.social.getRelationshipStage(b.id);
+        return stage === 'friend' || stage === 'close';
+      });
+      if (candidates.length === 0) return;
+      const commenter = candidates[appointmentRoll(`${username}:${day}:gbco2`) % candidates.length]!;
+      const ownerProfile = this.owners.myplace.getNpcProfile(username);
+      const authorKey = this.resolveProfileUsername(commenter) ?? commenter.handle;
+      this.owners.myplace.addGuestbookComment(username, authorKey, pickGuestbookLine(`${username}:${day}:gbco`, ownerProfile?.displayName ?? username), currentMinutes);
+      this.owners.telemetry.logEvent('social', 'myplace_guestbook', currentMinutes, { from: commenter.id, to: username });
+    } catch { /* co-comments never break the tick */ }
+  }
+
+  /** P5.4 stub MyPlace pages for a buddy (myplace username when known, else handle/id). */
+  public ensureMyPlaceStub(buddy: { handle?: string; id: string; displayName: string; archetype?: any; backstory?: { label?: string; bioSeed?: string } }): void {
+    try {
+      // One page per buddy: prefer the registry myplace username so links stay canonical.
+      const username = SEED_BY_ID[buddy.id]?.myplace || buddy.handle || buddy.id;
+      this.owners.myplace.ensureNpcProfile({
+        username,
+        displayName: buddy.displayName,
+        archetype: buddy.archetype,
+        backstory: buddy.backstory ?? SEED_BY_ID[buddy.id]?.backstory ?? undefined,
+      });
+      // Also index by raw id so MyPlace routing works with either key
+      if (buddy.handle && buddy.handle !== buddy.id) {
+        this.owners.myplace.ensureNpcProfile({
+          username: buddy.id,
+          displayName: buddy.displayName,
+          archetype: buddy.archetype,
+          backstory: buddy.backstory ?? SEED_BY_ID[buddy.id]?.backstory ?? undefined,
+        });
+      }
+    } catch { /* MyPlace stub is best-effort */ }
+  }
+
 
 }
