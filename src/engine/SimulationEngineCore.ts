@@ -51,6 +51,7 @@ import { PlayerContactCoordination } from './kernel/PlayerContactCoordination';
 import { CityActivityCoordination } from './kernel/CityActivityCoordination';
 import { DesktopStorageCommands } from './kernel/DesktopStorageCommands';
 import { SocialInteractionCommands } from './kernel/SocialInteractionCommands';
+import { WorldNarrativeCommands } from './kernel/WorldNarrativeCommands';
 
 export class SimulationEngine {
   public readonly clock!: GameClock;
@@ -86,6 +87,7 @@ export class SimulationEngine {
   private readonly cityActivity: CityActivityCoordination;
   private readonly desktopCommands: DesktopStorageCommands;
   private readonly socialCommands: SocialInteractionCommands;
+  private readonly worldCommands: WorldNarrativeCommands;
 
   private activeView: 'pc' | 'room' | 'cafe' | 'work' | 'city' = 'room';
   private subscribers: Set<(state: Readonly<SimulationState>) => void> = new Set();
@@ -166,6 +168,7 @@ export class SimulationEngine {
       owners, this.playerContacts, this.relationshipContinuity,
       () => this.notifySubscribers(),
     );
+    this.worldCommands = new WorldNarrativeCommands(owners, () => this.notifySubscribers());
     this.registerInternalEventHandlers();
   }
 
@@ -439,6 +442,8 @@ export class SimulationEngine {
     if (desktopResult !== null) return desktopResult;
     const socialResult = this.socialCommands.dispatch(action, currentMinutes);
     if (socialResult !== null) return socialResult;
+    const worldResult = this.worldCommands.dispatch(action, currentMinutes);
+    if (worldResult !== null) return worldResult;
 
     switch (action.type) {
       case 'TIME_ADVANCE_MINUTES': {
@@ -692,55 +697,6 @@ export class SimulationEngine {
         });
         this.notifySubscribers();
         return { success: true, data: { ...res, release: targetRel, installMinutes } };
-      }
-
-      case 'WORLD_SET_FLAG': {
-        this.world.setFlag(action.key, action.value);
-        this.events.emit('world:flag_changed', { key: action.key, value: action.value });
-        this.notifySubscribers();
-        return { success: true };
-      }
-
-      case 'WORLD_TRIGGER_EVENT': {
-        const evt = this.world.triggerEventById(action.eventId, currentMinutes);
-        if (!evt) return { success: false, error: `Event not found or already triggered: ${action.eventId}` };
-        this.notifySubscribers();
-        return { success: true, data: evt };
-      }
-
-      case 'WORLD_ADD_OBSERVATION': {
-        this.world.addWindowObservation(action.entry);
-        this.notifySubscribers();
-        return { success: true };
-      }
-
-      case 'WORLD_SCHEDULE_APPOINTMENT': {
-        const appt = this.world.scheduleAppointment(action.appointment);
-        this.events.emit('world:appointment_scheduled', { appointment: appt });
-        this.notifySubscribers();
-        return { success: true, data: appt };
-      }
-
-      // Deprecated narrative aliases — routed to world
-      case 'NARRATIVE_TRIGGER_BEAT': {
-        // No-op in sandbox: beats removed. Keep for compat, emit but don't store.
-        this.events.emit('narrative:beat_triggered', { beatId: (action as any).beatId });
-        this.notifySubscribers();
-        return { success: true };
-      }
-
-      case 'NARRATIVE_SET_FLAG': {
-        this.world.setFlag(action.key, action.value);
-        this.events.emit('world:flag_changed', { key: action.key, value: action.value });
-        this.notifySubscribers();
-        return { success: true };
-      }
-
-      case 'NARRATIVE_SCHEDULE_APPOINTMENT': {
-        const appt = this.world.scheduleAppointment(action.appointment);
-        this.events.emit('world:appointment_scheduled', { appointment: appt });
-        this.notifySubscribers();
-        return { success: true, data: appt };
       }
 
       default:
