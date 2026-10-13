@@ -12,17 +12,18 @@ describe('PhysicalGroceryFulfillment — one physical pickup/courier authority',
     const engine = new SimulationEngine();
     const fulfillment = owner(engine);
     engine.economy.earnCash(100, 'pickup fixture');
-    const before = engine.exportSnapshot();
+    const beforeMinute = engine.clock.getTotalMinutes();
+    const beforePantry = engine.getState().player.pantry.noodles;
 
     const result = engine.placeGroceryOrder([{ sku: 'noodles_cup', qty: 2 }], 'pickup', engine.clock.getTotalMinutes());
     expect(result.success).toBe(true);
     expect(result.data?.orderId).toBeTruthy();
-    expect(engine.clock.getTotalMinutes()).toBe(before.totalMinutes + 30);
+    expect(engine.clock.getTotalMinutes()).toBe(beforeMinute + 30);
 
     const orderId = result.data!.orderId;
     expect(engine.delivery.getState().orders.find((order) => order.id === orderId)?.status)
       .toBe('done');
-    expect(engine.getState().player.pantry.noodles).toBe(before.player.pantry.noodles);
+    expect(engine.getState().player.pantry.noodles).toBe(beforePantry);
     const physical = engine.getPhysicalWorldState();
     const bagId = `shopping-bag:${orderId}`;
     expect(physical.items[bagId]?.location).toEqual({
