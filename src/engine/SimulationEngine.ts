@@ -9,7 +9,6 @@ import {
   SimulationEngine as LegacySimulationEngine,
   type EncounterCandidate,
   type EncounterDecision,
-  type EncounterPlayerTransitRead,
   type LiveSimulationState as LegacyLiveSimulationState,
 } from './SimulationEngineLegacyFacade';
 import {
