@@ -31,7 +31,7 @@ import { validatePersistedBuddy } from './CharacterEngine';
 import { generateNewcomer, shouldAutoDiscover, NEWCOMER_METVIA_ROTATION } from './CharacterDirector';
 
 import { pickOutingWarmLine, pickOutingReservedLine, pickMediationThanks, pickContactLine, pickContactBounce, rollSeeded100, } from './characterTemplates';
-import { appointmentRoll } from './AppointmentDirector';
+
 import { OUTINGS, isValidOutingId, isOutingOpen, outingHoursLabel, dinerStaffEncounter, canalRegularEncounter, buildLaundromatRumor, MIN_OUTING_ENERGY, type OutingId } from './OutingDirector';
 
 import {
