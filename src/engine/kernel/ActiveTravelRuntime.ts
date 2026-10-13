@@ -103,11 +103,11 @@ export class ActiveTravelRuntime {
     };
   }
 
-  public override collectEncounterCandidates(): EncounterCandidate[] {
+  public collectEncounterCandidates(): EncounterCandidate[] {
     return this.collectNpcCandidates(this.currentPlayerTransit());
   }
 
-  public override decideEncounter(): EncounterDecision {
+  public decideEncounter(): EncounterDecision {
     return this.decideNpcEncounter(this.currentPlayerTransit());
   }
 
