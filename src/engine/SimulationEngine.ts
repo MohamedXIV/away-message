@@ -50,12 +50,8 @@ import {
   type ReachableAffordance,
 } from './physical/PhysicalContextRuntime';
 import { PHYSICAL_ITEM_CATALOG } from './hardware/catalog';
-import {
-  commitTravelPlan as createActiveTravel,
-  activeTravelLegWindows,
-  parseActiveTravel,
-  travelStateAtMinute,
-} from './transit/ActiveTravel';
+import { parseActiveTravel } from './transit/ActiveTravel';
+import { ActiveTravelRuntime } from './kernel/ActiveTravelRuntime';
 import type { ActiveTravelState, TravelPlan } from './transit/types';
 import type { CharacterIntent } from './life/types';
 import type {
@@ -265,17 +261,13 @@ function clonePhysicalShopStates(
   );
 }
 
-function cloneActiveTravel(state: ActiveTravelState): ActiveTravelState {
-  return parseActiveTravel(structuredClone(state));
-}
-
 export class SimulationEngine extends LegacySimulationEngine {
   private readonly residenceCoordination: ResidenceCoordination;
   private physicalWorldState: PhysicalWorldState | null = null;
   private physicalObjectState: PhysicalObjectRuntimeState = { objects: {} };
   private physicalShopStates: Record<string, PhysicalShopState> = {};
   private readonly venueRuntime: VenueOperationsRuntime;
-  private activeTravelState: ActiveTravelState | null = null;
+  private readonly activeTravel: ActiveTravelRuntime;
   /** Single composed owner for authored Scenario instances and presentation-only Inner Voice. */
   private readonly story: StoryExperienceRuntime;
 
@@ -302,7 +294,15 @@ export class SimulationEngine extends LegacySimulationEngine {
     );
     this.physicalWorldState = this.hydratePhysicalWorld(initialState?.physicalWorld);
     this.physicalShopStates = clonePhysicalShopStates(initialState?.physicalShops ?? {});
-    this.activeTravelState = initialState?.activeTravel ? cloneActiveTravel(initialState.activeTravel) : null;
+    this.activeTravel = new ActiveTravelRuntime(
+      { clock: this.clock, economy: this.economy, telemetry: this.telemetry },
+      (actorId) => this.clearActorSpatialForTravel(actorId),
+      (actorId, placeId) => this.relocateActorToGeneratedPlaceEntry(actorId, placeId),
+      (action) => this.dispatchAction(action),
+      (playerTravel) => super.collectEncounterCandidates(playerTravel),
+      (playerTravel) => super.decideEncounter(playerTravel),
+      initialState?.activeTravel,
+    );
     this.story = new StoryExperienceRuntime(
       { clock: this.clock, social: this.social },
       initialState?.scenarios,
@@ -311,11 +311,11 @@ export class SimulationEngine extends LegacySimulationEngine {
     );
     this.delivery.setArrivalHandler((order) => this.materializeDeliveryParcel(order));
     this.events.on('time:tick', () => {
-      this.synchronizeActiveTravel();
+      this.activeTravel.synchronizeActiveTravel();
       this.venueRuntime.synchronizeVenueActivities();
     });
     this.events.on('time:jump', () => {
-      this.synchronizeActiveTravel();
+      this.activeTravel.synchronizeActiveTravel();
       this.venueRuntime.synchronizeVenueActivities();
     });
   }
@@ -463,36 +463,6 @@ export class SimulationEngine extends LegacySimulationEngine {
     const result = commitPhysicalShopCheckout(this, shop, pricesByDefinitionId);
     this.commitPhysicalShopSession(storeId, shop, physicalItems);
     return result;
-  }
-
-  private synchronizeActiveTravel(): void {
-    const current = this.activeTravelState;
-    if (!current || current.status !== 'active') return;
-
-    const resolved = travelStateAtMinute(current, this.clock.getTotalMinutes());
-    if (
-      resolved.status === current.status &&
-      resolved.currentLegIndex === current.currentLegIndex
-    ) {
-      return;
-    }
-
-    const arrivedNow = resolved.status === 'arrived';
-    this.activeTravelState = {
-      ...current,
-      ...resolved,
-    };
-
-    if (arrivedNow) {
-      this.relocateActorToGeneratedPlaceEntry(current.actorId, current.plan.destinationPlaceId);
-      try {
-        this.telemetry.logEvent('world', 'travel_arrived', this.clock.getTotalMinutes(), {
-          actorId: current.actorId,
-          destinationPlaceId: current.plan.destinationPlaceId,
-          purposeRef: current.purposeRef ?? null,
-        });
-      } catch {}
-    }
   }
 
   private materializeGroceryContainer(
@@ -725,46 +695,19 @@ export class SimulationEngine extends LegacySimulationEngine {
   }
 
   public setActiveTravel(state: ActiveTravelState | null): void {
-    this.activeTravelState = state ? cloneActiveTravel(state) : null;
+    this.activeTravel.setActiveTravel(state);
   }
 
   public getActiveTravel(): ActiveTravelState | null {
-    return this.activeTravelState ? cloneActiveTravel(this.activeTravelState) : null;
-  }
-
-  /**
-   * Live player wait/ride leg for #47 transit overlap, derived from the
-   * player's own committed journey. Walk legs and settled/arrived travel
-   * yield null (no transit candidacy). Pure read.
-   */
-  private currentPlayerTransit(): EncounterPlayerTransitRead | null {
-    const travel = this.getActiveTravel();
-    if (!travel || travel.status !== 'active') return null;
-    const resolved = travelStateAtMinute(travel, this.clock.getTotalMinutes());
-    if (resolved.status !== 'active') return null;
-    const window = activeTravelLegWindows(travel)[resolved.currentLegIndex];
-    const leg = travel.plan.legs[resolved.currentLegIndex];
-    if (!window || !leg || leg.kind === 'walk') return null;
-    if (leg.kind === 'wait') {
-      return { kind: 'wait', stopId: leg.stopId, windowStart: window.startMinute, windowEnd: window.endMinute };
-    }
-    return {
-      kind: 'bus',
-      lineId: leg.lineId,
-      fromStopId: leg.fromStopId,
-      toStopId: leg.toStopId,
-      boardMinute: window.startMinute,
-      windowStart: window.startMinute,
-      windowEnd: window.endMinute,
-    };
+    return this.activeTravel.getActiveTravel();
   }
 
   public override collectEncounterCandidates(): EncounterCandidate[] {
-    return super.collectEncounterCandidates(this.currentPlayerTransit());
+    return this.activeTravel.collectEncounterCandidates();
   }
 
   public override decideEncounter(): EncounterDecision {
-    return super.decideEncounter(this.currentPlayerTransit());
+    return this.activeTravel.decideEncounter();
   }
 
   public startTravel(
@@ -772,49 +715,7 @@ export class SimulationEngine extends LegacySimulationEngine {
     plan: TravelPlan,
     purposeRef?: string,
   ): { success: boolean; data?: ActiveTravelState; error?: string } {
-    if (this.activeTravelState?.status === 'active') {
-      return { success: false, error: 'An active journey is already in progress.' };
-    }
-    if (!Number.isFinite(plan.fare) || plan.fare < 0) {
-      return { success: false, error: 'Travel fare is invalid.' };
-    }
-    if (actorId === 'player' && !this.economy.canAfford(plan.fare)) {
-      return { success: false, error: `Cannot afford $${plan.fare.toFixed(2)} travel fare.` };
-    }
-
-    const committed = createActiveTravel(
-      actorId,
-      plan,
-      this.clock.getTotalMinutes(),
-      purposeRef,
-    );
-
-    this.activeTravelState = committed;
-    if (actorId === 'player') {
-      const fareResult = this.dispatchAction({
-        type: 'PLAYER_SPEND_CASH',
-        amount: plan.fare,
-        reason: 'Transit fare',
-      });
-      if (!fareResult.success) {
-        this.activeTravelState = null;
-        return { success: false, error: fareResult.error ?? `Cannot afford $${plan.fare.toFixed(2)} travel fare.` };
-      }
-    }
-
-    this.clearActorSpatialForTravel(actorId);
-
-    try {
-      this.telemetry.logEvent('world', 'travel_departed', this.clock.getTotalMinutes(), {
-        actorId,
-        originPlaceId: plan.originPlaceId,
-        destinationPlaceId: plan.destinationPlaceId,
-        fare: plan.fare,
-        purposeRef: purposeRef ?? null,
-      });
-    } catch {}
-
-    return { success: true, data: cloneActiveTravel(committed) };
+    return this.activeTravel.startTravel(actorId, plan, purposeRef);
   }
 
   public override getState(): Readonly<LiveSimulationState> {
@@ -874,7 +775,7 @@ export class SimulationEngine extends LegacySimulationEngine {
     this.venueRuntime.loadState(persistedVenueOperations as VenueRuntimeState);
     this.physicalWorldState = this.hydratePhysicalWorld(persistedPhysicalWorld);
     this.physicalShopStates = clonePhysicalShopStates(persistedPhysicalShops ?? {});
-    this.activeTravelState = persistedActiveTravel;
+    this.activeTravel.loadState(persistedActiveTravel);
     // Hydrate only the persisted authored bindings and presentation history.
     this.story.loadState(persistedScenarios, snapshot.innerVoice);
     this.delivery.setArrivalHandler((order) => this.materializeDeliveryParcel(order));
