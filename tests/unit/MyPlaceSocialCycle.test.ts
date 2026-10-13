@@ -24,6 +24,21 @@ describe('MyPlaceSocialCycle', () => {
     })).toBeNull();
   });
 
+  it('creates one canonical MyPlace profile for newly registered actors', () => {
+    const { owners, cycle } = fixture();
+    const actor = {
+      id: 'site_newcomer',
+      handle: 'newcomer42',
+      displayName: 'Newcomer 42',
+    };
+    cycle.ensureMyPlaceStub(actor);
+    const first = owners.myplace.getNpcProfile(actor.handle);
+    expect(first?.displayName).toBe(actor.displayName);
+    expect(owners.myplace.getNpcProfile(actor.id)?.displayName).toBe(actor.displayName);
+    cycle.ensureMyPlaceStub(actor);
+    expect(owners.myplace.getNpcProfile(actor.handle)).toEqual(first);
+  });
+
   it('is deterministic from the same authoritative day, roster, relationships and site state', () => {
     const a = fixture();
     const b = fixture();
