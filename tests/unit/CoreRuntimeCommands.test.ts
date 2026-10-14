@@ -194,4 +194,54 @@ describe('CoreRuntime Commands — authoritative execution contracts', () => {
     expect(engine.economy.getCash()).toBe(cashBefore - 75);
     expect(engine.hardware.getState().connectionType).toBe('dsl_256k');
   });
+  it('rejects retired HARDWARE_UPGRADE_OS without mutating cash, OS, or hardware', () => {
+    const runtime = new CoreRuntime();
+    runtime.owners.economy.earnCash(200, 'test budget');
+    const cashBefore = runtime.owners.economy.getCash();
+    const osBefore = runtime.owners.os.getCurrentOsId();
+    const hwStateBefore = (runtime.owners.hardware as any).state.osVersion;
+
+    const res = runtime.dispatchAction({
+      type: 'HARDWARE_UPGRADE_OS',
+      targetOs: 'Orion_5.0',
+      cost: 29,
+    });
+
+    expect(res.success).toBe(false);
+    expect(res.error).toMatch(/legacy os upgrades are retired/i);
+    expect(runtime.owners.economy.getCash()).toBe(cashBefore);
+    expect(runtime.owners.os.getCurrentOsId()).toBe(osBefore);
+    expect((runtime.owners.hardware as any).state.osVersion).toBe(hwStateBefore);
+  });
+
+  it('executes sleep through TimeAdvancement and emits time events authoritatively', () => {
+    const runtime = new CoreRuntime();
+    const dayChangedEvents: any[] = [];
+    const jumpEvents: any[] = [];
+
+    runtime.owners.events.on('time:day_changed', (e) => dayChangedEvents.push(e));
+    runtime.owners.events.on('time:jump', (e) => jumpEvents.push(e));
+
+    const dayBefore = runtime.owners.clock.getTime().day;
+    runtime.owners.needs.consumeEnergy(50);
+    runtime.owners.needs.spendSocialBattery(20);
+
+    const sleepRes = runtime.dispatchAction({
+      type: 'PLAYER_REST_OR_SLEEP',
+      wakeHour: 8,
+      wakeMinute: 0,
+    });
+
+    expect(sleepRes.success).toBe(true);
+    expect(runtime.owners.clock.getTime().day).toBe(dayBefore + 1);
+    expect(runtime.owners.clock.getTime().hour).toBe(8);
+    // Verified authoritative events emitted exactly once
+    expect(dayChangedEvents.length).toBe(1);
+    expect(dayChangedEvents[0].newDay).toBe(dayBefore + 1);
+    expect(jumpEvents.length).toBe(1);
+    expect(jumpEvents[0].reason).toBe('Sleep');
+    // Needs and social battery restored
+    expect(runtime.owners.needs.getState().energy).toBeGreaterThan(60);
+    expect(runtime.owners.needs.getSocialBattery()).toBeGreaterThan(50);
+  });
 });

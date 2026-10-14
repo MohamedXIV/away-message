@@ -73,7 +73,8 @@ export class SimulationEngine {
 
   constructor(initialState?: Partial<SimulationState>) {
     this.runtime = new CoreRuntime(initialState, {
-      advanceGameMinutes: (minutes, reason) => this.advanceGameMinutes(minutes, reason),
+      advanceGameMinutes: (minutes, reason, options) =>
+        this.advanceGameMinutes(minutes, reason, options),
       advanceRealTime: (delta) => this.advanceRealTime(delta),
       placeGroceryOrder: (items, fulfillment, minute, options) =>
         this.placeGroceryOrder(items, fulfillment, minute, options),
@@ -200,8 +201,12 @@ export class SimulationEngine {
     this.runtime.advanceRealTime(deltaRealSeconds);
   }
 
-  public advanceGameMinutes(minutes: number, reason?: string): void {
-    this.runtime.advanceGameMinutes(minutes, reason);
+  public advanceGameMinutes(
+    minutes: number,
+    reason?: string,
+    options?: { skipPublish?: boolean },
+  ): void {
+    this.runtime.advanceGameMinutes(minutes, reason, options);
   }
 
   public isPulse6(): boolean {

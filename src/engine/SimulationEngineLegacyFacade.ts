@@ -234,10 +234,14 @@ export class SimulationEngine extends SimulationEngineCore {
     this.movement.progressNpcMobility();
   }
 
-  public override advanceGameMinutes(minutes: number, reason?: string): void {
+  public override advanceGameMinutes(
+    minutes: number,
+    reason?: string,
+    options?: { skipPublish?: boolean },
+  ): void {
     const previousMinute = this.clock.getTotalMinutes();
     if (minutes > 0) this.movement.primeMissingNpcMobility();
-    super.advanceGameMinutes(minutes, reason);
+    super.advanceGameMinutes(minutes, reason, options);
     this.settleAtAuthoritativeMinuteBoundary(previousMinute);
   }
 

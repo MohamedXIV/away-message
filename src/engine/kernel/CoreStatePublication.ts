@@ -17,9 +17,6 @@ export class CoreStatePublication {
     owners: CoreDomainOwners,
     activeView: SimulationState['activeView'],
   ): Readonly<SimulationState> {
-    // Mood context is derived, reconcile before consulting cache
-    owners.mood.publishIfChanged();
-
     if (this._cachedState && this._cachedStateVersion === this._stateVersion) {
       return this._cachedState;
     }

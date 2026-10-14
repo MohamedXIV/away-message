@@ -23,7 +23,7 @@ export class CityActivityCoordination {
       CoreDomainOwners,
       'economy' | 'clock' | 'gameContext' | 'needs' | 'world' | 'social' | 'telemetry'
     >,
-    private readonly advanceMinutes: (minutes: number, reason: string) => void,
+    private readonly advanceMinutes: (minutes: number, reason: string, options?: { skipPublish?: boolean }) => void,
     private readonly publishState: () => void,
   ) {}
 
@@ -61,7 +61,7 @@ export class CityActivityCoordination {
         return { success: false, error: 'Too tired to walk there (need 10% energy). Take the bus or rest.' };
       }
       if (quote.busUsed) this.owners.economy.spendCash(BUS_FARE, `Bus to ${CITY_NODES[to].name}`);
-      this.advanceMinutes(quote.minutes, `Travel: ${CITY_NODES[from].name} → ${CITY_NODES[to].name} (${quote.mode})`);
+      this.advanceMinutes(quote.minutes, `Travel: ${CITY_NODES[from].name} → ${CITY_NODES[to].name} (${quote.mode})`, { skipPublish: true });
       if (walkCost > 0) this.owners.needs.consumeEnergy(walkCost);
       this.owners.economy.setLocation(to);
       // Arrival counts for meetings (same flags the legacy views raise)
@@ -146,7 +146,7 @@ export class CityActivityCoordination {
       }
       if (spec.cost > 0) this.owners.economy.spendCash(spec.cost, `City outing (${spec.label})`);
       this.owners.needs.spendSocialBattery(outingBattery);
-      this.advanceMinutes(spec.minutes, `City outing: ${spec.label}`);
+      this.advanceMinutes(spec.minutes, `City outing: ${spec.label}`, { skipPublish: true });
       if (spec.energyDelta < 0) this.owners.needs.consumeEnergy(-spec.energyDelta);
       else this.owners.needs.restoreEnergy(spec.energyDelta);
       this.owners.needs.addHunger(spec.hungerDelta);

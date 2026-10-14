@@ -26,7 +26,7 @@ export type GroceryOrderResult = ActionResult & {
 export class GroceryDeliveryCoordination {
   constructor(
     private readonly owners: GroceryOwners,
-    private readonly advanceGameMinutes: (minutes: number, reason: string) => void,
+    private readonly advanceGameMinutes: (minutes: number, reason: string, options?: { skipPublish?: boolean }) => void,
     private readonly publishState: () => void,
   ) {}
 
@@ -52,7 +52,7 @@ export class GroceryDeliveryCoordination {
           return { success: false, error: 'Too tired for a store run (need 20% energy).' };
         }
         economy.spendCash(total, 'CornerMart pickup');
-        this.advanceGameMinutes(30, 'CornerMart pickup run');
+        this.advanceGameMinutes(30, 'CornerMart pickup run', { skipPublish: true });
         needs.consumeEnergy(5);
         for (const item of items) {
           const sku = GROCERY_SKUS[item.sku]!;

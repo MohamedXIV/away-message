@@ -111,6 +111,16 @@ describe('SimulationEngine (Authoritative Master Coordinator)', () => {
     expect(notifiedCount).toBe(2);
   });
 
+  it('publishes public travel only after the player reaches the destination', () => {
+    const observedLocations: string[] = [];
+    sim.subscribe((state) => observedLocations.push(state.player.location));
+
+    const result = sim.travelTo('cafe', 'walk');
+
+    expect(result.success).toBe(true);
+    expect(observedLocations).toEqual(['home', 'cafe']);
+  });
+
   it('losslessly exports and loads canonical simulation state snapshot', () => {
     sim.hardware.installModularHardware(createScrapYardBundle());
     sim.dispatchAction({ type: 'PLAYER_EARN_CASH', amount: 50.0, reason: 'Found' });

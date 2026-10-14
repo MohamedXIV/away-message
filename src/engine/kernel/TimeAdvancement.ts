@@ -1,3 +1,4 @@
+import type { TimeJumpResult } from '../types';
 import type { CoreDomainOwners } from './CoreDomainOwners';
 
 /**
@@ -17,6 +18,7 @@ type MinuteOwners = Pick<
   | 'social'
   | 'world'
   | 'environment'
+  | 'mood'
   | 'os'
   | 'myplace'
   | 'events'
@@ -52,7 +54,7 @@ export class TimeAdvancement {
    * Never infer simulation time from rendering frame count.
    */
   private applyElapsedMinutes(elapsed: number, atMinute: number, day: number): void {
-    const { downloads, needs, social, world, environment, os, myplace } = this.owners;
+    const { downloads, needs, social, world, environment, mood, os, myplace } = this.owners;
     downloads.advanceTime(elapsed, atMinute);
     needs.advanceTime(elapsed);
     this.hooks.processDeliveries();
@@ -61,6 +63,11 @@ export class TimeAdvancement {
     this.hooks.sweepBusyLeaveLines(atMinute);
     world.checkAndTriggerEvents(atMinute, day);
     environment.publishIfChanged({ atMinute });
+    try {
+      mood.publishIfChanged();
+    } catch {
+      // Mood context is best-effort during fast jumps
+    }
     try {
       os.syncFromWorldState({
         triggeredEvents: world.getTriggeredEvents(),
@@ -113,20 +120,23 @@ export class TimeAdvancement {
     this.hooks.publishState();
   }
 
-  advanceGameMinutes(minutes: number, reason?: string): void {
-    if (minutes <= 0) return;
+  applyTimeJump(
+    jumpResult: TimeJumpResult,
+    reason?: string,
+    options?: { skipPublish?: boolean },
+  ): void {
+    if (jumpResult.elapsedMinutes <= 0) return;
 
     const { clock, events } = this.owners;
-    const jumpResult = clock.advanceMinutes(minutes);
     const atMinute = clock.getTotalMinutes();
-    this.applyElapsedMinutes(minutes, atMinute, jumpResult.newTime.day);
+    this.applyElapsedMinutes(jumpResult.elapsedMinutes, atMinute, jumpResult.newTime.day);
 
     if (jumpResult.dayChanged) {
       this.hooks.scheduleDailyProfileUpdate('jump', jumpResult.newTime.day, atMinute);
     }
 
     events.emit('time:jump', {
-      jumpMinutes: minutes,
+      jumpMinutes: jumpResult.elapsedMinutes,
       time: jumpResult.newTime,
       reason,
     });
@@ -140,6 +150,18 @@ export class TimeAdvancement {
       this.hooks.processNewDay(jumpResult.newTime.day);
     }
 
-    this.hooks.publishState();
+    if (!options?.skipPublish) {
+      this.hooks.publishState();
+    }
+  }
+
+  advanceGameMinutes(
+    minutes: number,
+    reason?: string,
+    options?: { skipPublish?: boolean },
+  ): void {
+    if (minutes <= 0) return;
+    const jumpResult = this.owners.clock.advanceMinutes(minutes);
+    this.applyTimeJump(jumpResult, reason, options);
   }
 }

@@ -1,12 +1,13 @@
 import type { ActionResult, SimulationAction } from '../types';
 import type { CoreDomainOwners } from './CoreDomainOwners';
 import { CityActivityCoordination } from './CityActivityCoordination';
+import type { TimeAdvancement } from './TimeAdvancement';
 
 /**
  * Player routine actions: rest/sleep and room interactions.
  *
- * Sleep transition executes directly on the Clock without double-advancing
- * Needs, Downloads, Social presence, World events, or deliveries.
+ * Sleep transition executes authoritatively through TimeAdvancement without
+ * double-advancing Needs, Downloads, Social presence, World events, or deliveries.
  */
 export class PlayerRoutineCommands {
   constructor(
@@ -16,14 +17,14 @@ export class PlayerRoutineCommands {
       | 'needs'
       | 'economy'
       | 'telemetry'
-      | 'events'
-      | 'downloads'
-      | 'social'
       | 'world'
     >,
-    private readonly advanceGameMinutes: (minutes: number, reason: string) => void,
-    private readonly processDeliveries: () => void,
-    private readonly processJobReplies: () => void,
+    private readonly advanceGameMinutes: (
+      minutes: number,
+      reason: string,
+      options?: { skipPublish?: boolean },
+    ) => void,
+    private readonly timeAdvancement: TimeAdvancement,
     private readonly publishState: () => void,
   ) {}
 
@@ -35,28 +36,16 @@ export class PlayerRoutineCommands {
         const jump = this.owners.clock.jumpToNextMorning(wakeHour, action.wakeMinute ?? 0);
         const hoursSlept = jump.elapsedMinutes / 60;
         this.owners.needs.restOrSleep(hoursSlept, bedtimeHour);
-        this.owners.needs.advanceTime(jump.elapsedMinutes); // Slow overnight hunger
-        this.processDeliveries(); // Couriers arrive while you sleep
-        this.processJobReplies(); // Replies wait in the morning
-        const newTotalMinutes = this.owners.clock.getTotalMinutes();
-        this.owners.downloads.advanceTime(jump.elapsedMinutes, newTotalMinutes);
-        this.owners.social.updatePresence(newTotalMinutes);
-        this.owners.world.checkAndTriggerEvents(newTotalMinutes, jump.newTime.day);
+        // Social battery: a full night restores the introvert (+30, capped).
+        this.owners.needs.rechargeSocialBattery(30);
 
-        if (jump.dayChanged) {
-          this.owners.events.emit('time:day_changed', {
-            newDay: jump.newTime.day,
-            previousDay: jump.previousTime.day,
-            time: jump.newTime,
-          });
-        }
+        // Authoritatively advance all time-dependent and daily subsystems
+        this.timeAdvancement.applyTimeJump(jump, 'Sleep', { skipPublish: true });
 
         this.owners.telemetry.logEvent('room', 'sleep', currentMinutes, {
           hoursSlept,
           wakeDay: jump.newTime.day,
         });
-        // Social battery: a full night restores the introvert (+30, capped).
-        this.owners.needs.rechargeSocialBattery(30);
         this.publishState();
         return { success: true, data: jump };
       }
@@ -83,7 +72,7 @@ export class PlayerRoutineCommands {
           const res = this.owners.economy.eatMeal('groceries');
           if (!res.success) return { success: false, error: res.error };
         }
-        this.advanceGameMinutes(dur, `Room interaction: ${action.activity}`);
+        this.advanceGameMinutes(dur, `Room interaction: ${action.activity}`, { skipPublish: true });
         if (action.activity === 'tea' || action.activity === 'coffee') {
           this.owners.needs.restoreEnergy(5);
           // Quiet rituals repay the introvert

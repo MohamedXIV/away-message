@@ -32,7 +32,11 @@ import { SimulationControlCommands } from './SimulationControlCommands';
 import type { FullSimulationSnapshot } from '../../persistence/schema';
 
 export interface CoreRuntimeHooks {
-  advanceGameMinutes?: (minutes: number, reason?: string) => void;
+  advanceGameMinutes?: (
+    minutes: number,
+    reason?: string,
+    options?: { skipPublish?: boolean },
+  ) => void;
   advanceRealTime?: (deltaRealSeconds: number) => void;
   placeGroceryOrder?: (
     items: Array<{ sku: string; qty: number }>,
@@ -40,6 +44,7 @@ export interface CoreRuntimeHooks {
     nowMinute: number,
     deliveryOptions?: PlaceDeliveryOptions,
   ) => ActionResult;
+  onNotifySubscribers?: () => void;
 }
 
 /**
@@ -77,8 +82,12 @@ export class CoreRuntime {
   public readonly controlCommands: SimulationControlCommands;
 
   private activeView: SimulationState['activeView'] = 'room';
+  private readonly hooks?: CoreRuntimeHooks;
+  private publicationBatchDepth = 0;
+  private publicationPending = false;
 
   constructor(initialState?: Partial<SimulationState>, hooks?: CoreRuntimeHooks) {
+    this.hooks = hooks;
     const owners = createCoreDomainOwners(initialState);
     this.owners = owners;
     this.publication = new CoreStatePublication();
@@ -88,11 +97,15 @@ export class CoreRuntime {
       initialState?.activeView ??
       (owners.hardware.getState().hasComputer ? 'pc' : 'room');
 
-    const advanceMinutesFn = (minutes: number, reason?: string) => {
+    const advanceMinutesFn = (
+      minutes: number,
+      reason?: string,
+      options?: { skipPublish?: boolean },
+    ) => {
       if (hooks?.advanceGameMinutes) {
-        hooks.advanceGameMinutes(minutes, reason);
+        hooks.advanceGameMinutes(minutes, reason, options);
       } else {
-        this.advanceGameMinutes(minutes, reason);
+        this.advanceGameMinutes(minutes, reason, options);
       }
     };
 
@@ -128,7 +141,7 @@ export class CoreRuntime {
 
     this.groceryDelivery = new GroceryDeliveryCoordination(
       owners,
-      (minutes, reason) => advanceMinutesFn(minutes, reason),
+      (minutes, reason, options) => advanceMinutesFn(minutes, reason, options),
       () => this.notifySubscribers(),
     );
 
@@ -151,7 +164,7 @@ export class CoreRuntime {
 
     this.cityActivity = new CityActivityCoordination(
       owners,
-      (minutes, reason) => advanceMinutesFn(minutes, reason),
+      (minutes, reason, options) => advanceMinutesFn(minutes, reason, options),
       () => this.notifySubscribers(),
     );
 
@@ -169,28 +182,26 @@ export class CoreRuntime {
       this.rentCoordination,
       this.jobBoard,
       placeGroceryOrderFn,
-      (minutes, reason) => advanceMinutesFn(minutes, reason),
+      (minutes, reason, options) => advanceMinutesFn(minutes, reason, options),
       () => this.notifySubscribers(),
     );
 
     this.routineCommands = new PlayerRoutineCommands(
       owners,
-      (minutes, reason) => advanceMinutesFn(minutes, reason),
-      () => this.groceryDelivery.processDeliveries(),
-      () => this.jobBoard.processJobReplies(),
+      (minutes, reason, options) => advanceMinutesFn(minutes, reason, options),
+      this.timeAdvancement,
       () => this.notifySubscribers(),
     );
 
     this.hardwareCommands = new PlayerHardwareCommands(
       owners,
-      (minutes, reason) => advanceMinutesFn(minutes, reason),
       () => this.notifySubscribers(),
     );
 
     this.controlCommands = new SimulationControlCommands(
       owners,
       this.cityActivity,
-      (minutes, reason) => advanceMinutesFn(minutes, reason),
+      (minutes: number, reason?: string) => advanceMinutesFn(minutes, reason),
       (view) => {
         this.activeView = view;
       },
@@ -241,15 +252,45 @@ export class CoreRuntime {
   }
 
   public notifySubscribers(): void {
+    if (this.publicationBatchDepth > 0) {
+      this.publication.invalidateCache();
+      this.publicationPending = true;
+      return;
+    }
+
+    this.publishSubscribersNow();
+  }
+
+  private publishSubscribersNow(): void {
     this.publication.notifySubscribers(() => this.getState());
+    this.hooks?.onNotifySubscribers?.();
+  }
+
+  private withPublicationBatch<T>(operation: () => T): T {
+    this.publicationBatchDepth += 1;
+    try {
+      return operation();
+    } finally {
+      this.publicationBatchDepth -= 1;
+      if (this.publicationBatchDepth === 0 && this.publicationPending) {
+        this.publicationPending = false;
+        this.publishSubscribersNow();
+      }
+    }
   }
 
   public advanceRealTime(deltaRealSeconds: number): void {
-    this.timeAdvancement.advanceRealTime(deltaRealSeconds);
+    this.withPublicationBatch(() => this.timeAdvancement.advanceRealTime(deltaRealSeconds));
   }
 
-  public advanceGameMinutes(minutes: number, reason?: string): void {
-    this.timeAdvancement.advanceGameMinutes(minutes, reason);
+  public advanceGameMinutes(
+    minutes: number,
+    reason?: string,
+    options?: { skipPublish?: boolean },
+  ): void {
+    this.withPublicationBatch(() =>
+      this.timeAdvancement.advanceGameMinutes(minutes, reason, options),
+    );
   }
 
   public placeGroceryOrder(
@@ -258,17 +299,21 @@ export class CoreRuntime {
     nowMinute: number,
     deliveryOptions?: PlaceDeliveryOptions,
   ): ActionResult & { data?: { orderId: string; etaMinute: number; summary: string } } {
-    return this.groceryDelivery.placeGroceryOrder(
-      rawItems,
-      fulfillment,
-      nowMinute,
-      deliveryOptions,
+    return this.withPublicationBatch(() =>
+      this.groceryDelivery.placeGroceryOrder(
+        rawItems,
+        fulfillment,
+        nowMinute,
+        deliveryOptions,
+      ),
     );
   }
 
   public dispatchAction(action: SimulationAction): ActionResult {
-    const currentMinutes = this.owners.clock.getTotalMinutes();
-    return this.commandRouting.dispatch(action, currentMinutes);
+    return this.withPublicationBatch(() => {
+      const currentMinutes = this.owners.clock.getTotalMinutes();
+      return this.commandRouting.dispatch(action, currentMinutes);
+    });
   }
 
   public exportSnapshot(): SimulationState {
@@ -289,11 +334,15 @@ export class CoreRuntime {
   }
 
   public loadSnapshot(snapshot: SimulationState): void {
-    this.activeView = this.persistence.loadSnapshot(this.owners, snapshot);
-    this.notifySubscribers();
+    this.withPublicationBatch(() => {
+      this.activeView = this.persistence.loadSnapshot(this.owners, snapshot);
+      this.notifySubscribers();
+    });
   }
 
   public handleMeetupChat(rawBuddyId: string, text: string, day: number): Appointment | null {
-    return this.appointmentCoordination.handleMeetupChat(rawBuddyId, text, day);
+    return this.withPublicationBatch(() =>
+      this.appointmentCoordination.handleMeetupChat(rawBuddyId, text, day),
+    );
   }
 }

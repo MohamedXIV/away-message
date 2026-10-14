@@ -22,7 +22,7 @@ export class PlayerEconomyCommands {
       fulfillment: Fulfillment,
       currentMinutes: number,
     ) => ActionResult,
-    private readonly advanceGameMinutes: (minutes: number, reason: string) => void,
+    private readonly advanceGameMinutes: (minutes: number, reason: string, options?: { skipPublish?: boolean }) => void,
     private readonly publishState: () => void,
   ) {}
 
@@ -71,11 +71,12 @@ export class PlayerEconomyCommands {
           energySpent: needResult.energySpent,
           fatigueAdded: needResult.fatigueAdded,
         };
-        this.advanceGameMinutes(durationMinutes, 'Work Shift');
+        this.advanceGameMinutes(durationMinutes, 'Work Shift', { skipPublish: true });
         this.owners.telemetry.logEvent('economy', 'shift_worked', currentMinutes, {
           wage: shiftRes.earnedWage,
           hours: shiftRes.hours,
         });
+        this.publishState();
         return { success: true, data: shiftRes };
       }
 
