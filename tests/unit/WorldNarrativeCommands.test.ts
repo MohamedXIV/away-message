@@ -3,7 +3,7 @@ import { SimulationEngine } from '../../src/engine/SimulationEngine';
 import { WorldNarrativeCommands } from '../../src/engine/kernel/WorldNarrativeCommands';
 
 function worldCommands(engine: SimulationEngine): WorldNarrativeCommands {
-  return (engine as unknown as { worldCommands: WorldNarrativeCommands }).worldCommands;
+  return (engine as unknown as { core: { worldCommands: WorldNarrativeCommands } }).core.worldCommands;
 }
 
 describe('WorldNarrativeCommands — no second flag/event timeline', () => {
