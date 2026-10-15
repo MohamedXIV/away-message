@@ -1,9 +1,7 @@
-// Canonical v6 simulation facade.
+// Composition-owned PC inventory, NPC Life/Goals, mobility/XYZ and encounters.
 //
-// The large gameplay coordinator is intentionally preserved in
-// SimulationEngineCore.ts so the computer/OS migration cannot accidentally
-// rewrite unrelated social/world/economy behavior. This facade owns the v6
-// canonical roots and narrows the remaining legacy compatibility to one place.
+// All dependencies are explicit; this runtime never subclasses another
+// simulation executor or persists a duplicate canonical world.
 
 import { InventoryEngine, type HardwareInstallSlot } from '../InventoryEngine';
 import {
