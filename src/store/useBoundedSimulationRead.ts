@@ -8,6 +8,7 @@ import type {
   SimulationConversationRead,
   SimulationHudProjection,
   SimulationMessengerRead,
+  SimulationPresenceRead,
   SimulationWorldRead,
 } from '../engine/kernel/SimulationPublication';
 
@@ -41,6 +42,7 @@ const readHud = (engine: SimulationEngine) => engine.getHudProjection();
 const readWorld = (engine: SimulationEngine) => engine.getWorldRead();
 const readChrome = (engine: SimulationEngine) => engine.getChromeRead();
 const readDesktop = (engine: SimulationEngine) => engine.getDesktopRead();
+const readPresence = (engine: SimulationEngine) => engine.getPresenceRead();
 
 export function useSimulationHud(): SimulationHudProjection {
   return useBoundedSimulationRead(readHud);
@@ -61,6 +63,10 @@ export function useSimulationDesktop(): SimulationDesktopRead {
 export function useSelectedActorRead(actorId: string): SimulationActorRead | null {
   const read = useCallback((engine: SimulationEngine) => engine.getPlayerActorRead(actorId), [actorId]);
   return useBoundedSimulationRead(read);
+}
+
+export function useSimulationPresence(): SimulationPresenceRead {
+  return useBoundedSimulationRead(readPresence);
 }
 
 export function useMessengerRead(maxContacts = 32): SimulationMessengerRead {
