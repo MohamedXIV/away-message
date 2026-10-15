@@ -7,6 +7,7 @@ describe('#187 pure actor semantics and single-authority source binding', () => 
     const game = new SimulationEngine();
     const actor = game.social.getBuddies()[0]!;
     const before = game.exportSnapshot();
+    const originalStatus = actor.status ?? 'acquaintance';
 
     const view = game.getActorSemanticView(actor.id, true)!;
     expect(view.actorId).toBe(actor.id);
@@ -21,7 +22,7 @@ describe('#187 pure actor semantics and single-authority source binding', () => 
       allowed: false, reasons: expect.arrayContaining(['blocked_contact']),
     });
     expect(blocked.relationship.stage).toBe(game.social.getRelationshipStage(actor.id));
-    game.social.setBuddyStatus(actor.id, actor.status ?? 'acquaintance');
+    game.social.setBuddyStatus(actor.id, originalStatus);
     expect(game.getActorSemanticView(actor.id)!.lifecycle).toBe('active');
     expect(before.social.relationships[actor.id]).toEqual(game.exportSnapshot().social.relationships[actor.id]);
   });
