@@ -25,8 +25,8 @@ import {
  * Never mirrors relationships/appointments, never owns a clock, and performs no
  * background work. All selectors share the same read-only domain source.
  *
- * #171 cutover: LegacyFacade may call this owner on the unmerged branch,
- * but the inherited execution class must be deleted before merge.
+ * #171 composed-kernel owner. The #187 fidelity decision consults canonical
+ * reach/contact/relationship facts, not stored labels or arbitrary NPC IDs.
  */
 export class NpcLifeRuntime {
   private entries: Map<string, NpcLifeEntry> = new Map();
@@ -104,7 +104,7 @@ export class NpcLifeRuntime {
     const buddy = this.owners.social.getBuddy(actorId);
     const routine = buddy?.schedule[day] ?? buddy?.schedule[1] ?? [];
     const traits = this.owners.social.getTraits(actorId);
-    const tier: FidelityTier = buddy?.reach === 'remote' ? 'background_remote' : 'important_local';
+    const tier = this.getFidelityTier(actorId);
     return deriveDefaultNpcPressure(actorId, traits, routine as never, tier);
   }
 
@@ -112,7 +112,7 @@ export class NpcLifeRuntime {
     const buddy = this.owners.social.getBuddy(actorId);
     if (!buddy) return [];
     const traits = this.owners.social.getTraits(actorId);
-    const tier: FidelityTier = buddy.reach === 'remote' ? 'background_remote' : 'important_local';
+    const tier = this.getFidelityTier(actorId);
     const bonds = this.owners.social
       .getBuddies()
       .filter((target) => target.id !== actorId)
@@ -168,6 +168,11 @@ export class NpcLifeRuntime {
     const atMinute = this.owners.clock.getTotalMinutes();
     const day = this.owners.clock.getTime().day;
     if (entry.pressure.lastUpdatedMinute >= atMinute) return entry;
+    // Promotion/demotion is a derived read. Persist only the new coarse
+    // pressure tier at a real minute boundary; never run extra RAF work.
+    const nextTier = this.getFidelityTier(actorId);
+    const sourcePressure = entry.pressure.tier === nextTier
+      ? entry.pressure : { ...entry.pressure, tier: nextTier };
 
     const scheduleBlocks = (buddy.schedule[day] ?? []) as Array<{
       status?: string;
@@ -185,7 +190,7 @@ export class NpcLifeRuntime {
     );
     const updated: NpcLifeEntry = {
       goals: entry.goals,
-      pressure: advanceNpcPressure(entry.pressure, entry.pressure.lastUpdatedMinute, atMinute, {
+      pressure: advanceNpcPressure(sourcePressure, sourcePressure.lastUpdatedMinute, atMinute, {
         day,
         isAtWork,
         inAppointment,
@@ -229,8 +234,15 @@ export class NpcLifeRuntime {
 
   public getFidelityTier(actorId: string): FidelityTier {
     const buddy = this.owners.social.getBuddy(actorId);
-    if (!buddy) return 'background_remote';
-    return buddy.reach === 'remote' ? 'background_remote' : 'important_local';
+    if (!buddy || buddy.reach === 'remote') return 'background_remote';
+    const condition = this.owners.social.getActorCondition(actorId);
+    if (condition?.lifecycle === 'departed') return 'local_offscreen';
+    const relationship = this.owners.social.getRelationships(actorId);
+    // Importance is derived from acquired identity/relationship, not a
+    // permanently tagged authored "special NPC". Focus is view-only.
+    return this.owners.social.isKnown(actorId)
+      || (relationship?.familiarity ?? 0) >= 35
+      ? 'important_local' : 'local_offscreen';
   }
 
 }
