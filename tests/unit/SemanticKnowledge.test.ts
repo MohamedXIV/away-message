@@ -30,6 +30,12 @@ describe('#187 World-owned semantic truth, claim and actor-specific knowledge', 
     expect(student.claims).toEqual([rumor]);
     expect(world.actorHeardSemanticClaim('student:a', rumor.id)).toBe(true);
     expect(world.actorKnowsSemanticFact('student:a', fact.id)).toBe(false);
+    // Pulse's existing getKnowledgeContextForBuddy consumer sees claims, not
+    // hidden canonical fact values, even when a false rumor points to that fact.
+    expect(world.getKnowledgeContextForBuddy('student:a', 1)).toContain('Unverified rumor');
+    expect(world.getKnowledgeContextForBuddy('student:a', 1)).toContain('asserted true');
+    expect(world.getKnowledgeContextForBuddy('student:a', 1)).not.toContain('= false');
+    expect(world.getKnowledgeContextForBuddy('student:b', 1)).not.toContain('Unverified rumor');
     expect(world.getActorSemanticKnowledge('student:b')).toEqual({
       actorId: 'student:b', facts: [], claims: [],
     });
