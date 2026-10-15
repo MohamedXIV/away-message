@@ -18,7 +18,9 @@ describe('#187 operational NPC fidelity / remote safety', () => {
     const game = new SimulationEngine();
     registerActor(game, 'unfamiliar_local', 'local');
     expect(game.getFidelityTier('unfamiliar_local')).toBe('local_offscreen');
+    const beforeRead = game.exportSnapshot();
     expect(game.getActorSemanticView('unfamiliar_local')?.fidelity).toBe('background_local');
+    expect(game.exportSnapshot()).toEqual(beforeRead); // new actor's semantic read cannot allocate NPC Life state
 
     game.advanceGameMinutes(60, 'semantic fixture first interval');
     expect(game.getNpcLivesState()['unfamiliar_local']?.pressure.tier).toBe('local_offscreen');
