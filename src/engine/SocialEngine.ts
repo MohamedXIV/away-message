@@ -1657,6 +1657,37 @@ export class SocialEngine {
     };
   }
 
+  /** Bounded System Tray read: totals stay exact, only the last previews cross UI. */
+  public getUnreadTraySummary(maxPreview = 4): {
+    unreadCount: number;
+    previews: Array<{ id: string; buddyId: string; buddyName: string; text: string }>;
+  } {
+    const limit = Number.isFinite(maxPreview) ? Math.max(0, Math.min(10, Math.floor(maxPreview))) : 4;
+    let unreadCount = 0;
+    const newest: Array<{ id: string; buddyId: string; buddyName: string; text: string; minute: number }> = [];
+    for (const [buddyId, conversation] of this.conversations) {
+      for (const message of conversation) {
+        if (message.senderId === 'player' || message.isRead) continue;
+        unreadCount++;
+        if (limit === 0) continue;
+        const row = {
+          id: message.id,
+          buddyId,
+          buddyName: this.buddies.get(buddyId)?.displayName ?? buddyId,
+          text: message.text,
+          minute: message.timestampMinute,
+        };
+        newest.push(row);
+        newest.sort((a, b) => b.minute - a.minute || b.id.localeCompare(a.id));
+        if (newest.length > limit) newest.pop();
+      }
+    }
+    return {
+      unreadCount,
+      previews: newest.map(({ id, buddyId, buddyName, text }) => ({ id, buddyId, buddyName, text })),
+    };
+  }
+
   /** One row per visible contact; no full SocialEngineState projection. */
   public getMessengerSummary(maxContacts = 32): Array<{
     actorId: string;
