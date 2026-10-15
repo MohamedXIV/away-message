@@ -445,19 +445,23 @@ export class SimulationKernel {
   }
 
   public setComputerPower(...args: Parameters<NpcComputerSimulationRuntime['setComputerPower']>): ReturnType<NpcComputerSimulationRuntime['setComputerPower']> {
-    return this.npc.setComputerPower(...args);
+    const before = this.clock.getTotalMinutes();
+    return this.withinBoundary(() => this.npc.setComputerPower(...args), before);
   }
 
   public installOwnedHardwareAtHome(...args: Parameters<NpcComputerSimulationRuntime['installOwnedHardwareAtHome']>): ReturnType<NpcComputerSimulationRuntime['installOwnedHardwareAtHome']> {
-    return this.npc.installOwnedHardwareAtHome(...args);
+    const before = this.clock.getTotalMinutes();
+    return this.withinBoundary(() => this.npc.installOwnedHardwareAtHome(...args), before);
   }
 
   public insertOwnedMediaAtHome(...args: Parameters<NpcComputerSimulationRuntime['insertOwnedMediaAtHome']>): ReturnType<NpcComputerSimulationRuntime['insertOwnedMediaAtHome']> {
-    return this.npc.insertOwnedMediaAtHome(...args);
+    const before = this.clock.getTotalMinutes();
+    return this.withinBoundary(() => this.npc.insertOwnedMediaAtHome(...args), before);
   }
 
   public ejectOwnedMediaAtHome(...args: Parameters<NpcComputerSimulationRuntime['ejectOwnedMediaAtHome']>): ReturnType<NpcComputerSimulationRuntime['ejectOwnedMediaAtHome']> {
-    return this.npc.ejectOwnedMediaAtHome(...args);
+    const before = this.clock.getTotalMinutes();
+    return this.withinBoundary(() => this.npc.ejectOwnedMediaAtHome(...args), before);
   }
 
   public prepareOsInstallFromInsertedMedia(...args: Parameters<NpcComputerSimulationRuntime['prepareOsInstallFromInsertedMedia']>): ReturnType<NpcComputerSimulationRuntime['prepareOsInstallFromInsertedMedia']> {
@@ -465,7 +469,8 @@ export class SimulationKernel {
   }
 
   public commitOsInstall(...args: Parameters<NpcComputerSimulationRuntime['commitOsInstall']>): ReturnType<NpcComputerSimulationRuntime['commitOsInstall']> {
-    return this.npc.commitOsInstall(...args);
+    const before = this.clock.getTotalMinutes();
+    return this.withinBoundary(() => this.npc.commitOsInstall(...args), before);
   }
 
   public purchaseStoreItem(...args: Parameters<NpcComputerSimulationRuntime['purchaseStoreItem']>): ReturnType<NpcComputerSimulationRuntime['purchaseStoreItem']> {
@@ -473,7 +478,8 @@ export class SimulationKernel {
   }
 
   public setupComputerAtHome(...args: Parameters<NpcComputerSimulationRuntime['setupComputerAtHome']>): ReturnType<NpcComputerSimulationRuntime['setupComputerAtHome']> {
-    return this.npc.setupComputerAtHome(...args);
+    const before = this.clock.getTotalMinutes();
+    return this.withinBoundary(() => this.npc.setupComputerAtHome(...args), before);
   }
 
   public getResidenceState(...args: Parameters<PhysicalSimulationRuntime['getResidenceState']>): ReturnType<PhysicalSimulationRuntime['getResidenceState']> {
@@ -489,7 +495,8 @@ export class SimulationKernel {
   }
 
   public moveResidenceToOffer(...args: Parameters<PhysicalSimulationRuntime['moveResidenceToOffer']>): ReturnType<PhysicalSimulationRuntime['moveResidenceToOffer']> {
-    return this.physical.moveResidenceToOffer(...args);
+    const before = this.clock.getTotalMinutes();
+    return this.withinBoundary(() => this.physical.moveResidenceToOffer(...args), before);
   }
 
   public getPhysicalShopState(...args: Parameters<PhysicalSimulationRuntime['getPhysicalShopState']>): ReturnType<PhysicalSimulationRuntime['getPhysicalShopState']> {
