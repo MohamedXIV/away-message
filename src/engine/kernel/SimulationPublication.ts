@@ -108,3 +108,9 @@ export interface SimulationDesktopRead {
   desktopFiles: Array<Pick<import('../types').FileRecord,
     'id' | 'name' | 'path' | 'parentPath' | 'kind' | 'appAssociation'>>;
 }
+
+/** UI-readable presence projection. Omits relationships, memories and chat history. */
+export interface SimulationPresenceRead {
+  revision: number;
+  presence: ReturnType<import('../SocialEngine').SocialEngine['getPresenceSummary']>;
+}
