@@ -66,6 +66,14 @@ jobs:
       - name: Test
         run: node scripts/verify-vitest-baseline.mjs
 
+      # #171 clean cutover: sample the exact checked-out PR head before
+      # accepting the replacement kernel. Other PRs are unaffected.
+      - name: Benchmark composed simulation (20 / 100 / 250 / 500 actors)
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.ref == 'refactor/171-clean-simulation-kernel'
+        env:
+          GITHUB_SHA: ${{ github.event.pull_request.head.sha }}
+        run: npm run bench:simulation
+
       - name: Install Playwright Chromium
         run: npx playwright install --with-deps chromium
 
