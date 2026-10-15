@@ -68,8 +68,8 @@ describe('#187 World-owned semantic truth, claim and actor-specific knowledge', 
     expect(restored.exportSnapshot()).toEqual(before);
 
     const damaged = { ...saved.world.semanticKnowledge!, learned: {
-      'student:a': [{ kind: 'fact', refId: 'missing', learned: fact.established },
-        { kind: 'claim', refId: rumor.id, learned: rumor.published }],
+      'student:a': [{ kind: 'fact' as const, refId: 'missing', learned: fact.established },
+        { kind: 'claim' as const, refId: rumor.id, learned: rumor.published }],
     } };
     restored.world.loadState({ ...saved.world, semanticKnowledge: damaged });
     expect(restored.world.actorKnowsSemanticFact('student:a', 'missing')).toBe(false);
