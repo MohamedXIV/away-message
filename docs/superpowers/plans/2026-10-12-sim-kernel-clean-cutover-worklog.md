@@ -1,6 +1,6 @@
 # #171 — Clean Simulation Kernel Cutover Worklog
 
-Status: **PRODUCTION CUTOVER IMPLEMENTED — final exact-head verification and benchmark acceptance pending. PR #192 remains DRAFT.**
+Status: **COMPOSED KERNEL CUTOVER VERIFIED — exact code HEAD, current-format tests, browser and performance complete. PR #192 review/merge state is tracked in GitHub.**
 
 Decision: `docs/18-SIMULATION-CLEAN-REPLACEMENT-DECISION.md`
 
@@ -168,21 +168,24 @@ If any requirement fails, keep the PR in Draft and #171 open. Do not call it fin
 
 **Save semantics:** the old parallel v1 `exportFullSnapshot` path is removed; the one current-format `exportSnapshot/loadSnapshot` round-trip includes hardware/OS, inventory, NPC goals/mobility/XYZ/encounters, physical items/shops, housing, transit, venues, Scenario instances and Inner Voice without save-time Scenario rerolls.
 
-**Verified milestone before the final clean-up:** implementation head `880485847edbb9dbd34dbfb066d13dca1ab77668` had [Verify 38699348508](https://github.com/MohamedXIV/away-message/actions/runs/38699348508) **SUCCESS**: content, TypeScript, build, baseline guard, **255/255 files and 1,578/1,578 tests**, Browser living-world smoke. Final exact-head verification is still required after later read/publication and retirement clean-up.
+**Final exact code HEAD:** `c12d7567651dc57dd53c2ccdd6ec9f68fca8424e`, [Verify 38701179434](https://github.com/MohamedXIV/away-message/actions/runs/38701179434) **SUCCESS**: content check, TypeScript, production build, Vitest baseline guard/self-test, **256/256 files and 1,585/1,585 tests**, simulation benchmark on 20/100/250/500 actors, and both Browser living-world smoke suites. Subsequent documentation-only `[skip ci]` commit does not change executable/tested code.
 
-**Measured #171 intermediate performance:** [Verify 38699863052](https://github.com/MohamedXIV/away-message/actions/runs/38699863052) succeeded on code head `644236d07d23d740405695a0b77ea41695065862`. Linux, Node 22.23.3, AMD EPYC 7763, 4 CPUs, 7 samples / 2 warmups; values below are *measured medians in milliseconds*, not performance thresholds:
+**Measured #171 final code-head performance:** [Verify 38701179434](https://github.com/MohamedXIV/away-message/actions/runs/38701179434) succeeded on code head `c12d7567651dc57dd53c2ccdd6ec9f68fca8424e`. Benchmark embedded `gitSha` matches checked-out HEAD. Earlier [intermediate run 38699863052](https://github.com/MohamedXIV/away-message/actions/runs/38699863052) also succeeded. Linux, Node 22.23.3, AMD EPYC 7763, 4 CPUs, 7 samples / 2 warmups; values below are *measured medians in milliseconds*, not performance thresholds:
 
 | Actors | Zero-minute RAF | +1 min | +60 min | Cold getState | Repeated getState | exportSnapshot |
 | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| 20 | 0.010 | 2.973 | 2.076 | 0.384 | 0.068 | 1.194 |
-| 100 | 0.010 | 15.260 | 16.796 | 0.800 | 0.108 | 5.236 |
-| 250 | 0.012 | 59.126 | 57.336 | 1.504 | 0.166 | 13.000 |
-| 500 | 0.011 | 194.101 | 200.143 | 6.468 | 0.349 | 27.299 |
+| 20 | 0.008 | 2.514 | 1.330 | 0.260 | 0.023 | 0.868 |
+| 100 | 0.005 | 10.105 | 9.177 | 0.426 | 0.065 | 3.902 |
+| 250 | 0.007 | 43.084 | 45.904 | 1.202 | 0.115 | 9.411 |
+| 500 | 0.012 | 151.485 | 157.586 | 5.051 | 0.248 | 21.400 |
 
-The #170 post-RAF-gate reference was **0.009 ms zero-minute median at 500 actors**, versus **84.569 ms** before #170. The new 0.011 ms intermediate #171 median preserves the no-population-work property, guarded by deterministic tests rather than fragile timing thresholds. #169/#170 used a different VM CPU (AMD EPYC 9V74); wall-clock medians cannot establish an apples-to-apples minute-advance speedup. Repeated full-state reads are notably slower than the older 0.011 ms cached reference; this is explicitly recorded as follow-on **#172 bounded projections**, not disguised as a #171 improvement. No arbitrary acceptance threshold has been invented for minute advancement.
+The #170 post-RAF-gate reference was **0.009 ms zero-minute median at 500 actors**, versus **84.569 ms** before #170. The final 0.012 ms #171 median preserves the no-population-work property, guarded by deterministic tests rather than fragile timing thresholds. #169/#170 used a different VM CPU (AMD EPYC 9V74); wall-clock medians cannot establish an apples-to-apples minute-advance speedup. Repeated full-state reads are notably slower than the older 0.011 ms cached reference; this is explicitly recorded as follow-on **#172 bounded projections**, not disguised as a #171 improvement. No arbitrary acceptance threshold has been invented for minute advancement.
 
-**Outstanding before PR #192 Ready or merge:**
-- [ ] A final **exact-code-head** successful Verify run after the latest atomic publication, pure state reads and retirement changes, including benchmark 20/100/250/500 and Browser living-world smoke.
-- [ ] Record benchmark SHA and final measured medians on the verified code head (the intermediate report's embedded `GITHUB_SHA` was inconsistent with exact checkout; a dedicated `SIM_BENCH_HEAD_SHA` provenance input was added).
-- [ ] Confirm no unresolved PR review threads or merge conflicts and no canonical branch changes.
-- [ ] Mark Ready/merge/close #171 **only if** these evidence gates pass; do not treat a green intermediate milestone as final acceptance.
+**Final acceptance evidence:**
+- [x] Exact-code-head Verify green on `c12d7567651dc57dd53c2ccdd6ec9f68fca8424e`: **1,585 tests**, generated content, TS, build, baseline guard, benchmark and browser smoke.
+- [x] Benchmark embedded SHA equals checked-out HEAD; 20/100/250/500 medians recorded above; deterministic zero-minute tests green.
+- [x] PR #192 mergeable, zero submitted reviews and zero unresolved review threads at inspection; recheck head/main on merge.
+- [x] Deleted inherited executors and parallel legacy snapshot export; export-only public API alias and old-file-absence test.
+- [x] Save/current-format, deterministic social/life/transit/physical/housing/story/voice regressions and actual browser runtime green.
+- [x] External deployment caveat: **Vercel preview BLOCKED**, with no build events on deployment `dpl_9eSSJkjdaGoobzn4pY1LUDcUn6so`; this does **not** establish a successful Vercel preview nor a source build defect. GitHub CI production build + browser smoke are green; Vercel preview is an external platform follow-up.
+- PR Ready/merge/issue closure are GitHub lifecycle records, tracked on [PR #192](https://github.com/MohamedXIV/away-message/pull/192) and [issue #171](https://github.com/MohamedXIV/away-message/issues/171).
