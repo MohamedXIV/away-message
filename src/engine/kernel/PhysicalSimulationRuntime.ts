@@ -1,9 +1,8 @@
-// Canonical simulation facade with the universal physical-world persistence seam.
+// Composition-owned material world, housing, venue, physical shops,
+// committed travel, Scenario and Inner Voice.
 //
-// The established v6 PC/OS facade remains byte-for-byte in
-// SimulationEngineLegacyFacade.ts. This thin layer owns #18's new persisted
-// physical root so the material-world migration cannot rewrite unrelated
-// gameplay coordination.
+// The root SimulationKernel coordinates persistence and publication; these
+// domain owners retain their sole authoritative state and lifecycle.
 
 import type { EncounterCandidate, EncounterDecision } from '../encounters';
 import { CoreSimulationRuntime } from './CoreSimulationRuntime';
