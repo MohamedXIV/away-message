@@ -499,12 +499,22 @@ export interface SocialEngineState {
 // P3 — MEMORY & RELATIONSHIP DEPTH
 // ==========================================
 
-/** Immortal per-buddy memory: survives the rolling 6-message window, injected into every prompt. */
+/** Typed irreducible significance of a memory; text is fallback rendering. */
+export interface CoreMemoryMeaning {
+  participants: string[];
+  subject: { kind: 'actor' | 'promise' | 'event' | 'fact' | 'claim'; id: string };
+  source: { kind: 'direct_experience' | 'domain_event' | 'message' | 'scenario'; refId: string };
+  salience: 'low' | 'medium' | 'high';
+  valence: 'positive' | 'negative' | 'neutral' | 'mixed';
+}
+
+/** Immortal per-buddy memory: canonical meaning is structured when important. */
 export interface CoreMemory {
   id: string;
   text: string; // <= 160 chars
   kind: 'fact' | 'promise_kept' | 'promise_broken' | 'first_meeting' | 'shared_moment' | 'shared_photo';
   day: number;
+  meaning?: CoreMemoryMeaning;
 }
 
 /** A commitment the player made to a buddy. Kept/broken explicitly move trust. */
