@@ -5,6 +5,7 @@ import { loadAISettings, saveAISettings } from '../../ai/settings';
 import type { AIProviderId, AISettings, BenchmarkResult } from '../../ai/types';
 import { generateCharacterImage } from '../../ai/imageService';
 import { useSimulationStore } from '../../store/useSimulationStore';
+import { useSimulationHud } from '../../store/useBoundedSimulationRead';
 import { ProceduralDirector } from '../../engine/ProceduralDirector';
 import { pickTemplateEvents } from '../../ai/proceduralTemplates';
 import type { ProceduralWorldEvent } from '../../ai/proceduralSchemas';
@@ -33,7 +34,7 @@ export const AILabApp: React.FC = () => {
   const [imageResult, setImageResult] = useState<{ url: string; provider: string; fallback: boolean; error?: string } | null>(null);
 
   // Procedural Director tuning
-  const worldDay = useSimulationStore((s) => s.state.time.day);
+  const worldDay = useSimulationHud().time.day;
   const [procSeed, setProcSeed] = useState('oakhaven-lab');
   const [procTone, setProcTone] = useState<'grounded' | 'whimsical' | 'melancholy' | 'hopeful'>('grounded');
   const [procMaxEvents, setProcMaxEvents] = useState(2);
