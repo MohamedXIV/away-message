@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { existsSync } from 'node:fs';
 import { SimulationEngine } from '../../src/engine/SimulationEngine';
 import { SimulationKernel } from '../../src/engine/kernel/SimulationKernel';
 import type { CoreSimulationRuntime } from '../../src/engine/kernel/CoreSimulationRuntime';
@@ -19,6 +20,11 @@ describe('#171 atomic composed-kernel production contract', () => {
     expect(Object.getPrototypeOf(SimulationEngine.prototype)).toBe(Object.prototype);
     const engine = new SimulationEngine();
     expect(Object.getPrototypeOf(engine)).toBe(SimulationKernel.prototype);
+  });
+
+  it('contains neither of the retired inherited execution modules', () => {
+    expect(existsSync(new URL('../../src/engine/SimulationEngineCore.ts', import.meta.url))).toBe(false);
+    expect(existsSync(new URL('../../src/engine/SimulationEngineLegacyFacade.ts', import.meta.url))).toBe(false);
   });
 
   it('uses the same clock, event bus, inventory and domain authorities throughout its composition', () => {
