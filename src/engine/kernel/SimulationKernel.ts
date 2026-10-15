@@ -15,6 +15,7 @@ import { domainFromEmission } from './SimulationPublication';
 import type {
   ObservedSimulationDomain,
   SimulationActorRead,
+  SimulationAppRead,
   SimulationChromeRead,
   SimulationDesktopRead,
   SimulationChange,
@@ -26,6 +27,7 @@ import type {
 } from './SimulationPublication';
 export type {
   SimulationActorRead,
+  SimulationAppRead,
   SimulationChromeRead,
   SimulationDesktopRead,
   SimulationChange,
@@ -273,6 +275,16 @@ export class SimulationKernel {
     return {
       revision: this.revision, actor,
       playerKnowledge: learned,
+    };
+  }
+
+  /** The desktop app ecosystem reads only Hardware, OS and Software owners. */
+  public getAppRead(): SimulationAppRead {
+    return {
+      revision: this.revision,
+      hardware: this.hardware.getState(),
+      os: this.os.getState(),
+      installedSoftware: this.software.getInstalledSoftware(),
     };
   }
 
