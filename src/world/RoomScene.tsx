@@ -2,6 +2,7 @@
 
 import React, { useMemo, useRef, useState } from 'react';
 import { useSimulationStore } from '../store/useSimulationStore';
+import { useSimulationHud, useSimulationWorldRead } from '../store/useBoundedSimulationRead';
 import { resolvePcBootState } from '../engine/SimulationEngine';
 import { soundManager } from '../audio/SoundManager';
 import { PhysicalWorldBoundary } from './phaser/PhysicalWorldBoundary';
@@ -40,11 +41,12 @@ export const RoomScene: React.FC = () => {
   // Simulation Store selectors
   const engine = useSimulationStore((s) => s.engine);
   const syncStateFromEngine = useSimulationStore((s) => s.syncStateFromEngine);
-  const time = useSimulationStore((s) => s.state.time);
-  const player = useSimulationStore((s) => s.state.player);
-  useSimulationStore((s) => s.state.needs);
-  useSimulationStore((s) => s.state.mood);
-  useSimulationStore((s) => s.state.world.triggeredEvents);
+  // Phaser's clock and world-environment inputs now come from bounded
+  // revisions, not the broad persisted world snapshot.
+  const hud = useSimulationHud();
+  const worldRead = useSimulationWorldRead();
+  const time = worldRead.time;
+  const player = { cash: hud.cash, location: worldRead.playerLocation };
   const computer = useSimulationStore((s) => s.state.computer);
   const inventory = useSimulationStore((s) => s.state.inventory);
   const os = useSimulationStore((s) => s.state.os);
@@ -66,7 +68,7 @@ export const RoomScene: React.FC = () => {
     'window' | 'beverage' | 'door' | 'sleep' | 'hardware' | 'housing' | null
   >(null);
 
-  const environment = engine.gameContext.environment.current();
+  const environment = worldRead.environment;
   const environmentPresentation = projectEnvironmentPresentation(environment);
   const weather: WeatherType = environmentPresentation.weather;
   const needs = engine.gameContext.player.needs();
@@ -124,7 +126,7 @@ export const RoomScene: React.FC = () => {
     }
   };
 
-  const residencePlaceId = engine.getCurrentResidencePlaceId();
+  const residencePlaceId = worldRead.residencePlaceId;
   const preferredPhysicalViewId = physicalViewByPlace[residencePlaceId];
   const roomProjection = useMemo(
     () => createWorldSceneProjection({
