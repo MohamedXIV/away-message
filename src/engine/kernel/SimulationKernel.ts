@@ -9,8 +9,22 @@ import {
   type ActorSemanticView, type SemanticInfluenceView,
 } from '../semantic/ActorSemantics';
 
-import type { SimulationChange, SimulationHudProjection } from './SimulationPublication';
-export type { SimulationChange, SimulationHudProjection } from './SimulationPublication';
+import type {
+  SimulationActorRead,
+  SimulationChange,
+  SimulationConversationRead,
+  SimulationHudProjection,
+  SimulationMessengerRead,
+  SimulationWorldRead,
+} from './SimulationPublication';
+export type {
+  SimulationActorRead,
+  SimulationChange,
+  SimulationConversationRead,
+  SimulationHudProjection,
+  SimulationMessengerRead,
+  SimulationWorldRead,
+} from './SimulationPublication';
 export type { LiveSimulationState } from './PhysicalSimulationRuntime';
 
 /**
@@ -204,6 +218,37 @@ export class SimulationKernel {
       socialBattery: player.socialBattery,
       activeView: this.core.getActiveView(),
     };
+  }
+
+  /** Small viewport inputs for Phaser/React — no physical object graph. */
+  public getWorldRead(): SimulationWorldRead {
+    return {
+      revision: this.revision,
+      time: { ...this.clock.getTime() },
+      activeView: this.core.getActiveView(),
+      residencePlaceId: this.physical.getCurrentResidencePlaceId(),
+      playerLocation: this.economy.getState().location,
+      environment: this.environment.getCurrentSnapshot(),
+    };
+  }
+
+  /** Selected actor read is player-safe; never reveal NPC-private facts. */
+  public getPlayerActorRead(actorId: string): SimulationActorRead | null {
+    const actor = this.getActorSemanticView(actorId);
+    if (!actor || actor.connection === 'unknown') return null;
+    const learned = this.world.getActorSemanticKnowledge('player');
+    return {
+      revision: this.revision, actor,
+      playerKnowledge: learned,
+    };
+  }
+
+  public getMessengerRead(maxContacts = 32): SimulationMessengerRead {
+    return { revision: this.revision, contacts: this.social.getMessengerSummary(maxContacts) };
+  }
+
+  public getConversationRead(actorId: string, offset = 0, limit = 30): SimulationConversationRead {
+    return { revision: this.revision, ...this.social.getConversationPage(actorId, offset, limit) };
   }
 
   public subscribe(listener: (state: Readonly<LiveSimulationState>) => void): () => void {
