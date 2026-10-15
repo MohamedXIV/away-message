@@ -4,7 +4,7 @@ import { VenueOperationsRuntime } from '../../src/engine/kernel/VenueOperationsR
 import { GENERATED_VENUE_DEFINITIONS } from '../../src/engine/venue/GeneratedVenueDefinitions';
 
 function venue(engine: SimulationEngine): VenueOperationsRuntime {
-  return (engine as unknown as { venueRuntime: VenueOperationsRuntime }).venueRuntime;
+  return (engine as unknown as { physical: { venueRuntime: VenueOperationsRuntime } }).physical.venueRuntime;
 }
 
 describe('VenueOperationsRuntime — canonical role and activity ownership', () => {
