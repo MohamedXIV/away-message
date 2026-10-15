@@ -3,7 +3,6 @@
 import React, { useMemo, useRef, useState } from 'react';
 import { useSimulationStore } from '../store/useSimulationStore';
 import { useSimulationHud, useSimulationWorldRead } from '../store/useBoundedSimulationRead';
-import { resolvePcBootState } from '../engine/SimulationEngine';
 import { soundManager } from '../audio/SoundManager';
 import { PhysicalWorldBoundary } from './phaser/PhysicalWorldBoundary';
 import { createWorldSceneProjection } from './phaser/presentationAdapter';
@@ -47,10 +46,6 @@ export const RoomScene: React.FC = () => {
   const worldRead = useSimulationWorldRead();
   const time = worldRead.time;
   const player = { cash: hud.cash, location: worldRead.playerLocation };
-  const computer = useSimulationStore((s) => s.state.computer);
-  const inventory = useSimulationStore((s) => s.state.inventory);
-  const os = useSimulationStore((s) => s.state.os);
-  const world = useSimulationStore((s) => s.state.world);
 
   const switchView = useSimulationStore((s) => s.switchView);
   const interactRoom = useSimulationStore((s) => s.interactRoom);
@@ -59,7 +54,7 @@ export const RoomScene: React.FC = () => {
   const applyGig = useSimulationStore((s) => s.applyGig);
   const setupComputerAtHome = useSimulationStore((s) => s.setupComputerAtHome);
 
-  const pcBootState = resolvePcBootState({ computer, inventory, os });
+  const pcBootState = worldRead.pcBootState;
   const deskPresentation = getRoomDeskPresentation(pcBootState);
   const assembledComputer = deskPresentation === 'assembled_off' || deskPresentation === 'assembled_on';
 
@@ -250,7 +245,7 @@ export const RoomScene: React.FC = () => {
   };
 
   // Get Window Observation data — sandbox uses world flags
-  const windowData = getContextualWindowThought(time.day, timeOfDay, weather, world.flags);
+  const windowData = getContextualWindowThought(time.day, timeOfDay, weather, { met_in_person: worldRead.metInPerson });
   // P6.5 live street sighting: who is visible out there right now (schedules made visible)
   const streetSighting = (() => {
     try {
