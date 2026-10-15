@@ -104,9 +104,8 @@ export class CoreSimulationRuntime {
   private _stateVersion = 0;
 
   constructor(private readonly ports: CoreRuntimePorts, initialState?: Partial<SimulationState>) {
-    // #171 transitional wiring on the unmerged feature branch. This is one
-    // owner graph, not a parallel second engine. The inherited runtime below
-    // must be removed before the atomic production cutover is merged.
+    // One canonical set of domain owners for the composed production kernel.
+    // This runtime is a coordinator, never a second simulation state writer.
     const owners = createCoreDomainOwners(initialState);
     this.coreOwners = owners;
     this.jobBoard = new JobBoardCoordination(owners, () => this.notifySubscribers());
