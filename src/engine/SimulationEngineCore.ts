@@ -379,10 +379,6 @@ export class SimulationEngine {
     return this.jobBoard.getJobBoard();
   }
 
-  private applyForGig(gigId: string): ActionResult {
-    return this.jobBoard.applyForGig(gigId);
-  }
-
   private processJobReplies(): void {
     this.jobBoard.processJobReplies();
   }
