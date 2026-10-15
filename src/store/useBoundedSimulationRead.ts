@@ -6,6 +6,8 @@ import type {
   SimulationAppRead,
   SimulationChromeRead,
   SimulationDesktopRead,
+  SimulationDirectoryRead,
+  SimulationFileRead,
   SimulationConversationRead,
   SimulationHudProjection,
   SimulationMessengerRead,
@@ -52,6 +54,16 @@ export function useSimulationHud(): SimulationHudProjection {
 
 export function useSimulationWorldRead(): SimulationWorldRead {
   return useBoundedSimulationRead(readWorld);
+}
+
+export function useSimulationDirectory(path: string): SimulationDirectoryRead {
+  const read = useCallback((engine: SimulationEngine) => engine.getDirectoryRead(path), [path]);
+  return useBoundedSimulationRead(read);
+}
+
+export function useSimulationFile(path: string): SimulationFileRead {
+  const read = useCallback((engine: SimulationEngine) => engine.getFileRead(path), [path]);
+  return useBoundedSimulationRead(read);
 }
 
 export function useSimulationApps(): SimulationAppRead {
