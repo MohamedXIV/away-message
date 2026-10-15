@@ -2,6 +2,7 @@ import React, { useEffect, useRef } from 'react';
 import { MessageRecord, BuddyCharacter } from '../../../engine/types';
 import { formatSimulationMinutes } from '../utils/timeFormat';
 import { useSimulationStore } from '../../../store/useSimulationStore';
+import { useSimulationChrome } from '../../../store/useBoundedSimulationRead';
 import { useWindowStore } from '../../../store/useWindowStore';
 import { renderWithLinksAndEmoticons } from '../utils/linkDetector';
 import { pulseHasFeature } from '../../../engine/PulseCatalog';
@@ -15,10 +16,11 @@ interface MessageHistoryViewProps {
 }
 
 export const MessageHistoryView: React.FC<MessageHistoryViewProps> = ({ messages, buddy }) => {
-  const isOrion60 = useSimulationStore((s) => s.state.os.currentOsId === 'Orion_6.0');
+  const chrome = useSimulationChrome();
+  const isOrion60 = chrome.osVersion === 'Orion_6.0';
   // Pulse 6 generation: buddies tint their own names + animated emoticons move.
-  const pulse6 = useSimulationStore((s) => pulseHasFeature(s.state.pulse.currentPulseId, 'buddy-colors'));
-  const pulse6Animated = useSimulationStore((s) => pulseHasFeature(s.state.pulse.currentPulseId, 'animated-emoticons'));
+  const pulse6 = pulseHasFeature(chrome.pulseVersion, 'buddy-colors');
+  const pulse6Animated = pulseHasFeature(chrome.pulseVersion, 'animated-emoticons');
   const openWindow = useWindowStore((s) => s.openWindow);
   const dispatchAction = useSimulationStore((s) => s.dispatchAction);
   const scrollRef = useRef<HTMLDivElement>(null);
