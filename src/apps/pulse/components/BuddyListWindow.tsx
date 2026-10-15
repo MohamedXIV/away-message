@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { useSimulationStore } from '../../../store/useSimulationStore';
+import { useSimulationPresence } from '../../../store/useBoundedSimulationRead';
 import { UserProfileHeader } from './UserProfileHeader';
 import { BuddyGroup } from './BuddyGroup';
 import { formatLastSeen } from './BuddyItem';
@@ -77,7 +78,7 @@ export const BuddyListWindow: React.FC<BuddyListWindowProps> = ({
   onChangeSkin,
 }) => {
   const engine = useSimulationStore((s) => s.engine);
-  const presenceMap = useSimulationStore((s) => s.state.social.presence);
+  const { presence: presenceMap, revision: presenceRevision } = useSimulationPresence();
   const [searchFilter, setSearchFilter] = useState('');
   const [contextMenu, setContextMenu] = useState<{ buddyId: string; x: number; y: number } | null>(null);
   const [showInviteSubmenu, setShowInviteSubmenu] = useState(false);
@@ -90,7 +91,7 @@ export const BuddyListWindow: React.FC<BuddyListWindowProps> = ({
 
   const buddies = useMemo(() => {
     return engine.social.getBuddies().filter((b) => engine.social.isKnown(b.id));
-  }, [engine, presenceMap]);
+  }, [engine, presenceRevision]);
 
   const candidateSuggestions = useMemo(() => {
     const list: Array<{ handle: string; note: string; buddyName: string }> = [];
@@ -105,7 +106,7 @@ export const BuddyListWindow: React.FC<BuddyListWindowProps> = ({
       }
     }
     return list;
-  }, [engine, presenceMap]);
+  }, [engine, presenceRevision]);
 
   const buddiesWithPresence = useMemo(() => buddies
     .filter((buddy) => buddy.displayName.toLowerCase().includes(searchFilter.toLowerCase()) || buddy.handle.toLowerCase().includes(searchFilter.toLowerCase()))
