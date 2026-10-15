@@ -45,9 +45,10 @@ describe('#187 pure actor semantics and single-authority source binding', () => 
   });
 
   it('offers explainable busy/chat blockers from canonical read inputs without writing them', () => {
-    const actor = { id: 'actor:student', status: 'friend' as const, reach: 'local' as const };
+    const actor = { id: 'actor:student', reach: 'local' as const };
     const derived = deriveActorSemantics({
       actor,
+      condition: { lifecycle: 'active', contact: 'open' },
       relationshipStage: 'friend',
       knownToPlayer: true,
       presence: { status: 'busy' },
@@ -57,7 +58,7 @@ describe('#187 pure actor semantics and single-authority source binding', () => 
     expect(derived.fidelity).toBe('background_local');
     expect(derived.canChatNow).toEqual({ allowed: false, reasons: ['busy'] });
     expect(derived.canMeetInPerson.allowed).toBe(true);
-    expect(actor).toEqual({ id: 'actor:student', status: 'friend', reach: 'local' });
+    expect(actor).toEqual({ id: 'actor:student', reach: 'local' });
   });
 
   it('exposes active life influences with source event and duration provenance only', () => {
