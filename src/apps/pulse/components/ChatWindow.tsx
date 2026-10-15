@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { BuddyCharacter, MessageRecord } from '../../../engine/types';
+import { BuddyCharacter } from '../../../engine/types';
+import { useConversationRead } from '../../../store/useBoundedSimulationRead';
 import { ChatTabHeader } from './ChatTabHeader';
 import { MessageHistoryView } from './MessageHistoryView';
 import { MessageInputBar } from './MessageInputBar';
@@ -12,7 +13,6 @@ interface ChatWindowProps {
   openBuddyIds: string[];
   activeBuddyId: string | null;
   buddies: Record<string, BuddyCharacter>;
-  conversations: Record<string, MessageRecord[]>;
   unreadCounts: Record<string, number>;
   typingIndicatorText?: string;
   availableChoices?: DialogueChoiceOption[];
@@ -31,7 +31,6 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   openBuddyIds,
   activeBuddyId,
   buddies,
-  conversations,
   unreadCounts,
   typingIndicatorText,
   availableChoices = [],
@@ -46,10 +45,16 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
 }) => {
   const [injectedSuggestion, setInjectedSuggestion] = useState<string | null>(null);
   const [refreshCount, setRefreshCount] = useState(0);
+  const [pageOffset, setPageOffset] = useState(0);
   const { suggestions, loading: suggestionsLoading, refresh: refreshSuggestions, clear: clearSuggestions } = useReplySuggestions();
 
-  const activeMessages = activeBuddyId ? conversations[activeBuddyId] || [] : [];
-  const lastNpcMessage = [...activeMessages].reverse().find((m) => m.senderId !== 'player') || null;
+  // 50-message slices from canonical Social authority; never hand React a
+  // complete conversation map. Suggestions always use the newest messages,
+  // even when the player browses older pages.
+  const page = useConversationRead(activeBuddyId ?? '', pageOffset, 50);
+  const latest = useConversationRead(activeBuddyId ?? '', 0, 8);
+  const activeMessages = page.messages;
+  const lastNpcMessage = [...latest.messages].reverse().find((m) => m.senderId !== 'player') || null;
 
   // Fetch fresh suggestions whenever a new NPC reply lands (or tab/refresh changes)
   useEffect(() => {
@@ -60,6 +65,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   }, [suggestionFetcher, activeBuddyId, lastNpcMessage?.id, refreshCount, isPlayerTyping, refreshSuggestions]);
 
   useEffect(() => {
+    setPageOffset(0);
     clearSuggestions();
     setInjectedSuggestion(null);
     setRefreshCount(0);
@@ -91,7 +97,16 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
       />
 
       <div className="flex-1 flex flex-col p-2 gap-2 overflow-hidden bg-white">
-        <MessageHistoryView messages={activeMessages} buddy={activeBuddy as any} />
+        <div className="flex shrink-0 items-center justify-between gap-2 border-b border-gray-300 bg-[#ece9d8] px-2 py-1 text-[10px] text-gray-700">
+          <span>{page.total === 0 ? 'No messages' : `${Math.max(1, page.total - pageOffset - activeMessages.length + 1)}–${Math.max(0, page.total - pageOffset)} of ${page.total} messages`}</span>
+          <div className="flex items-center gap-1">
+            <button type="button" disabled={!page.hasOlder} onClick={() => setPageOffset(offset => offset + 50)}
+              className="rounded border border-gray-400 px-1.5 py-0.5 disabled:opacity-40">← Older</button>
+            <button type="button" disabled={pageOffset === 0} onClick={() => setPageOffset(offset => Math.max(0, offset - 50))}
+              className="rounded border border-gray-400 px-1.5 py-0.5 disabled:opacity-40">Newer →</button>
+          </div>
+        </div>
+        <MessageHistoryView messages={activeMessages} totalMessages={page.total} buddy={activeBuddy as any} />
 
         {typingIndicatorText && (
           <div className="text-[11px] text-blue-700 italic px-2 animate-pulse">
