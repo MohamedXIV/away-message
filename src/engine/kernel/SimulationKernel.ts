@@ -84,6 +84,7 @@ export class SimulationKernel {
     if (!actor) return null;
     return deriveActorSemantics({
       actor,
+      condition: this.social.getActorCondition(actor.id)!,
       relationship: this.social.getRelationships(actor.id),
       relationshipStage: this.social.getRelationshipStage(actor.id),
       presence: this.social.getPresence(actor.id),
