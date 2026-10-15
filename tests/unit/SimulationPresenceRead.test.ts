@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { SimulationEngine } from '../../src/engine/SimulationEngine';
-import { createSimulationBenchmarkFixture } from '../../src/engine/benchmark/SimulationBenchmarkFixture';
+import { createSimulationBenchmarkFixture, populateBenchmarkMessages } from '../../src/engine/benchmark/SimulationBenchmarkFixture';
 
 describe('#172 presence-only UI projection', () => {
   it('agrees with canonical current presence without exposing chats or relationships', () => {
@@ -44,8 +44,13 @@ describe('#172 presence-only UI projection', () => {
       const engine = fixture.engine;
       const spy = vi.spyOn(engine, 'getState');
       const read = engine.getPresenceRead();
+      const beforeBytes = JSON.stringify(read).length;
       expect(Object.keys(read.presence).length).toBeGreaterThan(0);
-      expect(JSON.stringify(read).length).toBeLessThan(120000);
+      populateBenchmarkMessages(fixture, 160);
+      // Adding chat history must not increase the presence payload by one byte.
+      const after = engine.getPresenceRead();
+      expect(JSON.stringify(after).length).toBe(beforeBytes);
+      expect(beforeBytes).toBeLessThan(120000);
       expect(spy).not.toHaveBeenCalled();
       spy.mockRestore();
     }
