@@ -9,14 +9,13 @@ import type { NpcMovementRuntime } from '../../src/engine/kernel/NpcMovementRunt
  * regression: no population pass happens until an authoritative minute.
  */
 function spyOnNpcBoundaryPasses(engine: SimulationEngine) {
-  const owners = engine as unknown as {
-    npcLife: NpcLifeRuntime;
-    movement: NpcMovementRuntime;
+  const root = engine as unknown as {
+    npc: { npcLife: NpcLifeRuntime; movement: NpcMovementRuntime };
   };
 
   return {
-    pressure: vi.spyOn(owners.npcLife, 'advanceAllNpcPressuresToNow'),
-    mobility: vi.spyOn(owners.movement, 'progressNpcMobility'),
+    pressure: vi.spyOn(root.npc.npcLife, 'advanceAllNpcPressuresToNow'),
+    mobility: vi.spyOn(root.npc.movement, 'progressNpcMobility'),
   };
 }
 
