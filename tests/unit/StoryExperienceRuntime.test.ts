@@ -4,7 +4,7 @@ import { createCoreDomainOwners } from '../../src/engine/kernel/CoreDomainOwners
 import { StoryExperienceRuntime } from '../../src/engine/kernel/StoryExperienceRuntime';
 
 function runtime(engine: SimulationEngine): StoryExperienceRuntime {
-  return (engine as unknown as { story: StoryExperienceRuntime }).story;
+  return (engine as unknown as { physical: { story: StoryExperienceRuntime } }).physical.story;
 }
 
 describe('StoryExperienceRuntime — authored Scenario and Inner Voice ownership', () => {
