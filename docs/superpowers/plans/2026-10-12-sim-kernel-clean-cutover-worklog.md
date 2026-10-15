@@ -1,6 +1,6 @@
 # #171 — Clean Simulation Kernel Cutover Worklog
 
-Status: **IN PROGRESS — implementation branch only, NOT merge-ready**
+Status: **PRODUCTION CUTOVER IMPLEMENTED — final exact-head verification and benchmark acceptance pending. PR #192 remains DRAFT.**
 
 Decision: `docs/18-SIMULATION-CLEAN-REPLACEMENT-DECISION.md`
 
@@ -8,15 +8,19 @@ Starting baseline: `main@1ea59b8b506cf851d9e334cda7701872c384ae3d`.
 
 This document is a wiring and retirement ledger, not an alternative architecture. Every item here must either be completed and removed from the list or explicitly justified before #171 is merged.
 
-## 1. Live inheritance reality
+## 1. Inherited executor retirement (2026-10-15)
 
-| Live implementation | Responsibility today | Required disposition |
-| --- | --- | --- |
-| `src/engine/SimulationEngineCore.ts` | **Now transitional:** domain owners and most NPC/Social/procedural day policies are composed; inherited Core still owns substantial player commands, city outings, contact UI flows, event listeners, broad state and persistence | Migrate remaining command/publication/save boundaries into one composed kernel and **delete the inherited runtime** |
-| `src/engine/SimulationEngineLegacyFacade.ts` | **Now transitional:** 408-line legacy executor delegating PC/Inventory, NPC Life, trips/XYZ and Encounter to composed owners; still owns layered state/dispatch/load adapters | Cut over production routing and **delete the inherited runtime**, not rename it |
-| `src/engine/SimulationEngine.ts` | **Now transitional:** all upper-layer physical state owners, physical-shop sessions and physical grocery fulfillment are composed; inherited class mainly retains forwarding, delivery-port callbacks, layered state/export/load and event wiring | Replace layered inherited execution, move wiring to final composed kernel and delete this runtime; public alias must be stateless forwarding only |
+The entire `SimulationEngineCore → SimulationEngineLegacyFacade → SimulationEngine` executable inheritance chain has been **deleted** from this unmerged branch.
 
-Existing pure domains such as `life/Intent.ts`, `life/Obligations.ts`, `transit/NpcTrips.ts`, `spatial/`, `residence/` and `scenario/` are candidates for direct reuse.
+| Old production path | Final disposition |
+| --- | --- |
+| `src/engine/SimulationEngineCore.ts` | **Deleted**. Core domain coordination is now an independent `kernel/CoreSimulationRuntime.ts` using one `CoreDomainOwners` graph. |
+| `src/engine/SimulationEngineLegacyFacade.ts` | **Deleted**. NPC Life, mobility, spatial XYZ, encounters and computer inventory are now one independent `kernel/NpcComputerSimulationRuntime.ts`. |
+| Inherited `src/engine/SimulationEngine.ts` | **Replaced**, not renamed: 10-line export-only public compatibility alias to `kernel/SimulationKernel.ts`. No constructor, inheritance, writer or fallback execution is left in the public file. |
+| Physical/world upper-layer overrides | Replaced by `kernel/PhysicalSimulationRuntime.ts`, composed directly by the kernel alongside Core and NPC runtimes. |
+| Legacy `exportFullSnapshot` | **Deleted** as a parallel old-format export; `exportSnapshot/loadSnapshot` now use the one current-format kernel contract. |
+
+There are no executable inherited simulation base classes on this branch. Historical migration entries below document how the replacement was reached, not surviving production dependencies.
 
 ## 2. State authority table (target owners)
 
@@ -36,21 +40,48 @@ Existing pure domains such as `life/Intent.ts`, `life/Obligations.ts`, `transit/
 
 These are *logical owner boundaries*. No `SimulationKernel` mega-file should clone their mutable state.
 
-## 3. Production path inventory
+## 3. Production consumer cutover and call graph
 
-**Update 2026-10-13:** NPC Life, Mobility/Spatial, Encounter, PC Inventory, Residence, Venue, Active Travel, Material World, physical-shop sessions, physical grocery fulfillment, authored Scenario and Inner Voice now have composed owners. Public APIs still traverse inherited Core/LegacyFacade/Engine on this **unmerged** branch; production wiring and inheritance retirement are NOT complete.
+```text
+React components / OrionOS / Pulse / terminal / Phaser presentation
+  ↕
+src/store/useSimulationStore.ts (Zustand, public SimulationEngine alias)
+  ├─ ticker → advanceRealTime
+  ├─ typed actions → dispatchAction / explicit public APIs
+  ├─ subscribed state → subscribe / getState
+  └─ persistence/slots.ts → exportSnapshot / loadSnapshot
+                        ↓
+             kernel/SimulationKernel
+             SINGLE command/time/load/publication boundary
+               ├─ CoreSimulationRuntime
+               │  ├─ CoreDomainOwners (one Clock/EventBus/Economy/Needs/Mood/
+               │  │  Hardware/OS/Social/World/VFS/Software/etc.)
+               │  ├─ TimeAdvancement
+               │  └─ PlayerActionRuntime + existing domain policy coordinators
+               ├─ NpcComputerSimulationRuntime
+               │  ├─ ComputerOwnershipRuntime (one Inventory)
+               │  ├─ NpcLifeRuntime (one goals/pressure)
+               │  ├─ NpcMovementRuntime (one trips/XYZ)
+               │  └─ EncounterRuntime (one cooldown/history)
+               └─ PhysicalSimulationRuntime
+                  ├─ ResidenceCoordination
+                  ├─ MaterialWorldRuntime
+                  ├─ PhysicalShopSessionRuntime / PhysicalGroceryFulfillment
+                  ├─ ActiveTravelRuntime / VenueOperationsRuntime
+                  └─ StoryExperienceRuntime (Scenario / Inner Voice)
 
-- [ ] **Construction and startup:** React `src/store/useSimulationStore.ts` creates one `SimulationEngine`; persistence/fixtures may create more independent game sessions, not duplicate authorities in one game.
-- [ ] **Time:** `advanceRealTime` / `advanceGameMinutes` and time events must advance each canonical domain once and preserve #170 zero-minute gating.
-- [ ] **Commands:** `dispatchAction` currently resides in `SimulationEngineCore`; public PC/physical/venue/travel commands are spread across upper layers. Route through one coherent command owner/API.
-- [ ] **Reads:** `getState` is assembled/augmented in all three layers; remove super-call-based state layering, retain correct current-format projection/export semantics until #172.
-- [ ] **Subscriptions:** `subscribe` and `notifySubscribers` live in Core and are read via Zustand; avoid a second event bus/snapshot publisher.
-- [ ] **Persistence:** three `exportSnapshot`/`loadSnapshot` layers must become one coordinated current-format save/load path, not independent authority snapshots.
-- [ ] **Social & Life:** lifecycle, NPC Life Matrix, relationships, presence and remote reach must preserve their existing meaning.
-- [ ] **Mobility & spatial:** actor place/XYZ, transit and encounters must remain single-writer and deterministic.
-- [ ] **Housing/physical/venue:** physical world, residence and active travel must not be re-created by separate engine instances.
-- [ ] **Scenario/Inner Voice:** persisted Scenario instances and InnerVoice state must round-trip and be governed by existing owners.
-- [ ] **Presentation/Ink/UI:** existing direct engine call sites must all be routed to new APIs, with no old executor fallback.
+tools/benchmark-simulation.ts → benchmark/SimulationBenchmarkFixture.ts
+  → same public alias → same composed SimulationKernel
+```
+
+- [x] React/Zustand, OS/terminal and Phaser consumers still resolve the public `SimulationEngine` symbol to **the actual composed kernel**, with no inherited fallback or consumer-owned clock.
+- [x] Ticker and explicit time actions converge on `TimeAdvancement` and a single canonical GameClock. NPC pressure/mobility work is scheduled only when a minute changes (#170).
+- [x] Player/social/desktop/world/PC command routers delegate to canonical domain owners; retired OS upgrade command remains rejected.
+- [x] One current-format `exportSnapshot/loadSnapshot` coordinate Core → software → NPC → physical/venue/travel/story hydration.
+- [x] Core projection no longer writes hardware/OS metadata during reads. Mood reconciliation moved to write-time publication.
+- [x] Time notifications are deferred until NPC minutes settle; subscribers receive the completed transaction, not an intermediate time state.
+- [x] Historical public import alias is strictly an export rewire; no mutable store, executable engine superclass or fallback.
+- [x] Benchmark fixtures, tests and save-slot consumers use the same public kernel construction path.
 
 ## 4. Implementation progress — unmerged canonical branch
 
@@ -86,7 +117,7 @@ These are *logical owner boundaries*. No `SimulationKernel` mega-file should clo
 - [x] **Physical grocery fulfillment extraction:** `kernel/PhysicalGroceryFulfillment.ts` handles authored delivery target resolution, materializing one physical courier parcel via DeliveryEngine arrival callback, and physical pickup bags over canonical Economy/Needs/Delivery/World/Material owners. Delivery transactions still delegate into the same existing `GroceryDeliveryCoordination`; no duplicate courier queue/pantry/clock. Tests: `PhysicalGroceryFulfillment.test.ts` plus existing `PhysicalDeliveryIntegration.test.ts`.
 - [x] **Shop exact-head verification:** `5cc91f0d2364441ea16d85f1c2fd2a0d203c049e`, GitHub Actions [Verify 38416943448](https://github.com/MohamedXIV/away-message/actions/runs/38416943448) **SUCCESS**: content/typecheck/build/baseline guard, **247/247 test files, 1,554/1,554 tests**, browser living-world smoke.
 - [x] **Latest physical-fulfillment exact-head verification:** `efeb90593fa393c750ca82a7509e58288abd203d`, GitHub Actions [Verify 38417976805](https://github.com/MohamedXIV/away-message/actions/runs/38417976805) **SUCCESS**: content/typecheck/build/baseline guard, **248/248 test files, 1,556/1,556 tests**, browser living-world smoke.
-- [ ] **Still needed:** remaining Core player city/contact/OS/Social action dispatch, day event bootstrap, and broad state/subscribe/save/load; one **no-inheritance** composed kernel API, consumers, old executors deletion, exact-head benchmarks and no-shadow-writer proof.
+- [x] **Completed in final cutover:** Core player city/contact/OS/Social command coordination; independent Core/NPC/Physical composition; one state/subscribe/load/export boundary; inherited executors deleted. Final exact-head benchmark/CI evidence is recorded separately below.
 - [x] **NPC day policy ownership:** `kernel/NpcSocialLifeCycle.ts` now owns NPC agenda fills, seeded run-ins, NPC/NPC romance progress, mediation requests and backstory re-introductions. These are policy passes over canonical `SocialEngine`/World/clock/telemetry only, invoked from the existing authoritative day-change event. `NpcSocialLifeCycle.test.ts` covers owner reachability, deterministic social outcomes and non-duplicated agendas.
 - [x] **MyPlace authored/realtime side effects moved:** `kernel/MyPlaceSocialCycle.ts` now also owns the daily profile-update announcement, realtime-only UI event/co-comment policy, initial/newcomer profile stubs and guestbook interactions. Existing `MyPlaceP5.test.ts` was rewired to target the actual domain owner; `MyPlaceSocialCycle.test.ts` now covers newcomer profiles.
 - [x] **Bounded procedural orchestration moved:** `kernel/ProceduralWorldCycle.ts` owns the async generation pending/day gates and deterministic auto-discovery policy. It writes only to canonical `WorldEventsEngine` and invokes the original `SOCIAL_ADD_BUDDY` action via callback, no parallel roster/events.
@@ -125,3 +156,33 @@ Before marking the eventual #171 PR ready:
 7. 20/100/250/500 actor benchmarks are compared against #169/#170, with interpretation separating zero-minute and minute-advancement costs.
 
 If any requirement fails, keep the PR in Draft and #171 open. Do not call it finished.
+
+
+## 5. Final #171 evidence and acceptance ledger (2026-10-15)
+
+**Implementation:** `kernel/SimulationKernel.ts` is the only executable public simulation root. `PlayerActionRuntime` replaces the 265-line inherited player dispatcher and coordinates domain-specific handlers without storing state. The Core, NPC/Computer and Physical coordinators compose **one shared Core-domain owner graph** and own non-overlapping explicit responsibility slices. The public alias `src/engine/SimulationEngine.ts` is export-only. The two inherited implementation files are absent.
+
+**Single-writer protection:** `CoreDomainOwners` creates exactly one clock, event bus, Social, Economy, Needs, Mood, Hardware, OS, World, etc. `NpcComputerSimulationRuntime` owns the single inventory, NPC Life, trip/XYZ and encounter instances. `PhysicalSimulationRuntime` owns the single material/item and shop session state, housing, active travel, venue activities and authored narrative. The root holds no duplicate mutable entity registries and only coordinates construction, queries, time, dispatch, subscriptions and snapshot hydration. `getState()` does not publish Mood/OS writes; the explicit publication boundary reconciles Mood.
+
+**Scheduling and publication:** only an actual changed authoritative minute runs population pressure/mobility. A public time/command transaction buffers subscriber publication until the NPC minute boundary settles; no population pass or unnecessary publication occurs on zero-minute RAF frames. Existing `TimeAdvancement` domain event ordering remains unchanged.
+
+**Save semantics:** the old parallel v1 `exportFullSnapshot` path is removed; the one current-format `exportSnapshot/loadSnapshot` round-trip includes hardware/OS, inventory, NPC goals/mobility/XYZ/encounters, physical items/shops, housing, transit, venues, Scenario instances and Inner Voice without save-time Scenario rerolls.
+
+**Verified milestone before the final clean-up:** implementation head `880485847edbb9dbd34dbfb066d13dca1ab77668` had [Verify 38699348508](https://github.com/MohamedXIV/away-message/actions/runs/38699348508) **SUCCESS**: content, TypeScript, build, baseline guard, **255/255 files and 1,578/1,578 tests**, Browser living-world smoke. Final exact-head verification is still required after later read/publication and retirement clean-up.
+
+**Measured #171 intermediate performance:** [Verify 38699863052](https://github.com/MohamedXIV/away-message/actions/runs/38699863052) succeeded on code head `644236d07d23d740405695a0b77ea41695065862`. Linux, Node 22.23.3, AMD EPYC 7763, 4 CPUs, 7 samples / 2 warmups; values below are *measured medians in milliseconds*, not performance thresholds:
+
+| Actors | Zero-minute RAF | +1 min | +60 min | Cold getState | Repeated getState | exportSnapshot |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 20 | 0.010 | 2.973 | 2.076 | 0.384 | 0.068 | 1.194 |
+| 100 | 0.010 | 15.260 | 16.796 | 0.800 | 0.108 | 5.236 |
+| 250 | 0.012 | 59.126 | 57.336 | 1.504 | 0.166 | 13.000 |
+| 500 | 0.011 | 194.101 | 200.143 | 6.468 | 0.349 | 27.299 |
+
+The #170 post-RAF-gate reference was **0.009 ms zero-minute median at 500 actors**, versus **84.569 ms** before #170. The new 0.011 ms intermediate #171 median preserves the no-population-work property, guarded by deterministic tests rather than fragile timing thresholds. #169/#170 used a different VM CPU (AMD EPYC 9V74); wall-clock medians cannot establish an apples-to-apples minute-advance speedup. Repeated full-state reads are notably slower than the older 0.011 ms cached reference; this is explicitly recorded as follow-on **#172 bounded projections**, not disguised as a #171 improvement. No arbitrary acceptance threshold has been invented for minute advancement.
+
+**Outstanding before PR #192 Ready or merge:**
+- [ ] A final **exact-code-head** successful Verify run after the latest atomic publication, pure state reads and retirement changes, including benchmark 20/100/250/500 and Browser living-world smoke.
+- [ ] Record benchmark SHA and final measured medians on the verified code head (the intermediate report's embedded `GITHUB_SHA` was inconsistent with exact checkout; a dedicated `SIM_BENCH_HEAD_SHA` provenance input was added).
+- [ ] Confirm no unresolved PR review threads or merge conflicts and no canonical branch changes.
+- [ ] Mark Ready/merge/close #171 **only if** these evidence gates pass; do not treat a green intermediate milestone as final acceptance.
