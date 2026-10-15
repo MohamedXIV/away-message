@@ -4,6 +4,7 @@ import type { SimulationEngine } from '../engine/SimulationEngine';
 import type {
   SimulationActorRead,
   SimulationChromeRead,
+  SimulationDesktopRead,
   SimulationConversationRead,
   SimulationHudProjection,
   SimulationMessengerRead,
@@ -39,6 +40,7 @@ export function useBoundedSimulationRead<T>(read: (engine: SimulationEngine) => 
 const readHud = (engine: SimulationEngine) => engine.getHudProjection();
 const readWorld = (engine: SimulationEngine) => engine.getWorldRead();
 const readChrome = (engine: SimulationEngine) => engine.getChromeRead();
+const readDesktop = (engine: SimulationEngine) => engine.getDesktopRead();
 
 export function useSimulationHud(): SimulationHudProjection {
   return useBoundedSimulationRead(readHud);
@@ -50,6 +52,10 @@ export function useSimulationWorldRead(): SimulationWorldRead {
 
 export function useSimulationChrome(): SimulationChromeRead {
   return useBoundedSimulationRead(readChrome);
+}
+
+export function useSimulationDesktop(): SimulationDesktopRead {
+  return useBoundedSimulationRead(readDesktop);
 }
 
 export function useSelectedActorRead(actorId: string): SimulationActorRead | null {
