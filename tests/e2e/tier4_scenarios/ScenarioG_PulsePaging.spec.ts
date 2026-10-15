@@ -6,6 +6,8 @@ test('real React Pulse chat pages older/newer messages and Save Log exports comp
   test.setTimeout(60_000);
   await desktopPage.goto();
   const seed = await page.evaluate(async () => {
+    // Vite resolves this absolute dev-only module at runtime in Chromium.
+    // @ts-expect-error Browser dynamic import path is intentionally not a Node module.
     const { mountPulsePagingBrowserHarness } = await import(
       /* @vite-ignore */ '/src/tools/PulsePagingBrowserHarness.tsx'
     );
