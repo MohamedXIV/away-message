@@ -21,6 +21,7 @@ import type {
   SimulationConversationRead,
   SimulationHudProjection,
   SimulationMessengerRead,
+  SimulationPresenceRead,
   SimulationWorldRead,
 } from './SimulationPublication';
 export type {
@@ -31,6 +32,7 @@ export type {
   SimulationConversationRead,
   SimulationHudProjection,
   SimulationMessengerRead,
+  SimulationPresenceRead,
   SimulationWorldRead,
 } from './SimulationPublication';
 export type { LiveSimulationState } from './PhysicalSimulationRuntime';
@@ -317,6 +319,10 @@ export class SimulationKernel {
       unreadCount: unread.unreadCount,
       unreadPreviews: unread.previews,
     };
+  }
+
+  public getPresenceRead(): SimulationPresenceRead {
+    return { revision: this.revision, presence: this.social.getPresenceSummary() };
   }
 
   public getMessengerRead(maxContacts = 32): SimulationMessengerRead {
