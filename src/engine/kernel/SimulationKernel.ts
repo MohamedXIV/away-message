@@ -89,7 +89,7 @@ export class SimulationKernel {
       relationshipStage: this.social.getRelationshipStage(actor.id),
       presence: this.social.getPresence(actor.id),
       knownToPlayer: this.social.isKnown(actor.id),
-      pressure: this.getNpcPressure(actor.id),
+      pressure: this.npc.npcLife.peekNpcPressure(actor.id),
       lifeFidelity: this.getFidelityTier(actor.id),
       focused,
     });
