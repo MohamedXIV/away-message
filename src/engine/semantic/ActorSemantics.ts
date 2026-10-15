@@ -1,5 +1,5 @@
 import type {
-  BuddyCharacter, BuddyPresence, RelationshipDimensions, RelationshipStage,
+  ActorCondition, BuddyCharacter, BuddyPresence, RelationshipDimensions, RelationshipStage,
 } from '../types';
 import type { FidelityTier, LifePressureView } from '../life/types';
 import type { WorldModifier } from '../WorldModifiers';
@@ -9,7 +9,8 @@ import type { WorldModifier } from '../WorldModifiers';
  * Social, NPC Life and World. Never persist these derived booleans.
  */
 export interface ActorSemanticInputs {
-  actor: Pick<BuddyCharacter, 'id' | 'reach' | 'roles' | 'status'>;
+  actor: Pick<BuddyCharacter, 'id' | 'reach' | 'roles'>;
+  condition: ActorCondition;
   presence?: Pick<BuddyPresence, 'status'>;
   relationship?: RelationshipDimensions;
   relationshipStage: RelationshipStage;
@@ -30,8 +31,8 @@ export interface ActorSemanticView {
   actorId: string;
   reach: 'local' | 'remote';
   roles: string[];
-  lifecycle: 'active' | 'distant' | 'departed' | 'blocked';
-  connection: 'unknown' | 'known' | 'blocked';
+  lifecycle: ActorCondition['lifecycle'];
+  connection: 'unknown' | 'known' | 'distant' | 'blocked';
   relationship: {
     stage: RelationshipStage;
     trusted: boolean;
@@ -45,11 +46,11 @@ export interface ActorSemanticView {
 export function deriveActorSemantics(input: ActorSemanticInputs): ActorSemanticView {
   const { actor, pressure, relationship: r, presence } = input;
   const reach = actor.reach === 'remote' ? 'remote' : 'local';
-  const lifecycle = actor.status === 'gone' ? 'departed'
-    : actor.status === 'blocked' ? 'blocked'
-    : actor.status === 'distant' ? 'distant' : 'active';
-  // friend/close/acquaintance on the legacy actor status do not own stage truth.
-  const connection = lifecycle === 'blocked' ? 'blocked'
+  const lifecycle = input.condition.lifecycle;
+  // Reachability is separate from whether the player has learned a handle.
+  // Neither value is inferred from the relationship stage.
+  const connection = input.condition.contact === 'blocked' ? 'blocked'
+    : input.condition.contact === 'distant' ? 'distant'
     : input.knownToPlayer ? 'known' : 'unknown';
   const trusted = Boolean(r && r.trust >= 65 && r.suspicion < 40 && r.resentment < 40);
   const conflicted = Boolean(r && (r.annoyance >= 60 || r.resentment >= 60 || r.suspicion >= 65));
@@ -59,9 +60,9 @@ export function deriveActorSemantics(input: ActorSemanticInputs): ActorSemanticV
 
   const chatBlockers: string[] = [];
   if (connection === 'unknown') chatBlockers.push('unknown_contact');
-  if (lifecycle === 'blocked') chatBlockers.push('blocked_contact');
+  if (connection === 'blocked') chatBlockers.push('blocked_contact');
   if (lifecycle === 'departed') chatBlockers.push('actor_departed');
-  if (lifecycle === 'distant') chatBlockers.push('distant_contact');
+  if (connection === 'distant') chatBlockers.push('distant_contact');
   if (presence?.status === 'offline') chatBlockers.push('offline');
   if (presence?.status === 'busy' || pressure?.interruptionTolerance === 'do_not_disturb') {
     chatBlockers.push('busy');
@@ -69,9 +70,9 @@ export function deriveActorSemantics(input: ActorSemanticInputs): ActorSemanticV
 
   const meetingBlockers: string[] = [];
   if (reach === 'remote') meetingBlockers.push('remote_reach');
-  if (lifecycle === 'blocked') meetingBlockers.push('blocked_contact');
+  if (connection === 'blocked') meetingBlockers.push('blocked_contact');
   if (lifecycle === 'departed') meetingBlockers.push('actor_departed');
-  if (lifecycle === 'distant') meetingBlockers.push('distant_contact');
+  if (connection === 'distant') meetingBlockers.push('distant_contact');
   return {
     actorId: actor.id, reach, roles: [...(actor.roles ?? [])], lifecycle, connection,
     relationship: { stage: input.relationshipStage, trusted, conflicted },
