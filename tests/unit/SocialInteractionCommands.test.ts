@@ -4,7 +4,7 @@ import { SocialInteractionCommands } from '../../src/engine/kernel/SocialInterac
 import { buildCharacter } from '../../src/engine/CharacterEngine';
 
 function socialCommands(engine: SimulationEngine): SocialInteractionCommands {
-  return (engine as unknown as { socialCommands: SocialInteractionCommands }).socialCommands;
+  return (engine as unknown as { core: { socialCommands: SocialInteractionCommands } }).core.socialCommands;
 }
 
 describe('SocialInteractionCommands — canonical actor roster and messages', () => {
