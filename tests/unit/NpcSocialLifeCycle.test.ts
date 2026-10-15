@@ -11,10 +11,10 @@ function fixture() {
 describe('NpcSocialLifeCycle — one Social and World day-policy authority', () => {
   it('is the actual composed instance reached by the production simulation', () => {
     const engine = new SimulationEngine();
-    const internals = engine as unknown as { npcSocialLife: NpcSocialLifeCycle };
+    const internals = engine as unknown as { core: { npcSocialLife: NpcSocialLifeCycle } };
     expect(internals.npcSocialLife).toBeInstanceOf(NpcSocialLifeCycle);
     const before = engine.social.getNpcSocialLog(1);
-    internals.npcSocialLife.processDay(1);
+    internals.core.npcSocialLife.processDay(1);
     expect(engine.social.getNpcSocialLog(1).length).toBeGreaterThanOrEqual(before.length);
     expect(engine.social).toBe(engine.social);
   });
