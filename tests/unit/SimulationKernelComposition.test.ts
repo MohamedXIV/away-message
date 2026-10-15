@@ -57,6 +57,26 @@ describe('#171 atomic composed-kernel production contract', () => {
     unsubscribe();
   });
 
+  it('keeps state projection and snapshot queries free of mood/event mutations', () => {
+    const engine = new SimulationEngine();
+    let changedEvents = 0;
+    engine.events.on('mood:changed', () => { changedEvents++; });
+    const before = engine.mood.getState();
+    const first = engine.getState();
+    const second = engine.getState();
+    engine.exportSnapshot();
+    expect(first.mood).toEqual(second.mood);
+    expect(engine.mood.getState()).toEqual(before);
+    expect(changedEvents).toBe(0);
+
+    expect(engine.dispatchAction({
+      type: 'WORLD_SET_FLAG', key: 'kernel:publication', value: true,
+    }).success).toBe(true);
+    expect(changedEvents).toBe(1);
+    engine.getState();
+    expect(changedEvents).toBe(1);
+  });
+
   it('does not publish or run population-wide work on zero-minute realtime frames', () => {
     const engine = new SimulationEngine();
     let publications = 0;
