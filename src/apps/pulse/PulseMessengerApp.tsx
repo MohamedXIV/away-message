@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useSimulationStore } from '../../store/useSimulationStore';
-import { useMessengerRead, useSimulationHud } from '../../store/useBoundedSimulationRead';
+import { useMessengerRead, useSimulationHud, useSimulationPresence } from '../../store/useBoundedSimulationRead';
 import { BuddyListWindow } from './components/BuddyListWindow';
 import { ChatWindow } from './components/ChatWindow';
 import { PulseLoginSplash, PulseLoginSession } from './components/PulseLoginSplash';
@@ -215,7 +215,7 @@ export const PulseMessengerApp: React.FC = () => {
   const messenger = useMessengerRead();
   const currentDay = hud.time.day;
   const totalMinutes = hud.time.totalMinutes;
-  const presenceMap = useSimulationStore((s) => s.state.social.presence);
+  const presenceMap = useSimulationPresence().presence;
 
   usePulseAudio();
 
