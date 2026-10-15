@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useSimulationStore } from '../../store/useSimulationStore';
+import { useSimulationApps } from '../../store/useBoundedSimulationRead';
 import { useWindowStore } from '../../store/useWindowStore';
 import { getFileInfoFromUrl, formatFileSize } from '../../engine/fileUtils';
 import { soundManager } from '../../audio/SoundManager';
@@ -25,9 +26,10 @@ function terminalOsVersion(osVersion: string | null): string {
 }
 
 export const TerminalApp: React.FC<{ windowId: string }> = ({ windowId }) => {
-  const vfs = useSimulationStore((s) => s.state.vfs);
-  const hardware = useSimulationStore((s) => s.state.hardware);
-  const osVersion = useSimulationStore((s) => s.state.os.currentOsId);
+  const engine = useSimulationStore((s) => s.engine);
+  const vfs = engine.vfs;
+  const { hardware, os } = useSimulationApps();
+  const osVersion = os.currentOsId;
   const dispatchAction = useSimulationStore((s) => s.dispatchAction);
   const closeWindow = useWindowStore((s) => s.closeWindow);
 
@@ -209,7 +211,7 @@ export const TerminalApp: React.FC<{ windowId: string }> = ({ windowId }) => {
           : `${currentPath === 'C:' ? 'C:' : currentPath}/${target}`;
         resolvedPath = resolvedPath.replace(/\/+/g, '/');
 
-        const dirRecord = vfs.files[resolvedPath];
+        const dirRecord = vfs.readFile(resolvedPath);
         if (dirRecord && dirRecord.kind === 'directory') {
           setCurrentPath(resolvedPath);
         } else {
@@ -223,9 +225,7 @@ export const TerminalApp: React.FC<{ windowId: string }> = ({ windowId }) => {
         const targetDir = args[0]
           ? (args[0].startsWith('C:') ? args[0] : `${currentPath}/${args[0]}`).replace(/\/+/g, '/')
           : currentPath;
-        const matchingFiles = Object.values(vfs.files).filter(
-          (f) => f.parentPath === targetDir && f.path !== targetDir
-        );
+        const matchingFiles = vfs.listDirectoryMetadata(targetDir);
 
         let output = ` Volume in drive C has no label.\n Volume Serial Number is 4C23-8E1A\n\n Directory of ${targetDir}\n\n`;
         output += `08/22/2000  08:00 AM    <DIR>          .\n`;
@@ -247,7 +247,7 @@ export const TerminalApp: React.FC<{ windowId: string }> = ({ windowId }) => {
           }
         }
 
-        const freeBytes = Math.max(0, vfs.totalDiskBytes - vfs.baseSystemBytes - totalFileBytes).toLocaleString();
+        const freeBytes = Math.max(0, vfs.getDiskCapacity().totalDiskBytes - vfs.getDiskCapacity().baseSystemBytes - totalFileBytes).toLocaleString();
         output += `              ${fileCount} File(s)    ${totalFileBytes.toLocaleString()} bytes\n`;
         output += `              ${dirCount} Dir(s)     ${freeBytes} bytes free\n`;
         addLine(output);
@@ -263,7 +263,7 @@ export const TerminalApp: React.FC<{ windowId: string }> = ({ windowId }) => {
         const filePath = args[0].startsWith('C:')
           ? args[0]
           : `${currentPath}/${args[0]}`.replace(/\/+/g, '/');
-        const file = vfs.files[filePath];
+        const file = vfs.readFile(filePath);
         if (!file) {
           addLine(`The system cannot find the file specified: ${args[0]}`, 'error');
         } else if (file.kind === 'directory') {
@@ -350,7 +350,7 @@ export const TerminalApp: React.FC<{ windowId: string }> = ({ windowId }) => {
         const zipPath = args[0].startsWith('C:')
           ? args[0]
           : `${currentPath}/${args[0]}`.replace(/\/+/g, '/');
-        const file = vfs.files[zipPath];
+        const file = vfs.readFile(zipPath);
         if (!file || file.kind !== 'archive') {
           addLine(`Archive not found or invalid format: ${args[0]}`, 'error');
           return;
