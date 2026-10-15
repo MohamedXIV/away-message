@@ -3,6 +3,7 @@ import {
   RelationshipDimensions,
   BuddyCharacter,
   BuddyLifecycleStatus,
+  ActorCondition,
   BuddyPresence,
   CharacterTraits,
   CoreMemory,
@@ -24,6 +25,7 @@ import { getWeatherForDay, isWetWeather } from './WeatherEngine';
 import { validateCharacterId, isValidSchedule, traitsForBuddy, clampTraits, clampRelationships, resolveArchetype, rollSeeded100 } from './characterTemplates';
 import { SEED_CHARACTERS, seedCharacterDef, isSeedCharacter, resolveAffinitySeeds } from './seedCharacters';
 import { validatePersistedBuddy, sanitizeLanguages } from './CharacterEngine';
+import { conditionFromLegacyStatus, projectLegacyBuddyStatus, validActorCondition } from './semantic/ActorCondition';
 import { parseCoreMemoryMeaning } from './semantic/CoreMemoryMeaning';
 
 // P3 long-term memory caps (keeps prompt injection bounded and saves small)
@@ -146,6 +148,9 @@ function hashText(value: string): number {
 
 export class SocialEngine {
   private buddies: Map<string, BuddyCharacter> = new Map();
+  // Only authoritative departure/contact state. BuddyCharacter.status is an
+  // authored input or derived compatibility read; never stored on live actors.
+  private readonly actorConditions = new Map<string, ActorCondition>();
   private relationships: Map<string, RelationshipDimensions> = new Map();
   private presence: Map<string, BuddyPresence> = new Map();
   private conversations: Map<string, MessageRecord[]> = new Map();
@@ -222,12 +227,15 @@ export class SocialEngine {
         Object.entries(def.schedule).map(([day, blks]) => [Number(day), blks.map((b) => ({ ...b }))])
       ),
     };
+    this.actorConditions.set(id, conditionFromLegacyStatus(def.status));
+    delete stored.status;
     this.buddies.set(id, stored);
     if (!this.relationships.has(id)) this.relationships.set(id, { ...stored.initialRelationships });
     if (!this.presence.has(id)) this.presence.set(id, { status: 'offline', awayMessage: '' });
     if (!this.conversations.has(id)) this.conversations.set(id, []);
-    this.eventBus.emit('social:buddy_registered', { buddy: { ...stored } });
-    return { ...stored };
+    const registered = this.getBuddy(id)!;
+    this.eventBus.emit('social:buddy_registered', { buddy: registered });
+    return registered;
   }
 
   /**
@@ -239,6 +247,7 @@ export class SocialEngine {
     const id = normalizeBuddyId(rawId);
     if (!this.buddies.has(id)) return false;
     this.buddies.delete(id);
+    this.actorConditions.delete(id);
     this.relationships.delete(id);
     this.presence.delete(id);
     this.conversations.delete(id);
@@ -314,8 +323,10 @@ export class SocialEngine {
     const buddyDefs: Record<string, BuddyCharacter> = {};
     for (const [id, b] of this.buddies.entries()) {
       if (isSeedCharacter(id)) continue;
+      const identity = { ...b };
+      delete identity.status; // an old exported status would duplicate canonical truth
       buddyDefs[id] = {
-        ...b,
+        ...identity,
         initialRelationships: { ...b.initialRelationships },
         traits: { ...b.traits },
         appearance: { ...(b.appearance ?? { hair: 'brown', eyes: 'brown' }) },
@@ -330,23 +341,19 @@ export class SocialEngine {
       };
     }
 
-    const seedActorStatuses: Record<string, BuddyLifecycleStatus> = {};
-    const removedSeedActorIds: string[] = [];
-    for (const seed of SEED_CHARACTERS) {
-      const live = this.buddies.get(seed.id);
-      if (!live) {
-        removedSeedActorIds.push(seed.id);
-      } else if (live.status) {
-        seedActorStatuses[seed.id] = live.status;
-      }
+    const actorConditions: Record<string, ActorCondition> = {};
+    for (const [id, condition] of this.actorConditions) {
+      if (this.buddies.has(id)) actorConditions[id] = { ...condition };
     }
+    const removedSeedActorIds = SEED_CHARACTERS
+      .filter(seed => !this.buddies.has(seed.id)).map(seed => seed.id);
 
     return {
       relationships: rels,
       presence: pres,
       conversations: convs,
       buddies: buddyDefs,
-      seedActorStatuses,
+      actorConditions,
       removedSeedActorIds,
       coreMemories: mems,
       promises: proms,
@@ -371,15 +378,25 @@ export class SocialEngine {
   }
 
   public restoreState(state: SocialEngineState): void {
+    // Loading a new current-format world replaces roster/condition truth, not
+    // just its relationship graph. Otherwise a prior removed actor may leak.
+    this.buddies.clear();
+    this.actorConditions.clear();
+    this.initializeCharacters();
     // Apply per-save seed-roster divergence before restoring dependent state.
     for (const rawId of state.removedSeedActorIds ?? []) {
       const id = normalizeBuddyId(rawId);
-      if (isSeedCharacter(id)) this.buddies.delete(id);
+      if (isSeedCharacter(id)) {
+        this.buddies.delete(id);
+        this.actorConditions.delete(id);
+      }
     }
-    for (const [rawId, status] of Object.entries(state.seedActorStatuses ?? {})) {
-      const id = normalizeBuddyId(rawId);
-      const buddy = this.buddies.get(id);
-      if (buddy) buddy.status = status;
+    // Import-only legacy snapshots. New snapshots contain actorConditions.
+    if (!state.actorConditions) {
+      for (const [rawId, status] of Object.entries(state.seedActorStatuses ?? {})) {
+        const id = normalizeBuddyId(rawId);
+        if (this.buddies.has(id)) this.actorConditions.set(id, conditionFromLegacyStatus(status));
+      }
     }
 
     // Re-register persisted non-seed definitions first so rel/presence/convos land on real buddies.
@@ -389,7 +406,16 @@ export class SocialEngine {
         if (this.buddies.has(id) || isSeedCharacter(id)) continue;
         const res = validatePersistedBuddy({ ...def, id });
         if (!res.ok || !res.definition) continue;
-        this.buddies.set(id, res.definition);
+        const stored: BuddyCharacter = { ...res.definition };
+        this.actorConditions.set(id, conditionFromLegacyStatus(stored.status));
+        delete stored.status;
+        this.buddies.set(id, stored);
+      }
+    }
+    for (const [rawId, condition] of Object.entries(state.actorConditions ?? {})) {
+      const id = normalizeBuddyId(rawId);
+      if (this.buddies.has(id) && validActorCondition(condition)) {
+        this.actorConditions.set(id, { ...condition });
       }
     }
 
@@ -634,7 +660,10 @@ export class SocialEngine {
    */
   private initializeCharacters(): void {
     for (const buddy of SEED_CHARACTERS) {
-      this.buddies.set(buddy.id, seedCharacterDef(buddy.id));
+      const stored = seedCharacterDef(buddy.id);
+      this.actorConditions.set(buddy.id, conditionFromLegacyStatus(stored.status));
+      delete stored.status;
+      this.buddies.set(buddy.id, stored);
     }
   }
 
@@ -649,7 +678,8 @@ export class SocialEngine {
 
     for (const [id, buddy] of this.buddies.entries()) {
       // P3 sharp lifecycle: distant/gone/blocked buddies stay dark regardless of schedule.
-      if (buddy.status === 'distant' || buddy.status === 'gone' || buddy.status === 'blocked') {
+      const condition = this.actorConditions.get(id);
+      if (condition?.lifecycle === 'departed' || condition?.contact === 'distant' || condition?.contact === 'blocked') {
         const prev = this.presence.get(id);
         if (!prev || prev.status !== 'offline') {
           this.presence.set(id, { status: 'offline', awayMessage: '' });
@@ -879,13 +909,30 @@ export class SocialEngine {
    * Move a buddy along the lifecycle (distant/gone for sharp events, back to
    * acquaintance on return). No one is protected — anyone can walk away.
    */
+  /** Canonical owner for lifecycle/contact. This is not the relationship stage. */
+  public setActorCondition(rawId: string, next: ActorCondition): ActorCondition {
+    const id = normalizeBuddyId(rawId);
+    if (!this.buddies.has(id)) throw new Error(`Buddy not found: ${id}`);
+    if (!validActorCondition(next)) throw new Error('Invalid actor condition');
+    const previous = this.actorConditions.get(id);
+    if (previous?.lifecycle === next.lifecycle && previous.contact === next.contact) return { ...previous };
+    this.actorConditions.set(id, { ...next });
+    const status = projectLegacyBuddyStatus(next, this.getRelationshipStage(id));
+    this.eventBus.emit('social:buddy_status_changed', { buddyId: id, status });
+    return { ...next };
+  }
+
+  public getActorCondition(rawId: string): ActorCondition | undefined {
+    const id = normalizeBuddyId(rawId);
+    if (!this.buddies.has(id)) return undefined;
+    return { ...(this.actorConditions.get(id) ?? conditionFromLegacyStatus()) };
+  }
+
+  /** Legacy action adapter: friend/close are not mutable actor statuses. */
   public setBuddyStatus(rawId: string, status: BuddyLifecycleStatus): BuddyCharacter {
     const id = normalizeBuddyId(rawId);
-    const buddy = this.buddies.get(id);
-    if (!buddy) throw new Error(`Buddy not found: ${id}`);
-    buddy.status = status;
-    this.eventBus.emit('social:buddy_status_changed', { buddyId: id, status });
-    return { ...buddy };
+    this.setActorCondition(id, conditionFromLegacyStatus(status));
+    return this.getBuddy(id)!;
   }
 
   /** Governed direct adjustment (used by the distant-return path). Values clamped 0..100. */
@@ -1540,12 +1587,17 @@ export class SocialEngine {
     }
   }
 
+  /** A derived public projection; callers cannot write to the live roster via status. */
   public getBuddy(rawId: string): BuddyCharacter | undefined {
-    return this.buddies.get(normalizeBuddyId(rawId));
+    const id = normalizeBuddyId(rawId);
+    const buddy = this.buddies.get(id);
+    if (!buddy) return undefined;
+    const condition = this.actorConditions.get(id) ?? conditionFromLegacyStatus();
+    return { ...buddy, status: projectLegacyBuddyStatus(condition, this.getRelationshipStage(id)) };
   }
 
   public getBuddies(): BuddyCharacter[] {
-    return Array.from(this.buddies.values());
+    return Array.from(this.buddies.keys()).map(id => this.getBuddy(id)!);
   }
 
   /** Resolve current actors by capability role. Seed content has no runtime privilege. */
