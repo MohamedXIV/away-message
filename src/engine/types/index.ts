@@ -660,6 +660,8 @@ export interface BuddyEventKnowledge {
   attitude: BuddyAttitude;
   personalTake: string; // one sentence, buddy-specific
   learnedAtMinute: number;
+  /** Explicit public-feed or direct-disclosure provenance; not world truth. */
+  source?: import('../semantic/KnowledgeLedger').KnowledgeProvenance;
 }
 
 export interface WorldState {
@@ -669,6 +671,8 @@ export interface WorldState {
   triggeredEvents: GlobalEvent[];
   // Per-buddy attitude bank — each buddy sees same event through different eyes
   buddyKnowledge: Record<string, BuddyEventKnowledge[]>; // key: buddyId
+  /** #187: one World-owned truth/claim/actor-awareness ledger. Never a UI projection. */
+  semanticKnowledge?: import('../semantic/KnowledgeLedger').SemanticKnowledgeState;
 }
 
 // Deprecated alias — kept for backward compat during migration to sandbox
