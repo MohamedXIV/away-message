@@ -21,8 +21,8 @@ import type { OsVersion } from './engine/types';
 import {
   useSimulationTicker,
   useSimulationStore,
-  useActiveView,
 } from './store/useSimulationStore';
+import { useSimulationChrome, useSimulationHud } from './store/useBoundedSimulationRead';
 import { useAudioStore } from './store/useAudioStore';
 import { SimulationEngine } from './engine/SimulationEngine';
 import { MainMenu } from './menu/MainMenu';
@@ -115,9 +115,9 @@ export const App: React.FC = () => {
   useSimulationTicker({ enabled: true });
 
   const unlockAudio = useAudioStore((s) => s.unlockAudio);
-  const osState = useSimulationStore((s) => s.state.os);
-  const osVersion = osState.currentOsId;
-  const activeView = useActiveView();
+  const chrome = useSimulationChrome();
+  const osVersion = chrome.osVersion;
+  const activeView = useSimulationHud().activeView;
   const switchView = useSimulationStore((s) => s.switchView);
 
   // P9 boot phases: menu → loading → game. Boot requests (menu Continue/Load)
@@ -191,7 +191,7 @@ export const App: React.FC = () => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'F2' || (e.altKey && e.key.toLowerCase() === 'r')) {
         e.preventDefault();
-        const hardwareState = useSimulationStore.getState().state.hardware;
+        const hardwareState = useSimulationStore.getState().engine.hardware.getState();
         if (activeView === 'pc') {
           switchView('room');
         } else if (activeView === 'room') {
