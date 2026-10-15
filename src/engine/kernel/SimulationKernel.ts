@@ -104,6 +104,9 @@ export class SimulationKernel {
 
   private notifySubscribers(): void {
     if (this.hydrating || !this.physical) return;
+    // Reconcile derived mood exactly at the authoritative publication boundary,
+    // never during getState() or a current-format snapshot read.
+    this.mood.publishIfChanged();
     this.invalidateStateCache();
     const state = this.getState();
     for (const listener of this.subscribers) {
