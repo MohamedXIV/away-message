@@ -490,9 +490,10 @@ export const RoomScene: React.FC = () => {
                     type="button"
                     disabled={offer.current || !offer.available || !offer.affordable}
                     onClick={() => {
+                      const beforeRevision = engine.getRevision();
                       const result = engine.moveResidenceToOffer(offer.id);
                       if (result.success) {
-                        syncStateFromEngine();
+                        if (engine.getRevision() === beforeRevision) syncStateFromEngine();
                         setActiveModal(null);
                         flashOutingNotice(`Moved to ${offer.placeName}. New rent: ${offer.monthlyRent.toFixed(0)}.`);
                       } else {
