@@ -2,6 +2,7 @@ import type { SimulationState as TransportSimulationState, SimulationAction, Act
 import type { Fulfillment } from '../DeliveryEngine';
 import { createEmptyComputerSetup, createEmptyDisplaySetup } from '../hardware/state';
 import { CoreSimulationRuntime } from './CoreSimulationRuntime';
+import { resolvePcBootState } from './ComputerOwnershipRuntime';
 import { NpcComputerSimulationRuntime } from './NpcComputerSimulationRuntime';
 import { PhysicalSimulationRuntime, type LiveSimulationState, type InitialSimulationState } from './PhysicalSimulationRuntime';
 import {
@@ -242,7 +243,7 @@ export class SimulationKernel {
       residencePlaceId: this.physical.getCurrentResidencePlaceId(),
       playerLocation: this.economy.getState().location,
       environment: this.environment.getCurrentSnapshot(),
-      pcBootState: this.npc.getPcBootState(),
+      pcBootState: resolvePcBootState({ computer: this.hardware.getComputerState(), inventory: this.inventory.getState(), os: this.os.getState() }),
       metInPerson: !!this.world.getFlag('met_in_person'),
     };
   }
