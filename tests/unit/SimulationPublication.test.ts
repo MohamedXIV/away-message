@@ -23,7 +23,7 @@ describe('#172 revision-only publication and bounded HUD projection', () => {
     expect(changes.at(-1)).toMatchObject({
       revision: engine.getRevision(),
       atMinute: atStart + 10,
-      changedDomains: ['unknown'],
+      changedDomains: expect.arrayContaining(['clock', 'unknown']),
     });
     const hud = engine.getHudProjection();
     expect(hud.revision).toBe(engine.getRevision());
@@ -36,6 +36,19 @@ describe('#172 revision-only publication and bounded HUD projection', () => {
     engine.advanceGameMinutes(5, 'after unsubscribe');
     expect(changes).toHaveLength(beforeStop);
     wholeState.mockRestore();
+  });
+
+  it('coalesces owner-emitted domains without pretending silent writers are covered', () => {
+    const engine = new SimulationEngine();
+    const observations: string[][] = [];
+    const off = engine.subscribeChanges(change => observations.push([...change.changedDomains]));
+    engine.dispatchAction({ type: 'WORLD_SET_FLAG', key: 'publisher_fixture', value: true });
+    expect(observations.at(-1)).toEqual(expect.arrayContaining(['world', 'unknown']));
+    const set = new Set(observations.at(-1));
+    expect(set.size).toBe(observations.at(-1)?.length); // one domain per boundary
+    engine.advanceGameMinutes(2, 'domain event fixture');
+    expect(observations.at(-1)).toEqual(expect.arrayContaining(['clock', 'unknown']));
+    off();
   });
 
   it('keeps legacy full-snapshot subscription behavior while migrating consumers', () => {
