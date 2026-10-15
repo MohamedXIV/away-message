@@ -82,3 +82,17 @@ export interface SimulationMessengerRead {
 export interface SimulationConversationRead extends ReturnType<import('../SocialEngine').SocialEngine['getConversationPage']> {
   revision: number;
 }
+
+/** Small desktop chrome/tray input. Never ships the message history or VFS. */
+export interface SimulationChromeRead {
+  revision: number;
+  time: GameTime;
+  osVersion: import('../types').OsVersion | null;
+  pulseVersion: string;
+  pulseInstalled: boolean;
+  connectionType: import('../types').HardwareState['connectionType'];
+  connectionSpeedKbps: number;
+  activeDownloadCount: number;
+  unreadCount: number;
+  unreadPreviews: ReturnType<import('../SocialEngine').SocialEngine['getUnreadTraySummary']>['previews'];
+}
