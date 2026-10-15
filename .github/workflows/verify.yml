@@ -71,7 +71,7 @@ jobs:
       - name: Benchmark composed simulation (20 / 100 / 250 / 500 actors)
         if: github.event_name == 'pull_request' && github.event.pull_request.head.ref == 'refactor/171-clean-simulation-kernel'
         env:
-          GITHUB_SHA: ${{ github.event.pull_request.head.sha }}
+          SIM_BENCH_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: npm run bench:simulation
 
       - name: Install Playwright Chromium
