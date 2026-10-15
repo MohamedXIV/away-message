@@ -77,6 +77,28 @@ describe('#171 atomic composed-kernel production contract', () => {
     expect(changedEvents).toBe(1);
   });
 
+  it('publishes a completed game-minute transaction only after NPC owners settle', () => {
+    const engine = new SimulationEngine();
+    const states: Array<{ time: number; mobility: unknown; lives: unknown }> = [];
+    const unsubscribe = engine.subscribe((state) => {
+      states.push({
+        time: state.time.totalMinutes,
+        mobility: state.npcMobility,
+        lives: state.npcLives,
+      });
+    });
+    const beforeMinute = engine.clock.getTotalMinutes();
+
+    engine.advanceGameMinutes(60, 'atomic-minute-publication');
+
+    expect(engine.clock.getTotalMinutes()).toBe(beforeMinute + 60);
+    expect(states).toHaveLength(2);
+    expect(states.at(-1)?.time).toBe(beforeMinute + 60);
+    expect(states.at(-1)?.mobility).toEqual(engine.getNpcMobilityState());
+    expect(states.at(-1)?.lives).toEqual(engine.getNpcLivesState());
+    unsubscribe();
+  });
+
   it('does not publish or run population-wide work on zero-minute realtime frames', () => {
     const engine = new SimulationEngine();
     let publications = 0;
