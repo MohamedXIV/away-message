@@ -3,6 +3,7 @@ import type { Fulfillment } from '../DeliveryEngine';
 import { createEmptyComputerSetup, createEmptyDisplaySetup } from '../hardware/state';
 import { CoreSimulationRuntime } from './CoreSimulationRuntime';
 import { resolvePcBootState } from './ComputerOwnershipRuntime';
+import { getPhysicalCatalogItem } from '../hardware/catalog';
 import { NpcComputerSimulationRuntime } from './NpcComputerSimulationRuntime';
 import { PhysicalSimulationRuntime, type LiveSimulationState, type InitialSimulationState } from './PhysicalSimulationRuntime';
 import {
@@ -15,6 +16,7 @@ import type {
   ObservedSimulationDomain,
   SimulationActorRead,
   SimulationChromeRead,
+  SimulationDesktopRead,
   SimulationChange,
   SimulationConversationRead,
   SimulationHudProjection,
@@ -24,6 +26,7 @@ import type {
 export type {
   SimulationActorRead,
   SimulationChromeRead,
+  SimulationDesktopRead,
   SimulationChange,
   SimulationConversationRead,
   SimulationHudProjection,
@@ -268,6 +271,29 @@ export class SimulationKernel {
     return {
       revision: this.revision, actor,
       playerKnowledge: learned,
+    };
+  }
+
+  /** File-body-free desktop read. Only visible shortcut metadata crosses UI. */
+  public getDesktopRead(): SimulationDesktopRead {
+    const inventory = this.inventory.getState();
+    const computer = this.hardware.getComputerState();
+    const os = this.os.getState();
+    const desktopFiles = this.vfs.listDirectory('C:/Desktop').slice(0, 256).map(
+      ({ id, name, path, parentPath, kind, appAssociation }) => ({
+        id, name, path, parentPath, kind, appAssociation,
+      }),
+    );
+    return {
+      revision: this.revision,
+      osVersion: os.currentOsId ?? null,
+      pcBootState: resolvePcBootState({ computer, inventory, os }),
+      monitor: this.hardware.getDisplayState().monitor,
+      bootMediaItems: inventory.items.filter(item =>
+        getPhysicalCatalogItem(item.catalogItemId)?.media?.type === 'os_installer'
+        && (item.location === 'inventory' || item.location === 'room_package' || item.location === 'inserted')
+      ).map(item => ({ ...item })),
+      desktopFiles,
     };
   }
 
