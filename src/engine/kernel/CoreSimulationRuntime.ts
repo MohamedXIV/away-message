@@ -276,6 +276,11 @@ export class CoreSimulationRuntime {
     });
   }
 
+  /** Bounded read for OS/HUD; no whole CoreState projection. */
+  public getActiveView(): 'pc' | 'room' | 'cafe' | 'work' | 'city' {
+    return this.activeView;
+  }
+
   public getState(): Readonly<SimulationState> {
     // Reads never reconcile/publish derived mood. The write-time publication
     // boundary handles mood expiry/events; queries only project existing truth.
