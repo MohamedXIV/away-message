@@ -141,13 +141,10 @@ export const useSimulationStore = create<SimulationStore>()(
       },
 
       syncStateFromEngine: () => {
-        const { engine } = get();
-        const state = engine.getState();
-        set({
-          state,
-          isPaused: engine.clock.isPaused(),
-          activeView: state.activeView,
-        });
+        // Explicit boundary for direct domain methods used by legacy modals.
+        // The existing store subscription consumes the single delivered
+        // snapshot; bounded hooks receive the same revision atomically.
+        get().engine.publishExternalChange();
       },
 
       dispatchAction: (action: SimulationAction): ActionResult => {
@@ -219,26 +216,34 @@ export const useSimulationStore = create<SimulationStore>()(
       },
 
       setupComputerAtHome: () => {
-        const result = get().engine.setupComputerAtHome();
-        get().syncStateFromEngine();
+        const engine = get().engine;
+        const revision = engine.getRevision();
+        const result = engine.setupComputerAtHome();
+        if (revision === engine.getRevision()) get().syncStateFromEngine();
         return result;
       },
 
       setComputerPower: (poweredOn) => {
-        const result = get().engine.setComputerPower(poweredOn);
-        get().syncStateFromEngine();
+        const engine = get().engine;
+        const revision = engine.getRevision();
+        const result = engine.setComputerPower(poweredOn);
+        if (revision === engine.getRevision()) get().syncStateFromEngine();
         return result;
       },
 
       insertOwnedMediaAtHome: (instanceId) => {
-        const result = get().engine.insertOwnedMediaAtHome(instanceId);
-        get().syncStateFromEngine();
+        const engine = get().engine;
+        const revision = engine.getRevision();
+        const result = engine.insertOwnedMediaAtHome(instanceId);
+        if (revision === engine.getRevision()) get().syncStateFromEngine();
         return result;
       },
 
       ejectOwnedMediaAtHome: () => {
-        const result = get().engine.ejectOwnedMediaAtHome();
-        get().syncStateFromEngine();
+        const engine = get().engine;
+        const revision = engine.getRevision();
+        const result = engine.ejectOwnedMediaAtHome();
+        if (revision === engine.getRevision()) get().syncStateFromEngine();
         return result;
       },
 
@@ -247,8 +252,10 @@ export const useSimulationStore = create<SimulationStore>()(
       },
 
       commitOsInstall: (plan) => {
-        const result = get().engine.commitOsInstall(plan);
-        get().syncStateFromEngine();
+        const engine = get().engine;
+        const revision = engine.getRevision();
+        const result = engine.commitOsInstall(plan);
+        if (revision === engine.getRevision()) get().syncStateFromEngine();
         return result;
       },
 
