@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { SimulationEngine } from '../../src/engine/SimulationEngine';
-import { checkoutPhysicalShop } from '../../src/engine/PhysicalShopCheckout';
+import { checkoutPhysicalShop, type PhysicalShopCashPort } from '../../src/engine/PhysicalShopCheckout';
 import {
   PhysicalItemEngine,
   type PhysicalContainerDefinition,
@@ -26,6 +26,15 @@ const containerDefinitions: Readonly<Record<string, PhysicalContainerDefinition>
     allowedItemKinds: ['grocery'],
   },
 };
+
+function cashPort(simulation: SimulationEngine): PhysicalShopCashPort {
+  return {
+    canAfford: (amount) => simulation.economy.canAfford(amount),
+    spendCash: (amount, reason) => simulation.dispatchAction({
+      type: 'PLAYER_SPEND_CASH', amount, reason,
+    }),
+  };
+}
 
 function emptyWorld(): PhysicalWorldState {
   return {
@@ -132,7 +141,7 @@ describe('PhysicalShopEngine (#27)', () => {
       0,
     );
     const cashBefore = simulation.getState().player.cash;
-    const result = checkoutPhysicalShop(simulation, shop, prices);
+    const result = checkoutPhysicalShop(cashPort(simulation), shop, prices);
 
     expect(result).toEqual({ success: true, total: expectedTotal, itemIds: instanceIds });
     expect(simulation.getState().player.cash).toBe(cashBefore - expectedTotal);
@@ -145,7 +154,7 @@ describe('PhysicalShopEngine (#27)', () => {
     }
 
     const cashAfter = simulation.getState().player.cash;
-    expect(checkoutPhysicalShop(simulation, shop, prices).success).toBe(false);
+    expect(checkoutPhysicalShop(cashPort(simulation), shop, prices).success).toBe(false);
     expect(simulation.getState().player.cash).toBe(cashAfter);
   });
 
@@ -158,7 +167,7 @@ describe('PhysicalShopEngine (#27)', () => {
     const beforeState = shop.getState();
     const beforeWorld = physicalItems.getState();
     const cashBefore = simulation.getState().player.cash;
-    const result = checkoutPhysicalShop(simulation, shop, { soda: 1000, noodles: 1000 });
+    const result = checkoutPhysicalShop(cashPort(simulation), shop, { soda: 1000, noodles: 1000 });
 
     expect(result.success).toBe(false);
     expect(simulation.getState().player.cash).toBe(cashBefore);
@@ -173,12 +182,31 @@ describe('PhysicalShopEngine (#27)', () => {
     });
   });
 
+  it('rejects a denied debit before changing checkout ownership', () => {
+    const { shop, physicalItems } = createShop();
+    const instanceId = shop.getState().stockBySlot['front_shelf:0']!;
+    shop.take(instanceId, 'player_inventory');
+    const originalShop = shop.getState();
+    const originalItems = physicalItems.getState();
+    let attempted = 0;
+
+    const result = checkoutPhysicalShop({
+      canAfford: () => true,
+      spendCash: () => { attempted += 1; return { success: false, error: 'simulated debit denial' }; },
+    }, shop, prices);
+
+    expect(result).toEqual({ success: false, error: 'simulated debit denial' });
+    expect(attempted).toBe(1);
+    expect(shop.getState()).toEqual(originalShop);
+    expect(physicalItems.getState()).toEqual(originalItems);
+  });
+
   it('preserves paid carried goods across shop-state and physical-world reload', () => {
     const simulation = new SimulationEngine();
     const { shop, physicalItems } = createShop();
     const instanceId = shop.getState().stockBySlot['front_shelf:0']!;
     shop.take(instanceId, 'player_inventory');
-    expect(checkoutPhysicalShop(simulation, shop, prices).success).toBe(true);
+    expect(checkoutPhysicalShop(cashPort(simulation), shop, prices).success).toBe(true);
 
     const restored = createShop(shop.getState(), physicalItems.getState());
     expect(restored.shop.getState().ownershipByItemId[instanceId]).toBe('owned');

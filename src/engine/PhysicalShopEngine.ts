@@ -143,10 +143,13 @@ export class PhysicalShopEngine {
     return { itemIds, total };
   }
 
-  public finalizeCheckout(quote: PhysicalShopCheckoutQuote): void {
+  /** Validates every payable item before the external money owner debits cash. */
+  public validateCheckout(quote: PhysicalShopCheckoutQuote): void {
     if (quote.itemIds.length === 0) throw new Error('Checkout quote contains no unpaid goods.');
-
+    const seen = new Set<string>();
     for (const instanceId of quote.itemIds) {
+      if (seen.has(instanceId)) throw new Error(`Duplicate checkout item ${instanceId}.`);
+      seen.add(instanceId);
       if (this.state.ownershipByItemId[instanceId] !== 'unpaid') {
         throw new Error(`Item ${instanceId} is no longer unpaid store merchandise.`);
       }
@@ -155,7 +158,10 @@ export class PhysicalShopEngine {
         throw new Error(`Unpaid item ${instanceId} is no longer carried in a container.`);
       }
     }
+  }
 
+  public finalizeCheckout(quote: PhysicalShopCheckoutQuote): void {
+    this.validateCheckout(quote);
     for (const instanceId of quote.itemIds) {
       this.state.ownershipByItemId[instanceId] = 'owned';
     }

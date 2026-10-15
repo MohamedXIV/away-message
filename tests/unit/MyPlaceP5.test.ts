@@ -86,7 +86,7 @@ describe('P5.4 guestbook life (SimulationEngine)', () => {
 
   it('co-comments profile updates from mutual friends (deterministic roll)', () => {
     const before = sim.myplace.getGuestbook('maya_x').length;
-    (sim as any).maybeCoCommentProfileUpdate('maya_x', 5, 5000);
+    (sim as any).core.myplaceSocial.maybeCoCommentProfileUpdate('maya_x', 5, 5000);
     const after = sim.myplace.getGuestbook('maya_x').length;
     expect(after - before).toBe(appointmentRoll('maya_x:5:gbco') < 50 ? 1 : 0);
   });

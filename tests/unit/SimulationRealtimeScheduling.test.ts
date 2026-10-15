@@ -1,15 +1,21 @@
 import { describe, expect, it, vi } from 'vitest';
 import { SimulationEngine } from '../../src/engine/SimulationEngine';
+import type { NpcLifeRuntime } from '../../src/engine/kernel/NpcLifeRuntime';
+import type { NpcMovementRuntime } from '../../src/engine/kernel/NpcMovementRuntime';
 
+/**
+ * #171 migration: instrument the actual composed domain owners, not methods
+ * removed from the inherited LegacyFacade. Retain the stronger #170
+ * regression: no population pass happens until an authoritative minute.
+ */
 function spyOnNpcBoundaryPasses(engine: SimulationEngine) {
-  const internals = engine as unknown as {
-    advanceAllNpcPressuresToNow: () => void;
-    progressNpcMobility: () => void;
+  const root = engine as unknown as {
+    npc: { npcLife: NpcLifeRuntime; movement: NpcMovementRuntime };
   };
 
   return {
-    pressure: vi.spyOn(internals, 'advanceAllNpcPressuresToNow'),
-    mobility: vi.spyOn(internals, 'progressNpcMobility'),
+    pressure: vi.spyOn(root.npc.npcLife, 'advanceAllNpcPressuresToNow'),
+    mobility: vi.spyOn(root.npc.movement, 'progressNpcMobility'),
   };
 }
 

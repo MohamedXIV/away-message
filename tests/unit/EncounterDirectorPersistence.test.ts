@@ -5,7 +5,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { SimulationEngine } from '../../src/engine/SimulationEngine';
-import { SimulationEngine as LegacySimulationEngine } from '../../src/engine/SimulationEngineLegacyFacade';
+import type { NpcComputerSimulationRuntime } from '../../src/engine/kernel/NpcComputerSimulationRuntime';
 import { activeTravelLegWindows } from '../../src/engine/transit/ActiveTravel';
 import {
   getSharedTransitNetwork,
@@ -111,7 +111,7 @@ describe('EncounterDirector persistence (#47)', () => {
   });
 
   it('8. deciding an encounter invalidates the live-state cache so getState sees the stamp', () => {
-    const sim = new LegacySimulationEngine();
+    const sim = new SimulationEngine();
     const network = getSharedTransitNetwork();
     expect(network).not.toBeNull();
     if (!network) throw new Error('Expected shared transit network.');
@@ -163,7 +163,8 @@ describe('EncounterDirector persistence (#47)', () => {
 
     const before = sim.getState();
     expect(before.encounters).toEqual(emptyEncounterDirectorState());
-    const decision = sim.decideEncounter({
+    const npc = (sim as unknown as { npc: NpcComputerSimulationRuntime }).npc;
+    const decision = npc.decideEncounter({
       kind: 'wait',
       stopId: waitLeg.stopId,
       windowStart: waitWindow.startMinute,
