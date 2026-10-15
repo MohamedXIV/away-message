@@ -26,9 +26,9 @@ import type { SimulationState } from '../types';
  * SimulationEngine, does not tick, has no snapshots of its own and must not
  * become a second mutable source of truth.
  *
- * #171 migration note: the old inheritance shell consumes this root while
- * production call sites are cut over. The shell must be DELETED before #171
- * merges; the composition root stays and is consumed by SimulationKernel.
+ * #171 production cutover: only the composed SimulationKernel constructs
+ * this graph. No inherited executor exists; the root retains a single writer
+ * and delegates bounded responsibilities to explicit runtime coordinators.
  */
 export function createCoreDomainOwners(initialState?: Partial<SimulationState>) {
   const events = new EventBus();
