@@ -5,6 +5,7 @@
 
 import React, { useState } from 'react';
 import { useSimulationStore } from '../../store/useSimulationStore';
+import { useSimulationHud, useSimulationWorldRead } from '../../store/useBoundedSimulationRead';
 import { soundManager } from '../../audio/SoundManager';
 import { CITY_NODES, type CityNodeId } from '../../engine/CityMap';
 import { DOOR_OPTIONS } from '../data/roomInteractables';
@@ -27,10 +28,12 @@ function formatDuration(totalMin: number): string {
 
 export const CityPlaceView: React.FC<CityPlaceViewProps> = ({ location, onOpenMap }) => {
   const engine = useSimulationStore((s) => s.engine);
-  const time = useSimulationStore((s) => s.state.time);
-  const player = useSimulationStore((s) => s.state.player);
-  useSimulationStore((s) => s.state.needs);
-  useSimulationStore((s) => s.state.world.triggeredEvents);
+  // Visible city time/environment are light owner-backed revisions;
+  // the small economy domain supplies payment terms, not full WorldState.
+  const hud = useSimulationHud();
+  const worldRead = useSimulationWorldRead();
+  const time = hud.time;
+  const player = engine.economy.getState();
   const workShift = useSimulationStore((s) => s.workShift);
   const cityOuting = useSimulationStore((s) => s.cityOuting);
   const payRent = useSimulationStore((s) => s.payRent);
@@ -39,7 +42,7 @@ export const CityPlaceView: React.FC<CityPlaceViewProps> = ({ location, onOpenMa
   const [showShopModal, setShowShopModal] = useState(false);
 
   const node = CITY_NODES[location];
-  const environment = engine.gameContext.environment.current();
+  const environment = worldRead.environment;
   const needs = engine.gameContext.player.needs();
   const weatherMeta = ({
     rain: ['🌧️', 'Canal Rain'],
