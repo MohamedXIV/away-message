@@ -28,6 +28,29 @@ export class FileSystemEngine {
     }
   }
 
+  /** Directory view with no file bodies, image payloads or unrelated folders. */
+  public listDirectoryMetadata(dirPath: string): FileRecord[] {
+    const normalized = this.normalizePath(dirPath);
+    const result: FileRecord[] = [];
+    for (const record of this.files.values()) {
+      if (record.parentPath !== normalized || record.path === normalized) continue;
+      const { id, name, path, parentPath, kind, sizeBytes, createdAtMinute, modifiedAtMinute,
+        appAssociation, targetPath } = record;
+      result.push({
+        id, name, path, parentPath, kind, sizeBytes, createdAtMinute, modifiedAtMinute,
+        ...(appAssociation ? { appAssociation } : {}),
+        ...(targetPath ? { targetPath } : {}),
+        ...(record.metadata?.originalTrashPath
+          ? { metadata: { originalTrashPath: record.metadata.originalTrashPath } } : {}),
+      });
+    }
+    return result;
+  }
+
+  public getDiskCapacity(): { totalDiskBytes: number; baseSystemBytes: number } {
+    return { totalDiskBytes: this.totalDiskBytes, baseSystemBytes: this.baseSystemBytes };
+  }
+
   public getState(): VirtualFileSystemState {
     const fileRecords: Record<string, FileRecord> = {};
     for (const [path, record] of this.files.entries()) {
