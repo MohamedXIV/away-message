@@ -294,7 +294,11 @@ export class SimulationKernel {
   }
 
   public getMessengerRead(maxContacts = 32): SimulationMessengerRead {
-    return { revision: this.revision, contacts: this.social.getMessengerSummary(maxContacts) };
+    return {
+      revision: this.revision,
+      contacts: this.social.getMessengerSummary(maxContacts),
+      unreadCounts: this.social.getConversationUnreadCounts(),
+    };
   }
 
   public getConversationRead(actorId: string, offset = 0, limit = 30): SimulationConversationRead {
