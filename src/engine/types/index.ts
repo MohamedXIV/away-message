@@ -377,7 +377,13 @@ export interface ScheduleBlock {
 }
 
 export type CharacterArchetype = 'coworker' | 'nightowl' | 'student' | 'trader' | 'artist' | 'regular' | (string & {});
+/** Legacy authored/read projection, never canonical relationship or lifecycle truth. */
 export type BuddyLifecycleStatus = 'stranger' | 'acquaintance' | 'friend' | 'close' | 'distant' | 'gone' | 'blocked';
+/** The only persistent actor availability/contact truth; relationship stage is derived. */
+export interface ActorCondition {
+  lifecycle: 'active' | 'departed';
+  contact: 'open' | 'distant' | 'blocked';
+}
 export type BuddyMetVia = 'nightboard' | 'myplace' | 'pulse-room' | 'work' | 'intro' | 'seed';
 
 export type HairColor = 'black' | 'dark_brown' | 'brown' | 'light_brown' | 'blonde' | 'auburn' | 'red' | 'grey' | 'dyed_blue' | 'dyed_pink' | 'dyed_green';
@@ -420,6 +426,7 @@ export interface BuddyCharacter {
   traits: CharacterTraits;
   // Dynamic-roster metadata (optional so legacy defs keep compiling)
   archetype?: CharacterArchetype;
+  /** Legacy authored hint / derived read projection; Social owns actual condition. */
   status?: BuddyLifecycleStatus;
   metVia?: BuddyMetVia;
   isProcedural?: boolean;
@@ -469,6 +476,9 @@ export interface SocialEngineState {
   buddies?: Record<string, BuddyCharacter>;
   // Authored seed actors are content defaults, not sacred identities. Optional
   // lifecycle overrides/removals let a save diverge from the seed roster.
+  /** #187 canonical state; one condition per active roster actor. */
+  actorConditions?: Record<string, ActorCondition>;
+  /** @deprecated import-only from a development-era save, not written by new snapshots. */
   seedActorStatuses?: Record<string, BuddyLifecycleStatus>;
   removedSeedActorIds?: string[];
   // P3 long-term memory: immortal facts + promises per buddy (persisted, capped)
