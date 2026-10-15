@@ -1,13 +1,12 @@
 import React, { useState } from 'react';
 import { useSimulationStore } from '../../store/useSimulationStore';
+import { useSimulationApps, useSimulationHud } from '../../store/useBoundedSimulationRead';
 import type { EnvironmentSnapshot } from '../../engine/GameContext';
 
 export const WeatherBuddyApp: React.FC = () => {
   const engine = useSimulationStore((s) => s.engine);
-  const currentTime = useSimulationStore((s) => s.state.time);
-  const worldEvents = useSimulationStore((s) => s.state.world.triggeredEvents);
-  const installedSoftware = useSimulationStore((s) => s.state.installedSoftware || []);
-  void worldEvents;
+  const currentTime = useSimulationHud().time;
+  const installedSoftware = useSimulationApps().installedSoftware;
 
   const [isCelsius, setIsCelsius] = useState(false);
   const selectedCity = 'Oakhaven - Industrial Canal';
