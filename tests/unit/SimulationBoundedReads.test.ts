@@ -14,6 +14,8 @@ describe('#172 bounded owned-source reads and messenger paging', () => {
     expect(world.activeView).toBe(hud.activeView);
     expect(world.environment.atMinute).toBe(world.time.totalMinutes);
     expect(world.residencePlaceId).toBe(game.getCurrentResidencePlaceId());
+    expect(world.pcBootState).toBe(game.getPcBootState());
+    expect(world.metInPerson).toBe(Boolean(game.world.getFlag('met_in_person')));
 
     expect(game.getPlayerActorRead(actor.id)).toBeNull(); // unknown handle
     expect(game.social.learnHandle(actor.id, actor.handle)).toBe(true);
