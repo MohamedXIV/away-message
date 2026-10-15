@@ -107,12 +107,15 @@ export const useSimulationStore = create<SimulationStore>()(
   subscribeWithSelector((set, get) => {
     let unsubscribeEngine: (() => void) | null = null;
 
+    const initialState = defaultEngine.getState();
+
     const setupEngineSubscription = (engineInstance: SimulationEngine) => {
       if (unsubscribeEngine) {
         unsubscribeEngine();
       }
-      unsubscribeEngine = engineInstance.subscribe(() => {
-        const newState = engineInstance.getState();
+      // The kernel already built the legacy state once for publication.
+      // Never immediately rebuild it again inside the Zustand listener.
+      unsubscribeEngine = engineInstance.subscribe((newState) => {
         set({
           state: newState,
           isPaused: engineInstance.clock.isPaused(),
@@ -126,33 +129,35 @@ export const useSimulationStore = create<SimulationStore>()(
 
     return {
       engine: defaultEngine,
-      state: defaultEngine.getState(),
+      state: initialState,
       isPaused: defaultEngine.clock.isPaused(),
-      activeView: defaultEngine.getState().activeView,
+      activeView: initialState.activeView,
 
       setEngine: (engine: SimulationEngine) => {
+        // subscribe() emits its current state synchronously; avoid a second
+        // reconstruction after that callback has already synchronized it.
         setupEngineSubscription(engine);
-        set({
-          engine,
-          state: engine.getState(),
-          isPaused: engine.clock.isPaused(),
-          activeView: engine.getState().activeView,
-        });
+        set({ engine });
       },
 
       syncStateFromEngine: () => {
         const { engine } = get();
+        const state = engine.getState();
         set({
-          state: engine.getState(),
+          state,
           isPaused: engine.clock.isPaused(),
-          activeView: engine.getState().activeView,
+          activeView: state.activeView,
         });
       },
 
       dispatchAction: (action: SimulationAction): ActionResult => {
         const { engine } = get();
+        const priorRevision = engine.getRevision();
         const result = engine.dispatchAction(action);
-        get().syncStateFromEngine();
+        // Legacy actions without a publication still require a synchronous
+        // explicit resync. Published actions were already delivered exactly
+        // once through subscribe(), so do not reassemble their giant state.
+        if (engine.getRevision() === priorRevision) get().syncStateFromEngine();
         return result;
       },
 
