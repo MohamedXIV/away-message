@@ -62,14 +62,14 @@ describe('ActiveTravelRuntime — one committed journey owner', () => {
 
   it('public SimulationEngine delegates current travel state to the exact composed owner', () => {
     const engine = new SimulationEngine();
-    const runtime = (engine as unknown as { activeTravel: ActiveTravelRuntime }).activeTravel;
+    const runtime = (engine as unknown as { physical: { activeTravel: ActiveTravelRuntime } }).physical.activeTravel;
     const { trip } = fixture();
 
     engine.setActiveTravel(trip);
     expect(runtime.getActiveTravel()).toEqual(engine.getActiveTravel());
     expect(engine.exportSnapshot().activeTravel).toEqual(trip);
     engine.loadSnapshot(engine.exportSnapshot());
-    expect((engine as unknown as { activeTravel: ActiveTravelRuntime }).activeTravel)
+    expect((engine as unknown as { physical: { activeTravel: ActiveTravelRuntime } }).physical.activeTravel)
       .toBe(runtime);
     expect(engine.getActiveTravel()).toEqual(trip);
   });
