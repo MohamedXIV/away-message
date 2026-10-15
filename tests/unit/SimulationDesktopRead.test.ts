@@ -8,7 +8,7 @@ describe('#172 DesktopShell metadata-only read', () => {
     for (const [name, parentPath] of [
       ['Icon.txt', 'C:/Desktop'],
       ['Private.txt', 'C:/Documents'],
-    ]) {
+    ] as const) {
       const result = engine.dispatchAction({
         type: 'VFS_CREATE_FILE',
         file: {
