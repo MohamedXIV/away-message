@@ -1625,6 +1625,18 @@ export class SocialEngine {
     return rel ? { ...rel } : undefined;
   }
 
+  /**
+   * Current public presence only, without the Social persistence tree.
+   * Includes remote/unknown characters to preserve the login activity watcher.
+   */
+  public getPresenceSummary(): Record<string, BuddyPresence> {
+    const rows: Record<string, BuddyPresence> = {};
+    for (const [actorId, presence] of this.presence) {
+      rows[actorId] = { ...presence };
+    }
+    return rows;
+  }
+
   public getPresence(rawId: string): BuddyPresence | undefined {
     const pres = this.presence.get(normalizeBuddyId(rawId));
     return pres ? { ...pres } : undefined;
