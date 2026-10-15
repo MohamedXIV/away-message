@@ -97,3 +97,14 @@ export interface SimulationChromeRead {
   unreadCount: number;
   unreadPreviews: ReturnType<import('../SocialEngine').SocialEngine['getUnreadTraySummary']>['previews'];
 }
+
+/** Minimal desktop shell input: no file bodies, full VFS map or raw inventory. */
+export interface SimulationDesktopRead {
+  revision: number;
+  osVersion: import('../types').OsVersion | null;
+  pcBootState: import('./ComputerOwnershipRuntime').PcBootState;
+  monitor: ReturnType<import('../HardwareEngine').HardwareEngine['getDisplayState']>['monitor'];
+  bootMediaItems: import('../types').OwnedItem[];
+  desktopFiles: Array<Pick<import('../types').FileRecord,
+    'id' | 'name' | 'path' | 'parentPath' | 'kind' | 'appAssociation'>>;
+}
