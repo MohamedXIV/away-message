@@ -17,6 +17,8 @@ export class SimulationKernel {
   private readonly physical: PhysicalSimulationRuntime;
   private readonly subscribers = new Set<(state: Readonly<LiveSimulationState>) => void>();
   private hydrating = false;
+  private simulationBoundaryDepth = 0;
+  private publicationPending = false;
 
   constructor(initialState?: InitialSimulationState) {
     const computer = initialState?.computer ?? createEmptyComputerSetup();
@@ -72,17 +74,36 @@ export class SimulationKernel {
   public get gameContext() { return this.core.gameContext; }
   public get inventory() { return this.npc.inventory; }
 
+  /**
+   * Hold notification until all canonical time owners, including NPC mobility,
+   * have settled. A subscriber must never observe an in-between time snapshot.
+   */
+  private withinBoundary<T>(action: () => T, beforeMinute: number): T {
+    this.simulationBoundaryDepth++;
+    try {
+      return action();
+    } finally {
+      try {
+        this.npc.settleAfterTime(beforeMinute);
+      } finally {
+        this.simulationBoundaryDepth--;
+        if (this.simulationBoundaryDepth === 0 && this.publicationPending) {
+          this.publicationPending = false;
+          this.notifySubscribers();
+        }
+      }
+    }
+  }
+
   public advanceRealTime(deltaRealSeconds: number): void {
     const before = this.clock.getTotalMinutes();
-    this.core.advanceRealTime(deltaRealSeconds);
-    this.npc.settleAfterTime(before);
+    this.withinBoundary(() => this.core.advanceRealTime(deltaRealSeconds), before);
   }
 
   public advanceGameMinutes(minutes: number, reason?: string): void {
     const before = this.clock.getTotalMinutes();
     if (minutes > 0) this.npc.primeNpcMobility();
-    this.core.advanceGameMinutes(minutes, reason);
-    this.npc.settleAfterTime(before);
+    this.withinBoundary(() => this.core.advanceGameMinutes(minutes, reason), before);
   }
 
   public dispatchAction(action: SimulationAction): ActionResult {
@@ -93,9 +114,7 @@ export class SimulationKernel {
       return { success: false, error: 'Legacy OS upgrades are retired. Buy, insert, and boot from owned setup media instead.' };
     }
     const before = this.clock.getTotalMinutes();
-    const result = this.core.dispatchAction(action);
-    this.npc.settleAfterTime(before);
-    return result;
+    return this.withinBoundary(() => this.core.dispatchAction(action), before);
   }
 
   private invalidateStateCache(): void {
@@ -104,6 +123,10 @@ export class SimulationKernel {
 
   private notifySubscribers(): void {
     if (this.hydrating || !this.physical) return;
+    if (this.simulationBoundaryDepth > 0) {
+      this.publicationPending = true;
+      return;
+    }
     // Reconcile derived mood exactly at the authoritative publication boundary,
     // never during getState() or a current-format snapshot read.
     this.mood.publishIfChanged();
