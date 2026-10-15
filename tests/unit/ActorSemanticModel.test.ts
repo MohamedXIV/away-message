@@ -85,14 +85,14 @@ describe('#187 structured social memory provenance', () => {
       game.social.resolvePromise(actorId, record!.id, true, 3);
       return record!;
     });
-    expect(promises[0].id).toBe(promises[1].id);
+    expect(promises[0]!.id).toBe(promises[1]!.id);
 
     const memories = first.social.getCoreMemories(actorId);
     const promiseMemory = memories.find(m => m.kind === 'promise_kept')!;
     expect(promiseMemory.meaning).toEqual({
       participants: ['player', actorId],
-      subject: { kind: 'promise', id: promises[0].id },
-      source: { kind: 'domain_event', refId: promises[0].id },
+      subject: { kind: 'promise', id: promises[0]!.id },
+      source: { kind: 'domain_event', refId: promises[0]!.id },
       salience: 'high', valence: 'positive',
     });
     expect(second.social.getCoreMemories(actorId).find(m => m.kind === 'promise_kept')?.id).toBe(promiseMemory.id);
