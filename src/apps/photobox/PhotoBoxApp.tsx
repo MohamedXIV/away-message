@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import { useSimulationStore } from '../../store/useSimulationStore';
 import { useSimulationApps } from '../../store/useBoundedSimulationRead';
 import { soundManager } from '../../audio/SoundManager';
 
