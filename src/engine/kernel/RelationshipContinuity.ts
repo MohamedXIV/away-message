@@ -22,7 +22,7 @@ type RelationshipOwners = Pick<
  *
  * This is one domain policy over the existing relationship graph. It stores
  * no relationships or lifecycle state. #187 will separate actual actor
- * lifecycle/contact state from derived relationship stage on this seam.
+ * canonical lifecycle/contact state from derived relationship stage on this seam.
  */
 export class RelationshipContinuity {
   constructor(private readonly owners: RelationshipOwners) {}
@@ -66,7 +66,7 @@ export class RelationshipContinuity {
       if (sharpState === 'confronted' && rels.annoyance >= DISTANT_ANNOYANCE) {
         const active = this.owners.world.getFlag('sharp_active');
         if (active && active !== buddyId && active !== '') return;
-        this.owners.social.setBuddyStatus(buddyId, 'distant');
+        this.owners.social.setActorCondition(buddyId, { lifecycle: 'active', contact: 'distant' });
         this.owners.world.setFlag(sharpKey, 'distant');
         this.owners.world.setFlag(`${sharpKey}_day`, day);
         this.owners.world.setFlag(`distant_${buddyId}_until`, day + 7);
@@ -78,7 +78,7 @@ export class RelationshipContinuity {
       }
       if (sharpState === 'distant' && rels.annoyance >= GONE_ANNOYANCE) {
         // Genuinely gone: stays in roster as epitaph (memories kept), presence forced dark
-        this.owners.social.setBuddyStatus(buddyId, 'gone');
+        this.owners.social.setActorCondition(buddyId, { lifecycle: 'departed', contact: 'open' });
         this.owners.world.setFlag(sharpKey, 'gone');
         this.owners.world.setFlag(`${sharpKey}_day`, day);
         if (this.owners.world.getFlag('sharp_active') === buddyId) this.owners.world.setFlag('sharp_active', '');
@@ -108,10 +108,10 @@ export class RelationshipContinuity {
     } catch { /* promises never break the tick */ }
     try {
       for (const buddy of this.owners.social.getBuddies()) {
-        if (buddy.status !== 'distant') continue;
+        if (this.owners.social.getActorCondition(buddy.id)?.contact !== 'distant') continue;
         const until = this.owners.world.getFlag(`distant_${buddy.id}_until`);
         if (typeof until === 'number' && newDay < until) continue;
-        this.owners.social.setBuddyStatus(buddy.id, 'acquaintance');
+        this.owners.social.setActorCondition(buddy.id, { lifecycle: 'active', contact: 'open' });
         const rels = this.owners.social.getRelationships(buddy.id);
         if (rels) this.owners.social.adjustRelationship(buddy.id, { annoyance: 25, trust: Math.max(5, rels.trust - 10) });
         this.owners.world.setFlag(`sharp_${buddy.id}`, 'returned');
@@ -131,7 +131,8 @@ export class RelationshipContinuity {
     try {
       for (const buddy of this.owners.social.getBuddies()) {
         if (buddy.id === targetId) continue;
-        if (buddy.status === 'distant' || buddy.status === 'gone' || buddy.status === 'blocked') continue;
+        const condition = this.owners.social.getActorCondition(buddy.id);
+        if (!condition || condition.lifecycle === 'departed' || condition.contact !== 'open') continue;
         const stage = this.owners.social.getRelationshipStage(buddy.id);
         if (stage !== 'friend' && stage !== 'close') continue;
         this.owners.social.adjustAffinity(buddy.id, targetId, delta);
