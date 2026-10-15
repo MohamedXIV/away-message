@@ -229,6 +229,8 @@ export class SimulationKernel {
       residencePlaceId: this.physical.getCurrentResidencePlaceId(),
       playerLocation: this.economy.getState().location,
       environment: this.environment.getCurrentSnapshot(),
+      pcBootState: this.npc.getPcBootState(),
+      metInPerson: !!this.world.getFlag('met_in_person'),
     };
   }
 
