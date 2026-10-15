@@ -50,6 +50,39 @@ describe('#172 bounded owned-source reads and messenger paging', () => {
     snapshot.mockRestore();
   });
 
+  it('preserves all 125 canonical messages while rendering strictly bounded UI pages', () => {
+    const game = new SimulationEngine();
+    const actorId = game.social.getBuddies()[0]!.id;
+    for (let index = 0; index < 125; index++) {
+      game.social.sendMessage(
+        actorId, index % 3 === 0 ? 'player' : actorId,
+        index % 3 === 0 ? actorId : 'player',
+        `history ${index}`, 480 + index,
+      );
+    }
+    const firstPage = game.getConversationRead(actorId, 0, 50);
+    const olderPage = game.getConversationRead(actorId, 50, 50);
+    const oldestPage = game.getConversationRead(actorId, 100, 50);
+    expect(firstPage.messages).toHaveLength(50);
+    expect(firstPage.messages.at(-1)?.text).toBe('history 124');
+    expect(firstPage.hasOlder).toBe(true);
+    expect(olderPage.messages).toHaveLength(50);
+    expect(olderPage.messages[0]?.text).toBe('history 25');
+    expect(olderPage.hasOlder).toBe(true);
+    expect(oldestPage.messages.map(m => m.text)).toEqual(
+      Array.from({ length: 25 }, (_, index) => `history ${index}`),
+    );
+    expect(oldestPage.hasOlder).toBe(false);
+    // Explicit Save Log uses all messages; UI pagination never truncates owner history.
+    expect(game.social.getMessages(actorId)).toHaveLength(125);
+    expect(game.social.hasConversationMessageOnDay(actorId, 1)).toBe(true);
+    expect(game.social.hasConversationMessageOnDay(actorId, 2)).toBe(false);
+    expect(game.social.getConversationUnreadCounts()[actorId]).toBe(83);
+    game.social.markAsRead(actorId);
+    expect(game.social.getConversationUnreadCounts()[actorId]).toBeUndefined();
+    expect(game.getConversationRead(actorId, 0, 50).total).toBe(125);
+  });
+
   it('never exposes unlearned world facts through the player actor projection', () => {
     const game = new SimulationEngine();
     const actor = game.social.getBuddies()[0]!;
