@@ -384,17 +384,25 @@ export class WorldEventsEngine {
     const buddyId = normalizeBuddyId(rawBuddyId);
     const knowledge = this.buddyKnowledge.get(buddyId) ?? [];
     const map = new Map(knowledge.map((k) => [k.eventId, k]));
+    const limit = Number.isFinite(maxEvents) ? Math.max(0, Math.min(8, Math.floor(maxEvents))) : 4;
+    if (limit === 0) return 'No known major world events yet.';
     const triggered = this.getTriggeredEvents()
-      .filter((e) => e.triggerDay <= currentDay && map.has(e.id)).slice(-maxEvents);
-    if (triggered.length === 0) return 'No known major world events yet.';
-    return triggered
-      .map((e) => {
-        const k = map.get(e.id);
-        const att = k ? ` [${k.attitude}]` : '';
-        const take = k ? ` — you feel: "${k.personalTake}"` : '';
-        return `- [Day ${e.triggerDay}] ${e.title}${att}: ${e.knowledgePrompt}${take}`;
-      })
-      .join('\n');
+      .filter((e) => e.triggerDay <= currentDay && map.has(e.id)).slice(-limit);
+    const eventLines = triggered.map((e) => {
+      const k = map.get(e.id);
+      const att = k ? ` [${k.attitude}]` : '';
+      const take = k ? ` — you feel: "${k.personalTake}"` : '';
+      return `- [Day ${e.triggerDay}] ${e.title}${att}: ${e.knowledgePrompt}${take}`;
+    });
+    // This is consumed by Pulse DM prompt context. A claim provides only
+    // what the NPC heard; never dereference its fact ID to expose hidden truth.
+    const learned = this.semanticKnowledge.forActor(buddyId);
+    const factLines = learned.facts.slice(-limit).map((fact) =>
+      `- Known fact: ${fact.subjectId}.${fact.predicate} = ${JSON.stringify(fact.value)} (via ${fact.established.kind})`);
+    const claimLines = learned.claims.slice(-limit).map((claim) =>
+      `- Unverified rumor about ${claim.factId}: asserted ${JSON.stringify(claim.assertedValue)} (via ${claim.published.kind})`);
+    const lines = [...eventLines, ...factLines, ...claimLines].slice(-limit * 2);
+    return lines.length > 0 ? lines.join('\n') : 'No known major world events yet.';
   }
 
   public getBuddyKnowledge(rawBuddyId: string): BuddyEventKnowledge[] {
