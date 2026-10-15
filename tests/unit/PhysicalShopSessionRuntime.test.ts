@@ -17,7 +17,7 @@ const FIXTURES: readonly PhysicalShopFixtureDefinition[] = [
 ];
 
 function session(engine: SimulationEngine): PhysicalShopSessionRuntime {
-  return (engine as unknown as { physicalShop: PhysicalShopSessionRuntime }).physicalShop;
+  return (engine as unknown as { physical: { physicalShop: PhysicalShopSessionRuntime } }).physical.physicalShop;
 }
 
 describe('PhysicalShopSessionRuntime — single persisted shop and item owner', () => {
