@@ -4,6 +4,10 @@ import { createEmptyComputerSetup, createEmptyDisplaySetup } from '../hardware/s
 import { CoreSimulationRuntime } from './CoreSimulationRuntime';
 import { NpcComputerSimulationRuntime } from './NpcComputerSimulationRuntime';
 import { PhysicalSimulationRuntime, type LiveSimulationState, type InitialSimulationState } from './PhysicalSimulationRuntime';
+import {
+  deriveActorSemantics, projectLifeInfluences,
+  type ActorSemanticView, type SemanticInfluenceView,
+} from '../semantic/ActorSemantics';
 
 export type { LiveSimulationState } from './PhysicalSimulationRuntime';
 
@@ -73,6 +77,31 @@ export class SimulationKernel {
   public get mood() { return this.core.mood; }
   public get gameContext() { return this.core.gameContext; }
   public get inventory() { return this.npc.inventory; }
+
+  /** #187: bounded, non-persisted semantics over the one Social/Life authority. */
+  public getActorSemanticView(actorId: string, focused = false): ActorSemanticView | null {
+    const actor = this.social.getBuddy(actorId);
+    if (!actor) return null;
+    return deriveActorSemantics({
+      actor,
+      condition: this.social.getActorCondition(actor.id)!,
+      relationship: this.social.getRelationships(actor.id),
+      relationshipStage: this.social.getRelationshipStage(actor.id),
+      presence: this.social.getPresence(actor.id),
+      knownToPlayer: this.social.isKnown(actor.id),
+      pressure: this.npc.npcLife.peekNpcPressure(actor.id),
+      lifeFidelity: this.getFidelityTier(actor.id),
+      focused,
+    });
+  }
+
+  /** Inspector/owner-facing provenance; #172 will shape player-safe UI projections. */
+  public getActorLifeInfluences(actorId: string): SemanticInfluenceView[] {
+    if (!this.social.getBuddy(actorId)) return [];
+    return projectLifeInfluences(this.world.queryActiveModifiers({
+      domain: 'life', targetId: actorId, atMinute: this.clock.getTotalMinutes(),
+    }));
+  }
 
   /**
    * Hold notification until all canonical time owners, including NPC mobility,

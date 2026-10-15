@@ -377,7 +377,13 @@ export interface ScheduleBlock {
 }
 
 export type CharacterArchetype = 'coworker' | 'nightowl' | 'student' | 'trader' | 'artist' | 'regular' | (string & {});
+/** Legacy authored/read projection, never canonical relationship or lifecycle truth. */
 export type BuddyLifecycleStatus = 'stranger' | 'acquaintance' | 'friend' | 'close' | 'distant' | 'gone' | 'blocked';
+/** The only persistent actor availability/contact truth; relationship stage is derived. */
+export interface ActorCondition {
+  lifecycle: 'active' | 'departed';
+  contact: 'open' | 'distant' | 'blocked';
+}
 export type BuddyMetVia = 'nightboard' | 'myplace' | 'pulse-room' | 'work' | 'intro' | 'seed';
 
 export type HairColor = 'black' | 'dark_brown' | 'brown' | 'light_brown' | 'blonde' | 'auburn' | 'red' | 'grey' | 'dyed_blue' | 'dyed_pink' | 'dyed_green';
@@ -420,6 +426,7 @@ export interface BuddyCharacter {
   traits: CharacterTraits;
   // Dynamic-roster metadata (optional so legacy defs keep compiling)
   archetype?: CharacterArchetype;
+  /** Legacy authored hint / derived read projection; Social owns actual condition. */
   status?: BuddyLifecycleStatus;
   metVia?: BuddyMetVia;
   isProcedural?: boolean;
@@ -469,6 +476,9 @@ export interface SocialEngineState {
   buddies?: Record<string, BuddyCharacter>;
   // Authored seed actors are content defaults, not sacred identities. Optional
   // lifecycle overrides/removals let a save diverge from the seed roster.
+  /** #187 canonical state; one condition per active roster actor. */
+  actorConditions?: Record<string, ActorCondition>;
+  /** @deprecated import-only from a development-era save, not written by new snapshots. */
   seedActorStatuses?: Record<string, BuddyLifecycleStatus>;
   removedSeedActorIds?: string[];
   // P3 long-term memory: immortal facts + promises per buddy (persisted, capped)
@@ -499,12 +509,22 @@ export interface SocialEngineState {
 // P3 — MEMORY & RELATIONSHIP DEPTH
 // ==========================================
 
-/** Immortal per-buddy memory: survives the rolling 6-message window, injected into every prompt. */
+/** Typed irreducible significance of a memory; text is fallback rendering. */
+export interface CoreMemoryMeaning {
+  participants: string[];
+  subject: { kind: 'actor' | 'promise' | 'event' | 'fact' | 'claim'; id: string };
+  source: { kind: 'direct_experience' | 'domain_event' | 'message' | 'scenario'; refId: string };
+  salience: 'low' | 'medium' | 'high';
+  valence: 'positive' | 'negative' | 'neutral' | 'mixed';
+}
+
+/** Immortal per-buddy memory: canonical meaning is structured when important. */
 export interface CoreMemory {
   id: string;
   text: string; // <= 160 chars
   kind: 'fact' | 'promise_kept' | 'promise_broken' | 'first_meeting' | 'shared_moment' | 'shared_photo';
   day: number;
+  meaning?: CoreMemoryMeaning;
 }
 
 /** A commitment the player made to a buddy. Kept/broken explicitly move trust. */
@@ -660,6 +680,8 @@ export interface BuddyEventKnowledge {
   attitude: BuddyAttitude;
   personalTake: string; // one sentence, buddy-specific
   learnedAtMinute: number;
+  /** Explicit public-feed or direct-disclosure provenance; not world truth. */
+  source?: import('../semantic/KnowledgeLedger').KnowledgeProvenance;
 }
 
 export interface WorldState {
@@ -669,6 +691,8 @@ export interface WorldState {
   triggeredEvents: GlobalEvent[];
   // Per-buddy attitude bank — each buddy sees same event through different eyes
   buddyKnowledge: Record<string, BuddyEventKnowledge[]>; // key: buddyId
+  /** #187: one World-owned truth/claim/actor-awareness ledger. Never a UI projection. */
+  semanticKnowledge?: import('../semantic/KnowledgeLedger').SemanticKnowledgeState;
 }
 
 // Deprecated alias — kept for backward compat during migration to sandbox

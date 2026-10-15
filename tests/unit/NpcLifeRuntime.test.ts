@@ -48,8 +48,11 @@ describe('NpcLifeRuntime — one canonical pressure and goals owner', () => {
     const life = new NpcLifeRuntime(owners, () => {}, snapshot.npcLives);
 
     for (const buddy of owners.social.getBuddies()) {
+      const rel = owners.social.getRelationships(buddy.id);
+      const important = owners.social.isKnown(buddy.id) || (rel?.familiarity ?? 0) >= 35;
       expect(life.getFidelityTier(buddy.id)).toBe(
-        buddy.reach === 'remote' ? 'background_remote' : 'important_local',
+        buddy.reach === 'remote' ? 'background_remote'
+          : important ? 'important_local' : 'local_offscreen',
       );
     }
   });

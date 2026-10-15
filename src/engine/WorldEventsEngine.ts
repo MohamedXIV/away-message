@@ -3,6 +3,14 @@
 
 import { EventBus } from './EventBus';
 import { Appointment, GlobalEvent, WorldState, BuddyAttitude, BuddyEventKnowledge, CharacterArchetype } from './types';
+import {
+  KnowledgeLedger,
+  type ActorKnowledgeView,
+  type ClaimRecord,
+  type KnowledgeProvenance,
+  type KnowledgeReceipt,
+  type WorldFactRecord,
+} from './semantic/KnowledgeLedger';
 import { normalizeBuddyId } from './SocialEngine';
 import { ARCHETYPE_ATTITUDES, resolveArchetype } from './characterTemplates';
 import { GENERATED_EVENT_MODIFIERS } from './worldContent.generated';
@@ -134,7 +142,9 @@ export class WorldEventsEngine {
     }
     return resolveArchetype(buddyId);
   }
-  private buddyKnowledge: Map<string, BuddyEventKnowledge[]> = new Map(); // buddyId -> knowledge[]
+  private buddyKnowledge: Map<string, BuddyEventKnowledge[]> = new Map(); // learned public events
+  /** Sole authority for structured world facts, rumors and scoped awareness. */
+  private readonly semanticKnowledge = new KnowledgeLedger();
 
   constructor(
     eventBus: EventBus,
@@ -163,6 +173,7 @@ export class WorldEventsEngine {
       windowObservationHistory: [...this.windowObservationHistory],
       triggeredEvents: Array.from(this.triggeredEvents.values()).map((e) => ({ ...e })),
       buddyKnowledge,
+      semanticKnowledge: this.semanticKnowledge.getState(),
     };
     this._cachedState = state;
     return state;
@@ -174,6 +185,7 @@ export class WorldEventsEngine {
   }
 
   public loadState(state: Partial<WorldEventsState>): void {
+    this.semanticKnowledge.loadState(state.semanticKnowledge);
     this.flags.clear();
     if (state.flags) {
       for (const [k, v] of Object.entries(state.flags)) this.flags.set(k, v);
@@ -192,9 +204,12 @@ export class WorldEventsEngine {
     const rawKnowledge = (state as unknown as { buddyKnowledge?: Record<string, BuddyEventKnowledge[]> }).buddyKnowledge;
     if (rawKnowledge) {
       for (const [rawBid, list] of Object.entries(rawKnowledge)) {
+        if (!Array.isArray(list)) continue;
         const bid = normalizeBuddyId(rawBid);
         const existing = this.buddyKnowledge.get(bid) ?? [];
-        this.buddyKnowledge.set(bid, [...existing, ...list.map((k) => ({ ...k }))].slice(-20));
+        this.buddyKnowledge.set(bid, [...existing, ...list.map((k) => ({
+          ...k, ...(k.source ? { source: { ...k.source } } : {}),
+        }))].slice(-20));
       }
     }
     // Ensure pending still contains non-triggered catalog entries
@@ -236,14 +251,30 @@ export class WorldEventsEngine {
     return { attitude: entry.att, personalTake: take };
   }
 
+  /**
+   * Publicly available news is discoverable, not telepathically known.
+   * Stable per-actor/event feed exposure models limited discovery without RNG
+   * state. Direct disclosure is a separate explicit command.
+   */
+  private discoversPublicEvent(buddyId: string, evt: GlobalEvent): boolean {
+    return this.hashStr(`public-news:${evt.id}:${buddyId}`) % 100 < 60;
+  }
+
+  private makePublicEventKnowledge(buddyId: string, evt: GlobalEvent, atMinute: number): BuddyEventKnowledge {
+    const { attitude, personalTake } = this.attitudeForBuddy(buddyId, evt);
+    return {
+      eventId: evt.id, attitude, personalTake, learnedAtMinute: atMinute,
+      source: { kind: 'citywire', sourceId: evt.id, atMinute },
+    };
+  }
+
   private ensureBuddyAttitudes(evt: GlobalEvent, atMinute: number): void {
     const buddies = this.listBuddyIds();
     let changed = false;
     for (const bid of buddies) {
       const list = this.buddyKnowledge.get(bid) ?? [];
-      if (list.some((k) => k.eventId === evt.id)) continue;
-      const { attitude, personalTake } = this.attitudeForBuddy(bid, evt);
-      list.push({ eventId: evt.id, attitude, personalTake, learnedAtMinute: atMinute });
+      if (list.some((k) => k.eventId === evt.id) || !this.discoversPublicEvent(bid, evt)) continue;
+      list.push(this.makePublicEventKnowledge(bid, evt, atMinute));
       this.buddyKnowledge.set(bid, list.slice(-20));
       changed = true;
     }
@@ -259,9 +290,8 @@ export class WorldEventsEngine {
     let changed = false;
     for (const evt of this.triggeredEvents.values()) {
       const list = this.buddyKnowledge.get(buddyId) ?? [];
-      if (list.some((k) => k.eventId === evt.id)) continue;
-      const { attitude, personalTake } = this.attitudeForBuddy(buddyId, evt);
-      list.push({ eventId: evt.id, attitude, personalTake, learnedAtMinute: atMinute });
+      if (list.some((k) => k.eventId === evt.id) || !this.discoversPublicEvent(buddyId, evt)) continue;
+      list.push(this.makePublicEventKnowledge(buddyId, evt, atMinute));
       this.buddyKnowledge.set(buddyId, list.slice(-20));
       changed = true;
     }
@@ -352,27 +382,84 @@ export class WorldEventsEngine {
   /** Per-buddy knowledge context — same events but with that buddy's attitude/take */
   public getKnowledgeContextForBuddy(rawBuddyId: string, currentDay: number, maxEvents = 4): string {
     const buddyId = normalizeBuddyId(rawBuddyId);
-    const triggered = this.getTriggeredEvents().filter((e) => e.triggerDay <= currentDay).slice(-maxEvents);
-    if (triggered.length === 0) return 'No major world events yet — early days, quiet internet.';
     const knowledge = this.buddyKnowledge.get(buddyId) ?? [];
     const map = new Map(knowledge.map((k) => [k.eventId, k]));
-    return triggered
-      .map((e) => {
-        const k = map.get(e.id);
-        const att = k ? ` [${k.attitude}]` : '';
-        const take = k ? ` — you feel: "${k.personalTake}"` : '';
-        return `- [Day ${e.triggerDay}] ${e.title}${att}: ${e.knowledgePrompt}${take}`;
-      })
-      .join('\n');
+    const limit = Number.isFinite(maxEvents) ? Math.max(0, Math.min(8, Math.floor(maxEvents))) : 4;
+    if (limit === 0) return 'No known major world events yet.';
+    const triggered = this.getTriggeredEvents()
+      .filter((e) => e.triggerDay <= currentDay && map.has(e.id)).slice(-limit);
+    const eventLines = triggered.map((e) => {
+      const k = map.get(e.id);
+      const att = k ? ` [${k.attitude}]` : '';
+      const take = k ? ` — you feel: "${k.personalTake}"` : '';
+      return `- [Day ${e.triggerDay}] ${e.title}${att}: ${e.knowledgePrompt}${take}`;
+    });
+    // This is consumed by Pulse DM prompt context. A claim provides only
+    // what the NPC heard; never dereference its fact ID to expose hidden truth.
+    const learned = this.semanticKnowledge.forActor(buddyId);
+    const factLines = learned.facts.slice(-limit).map((fact) =>
+      `- Known fact: ${fact.subjectId}.${fact.predicate} = ${JSON.stringify(fact.value)} (via ${fact.established.kind})`);
+    const claimLines = learned.claims.slice(-limit).map((claim) =>
+      `- Unverified rumor about ${claim.factId}: asserted ${JSON.stringify(claim.assertedValue)} (via ${claim.published.kind})`);
+    const lines = [...eventLines, ...factLines, ...claimLines].slice(-limit * 2);
+    return lines.length > 0 ? lines.join('\n') : 'No known major world events yet.';
   }
 
   public getBuddyKnowledge(rawBuddyId: string): BuddyEventKnowledge[] {
-    return [...(this.buddyKnowledge.get(normalizeBuddyId(rawBuddyId)) ?? [])];
+    return (this.buddyKnowledge.get(normalizeBuddyId(rawBuddyId)) ?? [])
+      .map(k => ({ ...k, ...(k.source ? { source: { ...k.source } } : {}) }));
   }
 
-  /** Per-buddy knowledge check — for sandbox every buddy knows every triggered event */
-  public isEventKnownToBuddy(_rawBuddyId: string, eventId: string): boolean {
-    return this.triggeredEvents.has(eventId);
+  /** Direct discovery/disclosure uses explicit provenance and cannot create world events. */
+  public learnEventForBuddy(rawBuddyId: string, eventId: string, source: KnowledgeProvenance): boolean {
+    const buddyId = normalizeBuddyId(rawBuddyId);
+    const evt = this.triggeredEvents.get(eventId);
+    if (!evt || !this.listBuddyIds().includes(buddyId) || !Number.isSafeInteger(source?.atMinute)
+      || source.atMinute < 0 || !source.sourceId || !source.kind) return false;
+    const existing = this.buddyKnowledge.get(buddyId) ?? [];
+    if (existing.some(k => k.eventId === eventId)) return false;
+    const entry = this.makePublicEventKnowledge(buddyId, evt, source.atMinute);
+    entry.source = { ...source };
+    this.buddyKnowledge.set(buddyId, [...existing, entry].slice(-20));
+    this.bumpVersion();
+    return true;
+  }
+
+  public isEventKnownToBuddy(rawBuddyId: string, eventId: string): boolean {
+    return (this.buddyKnowledge.get(normalizeBuddyId(rawBuddyId)) ?? [])
+      .some(entry => entry.eventId === eventId && this.triggeredEvents.has(eventId));
+  }
+
+  /** Structured semantic truth writes are domain-owned, never AI/Ink free writes. */
+  public establishSemanticFact(fact: WorldFactRecord): boolean {
+    const changed = this.semanticKnowledge.establishFact(fact);
+    if (changed) this.bumpVersion();
+    return changed;
+  }
+
+  public publishSemanticClaim(claim: ClaimRecord): boolean {
+    const changed = this.semanticKnowledge.publishClaim(claim);
+    if (changed) this.bumpVersion();
+    return changed;
+  }
+
+  public learnSemanticReference(actorId: string, receipt: KnowledgeReceipt): boolean {
+    const changed = this.semanticKnowledge.learn(actorId, receipt);
+    if (changed) this.bumpVersion();
+    return changed;
+  }
+
+  public actorKnowsSemanticFact(actorId: string, factId: string): boolean {
+    return this.semanticKnowledge.knowsFact(actorId, factId);
+  }
+
+  public actorHeardSemanticClaim(actorId: string, claimId: string): boolean {
+    return this.semanticKnowledge.heardClaim(actorId, claimId);
+  }
+
+  /** Player-safe when actorId is 'player'; hidden truth is never included. */
+  public getActorSemanticKnowledge(actorId: string): ActorKnowledgeView {
+    return this.semanticKnowledge.forActor(actorId);
   }
 
   // ---- Flags / Appointments / Observations (sandbox world state) ----
@@ -463,7 +550,9 @@ export class WorldEventsEngine {
 
   public getBuddyKnowledgeMap(): Record<string, BuddyEventKnowledge[]> {
     const out: Record<string, BuddyEventKnowledge[]> = {};
-    for (const [k, v] of this.buddyKnowledge.entries()) out[k] = v.map((e) => ({ ...e }));
+    for (const [k, v] of this.buddyKnowledge.entries()) out[k] = v.map((e) => ({
+      ...e, ...(e.source ? { source: { ...e.source } } : {}),
+    }));
     return out;
   }
 

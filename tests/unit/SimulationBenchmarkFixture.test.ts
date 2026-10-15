@@ -23,15 +23,20 @@ describe('SimulationBenchmarkFixture', () => {
     expect(first.remoteActorIds.length).toBeGreaterThan(0);
   });
 
-  it('keeps remote benchmark actors physically low-fidelity and local actors important-local', () => {
+  it('keeps remote benchmarks background-only and allows both local fidelity tiers', () => {
     const fixture = createSimulationBenchmarkFixture(20);
-
     for (const actorId of fixture.remoteActorIds) {
       expect(fixture.engine.getFidelityTier(actorId)).toBe('background_remote');
     }
-    for (const actorId of fixture.localActorIds) {
-      expect(fixture.engine.getFidelityTier(actorId)).toBe('important_local');
-    }
+    const localTiers = fixture.localActorIds.map(actorId => fixture.engine.getFidelityTier(actorId));
+    expect(localTiers.every(tier => tier === 'important_local' || tier === 'local_offscreen')).toBe(true);
+    expect(localTiers).toContain('local_offscreen');
+
+    // Promoting an actor to a known contact changes only the derived tier.
+    const actorId = fixture.localActorIds.find(id => fixture.engine.getFidelityTier(id) === 'local_offscreen')!;
+    const actor = fixture.engine.social.getBuddy(actorId)!;
+    expect(fixture.engine.social.learnHandle(actorId, actor.handle)).toBe(true);
+    expect(fixture.engine.getFidelityTier(actorId)).toBe('important_local');
   });
 
   it('keeps the RAF benchmark call below a game-minute boundary', () => {

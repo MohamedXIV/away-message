@@ -56,8 +56,20 @@ export class NpcMovementRuntime {
     mobility?: NpcMobilityState,
     positions?: ActorSpatialPositions,
   ): void {
-    this.mobility = hydrateNpcMobility(mobility ?? {});
-    this.positions = hydrateActorSpatialPositions(positions ?? {});
+    const hydrated = hydrateNpcMobility(mobility ?? {});
+    const trips = { ...hydrated.trips };
+    const places = { ...hydrated.places };
+    const spatial = hydrateActorSpatialPositions(positions ?? {});
+    // The Social roster is authority for reach and lifecycle. Old/current
+    // saves cannot resurrect a trip or local XYZ for remote/departed actors.
+    for (const buddy of this.owners.social.getBuddies()) {
+      if (buddy.reach !== 'remote' && this.owners.social.getActorCondition(buddy.id)?.lifecycle !== 'departed') continue;
+      delete trips[buddy.id];
+      delete places[buddy.id];
+      delete spatial[buddy.id];
+    }
+    this.mobility = { trips, places };
+    this.positions = spatial;
     this.invalidate();
   }
 
@@ -74,7 +86,9 @@ export class NpcMovementRuntime {
     if (!network) return;
     const missingIntents = new Map(
       this.owners.social.getBuddies()
-        .filter((buddy) => this.mobility.trips[buddy.id] === undefined)
+        .filter((buddy) => buddy.reach !== 'remote'
+          && this.owners.social.getActorCondition(buddy.id)?.lifecycle !== 'departed'
+          && this.mobility.trips[buddy.id] === undefined)
         .map((buddy) => [buddy.id, this.readIntent(buddy.id)]),
     );
     if (missingIntents.size === 0) return;
@@ -157,6 +171,10 @@ export class NpcMovementRuntime {
     actorId: string,
     position: SpatialPosition,
   ): ActorSpatialProjection {
+    const buddy = this.owners.social.getBuddy(actorId);
+    if (buddy?.reach === 'remote' || this.owners.social.getActorCondition(actorId)?.lifecycle === 'departed') {
+      throw new Error('Remote/departed actors cannot acquire local spatial authority.');
+    }
     const relocation = relocateActorSpatialPosition(
       this.positions,
       actorId,
@@ -252,7 +270,10 @@ export class NpcMovementRuntime {
     const network = getSharedTransitNetwork();
     if (!network) return;
     const intents = new Map(
-      this.owners.social.getBuddies().map((buddy) => [buddy.id, this.readIntent(buddy.id)]),
+      this.owners.social.getBuddies()
+        .filter((buddy) => buddy.reach !== 'remote'
+          && this.owners.social.getActorCondition(buddy.id)?.lifecycle !== 'departed')
+        .map((buddy) => [buddy.id, this.readIntent(buddy.id)]),
     );
     const due = planDueNpcTrips(this.mobility, intents, nowMinute, {
       network,
