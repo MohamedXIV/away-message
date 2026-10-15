@@ -114,3 +114,11 @@ export interface SimulationPresenceRead {
   revision: number;
   presence: ReturnType<import('../SocialEngine').SocialEngine['getPresenceSummary']>;
 }
+
+/** Legacy desktop app dependencies, projected only from the relevant owners. */
+export interface SimulationAppRead {
+  revision: number;
+  hardware: import('../types').HardwareState;
+  os: ReturnType<import('../OsEngine').OsEngine['getState']>;
+  installedSoftware: import('../types').InstalledSoftwareRecord[];
+}
