@@ -5,12 +5,12 @@ import {
   ComputerOwnershipRuntime,
   resolvePcBootState,
 } from '../../src/engine/kernel/ComputerOwnershipRuntime';
-import { resolvePcBootState as legacyPublicBootRead } from '../../src/engine/SimulationEngineLegacyFacade';
+import { resolvePcBootState as legacyPublicBootRead } from '../../src/engine/SimulationEngine';
 
 function runtime(engine: SimulationEngine): ComputerOwnershipRuntime {
   // Transitional #171 branch-only inspection: the public inventory facade
   // must forward to this very same instance. No duplicated inventory store.
-  return (engine as unknown as { computerOwnership: ComputerOwnershipRuntime }).computerOwnership;
+  return (engine as unknown as { npc: { computerOwnership: ComputerOwnershipRuntime } }).npc.computerOwnership;
 }
 
 describe('ComputerOwnershipRuntime — one inventory and hardware transaction authority', () => {

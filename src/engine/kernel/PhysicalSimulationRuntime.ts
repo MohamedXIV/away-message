@@ -44,6 +44,7 @@ import type {
 } from '../venue/VenueOperations';
 import { VenueOperationsRuntime } from './VenueOperationsRuntime';
 import type { SimulationState as TransportSimulationState } from '../types';
+import type { SimulationState as CanonicalSimulationState } from '../types/index';
 import type { ResidenceState } from '../ResidenceTenancy';
 import { ResidenceCoordination } from './ResidenceCoordination';
 
@@ -66,7 +67,7 @@ import type { ScenarioDefinition, ScenarioInstance, ScenarioLifecycle } from '..
 import type { ScenarioProjection } from '../scenario/ScenarioProjection';
 import { GENERATED_SCENARIOS } from '../scenarioContent.generated';
 
-export type LiveSimulationState = TransportSimulationState & {
+export type LiveSimulationState = CanonicalSimulationState & {
   physicalWorld: PhysicalWorldState;
   physicalObjects: PhysicalObjectRuntimeState;
   physicalShops: Record<string, PhysicalShopState>;

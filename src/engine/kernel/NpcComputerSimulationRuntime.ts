@@ -66,7 +66,7 @@ function hasOwn(value: object | undefined, key: PropertyKey): boolean {
 }
 
 export interface NpcRuntimePorts {
-  getState(): Readonly<TransportSimulationState>;
+  getState(): Readonly<CanonicalSimulationState>;
   advanceGameMinutes(minutes: number, reason?: string): void;
   dispatchAction(action: import('../types').SimulationAction): ActionResult;
   invalidate(): void;

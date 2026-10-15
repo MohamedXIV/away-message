@@ -35,24 +35,24 @@ import { MyPlaceEngine } from '../MyPlaceEngine';
 
 import { pulseHasFeature, getAllPulseReleases } from '../PulseCatalog';
 
-import { createCoreDomainOwners, type CoreDomainOwners } from './/CoreDomainOwners';
-import { TimeAdvancement } from './/TimeAdvancement';
-import { projectCoreState } from './/CoreStateProjection';
-import { JobBoardCoordination } from './/JobBoardCoordination';
-import { GroceryDeliveryCoordination } from './/GroceryDeliveryCoordination';
-import { MyPlaceSocialCycle } from './/MyPlaceSocialCycle';
-import { RentCoordination } from './/RentCoordination';
-import { AppointmentCoordination } from './/AppointmentCoordination';
-import { SocialPresenceCycle } from './/SocialPresenceCycle';
-import { RelationshipContinuity } from './/RelationshipContinuity';
-import { NpcSocialLifeCycle } from './/NpcSocialLifeCycle';
-import { ProceduralWorldCycle } from './/ProceduralWorldCycle';
-import { PlayerContactCoordination } from './/PlayerContactCoordination';
-import { CityActivityCoordination } from './/CityActivityCoordination';
-import { DesktopStorageCommands } from './/DesktopStorageCommands';
-import { SocialInteractionCommands } from './/SocialInteractionCommands';
-import { WorldNarrativeCommands } from './/WorldNarrativeCommands';
-import { PlayerActionRuntime } from './/PlayerActionRuntime';
+import { createCoreDomainOwners, type CoreDomainOwners } from './CoreDomainOwners';
+import { TimeAdvancement } from './TimeAdvancement';
+import { projectCoreState } from './CoreStateProjection';
+import { JobBoardCoordination } from './JobBoardCoordination';
+import { GroceryDeliveryCoordination } from './GroceryDeliveryCoordination';
+import { MyPlaceSocialCycle } from './MyPlaceSocialCycle';
+import { RentCoordination } from './RentCoordination';
+import { AppointmentCoordination } from './AppointmentCoordination';
+import { SocialPresenceCycle } from './SocialPresenceCycle';
+import { RelationshipContinuity } from './RelationshipContinuity';
+import { NpcSocialLifeCycle } from './NpcSocialLifeCycle';
+import { ProceduralWorldCycle } from './ProceduralWorldCycle';
+import { PlayerContactCoordination } from './PlayerContactCoordination';
+import { CityActivityCoordination } from './CityActivityCoordination';
+import { DesktopStorageCommands } from './DesktopStorageCommands';
+import { SocialInteractionCommands } from './SocialInteractionCommands';
+import { WorldNarrativeCommands } from './WorldNarrativeCommands';
+import { PlayerActionRuntime } from './PlayerActionRuntime';
 
 export interface CoreRuntimePorts {
   dispatchAction(action: SimulationAction): ActionResult;
@@ -446,7 +446,7 @@ export class CoreSimulationRuntime {
   public async generateProceduralEventsNow(options?: { maxEvents?: number; useAI?: boolean }): Promise<import('../types').GlobalEvent[]> {
     const currentDay = this.clock.getTime().day;
     const totalMinutes = this.clock.getTotalMinutes();
-    const { ProceduralDirector } = await import('./ProceduralDirector');
+    const { ProceduralDirector } = await import('../ProceduralDirector');
     const dir = new ProceduralDirector(this.world);
     const res = await dir.generateNextBatch(currentDay, totalMinutes, {
       maxEvents: options?.maxEvents ?? 2,
