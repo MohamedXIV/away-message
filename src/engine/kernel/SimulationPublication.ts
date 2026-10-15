@@ -28,6 +28,9 @@ export interface SimulationWorldRead {
   residencePlaceId: string;
   playerLocation: import('../CityMap').CityNodeId;
   environment: import('../EnvironmentEngine').EnvironmentSnapshot;
+  /** Only the room's active authored capability and explicitly used window flag. */
+  pcBootState: import('./ComputerOwnershipRuntime').PcBootState;
+  metInPerson: boolean;
 }
 
 /** Player-visible read of a single selected real actor. */
