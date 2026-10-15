@@ -5,6 +5,7 @@ describe('#172 bounded owned-source reads and messenger paging', () => {
   it('reads world/HUD/selected actor, messages and summary without full WorldState', () => {
     const game = new SimulationEngine();
     const actor = game.social.getBuddies()[0]!;
+    const expectedBoot = game.getPcBootState(); // legacy comparison outside the no-snapshot probe
     const full = vi.spyOn(game, 'getState');
     const snapshot = vi.spyOn(game, 'exportSnapshot');
 
@@ -14,7 +15,7 @@ describe('#172 bounded owned-source reads and messenger paging', () => {
     expect(world.activeView).toBe(hud.activeView);
     expect(world.environment.atMinute).toBe(world.time.totalMinutes);
     expect(world.residencePlaceId).toBe(game.getCurrentResidencePlaceId());
-    expect(world.pcBootState).toBe(game.getPcBootState());
+    expect(world.pcBootState).toBe(expectedBoot);
     expect(world.metInPerson).toBe(Boolean(game.world.getFlag('met_in_person')));
 
     expect(game.getPlayerActorRead(actor.id)).toBeNull(); // unknown handle
