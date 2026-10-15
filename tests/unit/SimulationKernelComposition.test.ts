@@ -20,6 +20,7 @@ describe('#171 atomic composed-kernel production contract', () => {
     expect(Object.getPrototypeOf(SimulationEngine.prototype)).toBe(Object.prototype);
     const engine = new SimulationEngine();
     expect(Object.getPrototypeOf(engine)).toBe(SimulationKernel.prototype);
+    expect('exportFullSnapshot' in engine).toBe(false);
   });
 
   it('contains neither of the retired inherited execution modules', () => {
