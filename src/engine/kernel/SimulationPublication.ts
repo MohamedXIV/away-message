@@ -77,6 +77,7 @@ export interface SimulationActorRead {
 export interface SimulationMessengerRead {
   revision: number;
   contacts: ReturnType<import('../SocialEngine').SocialEngine['getMessengerSummary']>;
+  unreadCounts: Record<string, number>;
 }
 
 export interface SimulationConversationRead extends ReturnType<import('../SocialEngine').SocialEngine['getConversationPage']> {
