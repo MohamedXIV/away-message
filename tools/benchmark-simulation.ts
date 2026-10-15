@@ -148,10 +148,9 @@ function benchmarkPopulation(population: number): PopulationResult {
 
   const freshEngine = createSimulationBenchmarkEngineFactory(preparedSnapshot);
 
-  // Each RAF-style sample starts from the same snapshot. Even without a game
-  // minute, advanceRealTime updates realtime telemetry and runs legacy NPC
-  // pressure/mobility work, so reusing the engine would contaminate later
-  // samples. Rehydration remains outside the timed action.
+  // Each RAF-style sample starts from the same snapshot. Zero-minute frames
+  // update telemetry but must not run any NPC population work (#170).
+  // Isolate engine construction/rehydration from the timed action.
   const zeroMinuteRealtime = measureIsolated(freshEngine, (fresh) => {
     fresh.advanceRealTime(1 / 60);
   });
@@ -311,7 +310,7 @@ function benchmarkConversationHistory(): ConversationResult[] {
 
 const report = {
   schemaVersion: 1,
-  purpose: 'SIM-KERNEL #169 pre-refactor baseline',
+  purpose: 'SIM-KERNEL #171 composed-kernel cutover comparison',
   gitSha: process.env.GITHUB_SHA ?? process.env.VERCEL_GIT_COMMIT_SHA ?? 'unknown',
   runtime: {
     node: process.version,
