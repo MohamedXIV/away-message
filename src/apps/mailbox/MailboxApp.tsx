@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { soundManager } from '../../audio/SoundManager';
 import { useSimulationStore } from '../../store/useSimulationStore';
+import { useSimulationHud } from '../../store/useBoundedSimulationRead';
 import { buildNpcMailForDay, buildRentMailHistory, gameDayToMailDate, type NpcMail } from '../../engine/BoardDirector';
 import { locationLabel } from '../../engine/AppointmentDirector';
 
@@ -57,7 +58,7 @@ export const MailboxApp: React.FC = () => {
   // P5.6 NPC mail chains: deterministic per day from live sharp/appointment history
   // (farewell/welcome on transition days, thanks/apology the morning after meetings).
   const engine = useSimulationStore((s) => s.engine);
-  const today = useSimulationStore((s) => s.state.time.day);
+  const today = useSimulationHud().time.day;
   const npcMails: NpcMail[] = (() => {
     try {
       const buddies = engine.social.getBuddies().map((b) => ({
