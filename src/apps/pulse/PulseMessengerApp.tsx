@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useSimulationStore } from '../../store/useSimulationStore';
+import { useMessengerRead, useSimulationHud } from '../../store/useBoundedSimulationRead';
 import { BuddyListWindow } from './components/BuddyListWindow';
 import { ChatWindow } from './components/ChatWindow';
 import { PulseLoginSplash, PulseLoginSession } from './components/PulseLoginSplash';
@@ -209,9 +210,11 @@ export function getRoomResponderSequence(roomId: string, participantIds: string[
 
 export const PulseMessengerApp: React.FC = () => {
   const engine = useSimulationStore((s) => s.engine);
-  const conversations = useSimulationStore((s) => s.state.social.conversations);
-  const currentDay = useSimulationStore((s) => s.state.time.day);
-  const totalMinutes = useSimulationStore((s) => s.state.time.totalMinutes);
+  // Pulse message bodies are never selected from the giant Zustand snapshot.
+  const hud = useSimulationHud();
+  const messenger = useMessengerRead();
+  const currentDay = hud.time.day;
+  const totalMinutes = hud.time.totalMinutes;
   const presenceMap = useSimulationStore((s) => s.state.social.presence);
 
   usePulseAudio();
@@ -510,11 +513,7 @@ export const PulseMessengerApp: React.FC = () => {
       }));
     } catch { /* day-pass never breaks the session */ }
   }, [engine, session, totalMinutes, currentDay, pulseState.blockedBuddyIds, pulseState.initiatedToday]);
-  const unreadCounts: Record<string, number> = {};
-  Object.entries(conversations).forEach(([buddyId, msgs]) => {
-    const unreads = msgs.filter((message) => !message.isRead && message.senderId !== 'player').length;
-    if (unreads > 0) unreadCounts[buddyId] = unreads;
-  });
+  const unreadCounts = messenger.unreadCounts;
   const roomUnreadCounts: Record<string, number> = Object.fromEntries(PULSE_ROOMS.map((room) => {
     const total = pulseState.roomMessages[room.id]?.length ?? 0;
     const readThrough = pulseState.roomReadThrough[room.id] ?? 0;
@@ -1149,8 +1148,7 @@ export const PulseMessengerApp: React.FC = () => {
     const key = `${activeBuddyId}_day${currentDay}`;
     if (triggeredDayScripts.current.has(key)) return;
 
-    const buddyMsgs = conversations[activeBuddyId] || [];
-    const hasTodayMsg = buddyMsgs.some((message) => message.day === currentDay);
+    const hasTodayMsg = engine.social.hasConversationMessageOnDay(activeBuddyId, currentDay);
     if (!hasTodayMsg) {
       const script = DIALOGUE_SCRIPTS.find((item) => item.buddyId === activeBuddyId && item.day === currentDay);
       if (script) {
@@ -1159,7 +1157,7 @@ export const PulseMessengerApp: React.FC = () => {
         return () => window.clearTimeout(timer);
       }
     }
-  }, [activeBuddyId, currentDay, conversations, triggerNpcScript, session]);
+  }, [activeBuddyId, currentDay, hud.revision, engine, triggerNpcScript, session]);
 
   const buddiesMap: Record<string, any> = {};
   engine.social.getBuddies().forEach((buddy) => { buddiesMap[buddy.id] = buddy; });
@@ -1255,7 +1253,6 @@ export const PulseMessengerApp: React.FC = () => {
             openBuddyIds={openBuddyIds}
             activeBuddyId={activeBuddyId}
             buddies={buddiesMap}
-            conversations={conversations}
             unreadCounts={unreadCounts}
             typingIndicatorText={typingState.activeBuddyId === activeBuddyId ? typingState.typingIndicatorText : undefined}
             availableChoices={typingState.activeBuddyId === activeBuddyId ? typingState.availableChoices : []}
