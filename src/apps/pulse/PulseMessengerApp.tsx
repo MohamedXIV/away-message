@@ -528,6 +528,8 @@ export const PulseMessengerApp: React.FC = () => {
     setActiveRoomId(null);
     setView('contacts');
     engine.social.markAsRead(buddyId);
+    // A direct Social owner mutation must publish the bounded unread badge now.
+    engine.publishExternalChange();
     setPulseState((previous) => ({
       ...previous,
       activityFeed: previous.activityFeed.map((entry) => entry.buddyId === buddyId ? { ...entry, isRead: true } : entry),
