@@ -289,10 +289,7 @@ export class CoreSimulationRuntime {
     return newState;
   }
 
-  /**
-   * The migration branch delegates timing to one composed coordinator. This
-   * inherited caller must be removed at the #171 atomic production cutover.
-   */
+  /** Authoritative time coordination is delegated to one TimeAdvancement owner. */
   public advanceRealTime(deltaRealSeconds: number): void {
     this.timeAdvancement.advanceRealTime(deltaRealSeconds);
   }
