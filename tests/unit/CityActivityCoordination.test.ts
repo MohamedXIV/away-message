@@ -3,7 +3,7 @@ import { SimulationEngine } from '../../src/engine/SimulationEngine';
 import { CityActivityCoordination } from '../../src/engine/kernel/CityActivityCoordination';
 
 function city(engine: SimulationEngine): CityActivityCoordination {
-  return (engine as unknown as { cityActivity: CityActivityCoordination }).cityActivity;
+  return (engine as unknown as { core: { cityActivity: CityActivityCoordination } }).core.cityActivity;
 }
 
 describe('CityActivityCoordination — one Economy/Needs/World authority', () => {
