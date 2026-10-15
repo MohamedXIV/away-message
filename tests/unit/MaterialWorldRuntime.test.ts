@@ -3,7 +3,7 @@ import { SimulationEngine } from '../../src/engine/SimulationEngine';
 import { MaterialWorldRuntime } from '../../src/engine/kernel/MaterialWorldRuntime';
 
 function owner(engine: SimulationEngine): MaterialWorldRuntime {
-  return (engine as unknown as { material: MaterialWorldRuntime }).material;
+  return (engine as unknown as { physical: { material: MaterialWorldRuntime } }).physical.material;
 }
 
 describe('MaterialWorldRuntime — one canonical physical item and object owner', () => {
