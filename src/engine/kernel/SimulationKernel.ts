@@ -9,7 +9,9 @@ import {
   type ActorSemanticView, type SemanticInfluenceView,
 } from '../semantic/ActorSemantics';
 
+import { domainFromEmission } from './SimulationPublication';
 import type {
+  ObservedSimulationDomain,
   SimulationActorRead,
   SimulationChange,
   SimulationConversationRead,
@@ -38,6 +40,8 @@ export class SimulationKernel {
   private readonly subscribers = new Set<(state: Readonly<LiveSimulationState>) => void>();
   private readonly changeSubscribers = new Set<(change: Readonly<SimulationChange>) => void>();
   private revision = 0;
+  /** Ephemeral event provenance between atomic publication boundaries. */
+  private readonly observedDomains = new Set<ObservedSimulationDomain>();
   private hydrating = false;
   private simulationBoundaryDepth = 0;
   private publicationPending = false;
@@ -74,6 +78,12 @@ export class SimulationKernel {
       advanceGameMinutes: (minutes, reason) => this.advanceGameMinutes(minutes, reason),
       dispatchAction: (action) => this.dispatchAction(action),
     }, initialState);
+    // The same shared EventBus is the event source of truth; no polling or
+    // snapshot comparisons. Observations are proof of emitted domains only.
+    this.events.observeEmissions((event) => {
+      const domain = domainFromEmission(event);
+      if (domain) this.observedDomains.add(domain);
+    });
   }
 
   public get clock() { return this.core.clock; }
@@ -178,10 +188,13 @@ export class SimulationKernel {
     // never during getState() or a current-format snapshot read.
     this.mood.publishIfChanged();
     this.invalidateStateCache();
+    const observed = [...this.observedDomains].sort();
+    this.observedDomains.clear();
     const change: SimulationChange = {
       revision: ++this.revision,
       atMinute: this.clock.getTotalMinutes(),
-      changedDomains: ['unknown'],
+      // Conservatively retain 'unknown' until no silent domain writer exists.
+      changedDomains: [...observed, 'unknown'],
     };
     for (const listener of this.changeSubscribers) {
       try { listener(change); }
