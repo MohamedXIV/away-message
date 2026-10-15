@@ -278,8 +278,8 @@ export class CoreSimulationRuntime {
   }
 
   public getState(): Readonly<SimulationState> {
-    // Mood context is derived, so reconcile before consulting the state cache.
-    this.mood.publishIfChanged();
+    // Reads never reconcile/publish derived mood. The write-time publication
+    // boundary handles mood expiry/events; queries only project existing truth.
     // Cheap cache: if version hasn't changed, return same object reference to keep getSnapshot stable
     if (this._cachedState && this._cachedStateVersion === this._stateVersion) {
       return this._cachedState;
