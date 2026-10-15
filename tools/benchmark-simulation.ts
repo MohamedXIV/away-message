@@ -311,7 +311,9 @@ function benchmarkConversationHistory(): ConversationResult[] {
 const report = {
   schemaVersion: 1,
   purpose: 'SIM-KERNEL #171 composed-kernel cutover comparison',
-  gitSha: process.env.GITHUB_SHA ?? process.env.VERCEL_GIT_COMMIT_SHA ?? 'unknown',
+  // GITHUB_SHA can identify a synthetic pull-request merge commit; use the
+  // explicitly checked-out head passed by the #171 Verify workflow.
+  gitSha: process.env.SIM_BENCH_HEAD_SHA ?? process.env.GITHUB_SHA ?? process.env.VERCEL_GIT_COMMIT_SHA ?? 'unknown',
   runtime: {
     node: process.version,
     platform: platform(),
