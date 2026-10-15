@@ -3,7 +3,7 @@ import { SimulationEngine } from '../../src/engine/SimulationEngine';
 import { PlayerContactCoordination } from '../../src/engine/kernel/PlayerContactCoordination';
 
 function contacts(engine: SimulationEngine): PlayerContactCoordination {
-  return (engine as unknown as { playerContacts: PlayerContactCoordination }).playerContacts;
+  return (engine as unknown as { core: { playerContacts: PlayerContactCoordination } }).core.playerContacts;
 }
 
 describe('PlayerContactCoordination — one Social roster and Needs battery', () => {
