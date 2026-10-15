@@ -51,6 +51,35 @@ describe('#172 revision-only publication and bounded HUD projection', () => {
     off();
   });
 
+  it('publishes explicit direct domain writes once for bounded React views and legacy state', () => {
+    const previous = useSimulationStore.getState().engine;
+    const engine = new SimulationEngine();
+    const getState = vi.spyOn(engine, 'getState');
+    const changes: number[] = [];
+    try {
+      useSimulationStore.getState().setEngine(engine);
+      const stop = engine.subscribeChanges(change => changes.push(change.revision));
+      const baseline = engine.getRevision();
+      const before = getState.mock.calls.length;
+
+      // Direct domain owner writes do not go through the CommandBus.
+      engine.world.setFlag('met_in_person', true);
+      useSimulationStore.getState().syncStateFromEngine();
+      expect(engine.getRevision()).toBe(baseline + 1);
+      expect(changes.at(-1)).toBe(baseline + 1);
+      expect(engine.getWorldRead().metInPerson).toBe(true);
+      expect(useSimulationStore.getState().state.world.flags.met_in_person).toBe(true);
+      expect(getState.mock.calls.length - before).toBe(1);
+
+      // Full legacy listeners are removed when unbinding, change-only
+      // reads still deliver no giant snapshots.
+      stop();
+    } finally {
+      useSimulationStore.getState().setEngine(previous);
+      getState.mockRestore();
+    }
+  });
+
   it('keeps legacy full-snapshot subscription behavior while migrating consumers', () => {
     const engine = new SimulationEngine();
     const wholeState = vi.spyOn(engine, 'getState');
