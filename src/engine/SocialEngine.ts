@@ -1657,6 +1657,37 @@ export class SocialEngine {
     };
   }
 
+  /** A bounded 500-contact unread index, independent of any message payload. */
+  public getConversationUnreadCounts(maxConversations = 500): Record<string, number> {
+    const limit = Number.isFinite(maxConversations)
+      ? Math.max(0, Math.min(500, Math.floor(maxConversations))) : 500;
+    const counts: Record<string, number> = {};
+    let indexed = 0;
+    for (const [actorId, messages] of this.conversations) {
+      if (indexed >= limit) break;
+      let unread = 0;
+      for (const message of messages) {
+        if (message.senderId !== 'player' && !message.isRead) unread++;
+      }
+      if (unread > 0) counts[actorId] = unread;
+      indexed++;
+    }
+    return counts;
+  }
+
+  /** Day-presence check without copying a long conversation to React. */
+  public hasConversationMessageOnDay(rawConversationId: string, day: number): boolean {
+    const messages = this.conversations.get(normalizeBuddyId(rawConversationId));
+    if (!messages || !Number.isInteger(day)) return false;
+    for (let index = messages.length - 1; index >= 0; index--) {
+      const message = messages[index]!;
+      if (message.day === day) return true;
+      // Message inserts are not guaranteed chronological (offline delivery),
+      // so we scan through all entries rather than assume a sorted timeline.
+    }
+    return false;
+  }
+
   /** Bounded System Tray read: totals stay exact, only the last previews cross UI. */
   public getUnreadTraySummary(maxPreview = 4): {
     unreadCount: number;
