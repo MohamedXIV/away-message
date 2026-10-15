@@ -3,7 +3,7 @@ import { SimulationEngine } from '../../src/engine/SimulationEngine';
 import { DesktopStorageCommands } from '../../src/engine/kernel/DesktopStorageCommands';
 
 function desktop(engine: SimulationEngine): DesktopStorageCommands {
-  return (engine as unknown as { desktopCommands: DesktopStorageCommands }).desktopCommands;
+  return (engine as unknown as { core: { desktopCommands: DesktopStorageCommands } }).core.desktopCommands;
 }
 
 describe('DesktopStorageCommands — canonical VFS, downloads and software authorities', () => {
