@@ -88,9 +88,6 @@ export function createCoreDomainOwners(initialState?: Partial<SimulationState>) 
   const pulse = new PulseEngine(events, pulseInitial);
   const myplace = new MyPlaceEngine(events, (initialState as any)?.myplace);
 
-  // Keep current behavior until hardware/OS authority cleanup (#174): the
-  // hardware snapshot carries a compatibility OS version mirror.
-  (hardware as any).state.osVersion = os.getCurrentOsId();
   try {
     os.syncFromWorldState({
       triggeredEvents: world.getTriggeredEvents(),

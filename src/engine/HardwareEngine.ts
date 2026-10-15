@@ -45,14 +45,6 @@ export class HardwareEngine {
   private eventBus: EventBus;
 
   /**
-   * @deprecated SimulationEngineCore-only compatibility sink. Two preserved
-   * legacy coordinator writes still assign `state.osVersion`; no v6 reader,
-   * projection, or persistence path consumes it. Per-instance ownership avoids
-   * a shared prototype/global shadow while the coordinator remains preserved.
-   */
-  public readonly state: { osVersion?: unknown } = {};
-
-  /**
    * Temporary metadata cache for legacy insert/eject callers. The canonical
    * computer stores only insertedMediaId; inventory/media ownership moves to
    * the dedicated media flow in #9.

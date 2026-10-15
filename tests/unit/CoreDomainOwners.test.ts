@@ -42,6 +42,23 @@ describe('CoreDomainOwners', () => {
     expect(projected.activeView).toBe(state.activeView);
   });
 
+  it('projects and exports without any hidden hardware/OS metadata mutation', () => {
+    const source = new SimulationEngine();
+    const owners = createCoreDomainOwners(source.exportSnapshot());
+    for (const hardware of [source.hardware, owners.hardware]) {
+      Object.defineProperty(hardware, 'state', {
+        configurable: true,
+        get: () => { throw new Error('hardware compatibility state must never be read'); },
+        set: () => { throw new Error('hardware compatibility state must never be written'); },
+      });
+    }
+
+    expect(projectCoreState(owners, 'room').os.currentOsId)
+      .toBe(owners.os.getCurrentOsId());
+    expect(source.getState().os.currentOsId).toBe(source.os.getCurrentOsId());
+    expect(source.exportSnapshot().os.currentOsId).toBe(source.os.getCurrentOsId());
+  });
+
   it('does not duplicate domain owners across a single runtime graph', () => {
     const domains = createCoreDomainOwners();
     const owners = [
