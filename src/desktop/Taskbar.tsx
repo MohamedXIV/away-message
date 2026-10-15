@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { useSimulationStore } from '../store/useSimulationStore';
+import { useSimulationChrome } from '../store/useBoundedSimulationRead';
 import { useWindowStore, WindowState } from '../store/useWindowStore';
 import { soundManager } from '../audio/SoundManager';
 import { getOsPresentationProfile } from './host/OsPresentation';
@@ -12,7 +13,8 @@ interface TaskbarProps {
 }
 
 export const Taskbar: React.FC<TaskbarProps> = ({ onOpenDialUp }) => {
-  const osVersion = useSimulationStore((s) => s.state.os.currentOsId);
+  const chrome = useSimulationChrome();
+  const osVersion = chrome.osVersion;
   const osPresentation = osVersion ? getOsPresentationProfile(osVersion) : null;
   const taskbarPresentation = osPresentation?.shell.taskbarId ?? 'classic';
   const isCanalTaskbar = taskbarPresentation === 'canal';
@@ -30,7 +32,7 @@ export const Taskbar: React.FC<TaskbarProps> = ({ onOpenDialUp }) => {
   const closeWindow = useWindowStore((s) => s.closeWindow);
   const openWindow = useWindowStore((s) => s.openWindow);
   const minimizeAll = useWindowStore((s) => s.minimizeAll);
-  const isPulseInstalled = useSimulationStore((s) => s.state.installedSoftware.some((sw: any) => String(sw.appId).includes('pulse')));
+  const isPulseInstalled = chrome.pulseInstalled;
 
   const [isStartMenuOpen, setIsStartMenuOpen] = useState(false);
   const [tabContextMenu, setTabContextMenu] = useState<{ windowId: string; x: number; y: number } | null>(null);
