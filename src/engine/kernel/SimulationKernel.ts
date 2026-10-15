@@ -14,6 +14,7 @@ import { domainFromEmission } from './SimulationPublication';
 import type {
   ObservedSimulationDomain,
   SimulationActorRead,
+  SimulationChromeRead,
   SimulationChange,
   SimulationConversationRead,
   SimulationHudProjection,
@@ -22,6 +23,7 @@ import type {
 } from './SimulationPublication';
 export type {
   SimulationActorRead,
+  SimulationChromeRead,
   SimulationChange,
   SimulationConversationRead,
   SimulationHudProjection,
@@ -266,6 +268,28 @@ export class SimulationKernel {
     return {
       revision: this.revision, actor,
       playerKnowledge: learned,
+    };
+  }
+
+  /** Desktop chrome and Pulse tray use only domain-scoped, serializable reads. */
+  public getChromeRead(): SimulationChromeRead {
+    const hardware = this.hardware.getState();
+    const unread = this.social.getUnreadTraySummary(4);
+    return {
+      revision: this.revision,
+      time: { ...this.clock.getTime() },
+      osVersion: this.os.getCurrentOsId(),
+      pulseVersion: this.pulse.getState().currentPulseId,
+      pulseInstalled: this.software.getInstalledSoftware().some(
+        sw => String(sw.appId).includes('pulse'),
+      ),
+      connectionType: hardware.connectionType,
+      connectionSpeedKbps: hardware.connectionSpeedKbps,
+      activeDownloadCount: this.downloads.getState().tasks.filter(
+        task => task.status === 'downloading',
+      ).length,
+      unreadCount: unread.unreadCount,
+      unreadPreviews: unread.previews,
     };
   }
 
