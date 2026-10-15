@@ -24,6 +24,7 @@ import { getWeatherForDay, isWetWeather } from './WeatherEngine';
 import { validateCharacterId, isValidSchedule, traitsForBuddy, clampTraits, clampRelationships, resolveArchetype, rollSeeded100 } from './characterTemplates';
 import { SEED_CHARACTERS, seedCharacterDef, isSeedCharacter, resolveAffinitySeeds } from './seedCharacters';
 import { validatePersistedBuddy, sanitizeLanguages } from './CharacterEngine';
+import { parseCoreMemoryMeaning } from './semantic/CoreMemoryMeaning';
 
 // P3 long-term memory caps (keeps prompt injection bounded and saves small)
 export const MAX_CORE_MEMORIES = 8;
@@ -276,7 +277,9 @@ export class SocialEngine {
     for (const [id, msgs] of this.conversations.entries()) convs[id] = msgs.map(m => ({ ...m }));
 
     const mems: Record<string, CoreMemory[]> = {};
-    for (const [id, items] of this.coreMemories.entries()) mems[id] = items.map(m => ({ ...m }));
+    for (const [id, items] of this.coreMemories.entries()) mems[id] = items.map(m => ({
+      ...m, ...(m.meaning ? { meaning: parseCoreMemoryMeaning(m.meaning) } : {}),
+    }));
 
     const proms: Record<string, PromiseRecord[]> = {};
     for (const [id, items] of this.promises.entries()) proms[id] = items.map(p => ({ ...p }));
@@ -425,7 +428,12 @@ export class SocialEngine {
           const kind = (item as CoreMemory).kind;
           if (text.length < 3 || !SocialEngine.isValidMemoryKind(kind)) continue;
           if (clean.some((c) => c.text.toLowerCase() === text.toLowerCase())) continue;
-          clean.push({ id: String((item as CoreMemory).id || `cm_${clean.length}`), text, kind, day: Number.isFinite((item as CoreMemory).day) ? Math.max(1, Math.floor((item as CoreMemory).day)) : 1 });
+          const meaning = parseCoreMemoryMeaning((item as CoreMemory).meaning);
+          clean.push({
+            id: String((item as CoreMemory).id || `cm_${clean.length}`), text, kind,
+            day: Number.isFinite((item as CoreMemory).day) ? Math.max(1, Math.floor((item as CoreMemory).day)) : 1,
+            ...(meaning ? { meaning } : {}),
+          });
           if (clean.length >= MAX_CORE_MEMORIES) break;
         }
         if (clean.length > 0) this.coreMemories.set(id, clean);
@@ -721,7 +729,10 @@ export class SocialEngine {
   // ==========================================
 
   /** Add an immortal memory (capped at MAX_CORE_MEMORIES, deduped by text). Returns stored record or null. */
-  public addCoreMemory(rawBuddyId: string, memory: { text: string; kind: CoreMemory['kind']; day: number }): CoreMemory | null {
+  public addCoreMemory(
+    rawBuddyId: string,
+    memory: { text: string; kind: CoreMemory['kind']; day: number; meaning?: CoreMemory['meaning'] },
+  ): CoreMemory | null {
     const buddyId = normalizeBuddyId(rawBuddyId);
     if (!this.buddies.has(buddyId)) return null;
     if (!SocialEngine.isValidMemoryKind(memory.kind)) return null;
@@ -730,10 +741,12 @@ export class SocialEngine {
     const existing = this.coreMemories.get(buddyId) || [];
     if (existing.some((m) => m.text.toLowerCase() === text.toLowerCase())) return null;
     const record: CoreMemory = {
-      id: `cm_${Date.now().toString(36)}_${hashText(`${buddyId}:${text}`).toString(36)}`,
+      id: `cm_${buddyId}_${hashText(`${buddyId}:${memory.kind}:${memory.day}:${text}`).toString(36)}`,
       text,
       kind: memory.kind,
       day: Math.max(1, Math.floor(memory.day) || 1),
+      ...(memory.meaning && parseCoreMemoryMeaning(memory.meaning)
+        ? { meaning: parseCoreMemoryMeaning(memory.meaning) } : {}),
     };
     const next = [...existing, record];
     // Evict oldest non-first_meeting first so origin memories survive longest
@@ -742,11 +755,13 @@ export class SocialEngine {
       next.splice(evictIndex === -1 ? 0 : evictIndex, 1);
     }
     this.coreMemories.set(buddyId, next);
-    return { ...record };
+    return { ...record, ...(record.meaning ? { meaning: parseCoreMemoryMeaning(record.meaning) } : {}) };
   }
 
   public getCoreMemories(rawBuddyId: string): CoreMemory[] {
-    return (this.coreMemories.get(normalizeBuddyId(rawBuddyId)) || []).map((m) => ({ ...m }));
+    return (this.coreMemories.get(normalizeBuddyId(rawBuddyId)) || []).map((m) => ({
+      ...m, ...(m.meaning ? { meaning: parseCoreMemoryMeaning(m.meaning) } : {}),
+    }));
   }
 
   /** Record a player commitment. Caps open promises at MAX_OPEN_PROMISES (oldest open dropped). */
@@ -758,7 +773,7 @@ export class SocialEngine {
     const existing = this.promises.get(buddyId) || [];
     if (existing.some((p) => p.status === 'open' && p.text.toLowerCase() === clean.toLowerCase())) return null;
     const record: PromiseRecord = {
-      id: `pr_${Date.now().toString(36)}_${hashText(`${buddyId}:${clean}`).toString(36)}`,
+      id: `pr_${buddyId}_${hashText(`${buddyId}:${createdDay}:${clean}`).toString(36)}`,
       text: clean,
       status: 'open',
       createdDay: Math.max(1, Math.floor(createdDay) || 1),
@@ -798,6 +813,13 @@ export class SocialEngine {
       text: `${kept ? 'Kept promise' : 'Broke promise'}: "${record.text}"`,
       kind: kept ? 'promise_kept' : 'promise_broken',
       day,
+      meaning: {
+        participants: ['player', buddyId],
+        subject: { kind: 'promise', id: record.id },
+        source: { kind: 'domain_event', refId: record.id },
+        salience: 'high',
+        valence: kept ? 'positive' : 'negative',
+      },
     });
     // The buddy reads the player through kept/broken words (loyalty + discipline).
     this.observePlayerTrait(buddyId, kept ? { loyalty: 85, discipline: 75 } : { loyalty: 20, discipline: 35 }, day);
