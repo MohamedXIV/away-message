@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useSimulationStore } from '../../store/useSimulationStore';
+import { useSimulationApps } from '../../store/useBoundedSimulationRead';
 import { soundManager } from '../../audio/SoundManager';
 
 interface ImageFilterState {
@@ -21,8 +22,8 @@ const DEFAULT_FILTER: ImageFilterState = {
 };
 
 export const PhotoBoxApp: React.FC = () => {
-  const hardware = useSimulationStore((s) => s.state.hardware);
-  const currentOsId = useSimulationStore((s) => s.state.os.currentOsId);
+  const { hardware, os } = useSimulationApps();
+  const currentOsId = os.currentOsId;
   const isOrion60 = currentOsId === 'Orion_6.0';
   const hasSufficientRam = hardware.ramMB >= 768;
   const isGatingPassed = isOrion60 && hasSufficientRam;
