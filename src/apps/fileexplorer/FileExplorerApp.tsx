@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useSimulationStore } from '../../store/useSimulationStore';
+import { useSimulationDirectory } from '../../store/useBoundedSimulationRead';
 import { useWindowStore } from '../../store/useWindowStore';
 import { FileRecord, FileKind } from '../../engine/types';
 
@@ -15,11 +16,11 @@ const CANONICAL_SHORTCUTS = [
 ];
 
 export const FileExplorerApp: React.FC<{ initialPath?: string }> = ({ initialPath = 'C:' }) => {
-  const vfs = useSimulationStore((s) => s.state.vfs);
   const dispatchAction = useSimulationStore((s) => s.dispatchAction);
   const openWindow = useWindowStore((s) => s.openWindow);
 
   const [currentPath, setCurrentPath] = useState<string>(initialPath);
+  const directory = useSimulationDirectory(currentPath);
   const [history, setHistory] = useState<string[]>([initialPath]);
   const [historyIdx, setHistoryIdx] = useState<number>(0);
   const [viewMode, setViewMode] = useState<'details' | 'icons'>('details');
@@ -59,9 +60,7 @@ export const FileExplorerApp: React.FC<{ initialPath?: string }> = ({ initialPat
     }
   };
 
-  const currentFiles = Object.values(vfs.files).filter(
-    (f) => f.parentPath === currentPath && f.path !== currentPath
-  );
+  const currentFiles = directory.files;
 
   const [_installNotice, _setInstallNotice] = useState<string | null>(null);
 
@@ -265,7 +264,7 @@ export const FileExplorerApp: React.FC<{ initialPath?: string }> = ({ initialPat
       <div className="flex items-center justify-between px-2 py-0.5 bg-[#dfdfdf] border-t border-gray-400 text-[11px] text-gray-700">
         <span>{currentFiles.length} object(s)</span>
         <span>
-          Free Disk: {Math.max(0, (vfs.totalDiskBytes - vfs.baseSystemBytes) / (1024 * 1024 * 1024)).toFixed(2)} GB
+          Free Disk: {Math.max(0, (directory.totalDiskBytes - directory.baseSystemBytes) / (1024 * 1024 * 1024)).toFixed(2)} GB
         </span>
       </div>
     </div>
