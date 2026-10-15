@@ -9,6 +9,8 @@ import {
   type ActorSemanticView, type SemanticInfluenceView,
 } from '../semantic/ActorSemantics';
 
+import type { SimulationChange, SimulationHudProjection } from './SimulationPublication';
+export type { SimulationChange, SimulationHudProjection } from './SimulationPublication';
 export type { LiveSimulationState } from './PhysicalSimulationRuntime';
 
 /**
@@ -20,6 +22,8 @@ export class SimulationKernel {
   private readonly npc: NpcComputerSimulationRuntime;
   private readonly physical: PhysicalSimulationRuntime;
   private readonly subscribers = new Set<(state: Readonly<LiveSimulationState>) => void>();
+  private readonly changeSubscribers = new Set<(change: Readonly<SimulationChange>) => void>();
+  private revision = 0;
   private hydrating = false;
   private simulationBoundaryDepth = 0;
   private publicationPending = false;
@@ -160,11 +164,44 @@ export class SimulationKernel {
     // never during getState() or a current-format snapshot read.
     this.mood.publishIfChanged();
     this.invalidateStateCache();
-    const state = this.getState();
-    for (const listener of this.subscribers) {
-      try { listener(state); }
-      catch (err) { console.error('[SimulationKernel] Subscriber error:', err); }
+    const change: SimulationChange = {
+      revision: ++this.revision,
+      atMinute: this.clock.getTotalMinutes(),
+      changedDomains: ['unknown'],
+    };
+    for (const listener of this.changeSubscribers) {
+      try { listener(change); }
+      catch (err) { console.error('[SimulationKernel] Change subscriber error:', err); }
     }
+    // Legacy full-state consumers must be migrated under #172. Change-only
+    // subscriptions never pay for a broad snapshot by themselves.
+    if (this.subscribers.size > 0) {
+      const state = this.getState();
+      for (const listener of this.subscribers) {
+        try { listener(state); }
+        catch (err) { console.error('[SimulationKernel] Subscriber error:', err); }
+      }
+    }
+  }
+
+  /** #172: Worker-serializable revision channel, no broad snapshot read. */
+  public subscribeChanges(listener: (change: Readonly<SimulationChange>) => void): () => void {
+    this.changeSubscribers.add(listener);
+    listener({ revision: this.revision, atMinute: this.clock.getTotalMinutes(), changedDomains: ['unknown'] });
+    return () => { this.changeSubscribers.delete(listener); };
+  }
+
+  /** Bounded read from canonical owners; never assembles CoreStateProjection. */
+  public getHudProjection(): SimulationHudProjection {
+    const player = this.economy.getState();
+    return {
+      revision: this.revision,
+      time: { ...this.clock.getTime() },
+      paused: this.clock.isPaused(),
+      cash: player.cash,
+      socialBattery: player.socialBattery,
+      activeView: this.core.getActiveView(),
+    };
   }
 
   public subscribe(listener: (state: Readonly<LiveSimulationState>) => void): () => void {
