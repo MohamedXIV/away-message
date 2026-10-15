@@ -225,10 +225,6 @@ export class SimulationKernel {
     return this.core.generateProceduralEventsNow(...args);
   }
 
-  public exportFullSnapshot(...args: Parameters<CoreSimulationRuntime['exportFullSnapshot']>): ReturnType<CoreSimulationRuntime['exportFullSnapshot']> {
-    return this.core.exportFullSnapshot(...args);
-  }
-
   public getPcBootState(...args: Parameters<NpcComputerSimulationRuntime['getPcBootState']>): ReturnType<NpcComputerSimulationRuntime['getPcBootState']> {
     return this.npc.getPcBootState(...args);
   }
