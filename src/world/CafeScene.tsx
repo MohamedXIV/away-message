@@ -4,6 +4,7 @@
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useSimulationStore } from '../store/useSimulationStore';
+import { useSimulationHud, useSimulationWorldRead } from '../store/useBoundedSimulationRead';
 import { soundManager } from '../audio/SoundManager';
 import { PhysicalWorldBoundary } from './phaser/PhysicalWorldBoundary';
 import { createWorldSceneProjection } from './phaser/presentationAdapter';
@@ -66,14 +67,14 @@ export const CafeScene: React.FC<{ buddyId?: string }> = ({ buddyId: propBuddyId
 
   const engine = useSimulationStore((s) => s.engine);
   const buddyId = propBuddyId ?? defaultCafeBuddyId(engine);
-  const time = useSimulationStore((s) => s.state.time);
-  const totalMinutes = useSimulationStore((s) => s.state.time.totalMinutes);
-  const currentDay = useSimulationStore((s) => s.state.time.day);
+  const time = useSimulationHud().time;
+  const worldRead = useSimulationWorldRead();
+  const totalMinutes = time.totalMinutes;
+  const currentDay = time.day;
   const switchView = useSimulationStore((s) => s.switchView);
   const spendCash = useSimulationStore((s) => s.spendCash);
   const advanceTime = useSimulationStore((s) => s.advanceTime);
   const applySocialAction = useSimulationStore((s) => s.applySocialAction);
-  useSimulationStore((s) => s.state.world.triggeredEvents);
 
   const buddy = buddyId ? engine.social.getBuddy(buddyId) : undefined;
   const buddyName = buddy?.displayName || buddyId;
@@ -93,7 +94,7 @@ export const CafeScene: React.FC<{ buddyId?: string }> = ({ buddyId: propBuddyId
 
   const cafeService = GENERATED_VENUE_SERVICES.find((service) => service.tags.includes('cafe'));
   if (!cafeService) throw new Error('Generated world has no authored café venue service.');
-  const cafeEnvironment = engine.gameContext.environment.current();
+  const cafeEnvironment = worldRead.environment;
   const cafeProjection = useMemo(
     () => createWorldSceneProjection({
       placeId: cafeService.placeId,
