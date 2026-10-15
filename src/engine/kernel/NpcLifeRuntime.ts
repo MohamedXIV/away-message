@@ -220,6 +220,14 @@ export class NpcLifeRuntime {
     }
   }
 
+  /** Pure projection for semantic/UI reads; never creates a Life entry. */
+  public peekNpcPressure(actorId: string): LifePressureView | null {
+    if (!this.owners.social.getBuddy(actorId)) return null;
+    const entry = this.entries.get(actorId);
+    const pressure = entry?.pressure ?? this.deriveEntryPressure(actorId, this.owners.clock.getTime().day);
+    return projectLifePressureView(pressure, this.owners.clock.getTotalMinutes());
+  }
+
   public getNpcPressure(actorId: string): LifePressureView | null {
     const entry = this.getOrCreateNpcLifeEntry(actorId);
     if (!entry) return null;
