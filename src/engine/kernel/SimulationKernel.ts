@@ -18,6 +18,8 @@ import type {
   SimulationAppRead,
   SimulationChromeRead,
   SimulationDesktopRead,
+  SimulationDirectoryRead,
+  SimulationFileRead,
   SimulationChange,
   SimulationConversationRead,
   SimulationHudProjection,
@@ -30,6 +32,8 @@ export type {
   SimulationAppRead,
   SimulationChromeRead,
   SimulationDesktopRead,
+  SimulationDirectoryRead,
+  SimulationFileRead,
   SimulationChange,
   SimulationConversationRead,
   SimulationHudProjection,
@@ -276,6 +280,21 @@ export class SimulationKernel {
       revision: this.revision, actor,
       playerKnowledge: learned,
     };
+  }
+
+  public getDirectoryRead(path: string): SimulationDirectoryRead {
+    const capacity = this.vfs.getDiskCapacity();
+    return {
+      revision: this.revision,
+      path: this.vfs.normalizePath(path),
+      files: this.vfs.listDirectoryMetadata(path),
+      ...capacity,
+      freeDiskBytes: this.vfs.getFreeDiskBytes(),
+    };
+  }
+
+  public getFileRead(path: string): SimulationFileRead {
+    return { revision: this.revision, file: path ? this.vfs.readFile(path) ?? null : null };
   }
 
   /** The desktop app ecosystem reads only Hardware, OS and Software owners. */
