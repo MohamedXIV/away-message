@@ -122,3 +122,19 @@ export interface SimulationAppRead {
   os: ReturnType<import('../OsEngine').OsEngine['getState']>;
   installedSoftware: import('../types').InstalledSoftwareRecord[];
 }
+
+/** Per-directory visible metadata; file contents are requested separately. */
+export interface SimulationDirectoryRead {
+  revision: number;
+  path: string;
+  files: import('../types').FileRecord[];
+  totalDiskBytes: number;
+  baseSystemBytes: number;
+  freeDiskBytes: number;
+}
+
+/** An explicit one-file editor/document read, not a whole VFS snapshot. */
+export interface SimulationFileRead {
+  revision: number;
+  file: import('../types').FileRecord | null;
+}
