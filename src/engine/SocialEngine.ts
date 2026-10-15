@@ -1630,6 +1630,69 @@ export class SocialEngine {
     return pres ? { ...pres } : undefined;
   }
 
+  /**
+   * #172 bounded messenger read over the one canonical Social conversation.
+   * Offset is measured backward from newest; returned messages remain in
+   * chronological display order. #173 may change storage, not this contract.
+   */
+  public getConversationPage(rawConversationId: string, offset = 0, limit = 30): {
+    conversationId: string;
+    messages: MessageRecord[];
+    total: number;
+    hasOlder: boolean;
+  } {
+    const conversationId = normalizeBuddyId(rawConversationId);
+    const list = this.conversations.get(conversationId) ?? [];
+    const safeOffset = Number.isFinite(offset) ? Math.max(0, Math.floor(offset)) : 0;
+    const safeLimit = Number.isFinite(limit) ? Math.max(0, Math.min(50, Math.floor(limit))) : 30;
+    const end = Math.max(0, list.length - safeOffset);
+    const start = Math.max(0, end - safeLimit);
+    return {
+      conversationId,
+      messages: list.slice(start, end).map(m => ({
+        ...m, ...(m.tags ? { tags: [...m.tags] } : {}),
+      })),
+      total: list.length,
+      hasOlder: start > 0,
+    };
+  }
+
+  /** One row per visible contact; no full SocialEngineState projection. */
+  public getMessengerSummary(maxContacts = 32): Array<{
+    actorId: string;
+    displayName: string;
+    handle: string;
+    onlineStatus: BuddyPresence['status'];
+    relationshipStage: RelationshipStage;
+    lastMessageMinute: number | null;
+    unread: number;
+  }> {
+    const limit = Number.isFinite(maxContacts) ? Math.max(0, Math.min(100, Math.floor(maxContacts))) : 32;
+    if (limit === 0) return [];
+    const rows = [];
+    for (const [id, buddy] of this.buddies) {
+      if (!this.isKnown(id)) continue;
+      const conversation = this.conversations.get(id) ?? [];
+      const latest = conversation[conversation.length - 1];
+      let unread = 0;
+      for (let i = conversation.length - 1; i >= 0 && unread < 9999; i--) {
+        if (conversation[i]?.senderId !== 'player' && !conversation[i]?.isRead) unread++;
+      }
+      rows.push({
+        actorId: id,
+        displayName: buddy.displayName,
+        handle: buddy.handle,
+        onlineStatus: this.presence.get(id)?.status ?? 'offline',
+        relationshipStage: this.getRelationshipStage(id),
+        lastMessageMinute: latest?.timestampMinute ?? null,
+        unread,
+      });
+    }
+    rows.sort((a, b) => (b.lastMessageMinute ?? -1) - (a.lastMessageMinute ?? -1)
+      || a.actorId.localeCompare(b.actorId));
+    return rows.slice(0, limit);
+  }
+
   public getMessages(rawConversationId: string): MessageRecord[] {
     const msgs = this.conversations.get(normalizeBuddyId(rawConversationId)) || [];
     return msgs.map(m => ({ ...m }));
