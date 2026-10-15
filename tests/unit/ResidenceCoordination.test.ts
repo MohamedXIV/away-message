@@ -3,7 +3,7 @@ import { SimulationEngine } from '../../src/engine/SimulationEngine';
 import { ResidenceCoordination, fallbackResidenceState } from '../../src/engine/kernel/ResidenceCoordination';
 
 function owner(engine: SimulationEngine): ResidenceCoordination {
-  return (engine as unknown as { residenceCoordination: ResidenceCoordination }).residenceCoordination;
+  return (engine as unknown as { physical: { residenceCoordination: ResidenceCoordination } }).physical.residenceCoordination;
 }
 
 describe('ResidenceCoordination — canonical tenancy and housing policy', () => {
