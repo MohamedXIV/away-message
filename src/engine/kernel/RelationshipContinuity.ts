@@ -113,7 +113,12 @@ export class RelationshipContinuity {
         if (typeof until === 'number' && newDay < until) continue;
         this.owners.social.setActorCondition(buddy.id, { lifecycle: 'active', contact: 'open' });
         const rels = this.owners.social.getRelationships(buddy.id);
-        if (rels) this.owners.social.adjustRelationship(buddy.id, { annoyance: 25, trust: Math.max(5, rels.trust - 10) });
+        if (rels) this.owners.social.adjustRelationship(buddy.id, {
+          annoyance: 25, trust: Math.max(5, rels.trust - 10),
+          // A return is a renewed acquaintance in canonical relationship
+          // dimensions, never a second mutable "acquaintance" actor status.
+          familiarity: Math.max(10, rels.familiarity),
+        });
         this.owners.world.setFlag(`sharp_${buddy.id}`, 'returned');
         this.owners.world.setFlag(`sharp_${buddy.id}_day`, newDay);
         this.owners.world.setFlag(`strained_${buddy.id}`, false);
