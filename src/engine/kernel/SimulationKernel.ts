@@ -184,6 +184,8 @@ export class SimulationKernel {
     }
   }
 
+  public getRevision(): number { return this.revision; }
+
   /** #172: Worker-serializable revision channel, no broad snapshot read. */
   public subscribeChanges(listener: (change: Readonly<SimulationChange>) => void): () => void {
     this.changeSubscribers.add(listener);
