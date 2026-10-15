@@ -212,6 +212,16 @@ export class SimulationKernel {
     }
   }
 
+  /**
+   * Explicit publication boundary for direct legacy UI domain commands that
+   * do not go through dispatchAction. This is NOT a state write or snapshot;
+   * it delivers one revision to bounded readers and full state only to
+   * remaining legacy subscribers. Callers must invoke after the mutation.
+   */
+  public publishExternalChange(): void {
+    this.notifySubscribers();
+  }
+
   public getRevision(): number { return this.revision; }
 
   /** #172: Worker-serializable revision channel, no broad snapshot read. */
