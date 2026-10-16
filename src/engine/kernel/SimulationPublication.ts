@@ -8,7 +8,7 @@ import type { GameTime } from '../types';
 export type ObservedSimulationDomain =
   | 'clock' | 'player' | 'hardware' | 'downloads' | 'vfs' | 'software'
   | 'social' | 'world' | 'environment' | 'mood' | 'telemetry'
-  | 'transit' | 'venue';
+  | 'transit' | 'venue' | 'residence';
 
 export interface SimulationChange {
   revision: number;
@@ -182,4 +182,26 @@ export interface SimulationSituationRead {
   atMinute: number;
   activeEventIds: string[];
   influences: Array<import('../WorldModifiers').WorldModifier>;
+}
+
+/** One canonical tenancy and currently authored housing offers, not the physical-world graph. */
+export interface SimulationResidenceRead {
+  revision: number;
+  tenancy: import('../ResidenceTenancy').ResidenceState;
+  offers: ReturnType<import('./PhysicalSimulationRuntime').PhysicalSimulationRuntime['getHousingOffers']>;
+}
+
+/** Player's active journey only: no NPC trips, all-actor positions or transit network. */
+export interface SimulationTransitRead {
+  revision: number;
+  atMinute: number;
+  active: null | {
+    status: import('../transit/types').ActiveTravelState['status'];
+    originPlaceId: string;
+    destinationPlaceId: string;
+    currentLegIndex: number;
+    currentLeg: import('../transit/types').TravelLeg | null;
+    arriveAtMinute: number;
+    minutesRemaining: number;
+  };
 }
