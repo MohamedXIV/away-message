@@ -885,7 +885,7 @@ export class SimulationKernel {
           id: buddy.id,
           displayName: buddy.displayName,
           handle: buddy.handle,
-          roles: buddy.roles ? [...buddy.roles] : undefined,
+          ...(buddy.roles ? { roles: [...buddy.roles] } : {}),
         });
         lastSeenMinutes[buddy.id] = this.social.getLastActivityMinute(buddy.id);
       } else if (suggestions.length < 500) {
