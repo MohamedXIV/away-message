@@ -33,7 +33,7 @@ describe('#172 Pulse direct-owner mutations and focused profile reads', () => {
     const actor = game.social.getBuddies()[0]!;
     const unrelated = game.social.getBuddies()[1]!;
     game.social.addCoreMemory(unrelated.id, {
-      id: 'unrelated_secret', kind: 'shared_photo',
+      kind: 'shared_photo',
       text: 'SECRET_ONLY_OTHER_BUDDY', day: 1,
     });
     const giant = vi.spyOn(game, 'getState');
