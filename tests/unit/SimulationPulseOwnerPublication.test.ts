@@ -110,6 +110,27 @@ describe('#172 Pulse direct-owner mutations and focused profile reads', () => {
     expect(game.getRevision()).toBe(capped + 1);
     stop();
   });
+  it('does not leak a private roster into the public room member-name projection', () => {
+    const game = new SimulationEngine();
+    const roster = game.social.getBuddies();
+    const visible = roster[0]!;
+    const other = roster.find(buddy => buddy.id !== visible.id)!;
+    expect(other).toBeDefined();
+    const full = vi.spyOn(game, 'getState');
+    const social = vi.spyOn(game.social, 'getState');
+    const read = game.getPulseContactsRead([
+      { id: 'public-one', participantIds: [visible.id], participantRoles: [] },
+    ]);
+    expect(read.roomParticipantNames).toEqual({ [visible.id]: visible.displayName });
+    expect(read.roomParticipantNames[other.id]).toBeUndefined();
+    expect(Object.keys(read.roomParticipantNames).length).toBeLessThanOrEqual(500);
+    expect(JSON.stringify(read)).not.toContain('initialRelationships');
+    expect(JSON.stringify(read)).not.toContain('schedule');
+    expect(JSON.parse(JSON.stringify(read))).toEqual(read);
+    expect(full).not.toHaveBeenCalled();
+    expect(social).not.toHaveBeenCalled();
+  });
+
   it('publishes delayed NPC scripted messages through the inbound command and bounded conversation', () => {
     const game = new SimulationEngine();
     const actor = game.social.getBuddies()[0]!;
@@ -233,13 +254,15 @@ describe('#172 Pulse direct-owner mutations and focused profile reads', () => {
     const social = vi.spyOn(game.social, 'getState');
     const view = game.getPulseContactsRead(rooms);
     expect(Object.keys(view).sort()).toEqual([
-      'revision', 'contacts', 'suggestions', 'lastSeenMinutes', 'roomParticipantCounts',
+      'revision', 'contacts', 'suggestions', 'lastSeenMinutes', 'roomParticipantCounts', 'roomParticipantNames',
     ].sort());
     expect(view.contacts.every(contact => game.social.isKnown(contact.id))).toBe(true);
     expect(view.contacts.every(contact => Object.keys(contact).every(key =>
-      ['id', 'displayName', 'handle', 'roles'].includes(key)))).toBe(true);
+      ['id', 'displayName', 'handle', 'roles', 'archetype'].includes(key)))).toBe(true);
     expect(view.roomParticipantCounts['test-room']).toBe(1);
     expect(view.roomParticipantCounts['empty-room']).toBe(0);
+    expect(view.roomParticipantNames[actor.id]).toBe(actor.displayName);
+    expect(Object.keys(view.roomParticipantNames)).toEqual([actor.id]);
     expect(view.contacts.length).toBeLessThanOrEqual(500);
     expect(view.suggestions.length).toBeLessThanOrEqual(500);
     expect(JSON.parse(JSON.stringify(view))).toEqual(view);

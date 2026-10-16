@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { BuddyCharacter } from '../../../engine/types';
+import type { SimulationPulseContact } from '../../../engine/kernel/SimulationPublication';
 import { useConversationRead } from '../../../store/useBoundedSimulationRead';
 import { ChatTabHeader } from './ChatTabHeader';
 import { MessageHistoryView } from './MessageHistoryView';
@@ -12,7 +12,7 @@ import { DialogueChoiceOption } from '../types';
 interface ChatWindowProps {
   openBuddyIds: string[];
   activeBuddyId: string | null;
-  buddies: Record<string, BuddyCharacter>;
+  buddies: Record<string, SimulationPulseContact>;
   unreadCounts: Record<string, number>;
   typingIndicatorText?: string;
   availableChoices?: DialogueChoiceOption[];
@@ -106,7 +106,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
               className="rounded border border-gray-400 px-1.5 py-0.5 disabled:opacity-40">Newer →</button>
           </div>
         </div>
-        <MessageHistoryView messages={activeMessages} totalMessages={page.total} buddy={activeBuddy as any} />
+        <MessageHistoryView messages={activeMessages} totalMessages={page.total} buddy={activeBuddy as SimulationPulseContact} />
 
         {typingIndicatorText && (
           <div className="text-[11px] text-blue-700 italic px-2 animate-pulse">

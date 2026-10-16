@@ -87,7 +87,7 @@ export interface SimulationActorRead {
 
 /** Minimal player-known contact identity required for buddy-list rendering. */
 export type SimulationPulseContact = Pick<import('../types').BuddyCharacter,
-  'id' | 'displayName' | 'handle' | 'roles'>;
+  'id' | 'displayName' | 'handle' | 'roles' | 'archetype'>;
 
 /** Pulse contacts + recall hints and public room totals; no full Social roster. */
 export interface SimulationPulseContactsRead {
@@ -96,6 +96,8 @@ export interface SimulationPulseContactsRead {
   suggestions: Array<{ handle: string; note: string; buddyName: string }>;
   lastSeenMinutes: Record<string, number>;
   roomParticipantCounts: Record<string, number>;
+  /** Names in public room membership only; no private roster. */
+  roomParticipantNames: Record<string, string>;
 }
 
 export interface SimulationMessengerRead {

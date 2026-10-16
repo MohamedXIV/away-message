@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useSimulationStore } from '../../store/useSimulationStore';
-import { useMessengerRead, useSimulationHud, useSimulationPresence } from '../../store/useBoundedSimulationRead';
+import { useMessengerRead, usePulseContactsRead, useSimulationHud, useSimulationPresence } from '../../store/useBoundedSimulationRead';
 import { BuddyListWindow } from './components/BuddyListWindow';
 import { ChatWindow } from './components/ChatWindow';
 import { PulseLoginSplash, PulseLoginSession } from './components/PulseLoginSplash';
@@ -213,6 +213,7 @@ export const PulseMessengerApp: React.FC = () => {
   // Pulse message bodies are never selected from the giant Zustand snapshot.
   const hud = useSimulationHud();
   const messenger = useMessengerRead();
+  const pulseContacts = usePulseContactsRead();
   const currentDay = hud.time.day;
   const totalMinutes = hud.time.totalMinutes;
   const presenceMap = useSimulationPresence().presence;
@@ -1163,8 +1164,9 @@ export const PulseMessengerApp: React.FC = () => {
     }
   }, [activeBuddyId, currentDay, hud.revision, engine, triggerNpcScript, session]);
 
-  const buddiesMap: Record<string, any> = {};
-  engine.social.getBuddies().forEach((buddy) => { buddiesMap[buddy.id] = buddy; });
+  // Player-learned display identities only; never project a full NPC roster
+  // or pass internal buddy memories/relationships to the React chat subtree.
+  const buddiesMap = Object.fromEntries(pulseContacts.contacts.map(buddy => [buddy.id, buddy]));
   const activeRoom = activeRoomId ? getPulseRoom(activeRoomId) : undefined;
 
   // AI reply suggestions for the player (P8/B2): same live context as the NPC side.
@@ -1233,7 +1235,7 @@ export const PulseMessengerApp: React.FC = () => {
           <PulseRoomWindow
             room={activeRoom}
             messages={roomMessages[activeRoom.id] || []}
-            participantNames={Object.fromEntries(engine.social.getBuddies().map((buddy) => [buddy.id, buddy.displayName]))}
+            participantNames={pulseContacts.roomParticipantNames}
             username={session.username}
             topic={roomTopics[activeRoom.id] || activeRoom.topic}
             isTyping={roomTyping}

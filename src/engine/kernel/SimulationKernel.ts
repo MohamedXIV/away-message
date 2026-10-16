@@ -888,6 +888,7 @@ export class SimulationKernel {
           id: buddy.id,
           displayName: buddy.displayName,
           handle: buddy.handle,
+          ...(buddy.archetype ? { archetype: buddy.archetype } : {}),
           ...(buddy.roles ? { roles: [...buddy.roles] } : {}),
         });
         lastSeenMinutes[buddy.id] = this.social.getLastActivityMinute(buddy.id);
@@ -903,6 +904,8 @@ export class SimulationKernel {
       }
     }
     const roomParticipantCounts: Record<string, number> = {};
+    const roomParticipantNames: Record<string, string> = {};
+    let namedCount = 0;
     for (const room of rooms.slice(0, 32)) {
       const present = new Set<string>();
       for (const buddy of roster) {
@@ -910,11 +913,15 @@ export class SimulationKernel {
         if (room.participantIds.includes(buddy.id) ||
           (buddy.roles ?? []).some(role => room.participantRoles.includes(role))) {
           present.add(buddy.id);
+          if (!Object.prototype.hasOwnProperty.call(roomParticipantNames, buddy.id) && namedCount < 500) {
+            roomParticipantNames[buddy.id] = buddy.displayName;
+            namedCount++;
+          }
         }
       }
       roomParticipantCounts[room.id] = present.size;
     }
-    return { revision: this.revision, contacts, suggestions, lastSeenMinutes, roomParticipantCounts };
+    return { revision: this.revision, contacts, suggestions, lastSeenMinutes, roomParticipantCounts, roomParticipantNames };
   }
 
   public getMessengerRead(maxContacts = 32): SimulationMessengerRead {

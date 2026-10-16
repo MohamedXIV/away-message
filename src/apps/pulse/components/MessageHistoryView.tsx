@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from 'react';
-import { MessageRecord, BuddyCharacter } from '../../../engine/types';
+import type { MessageRecord } from '../../../engine/types';
+import type { SimulationPulseContact } from '../../../engine/kernel/SimulationPublication';
 import { formatSimulationMinutes } from '../utils/timeFormat';
 import { useSimulationStore } from '../../../store/useSimulationStore';
 import { useSimulationChrome } from '../../../store/useBoundedSimulationRead';
@@ -14,7 +15,7 @@ interface MessageHistoryViewProps {
   messages: MessageRecord[];
   /** Total persisted messages, even when the current UI displays one page. */
   totalMessages?: number;
-  buddy: BuddyCharacter;
+  buddy: SimulationPulseContact;
 }
 
 export const MessageHistoryView: React.FC<MessageHistoryViewProps> = ({ messages, totalMessages = messages.length, buddy }) => {

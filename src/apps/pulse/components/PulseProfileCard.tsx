@@ -1,11 +1,12 @@
 import React from 'react';
-import type { BuddyCharacter, BuddyPresence, RelationshipDimensions } from '../../../engine/types';
+import type { BuddyPresence, RelationshipDimensions } from '../../../engine/types';
+import type { SimulationPulseContact } from '../../../engine/kernel/SimulationPublication';
 import type { PulseRoom } from '../data/pulseRooms';
 import type { PulseActivityEntry } from '../types';
 import { usePulseProfileRead } from '../../../store/useBoundedSimulationRead';
 
 interface PulseProfileCardProps {
-  buddy: BuddyCharacter;
+  buddy: SimulationPulseContact;
   presence: BuddyPresence;
   relationship?: RelationshipDimensions;
   rooms: PulseRoom[];
