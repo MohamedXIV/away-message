@@ -544,7 +544,18 @@ export class SimulationKernel {
       locked,
       userProfile,
       profile: locked && candidate
-        ? { ...candidate, headline: '', bio: '', interests: [], songTitle: '', top8: [], glitterIntensity: 0 }
+        ? {
+            username: candidate.username,
+            displayName: candidate.displayName,
+            headline: '',
+            bio: '',
+            interests: [],
+            songTitle: '',
+            avatarGlyph: '👤',
+            top8: [],
+            glitterIntensity: 0,
+            visibility: 'friendsOnly',
+          }
         : candidate,
       guestbook: locked ? [] : this.myplace.getGuestbook(username),
     };

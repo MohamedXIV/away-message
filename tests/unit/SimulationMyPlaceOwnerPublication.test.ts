@@ -221,13 +221,18 @@ describe('#172 MyPlace website owner publication', () => {
       headline: 'SECRET_HEADLINE',
       bio: 'SECRET_BIO',
       interests: ['SECRET_INTEREST'],
+      tiledBackground: 'SECRET_TILE',
     });
     const blocked = game.getMyPlacePageRead('maya_x');
     expect(blocked.locked).toBe(true);
     expect(blocked.profile?.username).toBe('maya_x');
     expect(blocked.profile?.visibility).toBe('friendsOnly');
     expect(blocked.guestbook).toEqual([]);
-    expect(JSON.stringify(blocked)).not.toMatch(/SECRET_HEADLINE|SECRET_BIO|SECRET_INTEREST|SECRET_GUESTBOOK/);
+    expect(JSON.stringify(blocked)).not.toMatch(/SECRET_HEADLINE|SECRET_BIO|SECRET_INTEREST|SECRET_GUESTBOOK|SECRET_TILE/);
+    expect(Object.keys(blocked.profile!).sort()).toEqual([
+      'avatarGlyph', 'bio', 'displayName', 'glitterIntensity', 'headline',
+      'interests', 'songTitle', 'top8', 'username', 'visibility',
+    ].sort());
 
     game.myplace.updateNpcProfile('maya_x', {
       top8: [{ handle: game.myplace.getUserProfile().username, name: 'Wanderer', avatar: '💻' }],
