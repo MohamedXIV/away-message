@@ -189,4 +189,34 @@ describe('#172 Pulse direct-owner mutations and focused profile reads', () => {
     stop();
   });
 
+  it('publishes scheduled and cancelled meetup owner state even when cancel returns null', () => {
+    const game = new SimulationEngine();
+    const actor = game.social.getBuddies()[0]!;
+    const observed: Array<readonly string[]> = [];
+    const stop = game.subscribeChanges(change => observed.push(change.changedDomains));
+    observed.length = 0;
+    const broad = vi.spyOn(game, 'getState');
+    const start = game.getRevision();
+
+    expect(game.handleMeetupChat(actor.id, 'maybe sometime', 1)).toBeNull();
+    expect(game.getRevision()).toBe(start);
+    const proposed = game.handleMeetupChat(actor.id, 'Let us meet at the cafe tomorrow', 1);
+    expect(proposed).not.toBeNull();
+    expect(game.getRevision()).toBe(start + 1);
+    expect(observed[0]).toEqual(expect.arrayContaining(['world', 'unknown']));
+    expect(game.world.getAppointments().some(appointment => appointment.characterId === actor.id)).toBe(true);
+    expect(game.handleMeetupChat(actor.id, 'Let us meet at the cafe tomorrow', 1)).toBeNull();
+    expect(game.getRevision()).toBe(start + 1);
+
+    // The owner method returns null for cancellation by design; the write
+    // still needs a bounded UI notification.
+    expect(game.handleMeetupChat(actor.id, 'I have to cancel', 1)).toBeNull();
+    expect(game.getRevision()).toBe(start + 2);
+    expect(observed).toHaveLength(2);
+    expect(game.world.getAppointments().some(appointment =>
+      appointment.characterId === actor.id && appointment.status === 'cancelled')).toBe(true);
+    expect(broad).not.toHaveBeenCalled();
+    stop();
+  });
+
 });

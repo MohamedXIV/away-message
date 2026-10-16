@@ -915,7 +915,13 @@ export class SimulationKernel {
   }
 
   public handleMeetupChat(...args: Parameters<CoreSimulationRuntime['handleMeetupChat']>): ReturnType<CoreSimulationRuntime['handleMeetupChat']> {
-    return this.core.handleMeetupChat(...args);
+    // A cancelled meeting returns null despite changing canonical World and
+    // Social truth. Detect actual appointment updates, not just the return
+    // value, and publish the single source-backed boundary for both paths.
+    const before = JSON.stringify(this.world.getAppointments());
+    return this.publishOwnerMutation(['world', 'social', 'player'],
+      () => this.core.handleMeetupChat(...args),
+      () => before !== JSON.stringify(this.world.getAppointments()));
   }
 
   public travelTo(...args: Parameters<CoreSimulationRuntime['travelTo']>): ReturnType<CoreSimulationRuntime['travelTo']> {
