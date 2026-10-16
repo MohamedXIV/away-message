@@ -149,6 +149,9 @@ describe('#172 Pulse direct-owner mutations and focused profile reads', () => {
 
   it('deduplicates presence presets and emits a real revision only on changes', () => {
     const game = new SimulationEngine();
+    // Player presence is absent until its first real command; initialize it
+    // through the same canonical path before testing repeated no-ops.
+    expect(game.setPlayerPresence({ status: 'online', awayMessage: '' })).toBe(true);
     const changes: Array<readonly string[]> = [];
     const stop = game.subscribeChanges(change => changes.push(change.changedDomains));
     changes.length = 0;
