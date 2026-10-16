@@ -118,6 +118,8 @@ export interface SimulationPresenceRead {
 /** Legacy desktop app dependencies, projected only from the relevant owners. */
 export interface SimulationAppRead {
   revision: number;
+  computer: Pick<import('../types').ComputerSetupState, 'assembled' | 'poweredOn'>;
+  downloads: import('../types').DownloadTask[];
   hardware: import('../types').HardwareState;
   os: ReturnType<import('../OsEngine').OsEngine['getState']>;
   installedSoftware: import('../types').InstalledSoftwareRecord[];
@@ -137,4 +139,15 @@ export interface SimulationDirectoryRead {
 export interface SimulationFileRead {
   revision: number;
   file: import('../types').FileRecord | null;
+}
+
+/** Shop UI only, no equipment list or WorldState transport. */
+export interface SimulationShopRead {
+  revision: number;
+  cash: number;
+  hardware: import('../types').HardwareState;
+  osVersion: import('../types').OsVersion | null;
+  purchaseCounts: Record<string, number>;
+  legacyRecovery?: import('../types').LegacyRecoveryState;
+  roomPackageCount: number;
 }
