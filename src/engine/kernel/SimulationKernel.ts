@@ -314,7 +314,7 @@ export class SimulationKernel {
       time: { ...this.clock.getTime() },
       activeView: this.core.getActiveView(),
       residencePlaceId: this.physical.getCurrentResidencePlaceId(),
-      playerLocation: this.economy.getState().location,
+      playerLocation: this.economy.getLocation(),
       environment: this.environment.getCurrentSnapshot(),
       pcBootState: resolvePcBootState({ computer: this.hardware.getComputerState(), inventory: this.inventory.getState(), os: this.os.getState() }),
       metInPerson: !!this.world.getFlag('met_in_person'),
@@ -488,7 +488,7 @@ export class SimulationKernel {
     return {
       revision: this.revision,
       time: { ...this.clock.getTime() },
-      cash: this.economy.getState().cash,
+      cash: this.economy.getCash(),
       narrativeFlags: { ...flags },
       world: {
         flags,
@@ -505,7 +505,7 @@ export class SimulationKernel {
     const inventory = this.inventory.getShopSummary();
     return {
       revision: this.revision,
-      cash: this.economy.getState().cash,
+      cash: this.economy.getCash(),
       hardware: this.hardware.getState(),
       osVersion: this.os.getCurrentOsId(),
       ...inventory,
