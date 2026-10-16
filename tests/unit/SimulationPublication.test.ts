@@ -83,6 +83,29 @@ describe('#172 revision-only publication and bounded HUD projection', () => {
     }
   });
 
+  it('isolates serializable change payloads from mutation by earlier subscribers', () => {
+    const engine = new SimulationEngine();
+    const whole = vi.spyOn(engine, 'getState');
+    const first: string[][] = [];
+    const second: string[][] = [];
+    const stopFirst = engine.subscribeChanges(change => {
+      expect(Object.isFrozen(change)).toBe(true);
+      expect(Object.isFrozen(change.changedDomains)).toBe(true);
+      expect(() => (change.changedDomains as string[]).push('fake_domain')).toThrow();
+      first.push([...change.changedDomains]);
+    });
+    const stopSecond = engine.subscribeChanges(change => second.push([...change.changedDomains]));
+    expect(first).toEqual([['unknown']]);
+    expect(second).toEqual([['unknown']]);
+
+    engine.dispatchAction({ type: 'WORLD_SET_FLAG', key: 'frozen_revision_172', value: true });
+    expect(first).toEqual([['unknown'], ['world', 'unknown']]);
+    expect(second).toEqual(first);
+    expect(whole).not.toHaveBeenCalled();
+    stopSecond();
+    stopFirst();
+  });
+
   it('keeps legacy full-snapshot subscription behavior while migrating consumers', () => {
     const engine = new SimulationEngine();
     const wholeState = vi.spyOn(engine, 'getState');

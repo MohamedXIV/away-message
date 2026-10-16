@@ -243,12 +243,14 @@ export class SimulationKernel {
     this.invalidateStateCache();
     const observed = [...this.observedDomains].sort();
     this.observedDomains.clear();
-    const change: SimulationChange = {
+    // A malicious/buggy first subscriber must not rewrite the delivery for
+    // later subscribers. Frozen plain objects remain Worker-serializable.
+    const change: SimulationChange = Object.freeze({
       revision: ++this.revision,
       atMinute: this.clock.getTotalMinutes(),
       // Conservatively retain 'unknown' until no silent domain writer exists.
-      changedDomains: [...observed, 'unknown'],
-    };
+      changedDomains: Object.freeze([...observed, 'unknown'] as const),
+    });
     for (const listener of this.changeSubscribers) {
       try { listener(change); }
       catch (err) { console.error('[SimulationKernel] Change subscriber error:', err); }
@@ -302,7 +304,11 @@ export class SimulationKernel {
   /** #172: Worker-serializable revision channel, no broad snapshot read. */
   public subscribeChanges(listener: (change: Readonly<SimulationChange>) => void): () => void {
     this.changeSubscribers.add(listener);
-    listener({ revision: this.revision, atMinute: this.clock.getTotalMinutes(), changedDomains: ['unknown'] });
+    listener(Object.freeze({
+      revision: this.revision,
+      atMinute: this.clock.getTotalMinutes(),
+      changedDomains: Object.freeze(['unknown'] as const),
+    }));
     return () => { this.changeSubscribers.delete(listener); };
   }
 
