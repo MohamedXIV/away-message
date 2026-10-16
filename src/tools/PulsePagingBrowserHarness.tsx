@@ -8,8 +8,13 @@ import { useSimulationStore } from '../store/useSimulationStore';
  * hooks, mounted outside the regular OS to avoid depending on installer/login.
  * This file is never imported into the game's production entrypoint.
  */
-export function mountPulsePagingBrowserHarness(): { actorId: string; total: number } {
-  const engine = useSimulationStore.getState().engine;
+export function mountPulsePagingBrowserHarness(): { actorId: string; total: number; paused: boolean } {
+  // The normal game ticker can deliver unsolicited NPC messages. Pin the
+  // simulated clock so this browser gate tests page boundaries against a
+  // fixed 125-message owner history, not an actively mutating background world.
+  const store = useSimulationStore.getState();
+  store.setPaused(true);
+  const engine = store.engine;
   const actor = engine.social.getBuddies()[0]!;
   const baseMinute = engine.clock.getTotalMinutes();
   for (let index = 0; index < 125; index++) {
@@ -39,5 +44,5 @@ export function mountPulsePagingBrowserHarness(): { actorId: string; total: numb
     onSendMessage: () => {},
     onSelectChoice: () => {},
   }));
-  return { actorId: actor.id, total: engine.getConversationRead(actor.id, 0, 50).total };
+  return { actorId: actor.id, total: engine.getConversationRead(actor.id, 0, 50).total, paused: engine.clock.isPaused() };
 }
