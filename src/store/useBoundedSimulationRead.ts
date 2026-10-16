@@ -19,6 +19,7 @@ import type {
   SimulationResidenceRead,
   SimulationJobBoardRead,
   SimulationTransitRead,
+  SimulationCafeGuestRead,
   SimulationWebsiteRead,
   SimulationPulseProfileRead,
 } from '../engine/kernel/SimulationPublication';
@@ -89,6 +90,15 @@ export function useSimulationResidence(): SimulationResidenceRead {
 
 export function useSimulationTransit(): SimulationTransitRead {
   return useBoundedSimulationRead(readTransit);
+}
+
+/** An authored place and actual NPC presence, not a Social roster guess. */
+export function useCafeGuestRead(placeId: string, requestedActorId?: string): SimulationCafeGuestRead {
+  const read = useCallback(
+    (engine: SimulationEngine) => engine.getCafeGuestRead(placeId, requestedActorId),
+    [placeId, requestedActorId],
+  );
+  return useBoundedSimulationRead(read);
 }
 
 export function useSimulationDirectory(path: string): SimulationDirectoryRead {

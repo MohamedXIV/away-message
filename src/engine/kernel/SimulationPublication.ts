@@ -214,6 +214,13 @@ export interface SimulationJobBoardRead {
   }>;
 }
 
+/** Player-known and physically present café guest. No synthetic in-person encounter. */
+export interface SimulationCafeGuestRead {
+  revision: number;
+  placeId: string;
+  guest: null | { actorId: string; displayName: string };
+}
+
 /** Player's active journey only: no NPC trips, all-actor positions or transit network. */
 export interface SimulationTransitRead {
   revision: number;

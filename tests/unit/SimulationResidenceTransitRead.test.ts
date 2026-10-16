@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { SimulationEngine } from '../../src/engine/SimulationEngine';
 import type { ActiveTravelState } from '../../src/engine/transit/types';
+import { GENERATED_VENUE_SERVICES } from '../../src/engine/worldContent.generated';
 
 describe('#172 owner-scoped residence and player-only transit projections', () => {
   it('projects canonical tenancy and the shop-visible offer list without world snapshots', () => {
@@ -19,6 +20,37 @@ describe('#172 owner-scoped residence and player-only transit projections', () =
     expect(physical).not.toHaveBeenCalled();
     read.tenancy.currentRent = -55;
     expect(game.getResidenceState().currentRent).toBeGreaterThanOrEqual(0);
+  });
+
+  it('only presents known, physically co-located café guests from the NPC place owner', () => {
+    const game = new SimulationEngine();
+    const actor = game.social.getBuddies().find(buddy => buddy.reach === 'local')!;
+    const cafe = GENERATED_VENUE_SERVICES.find(service => service.tags.includes('cafe'))!;
+    const shop = GENERATED_VENUE_SERVICES.find(service => service.tags.includes('shop'))!;
+    expect(cafe.placeId).not.toBe(shop.placeId);
+    const noSnapshot = vi.spyOn(game, 'getState');
+    const noMobilityDump = vi.spyOn(game, 'getNpcMobilityState');
+    const noSocialDump = vi.spyOn(game.social, 'getState');
+
+    // A local actor or an explicit guest request is not proof of a meeting.
+    expect(game.getCafeGuestRead(cafe.placeId, actor.id).guest).toBeNull();
+    expect(game.social.learnHandle(actor.id, actor.handle)).toBe(true);
+    expect(game.relocateActorToGeneratedPlaceEntry(actor.id, shop.placeId)).toBe(true);
+    expect(game.getNpcPlaceState(actor.id)).toEqual({ status: 'at_place', placeId: shop.placeId });
+    expect(game.getCafeGuestRead(cafe.placeId, actor.id).guest).toBeNull();
+
+    expect(game.relocateActorToGeneratedPlaceEntry(actor.id, cafe.placeId)).toBe(true);
+    const actual = game.getCafeGuestRead(cafe.placeId, actor.id);
+    expect(actual).toEqual({
+      revision: game.getRevision(),
+      placeId: cafe.placeId,
+      guest: { actorId: actor.id, displayName: actor.displayName },
+    });
+    expect(game.getCafeGuestRead(cafe.placeId).guest).toEqual(actual.guest);
+    expect(JSON.parse(JSON.stringify(actual))).toEqual(actual);
+    expect(noSnapshot).not.toHaveBeenCalled();
+    expect(noMobilityDump).not.toHaveBeenCalled();
+    expect(noSocialDump).not.toHaveBeenCalled();
   });
 
   it('shows one player trip and one leg, never NPC mobility or an entire route graph', () => {

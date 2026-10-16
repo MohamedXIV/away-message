@@ -34,6 +34,7 @@ import type {
   SimulationResidenceRead,
   SimulationJobBoardRead,
   SimulationTransitRead,
+  SimulationCafeGuestRead,
 } from './SimulationPublication';
 export type {
   SimulationActorRead,
@@ -56,6 +57,7 @@ export type {
   SimulationResidenceRead,
   SimulationJobBoardRead,
   SimulationTransitRead,
+  SimulationCafeGuestRead,
 } from './SimulationPublication';
 export type { LiveSimulationState } from './PhysicalSimulationRuntime';
 
@@ -369,6 +371,30 @@ export class SimulationKernel {
         minutesRemaining: Math.max(0, travel.plan.arriveAtMinute - atMinute),
       },
     };
+  }
+
+  /**
+   * Factual in-person guest: Social owns knowledge and reach, NPC movement
+   * owns the current physical place. Online status is not location evidence.
+   */
+  public getCafeGuestRead(placeId: string, requestedActorId?: string): SimulationCafeGuestRead {
+    const candidates = requestedActorId
+      ? [this.social.getBuddy(requestedActorId)]
+      : this.social.getBuddies();
+    let guest: SimulationCafeGuestRead['guest'] = null;
+    let bestFamiliarity = -Infinity;
+    for (const candidate of candidates) {
+      if (!candidate || candidate.reach !== 'local' || !this.social.isKnown(candidate.id)) continue;
+      const location = this.npc.getNpcPlaceState(candidate.id);
+      if (location.status !== 'at_place' || location.placeId !== placeId) continue;
+      const semantics = this.getActorSemanticView(candidate.id);
+      if (!semantics || semantics.connection !== 'known' || !semantics.canMeetInPerson.allowed) continue;
+      const familiarity = this.social.getRelationships(candidate.id)?.familiarity ?? 0;
+      if (guest && familiarity <= bestFamiliarity) continue;
+      guest = { actorId: candidate.id, displayName: candidate.displayName };
+      bestFamiliarity = familiarity;
+    }
+    return { revision: this.revision, placeId, guest };
   }
 
   public getSituationRead(): SimulationSituationRead {
