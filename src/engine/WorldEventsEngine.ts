@@ -467,6 +467,11 @@ export class WorldEventsEngine {
     return this.semanticKnowledge.forActor(actorId);
   }
 
+  /** One subject's facts and heard claims known to a specified viewer. */
+  public getKnownSemanticContextForSubject(viewerId: string, subjectId: string): ActorKnowledgeView {
+    return this.semanticKnowledge.forActorSubject(viewerId, subjectId);
+  }
+
   // ---- Flags / Appointments / Observations (sandbox world state) ----
 
   public setFlag(key: string, value: boolean | number | string): void {
