@@ -97,6 +97,11 @@ describe('#172 website/shop owner-only projections and lazy legacy state', () =>
 
     const revision = engine.getRevision();
     engine.advanceGameMinutes(7 * 1440);
+    // The tick is deliberately outside the read audit: only count owner
+    // projections assembled to satisfy the newly opened forum tab.
+    broad.mockClear();
+    social.mockClear();
+    world.mockClear();
     const next = engine.getNightBoardRead();
     expect(next.revision).toBeGreaterThan(revision);
     expect(next.threads.length).toBeLessThanOrEqual(8);
