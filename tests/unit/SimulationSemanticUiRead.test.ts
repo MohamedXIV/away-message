@@ -55,6 +55,36 @@ describe('#172 player-safe semantic and Situation projections', () => {
     expect(ledger).not.toHaveBeenCalled();
   });
 
+  it('does not expose owner-private Pulse profile information for unknown actors', () => {
+    const game = new SimulationEngine();
+    const actor = game.social.getBuddies()[0]!;
+    expect(game.social.isKnown(actor.id)).toBe(false);
+    const knowledge = vi.spyOn(game.world, 'getBuddyKnowledge');
+    const memories = vi.spyOn(game.social, 'getCoreMemories');
+    const snapshot = vi.spyOn(game, 'getState');
+
+    const hidden = game.getPulseProfileRead(actor.id);
+    expect(hidden).toEqual({
+      revision: game.getRevision(),
+      buddyKnowledge: [],
+      worldEvents: [],
+      photoMemories: [],
+      semantics: null,
+      influences: [],
+    });
+    expect(knowledge).not.toHaveBeenCalled();
+    expect(memories).not.toHaveBeenCalled();
+    expect(snapshot).not.toHaveBeenCalled();
+    expect(JSON.parse(JSON.stringify(hidden))).toEqual(hidden);
+
+    expect(game.social.learnHandle(actor.id, actor.handle)).toBe(true);
+    const visible = game.getPulseProfileRead(actor.id);
+    expect(visible.semantics?.actorId).toBe(actor.id);
+    expect(knowledge).toHaveBeenCalledWith(actor.id);
+    expect(memories).toHaveBeenCalledWith(actor.id);
+    expect(snapshot).not.toHaveBeenCalled();
+  });
+
   it('returns bounded source-backed situation and focused Pulse semantics without full snapshots', () => {
     const game = new SimulationEngine();
     const actor = game.social.getBuddies()[0]!;
