@@ -39,7 +39,6 @@ export const RoomScene: React.FC = () => {
 
   // Simulation Store selectors
   const engine = useSimulationStore((s) => s.engine);
-  const syncStateFromEngine = useSimulationStore((s) => s.syncStateFromEngine);
   // Phaser's clock and world-environment inputs now come from bounded
   // revisions, not the broad persisted world snapshot.
   const hud = useSimulationHud();
@@ -471,10 +470,9 @@ export const RoomScene: React.FC = () => {
                     type="button"
                     disabled={offer.current || !offer.available || !offer.affordable}
                     onClick={() => {
-                      const beforeRevision = engine.getRevision();
                       const result = engine.moveResidenceToOffer(offer.id);
                       if (result.success) {
-                        if (engine.getRevision() === beforeRevision) syncStateFromEngine();
+                        // Source owner publishes the tenancy revision atomically.
                         setActiveModal(null);
                         flashOutingNotice(`Moved to ${offer.placeName}. New rent: ${offer.monthlyRent.toFixed(0)}.`);
                       } else {
@@ -541,7 +539,6 @@ export const RoomScene: React.FC = () => {
       {activeModal === 'hardware' && (
         <HardwareWorkbenchModal
           engine={engine}
-          onStateChanged={syncStateFromEngine}
           onClose={() => setActiveModal(null)}
         />
       )}

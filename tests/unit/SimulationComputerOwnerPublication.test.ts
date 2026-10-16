@@ -12,12 +12,17 @@ describe('#172 bounded computer owner commands and atomic publication', () => {
   it('reads PC boot and rejected install preflight without assembling a complete world', () => {
     const game = new SimulationEngine();
     const full = vi.spyOn(game, 'getState');
+    const seen = capture(game);
+    const initialRevision = game.getRevision();
     expect(game.getPcBootState()).toBe('no_computer');
     expect(game.prepareOsInstallFromInsertedMedia().success).toBe(false);
     expect(game.insertOwnedMediaAtHome('missing-media').success).toBe(false);
     expect(game.ejectOwnedMediaAtHome().success).toBe(false);
     expect(game.installOwnedHardwareAtHome('missing-ram', 'ram:0').success).toBe(false);
+    expect(game.getRevision()).toBe(initialRevision);
+    expect(seen.changes).toHaveLength(0);
     expect(full).not.toHaveBeenCalled();
+    seen.stop();
   });
 
   it('attributes successful inventory purchases even when no cash is charged', () => {
