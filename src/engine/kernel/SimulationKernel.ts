@@ -699,7 +699,13 @@ export class SimulationKernel {
 
   public moveResidenceToOffer(...args: Parameters<PhysicalSimulationRuntime['moveResidenceToOffer']>): ReturnType<PhysicalSimulationRuntime['moveResidenceToOffer']> {
     const before = this.clock.getTotalMinutes();
-    return this.withinBoundary(() => this.physical.moveResidenceToOffer(...args), before);
+    return this.withinBoundary(() => {
+      const result = this.physical.moveResidenceToOffer(...args);
+      // The tenancy owner is a silent writer. Mark the changed domain
+      // BEFORE the outer atomic boundary publishes source-event changes.
+      if (result.success) this.observedDomains.add('residence');
+      return result;
+    }, before);
   }
 
   public getPhysicalShopState(...args: Parameters<PhysicalSimulationRuntime['getPhysicalShopState']>): ReturnType<PhysicalSimulationRuntime['getPhysicalShopState']> {
