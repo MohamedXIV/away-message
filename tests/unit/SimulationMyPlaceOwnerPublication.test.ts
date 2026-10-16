@@ -25,7 +25,7 @@ describe('#172 MyPlace website owner publication', () => {
     expect(game.getRevision()).toBe(baseline + 1);
     expect(received).toHaveLength(1);
     expect(received[0]!.domains).toEqual(expect.arrayContaining(['myplace', 'unknown']));
-    expect(game.getWebsiteRead().myplace.userProfile).toMatchObject({
+    expect(game.getMyPlacePageRead().userProfile).toMatchObject({
       headline: 'Building a quieter corner of Oakhaven', tiledBackground: 'stars',
       interests: ['Music', 'Coding'],
     });
@@ -51,7 +51,7 @@ describe('#172 MyPlace website owner publication', () => {
     expect(game.postMyPlaceComment('maya_x', 'Hello from my room!')).toBe(true);
     expect(game.getRevision()).toBe(before + 1);
     expect(events).toHaveLength(1);
-    const comments = game.getWebsiteRead().myplace.guestbook.maya_x;
+    const comments = game.getMyPlacePageRead('maya_x').guestbook;
     expect(comments?.[0]).toMatchObject({
       author: game.myplace.getUserProfile().username,
       text: 'Hello from my room!',
@@ -79,7 +79,7 @@ describe('#172 MyPlace website owner publication', () => {
     expect(game.getRevision()).toBe(before + 1);
     expect(changes).toHaveLength(1);
     expect(changes[0]?.domains).toEqual(expect.arrayContaining(['myplace', 'world', 'unknown']));
-    expect(game.getWebsiteRead().myplace.currentMyPlaceId).toBe('myplace_2.0');
+    expect(game.getMyPlacePageRead().currentMyPlaceId).toBe('myplace_2.0');
     expect(game.world.getPendingEvents().some(event => event.id === 'myplace_2_0')).toBe(true);
 
     expect(game.updateMyPlaceRelease('myplace_2.0').success).toBe(false);
@@ -108,7 +108,7 @@ describe('#172 MyPlace website owner publication', () => {
     await vi.waitFor(() => expect(game.getRevision()).toBe(baseline + 1));
     expect(changes).toHaveLength(1);
     expect(changes[0]!.domains).toEqual(expect.arrayContaining(['myplace', 'social', 'unknown']));
-    expect(game.getWebsiteRead().myplace.npcProfiles.maya_x?.headline)
+    expect(game.getMyPlacePageRead('maya_x').profile?.headline)
       .toBe('A new day and a new headline');
     expect(JSON.parse(JSON.stringify(changes[0]))).toEqual(changes[0]);
     expect(full).not.toHaveBeenCalled();

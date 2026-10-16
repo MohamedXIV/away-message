@@ -557,7 +557,6 @@ export class SimulationKernel {
         triggeredEvents: this.world.getTriggeredEvents().slice(-256).map(event => ({ ...event })),
         buddyKnowledge: {},
       },
-      myplace: this.myplace.getState(),
     };
   }
 

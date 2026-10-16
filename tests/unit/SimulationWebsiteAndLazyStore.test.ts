@@ -15,7 +15,14 @@ describe('#172 website/shop owner-only projections and lazy legacy state', () =>
     engine.world.setFlag('test_public_site_flag', true);
     const broad = vi.spyOn(engine, 'getState');
     const worldState = vi.spyOn(engine.world, 'getState');
+    const allMyPlace = vi.spyOn(engine.myplace, 'getState');
+    const allProfiles = vi.spyOn(engine.myplace, 'getAllNpcProfiles');
     const site = engine.getWebsiteRead();
+    // FindIt / CityWire / shop sites must not clone the entire social site
+    // on every unrelated world or cash revision.
+    expect('myplace' in site).toBe(false);
+    expect(allMyPlace).not.toHaveBeenCalled();
+    expect(allProfiles).not.toHaveBeenCalled();
     expect(site.world.flags.test_public_site_flag).toBe(true);
     expect(site.narrativeFlags.test_public_site_flag).toBe(true);
     expect(site.world.semanticKnowledge).toBeUndefined();

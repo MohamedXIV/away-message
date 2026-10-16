@@ -181,7 +181,6 @@ export interface SimulationWebsiteRead {
   /** Compatibility with published site helper shapes; private banks are empty. */
   world: import('../types').WorldState;
   narrativeFlags: Record<string, boolean | number | string>;
-  myplace: ReturnType<import('../MyPlaceEngine').MyPlaceEngine['getState']>;
 }
 
 /** One MyPlace page, not all NPC pages or guestbooks. */
