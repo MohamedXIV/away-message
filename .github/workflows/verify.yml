@@ -74,6 +74,14 @@ jobs:
           SIM_BENCH_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: npm run bench:simulation
 
+      # #172: cheap, exact-head Node timings. Not a browser FPS benchmark.
+      - name: Benchmark bounded publication (20 / 100 / 250 / 500 actors)
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.ref == 'feat/172-bounded-publication'
+        env:
+          PUBLICATION_BENCH_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PUBLICATION_BENCH_SAMPLES: 5
+        run: npm run bench:publication
+
       - name: Install Playwright Chromium
         run: npx playwright install --with-deps chromium
 
