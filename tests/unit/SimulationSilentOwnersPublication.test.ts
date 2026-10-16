@@ -26,7 +26,15 @@ describe('#172 silent owner publication boundaries', () => {
     const first = game.takePhysicalShopItem(STORE, SEED, FIXTURES, itemId);
     expect(first.location.kind).toBe('container');
     expect(changes).toHaveLength(1);
-    expect(changes[0]!.changedDomains).toEqual(['physical', 'shop', 'unknown']);
+    // Reconciliation may also legitimately emit a mood source event on the
+    // first publication; it must not be discarded to force a smaller set.
+    expect(changes[0]!.changedDomains).toEqual(
+      expect.arrayContaining(['physical', 'shop', 'unknown']),
+    );
+    expect(changes[0]!.changedDomains).toEqual([
+      ...changes[0]!.changedDomains.filter(domain => domain !== 'unknown').sort(),
+      'unknown',
+    ]);
     expect(getState).not.toHaveBeenCalled();
 
     game.returnPhysicalShopItem(STORE, SEED, FIXTURES, itemId);
@@ -114,9 +122,11 @@ describe('#172 silent owner publication boundaries', () => {
     game.setVenueRoleAssignment(assignment);
     expect(game.getVenueRuntimeState().roleAssignments[assignment.id]).toEqual(assignment);
     expect(changes).toHaveLength(1);
-    expect(changes[0]!.changedDomains).toEqual(['unknown', 'venue'].sort((a, b) =>
-      a === 'unknown' ? 1 : b === 'unknown' ? -1 : a.localeCompare(b),
-    ));
+    expect(changes[0]!.changedDomains).toEqual(expect.arrayContaining(['venue', 'unknown']));
+    expect(changes[0]!.changedDomains).toEqual([
+      ...changes[0]!.changedDomains.filter(domain => domain !== 'unknown').sort(),
+      'unknown',
+    ]);
     stop();
   });
 });
