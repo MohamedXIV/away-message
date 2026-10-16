@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { SiteRouteProps } from '../types';
 import { useSimulationStore } from '../../store/useSimulationStore';
+import { useSimulationWebsite } from '../../store/useBoundedSimulationRead';
 import { soundManager } from '../../audio/SoundManager';
 import { getMyPlaceReleaseById } from '../../engine/MyPlaceCatalog';
 import { buildCharacter } from '../../engine/CharacterEngine';
@@ -15,8 +16,7 @@ function slugBuddyId(value: string): string {
 export const MyPlaceSite: React.FC<SiteRouteProps> = (props) => {
   const doNavigate = props.navigate || props.onNavigate || (() => {});
   const engine = useSimulationStore((s) => s.engine);
-  const myplaceState = useSimulationStore((s) => s.state.myplace);
-  const time = useSimulationStore((s) => s.state.time);
+  const { myplace: myplaceState, time } = useSimulationWebsite();
   const dispatchAction = useSimulationStore((s) => s.dispatchAction);
   const [friendNotice, setFriendNotice] = useState<string | null>(null);
 
