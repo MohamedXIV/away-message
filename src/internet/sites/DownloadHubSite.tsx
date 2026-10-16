@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { SiteRouteProps } from '../types';
 import { useSimulationStore } from '../../store/useSimulationStore';
+import { useSimulationWebsite, useSimulationApps } from '../../store/useBoundedSimulationRead';
 import { useWindowStore } from '../../store/useWindowStore';
 import { useOsHost } from '../../desktop/host/OsHostContext';
 import { soundManager } from '../../audio/SoundManager';
@@ -87,8 +88,8 @@ const DOWNLOAD_CATALOG: DownloadItem[] = [
 export const DownloadHubSite: React.FC<SiteRouteProps> = () => {
   const { network } = useOsHost();
   const downloads = network.transfers;
-  const world = useSimulationStore((s) => s.state.world);
-  const time = useSimulationStore((s) => s.state.time);
+  const { world, time } = useSimulationWebsite();
+  const apps = useSimulationApps();
   const openWindow = useWindowStore((s) => s.openWindow);
   const [selectedCat, setSelectedCat] = useState<string>('ALL');
   const [notice, setNotice] = useState<string | null>(null);
@@ -98,8 +99,8 @@ export const DownloadHubSite: React.FC<SiteRouteProps> = () => {
   const pulseDynamic: DownloadItem[] = (() => {
     try {
       const enginePulse = (useSimulationStore.getState().engine as any).pulse as { getAvailableReleases: (day:number, hw:any, os:any)=>Array<{id:string; displayName:string; version:string; installSizeMB:number; blurb?:string; changelog:string[]}> };
-      const hw = useSimulationStore.getState().state.hardware;
-      const osVer = useSimulationStore.getState().state.os.currentOsId;
+      const hw = apps.hardware;
+      const osVer = apps.os.currentOsId;
       const avail = enginePulse ? enginePulse.getAvailableReleases(time.day, hw as any, osVer as any) : [];
       return avail.map((r: any) => ({
         id: r.id,
