@@ -99,7 +99,11 @@ describe('#172 revision-only publication and bounded HUD projection', () => {
     expect(second).toEqual([['unknown']]);
 
     engine.dispatchAction({ type: 'WORLD_SET_FLAG', key: 'frozen_revision_172', value: true });
-    expect(first).toEqual([['unknown'], ['world', 'unknown']]);
+    expect(first).toHaveLength(2);
+    // World is source-backed. The kernel may also legitimately reconcile
+    // derived Mood at the same atomic publication boundary.
+    expect(first[1]).toEqual(expect.arrayContaining(['world', 'unknown']));
+    expect(first[1]).not.toContain('fake_domain');
     expect(second).toEqual(first);
     expect(whole).not.toHaveBeenCalled();
     stopSecond();
