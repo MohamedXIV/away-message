@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { SimulationEngine } from '../../src/engine/SimulationEngine';
 
- describe('#172 owner-scoped public job-board projection', () => {
+describe('#172 owner-scoped public job-board projection', () => {
   it('delivers capped serializable job offers without copying Social or World state', () => {
     const game = new SimulationEngine();
     const full = vi.spyOn(game, 'getState');
@@ -43,7 +43,7 @@ import { SimulationEngine } from '../../src/engine/SimulationEngine';
     expect(gig).toBeDefined();
     const received: number[] = [];
     const off = game.subscribeChanges(change => received.push(change.revision));
-    const result = game.dispatchAction({ type: 'APPLY_FOR_GIG', gigId: gig.gigId });
+    const result = game.dispatchAction({ type: 'JOB_APPLY', gigId: gig.gigId });
     off();
     expect(result.success).toBe(true);
     const updated = game.getJobBoardRead();
