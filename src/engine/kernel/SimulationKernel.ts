@@ -29,6 +29,7 @@ import type {
   SimulationMessengerRead,
   SimulationPresenceRead,
   SimulationWorldRead,
+  SimulationSituationRead,
 } from './SimulationPublication';
 export type {
   SimulationActorRead,
@@ -46,6 +47,7 @@ export type {
   SimulationMessengerRead,
   SimulationPresenceRead,
   SimulationWorldRead,
+  SimulationSituationRead,
 } from './SimulationPublication';
 export type { LiveSimulationState } from './PhysicalSimulationRuntime';
 
@@ -277,14 +279,39 @@ export class SimulationKernel {
     };
   }
 
-  /** Selected actor read is player-safe; never reveal NPC-private facts. */
+  /** Public Situation: only triggered world events, bounded source-backed modifiers. */
+  public getSituationRead(): SimulationSituationRead {
+    const atMinute = this.clock.getTotalMinutes();
+    const visibleEvents = this.world.getTriggeredEvents();
+    const visibleIds = new Set(visibleEvents.map(event => event.id));
+    const influences = this.world.queryActiveModifiers({ atMinute })
+      .filter(modifier => visibleIds.has(modifier.sourceEventId))
+      .slice(0, 32)
+      .map(modifier => ({ ...modifier, ...(modifier.targetIds
+        ? { targetIds: [...modifier.targetIds] } : {}) }));
+    return {
+      revision: this.revision,
+      atMinute,
+      activeEventIds: [...new Set(influences.map(modifier => modifier.sourceEventId))].slice(0, 16),
+      influences,
+    };
+  }
+
+  /** Selected actor read is player-safe; never reveal other actors' learned facts. */
   public getPlayerActorRead(actorId: string): SimulationActorRead | null {
     const actor = this.getActorSemanticView(actorId);
     if (!actor || actor.connection === 'unknown') return null;
     const learned = this.world.getActorSemanticKnowledge('player');
+    const facts = learned.facts.filter(fact => fact.subjectId === actorId);
+    const factIds = new Set(facts.map(fact => fact.id));
+    const claims = learned.claims.filter(claim => factIds.has(claim.factId));
+    const visibleEventIds = new Set(this.world.getTriggeredEvents().map(event => event.id));
+    const influences = this.getActorLifeInfluences(actorId)
+      .filter(influence => visibleEventIds.has(influence.sourceEventId));
     return {
       revision: this.revision, actor,
-      playerKnowledge: learned,
+      playerKnowledge: { actorId: 'player', facts, claims },
+      influences,
     };
   }
 
@@ -326,6 +353,8 @@ export class SimulationKernel {
         .map(event => ({ ...event })),
       photoMemories: this.social.getCoreMemories(actorId).filter(memory => memory.kind === 'shared_photo')
         .slice(-12),
+      semantics: this.getPlayerActorRead(actorId)?.actor ?? null,
+      influences: this.getPlayerActorRead(actorId)?.influences ?? [],
     };
   }
 
