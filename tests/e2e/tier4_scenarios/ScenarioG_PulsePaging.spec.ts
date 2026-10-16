@@ -12,6 +12,7 @@ test('real React Pulse chat pages older/newer messages and Save Log exports comp
     return mountPulsePagingBrowserHarness();
   });
   expect(seed.total).toBe(125);
+  expect(seed.paused).toBe(true);
   const host = page.locator('#pulse-paging-harness');
   await expect(host.getByText('PAGING_BROWSER_124')).toBeVisible({ timeout: 10_000 });
   await expect(host.getByText('PAGING_BROWSER_075')).toBeVisible();
