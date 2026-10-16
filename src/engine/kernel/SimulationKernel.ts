@@ -433,6 +433,16 @@ export class SimulationKernel {
 
   public getPulseProfileRead(actorId: string): SimulationPulseProfileRead {
     const playerActor = this.getPlayerActorRead(actorId);
+    // A profile lookup is not evidence that the player knows this identity.
+    // Keep owner-private knowledge and memories behind the same semantic gate.
+    if (!playerActor) return {
+      revision: this.revision,
+      buddyKnowledge: [],
+      worldEvents: [],
+      photoMemories: [],
+      semantics: null,
+      influences: [],
+    };
     const buddyKnowledge = this.world.getBuddyKnowledge(actorId).slice(-8);
     const eventIds = new Set(buddyKnowledge.map(k => k.eventId));
     return {
