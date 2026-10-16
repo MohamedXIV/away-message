@@ -707,7 +707,12 @@ export class SimulationKernel {
       const result = this.physical.moveResidenceToOffer(...args);
       // The tenancy owner is a silent writer. Mark the changed domain
       // BEFORE the outer atomic boundary publishes source-event changes.
-      if (result.success) this.observedDomains.add('residence');
+      if (result.success) {
+        this.observedDomains.add('residence');
+        // ResidenceCoordination can update tenancy without an engine-level
+        // event; request exactly one publication after the outer boundary.
+        this.notifySubscribers();
+      }
       return result;
     }, before);
   }
