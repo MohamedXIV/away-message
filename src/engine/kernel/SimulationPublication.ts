@@ -72,6 +72,8 @@ export interface SimulationActorRead {
   actor: import('../semantic/ActorSemantics').ActorSemanticView;
   /** Only facts/claims the player has actually learned, not NPC private knowledge. */
   playerKnowledge: import('../semantic/KnowledgeLedger').ActorKnowledgeView;
+  /** Public global-event influences applying to this actor, with source/window. */
+  influences: import('../semantic/ActorSemantics').SemanticInfluenceView[];
 }
 
 export interface SimulationMessengerRead {
@@ -169,4 +171,15 @@ export interface SimulationPulseProfileRead {
   buddyKnowledge: import('../types').BuddyEventKnowledge[];
   worldEvents: import('../types').GlobalEvent[];
   photoMemories: import('../types').CoreMemory[];
+  /** Player-safe reach, relationship and explainable chat/meeting eligibility. */
+  semantics: import('../semantic/ActorSemantics').ActorSemanticView | null;
+  influences: import('../semantic/ActorSemantics').SemanticInfluenceView[];
+}
+
+/** Current public Situation derived from canonical event/typed-influence truth. */
+export interface SimulationSituationRead {
+  revision: number;
+  atMinute: number;
+  activeEventIds: string[];
+  influences: Array<import('../WorldModifiers').WorldModifier>;
 }
