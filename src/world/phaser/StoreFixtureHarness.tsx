@@ -149,8 +149,7 @@ export const StoreFixtureHarness: React.FC<StoreFixtureHarnessProps> = ({ onExit
     [simulation, projection.viewName, weather, revision],
   );
   const cashierHistory = useMemo(
-    () => simulation.social.getMessages(CASHIER_ACTOR_ID)
-      .slice(-8)
+    () => simulation.social.getConversationPage(CASHIER_ACTOR_ID, 0, 8).messages
       .map((entry) => ({
         senderId: entry.senderId,
         recipientId: entry.recipientId,
@@ -200,7 +199,7 @@ export const StoreFixtureHarness: React.FC<StoreFixtureHarnessProps> = ({ onExit
       : null,
     chatBusy,
     chatHistory: cashierHistory,
-    cash: simulation.getState().player.cash,
+    cash: simulation.getHudProjection().cash,
     focusedStock,
     actorCount: characters.length,
     innerVoiceTopic: arrivalThought?.topic ?? null,
