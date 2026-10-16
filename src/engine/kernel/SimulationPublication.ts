@@ -199,6 +199,21 @@ export interface SimulationResidenceRead {
   offers: ReturnType<import('./PhysicalSimulationRuntime').PhysicalSimulationRuntime['getHousingOffers']>;
 }
 
+/** Public job-board offers only; contact identities obey player-known Social state. */
+export interface SimulationJobBoardRead {
+  revision: number;
+  jobs: Array<{
+    gigId: string;
+    title: string;
+    blurb: string;
+    pay: number;
+    durationMin: number;
+    minEnergy: number;
+    contactName: string;
+    pending: boolean;
+  }>;
+}
+
 /** Player's active journey only: no NPC trips, all-actor positions or transit network. */
 export interface SimulationTransitRead {
   revision: number;

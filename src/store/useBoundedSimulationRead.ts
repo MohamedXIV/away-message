@@ -17,6 +17,7 @@ import type {
   SimulationWorldRead,
   SimulationSituationRead,
   SimulationResidenceRead,
+  SimulationJobBoardRead,
   SimulationTransitRead,
   SimulationWebsiteRead,
   SimulationPulseProfileRead,
@@ -53,6 +54,7 @@ const readPlayerStatus = (engine: SimulationEngine) => engine.getPlayerStatusRea
 const readWorld = (engine: SimulationEngine) => engine.getWorldRead();
 const readSituation = (engine: SimulationEngine) => engine.getSituationRead();
 const readResidence = (engine: SimulationEngine) => engine.getResidenceRead();
+const readJobBoard = (engine: SimulationEngine) => engine.getJobBoardRead();
 const readTransit = (engine: SimulationEngine) => engine.getTransitRead();
 const readChrome = (engine: SimulationEngine) => engine.getChromeRead();
 const readApps = (engine: SimulationEngine) => engine.getAppRead();
@@ -75,6 +77,10 @@ export function useSimulationWorldRead(): SimulationWorldRead {
 
 export function useSimulationSituation(): SimulationSituationRead {
   return useBoundedSimulationRead(readSituation);
+}
+
+export function useSimulationJobBoard(): SimulationJobBoardRead {
+  return useBoundedSimulationRead(readJobBoard);
 }
 
 export function useSimulationResidence(): SimulationResidenceRead {

@@ -32,6 +32,7 @@ import type {
   SimulationWorldRead,
   SimulationSituationRead,
   SimulationResidenceRead,
+  SimulationJobBoardRead,
   SimulationTransitRead,
 } from './SimulationPublication';
 export type {
@@ -53,6 +54,7 @@ export type {
   SimulationWorldRead,
   SimulationSituationRead,
   SimulationResidenceRead,
+  SimulationJobBoardRead,
   SimulationTransitRead,
 } from './SimulationPublication';
 export type { LiveSimulationState } from './PhysicalSimulationRuntime';
@@ -325,6 +327,27 @@ export class SimulationKernel {
       revision: this.revision,
       tenancy: this.getResidenceState(),
       offers: this.getHousingOffers(),
+    };
+  }
+
+  /** Capped, player-safe public job board. Never expose a private roster/name. */
+  public getJobBoardRead(): SimulationJobBoardRead {
+    return {
+      revision: this.revision,
+      jobs: this.getJobBoard().slice(0, 32).map(({ gig, pending }) => {
+        const contact = this.social.getBuddyWithRole(gig.contactRole);
+        return {
+          gigId: gig.id,
+          title: gig.title,
+          blurb: gig.blurb,
+          pay: gig.pay,
+          durationMin: gig.durationMin,
+          minEnergy: gig.minEnergy,
+          contactName: contact && this.social.isKnown(contact.id)
+            ? contact.displayName : gig.contactRole,
+          pending,
+        };
+      }),
     };
   }
 

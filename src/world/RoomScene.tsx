@@ -2,7 +2,7 @@
 
 import React, { useMemo, useRef, useState } from 'react';
 import { useSimulationStore } from '../store/useSimulationStore';
-import { useSimulationHud, useSimulationWorldRead, useSimulationResidence, useSimulationTransit, useSimulationPlayerStatus } from '../store/useBoundedSimulationRead';
+import { useSimulationHud, useSimulationWorldRead, useSimulationResidence, useSimulationTransit, useSimulationPlayerStatus, useSimulationJobBoard } from '../store/useBoundedSimulationRead';
 import { soundManager } from '../audio/SoundManager';
 import { PhysicalWorldBoundary } from './phaser/PhysicalWorldBoundary';
 import { createWorldSceneProjection } from './phaser/presentationAdapter';
@@ -21,7 +21,7 @@ import { BeverageModal } from './modals/BeverageModal';
 import { DoorActionModal } from './modals/DoorActionModal';
 import { SleepTransitionModal } from './modals/SleepTransitionModal';
 import { HardwareWorkbenchModal } from './modals/HardwareWorkbenchModal';
-import { getContextualWindowThought, getStreetSighting } from './data/windowThoughts';
+import { getContextualWindowThought } from './data/windowThoughts';
 import {
   Monitor,
   CloudRain,
@@ -189,25 +189,8 @@ export const RoomScene: React.FC = () => {
     }
   };
 
-  // P6 Job Board data (gigs + pending state, straight from the engine)
-  const jobBoardEntries = (() => {
-    try {
-      const engine = useSimulationStore.getState().engine;
-      return engine.getJobBoard().map(({ gig, pending }) => {
-        const contact = engine.social.getBuddyWithRole(gig.contactRole);
-        return {
-          gigId: gig.id,
-          title: gig.title,
-          blurb: gig.blurb,
-          pay: gig.pay,
-          durationMin: gig.durationMin,
-          minEnergy: gig.minEnergy,
-          contactName: contact?.displayName ?? gig.contactRole,
-          pending,
-        };
-      });
-    } catch { return []; }
-  })();
+  // Public offers and authorized contact labels only; no Social roster walk in React.
+  const jobBoardEntries = useSimulationJobBoard().jobs;
 
   const handleApplyGig = (gigId: string): string | null => {
     const res = applyGig(gigId) as unknown as { success: boolean; error?: string };
@@ -249,19 +232,9 @@ export const RoomScene: React.FC = () => {
 
   // Get Window Observation data — sandbox uses world flags
   const windowData = getContextualWindowThought(time.day, timeOfDay, weather, { met_in_person: worldRead.metInPerson });
-  // P6.5 live street sighting: who is visible out there right now (schedules made visible)
-  const streetSighting = (() => {
-    try {
-      const engine = useSimulationStore.getState().engine;
-      const sightBuddies = engine.social.getBuddies().map((b) => ({
-        id: b.id,
-        displayName: b.displayName,
-        presenceStatus: engine.social.getPresence(b.id)?.status ?? 'offline',
-        lifecycleStatus: b.status,
-      }));
-      return getStreetSighting(sightBuddies, timeOfDay, time.day);
-    } catch { return null; }
-  })();
+  // A messenger's online/away status is not evidence they are outside this
+  // residence window. Until authored sightlines establish a spatial witness,
+  // render environmental observations but no invented named street sighting.
 
   const formattedTime = `${String(time.hour).padStart(2, '0')}:${String(time.minute).padStart(2, '0')}`;
 
@@ -528,7 +501,6 @@ export const RoomScene: React.FC = () => {
           thoughtText={windowData.thought}
           entity={windowData.entity}
           mood={mood.band}
-          sighting={streetSighting}
           onClose={() => setActiveModal(null)}
         />
       )}
