@@ -982,9 +982,9 @@ export const PulseMessengerApp: React.FC = () => {
         const responders = responderIds.filter((id) => engine.social.getBuddy(id));
         if (responders.length >= 2) {
           const points = roomMood === 'lively' ? 3 : roomMood === 'tense' ? 1 : roomMood === 'cold' ? 0 : 2;
-          engine.social.bumpRoomAffinity(responders, currentDay, points);
-          // Directed-address pairs earn one extra point through the same daily cap
-          for (const [a, b] of directedPairs) engine.social.bumpRoomAffinity([a, b], currentDay, 1);
+          // One committed owner command: group pairs and directed-address
+          // bonuses share the real daily cap and a single revision.
+          engine.commitPulseRoomTurn(responders, currentDay, points, directedPairs);
         }
       } catch { /* affinity bump never breaks rooms */ }
     } finally {

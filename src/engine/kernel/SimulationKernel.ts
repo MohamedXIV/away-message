@@ -670,6 +670,29 @@ export class SimulationKernel {
   }
 
   /** One authoritative read receipt; rejected/duplicate opens stay silent. */
+  /**
+   * Commit a real Pulse room turn to the canonical NPC affinity graph.
+   * A room may touch many symmetric pairs (plus directed address bonuses);
+   * the room must publish one social revision only if at least one owner cap
+   * or affinity changed. Keep SocialEngine's original daily cap/rules intact.
+   */
+  public commitPulseRoomTurn(
+    responderIds: string[],
+    day: number,
+    points: number,
+    directedPairs: ReadonlyArray<readonly [string, string]> = [],
+  ): number {
+    return this.publishOwnerMutation(['social'], () => {
+      // Match the actual room rule: a solo responder has no group affinity.
+      if (responderIds.length < 2) return 0;
+      let bumped = this.social.bumpRoomAffinity(responderIds, day, points);
+      for (const [from, to] of directedPairs) {
+        bumped += this.social.bumpRoomAffinity([from, to], day, 1);
+      }
+      return bumped;
+    }, bumped => bumped > 0);
+  }
+
   public markConversationAsRead(actorId: string): boolean {
     if (!this.social.isKnown(actorId)) return false;
     return this.publishOwnerMutation(
