@@ -22,6 +22,7 @@ import type {
   SimulationTransitRead,
   SimulationCafeGuestRead,
   SimulationWebsiteRead,
+  SimulationMyPlacePageRead,
   SimulationPulseProfileRead,
 } from '../engine/kernel/SimulationPublication';
 
@@ -115,6 +116,11 @@ export function useSimulationFile(path: string): SimulationFileRead {
 
 export function usePulseProfileRead(actorId: string): SimulationPulseProfileRead {
   const read = useCallback((engine: SimulationEngine) => engine.getPulseProfileRead(actorId), [actorId]);
+  return useBoundedSimulationRead(read);
+}
+
+export function useMyPlacePageRead(username: string): SimulationMyPlacePageRead {
+  const read = useCallback((engine: SimulationEngine) => engine.getMyPlacePageRead(username), [username]);
   return useBoundedSimulationRead(read);
 }
 

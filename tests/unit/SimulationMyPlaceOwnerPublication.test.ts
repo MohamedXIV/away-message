@@ -147,4 +147,70 @@ describe('#172 MyPlace website owner publication', () => {
     expect(owner.getState()).toEqual(state);
   });
 
+  it('scopes the real MyPlace page to one NPC without cloning global site state', () => {
+    const game = new SimulationEngine();
+    const all = vi.spyOn(game.myplace, 'getState');
+    const allProfiles = vi.spyOn(game.myplace, 'getAllNpcProfiles');
+    const broad = vi.spyOn(game, 'getState');
+    const read = game.getMyPlacePageRead('maya_x');
+    expect(read.profile?.username).toBe('maya_x');
+    expect(read.userProfile.username).toBe('wanderer06');
+    expect(read.guestbook).toEqual(game.myplace.getGuestbook('maya_x'));
+    expect(JSON.stringify(read)).not.toContain('nightowl87');
+    expect(JSON.parse(JSON.stringify(read))).toEqual(read);
+    expect(all).not.toHaveBeenCalled();
+    expect(allProfiles).not.toHaveBeenCalled();
+    expect(broad).not.toHaveBeenCalled();
+  });
+
+  it('does not leak mutable nested profile or guestbook arrays from read models', () => {
+    const game = new SimulationEngine();
+    const mine = game.myplace.getUserProfile();
+    const npc = game.myplace.getNpcProfile('maya_x')!;
+    const originalMine = [...mine.interests];
+    const originalNpc = [...npc.interests];
+    mine.interests.push('OUTSIDE_WRITE');
+    npc.interests.push('OUTSIDE_WRITE');
+    mine.top8.push({ handle: 'hacker', name: 'Hacker', avatar: 'X' });
+    npc.top8.push({ handle: 'hacker', name: 'Hacker', avatar: 'X' });
+    expect(game.myplace.getUserProfile().interests).toEqual(originalMine);
+    expect(game.myplace.getNpcProfile('maya_x')!.interests).toEqual(originalNpc);
+    expect(game.myplace.getUserProfile().top8).not.toContainEqual(expect.objectContaining({ handle: 'hacker' }));
+    expect(game.myplace.getNpcProfile('maya_x')!.top8).not.toContainEqual(expect.objectContaining({ handle: 'hacker' }));
+
+    expect(game.postMyPlaceComment('maya_x', 'A real entry')).toBe(true);
+    const read = game.getMyPlacePageRead('maya_x');
+    const revision = game.getRevision();
+    read.profile!.interests.push('TAMPER');
+    read.guestbook[0]!.text = 'TAMPER';
+    read.userProfile.interests.push('TAMPER');
+    expect(game.getRevision()).toBe(revision);
+    expect(game.myplace.getGuestbook('maya_x')[0]!.text).toBe('A real entry');
+    expect(game.myplace.getNpcProfile('maya_x')!.interests).toEqual(originalNpc);
+    expect(game.myplace.getUserProfile().interests).toEqual(originalMine);
+    const full = game.myplace.getState();
+    full.npcProfiles.maya_x!.interests.push('TAMPER');
+    full.userProfile.interests.push('TAMPER');
+    expect(game.myplace.getNpcProfile('maya_x')!.interests).toEqual(originalNpc);
+    expect(game.myplace.getUserProfile().interests).toEqual(originalMine);
+  });
+
+  it('refreshes one selected page on a real mutation with no broad owner reads', () => {
+    const game = new SimulationEngine();
+    const broad = vi.spyOn(game, 'getState');
+    const all = vi.spyOn(game.myplace, 'getState');
+    const revisions: number[] = [];
+    const stop = game.subscribeChanges(change => revisions.push(change.revision));
+    revisions.length = 0;
+    const before = game.getMyPlacePageRead();
+    expect(game.updateMyPlaceProfile({ headline: 'My new headline' })).toBe(true);
+    const after = game.getMyPlacePageRead();
+    expect(after.userProfile.headline).toBe('My new headline');
+    expect(before.userProfile.headline).not.toBe(after.userProfile.headline);
+    expect(revisions).toHaveLength(1);
+    expect(broad).not.toHaveBeenCalled();
+    expect(all).not.toHaveBeenCalled();
+    stop();
+  });
+
 });

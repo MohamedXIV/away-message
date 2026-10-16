@@ -21,6 +21,7 @@ import type {
   SimulationAppRead,
   SimulationShopRead,
   SimulationWebsiteRead,
+  SimulationMyPlacePageRead,
   SimulationPulseProfileRead,
   SimulationChromeRead,
   SimulationDesktopRead,
@@ -45,6 +46,7 @@ export type {
   SimulationAppRead,
   SimulationShopRead,
   SimulationWebsiteRead,
+  SimulationMyPlacePageRead,
   SimulationPulseProfileRead,
   SimulationChromeRead,
   SimulationDesktopRead,
@@ -525,6 +527,20 @@ export class SimulationKernel {
       }
       return result;
     }, result => result.success);
+  }
+
+  /** Read only the page currently displayed by the real MyPlace site. */
+  public getMyPlacePageRead(requestedUsername = ''): SimulationMyPlacePageRead {
+    const userProfile = this.myplace.getUserProfile();
+    const username = requestedUsername || userProfile.username;
+    return {
+      revision: this.revision,
+      time: { ...this.clock.getTime() },
+      currentMyPlaceId: this.myplace.getCurrentMyPlaceId(),
+      userProfile,
+      profile: username === userProfile.username ? userProfile : this.myplace.getNpcProfile(username) ?? null,
+      guestbook: this.myplace.getGuestbook(username),
+    };
   }
 
   public getWebsiteRead(): SimulationWebsiteRead {

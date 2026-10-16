@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { SiteRouteProps } from '../types';
 import { useSimulationStore } from '../../store/useSimulationStore';
-import { useSimulationWebsite } from '../../store/useBoundedSimulationRead';
+import { useMyPlacePageRead } from '../../store/useBoundedSimulationRead';
 import { soundManager } from '../../audio/SoundManager';
 import { getMyPlaceReleaseById } from '../../engine/MyPlaceCatalog';
 import { buildCharacter } from '../../engine/CharacterEngine';
@@ -16,24 +16,23 @@ function slugBuddyId(value: string): string {
 export const MyPlaceSite: React.FC<SiteRouteProps> = (props) => {
   const doNavigate = props.navigate || props.onNavigate || (() => {});
   const engine = useSimulationStore((s) => s.engine);
-  const { myplace: myplaceState, time } = useSimulationWebsite();
   const dispatchAction = useSimulationStore((s) => s.dispatchAction);
   const [friendNotice, setFriendNotice] = useState<string | null>(null);
 
   const effectiveParams = { ...props.params, ...props.routeParams };
+  const requestedUsername = effectiveParams['username'] || '';
+  const { userProfile, profile: selectedProfile, guestbook, time, currentMyPlaceId } = useMyPlacePageRead(requestedUsername);
   // Default to YOUR page (wanderer06) — not Maya — and routing is strict
-  const currentUsername = effectiveParams['username'] || myplaceState.userProfile.username || 'wanderer06';
-  const isOwnProfile = currentUsername === myplaceState.userProfile.username;
+  const currentUsername = requestedUsername || userProfile.username;
+  const isOwnProfile = currentUsername === userProfile.username;
 
-  const currentRelease = getMyPlaceReleaseById(myplaceState.currentMyPlaceId) ?? getMyPlaceReleaseById('myplace_1.0')!;
+  const currentRelease = getMyPlaceReleaseById(currentMyPlaceId) ?? getMyPlaceReleaseById('myplace_1.0')!;
   const features = currentRelease.features;
   const isV1 = currentRelease.id === 'myplace_1.0';
 
   // Dynamic profiles — not hardcoded: read from MyPlaceEngine (AI-mutable), fallback generates a minimal profile for any username
   const getProfile = (username: string) => {
-    if (username === myplaceState.userProfile.username) return myplaceState.userProfile;
-    const npc = engine.myplace.getNpcProfile(username);
-    if (npc) return npc;
+    if (selectedProfile) return selectedProfile;
     // Generate a lightweight profile for unknown usernames (dynamic, not hardcoded)
     const hash = username.split('').reduce((a, c) => a + c.charCodeAt(0), 0);
     const avatars = ['🎸', '🎧', '📻', '💾', '🎮', '📚', '🎨', '🚲'];
@@ -49,24 +48,23 @@ export const MyPlaceSite: React.FC<SiteRouteProps> = (props) => {
       glitterIntensity: 0,
       visibility: 'public' as const,
       themeColor: '#6b7280',
-    } as unknown as typeof myplaceState.userProfile;
+    } as unknown as typeof userProfile;
   };
 
   const profile = getProfile(currentUsername);
 
   // Privacy: friendsOnly → only Top8 + self can view
-  const viewerHandle = myplaceState.userProfile.username;
+  const viewerHandle = userProfile.username;
   const isViewerFriend = isOwnProfile || profile.top8.some((f) => f.handle === viewerHandle) || (profile as unknown as { visibility?: string }).visibility !== 'friendsOnly';
   const isLocked = !isViewerFriend;
-  const guestbook = engine.myplace.getGuestbook(currentUsername);
   const [commentInput, setCommentInput] = useState('');
   const [editMode, setEditMode] = useState(false);
-  const [editBio, setEditBio] = useState(myplaceState.userProfile.bio);
-  const [editInterests, setEditInterests] = useState(myplaceState.userProfile.interests.join(', '));
-  const [editSong, setEditSong] = useState(myplaceState.userProfile.songTitle);
-  const [editHeadline, setEditHeadline] = useState(myplaceState.userProfile.headline);
-  const [glitter, setGlitter] = useState(myplaceState.userProfile.glitterIntensity);
-  const [editTiledBackground, setEditTiledBackground] = useState(myplaceState.userProfile.tiledBackground);
+  const [editBio, setEditBio] = useState(userProfile.bio);
+  const [editInterests, setEditInterests] = useState(userProfile.interests.join(', '));
+  const [editSong, setEditSong] = useState(userProfile.songTitle);
+  const [editHeadline, setEditHeadline] = useState(userProfile.headline);
+  const [glitter, setGlitter] = useState(userProfile.glitterIntensity);
+  const [editTiledBackground, setEditTiledBackground] = useState(userProfile.tiledBackground);
 
   const availableUpdates = engine.myplace.getAvailableReleases(time.day);
 
@@ -119,8 +117,8 @@ export const MyPlaceSite: React.FC<SiteRouteProps> = (props) => {
           <div className="text-4xl">🔒</div>
           <h2 className="font-bold text-sm">This profile is private</h2>
           <p className="text-xs text-gray-600">{profile.displayName} only shares their full profile with friends.</p>
-          <p className="text-[11px] text-gray-500">You are viewing as <b>{myplaceState.userProfile.username}</b> — not in Top 8.</p>
-          <button onClick={() => doNavigate(`myplace.local/${myplaceState.userProfile.username}`)} className="mt-2 px-3 py-1 bg-[#3b5998] hover:bg-[#2d4373] text-white font-bold rounded text-xs">Back to your profile</button>
+          <p className="text-[11px] text-gray-500">You are viewing as <b>{userProfile.username}</b> — not in Top 8.</p>
+          <button onClick={() => doNavigate(`myplace.local/${userProfile.username}`)} className="mt-2 px-3 py-1 bg-[#3b5998] hover:bg-[#2d4373] text-white font-bold rounded text-xs">Back to your profile</button>
         </div>
       </div>
     );
@@ -184,7 +182,7 @@ export const MyPlaceSite: React.FC<SiteRouteProps> = (props) => {
               <div className="px-2 pb-2 space-y-1">
                 <button
                   onClick={() => {
-                    const handle = profile.username === myplaceState.userProfile.username ? 'maya_x' : profile.username;
+                    const handle = profile.username === userProfile.username ? 'maya_x' : profile.username;
                     engine.postMyPlaceComment(handle, 'Hey! Love the new look — what do you think of my page?');
                   }}
                   className="w-full bg-[#dbeafe] hover:bg-[#bfdbfe] border border-[#93c5fd] text-[#1e3a8a] font-bold py-1 text-xs flex items-center justify-center gap-1"
@@ -318,7 +316,7 @@ export const MyPlaceSite: React.FC<SiteRouteProps> = (props) => {
               <div className="bg-[#e5eaf6] px-2 py-1 font-bold text-[#003399] text-xs">About me</div>
               <div className="p-3 text-xs leading-relaxed whitespace-pre-wrap">{profile.bio}</div>
               <div className="px-3 pb-2 text-[11px] text-gray-500">Mood: hopeful • Headline: {profile.headline}</div>
-              {features.glitter && myplaceState.userProfile.glitterIntensity > 2 && <div className="px-3 pb-2 text-[10px] text-yellow-600">✨ Glitter {myplaceState.userProfile.glitterIntensity}/5</div>}
+              {features.glitter && userProfile.glitterIntensity > 2 && <div className="px-3 pb-2 text-[10px] text-yellow-600">✨ Glitter {userProfile.glitterIntensity}/5</div>}
             </div>
 
             {/* Top 8 — hidden entirely in 1.0 Stripped */}

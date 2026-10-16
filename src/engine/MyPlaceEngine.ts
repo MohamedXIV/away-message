@@ -92,6 +92,15 @@ export function buildRosterProfile(input: {
   };
 }
 
+/** Detach the nested arrays that otherwise allow silent writes through getters. */
+function copyProfile(profile: MyPlaceProfile): MyPlaceProfile {
+  return {
+    ...profile,
+    interests: [...profile.interests],
+    top8: profile.top8.map(entry => ({ ...entry })),
+  };
+}
+
 export class MyPlaceEngine {
   private eventBus: EventBus;
   private currentMyPlaceId: string;
@@ -108,10 +117,10 @@ export class MyPlaceEngine {
     this.currentMyPlaceId = initialState?.currentMyPlaceId ?? 'myplace_1.0';
     this.lastUpdateAtMinute = initialState?.lastUpdateAtMinute;
     this.lastUpdateLog = initialState?.lastUpdateLog ?? [];
-    this.userProfile = initialState?.userProfile ? { ...initialState.userProfile } : { ...DEFAULT_PROFILE };
+    this.userProfile = copyProfile(initialState?.userProfile ?? DEFAULT_PROFILE);
     // NPC profiles — generated from the content roster (no hand-authored pages).
     if (initialState?.npcProfiles) {
-      for (const [k, v] of Object.entries(initialState.npcProfiles)) this.npcProfiles.set(k, { ...v, top8: v.top8.map((t) => ({ ...t })) });
+      for (const [k, v] of Object.entries(initialState.npcProfiles)) this.npcProfiles.set(k, copyProfile(v));
     } else {
       for (const b of SEED_CHARACTERS) {
         if (!b.myplace) continue;
@@ -152,12 +161,12 @@ export class MyPlaceEngine {
     const gb: Record<string, Array<{ author: string; text: string; date: string; minute: number }>> = {};
     for (const [k, v] of this.guestbook.entries()) gb[k] = v.map((e) => ({ ...e }));
     const npc: Record<string, MyPlaceProfile> = {};
-    for (const [k, v] of this.npcProfiles.entries()) npc[k] = { ...v, top8: v.top8.map((t) => ({ ...t })) };
+    for (const [k, v] of this.npcProfiles.entries()) npc[k] = copyProfile(v);
     return {
       currentMyPlaceId: this.currentMyPlaceId,
       lastUpdateAtMinute: this.lastUpdateAtMinute,
       lastUpdateLog: [...this.lastUpdateLog],
-      userProfile: { ...this.userProfile, top8: this.userProfile.top8.map((t) => ({ ...t })) },
+      userProfile: copyProfile(this.userProfile),
       npcProfiles: npc,
       guestbook: gb,
       proceduralCatalog: procedural,
@@ -169,10 +178,10 @@ export class MyPlaceEngine {
     if (state.currentMyPlaceId) this.currentMyPlaceId = state.currentMyPlaceId;
     if (state.lastUpdateAtMinute !== undefined) this.lastUpdateAtMinute = state.lastUpdateAtMinute;
     if (state.lastUpdateLog) this.lastUpdateLog = [...state.lastUpdateLog];
-    if (state.userProfile) this.userProfile = { ...state.userProfile, top8: state.userProfile.top8.map((t) => ({ ...t })) };
+    if (state.userProfile) this.userProfile = copyProfile(state.userProfile);
     if (state.npcProfiles) {
       this.npcProfiles.clear();
-      for (const [k, v] of Object.entries(state.npcProfiles)) this.npcProfiles.set(k, { ...v, top8: v.top8.map((t) => ({ ...t })) });
+      for (const [k, v] of Object.entries(state.npcProfiles)) this.npcProfiles.set(k, copyProfile(v));
     }
     if (state.guestbook) {
       this.guestbook.clear();
@@ -231,7 +240,7 @@ export class MyPlaceEngine {
 
   // Profile — user and NPCs
   public getUserProfile(): MyPlaceProfile {
-    return { ...this.userProfile, top8: this.userProfile.top8.map((t) => ({ ...t })) };
+    return copyProfile(this.userProfile);
   }
 
   /** Update only on a real profile change; keeps edit-buffer arrays detached. */
@@ -249,7 +258,7 @@ export class MyPlaceEngine {
 
   public getNpcProfile(username: string): MyPlaceProfile | undefined {
     const p = this.npcProfiles.get(username);
-    return p ? { ...p, top8: p.top8.map((t) => ({ ...t })) } : undefined;
+    return p ? copyProfile(p) : undefined;
   }
 
   public static readonly ARCHETYPE_AVATARS: Record<CharacterArchetype, string> = {
@@ -268,22 +277,22 @@ export class MyPlaceEngine {
    */
   public ensureNpcProfile(input: { username: string; displayName: string; archetype?: CharacterArchetype; backstory?: { label?: string; bioSeed?: string } }): MyPlaceProfile {
     const existing = this.npcProfiles.get(input.username);
-    if (existing) return { ...existing, top8: existing.top8.map((t) => ({ ...t })) };
+    if (existing) return copyProfile(existing);
     const stub = buildRosterProfile(input);
     this.npcProfiles.set(input.username, stub);
-    return { ...stub, top8: [] };
+    return copyProfile(stub);
   }
 
   public getAllNpcProfiles(): Record<string, MyPlaceProfile> {
     const out: Record<string, MyPlaceProfile> = {};
-    for (const [k, v] of this.npcProfiles.entries()) out[k] = { ...v, top8: v.top8.map((t) => ({ ...t })) };
+    for (const [k, v] of this.npcProfiles.entries()) out[k] = copyProfile(v);
     return out;
   }
 
   public updateNpcProfile(username: string, patch: Partial<MyPlaceProfile>): void {
     const existing = this.npcProfiles.get(username);
     if (!existing) return;
-    const updated = { ...existing, ...patch, top8: patch.top8 ? patch.top8.map((t) => ({ ...t })) : existing.top8 };
+    const updated = copyProfile({ ...existing, ...patch });
     this.npcProfiles.set(username, updated);
     this.log(`NPC ${username} updated profile: ${patch.headline ?? patch.bio?.slice(0, 30) ?? 'change'}`);
     this.eventBus.emit('myplace:profile_updated' as any, { username, profile: { ...updated } });
@@ -386,7 +395,7 @@ export class MyPlaceEngine {
   }
 
   public getGuestbook(username: string): Array<{ author: string; text: string; date: string; minute: number }> {
-    return [...(this.guestbook.get(username) ?? [])];
+    return (this.guestbook.get(username) ?? []).map(entry => ({ ...entry }));
   }
 
   public addGuestbookComment(username: string, author: string, text: string, minute: number): boolean {

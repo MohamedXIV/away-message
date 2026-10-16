@@ -184,6 +184,16 @@ export interface SimulationWebsiteRead {
   myplace: ReturnType<import('../MyPlaceEngine').MyPlaceEngine['getState']>;
 }
 
+/** One MyPlace page, not all NPC pages or guestbooks. */
+export interface SimulationMyPlacePageRead {
+  revision: number;
+  time: GameTime;
+  currentMyPlaceId: string;
+  userProfile: import('../MyPlaceEngine').MyPlaceProfile;
+  profile: import('../MyPlaceEngine').MyPlaceProfile | null;
+  guestbook: ReturnType<import('../MyPlaceEngine').MyPlaceEngine['getGuestbook']>;
+}
+
 /** One opened Pulse profile card. No other actors' memories or event knowledge. */
 export interface SimulationPulseProfileRead {
   revision: number;
