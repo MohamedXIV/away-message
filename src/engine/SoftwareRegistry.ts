@@ -335,8 +335,9 @@ export class SoftwareRegistry {
       : session.selectedOptions.createDesktopShortcut;
     const acceptedOffers = { ...session.selectedOptions.acceptedBundledOffers };
     for (const offer of def.bundledOffers ?? []) {
-      if (typeof optionOverrides?.[offer.id] === 'boolean') {
-        acceptedOffers[offer.id] = optionOverrides[offer.id];
+      const override = optionOverrides?.[offer.id];
+      if (typeof override === 'boolean') {
+        acceptedOffers[offer.id] = override;
       }
     }
     const previousReleases = Array.from(this.installedSoftware.values()).filter(
