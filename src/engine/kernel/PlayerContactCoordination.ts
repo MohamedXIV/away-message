@@ -28,6 +28,7 @@ export class PlayerContactCoordination {
     private readonly owners: Pick<CoreDomainOwners, 'clock' | 'social' | 'world' | 'needs' | 'telemetry'>,
     private readonly registerNewcomer: (action: Extract<SimulationAction, { type: 'SOCIAL_ADD_BUDDY' }>) => ActionResult,
     private readonly publishState: () => void,
+    private readonly createNewcomer: typeof generateNewcomer = generateNewcomer,
   ) {}
 
   public addContactByHandle(rawHandle: string, currentMinutes: number): { success: boolean; error?: string; data?: unknown } {
@@ -105,7 +106,7 @@ export class PlayerContactCoordination {
     const metVia = NEWCOMER_METVIA_ROTATION[this.owners.social.getBuddies().filter((b) => b.isProcedural).length % NEWCOMER_METVIA_ROTATION.length]!;
     const existingIds = this.owners.social.getBuddies().map((b) => b.id);
     const loadEpoch = this.owners.world.getLoadEpoch();
-    void generateNewcomer({ metVia, day, seed: `nbmeet-day-${day}`, useAI: true }, { existingIds })
+    void this.createNewcomer({ metVia, day, seed: `nbmeet-day-${day}`, useAI: true }, { existingIds })
       .then((res) => {
         if (loadEpoch !== this.owners.world.getLoadEpoch()) return;
         // SOCIAL_ADD_BUDDY already publishes its own completed owner write.
