@@ -145,6 +145,8 @@ export class WorldEventsEngine {
   private buddyKnowledge: Map<string, BuddyEventKnowledge[]> = new Map(); // learned public events
   /** Sole authority for structured world facts, rumors and scoped awareness. */
   private readonly semanticKnowledge = new KnowledgeLedger();
+  /** Load-only generation: normal event writes must not invalidate AI work. */
+  private loadEpoch = 0;
 
   constructor(
     eventBus: EventBus,
@@ -162,6 +164,8 @@ export class WorldEventsEngine {
       this.loadState(initialState);
     }
   }
+
+  public getLoadEpoch(): number { return this.loadEpoch; }
 
   public getState(): WorldEventsState {
     if (this._cachedState) return this._cachedState;
@@ -185,6 +189,7 @@ export class WorldEventsEngine {
   }
 
   public loadState(state: Partial<WorldEventsState>): void {
+    this.loadEpoch++;
     this.semanticKnowledge.loadState(state.semanticKnowledge);
     this.flags.clear();
     if (state.flags) {

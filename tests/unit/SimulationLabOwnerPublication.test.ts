@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 import { SimulationEngine } from '../../src/engine/SimulationEngine';
 import { getAllReleases } from '../../src/engine/OsCatalog';
+import { ProceduralDirector } from '../../src/engine/ProceduralDirector';
+import { ProceduralWorldCycle } from '../../src/engine/kernel/ProceduralWorldCycle';
 
 describe('#172 AI Lab source-backed world and OS publication', () => {
   it('commits only genuinely new procedural events and publishes one world revision', async () => {
@@ -24,9 +26,12 @@ describe('#172 AI Lab source-backed world and OS publication', () => {
     expect(JSON.parse(JSON.stringify(revisions))).toEqual(revisions);
     expect(broad).not.toHaveBeenCalled();
 
-    const repeated = await game.generateLabProceduralEvents(options);
-    expect(repeated.injectedIds).toEqual([]);
-    expect(repeated.events).toEqual([]);
+    // Director may intentionally rename repeat seeds to unique IDs; test
+    // idempotency at the actual owner-commit boundary, not content authoring.
+    expect(game.commitLabProceduralEvents(first.events)).toEqual([]);
+    expect(game.commitLabProceduralEvents([{
+      ...first.events[0]!, id: 'NOT VALID AS WORLD ID',
+    }])).toEqual([]);
     expect(game.getRevision()).toBe(before + 1);
     expect(revisions).toHaveLength(1);
     stop();
@@ -76,4 +81,41 @@ describe('#172 AI Lab source-backed world and OS publication', () => {
     expect(seen).toHaveLength(1);
     stop();
   });
+  it('drops an in-flight automatic procedural generation after loading a different world', async () => {
+    const game = new SimulationEngine();
+    const saved = game.world.getState();
+    const before = game.world.getPendingEvents().map(event => event.id);
+    type Batch = Awaited<ReturnType<ProceduralDirector['generateNextBatch']>>;
+    let complete!: (result: Batch) => void;
+    const deferred = new Promise<Batch>(resolve => { complete = resolve; });
+    const generate = vi.spyOn(ProceduralDirector.prototype, 'generateNextBatch')
+      .mockReturnValue(deferred);
+    let notifications = 0;
+    const cycle = new ProceduralWorldCycle(
+      { clock: game.clock, world: game.world, social: game.social },
+      () => false,
+      () => { notifications++; },
+    );
+    try {
+      cycle.processNewDay(1);
+      await vi.waitFor(() => expect(generate).toHaveBeenCalledTimes(1));
+      expect(generate.mock.calls[0]![2]).toMatchObject({ inject: false });
+      game.world.loadState(saved);
+      const event = game.world.getPendingEvents()[0]!;
+      complete({
+        events: [{ ...event, id: 'stale_autoworld_batch_172' }],
+        injectedIds: [],
+        meta: { source: 'template', latencyMs: 0 },
+      });
+      await vi.waitFor(() => {
+        expect(game.world.getPendingEvents().map(entry => entry.id)).toEqual(before);
+      });
+      await new Promise(resolve => setTimeout(resolve, 0));
+      expect(notifications).toBe(0);
+      expect(game.world.getPendingEvents().some(entry => entry.id === 'stale_autoworld_batch_172')).toBe(false);
+    } finally {
+      generate.mockRestore();
+    }
+  });
+
 });

@@ -548,24 +548,21 @@ export class SimulationKernel {
     if (epoch !== this.snapshotEpoch) {
       return { ...generated, events: [], injectedIds: [] };
     }
-    const injectedIds = this.publishOwnerMutation(['world'], () => this.world.injectProceduralEvents(
-      generated.events.map(event => ({
-        id: event.id,
-        title: event.title,
-        description: event.description,
-        category: event.category,
-        triggerDay: event.triggerDay,
-        triggerHour: event.triggerHour,
-        knowledgePrompt: event.knowledgePrompt,
-        siteUrl: event.siteUrl,
-      })),
-    ), ids => ids.length > 0);
+    const injectedIds = this.commitLabProceduralEvents(generated.events);
     const accepted = new Set(injectedIds);
     return {
       ...generated,
       injectedIds,
       events: generated.events.filter(event => accepted.has(event.id)),
     };
+  }
+
+  /** A manually previewed or AI-generated batch is an idempotent source write. */
+  public commitLabProceduralEvents(
+    events: Parameters<typeof this.world.injectProceduralEvents>[0],
+  ): string[] {
+    return this.publishOwnerMutation(['world'],
+      () => this.world.injectProceduralEvents(events), ids => ids.length > 0);
   }
 
   /** Lab registration and the matching world announcement are one commit. */

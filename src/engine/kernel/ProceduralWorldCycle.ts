@@ -30,15 +30,20 @@ export class ProceduralWorldCycle {
     this.pending = true;
     this.lastGeneratedDay = currentDay;
     const totalMinutes = this.owners.clock.getTotalMinutes();
+    const loadEpoch = this.owners.world.getLoadEpoch();
     // Fire-and-forget, never blocks simulation
     import('../ProceduralDirector')
       .then(({ ProceduralDirector }) => {
         const dir = new ProceduralDirector(this.owners.world);
-        return dir.generateNextBatch(currentDay, totalMinutes, { maxEvents: 2, useAI: true });
+        // Stage, never let a late AI result directly mutate a reloaded world.
+        return dir.generateNextBatch(currentDay, totalMinutes, { maxEvents: 2, useAI: true, inject: false });
       })
-      .then(({ injectedIds }) => {
-        // No-op/failure batches must not fabricate world revisions.
-        if (injectedIds.length > 0) this.notifySubscribers();
+      .then(({ events }) => {
+        if (loadEpoch !== this.owners.world.getLoadEpoch()) return;
+        const accepted = this.owners.world.injectProceduralEvents(events);
+        // Source event observes the world domain; only actual accepted events
+        // advance the UI publication revision.
+        if (accepted.length > 0) this.notifySubscribers();
       })
       .catch(() => {})
       .finally(() => {
