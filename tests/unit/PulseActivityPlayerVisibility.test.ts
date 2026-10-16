@@ -6,11 +6,20 @@ import type { PulseActivityEntry } from '../../src/apps/pulse/types';
 describe('#172 player-visible Pulse activity is limited by actual contact knowledge', () => {
   it('hides unknown one-to-one activity without mutating the saved Pulse feed', () => {
     const game = new SimulationEngine();
-    const [visible, hidden] = game.social.getBuddies();
+    const visible = game.social.getBuddies()[0]!;
     expect(visible).toBeDefined();
-    expect(hidden).toBeDefined();
-    expect(game.social.learnHandle(visible!.id, visible!.handle)).toBe(true);
-    expect(game.social.isKnown(hidden!.id)).toBe(false);
+    // Seed roster knowledge varies with authored backstory. Register an
+    // explicitly undiscovered actor rather than guessing who is unknown.
+    const hidden = game.social.registerBuddy({
+      ...visible,
+      id: 'unlearned_activity_actor',
+      handle: 'unlearned_activity_actor',
+      displayName: 'Unlearned Activity Actor',
+      status: 'stranger',
+      reach: 'local',
+    });
+    expect(game.social.learnHandle(visible.id, visible.handle)).toBe(true);
+    expect(game.social.isKnown(hidden.id)).toBe(false);
     const activity: PulseActivityEntry[] = [
       { id: 'a', buddyId: hidden!.id, kind: 'sign_in', text: 'SECRET NAME signed in', minute: 480, createdAt: 1, isRead: false },
       { id: 'b', buddyId: visible!.id, kind: 'away', text: 'Known contact away', minute: 481, createdAt: 2, isRead: false },
