@@ -36,11 +36,13 @@ export class ProceduralWorldCycle {
         const dir = new ProceduralDirector(this.owners.world);
         return dir.generateNextBatch(currentDay, totalMinutes, { maxEvents: 2, useAI: true });
       })
+      .then(({ injectedIds }) => {
+        // No-op/failure batches must not fabricate world revisions.
+        if (injectedIds.length > 0) this.notifySubscribers();
+      })
       .catch(() => {})
       .finally(() => {
         this.pending = false;
-        // Notify so UI (CityWire) updates pending count
-        try { this.notifySubscribers(); } catch {}
       });
   }
 

@@ -1,6 +1,8 @@
 import type { SimulationState as TransportSimulationState, SimulationAction, ActionResult, HardwareState } from '../types';
 import type { Fulfillment } from '../DeliveryEngine';
 import type { MyPlaceProfile } from '../MyPlaceEngine';
+import type { OsRelease } from '../OsCatalog';
+import { ProceduralDirector, type DirectorGenerateOptions } from '../ProceduralDirector';
 import { buildRecentNpcMail, buildRentMailHistory } from '../BoardDirector';
 import { locationLabel } from '../AppointmentDirector';
 import { createEmptyComputerSetup, createEmptyDisplaySetup } from '../hardware/state';
@@ -84,6 +86,8 @@ export class SimulationKernel {
   private hydrating = false;
   private simulationBoundaryDepth = 0;
   private publicationPending = false;
+  /** Discard pending Lab AI decisions if another save is loaded. */
+  private snapshotEpoch = 0;
 
   constructor(initialState?: InitialSimulationState) {
     const computer = initialState?.computer ?? createEmptyComputerSetup();
@@ -530,6 +534,57 @@ export class SimulationKernel {
   }
 
   /** Read only the page currently displayed by the real MyPlace site. */
+  /**
+   * AI Lab stages its asynchronous world batch before writing the owner.
+   * Generation never leaks a stale response across a loaded save, and
+   * duplicate/invalid event IDs cannot fabricate a revision.
+   */
+  public async generateLabProceduralEvents(options: DirectorGenerateOptions = {}):
+    Promise<Awaited<ReturnType<ProceduralDirector['generateNextBatch']>>> {
+    const epoch = this.snapshotEpoch;
+    const generated = await new ProceduralDirector(this.world).generateNextBatch(
+      this.clock.getTime().day, this.clock.getTotalMinutes(), { ...options, inject: false },
+    );
+    if (epoch !== this.snapshotEpoch) {
+      return { ...generated, events: [], injectedIds: [] };
+    }
+    const injectedIds = this.publishOwnerMutation(['world'], () => this.world.injectProceduralEvents(
+      generated.events.map(event => ({
+        id: event.id,
+        title: event.title,
+        description: event.description,
+        category: event.category,
+        triggerDay: event.triggerDay,
+        triggerHour: event.triggerHour,
+        knowledgePrompt: event.knowledgePrompt,
+        siteUrl: event.siteUrl,
+      })),
+    ), ids => ids.length > 0);
+    const accepted = new Set(injectedIds);
+    return {
+      ...generated,
+      injectedIds,
+      events: generated.events.filter(event => accepted.has(event.id)),
+    };
+  }
+
+  /** Lab registration and the matching world announcement are one commit. */
+  public registerLabOsRelease(release: OsRelease): OsRelease {
+    return this.publishOwnerMutation(['os', 'world'], () => {
+      const added = this.os.registerProceduralRelease(release);
+      this.world.injectProceduralEvents([{
+        id: `os_${release.id}`.replace(/[^a-z0-9_]/g, '_'),
+        title: release.displayName,
+        description: release.changelog.join(' • '),
+        category: 'os_release',
+        triggerDay: release.releaseDay,
+        knowledgePrompt: `${release.displayName} is out — ${release.blurb ?? ''} Needs ${release.requirements.minRamMB}MB RAM.`,
+        siteUrl: 'http://orionsoft.local/',
+      }]);
+      return added;
+    });
+  }
+
   public getMyPlacePageRead(requestedUsername = ''): SimulationMyPlacePageRead {
     const userProfile = this.myplace.getUserProfile();
     const username = requestedUsername || userProfile.username;
@@ -789,6 +844,7 @@ export class SimulationKernel {
   }
 
   public loadSnapshot(snapshot: TransportSimulationState): void {
+    this.snapshotEpoch++;
     const computer = snapshot.computer ?? createEmptyComputerSetup();
     const display = snapshot.display ?? createEmptyDisplaySetup();
     this.hydrating = true;

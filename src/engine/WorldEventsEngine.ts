@@ -554,7 +554,12 @@ export class WorldEventsEngine {
       });
       added.push(evt.id);
     }
-    if (added.length > 0) this.bumpVersion();
+    if (added.length > 0) {
+      this.bumpVersion();
+      // Source provenance for async procedural writers. The consumer's
+      // outer boundary, not this event, decides when to publish a revision.
+      this.eventBus.emit('world:procedural_events_injected' as any, { ids: [...added] });
+    }
     return added;
   }
 
