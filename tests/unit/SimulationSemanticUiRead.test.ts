@@ -28,12 +28,26 @@ describe('#172 player-safe semantic and Situation projections', () => {
     expect(game.world.learnSemanticReference('player', {
       kind: 'claim', refId: 'claim:chosen', learned: provenance,
     })).toBe(true);
+    expect(game.world.establishSemanticFact({
+      id: 'fact:unlearned_truth', subjectId: chosen.id, predicate: 'rumored_activity',
+      value: 'PRIVATE_UNLEARNED_TRUTH', established: provenance,
+    })).toBe(true);
+    expect(game.world.publishSemanticClaim({
+      id: 'claim:heard_only', factId: 'fact:unlearned_truth',
+      assertedValue: 'HEARD_ONLY_RUMOR',
+      published: { kind: 'friend', sourceId: 'test:friend', atMinute: 483 },
+    })).toBe(true);
+    expect(game.world.learnSemanticReference('player', {
+      kind: 'claim', refId: 'claim:heard_only', learned: provenance,
+    })).toBe(true);
     const giant = vi.spyOn(game, 'getState');
     const ledger = vi.spyOn(game.world, 'getState');
     const read = game.getPlayerActorRead(chosen.id)!;
     expect(read.actor.actorId).toBe(chosen.id);
     expect(read.playerKnowledge.facts.map(x => x.id)).toEqual(['fact:chosen']);
-    expect(read.playerKnowledge.claims.map(x => x.id)).toEqual(['claim:chosen']);
+    expect(read.playerKnowledge.claims.map(x => x.id)).toEqual(['claim:chosen', 'claim:heard_only']);
+    expect(JSON.stringify(read)).toContain('HEARD_ONLY_RUMOR');
+    expect(JSON.stringify(read)).not.toContain('PRIVATE_UNLEARNED_TRUTH');
     expect(read.actor.canChatNow).toMatchObject({ allowed: expect.any(Boolean), reasons: expect.any(Array) });
     expect(JSON.stringify(read)).not.toContain('PRIVATE_OTHER_LOCATION');
     expect(JSON.parse(JSON.stringify(read))).toEqual(read);
