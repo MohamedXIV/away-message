@@ -38,8 +38,15 @@ describe('#172 owner-scoped residence and player-only transit projections', () =
       },
       committedAtMinute: start, currentLegIndex: 0, farePaid: 0, status: 'active',
     };
+    const changes: string[][] = [];
+    const off = game.subscribeChanges(change => changes.push([...change.changedDomains]));
+    changes.length = 0;
     game.setActiveTravel(trip);
-    game.publishExternalChange();
+    game.publishExternalChange(['transit']); // direct setter + explicit hint coalesce
+    expect(changes).toHaveLength(1);
+    expect(changes[0]).toEqual(expect.arrayContaining(['transit', 'unknown']));
+    expect(changes[0]!.filter(domain => domain === 'transit')).toHaveLength(1);
+    off();
     const read = game.getTransitRead();
     expect(read.revision).toBe(game.getRevision());
     expect(read.active).toMatchObject({
