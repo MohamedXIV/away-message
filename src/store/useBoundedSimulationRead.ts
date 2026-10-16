@@ -15,6 +15,7 @@ import type {
   SimulationPresenceRead,
   SimulationWorldRead,
   SimulationWebsiteRead,
+  SimulationPulseProfileRead,
 } from '../engine/kernel/SimulationPublication';
 
 /**
@@ -67,6 +68,11 @@ export function useSimulationDirectory(path: string): SimulationDirectoryRead {
 
 export function useSimulationFile(path: string): SimulationFileRead {
   const read = useCallback((engine: SimulationEngine) => engine.getFileRead(path), [path]);
+  return useBoundedSimulationRead(read);
+}
+
+export function usePulseProfileRead(actorId: string): SimulationPulseProfileRead {
+  const read = useCallback((engine: SimulationEngine) => engine.getPulseProfileRead(actorId), [actorId]);
   return useBoundedSimulationRead(read);
 }
 
