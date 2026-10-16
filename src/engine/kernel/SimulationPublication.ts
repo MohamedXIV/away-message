@@ -151,3 +151,14 @@ export interface SimulationShopRead {
   legacyRecovery?: import('../types').LegacyRecoveryState;
   roomPackageCount: number;
 }
+
+/** Internet sites get a player-visible world feed, not private NPC state. */
+export interface SimulationWebsiteRead {
+  revision: number;
+  time: GameTime;
+  cash: number;
+  /** Compatibility with published site helper shapes; private banks are empty. */
+  world: import('../types').WorldState;
+  narrativeFlags: Record<string, boolean | number | string>;
+  myplace: ReturnType<import('../MyPlaceEngine').MyPlaceEngine['getState']>;
+}
