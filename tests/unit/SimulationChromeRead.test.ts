@@ -8,6 +8,9 @@ describe('#172 bounded desktop chrome and unread tray', () => {
     const [a, b] = game.social.getBuddies().slice(0, 2);
     expect(a).toBeDefined();
     expect(b).toBeDefined();
+    // Tray is player-visible: only discovered handles can appear in its badge.
+    expect(game.social.learnHandle(a!.id, a!.handle)).toBe(true);
+    expect(game.social.learnHandle(b!.id, b!.handle)).toBe(true);
     const full = vi.spyOn(game, 'getState');
     const snapshot = vi.spyOn(game, 'exportSnapshot');
     const received: string[] = [];
@@ -52,6 +55,8 @@ describe('#172 bounded desktop chrome and unread tray', () => {
       const spy = vi.spyOn(game, 'getState');
       for (let i = 0; i < 55; i++) {
         const actorId = fixture.actorIds[i % fixture.actorIds.length]!;
+        const actor = game.social.getBuddy(actorId)!;
+        game.social.learnHandle(actorId, actor.handle);
         game.social.sendMessage(actorId, actorId, 'player', 'inbox-' + i, 480 + i);
       }
       const chrome = game.getChromeRead();
