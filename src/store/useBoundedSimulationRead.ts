@@ -15,6 +15,8 @@ import type {
   SimulationPresenceRead,
   SimulationWorldRead,
   SimulationSituationRead,
+  SimulationResidenceRead,
+  SimulationTransitRead,
   SimulationWebsiteRead,
   SimulationPulseProfileRead,
 } from '../engine/kernel/SimulationPublication';
@@ -48,6 +50,8 @@ export function useBoundedSimulationRead<T>(read: (engine: SimulationEngine) => 
 const readHud = (engine: SimulationEngine) => engine.getHudProjection();
 const readWorld = (engine: SimulationEngine) => engine.getWorldRead();
 const readSituation = (engine: SimulationEngine) => engine.getSituationRead();
+const readResidence = (engine: SimulationEngine) => engine.getResidenceRead();
+const readTransit = (engine: SimulationEngine) => engine.getTransitRead();
 const readChrome = (engine: SimulationEngine) => engine.getChromeRead();
 const readApps = (engine: SimulationEngine) => engine.getAppRead();
 const readShop = (engine: SimulationEngine) => engine.getShopRead();
@@ -65,6 +69,14 @@ export function useSimulationWorldRead(): SimulationWorldRead {
 
 export function useSimulationSituation(): SimulationSituationRead {
   return useBoundedSimulationRead(readSituation);
+}
+
+export function useSimulationResidence(): SimulationResidenceRead {
+  return useBoundedSimulationRead(readResidence);
+}
+
+export function useSimulationTransit(): SimulationTransitRead {
+  return useBoundedSimulationRead(readTransit);
 }
 
 export function useSimulationDirectory(path: string): SimulationDirectoryRead {
