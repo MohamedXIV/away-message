@@ -17,6 +17,7 @@ import type {
   SimulationActorRead,
   SimulationAppRead,
   SimulationShopRead,
+  SimulationWebsiteRead,
   SimulationChromeRead,
   SimulationDesktopRead,
   SimulationDirectoryRead,
@@ -32,6 +33,7 @@ export type {
   SimulationActorRead,
   SimulationAppRead,
   SimulationShopRead,
+  SimulationWebsiteRead,
   SimulationChromeRead,
   SimulationDesktopRead,
   SimulationDirectoryRead,
@@ -309,6 +311,24 @@ export class SimulationKernel {
       os: this.os.getState(),
       installedSoftware: this.software.getInstalledSoftware(),
       downloads: this.downloads.getState().tasks.slice(-256),
+    };
+  }
+
+  public getWebsiteRead(): SimulationWebsiteRead {
+    const flags = this.world.getPublicFlags();
+    return {
+      revision: this.revision,
+      time: { ...this.clock.getTime() },
+      cash: this.economy.getState().cash,
+      narrativeFlags: { ...flags },
+      world: {
+        flags,
+        appointments: [],
+        windowObservationHistory: [],
+        triggeredEvents: this.world.getTriggeredEvents().slice(-256).map(event => ({ ...event })),
+        buddyKnowledge: {},
+      },
+      myplace: this.myplace.getState(),
     };
   }
 
