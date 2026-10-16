@@ -25,7 +25,7 @@ const meterItems: Array<{ key: keyof RelationshipDimensions; label: string; colo
 
 export const PulseProfileCard: React.FC<PulseProfileCardProps> = ({ buddy, presence, relationship, rooms, onClose, onChat, onBuzz, onInvite, awayHistory = [] }) => {
   const avatarLetter = buddy.displayName.trim().charAt(0).toUpperCase() || '?';
-  const { buddyKnowledge, worldEvents, photoMemories } = usePulseProfileRead(buddy.id);
+  const { buddyKnowledge, worldEvents, photoMemories, semantics, influences } = usePulseProfileRead(buddy.id);
   const photos = photoMemories.filter((m) => m.kind === 'shared_photo');
 
   return (
@@ -50,6 +50,27 @@ export const PulseProfileCard: React.FC<PulseProfileCardProps> = ({ buddy, prese
           <button onClick={onChat} className="flex-1 border border-[#3d5874] bg-[#d9e9f7] px-2 py-1 font-bold hover:bg-[#c6def1]">Send IM</button>
           <button onClick={onBuzz} className="border border-[#825c25] bg-[#f4d58d] px-2 py-1 font-bold hover:bg-[#eec878]">Buzz</button>
         </div>
+
+        {semantics && (
+          <div className="border border-[#b2bdc8] bg-white p-2" data-testid="pulse-semantic-context">
+            <div className="mb-1 font-bold text-[#274e78]">Contact context</div>
+            <div className="text-[10px] text-gray-600">
+              {semantics.reach === 'remote' ? 'Remote contact' : 'Local contact'}
+              {' · '}{semantics.relationship.trusted ? 'Trusted' : semantics.relationship.conflicted ? 'Conflicted' : semantics.relationship.stage}
+            </div>
+            <div className="mt-1 text-[10px] text-gray-600">
+              IM: {semantics.canChatNow.allowed ? 'Available' : semantics.canChatNow.reasons.join(', ').replaceAll('_', ' ')}
+            </div>
+            <div className="text-[10px] text-gray-600">
+              Meet: {semantics.canMeetInPerson.allowed ? 'Available' : semantics.canMeetInPerson.reasons.join(', ').replaceAll('_', ' ')}
+            </div>
+            {influences.length > 0 && (
+              <div className="mt-1 text-[10px] text-gray-500">
+                Current influences: {influences.map(influence => influence.kind.replaceAll('_', ' ')).join(', ')}
+              </div>
+            )}
+          </div>
+        )}
 
         {awayHistory.length > 0 ? <div className="border border-[#b2bdc8] bg-white p-2">
           <div className="mb-1 flex items-center justify-between font-bold text-[#274e78]"><span>Away message history</span><span className="text-[9px] font-normal text-gray-400">{awayHistory.length} entries</span></div>
