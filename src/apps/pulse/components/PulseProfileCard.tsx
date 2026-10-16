@@ -2,7 +2,7 @@ import React from 'react';
 import type { BuddyCharacter, BuddyPresence, RelationshipDimensions } from '../../../engine/types';
 import type { PulseRoom } from '../data/pulseRooms';
 import type { PulseActivityEntry } from '../types';
-import { useSimulationStore } from '../../../store/useSimulationStore';
+import { usePulseProfileRead } from '../../../store/useBoundedSimulationRead';
 
 interface PulseProfileCardProps {
   buddy: BuddyCharacter;
@@ -23,17 +23,9 @@ const meterItems: Array<{ key: keyof RelationshipDimensions; label: string; colo
   { key: 'respect', label: 'Respect', color: '#8668a8' },
 ];
 
-const EMPTY_KNOWLEDGE: import('../../../engine/types').BuddyEventKnowledge[] = [];
-const EMPTY_EVENTS: import('../../../engine/types').GlobalEvent[] = [];
-const EMPTY_PHOTOS: import('../../../engine/types').CoreMemory[] = [];
-
 export const PulseProfileCard: React.FC<PulseProfileCardProps> = ({ buddy, presence, relationship, rooms, onClose, onChat, onBuzz, onInvite, awayHistory = [] }) => {
   const avatarLetter = buddy.displayName.trim().charAt(0).toUpperCase() || '?';
-  // Use stable selectors — avoid creating new [] on every getSnapshot call
-  const buddyKnowledge = useSimulationStore((s) => s.state.world.buddyKnowledge?.[buddy.id] ?? EMPTY_KNOWLEDGE);
-  const worldEvents = useSimulationStore((s) => s.state.world.triggeredEvents ?? EMPTY_EVENTS);
-  // P5.5 visual album: immortal shared-photo memories (stable reference from cached engine state)
-  const photoMemories = useSimulationStore((s) => s.state.social.coreMemories?.[buddy.id] ?? EMPTY_PHOTOS);
+  const { buddyKnowledge, worldEvents, photoMemories } = usePulseProfileRead(buddy.id);
   const photos = photoMemories.filter((m) => m.kind === 'shared_photo');
 
   return (
