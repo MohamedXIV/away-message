@@ -24,6 +24,29 @@ import {
 // Default singleton engine instance
 const defaultEngine = new SimulationEngine();
 
+/**
+ * #172: deprecated full-state compatibility is an explicit read, not hot
+ * publication. Every revision gets a fresh lazy facade and only the FIRST
+ * property access materializes a full composed snapshot. React views must use
+ * owner-backed projections instead; persistence uses engine.exportSnapshot().
+ *
+ * The facade is local legacy glue (not Worker wire data); bounded read models
+ * and SimulationChange remain plain serializable objects.
+ */
+function createLegacySnapshotView(engine: SimulationEngine): StrictSimulationState {
+  let materialized: StrictSimulationState | null = null;
+  const read = (): StrictSimulationState =>
+    (materialized ??= engine.getState() as StrictSimulationState);
+  return new Proxy({} as StrictSimulationState, {
+    get: (_target, property) => Reflect.get(read(), property),
+    has: (_target, property) => Reflect.has(read(), property),
+    ownKeys: () => Reflect.ownKeys(read()),
+    getOwnPropertyDescriptor: (_target, property) =>
+      Reflect.getOwnPropertyDescriptor(read(), property),
+    set: () => false,
+  });
+}
+
 export interface SimulationStoreState {
   engine: SimulationEngine;
   state: StrictSimulationState;
@@ -107,37 +130,37 @@ export const useSimulationStore = create<SimulationStore>()(
   subscribeWithSelector((set, get) => {
     let unsubscribeEngine: (() => void) | null = null;
 
-    const initialState = defaultEngine.getState();
-
     const setupEngineSubscription = (engineInstance: SimulationEngine) => {
-      if (unsubscribeEngine) {
-        unsubscribeEngine();
-      }
-      // The kernel already built the legacy state once for publication.
-      // Never immediately rebuild it again inside the Zustand listener.
-      unsubscribeEngine = engineInstance.subscribe((newState) => {
+      unsubscribeEngine?.();
+      let initial = true;
+      unsubscribeEngine = engineInstance.subscribeChanges(() => {
+        // subscribeChanges synchronously supplies a baseline; setEngine
+        // publishes it once below, not twice.
+        if (initial) { initial = false; return; }
         set({
-          state: newState,
+          state: createLegacySnapshotView(engineInstance),
           isPaused: engineInstance.clock.isPaused(),
-          activeView: newState.activeView,
+          activeView: engineInstance.getHudProjection().activeView,
         });
       });
     };
 
-    // Initial subscription
     setupEngineSubscription(defaultEngine);
 
     return {
       engine: defaultEngine,
-      state: initialState,
+      state: createLegacySnapshotView(defaultEngine),
       isPaused: defaultEngine.clock.isPaused(),
-      activeView: initialState.activeView,
+      activeView: defaultEngine.getHudProjection().activeView,
 
       setEngine: (engine: SimulationEngine) => {
-        // subscribe() emits its current state synchronously; avoid a second
-        // reconstruction after that callback has already synchronized it.
         setupEngineSubscription(engine);
-        set({ engine });
+        set({
+          engine,
+          state: createLegacySnapshotView(engine),
+          isPaused: engine.clock.isPaused(),
+          activeView: engine.getHudProjection().activeView,
+        });
       },
 
       syncStateFromEngine: () => {
