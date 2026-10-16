@@ -11,6 +11,7 @@ import type {
   SimulationFileRead,
   SimulationConversationRead,
   SimulationHudProjection,
+  SimulationPlayerStatusRead,
   SimulationMessengerRead,
   SimulationPresenceRead,
   SimulationWorldRead,
@@ -48,6 +49,7 @@ export function useBoundedSimulationRead<T>(read: (engine: SimulationEngine) => 
 }
 
 const readHud = (engine: SimulationEngine) => engine.getHudProjection();
+const readPlayerStatus = (engine: SimulationEngine) => engine.getPlayerStatusRead();
 const readWorld = (engine: SimulationEngine) => engine.getWorldRead();
 const readSituation = (engine: SimulationEngine) => engine.getSituationRead();
 const readResidence = (engine: SimulationEngine) => engine.getResidenceRead();
@@ -61,6 +63,10 @@ const readPresence = (engine: SimulationEngine) => engine.getPresenceRead();
 
 export function useSimulationHud(): SimulationHudProjection {
   return useBoundedSimulationRead(readHud);
+}
+
+export function useSimulationPlayerStatus(): SimulationPlayerStatusRead {
+  return useBoundedSimulationRead(readPlayerStatus);
 }
 
 export function useSimulationWorldRead(): SimulationWorldRead {

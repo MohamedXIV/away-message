@@ -2,7 +2,7 @@
 
 import React, { useMemo, useRef, useState } from 'react';
 import { useSimulationStore } from '../store/useSimulationStore';
-import { useSimulationHud, useSimulationWorldRead, useSimulationResidence, useSimulationTransit } from '../store/useBoundedSimulationRead';
+import { useSimulationHud, useSimulationWorldRead, useSimulationResidence, useSimulationTransit, useSimulationPlayerStatus } from '../store/useBoundedSimulationRead';
 import { soundManager } from '../audio/SoundManager';
 import { PhysicalWorldBoundary } from './phaser/PhysicalWorldBoundary';
 import { createWorldSceneProjection } from './phaser/presentationAdapter';
@@ -46,6 +46,7 @@ export const RoomScene: React.FC = () => {
   const worldRead = useSimulationWorldRead();
   const residenceRead = useSimulationResidence();
   const transitRead = useSimulationTransit();
+  const playerStatus = useSimulationPlayerStatus();
   const time = worldRead.time;
   const player = { cash: hud.cash, location: worldRead.playerLocation };
 
@@ -68,7 +69,7 @@ export const RoomScene: React.FC = () => {
   const environment = worldRead.environment;
   const environmentPresentation = projectEnvironmentPresentation(environment);
   const weather: WeatherType = environmentPresentation.weather;
-  const needs = engine.gameContext.player.needs();
+  const needs = playerStatus.needs;
   const mood = engine.gameContext.player.mood();
   const timeOfDay = time.timeOfDay;
 

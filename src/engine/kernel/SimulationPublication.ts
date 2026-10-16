@@ -54,6 +54,13 @@ export interface SimulationHudProjection {
   activeView: 'pc' | 'room' | 'cafe' | 'work' | 'city';
 }
 
+/** Compact owner-backed physical-place needs and rent UI, not the whole PlayerState. */
+export interface SimulationPlayerStatusRead {
+  revision: number;
+  needs: import('../PlayerNeedsEngine').PlayerNeedsSnapshot;
+  rent: Pick<import('../types').PlayerState, 'rentAmount' | 'rentDueDay' | 'rentPaid'>;
+}
+
 /** Render-specific dependencies, not a copy of the persisted world. */
 export interface SimulationWorldRead {
   revision: number;

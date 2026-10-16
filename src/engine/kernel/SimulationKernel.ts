@@ -26,6 +26,7 @@ import type {
   SimulationChange,
   SimulationConversationRead,
   SimulationHudProjection,
+  SimulationPlayerStatusRead,
   SimulationMessengerRead,
   SimulationPresenceRead,
   SimulationWorldRead,
@@ -46,6 +47,7 @@ export type {
   SimulationChange,
   SimulationConversationRead,
   SimulationHudProjection,
+  SimulationPlayerStatusRead,
   SimulationMessengerRead,
   SimulationPresenceRead,
   SimulationWorldRead,
@@ -283,14 +285,22 @@ export class SimulationKernel {
 
   /** Bounded read from canonical owners; never assembles CoreStateProjection. */
   public getHudProjection(): SimulationHudProjection {
-    const player = this.economy.getState();
     return {
       revision: this.revision,
       time: { ...this.clock.getTime() },
       paused: this.clock.isPaused(),
-      cash: player.cash,
-      socialBattery: player.socialBattery,
+      cash: this.economy.getCash(),
+      socialBattery: this.needs.getSocialBattery(),
       activeView: this.core.getActiveView(),
+    };
+  }
+
+  /** Owner-backed status for residence and city UI; never merges full PlayerState. */
+  public getPlayerStatusRead(): SimulationPlayerStatusRead {
+    return {
+      revision: this.revision,
+      needs: this.needs.getSnapshot(),
+      rent: this.economy.getRentStatus(),
     };
   }
 
