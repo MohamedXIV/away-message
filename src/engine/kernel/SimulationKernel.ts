@@ -16,6 +16,7 @@ import type {
   ObservedSimulationDomain,
   SimulationActorRead,
   SimulationAppRead,
+  SimulationShopRead,
   SimulationChromeRead,
   SimulationDesktopRead,
   SimulationDirectoryRead,
@@ -30,6 +31,7 @@ import type {
 export type {
   SimulationActorRead,
   SimulationAppRead,
+  SimulationShopRead,
   SimulationChromeRead,
   SimulationDesktopRead,
   SimulationDirectoryRead,
@@ -299,11 +301,25 @@ export class SimulationKernel {
 
   /** The desktop app ecosystem reads only Hardware, OS and Software owners. */
   public getAppRead(): SimulationAppRead {
+    const computer = this.hardware.getComputerState();
     return {
       revision: this.revision,
       hardware: this.hardware.getState(),
+      computer: { assembled: computer.assembled, poweredOn: computer.poweredOn },
       os: this.os.getState(),
       installedSoftware: this.software.getInstalledSoftware(),
+      downloads: this.downloads.getState().tasks.slice(-256),
+    };
+  }
+
+  public getShopRead(): SimulationShopRead {
+    const inventory = this.inventory.getShopSummary();
+    return {
+      revision: this.revision,
+      cash: this.economy.getState().cash,
+      hardware: this.hardware.getState(),
+      osVersion: this.os.getCurrentOsId(),
+      ...inventory,
     };
   }
 
