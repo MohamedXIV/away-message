@@ -210,9 +210,11 @@ export class SimulationKernel {
       this.publicationPending = true;
       return;
     }
-    // Reconcile derived mood exactly at the authoritative publication boundary,
-    // never during getState() or a current-format snapshot read.
-    this.mood.publishIfChanged();
+    // A presentation-only Inner Voice update must not advance unrelated
+    // gameplay Mood state. If any other source event was observed, preserve
+    // the normal reconciliation for that combined atomic boundary.
+    const voiceOnly = this.observedDomains.size === 1 && this.observedDomains.has('innerVoice');
+    if (!voiceOnly) this.mood.publishIfChanged();
     this.invalidateStateCache();
     const observed = [...this.observedDomains].sort();
     this.observedDomains.clear();

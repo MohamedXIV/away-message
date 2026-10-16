@@ -96,7 +96,7 @@ describe('#172 direct spatial, story and Inner Voice mutation attribution', () =
     const first = game.requestInnerThought(thought, 420);
     expect(first).not.toBeNull();
     expect(seen.changes).toHaveLength(1);
-    expect(seen.changes[0]!.changedDomains).toEqual(expect.arrayContaining(['innerVoice', 'unknown']));
+    expect(seen.changes[0]!.changedDomains).toEqual(['innerVoice', 'unknown']);
     expect(game.requestInnerThought(thought, 425)).toBeNull();
     expect(seen.changes).toHaveLength(1);
     game.dismissInnerThought();

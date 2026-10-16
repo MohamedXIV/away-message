@@ -98,6 +98,7 @@ describe('PhysicalShopSessionRuntime — single persisted shop and item owner', 
   it('returns defensive session projections without giving callers writable authority', () => {
     const engine = new SimulationEngine();
     const source = engine.getPhysicalShopState(STORE, SEED, FIXTURES);
+    engine.initializePhysicalShop(STORE, SEED, FIXTURES);
     const detached = session(engine).getState();
     detached[STORE]!.stockBySlot['fixture:shelf:0'] = 'fake';
     expect(engine.getPhysicalShopState(STORE, SEED, FIXTURES)).toEqual(source);
