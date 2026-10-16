@@ -144,37 +144,39 @@ export class MyPlaceSocialCycle {
   ): void {
     void this.owners.myplace.maybeUpdateRandomNpcProfile(day, currentMinutes).then((res) => {
       if (!res) return;
-      const link = `http://myplace.local/${res.username}`;
-      const announcer = Object.values(SEED_BY_ID).find((b) => b.myplace === res.username);
-      const traits = announcer
-        ? this.owners.social.getTraits(announcer.id)
-        : { shyness: 50, discipline: 50 };
-      const text = pickMyplaceUpdateLine(traits.shyness, traits.discipline, link);
       try {
-        this.owners.social.sendMessage(
-          res.username, res.username, 'player',
-          text, currentMinutes, false, ['myplace_update'],
-        );
-      } catch {
-        // Existing profile announcers are best effort.
-      }
-      if (mode === 'realtime') {
-        // Preserve the original realtime-only notification/co-comment behavior
-        // until a dedicated Social side-effect cutover owns it.
-        this.maybeCoCommentProfileUpdate(res.username, day, currentMinutes);
+        const link = `http://myplace.local/${res.username}`;
+        const announcer = Object.values(SEED_BY_ID).find((b) => b.myplace === res.username);
+        const traits = announcer
+          ? this.owners.social.getTraits(announcer.id)
+          : { shyness: 50, discipline: 50 };
+        const text = pickMyplaceUpdateLine(traits.shyness, traits.discipline, link);
         try {
-          this.owners.events.emit('social:message_received' as any, {
-            message: { senderId: res.username, text },
-          });
+          this.owners.social.sendMessage(
+            res.username, res.username, 'player',
+            text, currentMinutes, false, ['myplace_update'],
+          );
         } catch {
-          // Non-critical UI event.
+          // Existing profile announcers are best effort.
         }
-        this.maybeCoCommentProfileUpdate(res.username, day, currentMinutes);
+        if (mode === 'realtime') {
+          // Preserve the original realtime-only notification/co-comment behavior
+          // until a dedicated Social side-effect cutover owns it.
+          this.maybeCoCommentProfileUpdate(res.username, day, currentMinutes);
+          try {
+            this.owners.events.emit('social:message_received' as any, {
+              message: { senderId: res.username, text },
+            });
+          } catch {
+            // Non-critical UI event.
+          }
+          this.maybeCoCommentProfileUpdate(res.username, day, currentMinutes);
+        }
+      } finally {
+        // Even if optional social narration fails, the already committed
+        // source-owned profile must still become visible to bounded readers.
+        this.publishAsyncCompletion();
       }
-      // The profile update, social announcement and guestbook side effects
-      // happen in this same microtask, after the original tick has returned.
-      // Publish one fresh revision only for a successfully committed update.
-      this.publishAsyncCompletion();
     }).catch(() => {});
   }
 
