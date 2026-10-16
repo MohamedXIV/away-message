@@ -24,6 +24,9 @@ export function usePulseNotifications(activeTabBuddyId: string | null) {
       }
       if (msg.senderId === 'player') return;
       const buddyId = msg.conversationId;
+      // The source event is private simulation truth. Only a learned contact
+      // may generate a player-visible toast, text snippet or audible buzz.
+      if (!engine.social.isKnown(buddyId)) return;
 
       if ((msg.tags ?? []).includes('buzz')) {
         try { soundManager.play('buzz'); } catch { /* best effort */ }

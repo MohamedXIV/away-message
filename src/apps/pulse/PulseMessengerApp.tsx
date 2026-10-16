@@ -219,7 +219,9 @@ export const PulseMessengerApp: React.FC = () => {
 
   usePulseAudio();
 
-  const initialBuddyId = engine.social.getBuddies()[0]?.id ?? '';
+  // Do not open the first authored NPC merely because it exists in the
+  // roster: Pulse starts with the first *learned* contact, if any.
+  const initialBuddyId = messenger.contacts[0]?.actorId ?? '';
   const [session, setSession] = useState<PulseLoginSession | null>(() => tryAutoSign());
   const [openBuddyIds, setOpenBuddyIds] = useState<string[]>(initialBuddyId ? [initialBuddyId] : []);
   const [activeBuddyId, setActiveBuddyId] = useState<string>(initialBuddyId);
@@ -521,6 +523,8 @@ export const PulseMessengerApp: React.FC = () => {
   }));
 
   const handleOpenChat = (buddyId: string) => {
+    // Defensive UI boundary for stale activity entries / guessed actor IDs.
+    if (!engine.social.isKnown(buddyId)) return;
     if (!openBuddyIds.includes(buddyId)) setOpenBuddyIds((previous) => [...previous, buddyId]);
     setSelectedBuddyId(null);
     setActiveBuddyId(buddyId);

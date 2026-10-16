@@ -44,6 +44,17 @@ interface BuddyListWindowProps {
   onChangeSkin?: (skin: PulseSkin) => void;
 }
 
+/** Pulse feed is player-facing, unlike the canonical offline/private actor log.
+ * Public room posts remain discoverable; one-to-one activity requires a
+ * learned contact handle. Never destroy stored history before discovery.
+ */
+export function filterPlayerVisiblePulseActivity(
+  activityFeed: readonly PulseActivityEntry[],
+  isKnown: (actorId: string) => boolean,
+): PulseActivityEntry[] {
+  return activityFeed.filter(entry => entry.kind === 'room' || isKnown(entry.buddyId));
+}
+
 const presenceRank: Record<string, number> = { online: 0, away: 1, busy: 2, offline: 3 };
 
 export const BuddyListWindow: React.FC<BuddyListWindowProps> = ({
@@ -92,6 +103,10 @@ export const BuddyListWindow: React.FC<BuddyListWindowProps> = ({
   const buddies = useMemo(() => {
     return engine.social.getBuddies().filter((b) => engine.social.isKnown(b.id));
   }, [engine, presenceRevision]);
+  const visibleActivityFeed = useMemo(
+    () => filterPlayerVisiblePulseActivity(activityFeed, id => engine.social.isKnown(id)),
+    [activityFeed, engine, presenceRevision],
+  );
 
   const candidateSuggestions = useMemo(() => {
     const list: Array<{ handle: string; note: string; buddyName: string }> = [];
@@ -300,10 +315,10 @@ export const BuddyListWindow: React.FC<BuddyListWindowProps> = ({
               + Add
             </button>
           </div>
-          {activityFeed.length > 0 && <div className="mx-1 mt-1 border border-[#b8c3ce] bg-[#f3f6f8] px-2 py-1">
-            <div className="mb-1 flex items-center justify-between text-[9px] font-bold uppercase tracking-wide text-[#456990]"><span>Pulse activity</span><span className="font-normal text-gray-500">last {Math.min(activityFeed.length, 5)} • {activityFeed.filter((entry) => !entry.isRead).length} new</span></div>
+          {visibleActivityFeed.length > 0 && <div className="mx-1 mt-1 border border-[#b8c3ce] bg-[#f3f6f8] px-2 py-1">
+            <div className="mb-1 flex items-center justify-between text-[9px] font-bold uppercase tracking-wide text-[#456990]"><span>Pulse activity</span><span className="font-normal text-gray-500">last {Math.min(visibleActivityFeed.length, 5)} • {visibleActivityFeed.filter((entry) => !entry.isRead).length} new</span></div>
             <div className="space-y-0.5">
-              {activityFeed.slice(-5).reverse().map((entry) => {
+              {visibleActivityFeed.slice(-5).reverse().map((entry) => {
                 const isMessage = entry.kind === 'message';
                 const isUnread = !entry.isRead;
                 return <button key={entry.id} onClick={() => onOpenChat(entry.buddyId)} className={`block w-full truncate text-left text-[10px] hover:text-blue-800 hover:underline ${isUnread ? 'font-bold text-[#1d3d64]' : 'text-gray-700'} ${isMessage ? 'italic' : ''}`} title={`${entry.text} — Day ${Math.floor(entry.minute / 1440) + 1}`}>{isUnread ? '● ' : ''}{entry.text}</button>;
