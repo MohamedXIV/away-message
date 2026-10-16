@@ -18,6 +18,7 @@ import type {
   SimulationAppRead,
   SimulationShopRead,
   SimulationWebsiteRead,
+  SimulationPulseProfileRead,
   SimulationChromeRead,
   SimulationDesktopRead,
   SimulationDirectoryRead,
@@ -34,6 +35,7 @@ export type {
   SimulationAppRead,
   SimulationShopRead,
   SimulationWebsiteRead,
+  SimulationPulseProfileRead,
   SimulationChromeRead,
   SimulationDesktopRead,
   SimulationDirectoryRead,
@@ -311,6 +313,19 @@ export class SimulationKernel {
       os: this.os.getState(),
       installedSoftware: this.software.getInstalledSoftware(),
       downloads: this.downloads.getState().tasks.slice(-256),
+    };
+  }
+
+  public getPulseProfileRead(actorId: string): SimulationPulseProfileRead {
+    const buddyKnowledge = this.world.getBuddyKnowledge(actorId).slice(-8);
+    const eventIds = new Set(buddyKnowledge.map(k => k.eventId));
+    return {
+      revision: this.revision,
+      buddyKnowledge,
+      worldEvents: this.world.getTriggeredEvents().filter(event => eventIds.has(event.id))
+        .map(event => ({ ...event })),
+      photoMemories: this.social.getCoreMemories(actorId).filter(memory => memory.kind === 'shared_photo')
+        .slice(-12),
     };
   }
 
