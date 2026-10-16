@@ -9,6 +9,8 @@ import { FileSystemEngine } from './FileSystemEngine';
 import { isMinOsSatisfied } from './OsCatalog';
 import { getPulseReleaseById } from './PulseCatalog';
 
+export type InstallerPreview = Pick<InstallerSession, 'softwareDef' | 'compatibilityResult' | 'selectedOptions'>;
+
 export interface HardwareInfoProvider {
   getOsVersion: () => OsVersion | null;
   getRamMb: () => number;
@@ -253,42 +255,48 @@ export class SoftwareRegistry {
     };
   }
 
-  public startInstallerWizard(softwareDefId: string): InstallerSession {
-    let def = this.catalog.get(softwareDefId);
-    if (!def) {
-      def = Array.from(this.catalog.values()).find(
-        (candidate) =>
-          candidate.appId === softwareDefId ||
-          candidate.appId === `app.${softwareDefId}` ||
-          candidate.id.includes(softwareDefId),
-      );
-    }
+  /**
+   * Read-only installer preview for the React wizard and command preflight.
+   * Rendering a setup window must not allocate an internal installer session.
+   */
+  public previewInstaller(softwareDefId: string): InstallerPreview {
+    const def = this.getSoftwareDefinition(softwareDefId);
     if (!def) throw new Error(`Unknown software definition: ${softwareDefId}`);
-
-    const compatibilityResult = this.evaluateCompatibility(def);
     const initialOffers: Record<string, boolean> = {};
     for (const offer of def.bundledOffers ?? []) {
       initialOffers[offer.id] = offer.defaultChecked;
     }
-
-    const sessionId = `inst_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
-    const session: InstallerSession = {
-      sessionId,
+    return {
       softwareDef: def,
-      currentStage: 1,
-      destinationPath: `C:/Program Files/${def.name.split(' ')[0]}`,
+      compatibilityResult: this.evaluateCompatibility(def),
       selectedOptions: {
         createDesktopShortcut: true,
         createStartMenuShortcut: true,
         launchOnStartup: false,
         acceptedBundledOffers: initialOffers,
       },
-      compatibilityResult,
+    };
+  }
+
+  public startInstallerWizard(softwareDefId: string): InstallerSession {
+    const preview = this.previewInstaller(softwareDefId);
+    const sessionId = `inst_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
+    const session: InstallerSession = {
+      sessionId,
+      ...preview,
+      currentStage: 1,
+      destinationPath: `C:/Program Files/${preview.softwareDef.name.split(' ')[0]}`,
       installProgress: 0,
     };
 
     this.activeInstallers.set(sessionId, session);
-    return { ...session };
+    return {
+      ...session,
+      selectedOptions: {
+        ...session.selectedOptions,
+        acceptedBundledOffers: { ...session.selectedOptions.acceptedBundledOffers },
+      },
+    };
   }
 
   public advanceInstallerStage(
@@ -306,7 +314,11 @@ export class SoftwareRegistry {
     return { ...session };
   }
 
-  public completeInstallation(sessionId: string, currentMinute = 0): InstalledSoftwareRecord {
+  public completeInstallation(
+    sessionId: string,
+    currentMinute = 0,
+    optionOverrides?: Record<string, boolean>,
+  ): InstalledSoftwareRecord {
     const session = this.activeInstallers.get(sessionId);
     if (!session) throw new Error(`Invalid installer session: ${sessionId}`);
 
@@ -316,12 +328,23 @@ export class SoftwareRegistry {
     }
 
     const def = session.softwareDef;
+    // The action is authoritative, not a mutable copy returned by wizard
+    // creation. Honor only options actually offered by this software.
+    const createDesktopShortcut = typeof optionOverrides?.createDesktopShortcut === 'boolean'
+      ? optionOverrides.createDesktopShortcut
+      : session.selectedOptions.createDesktopShortcut;
+    const acceptedOffers = { ...session.selectedOptions.acceptedBundledOffers };
+    for (const offer of def.bundledOffers ?? []) {
+      if (typeof optionOverrides?.[offer.id] === 'boolean') {
+        acceptedOffers[offer.id] = optionOverrides[offer.id];
+      }
+    }
     const previousReleases = Array.from(this.installedSoftware.values()).filter(
       (software) => software.appId === def.appId,
     );
     const createdShortcuts: string[] = [];
 
-    if (session.selectedOptions.createDesktopShortcut) {
+    if (createDesktopShortcut) {
       const shortcutPath = `C:/Desktop/${def.name}.lnk`;
       try {
         this.vfs.createFile(
@@ -342,8 +365,8 @@ export class SoftwareRegistry {
       createdShortcuts.push(shortcutPath);
     }
 
-    const hasToolbar = session.selectedOptions.acceptedBundledOffers['searchmate_toolbar'] ?? false;
-    const hasAutorun = session.selectedOptions.acceptedBundledOffers['autorun_startup'] ?? false;
+    const hasToolbar = acceptedOffers['searchmate_toolbar'] ?? false;
+    const hasAutorun = acceptedOffers['autorun_startup'] ?? false;
 
     const record: InstalledSoftwareRecord = {
       id: `inst_${def.id}`,
