@@ -22,6 +22,9 @@ describe('#172 silent owner publication boundaries', () => {
     const physicalBefore = game.getPhysicalWorldState();
     const broad = vi.spyOn(game, 'getState');
 
+    const sessionOwner = (game as unknown as {
+      physical: { physicalShop: { getState(): Record<string, unknown> } };
+    }).physical.physicalShop;
     const stock = game.getPhysicalShopState(STORE, SEED, FIXTURES);
     expect(stock.stockBySlot['fixture:shelf:0']).toBeDefined();
     expect(game.getPhysicalShopCashierCapabilities(STORE, SEED, FIXTURES))
@@ -30,12 +33,12 @@ describe('#172 silent owner publication boundaries', () => {
     expect(game.getPhysicalWorldState()).toEqual(physicalBefore);
     expect(game.getRevision()).toBe(before);
     expect(seen).toHaveLength(0);
-    expect(game.getAllPhysicalShopStates()[STORE]).toBeUndefined();
+    expect(sessionOwner.getState()[STORE]).toBeUndefined();
 
     expect(game.initializePhysicalShop(STORE, SEED, FIXTURES)).toBe(true);
     expect(seen).toHaveLength(1);
     expect(seen[0]!.changedDomains).toEqual(expect.arrayContaining(['physical', 'shop', 'unknown']));
-    expect(game.getAllPhysicalShopStates()[STORE]).toEqual(stock);
+    expect(sessionOwner.getState()[STORE]).toEqual(stock);
     expect(game.getPhysicalWorldState().items[stock.stockBySlot['fixture:shelf:0']!]).toBeDefined();
     expect(game.initializePhysicalShop(STORE, SEED, FIXTURES)).toBe(false);
     expect(game.getRevision()).toBe(before + 1);
@@ -46,13 +49,16 @@ describe('#172 silent owner publication boundaries', () => {
   it('keeps a rejected checkout from implicitly seeding a never-opened shop', () => {
     const game = new SimulationEngine();
     const before = game.getRevision();
+    const sessionOwner = (game as unknown as {
+      physical: { physicalShop: { getState(): Record<string, unknown> } };
+    }).physical.physicalShop;
     const emptyWorld = game.getPhysicalWorldState();
     const rejected = game.checkoutPhysicalShop(STORE, SEED, FIXTURES, {
       'corner-mart:noodles_cup': 2,
     });
     expect(rejected.success).toBe(false);
     expect(game.getPhysicalWorldState()).toEqual(emptyWorld);
-    expect(game.getAllPhysicalShopStates()[STORE]).toBeUndefined();
+    expect(sessionOwner.getState()[STORE]).toBeUndefined();
     expect(game.getRevision()).toBe(before);
   });
 
