@@ -114,14 +114,23 @@ describe('#172 revision-only publication and bounded HUD projection', () => {
       const after = useSimulationStore.getState().state;
       expect(after).not.toBe(before);
       expect(after.world.flags.lazy_publisher_smoke).toBe(true);
+      const callsForExplicitMaterialization = wholeState.mock.calls.length;
+      // Kernel's composed getState can make nested internal reads. The lazy
+      // legacy proxy must reuse that ONE materialized result per revision.
+      expect(callsForExplicitMaterialization).toBeGreaterThan(0);
       expect(after.player.cash).toBe(engine.economy.getState().cash);
-      expect(wholeState).toHaveBeenCalledTimes(1); // one explicit read, reused within revision
+      expect(wholeState.mock.calls.length).toBe(callsForExplicitMaterialization);
 
       engine.world.setFlag('lazy_publisher_next', true);
       engine.publishExternalChange();
-      expect(wholeState).toHaveBeenCalledTimes(1);
-      expect(useSimulationStore.getState().state.world.flags.lazy_publisher_next).toBe(true);
-      expect(wholeState).toHaveBeenCalledTimes(2);
+      expect(wholeState.mock.calls.length).toBe(callsForExplicitMaterialization);
+      const nextView = useSimulationStore.getState().state;
+      expect(nextView).not.toBe(after);
+      expect(nextView.world.flags.lazy_publisher_next).toBe(true);
+      const callsForNextMaterialization = wholeState.mock.calls.length;
+      expect(callsForNextMaterialization).toBeGreaterThan(callsForExplicitMaterialization);
+      expect(nextView.player.cash).toBe(engine.economy.getState().cash);
+      expect(wholeState.mock.calls.length).toBe(callsForNextMaterialization);
     } finally {
       useSimulationStore.getState().setEngine(previous);
       wholeState.mockRestore();
