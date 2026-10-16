@@ -96,6 +96,10 @@ describe('#172 AI Lab source-backed world and OS publication', () => {
       () => false,
       () => { notifications++; },
     );
+    // The fixture world ships with enough authored pending events that the
+    // automatic generator correctly skips work. Open only the scheduling gate
+    // once, without altering canonical pending/triggered state.
+    const emptyGate = vi.spyOn(game.world, 'getPendingEvents').mockReturnValueOnce([]);
     try {
       cycle.processNewDay(1);
       await vi.waitFor(() => expect(generate).toHaveBeenCalledTimes(1));
@@ -114,6 +118,7 @@ describe('#172 AI Lab source-backed world and OS publication', () => {
       expect(notifications).toBe(0);
       expect(game.world.getPendingEvents().some(entry => entry.id === 'stale_autoworld_batch_172')).toBe(false);
     } finally {
+      emptyGate.mockRestore();
       generate.mockRestore();
     }
   });
