@@ -62,6 +62,17 @@ function probe(population: number) {
   }
   engine.getState = originalGetState;
 
+  // Unlike a cached getState() call, this phase forces a NEW published
+  // revision before the composed snapshot read; measured time includes the
+  // small revision publication plus first materialization. No constructor,
+  // 500-actor fixture setup, or NPC time tick is timed.
+  let coldSerial = 0;
+  const coldSnapshotAfterRevision = stats(() => {
+    engine.world.setFlag('publication_bench_cold_snapshot', ++coldSerial);
+    engine.publishExternalChange();
+    engine.getState();
+  });
+
   const reads = {
     hud: stats(() => engine.getHudProjection()),
     world: stats(() => engine.getWorldRead()),
@@ -71,7 +82,8 @@ function probe(population: number) {
     selectedActor: stats(() => engine.getPlayerActorRead(buddyId)),
     situation: stats(() => engine.getSituationRead()),
     website: stats(() => engine.getWebsiteRead()),
-    fullSnapshot: stats(() => engine.getState()),
+    cachedSnapshot: stats(() => engine.getState()),
+    coldSnapshotAfterRevision,
   };
   const payloadBytes = {
     revision: Buffer.byteLength(JSON.stringify({
