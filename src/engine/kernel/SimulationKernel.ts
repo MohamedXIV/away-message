@@ -1,7 +1,8 @@
 import type { SimulationState as TransportSimulationState, SimulationAction, ActionResult, HardwareState } from '../types';
 import type { Fulfillment } from '../DeliveryEngine';
 import type { MyPlaceProfile } from '../MyPlaceEngine';
-import type { BuddyPresence } from '../types';
+import type { BuddyPresence, BuddyMetVia } from '../types';
+import type { CharacterDefinition } from '../CharacterEngine';
 import type { OsRelease } from '../OsCatalog';
 import { ProceduralDirector, type DirectorGenerateOptions } from '../ProceduralDirector';
 import { buildRecentNpcMail, buildRentMailHistory, buildWeeklyNpcThreads, buildWeeklyWeatherThread, npcThreadWeek } from '../BoardDirector';
@@ -116,6 +117,8 @@ export class SimulationKernel {
       advanceGameMinutes: (minutes, reason) => this.advanceGameMinutes(minutes, reason),
       placeGroceryOrder: (items, fulfillment, minute) => this.placeGroceryOrder(items, fulfillment, minute),
       publishState: () => this.notifySubscribers(),
+      commitAutoDiscoveredNewcomer: (buddy, introText, metVia, day) =>
+        this.commitAutoDiscoveredNewcomer(buddy, introText, metVia, day),
     }, normalizedInitial);
     this.npc = new NpcComputerSimulationRuntime(this.core, {
       advanceGameMinutes: (minutes, reason) => this.advanceGameMinutes(minutes, reason),
@@ -930,6 +933,38 @@ export class SimulationKernel {
       return { revision: this.revision, conversationId: actorId, messages: [], total: 0, hasOlder: false };
     }
     return { revision: this.revision, ...this.social.getConversationPage(actorId, offset, limit) };
+  }
+
+  /**
+   * Atomically commit an auto-discovered newcomer, its MyPlace stub and
+   * public world trace. Rejected duplicates must not synthesize revisions.
+   */
+  public commitAutoDiscoveredNewcomer(
+    buddy: CharacterDefinition, introText: string, metVia: BuddyMetVia, day: number,
+  ): boolean {
+    return this.publishOwnerMutation(['social', 'world', 'myplace'], () => {
+      if (this.social.getBuddy(buddy.id)) return false;
+      const result = this.core.dispatchAction({
+        type: 'SOCIAL_ADD_BUDDY', buddy, introText,
+      });
+      if (!result.success) return false;
+      if (metVia === 'nightboard') {
+        try {
+          this.world.injectProceduralEvents([{
+            id: `met_${buddy.id}`.replace(/[^a-z0-9_]/g, '_').slice(0, 40),
+            title: `New voice on NightBoard: ${buddy.displayName}`,
+            description: `${buddy.displayName} (${buddy.handle}) showed up asking about the canal hum thread.`,
+            category: 'city_news',
+            triggerDay: day,
+            triggerHour: 22,
+            knowledgePrompt: `A newcomer (${buddy.displayName}) appeared on NightBoard and added you on Pulse.`,
+            siteUrl: 'http://nightboard.local/',
+          }]);
+        } catch { /* Public trace is best-effort; retain the admitted NPC. */ }
+      }
+      this.world.setFlag('newcomer_last_day', day);
+      return true;
+    }, committed => committed);
   }
 
   public subscribe(listener: (state: Readonly<LiveSimulationState>) => void): () => void {

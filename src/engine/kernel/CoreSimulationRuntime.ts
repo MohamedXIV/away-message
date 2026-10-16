@@ -47,6 +47,8 @@ import { SocialPresenceCycle } from './SocialPresenceCycle';
 import { RelationshipContinuity } from './RelationshipContinuity';
 import { NpcSocialLifeCycle } from './NpcSocialLifeCycle';
 import { ProceduralWorldCycle } from './ProceduralWorldCycle';
+import type { CharacterDefinition } from '../CharacterEngine';
+import type { BuddyMetVia } from '../types';
 import { PlayerContactCoordination } from './PlayerContactCoordination';
 import { CityActivityCoordination } from './CityActivityCoordination';
 import { DesktopStorageCommands } from './DesktopStorageCommands';
@@ -59,6 +61,9 @@ export interface CoreRuntimePorts {
   advanceGameMinutes(minutes: number, reason?: string): void;
   placeGroceryOrder(items: Array<{ sku: string; qty: number }>, fulfillment: Fulfillment, nowMinute: number): ActionResult;
   publishState(): void;
+  commitAutoDiscoveredNewcomer(
+    buddy: CharacterDefinition, introText: string, metVia: BuddyMetVia, day: number,
+  ): boolean;
 }
 
 export class CoreSimulationRuntime {
@@ -117,11 +122,8 @@ export class CoreSimulationRuntime {
     this.npcSocialLife = new NpcSocialLifeCycle(owners);
     this.proceduralWorld = new ProceduralWorldCycle(
       owners,
-      (buddy, introText) => this.ports.dispatchAction({
-        type: 'SOCIAL_ADD_BUDDY',
-        buddy,
-        introText,
-      }).success,
+      (buddy, introText, metVia, day) =>
+        this.ports.commitAutoDiscoveredNewcomer(buddy, introText, metVia, day),
       () => this.notifySubscribers(),
     );
     this.groceryDelivery = new GroceryDeliveryCoordination(
