@@ -146,6 +146,7 @@ export class HardwareEngine {
 
   public setPower(isPoweredOn: boolean): void {
     const nextPower = this.computer.assembled ? isPoweredOn : false;
+    if (this.computer.poweredOn === nextPower) return;
     this.computer = { ...this.computer, poweredOn: nextPower };
     this.eventBus.emit('hardware:power_changed', { isPoweredOn: nextPower });
   }

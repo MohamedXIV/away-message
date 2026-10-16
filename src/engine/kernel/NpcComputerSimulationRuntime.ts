@@ -64,7 +64,6 @@ function hasOwn(value: object | undefined, key: PropertyKey): boolean {
 }
 
 export interface NpcRuntimePorts {
-  getState(): Readonly<CanonicalSimulationState>;
   advanceGameMinutes(minutes: number, reason?: string): void;
   dispatchAction(action: import('../types').SimulationAction): ActionResult;
   invalidate(): void;
@@ -106,8 +105,7 @@ export class NpcComputerSimulationRuntime {
       this.pulse.syncInstalledVersion(installedPulse?.version ?? null);
     }
     this.computerOwnership = new ComputerOwnershipRuntime(
-      { hardware: this.hardware, os: this.os, economy: this.economy },
-      () => this.ports.getState(),
+      { hardware: this.hardware, os: this.os, economy: this.economy, clock: this.clock },
       (minutes, reason) => this.ports.advanceGameMinutes(minutes, reason),
       (amount, reason) => this.ports.dispatchAction({
         type: 'PLAYER_SPEND_CASH',

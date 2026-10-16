@@ -99,7 +99,6 @@ export class SimulationKernel {
       publishState: () => this.notifySubscribers(),
     }, normalizedInitial);
     this.npc = new NpcComputerSimulationRuntime(this.core, {
-      getState: () => this.getState(),
       advanceGameMinutes: (minutes, reason) => this.advanceGameMinutes(minutes, reason),
       dispatchAction: (action) => this.dispatchAction(action),
       invalidate: () => this.invalidateStateCache(),
@@ -195,7 +194,7 @@ export class SimulationKernel {
 
   public dispatchAction(action: SimulationAction): ActionResult {
     if (action.type === 'STORE_PURCHASE_ITEM') {
-      return this.npc.purchaseStoreItem(action.storeId, action.skuId);
+      return this.purchaseStoreItem(action.storeId, action.skuId);
     }
     if (action.type === 'HARDWARE_UPGRADE_OS') {
       return { success: false, error: 'Legacy OS upgrades are retired. Buy, insert, and boot from owned setup media instead.' };
@@ -714,24 +713,46 @@ export class SimulationKernel {
     return this.physical.decideEncounter(...args);
   }
 
+  /**
+   * PC ownership commands can write silent Inventory and OS owner state even
+   * when Hardware emits no event. Diff only those small canonical owner roots;
+   * all nested time/economy publications remain one atomic revision.
+   */
+  private publishComputerMutation<T extends { success: boolean }>(action: () => T): T {
+    const beforeMinute = this.clock.getTotalMinutes();
+    const beforeInventory = JSON.stringify(this.inventory.getState());
+    const hardwareKey = () => JSON.stringify({
+      computer: this.hardware.getComputerState(), display: this.hardware.getDisplayState(),
+    });
+    const beforeHardware = hardwareKey();
+    const beforeOs = JSON.stringify(this.os.getState());
+    return this.withinBoundary(() => {
+      const result = action();
+      if (result.success) {
+        const domains: ObservedSimulationDomain[] = [];
+        if (beforeInventory !== JSON.stringify(this.inventory.getState())) domains.push('inventory');
+        if (beforeHardware !== hardwareKey()) domains.push('hardware');
+        if (beforeOs !== JSON.stringify(this.os.getState())) domains.push('os');
+        if (domains.length > 0) this.publishExternalChange(domains);
+      }
+      return result;
+    }, beforeMinute);
+  }
+
   public setComputerPower(...args: Parameters<NpcComputerSimulationRuntime['setComputerPower']>): ReturnType<NpcComputerSimulationRuntime['setComputerPower']> {
-    const before = this.clock.getTotalMinutes();
-    return this.withinBoundary(() => this.npc.setComputerPower(...args), before);
+    return this.publishComputerMutation(() => this.npc.setComputerPower(...args));
   }
 
   public installOwnedHardwareAtHome(...args: Parameters<NpcComputerSimulationRuntime['installOwnedHardwareAtHome']>): ReturnType<NpcComputerSimulationRuntime['installOwnedHardwareAtHome']> {
-    const before = this.clock.getTotalMinutes();
-    return this.withinBoundary(() => this.npc.installOwnedHardwareAtHome(...args), before);
+    return this.publishComputerMutation(() => this.npc.installOwnedHardwareAtHome(...args));
   }
 
   public insertOwnedMediaAtHome(...args: Parameters<NpcComputerSimulationRuntime['insertOwnedMediaAtHome']>): ReturnType<NpcComputerSimulationRuntime['insertOwnedMediaAtHome']> {
-    const before = this.clock.getTotalMinutes();
-    return this.withinBoundary(() => this.npc.insertOwnedMediaAtHome(...args), before);
+    return this.publishComputerMutation(() => this.npc.insertOwnedMediaAtHome(...args));
   }
 
   public ejectOwnedMediaAtHome(...args: Parameters<NpcComputerSimulationRuntime['ejectOwnedMediaAtHome']>): ReturnType<NpcComputerSimulationRuntime['ejectOwnedMediaAtHome']> {
-    const before = this.clock.getTotalMinutes();
-    return this.withinBoundary(() => this.npc.ejectOwnedMediaAtHome(...args), before);
+    return this.publishComputerMutation(() => this.npc.ejectOwnedMediaAtHome(...args));
   }
 
   public prepareOsInstallFromInsertedMedia(...args: Parameters<NpcComputerSimulationRuntime['prepareOsInstallFromInsertedMedia']>): ReturnType<NpcComputerSimulationRuntime['prepareOsInstallFromInsertedMedia']> {
@@ -739,17 +760,15 @@ export class SimulationKernel {
   }
 
   public commitOsInstall(...args: Parameters<NpcComputerSimulationRuntime['commitOsInstall']>): ReturnType<NpcComputerSimulationRuntime['commitOsInstall']> {
-    const before = this.clock.getTotalMinutes();
-    return this.withinBoundary(() => this.npc.commitOsInstall(...args), before);
+    return this.publishComputerMutation(() => this.npc.commitOsInstall(...args));
   }
 
   public purchaseStoreItem(...args: Parameters<NpcComputerSimulationRuntime['purchaseStoreItem']>): ReturnType<NpcComputerSimulationRuntime['purchaseStoreItem']> {
-    return this.npc.purchaseStoreItem(...args);
+    return this.publishComputerMutation(() => this.npc.purchaseStoreItem(...args));
   }
 
   public setupComputerAtHome(...args: Parameters<NpcComputerSimulationRuntime['setupComputerAtHome']>): ReturnType<NpcComputerSimulationRuntime['setupComputerAtHome']> {
-    const before = this.clock.getTotalMinutes();
-    return this.withinBoundary(() => this.npc.setupComputerAtHome(...args), before);
+    return this.publishComputerMutation(() => this.npc.setupComputerAtHome(...args));
   }
 
   public getResidenceState(...args: Parameters<PhysicalSimulationRuntime['getResidenceState']>): ReturnType<PhysicalSimulationRuntime['getResidenceState']> {

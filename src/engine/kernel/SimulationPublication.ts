@@ -9,7 +9,7 @@ export type ObservedSimulationDomain =
   | 'clock' | 'player' | 'hardware' | 'downloads' | 'vfs' | 'software'
   | 'social' | 'world' | 'environment' | 'mood' | 'telemetry'
   | 'transit' | 'venue' | 'residence' | 'physical' | 'shop'
-  | 'scenario' | 'innerVoice';
+  | 'scenario' | 'innerVoice' | 'inventory' | 'os';
 
 export interface SimulationChange {
   revision: number;
