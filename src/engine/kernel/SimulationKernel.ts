@@ -344,6 +344,7 @@ export class SimulationKernel {
   }
 
   public getPulseProfileRead(actorId: string): SimulationPulseProfileRead {
+    const playerActor = this.getPlayerActorRead(actorId);
     const buddyKnowledge = this.world.getBuddyKnowledge(actorId).slice(-8);
     const eventIds = new Set(buddyKnowledge.map(k => k.eventId));
     return {
@@ -353,8 +354,8 @@ export class SimulationKernel {
         .map(event => ({ ...event })),
       photoMemories: this.social.getCoreMemories(actorId).filter(memory => memory.kind === 'shared_photo')
         .slice(-12),
-      semantics: this.getPlayerActorRead(actorId)?.actor ?? null,
-      influences: this.getPlayerActorRead(actorId)?.influences ?? [],
+      semantics: playerActor?.actor ?? null,
+      influences: playerActor?.influences ?? [],
     };
   }
 
