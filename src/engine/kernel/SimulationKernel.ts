@@ -301,16 +301,13 @@ export class SimulationKernel {
   public getPlayerActorRead(actorId: string): SimulationActorRead | null {
     const actor = this.getActorSemanticView(actorId);
     if (!actor || actor.connection === 'unknown') return null;
-    const learned = this.world.getActorSemanticKnowledge('player');
-    const facts = learned.facts.filter(fact => fact.subjectId === actorId);
-    const factIds = new Set(facts.map(fact => fact.id));
-    const claims = learned.claims.filter(claim => factIds.has(claim.factId));
+    const learned = this.world.getKnownSemanticContextForSubject('player', actorId);
     const visibleEventIds = new Set(this.world.getTriggeredEvents().map(event => event.id));
     const influences = this.getActorLifeInfluences(actorId)
       .filter(influence => visibleEventIds.has(influence.sourceEventId));
     return {
       revision: this.revision, actor,
-      playerKnowledge: { actorId: 'player', facts, claims },
+      playerKnowledge: learned,
       influences,
     };
   }
