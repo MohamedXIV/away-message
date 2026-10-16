@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { SimulationEngine } from '../../src/engine/SimulationEngine';
 import { generateNewcomer, shouldAutoDiscover } from '../../src/engine/CharacterDirector';
 import { ProceduralWorldCycle } from '../../src/engine/kernel/ProceduralWorldCycle';
+import { PlayerContactCoordination } from '../../src/engine/kernel/PlayerContactCoordination';
 
 const eligibleDay = Array.from({ length: 100 }, (_, index) => index + 6)
   .find(day => shouldAutoDiscover(day, 0))!;
@@ -92,4 +93,64 @@ describe('#172 automatic newcomer publication', () => {
     expect(game.social.getBuddy(candidate.definition.id)?.id).toBe(candidate.definition.id);
     expect(game.world.getFlag('newcomer_last_day')).toBe(eligibleDay);
   });
+  it('does not import a manually requested NightBoard stranger from a previous save', async () => {
+    const game = new SimulationEngine();
+    const candidate = await generateNewcomer(
+      { metVia: 'nightboard', day: 1, seed: 'nightboard-manual-stale-172', useAI: false },
+      { existingIds: game.social.getBuddies().map(buddy => buddy.id) },
+    );
+    type Generated = Awaited<ReturnType<typeof generateNewcomer>>;
+    let resolve!: (value: Generated) => void;
+    const deferred = new Promise<Generated>(done => { resolve = done; });
+    const make = vi.fn(() => deferred);
+    const revisions: number[] = [];
+    const stop = game.subscribeChanges(change => revisions.push(change.revision));
+    revisions.length = 0;
+    const contacts = new PlayerContactCoordination(
+      { clock: game.clock, social: game.social, world: game.world,
+        needs: game.needs, telemetry: game.telemetry },
+      action => game.dispatchAction(action),
+      () => game.publishExternalChange(['player', 'world']),
+      make,
+    );
+    expect(contacts.meetOnNightBoard(game.clock.getTotalMinutes()).success).toBe(true);
+    expect(make).toHaveBeenCalledTimes(1);
+    expect(revisions).toHaveLength(1); // battery + nightly gate
+    const snapshot = game.exportSnapshot();
+    game.loadSnapshot(snapshot);
+    const loadedRevision = game.getRevision();
+    resolve(candidate);
+    await new Promise(done => setTimeout(done, 0));
+    expect(game.social.getBuddy(candidate.definition.id)).toBeUndefined();
+    expect(game.getRevision()).toBe(loadedRevision);
+    expect(revisions).toHaveLength(2); // start + load, not stale arrival
+    stop();
+  });
+
+  it('publishes a manually admitted NightBoard contact once after the original gate update', async () => {
+    const game = new SimulationEngine();
+    const candidate = await generateNewcomer(
+      { metVia: 'nightboard', day: 1, seed: 'nightboard-manual-current-172', useAI: false },
+      { existingIds: game.social.getBuddies().map(buddy => buddy.id) },
+    );
+    const revisions: number[] = [];
+    const stop = game.subscribeChanges(change => revisions.push(change.revision));
+    revisions.length = 0;
+    const contacts = new PlayerContactCoordination(
+      { clock: game.clock, social: game.social, world: game.world,
+        needs: game.needs, telemetry: game.telemetry },
+      action => game.dispatchAction(action),
+      () => game.publishExternalChange(['player', 'world']),
+      vi.fn(async () => candidate),
+    );
+    expect(contacts.meetOnNightBoard(game.clock.getTotalMinutes()).success).toBe(true);
+    expect(revisions).toHaveLength(1);
+    const afterGate = game.getRevision();
+    await vi.waitFor(() => expect(game.social.getBuddy(candidate.definition.id)?.id)
+      .toBe(candidate.definition.id));
+    expect(game.getRevision()).toBe(afterGate + 1);
+    expect(revisions).toHaveLength(2); // exactly one for registration
+    stop();
+  });
+
 });
