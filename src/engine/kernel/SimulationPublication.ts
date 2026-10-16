@@ -8,7 +8,8 @@ import type { GameTime } from '../types';
 export type ObservedSimulationDomain =
   | 'clock' | 'player' | 'hardware' | 'downloads' | 'vfs' | 'software'
   | 'social' | 'world' | 'environment' | 'mood' | 'telemetry'
-  | 'transit' | 'venue' | 'residence' | 'physical' | 'shop';
+  | 'transit' | 'venue' | 'residence' | 'physical' | 'shop'
+  | 'scenario' | 'innerVoice';
 
 export interface SimulationChange {
   revision: number;

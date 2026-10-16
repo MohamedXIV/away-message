@@ -635,15 +635,24 @@ export class SimulationKernel {
   }
 
   public relocateActorSpatially(...args: Parameters<NpcComputerSimulationRuntime['relocateActorSpatially']>): ReturnType<NpcComputerSimulationRuntime['relocateActorSpatially']> {
-    return this.npc.relocateActorSpatially(...args);
+    const before = this.npc.getActorSpatialProjection(args[0]);
+    return this.publishOwnerMutation(['transit'],
+      () => this.npc.relocateActorSpatially(...args),
+      (after) => JSON.stringify(before) !== JSON.stringify(after));
   }
 
   public clearActorSpatialForTravel(...args: Parameters<NpcComputerSimulationRuntime['clearActorSpatialForTravel']>): ReturnType<NpcComputerSimulationRuntime['clearActorSpatialForTravel']> {
-    return this.npc.clearActorSpatialForTravel(...args);
+    const before = this.npc.getActorSpatialProjection(args[0]);
+    return this.publishOwnerMutation(['transit'],
+      () => this.npc.clearActorSpatialForTravel(...args),
+      () => before !== null && this.npc.getActorSpatialProjection(args[0]) === null);
   }
 
   public relocateActorToGeneratedPlaceEntry(...args: Parameters<NpcComputerSimulationRuntime['relocateActorToGeneratedPlaceEntry']>): ReturnType<NpcComputerSimulationRuntime['relocateActorToGeneratedPlaceEntry']> {
-    return this.npc.relocateActorToGeneratedPlaceEntry(...args);
+    const before = this.npc.getActorSpatialProjection(args[0]);
+    return this.publishOwnerMutation(['transit'],
+      () => this.npc.relocateActorToGeneratedPlaceEntry(...args),
+      (success) => success && JSON.stringify(before) !== JSON.stringify(this.npc.getActorSpatialProjection(args[0])));
   }
 
   public getNpcTrip(...args: Parameters<NpcComputerSimulationRuntime['getNpcTrip']>): ReturnType<NpcComputerSimulationRuntime['getNpcTrip']> {
@@ -837,7 +846,10 @@ export class SimulationKernel {
   }
 
   public initializeScenarios(...args: Parameters<PhysicalSimulationRuntime['initializeScenarios']>): ReturnType<PhysicalSimulationRuntime['initializeScenarios']> {
-    return this.physical.initializeScenarios(...args);
+    // Initialization can record attempted definitions even if no thread binds.
+    const before = JSON.stringify(this.physical.getScenarioState());
+    return this.publishOwnerMutation(['scenario'], () => this.physical.initializeScenarios(...args),
+      () => JSON.stringify(this.physical.getScenarioState()) !== before);
   }
 
   public getScenarioHookOpportunities(...args: Parameters<PhysicalSimulationRuntime['getScenarioHookOpportunities']>): ReturnType<PhysicalSimulationRuntime['getScenarioHookOpportunities']> {
@@ -849,11 +861,15 @@ export class SimulationKernel {
   }
 
   public consumeScenarioHook(...args: Parameters<PhysicalSimulationRuntime['consumeScenarioHook']>): ReturnType<PhysicalSimulationRuntime['consumeScenarioHook']> {
-    return this.physical.consumeScenarioHook(...args);
+    const before = JSON.stringify(this.physical.getScenarioState());
+    return this.publishOwnerMutation(['scenario'], () => this.physical.consumeScenarioHook(...args),
+      () => JSON.stringify(this.physical.getScenarioState()) !== before);
   }
 
   public setScenarioLifecycle(...args: Parameters<PhysicalSimulationRuntime['setScenarioLifecycle']>): ReturnType<PhysicalSimulationRuntime['setScenarioLifecycle']> {
-    return this.physical.setScenarioLifecycle(...args);
+    const before = JSON.stringify(this.physical.getScenarioState());
+    return this.publishOwnerMutation(['scenario'], () => this.physical.setScenarioLifecycle(...args),
+      () => JSON.stringify(this.physical.getScenarioState()) !== before);
   }
 
   public getInnerVoiceEngine(...args: Parameters<PhysicalSimulationRuntime['getInnerVoiceEngine']>): ReturnType<PhysicalSimulationRuntime['getInnerVoiceEngine']> {
@@ -864,15 +880,31 @@ export class SimulationKernel {
     return this.physical.getInnerVoiceState(...args);
   }
 
+  /** The voice's small presentation queue is not part of its persisted cooldowns. */
+  private innerVoicePublicationKey(): string {
+    const voice = this.physical.getInnerVoiceEngine();
+    return JSON.stringify({
+      saved: voice.getPersistedState(),
+      activeId: voice.peekActive()?.id ?? null,
+      queued: voice.getQueueLength(),
+    });
+  }
+
   public requestInnerThought(...args: Parameters<PhysicalSimulationRuntime['requestInnerThought']>): ReturnType<PhysicalSimulationRuntime['requestInnerThought']> {
-    return this.physical.requestInnerThought(...args);
+    const before = this.innerVoicePublicationKey();
+    return this.publishOwnerMutation(['innerVoice'], () => this.physical.requestInnerThought(...args),
+      () => this.innerVoicePublicationKey() !== before);
   }
 
   public requestInspectThought(...args: Parameters<PhysicalSimulationRuntime['requestInspectThought']>): ReturnType<PhysicalSimulationRuntime['requestInspectThought']> {
-    return this.physical.requestInspectThought(...args);
+    const before = this.innerVoicePublicationKey();
+    return this.publishOwnerMutation(['innerVoice'], () => this.physical.requestInspectThought(...args),
+      () => this.innerVoicePublicationKey() !== before);
   }
 
   public dismissInnerThought(...args: Parameters<PhysicalSimulationRuntime['dismissInnerThought']>): ReturnType<PhysicalSimulationRuntime['dismissInnerThought']> {
-    return this.physical.dismissInnerThought(...args);
+    const before = this.innerVoicePublicationKey();
+    return this.publishOwnerMutation(['innerVoice'], () => this.physical.dismissInnerThought(...args),
+      () => this.innerVoicePublicationKey() !== before);
   }
 }
