@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { SiteRouteProps } from '../types';
 import { soundManager } from '../../audio/SoundManager';
 import { useSimulationStore } from '../../store/useSimulationStore';
+import { useSimulationWebsite } from '../../store/useBoundedSimulationRead';
 import { getNightBoardDynamicThreads } from '../worldSiteHelpers';
 import { buildWeeklyNpcThreads, buildWeeklyWeatherThread, npcThreadWeek, type NpcThread } from '../../engine/BoardDirector';
 import { getWeatherForDay, gameDayName } from '../../engine/WeatherEngine';
@@ -104,8 +105,7 @@ const INITIAL_THREADS: ThreadRecord[] = [
 ];
 
 export const NightBoardSite: React.FC<SiteRouteProps> = (props) => {
-  const world = useSimulationStore((s) => s.state.world);
-  const time = useSimulationStore((s) => s.state.time);
+  const { world, time } = useSimulationWebsite();
   const engine = useSimulationStore((s) => s.engine);
   const dynamicThreads = getNightBoardDynamicThreads(world, time.day);
   // P5.6 NPC-authored threads: deterministic per week (current + previous stay visible)
