@@ -174,10 +174,11 @@ export const useSimulationStore = create<SimulationStore>()(
         const { engine } = get();
         const priorRevision = engine.getRevision();
         const result = engine.dispatchAction(action);
-        // Legacy actions without a publication still require a synchronous
-        // explicit resync. Published actions were already delivered exactly
-        // once through subscribe(), so do not reassemble their giant state.
-        if (engine.getRevision() === priorRevision) get().syncStateFromEngine();
+        // Rejected commands have not committed owner state and must not
+        // synthesize a new revision. Successful legacy writes without an
+        // owner notification retain the explicit compatibility fallback.
+        // Already-published commands never rebuild a second snapshot.
+        if (result.success && engine.getRevision() === priorRevision) get().syncStateFromEngine();
         return result;
       },
 
@@ -240,33 +241,37 @@ export const useSimulationStore = create<SimulationStore>()(
 
       setupComputerAtHome: () => {
         const engine = get().engine;
-        const revision = engine.getRevision();
         const result = engine.setupComputerAtHome();
-        if (revision === engine.getRevision()) get().syncStateFromEngine();
+        // Canonical Computer Ownership already publishes actual Inventory,
+        // Hardware, OS and clock changes atomically. Failed/idempotent calls
+        // deliberately do not publish another synthetic revision.
         return result;
       },
 
       setComputerPower: (poweredOn) => {
         const engine = get().engine;
-        const revision = engine.getRevision();
         const result = engine.setComputerPower(poweredOn);
-        if (revision === engine.getRevision()) get().syncStateFromEngine();
+        // Canonical Computer Ownership already publishes actual Inventory,
+        // Hardware, OS and clock changes atomically. Failed/idempotent calls
+        // deliberately do not publish another synthetic revision.
         return result;
       },
 
       insertOwnedMediaAtHome: (instanceId) => {
         const engine = get().engine;
-        const revision = engine.getRevision();
         const result = engine.insertOwnedMediaAtHome(instanceId);
-        if (revision === engine.getRevision()) get().syncStateFromEngine();
+        // Canonical Computer Ownership already publishes actual Inventory,
+        // Hardware, OS and clock changes atomically. Failed/idempotent calls
+        // deliberately do not publish another synthetic revision.
         return result;
       },
 
       ejectOwnedMediaAtHome: () => {
         const engine = get().engine;
-        const revision = engine.getRevision();
         const result = engine.ejectOwnedMediaAtHome();
-        if (revision === engine.getRevision()) get().syncStateFromEngine();
+        // Canonical Computer Ownership already publishes actual Inventory,
+        // Hardware, OS and clock changes atomically. Failed/idempotent calls
+        // deliberately do not publish another synthetic revision.
         return result;
       },
 
@@ -276,9 +281,10 @@ export const useSimulationStore = create<SimulationStore>()(
 
       commitOsInstall: (plan) => {
         const engine = get().engine;
-        const revision = engine.getRevision();
         const result = engine.commitOsInstall(plan);
-        if (revision === engine.getRevision()) get().syncStateFromEngine();
+        // Canonical Computer Ownership already publishes actual Inventory,
+        // Hardware, OS and clock changes atomically. Failed/idempotent calls
+        // deliberately do not publish another synthetic revision.
         return result;
       },
 
