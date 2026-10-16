@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { SimulationEngine } from '../../src/engine/SimulationEngine';
 import { createCoreDomainOwners } from '../../src/engine/kernel/CoreDomainOwners';
 import { NpcLifeRuntime } from '../../src/engine/kernel/NpcLifeRuntime';
@@ -39,6 +39,51 @@ describe('NpcLifeRuntime — one canonical pressure and goals owner', () => {
     life.loadState(evolved);
     expect(life.getNpcLivesState()).toEqual(evolved);
     expect(invalidations).toBeGreaterThan(0);
+  });
+
+  it('late-joined NPC Life reads remain pure until canonical clock progression materializes the actor', () => {
+    const game = new SimulationEngine();
+    const template = game.social.getBuddies().find(actor => actor.reach === 'local')!;
+    const actorId = 'late_life_reader';
+    game.social.registerBuddy({
+      ...template, id: actorId, handle: actorId, displayName: 'Late Life Reader',
+      status: 'stranger', reach: 'local',
+    });
+    const currentLives = game.getNpcLivesState();
+    expect(currentLives[actorId]).toBeUndefined();
+
+    const revisionBefore = game.getRevision();
+    const broad = vi.spyOn(game, 'getState');
+    const changes: number[] = [];
+    const stop = game.subscribeChanges(change => changes.push(change.revision));
+    changes.length = 0;
+
+    const projectedPressure = game.getNpcPressure(actorId);
+    const projectedGoals = game.getPersonalGoals(actorId);
+    expect(projectedPressure).toEqual(game.npc.npcLife.peekNpcPressure(actorId));
+    expect(projectedPressure).not.toBeNull();
+    expect(projectedGoals.length).toBeGreaterThan(0);
+    expect(game.getLifeSnapshot(actorId)).not.toBeNull();
+    expect(game.getCharacterObligations(actorId)).toBeDefined();
+    expect(game.getCharacterIntent(actorId)).not.toBeNull();
+
+    // A new actor cannot change the canonical save, revision, or subscriber
+    // notifications merely because a user opens an inspector or a scene.
+    expect(game.getNpcLivesState()).toEqual(currentLives);
+    expect(game.getRevision()).toBe(revisionBefore);
+    expect(changes).toHaveLength(0);
+    expect(broad).not.toHaveBeenCalled();
+
+    const goalsForUi = game.getPersonalGoals(actorId);
+    const meta = goalsForUi.find(goal => goal.metadata)?.metadata;
+    if (meta) (meta as Record<string, unknown>).viewerOverride = true;
+    expect(game.getPersonalGoals(actorId)).toEqual(projectedGoals);
+
+    game.advanceGameMinutes(60, 'materialize late NPC on canonical tick');
+    expect(game.getNpcLivesState()[actorId]).toBeDefined();
+    expect(game.getPersonalGoals(actorId)).toEqual(projectedGoals);
+    expect(changes.at(-1)).toBe(game.getRevision());
+    stop();
   });
 
   it('keeps remote reach as a source of fidelity rather than player rank', () => {

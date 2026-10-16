@@ -132,9 +132,9 @@ export class NpcLifeRuntime {
   /**
    * Canonical entry, created deterministically when missing. Creation stamps
    * the authoritative minute WITHOUT simulating elapsed history — there is
-   * no fake past to replay (old saves, late joiners). Never advances here;
-   * time evolution happens only on explicit reads below. Returns null for
-   * unknown actors (callers keep their null/[] contract).
+   * no fake past to replay (old saves, late joiners). Never advances here.
+   * Only initialization/load and an explicit coarse time progression may
+   * create this persisted entry. Projection/UI reads must not call it.
    */
   private getOrCreateNpcLifeEntry(actorId: string): NpcLifeEntry | null {
     const buddy = this.owners.social.getBuddy(actorId);
@@ -228,16 +228,20 @@ export class NpcLifeRuntime {
     return projectLifePressureView(pressure, this.owners.clock.getTotalMinutes());
   }
 
+  /** NPC life reads are pure: new actors acquire canonical entries on the next tick. */
   public getNpcPressure(actorId: string): LifePressureView | null {
-    const entry = this.getOrCreateNpcLifeEntry(actorId);
-    if (!entry) return null;
-    return projectLifePressureView(entry.pressure, this.owners.clock.getTotalMinutes());
+    return this.peekNpcPressure(actorId);
   }
 
+  /** Until the next tick, derive late-joined actor goals without persisting them. */
   public getPersonalGoals(actorId: string): PersonalGoal[] {
-    const entry = this.getOrCreateNpcLifeEntry(actorId);
-    if (!entry) return [];
-    return entry.goals.map((g) => ({ ...g }));
+    if (!this.owners.social.getBuddy(actorId)) return [];
+    const goals = this.entries.get(actorId)?.goals
+      ?? this.initializeEntryGoals(actorId, this.owners.clock.getTime().day);
+    return goals.map((goal) => ({
+      ...goal,
+      ...(goal.metadata ? { metadata: { ...goal.metadata } } : {}),
+    }));
   }
 
   public getFidelityTier(actorId: string): FidelityTier {
