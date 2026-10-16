@@ -243,7 +243,11 @@ export class SimulationKernel {
    * it delivers one revision to bounded readers and full state only to
    * remaining legacy subscribers. Callers must invoke after the mutation.
    */
-  public publishExternalChange(): void {
+  public publishExternalChange(changedDomains: readonly ObservedSimulationDomain[] = []): void {
+    // Caller must name only owners it has just mutated. This augments
+    // source events and remains conservative: 'unknown' is still retained
+    // until every silent writer is covered.
+    for (const domain of changedDomains) this.observedDomains.add(domain);
     this.notifySubscribers();
   }
 
@@ -789,7 +793,11 @@ export class SimulationKernel {
   }
 
   public setActiveTravel(...args: Parameters<PhysicalSimulationRuntime['setActiveTravel']>): ReturnType<PhysicalSimulationRuntime['setActiveTravel']> {
-    return this.physical.setActiveTravel(...args);
+    const result = this.physical.setActiveTravel(...args);
+    // A direct owner setter has no source event. Its caller already owns
+    // the explicit publication boundary; annotate the next revision.
+    this.observedDomains.add('transit');
+    return result;
   }
 
   public getActiveTravel(...args: Parameters<PhysicalSimulationRuntime['getActiveTravel']>): ReturnType<PhysicalSimulationRuntime['getActiveTravel']> {
