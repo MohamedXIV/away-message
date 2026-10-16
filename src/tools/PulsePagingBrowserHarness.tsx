@@ -16,6 +16,7 @@ export function mountPulsePagingBrowserHarness(): { actorId: string; total: numb
   store.setPaused(true);
   const engine = store.engine;
   const actor = engine.social.getBuddies()[0]!;
+  engine.social.learnHandle(actor.id, actor.handle);
   const baseMinute = engine.clock.getTotalMinutes();
   for (let index = 0; index < 125; index++) {
     engine.social.sendMessage(

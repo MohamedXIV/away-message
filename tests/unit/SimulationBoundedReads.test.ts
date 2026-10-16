@@ -52,7 +52,9 @@ describe('#172 bounded owned-source reads and messenger paging', () => {
 
   it('preserves all 125 canonical messages while rendering strictly bounded UI pages', () => {
     const game = new SimulationEngine();
-    const actorId = game.social.getBuddies()[0]!.id;
+    const actor = game.social.getBuddies()[0]!;
+    const actorId = actor.id;
+    expect(game.social.learnHandle(actorId, actor.handle)).toBe(true);
     for (let index = 0; index < 125; index++) {
       game.social.sendMessage(
         actorId, index % 3 === 0 ? 'player' : actorId,

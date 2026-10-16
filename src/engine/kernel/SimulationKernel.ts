@@ -538,7 +538,7 @@ export class SimulationKernel {
   /** Desktop chrome and Pulse tray use only domain-scoped, serializable reads. */
   public getChromeRead(): SimulationChromeRead {
     const hardware = this.hardware.getState();
-    const unread = this.social.getUnreadTraySummary(4);
+    const unread = this.social.getUnreadTraySummary(4, true);
     return {
       revision: this.revision,
       time: { ...this.clock.getTime() },
@@ -565,11 +565,17 @@ export class SimulationKernel {
     return {
       revision: this.revision,
       contacts: this.social.getMessengerSummary(maxContacts),
-      unreadCounts: this.social.getConversationUnreadCounts(),
+      unreadCounts: this.social.getConversationUnreadCounts(500, true),
     };
   }
 
   public getConversationRead(actorId: string, offset = 0, limit = 30): SimulationConversationRead {
+    // An arbitrary/guessed actor ID is NOT authorization to read their
+    // transcript. Source-owned learned handles are the Pulse discovery gate.
+    // Keep full canonical histories for future contact unlock and Save Log.
+    if (!this.social.isKnown(actorId)) {
+      return { revision: this.revision, conversationId: actorId, messages: [], total: 0, hasOlder: false };
+    }
     return { revision: this.revision, ...this.social.getConversationPage(actorId, offset, limit) };
   }
 

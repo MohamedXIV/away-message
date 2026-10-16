@@ -1676,13 +1676,17 @@ export class SocialEngine {
     };
   }
 
-  /** A bounded 500-contact unread index, independent of any message payload. */
-  public getConversationUnreadCounts(maxConversations = 500): Record<string, number> {
+  /** A bounded 500-contact unread index, independent of any message payload.
+   * The player-visible projection must not reveal unlearned actors via IDs/counts.
+   * Internal simulation callers retain the unfiltered canonical index.
+   */
+  public getConversationUnreadCounts(maxConversations = 500, playerKnownOnly = false): Record<string, number> {
     const limit = Number.isFinite(maxConversations)
       ? Math.max(0, Math.min(500, Math.floor(maxConversations))) : 500;
     const counts: Record<string, number> = {};
     let indexed = 0;
     for (const [actorId, messages] of this.conversations) {
+      if (playerKnownOnly && !this.isKnown(actorId)) continue;
       if (indexed >= limit) break;
       let unread = 0;
       for (const message of messages) {
@@ -1707,8 +1711,10 @@ export class SocialEngine {
     return false;
   }
 
-  /** Bounded System Tray read: totals stay exact, only the last previews cross UI. */
-  public getUnreadTraySummary(maxPreview = 4): {
+  /** Bounded System Tray read: totals stay exact for visible conversations.
+   * Canonical callers may retain private actor history without exposing it to UI.
+   */
+  public getUnreadTraySummary(maxPreview = 4, playerKnownOnly = false): {
     unreadCount: number;
     previews: Array<{ id: string; buddyId: string; buddyName: string; text: string }>;
   } {
@@ -1716,6 +1722,7 @@ export class SocialEngine {
     let unreadCount = 0;
     const newest: Array<{ id: string; buddyId: string; buddyName: string; text: string; minute: number }> = [];
     for (const [buddyId, conversation] of this.conversations) {
+      if (playerKnownOnly && !this.isKnown(buddyId)) continue;
       for (const message of conversation) {
         if (message.senderId === 'player' || message.isRead) continue;
         unreadCount++;
