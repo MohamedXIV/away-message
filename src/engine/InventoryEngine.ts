@@ -129,6 +129,15 @@ export class InventoryEngine {
     };
   }
 
+  /** Shop UI summary without cloning every owned hardware item. */
+  public getShopSummary(): Pick<PlayerInventoryState, 'purchaseCounts' | 'legacyRecovery'> & { roomPackageCount: number } {
+    return {
+      purchaseCounts: { ...this.state.purchaseCounts },
+      legacyRecovery: this.state.legacyRecovery ? { ...this.state.legacyRecovery } : undefined,
+      roomPackageCount: this.state.items.filter(item => item.location === 'room_package').length,
+    };
+  }
+
   public getState(): Readonly<PlayerInventoryState> {
     return cloneState(this.state);
   }
