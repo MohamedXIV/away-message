@@ -231,8 +231,17 @@ export class MyPlaceEngine {
     return { ...this.userProfile, top8: this.userProfile.top8.map((t) => ({ ...t })) };
   }
 
-  public updateUserProfile(patch: Partial<MyPlaceProfile>): void {
-    this.userProfile = { ...this.userProfile, ...patch, top8: patch.top8 ? patch.top8.map((t) => ({ ...t })) : this.userProfile.top8 };
+  /** Update only on a real profile change; keeps edit-buffer arrays detached. */
+  public updateUserProfile(patch: Partial<MyPlaceProfile>): boolean {
+    const next: MyPlaceProfile = {
+      ...this.userProfile,
+      ...patch,
+      interests: patch.interests ? [...patch.interests] : [...this.userProfile.interests],
+      top8: patch.top8 ? patch.top8.map(t => ({ ...t })) : this.userProfile.top8.map(t => ({ ...t })),
+    };
+    if (JSON.stringify(next) === JSON.stringify(this.userProfile)) return false;
+    this.userProfile = next;
+    return true;
   }
 
   public getNpcProfile(username: string): MyPlaceProfile | undefined {
@@ -372,10 +381,15 @@ export class MyPlaceEngine {
     return [...(this.guestbook.get(username) ?? [])];
   }
 
-  public addGuestbookComment(username: string, author: string, text: string, minute: number): void {
+  public addGuestbookComment(username: string, author: string, text: string, minute: number): boolean {
+    const clean = text.trim();
+    if (!username.trim() || !clean) return false;
     const list = this.guestbook.get(username) ?? [];
-    list.unshift({ author, text, date: 'Just now', minute });
-    this.guestbook.set(username, list.slice(0, 20));
+    this.guestbook.set(username, [
+      { author, text: clean, date: 'Just now', minute },
+      ...list,
+    ].slice(0, 20));
+    return true;
   }
 
   /**

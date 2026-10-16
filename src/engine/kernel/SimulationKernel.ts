@@ -1,5 +1,6 @@
 import type { SimulationState as TransportSimulationState, SimulationAction, ActionResult, HardwareState } from '../types';
 import type { Fulfillment } from '../DeliveryEngine';
+import type { MyPlaceProfile } from '../MyPlaceEngine';
 import { buildRecentNpcMail, buildRentMailHistory } from '../BoardDirector';
 import { locationLabel } from '../AppointmentDirector';
 import { createEmptyComputerSetup, createEmptyDisplaySetup } from '../hardware/state';
@@ -485,6 +486,45 @@ export class SimulationKernel {
       semantics: playerActor?.actor ?? null,
       influences: playerActor?.influences ?? [],
     };
+  }
+
+  /**
+   * Player profile and guestbook writes are canonical MyPlace owner mutations.
+   * Keep UI events and owner changes in one revision; never rely on a React
+   * local redraw to hide an unannounced simulation change.
+   */
+  public updateMyPlaceProfile(patch: Partial<MyPlaceProfile>): boolean {
+    return this.publishOwnerMutation(['myplace'],
+      () => this.myplace.updateUserProfile(patch), changed => changed);
+  }
+
+  public postMyPlaceComment(username: string, text: string): boolean {
+    return this.publishOwnerMutation(['myplace'],
+      () => this.myplace.addGuestbookComment(
+        username, this.myplace.getUserProfile().username, text, this.clock.getTotalMinutes(),
+      ), changed => changed);
+  }
+
+  /** Apply the site upgrade and its world news in one atomic boundary. */
+  public updateMyPlaceRelease(targetId: string): ReturnType<typeof this.myplace.updateTo> {
+    return this.publishOwnerMutation(['myplace', 'world'], () => {
+      const day = this.clock.getTime().day;
+      const minute = this.clock.getTotalMinutes();
+      const result = this.myplace.updateTo(targetId, day, minute);
+      if (result.success && result.release) {
+        const target = result.release;
+        this.world.injectProceduralEvents([{
+          id: `myplace_${target.version}`.replace(/[^a-z0-9_]/g, '_'),
+          title: target.displayName,
+          description: target.changelog.join(' • '),
+          category: 'site_launch',
+          triggerDay: day,
+          knowledgePrompt: `${target.displayName} is live — ${target.blurb}`,
+          siteUrl: 'http://myplace.local/',
+        }]);
+      }
+      return result;
+    }, result => result.success);
   }
 
   public getWebsiteRead(): SimulationWebsiteRead {

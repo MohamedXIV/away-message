@@ -66,24 +66,27 @@ export const MyPlaceSite: React.FC<SiteRouteProps> = (props) => {
   const [editSong, setEditSong] = useState(myplaceState.userProfile.songTitle);
   const [editHeadline, setEditHeadline] = useState(myplaceState.userProfile.headline);
   const [glitter, setGlitter] = useState(myplaceState.userProfile.glitterIntensity);
+  const [editTiledBackground, setEditTiledBackground] = useState(myplaceState.userProfile.tiledBackground);
 
   const availableUpdates = engine.myplace.getAvailableReleases(time.day);
 
   const handlePostComment = (e: React.FormEvent) => {
     e.preventDefault();
     if (!commentInput.trim()) return;
-    engine.myplace.addGuestbookComment(currentUsername, 'wanderer06', commentInput.trim(), time.totalMinutes);
-    setCommentInput('');
-    soundManager.play('im_send');
+    if (engine.postMyPlaceComment(currentUsername, commentInput)) {
+      setCommentInput('');
+      soundManager.play('im_send');
+    }
   };
 
   const handleSaveProfile = () => {
-    engine.myplace.updateUserProfile({
+    engine.updateMyPlaceProfile({
       headline: editHeadline,
       bio: editBio,
       interests: editInterests.split(',').map((s) => s.trim()).filter(Boolean),
       songTitle: editSong,
       glitterIntensity: glitter,
+      tiledBackground: editTiledBackground,
     });
     setEditMode(false);
     soundManager.play('im_send');
@@ -93,19 +96,8 @@ export const MyPlaceSite: React.FC<SiteRouteProps> = (props) => {
   const handleUpdateMyPlace = () => {
     if (availableUpdates.length === 0) return;
     const target = availableUpdates[0]!;
-    const res = engine.myplace.updateTo(target.id, time.day, time.totalMinutes);
-    if (res.success) {
-      soundManager.play('im_recv');
-      engine.world.injectProceduralEvents([{
-        id: `myplace_${target.version}`.replace(/[^a-z0-9_]/g, '_'),
-        title: target.displayName,
-        description: target.changelog.join(' • '),
-        category: 'site_launch',
-        triggerDay: time.day,
-        knowledgePrompt: `${target.displayName} is live — ${target.blurb}`,
-        siteUrl: 'http://myplace.local/',
-      } as any]);
-    }
+    const res = engine.updateMyPlaceRelease(target.id);
+    if (res.success) soundManager.play('im_recv');
   };
 
   // MySpace 2005 tiled background per user choice + version
@@ -193,7 +185,7 @@ export const MyPlaceSite: React.FC<SiteRouteProps> = (props) => {
                 <button
                   onClick={() => {
                     const handle = profile.username === myplaceState.userProfile.username ? 'maya_x' : profile.username;
-                    engine.myplace.addGuestbookComment(handle, 'wanderer06', 'Hey! Love the new look — what do you think of my page?', time.totalMinutes);
+                    engine.postMyPlaceComment(handle, 'Hey! Love the new look — what do you think of my page?');
                   }}
                   className="w-full bg-[#dbeafe] hover:bg-[#bfdbfe] border border-[#93c5fd] text-[#1e3a8a] font-bold py-1 text-xs flex items-center justify-center gap-1"
                 >
@@ -291,7 +283,7 @@ export const MyPlaceSite: React.FC<SiteRouteProps> = (props) => {
             {isOwnProfile && (
               <div className="border border-blue-300 bg-blue-50 p-2">
                 {!editMode ? (
-                  <button onClick={() => { setEditMode(true); setEditHeadline(profile.headline); setEditBio(profile.bio); setEditInterests(profile.interests.join(', ')); setEditSong(profile.songTitle); setGlitter(profile.glitterIntensity); }} className="w-full bg-white hover:bg-gray-50 border border-gray-400 py-1 text-xs font-bold">Edit Profile</button>
+                  <button onClick={() => { setEditMode(true); setEditHeadline(profile.headline); setEditBio(profile.bio); setEditInterests(profile.interests.join(', ')); setEditSong(profile.songTitle); setGlitter(profile.glitterIntensity); setEditTiledBackground(profile.tiledBackground); }} className="w-full bg-white hover:bg-gray-50 border border-gray-400 py-1 text-xs font-bold">Edit Profile</button>
                 ) : (
                   <div className="space-y-2">
                     <label className="block text-[10px] font-bold uppercase">Headline<input value={editHeadline} onChange={(e) => setEditHeadline(e.target.value)} className="w-full mt-1 p-1 border border-gray-400 text-xs" /></label>
@@ -299,7 +291,7 @@ export const MyPlaceSite: React.FC<SiteRouteProps> = (props) => {
                     <label className="block text-[10px] font-bold uppercase">Interests<input value={editInterests} onChange={(e) => setEditInterests(e.target.value)} className="w-full mt-1 p-1 border border-gray-400 text-xs" /></label>
                     <label className="block text-[10px] font-bold uppercase">Song<input value={editSong} onChange={(e) => setEditSong(e.target.value)} className="w-full mt-1 p-1 border border-gray-400 text-xs" /></label>
                     {features.glitter && <label className="block text-[10px] font-bold uppercase">Glitter {glitter}<input type="range" min={0} max={5} value={glitter} onChange={(e) => setGlitter(parseInt(e.target.value, 10))} className="w-full" /></label>}
-                    {features.tiler && <label className="block text-[10px] font-bold uppercase">Tiled BG<select value={engine.myplace.getUserProfile().tiledBackground ?? ''} onChange={(e) => engine.myplace.updateUserProfile({ tiledBackground: e.target.value || undefined })} className="w-full mt-1 p-1 border border-gray-400 text-xs"><option value="">None</option><option value="stars">Stars</option><option value="hearts">Hearts</option></select></label>}
+                    {features.tiler && <label className="block text-[10px] font-bold uppercase">Tiled BG<select value={editTiledBackground ?? ''} onChange={(e) => setEditTiledBackground(e.target.value || undefined)} className="w-full mt-1 p-1 border border-gray-400 text-xs"><option value="">None</option><option value="stars">Stars</option><option value="hearts">Hearts</option></select></label>}
                     <div className="flex gap-1">
                       <button onClick={handleSaveProfile} className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-1 rounded text-xs">Save</button>
                       <button onClick={() => setEditMode(false)} className="flex-1 bg-white border border-gray-400 py-1 text-xs">Cancel</button>

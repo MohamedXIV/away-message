@@ -9,7 +9,7 @@ export type ObservedSimulationDomain =
   | 'clock' | 'player' | 'hardware' | 'downloads' | 'vfs' | 'software'
   | 'social' | 'world' | 'environment' | 'mood' | 'telemetry'
   | 'transit' | 'venue' | 'residence' | 'physical' | 'shop'
-  | 'scenario' | 'innerVoice' | 'inventory' | 'os';
+  | 'scenario' | 'innerVoice' | 'inventory' | 'os' | 'myplace';
 
 export interface SimulationChange {
   revision: number;
@@ -32,6 +32,7 @@ export function domainFromEmission(event: string): ObservedSimulationDomain | nu
     case 'download': return 'downloads';
     case 'vfs': return 'vfs';
     case 'software': return 'software';
+    case 'myplace': return 'myplace';
     case 'social': return 'social';
     case 'world':
     case 'narrative': return 'world';
