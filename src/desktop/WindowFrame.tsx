@@ -1,6 +1,6 @@
 import React, { useRef, useCallback, useState, memo } from 'react';
 import { WindowState, useWindowStore } from '../store/useWindowStore';
-import { useSimulationStore } from '../store/useSimulationStore';
+import { useSimulationChrome } from '../store/useBoundedSimulationRead';
 import { OsHostProvider } from './host/OsHostContext';
 import { getOsPresentationProfile, resolveWindowTransition } from './host/OsPresentation';
 import { synthAudio } from '../audio/SynthAudio';
@@ -15,7 +15,7 @@ type ResizeDirection = 'n' | 's' | 'e' | 'w' | 'ne' | 'nw' | 'se' | 'sw';
 type PendingExitAction = 'close' | 'minimize';
 
 export const WindowFrame: React.FC<WindowFrameProps> = memo(({ window: winState, isActive, children }) => {
-  const osVersion = useSimulationStore((s) => s.state.os.currentOsId);
+  const osVersion = useSimulationChrome().osVersion;
   const osPresentation = osVersion ? getOsPresentationProfile(osVersion) : null;
   const reducedMotion =
     typeof globalThis.matchMedia === 'function' &&
