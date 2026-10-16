@@ -14,6 +14,7 @@ import type {
   SimulationPlayerStatusRead,
   SimulationMessengerRead,
   SimulationPresenceRead,
+  SimulationMailboxRead,
   SimulationWorldRead,
   SimulationSituationRead,
   SimulationResidenceRead,
@@ -63,6 +64,7 @@ const readShop = (engine: SimulationEngine) => engine.getShopRead();
 const readWebsite = (engine: SimulationEngine) => engine.getWebsiteRead();
 const readDesktop = (engine: SimulationEngine) => engine.getDesktopRead();
 const readPresence = (engine: SimulationEngine) => engine.getPresenceRead();
+const readMailbox = (engine: SimulationEngine) => engine.getMailboxRead();
 
 export function useSimulationHud(): SimulationHudProjection {
   return useBoundedSimulationRead(readHud);
@@ -139,6 +141,10 @@ export function useSimulationDesktop(): SimulationDesktopRead {
 export function useSelectedActorRead(actorId: string): SimulationActorRead | null {
   const read = useCallback((engine: SimulationEngine) => engine.getPlayerActorRead(actorId), [actorId]);
   return useBoundedSimulationRead(read);
+}
+
+export function useSimulationMailbox(): SimulationMailboxRead {
+  return useBoundedSimulationRead(readMailbox);
 }
 
 export function useSimulationPresence(): SimulationPresenceRead {

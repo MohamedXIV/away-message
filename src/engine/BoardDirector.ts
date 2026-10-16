@@ -266,6 +266,38 @@ export function buildNpcMailForDay(ctx: MailContext): NpcMail[] {
   return out.slice(0, 2).map(({ priority: _priority, ...mail }) => mail);
 }
 
+/**
+ * Bounded historical inbox. Only sharp transitions and the day after a
+ * resolved meeting can produce mail, so skipped calendar days need no scan.
+ * Retains the identical per-day two-message priority and chronological tail.
+ */
+export function buildRecentNpcMail(
+  ctx: Omit<MailContext, 'day'>,
+  today: number,
+  maxMessages = 10,
+): NpcMail[] {
+  const limit = Math.max(0, Math.min(50, Math.floor(maxMessages) || 0));
+  if (limit === 0) return [];
+  const lastDay = Math.max(1, Math.floor(today) || 1);
+  const days = new Set<number>();
+  for (const sharp of ctx.sharps) {
+    if (sharp.state === 'distant' || sharp.state === 'gone' || sharp.state === 'returned') {
+      days.add(sharp.stateDay);
+    }
+  }
+  for (const meeting of ctx.meetings) {
+    if (meeting.status === 'happened' || meeting.status === 'missed') {
+      days.add(meeting.targetDay + 1);
+    }
+  }
+  const recent: NpcMail[] = [];
+  for (const day of [...days].filter(d => Number.isInteger(d) && d >= 1 && d <= lastDay).sort((a, b) => a - b)) {
+    recent.push(...buildNpcMailForDay({ ...ctx, day }));
+    if (recent.length > limit) recent.splice(0, recent.length - limit);
+  }
+  return recent;
+}
+
 /** Game day → display date (day 1 = Aug 22, 2006, matching the static inbox). */
 export function gameDayToMailDate(day: number): string {
   const date = new Date(2006, 7, 21 + Math.max(1, Math.floor(day) || 1));

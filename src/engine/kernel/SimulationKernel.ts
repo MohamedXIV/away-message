@@ -1,5 +1,7 @@
 import type { SimulationState as TransportSimulationState, SimulationAction, ActionResult, HardwareState } from '../types';
 import type { Fulfillment } from '../DeliveryEngine';
+import { buildRecentNpcMail, buildRentMailHistory } from '../BoardDirector';
+import { locationLabel } from '../AppointmentDirector';
 import { createEmptyComputerSetup, createEmptyDisplaySetup } from '../hardware/state';
 import { CoreSimulationRuntime } from './CoreSimulationRuntime';
 import { resolvePcBootState } from './ComputerOwnershipRuntime';
@@ -29,6 +31,7 @@ import type {
   SimulationPlayerStatusRead,
   SimulationMessengerRead,
   SimulationPresenceRead,
+  SimulationMailboxRead,
   SimulationWorldRead,
   SimulationSituationRead,
   SimulationResidenceRead,
@@ -52,6 +55,7 @@ export type {
   SimulationPlayerStatusRead,
   SimulationMessengerRead,
   SimulationPresenceRead,
+  SimulationMailboxRead,
   SimulationWorldRead,
   SimulationSituationRead,
   SimulationResidenceRead,
@@ -554,6 +558,68 @@ export class SimulationKernel {
       ).length,
       unreadCount: unread.unreadCount,
       unreadPreviews: unread.previews,
+    };
+  }
+
+  /** Mailbox only needs the most recent player-known NPC letters and parcel
+   * receipts; day-loop / roster walks never execute in the React render.
+   */
+  public getMailboxRead(): SimulationMailboxRead {
+    const today = this.clock.getTime().day;
+    const buddies = this.social.getBuddies().filter(buddy => this.social.isKnown(buddy.id));
+    const knownIds = new Set(buddies.map(buddy => buddy.id));
+    const mailContext = {
+      buddies: buddies.map(buddy => ({
+        id: buddy.id,
+        displayName: buddy.displayName,
+        handle: buddy.handle,
+        archetype: buddy.archetype,
+        stage: this.social.getRelationshipStage(buddy.id),
+        status: buddy.status,
+      })),
+      sharps: buddies.map(buddy => {
+        const state = this.world.getFlag(`sharp_${buddy.id}`);
+        const stateDay = this.world.getFlag(`sharp_${buddy.id}_day`);
+        return {
+          buddyId: buddy.id,
+          state: typeof state === 'string' ? state : '',
+          stateDay: typeof stateDay === 'number' ? stateDay : 0,
+        };
+      }),
+      meetings: this.world.getAppointments()
+        .filter(appointment => knownIds.has(appointment.characterId))
+        .map(appointment => ({
+          buddyId: appointment.characterId,
+          targetDay: appointment.targetDay,
+          status: appointment.status,
+          npcShowed: appointment.npcShowed,
+          playerShowed: appointment.playerShowed,
+          locationLabel: locationLabel(appointment.locationId),
+        })),
+    };
+    const npcMails = buildRecentNpcMail(mailContext, today, 10);
+    const landlordId = buddies.find(buddy =>
+      buddy.roles?.includes('landlord') && buddy.status !== 'gone' && buddy.status !== 'blocked',
+    )?.id;
+    // Rent notices survive payment and retain their existing mailbox priority.
+    for (const rent of buildRentMailHistory(this.world.getFlags(), landlordId)) {
+      if (!npcMails.some(mail => mail.key === rent.key)) npcMails.push(rent);
+    }
+    const orders = this.delivery.getState().orders;
+    const selected = [
+      ...orders.filter(order => order.status === 'transit'),
+      ...orders.filter(order => order.status === 'done').slice(-3),
+    ];
+    return {
+      revision: this.revision,
+      npcMails: npcMails.slice(-12),
+      orders: selected.map(order => ({
+        id: order.id,
+        items: order.items.map(item => ({ sku: item.sku, qty: item.qty })),
+        fulfillment: order.fulfillment,
+        readyMinute: order.readyMinute,
+        status: order.status,
+      })),
     };
   }
 

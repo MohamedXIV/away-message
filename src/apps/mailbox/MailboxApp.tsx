@@ -1,9 +1,7 @@
 import React, { useState } from 'react';
 import { soundManager } from '../../audio/SoundManager';
-import { useSimulationStore } from '../../store/useSimulationStore';
-import { useSimulationHud } from '../../store/useBoundedSimulationRead';
-import { buildNpcMailForDay, buildRentMailHistory, gameDayToMailDate, type NpcMail } from '../../engine/BoardDirector';
-import { locationLabel } from '../../engine/AppointmentDirector';
+import { useSimulationMailbox } from '../../store/useBoundedSimulationRead';
+import { gameDayToMailDate, type NpcMail } from '../../engine/BoardDirector';
 
 interface EmailMessage {
   id: string;
@@ -55,52 +53,8 @@ const INITIAL_EMAILS: EmailMessage[] = [
 
 export const MailboxApp: React.FC = () => {
   const [emails, setEmails] = useState<EmailMessage[]>(INITIAL_EMAILS);
-  // P5.6 NPC mail chains: deterministic per day from live sharp/appointment history
-  // (farewell/welcome on transition days, thanks/apology the morning after meetings).
-  const engine = useSimulationStore((s) => s.engine);
-  const today = useSimulationHud().time.day;
-  const npcMails: NpcMail[] = (() => {
-    try {
-      const buddies = engine.social.getBuddies().map((b) => ({
-        id: b.id,
-        displayName: b.displayName,
-        handle: b.handle,
-        archetype: b.archetype,
-        stage: engine.social.getRelationshipStage(b.id),
-        status: b.status,
-      }));
-      const sharps = engine.social.getBuddies().map((b) => {
-        const state = engine.world.getFlag(`sharp_${b.id}`);
-        const stateDay = engine.world.getFlag(`sharp_${b.id}_day`);
-        return {
-          buddyId: b.id,
-          state: typeof state === 'string' ? state : '',
-          stateDay: typeof stateDay === 'number' ? stateDay : 0,
-        };
-      });
-      const meetings = engine.world.getAppointments().map((a) => ({
-        buddyId: a.characterId,
-        targetDay: a.targetDay,
-        status: a.status,
-        npcShowed: a.npcShowed,
-        playerShowed: a.playerShowed,
-        locationLabel: locationLabel(a.locationId),
-      }));
-      const collected: NpcMail[] = [];
-      for (let d = 1; d <= Math.max(1, today); d++) {
-        collected.push(...buildNpcMailForDay({ day: d, buddies, sharps, meetings }));
-      }
-      const trimmed = collected.slice(-10);
-      // P6.4 rent paper trail (survives payment — reconstructed from flags; never trimmed away)
-      try {
-        const landlordId = engine.social.getBuddyWithRole('landlord')?.id;
-        for (const rent of buildRentMailHistory(engine.world.getFlags(), landlordId)) {
-          if (!trimmed.some((m) => m.key === rent.key)) trimmed.push(rent);
-        }
-      } catch { /* rent mail is best-effort */ }
-      return trimmed.slice(-12);
-    } catch { return []; }
-  })();
+  // Current NPC letters and courier tray come from one player-safe bounded read.
+  const { npcMails, orders } = useSimulationMailbox();
   const toEmail = (m: NpcMail): EmailMessage => ({
     id: m.key,
     sender: m.sender,
@@ -260,8 +214,6 @@ export const MailboxApp: React.FC = () => {
         <div className="flex-1 flex flex-col overflow-hidden bg-white">
           {/* P6 parcels: pending courier orders with ETA + recent arrivals */}
           {(() => {
-            let orders: Array<{ id: string; items: Array<{ sku: string; qty: number }>; fulfillment: string; readyMinute: number; status: string }> = [];
-            try { orders = (engine.delivery.getState().orders as typeof orders) ?? []; } catch { orders = []; }
             if (orders.length === 0) return null;
             const fmtEta = (minute: number): string => {
               const day = Math.floor(minute / 1440) + 1;

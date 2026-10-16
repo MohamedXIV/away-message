@@ -125,6 +125,16 @@ export interface SimulationPresenceRead {
   presence: ReturnType<import('../SocialEngine').SocialEngine['getPresenceSummary']>;
 }
 
+/** Display-ready NPC/rent mail and a small courier tray, never the full roster,
+ * Social history, World state, or Delivery domain representation.
+ */
+export interface SimulationMailboxRead {
+  revision: number;
+  npcMails: import('../BoardDirector').NpcMail[];
+  orders: Array<Pick<import('../DeliveryEngine').DeliveryOrder,
+    'id' | 'items' | 'fulfillment' | 'readyMinute' | 'status'>>;
+}
+
 /** Legacy desktop app dependencies, projected only from the relevant owners. */
 export interface SimulationAppRead {
   revision: number;
