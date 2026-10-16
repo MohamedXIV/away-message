@@ -14,6 +14,7 @@ import type {
   SimulationMessengerRead,
   SimulationPresenceRead,
   SimulationWorldRead,
+  SimulationWebsiteRead,
 } from '../engine/kernel/SimulationPublication';
 
 /**
@@ -47,6 +48,7 @@ const readWorld = (engine: SimulationEngine) => engine.getWorldRead();
 const readChrome = (engine: SimulationEngine) => engine.getChromeRead();
 const readApps = (engine: SimulationEngine) => engine.getAppRead();
 const readShop = (engine: SimulationEngine) => engine.getShopRead();
+const readWebsite = (engine: SimulationEngine) => engine.getWebsiteRead();
 const readDesktop = (engine: SimulationEngine) => engine.getDesktopRead();
 const readPresence = (engine: SimulationEngine) => engine.getPresenceRead();
 
@@ -66,6 +68,10 @@ export function useSimulationDirectory(path: string): SimulationDirectoryRead {
 export function useSimulationFile(path: string): SimulationFileRead {
   const read = useCallback((engine: SimulationEngine) => engine.getFileRead(path), [path]);
   return useBoundedSimulationRead(read);
+}
+
+export function useSimulationWebsite(): SimulationWebsiteRead {
+  return useBoundedSimulationRead(readWebsite);
 }
 
 export function useSimulationShop(): SimulationShopRead {
