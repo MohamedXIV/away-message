@@ -340,6 +340,11 @@ export class WorldEventsEngine {
     return event;
   }
 
+  /** Website HUD-visible flags only; never clone NPC knowledge or semantic ledgers. */
+  public getPublicFlags(): Record<string, boolean | number | string> {
+    return Object.fromEntries(this.flags.entries());
+  }
+
   public getTriggeredEvents(): GlobalEvent[] {
     return Array.from(this.triggeredEvents.values()).sort((a, b) => (a.triggeredAtMinute ?? 0) - (b.triggeredAtMinute ?? 0));
   }
