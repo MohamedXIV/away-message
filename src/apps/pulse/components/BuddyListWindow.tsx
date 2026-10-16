@@ -1,11 +1,11 @@
 import React, { useMemo, useState } from 'react';
 import { useSimulationStore } from '../../../store/useSimulationStore';
-import { useSimulationPresence } from '../../../store/useBoundedSimulationRead';
+import { useSimulationPresence, usePulseContactsRead } from '../../../store/useBoundedSimulationRead';
 import { UserProfileHeader } from './UserProfileHeader';
 import { BuddyGroup } from './BuddyGroup';
 import { formatLastSeen } from './BuddyItem';
 import { soundManager } from '../../../audio/SoundManager';
-import { PULSE_GROUPS, PULSE_ROOMS, resolvePulseRoomParticipantIds } from '../data/pulseRooms';
+import { PULSE_GROUPS, PULSE_ROOMS } from '../data/pulseRooms';
 import type { PulseLoginSession } from './PulseLoginSplash';
 import type { PulseActivityEntry } from '../types';
 import type { PulseSkin } from '../persistence';
@@ -89,7 +89,8 @@ export const BuddyListWindow: React.FC<BuddyListWindowProps> = ({
   onChangeSkin,
 }) => {
   const engine = useSimulationStore((s) => s.engine);
-  const { presence: presenceMap, revision: presenceRevision } = useSimulationPresence();
+  const { presence: presenceMap } = useSimulationPresence();
+  const { contacts: buddies, suggestions: candidateSuggestions, lastSeenMinutes, roomParticipantCounts } = usePulseContactsRead();
   const [searchFilter, setSearchFilter] = useState('');
   const [contextMenu, setContextMenu] = useState<{ buddyId: string; x: number; y: number } | null>(null);
   const [showInviteSubmenu, setShowInviteSubmenu] = useState(false);
@@ -100,28 +101,11 @@ export const BuddyListWindow: React.FC<BuddyListWindowProps> = ({
   const [addSuccess, setAddSuccess] = useState<string | null>(null);
   const [showRecall, setShowRecall] = useState(false);
 
-  const buddies = useMemo(() => {
-    return engine.social.getBuddies().filter((b) => engine.social.isKnown(b.id));
-  }, [engine, presenceRevision]);
+  const knownContactIds = useMemo(() => new Set(buddies.map(buddy => buddy.id)), [buddies]);
   const visibleActivityFeed = useMemo(
-    () => filterPlayerVisiblePulseActivity(activityFeed, id => engine.social.isKnown(id)),
-    [activityFeed, engine, presenceRevision],
+    () => filterPlayerVisiblePulseActivity(activityFeed, id => knownContactIds.has(id)),
+    [activityFeed, knownContactIds],
   );
-
-  const candidateSuggestions = useMemo(() => {
-    const list: Array<{ handle: string; note: string; buddyName: string }> = [];
-    for (const b of engine.social.getBuddies()) {
-      if (engine.social.isKnown(b.id)) continue;
-      for (const cand of b.backstory?.candidates ?? []) {
-        list.push({
-          handle: cand.handle,
-          note: cand.note || b.backstory?.label || 'From your past',
-          buddyName: b.displayName,
-        });
-      }
-    }
-    return list;
-  }, [engine, presenceRevision]);
 
   const buddiesWithPresence = useMemo(() => buddies
     .filter((buddy) => buddy.displayName.toLowerCase().includes(searchFilter.toLowerCase()) || buddy.handle.toLowerCase().includes(searchFilter.toLowerCase()))
@@ -131,13 +115,13 @@ export const BuddyListWindow: React.FC<BuddyListWindowProps> = ({
       let lastSeen: string | undefined;
       try {
         if (presence.status === 'offline') {
-          const label = formatLastSeen(engine.social.getLastActivityMinute(buddy.id));
+          const label = formatLastSeen(lastSeenMinutes[buddy.id] ?? 0);
           if (label) lastSeen = label;
         }
       } catch { /* last-seen is best-effort */ }
       return { buddy, presence, lastSeen };
     })
-    .sort((a, b) => (presenceRank[a.presence.status] ?? 9) - (presenceRank[b.presence.status] ?? 9)), [buddies, presenceMap, searchFilter, engine]);
+    .sort((a, b) => (presenceRank[a.presence.status] ?? 9) - (presenceRank[b.presence.status] ?? 9)), [buddies, presenceMap, searchFilter, lastSeenMinutes]);
   const visibleBuddies = useMemo(() => buddiesWithPresence.filter(({ buddy }) => !blockedBuddyIds.includes(buddy.id)), [buddiesWithPresence, blockedBuddyIds]);
   const blockedBuddies = useMemo(() => buddiesWithPresence.filter(({ buddy }) => blockedBuddyIds.includes(buddy.id)), [buddiesWithPresence, blockedBuddyIds]);
 
@@ -385,7 +369,7 @@ export const BuddyListWindow: React.FC<BuddyListWindowProps> = ({
                   <span className="h-3 w-3 rounded-full border border-black/20" style={{ backgroundColor: room.color }} />
                   <span className="font-bold text-[#1c4167]">{room.name}</span>
                   {(roomUnreadCounts[room.id] ?? 0) > 0 && <span className="rounded-full bg-[#d96c3b] px-1.5 py-0.5 text-[9px] font-bold text-white">{roomUnreadCounts[room.id] ?? 0}</span>}
-                  <span className="ml-auto text-[10px] text-gray-500">{resolvePulseRoomParticipantIds(room, engine.social.getBuddies()).length + 1}</span>
+                  <span className="ml-auto text-[10px] text-gray-500">{(roomParticipantCounts[room.id] ?? 0) + 1}</span>
                 </div>
                 <div className="mt-1 flex items-center justify-between gap-2"><span className="truncate text-[10px] text-gray-600">{room.topic}</span><span className="text-[9px] font-bold uppercase text-gray-400">{joinedRoomIds.includes(room.id) ? 'joined' : 'join'}</span></div>
               </button>

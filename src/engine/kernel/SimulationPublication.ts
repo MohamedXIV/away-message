@@ -85,6 +85,19 @@ export interface SimulationActorRead {
   influences: import('../semantic/ActorSemantics').SemanticInfluenceView[];
 }
 
+/** Minimal player-known contact identity required for buddy-list rendering. */
+export type SimulationPulseContact = Pick<import('../types').BuddyCharacter,
+  'id' | 'displayName' | 'handle' | 'roles'>;
+
+/** Pulse contacts + recall hints and public room totals; no full Social roster. */
+export interface SimulationPulseContactsRead {
+  revision: number;
+  contacts: SimulationPulseContact[];
+  suggestions: Array<{ handle: string; note: string; buddyName: string }>;
+  lastSeenMinutes: Record<string, number>;
+  roomParticipantCounts: Record<string, number>;
+}
+
 export interface SimulationMessengerRead {
   revision: number;
   contacts: ReturnType<import('../SocialEngine').SocialEngine['getMessengerSummary']>;

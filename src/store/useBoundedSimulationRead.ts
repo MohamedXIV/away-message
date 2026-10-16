@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useSyncExternalStore } from 'react';
 import { useSimulationStore } from './useSimulationStore';
+import { PULSE_ROOMS } from '../apps/pulse/data/pulseRooms';
 import type { SimulationEngine } from '../engine/SimulationEngine';
 import type {
   SimulationActorRead,
@@ -13,6 +14,7 @@ import type {
   SimulationHudProjection,
   SimulationPlayerStatusRead,
   SimulationMessengerRead,
+  SimulationPulseContactsRead,
   SimulationPresenceRead,
   SimulationMailboxRead,
   SimulationWorldRead,
@@ -162,6 +164,12 @@ export function useSimulationMailbox(): SimulationMailboxRead {
 
 export function useSimulationPresence(): SimulationPresenceRead {
   return useBoundedSimulationRead(readPresence);
+}
+
+const readPulseContacts = (engine: SimulationEngine) => engine.getPulseContactsRead(PULSE_ROOMS);
+
+export function usePulseContactsRead(): SimulationPulseContactsRead {
+  return useBoundedSimulationRead(readPulseContacts);
 }
 
 export function useMessengerRead(maxContacts = 32): SimulationMessengerRead {

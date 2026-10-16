@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
-import { BuddyCharacter, BuddyPresence } from '../../../engine/types';
+import type { BuddyPresence } from '../../../engine/types';
+import type { SimulationPulseContact } from '../../../engine/kernel/SimulationPublication';
 import { BuddyItem } from './BuddyItem';
 
 interface BuddyGroupProps {
   title: string;
   groupId?: string;
-  buddies: Array<{ buddy: BuddyCharacter; presence: BuddyPresence; lastSeen?: string }>;
+  buddies: Array<{ buddy: SimulationPulseContact; presence: BuddyPresence; lastSeen?: string }>;
   unreadCounts: Record<string, number>;
   onOpenChat: (buddyId: string) => void;
   onInspect?: (buddyId: string) => void;

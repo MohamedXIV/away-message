@@ -222,4 +222,37 @@ describe('#172 Pulse direct-owner mutations and focused profile reads', () => {
     stop();
   });
 
+  it('gives the real Pulse buddy list minimal known contacts, recall hints, and room counts', () => {
+    const game = new SimulationEngine();
+    const actor = game.social.getBuddies()[0]!;
+    const rooms = [
+      { id: 'test-room', participantIds: [actor.id], participantRoles: [] as string[] },
+      { id: 'empty-room', participantIds: [], participantRoles: [] as string[] },
+    ];
+    const full = vi.spyOn(game, 'getState');
+    const social = vi.spyOn(game.social, 'getState');
+    const view = game.getPulseContactsRead(rooms);
+    expect(Object.keys(view).sort()).toEqual([
+      'revision', 'contacts', 'suggestions', 'lastSeenMinutes', 'roomParticipantCounts',
+    ].sort());
+    expect(view.contacts.every(contact => game.social.isKnown(contact.id))).toBe(true);
+    expect(view.contacts.every(contact => Object.keys(contact).every(key =>
+      ['id', 'displayName', 'handle', 'roles'].includes(key)))).toBe(true);
+    expect(view.roomParticipantCounts['test-room']).toBe(1);
+    expect(view.roomParticipantCounts['empty-room']).toBe(0);
+    expect(view.contacts.length).toBeLessThanOrEqual(500);
+    expect(view.suggestions.length).toBeLessThanOrEqual(500);
+    expect(JSON.parse(JSON.stringify(view))).toEqual(view);
+    expect(full).not.toHaveBeenCalled();
+    expect(social).not.toHaveBeenCalled();
+
+    const beforeRevision = game.getRevision();
+    expect(game.dispatchAction({ type: 'SOCIAL_RECEIVE_MESSAGE', buddyId: actor.id, text: 'A message' }).success).toBe(true);
+    const after = game.getPulseContactsRead(rooms);
+    expect(after.revision).toBe(beforeRevision + 1);
+    expect(after.contacts.map(contact => contact.id)).toEqual(view.contacts.map(contact => contact.id));
+    expect(full).not.toHaveBeenCalled();
+    expect(social).not.toHaveBeenCalled();
+  });
+
 });

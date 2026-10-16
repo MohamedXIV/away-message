@@ -37,6 +37,7 @@ import type {
   SimulationHudProjection,
   SimulationPlayerStatusRead,
   SimulationMessengerRead,
+  SimulationPulseContactsRead,
   SimulationPresenceRead,
   SimulationMailboxRead,
   SimulationWorldRead,
@@ -63,6 +64,7 @@ export type {
   SimulationHudProjection,
   SimulationPlayerStatusRead,
   SimulationMessengerRead,
+  SimulationPulseContactsRead,
   SimulationPresenceRead,
   SimulationMailboxRead,
   SimulationWorldRead,
@@ -857,6 +859,59 @@ export class SimulationKernel {
       () => this.social.markAsRead(actorId),
       changed => changed,
     );
+  }
+
+  /**
+   * One bounded player-facing Pulse buddy list. Only learned identities,
+   * authored recall suggestions and numeric public-room totals leave Social.
+   * Static room membership rules are an explicit argument; the engine never
+   * imports or owns the React site's room catalog.
+   */
+  public getPulseContactsRead(
+    rooms: ReadonlyArray<{
+      id: string;
+      participantIds: readonly string[];
+      participantRoles: readonly string[];
+    }> = [],
+  ): SimulationPulseContactsRead {
+    const roster = this.social.getBuddies();
+    const contacts: SimulationPulseContactsRead['contacts'] = [];
+    const suggestions: SimulationPulseContactsRead['suggestions'] = [];
+    const lastSeenMinutes: Record<string, number> = {};
+    for (const buddy of roster) {
+      if (this.social.isKnown(buddy.id)) {
+        if (contacts.length >= 500) continue;
+        contacts.push({
+          id: buddy.id,
+          displayName: buddy.displayName,
+          handle: buddy.handle,
+          roles: buddy.roles ? [...buddy.roles] : undefined,
+        });
+        lastSeenMinutes[buddy.id] = this.social.getLastActivityMinute(buddy.id);
+      } else if (suggestions.length < 500) {
+        for (const candidate of buddy.backstory?.candidates ?? []) {
+          if (suggestions.length >= 500) break;
+          suggestions.push({
+            handle: candidate.handle,
+            note: candidate.note || buddy.backstory?.label || 'From your past',
+            buddyName: buddy.displayName,
+          });
+        }
+      }
+    }
+    const roomParticipantCounts: Record<string, number> = {};
+    for (const room of rooms.slice(0, 32)) {
+      const present = new Set<string>();
+      for (const buddy of roster) {
+        if (buddy.status === 'gone' || buddy.status === 'blocked') continue;
+        if (room.participantIds.includes(buddy.id) ||
+          (buddy.roles ?? []).some(role => room.participantRoles.includes(role))) {
+          present.add(buddy.id);
+        }
+      }
+      roomParticipantCounts[room.id] = present.size;
+    }
+    return { revision: this.revision, contacts, suggestions, lastSeenMinutes, roomParticipantCounts };
   }
 
   public getMessengerRead(maxContacts = 32): SimulationMessengerRead {
