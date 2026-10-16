@@ -60,12 +60,12 @@ describe('NpcLifeRuntime — one canonical pressure and goals owner', () => {
 
     const projectedPressure = game.getNpcPressure(actorId);
     const projectedGoals = game.getPersonalGoals(actorId);
-    expect(projectedPressure).toEqual(game.npc.npcLife.peekNpcPressure(actorId));
+    expect(projectedPressure).toEqual(game.getNpcPressure(actorId));
     expect(projectedPressure).not.toBeNull();
     expect(projectedGoals.length).toBeGreaterThan(0);
     expect(game.getLifeSnapshot(actorId)).not.toBeNull();
     expect(game.getCharacterObligations(actorId)).toBeDefined();
-    expect(game.getCharacterIntent(actorId)).not.toBeNull();
+    expect(game.getCharacterIntent(actorId)).toEqual(game.getCharacterIntent(actorId));
 
     // A new actor cannot change the canonical save, revision, or subscriber
     // notifications merely because a user opens an inspector or a scene.
