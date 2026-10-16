@@ -30,6 +30,8 @@ import type {
   SimulationPresenceRead,
   SimulationWorldRead,
   SimulationSituationRead,
+  SimulationResidenceRead,
+  SimulationTransitRead,
 } from './SimulationPublication';
 export type {
   SimulationActorRead,
@@ -48,6 +50,8 @@ export type {
   SimulationPresenceRead,
   SimulationWorldRead,
   SimulationSituationRead,
+  SimulationResidenceRead,
+  SimulationTransitRead,
 } from './SimulationPublication';
 export type { LiveSimulationState } from './PhysicalSimulationRuntime';
 
@@ -280,6 +284,36 @@ export class SimulationKernel {
   }
 
   /** Public Situation: only triggered world events, bounded source-backed modifiers. */
+  /** Bounded player tenancy and offers, with affordability owned by Housing. */
+  public getResidenceRead(): SimulationResidenceRead {
+    return {
+      revision: this.revision,
+      tenancy: this.getResidenceState(),
+      offers: this.getHousingOffers(),
+    };
+  }
+
+  /** Only the currently committed player trip; never a global NPC mobility snapshot. */
+  public getTransitRead(): SimulationTransitRead {
+    const atMinute = this.clock.getTotalMinutes();
+    const travel = this.getActiveTravel();
+    if (!travel) return { revision: this.revision, atMinute, active: null };
+    const currentLeg = travel.plan.legs[travel.currentLegIndex] ?? null;
+    return {
+      revision: this.revision,
+      atMinute,
+      active: {
+        status: travel.status,
+        originPlaceId: travel.plan.originPlaceId,
+        destinationPlaceId: travel.plan.destinationPlaceId,
+        currentLegIndex: travel.currentLegIndex,
+        currentLeg: currentLeg ? { ...currentLeg } : null,
+        arriveAtMinute: travel.plan.arriveAtMinute,
+        minutesRemaining: Math.max(0, travel.plan.arriveAtMinute - atMinute),
+      },
+    };
+  }
+
   public getSituationRead(): SimulationSituationRead {
     const atMinute = this.clock.getTotalMinutes();
     const visibleEvents = this.world.getTriggeredEvents();
