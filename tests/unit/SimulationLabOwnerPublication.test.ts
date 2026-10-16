@@ -103,7 +103,7 @@ describe('#172 AI Lab source-backed world and OS publication', () => {
       game.world.loadState(saved);
       const event = game.world.getPendingEvents()[0]!;
       complete({
-        events: [{ ...event, id: 'stale_autoworld_batch_172' }],
+        events: [{ ...event, id: 'stale_autoworld_batch_172', isTriggered: false }],
         injectedIds: [],
         meta: { source: 'template', latencyMs: 0 },
       });
