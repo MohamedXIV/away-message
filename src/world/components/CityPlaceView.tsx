@@ -5,7 +5,7 @@
 
 import React, { useState } from 'react';
 import { useSimulationStore } from '../../store/useSimulationStore';
-import { useSimulationHud, useSimulationWorldRead } from '../../store/useBoundedSimulationRead';
+import { useSimulationHud, useSimulationWorldRead, useSimulationTransit } from '../../store/useBoundedSimulationRead';
 import { soundManager } from '../../audio/SoundManager';
 import { CITY_NODES, type CityNodeId } from '../../engine/CityMap';
 import { DOOR_OPTIONS } from '../data/roomInteractables';
@@ -32,6 +32,7 @@ export const CityPlaceView: React.FC<CityPlaceViewProps> = ({ location, onOpenMa
   // the small economy domain supplies payment terms, not full WorldState.
   const hud = useSimulationHud();
   const worldRead = useSimulationWorldRead();
+  const transit = useSimulationTransit();
   const time = hud.time;
   const player = engine.economy.getState();
   const workShift = useSimulationStore((s) => s.workShift);
@@ -96,6 +97,11 @@ export const CityPlaceView: React.FC<CityPlaceViewProps> = ({ location, onOpenMa
           <span className="font-bold text-amber-300">{node.name}</span>
           <span className="font-mono text-slate-400">Day {time.day} • {formattedTime}</span>
           <span className="text-slate-400">{weatherMeta[0]} {weatherMeta[1]}</span>
+          {transit.active?.status === 'active' && (
+            <span className="font-mono text-sky-300" data-testid="city-transit-status">
+              En route · {transit.active.minutesRemaining}m
+            </span>
+          )}
         </div>
         <div className="flex items-center gap-3 font-mono">
           <span className="font-bold text-green-400">${player.cash.toFixed(2)}</span>
