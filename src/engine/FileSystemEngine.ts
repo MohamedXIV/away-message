@@ -180,6 +180,16 @@ export class FileSystemEngine {
     return record ? { ...record } : undefined;
   }
 
+  /** Resolve a host API's bare file name only on explicit open; never publish the file map. */
+  public findFileByPathOrName(pathOrName: string): FileRecord | undefined {
+    const exact = this.readFile(pathOrName);
+    if (exact) return exact;
+    for (const record of this.files.values()) {
+      if (record.name === pathOrName) return { ...record };
+    }
+    return undefined;
+  }
+
   public listDirectory(dirPath: string): FileRecord[] {
     const normalized = this.normalizePath(dirPath);
     const results: FileRecord[] = [];
