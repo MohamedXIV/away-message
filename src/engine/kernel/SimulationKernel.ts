@@ -251,6 +251,25 @@ export class SimulationKernel {
     this.notifySubscribers();
   }
 
+  /**
+   * Source-backed publication for composed owner writes that emit no EventBus
+   * event. Hold nested action/event notifications (notably shop checkout cash
+   * spending) until the owner has committed. Never publish a failed operation.
+   * This is a notification boundary, not a second source of state authority.
+   */
+  private publishOwnerMutation<T>(
+    domains: readonly ObservedSimulationDomain[],
+    operation: () => T,
+    committed: (result: T) => boolean = () => true,
+  ): T {
+    const before = this.clock.getTotalMinutes();
+    return this.withinBoundary(() => {
+      const result = operation();
+      if (committed(result)) this.publishExternalChange(domains);
+      return result;
+    }, before);
+  }
+
   public getRevision(): number { return this.revision; }
 
   /** #172: Worker-serializable revision channel, no broad snapshot read. */
@@ -726,15 +745,15 @@ export class SimulationKernel {
   }
 
   public takePhysicalShopItem(...args: Parameters<PhysicalSimulationRuntime['takePhysicalShopItem']>): ReturnType<PhysicalSimulationRuntime['takePhysicalShopItem']> {
-    return this.physical.takePhysicalShopItem(...args);
+    return this.publishOwnerMutation(['physical', 'shop'], () => this.physical.takePhysicalShopItem(...args));
   }
 
   public returnPhysicalShopItem(...args: Parameters<PhysicalSimulationRuntime['returnPhysicalShopItem']>): ReturnType<PhysicalSimulationRuntime['returnPhysicalShopItem']> {
-    return this.physical.returnPhysicalShopItem(...args);
+    return this.publishOwnerMutation(['physical', 'shop'], () => this.physical.returnPhysicalShopItem(...args));
   }
 
   public checkoutPhysicalShop(...args: Parameters<PhysicalSimulationRuntime['checkoutPhysicalShop']>): ReturnType<PhysicalSimulationRuntime['checkoutPhysicalShop']> {
-    return this.physical.checkoutPhysicalShop(...args);
+    return this.publishOwnerMutation(['physical', 'shop'], () => this.physical.checkoutPhysicalShop(...args), (result) => result.success);
   }
 
   public getPhysicalWorldState(...args: Parameters<PhysicalSimulationRuntime['getPhysicalWorldState']>): ReturnType<PhysicalSimulationRuntime['getPhysicalWorldState']> {
@@ -750,7 +769,7 @@ export class SimulationKernel {
   }
 
   public setVenueRoleAssignment(...args: Parameters<PhysicalSimulationRuntime['setVenueRoleAssignment']>): ReturnType<PhysicalSimulationRuntime['setVenueRoleAssignment']> {
-    return this.physical.setVenueRoleAssignment(...args);
+    return this.publishOwnerMutation(['venue'], () => this.physical.setVenueRoleAssignment(...args));
   }
 
   public getVenueServiceAvailability(...args: Parameters<PhysicalSimulationRuntime['getVenueServiceAvailability']>): ReturnType<PhysicalSimulationRuntime['getVenueServiceAvailability']> {
@@ -762,11 +781,11 @@ export class SimulationKernel {
   }
 
   public startVenueActivityFromIntent(...args: Parameters<PhysicalSimulationRuntime['startVenueActivityFromIntent']>): ReturnType<PhysicalSimulationRuntime['startVenueActivityFromIntent']> {
-    return this.physical.startVenueActivityFromIntent(...args);
+    return this.publishOwnerMutation(['venue'], () => this.physical.startVenueActivityFromIntent(...args), (result) => result.ok);
   }
 
   public startCurrentVenueActivity(...args: Parameters<PhysicalSimulationRuntime['startCurrentVenueActivity']>): ReturnType<PhysicalSimulationRuntime['startCurrentVenueActivity']> {
-    return this.physical.startCurrentVenueActivity(...args);
+    return this.publishOwnerMutation(['venue'], () => this.physical.startCurrentVenueActivity(...args), (result) => result.ok);
   }
 
   public getActiveVenueActivity(...args: Parameters<PhysicalSimulationRuntime['getActiveVenueActivity']>): ReturnType<PhysicalSimulationRuntime['getActiveVenueActivity']> {
@@ -782,19 +801,19 @@ export class SimulationKernel {
   }
 
   public movePhysicalObject(...args: Parameters<PhysicalSimulationRuntime['movePhysicalObject']>): ReturnType<PhysicalSimulationRuntime['movePhysicalObject']> {
-    return this.physical.movePhysicalObject(...args);
+    return this.publishOwnerMutation(['physical'], () => this.physical.movePhysicalObject(...args));
   }
 
   public detachPhysicalObject(...args: Parameters<PhysicalSimulationRuntime['detachPhysicalObject']>): ReturnType<PhysicalSimulationRuntime['detachPhysicalObject']> {
-    return this.physical.detachPhysicalObject(...args);
+    return this.publishOwnerMutation(['physical'], () => this.physical.detachPhysicalObject(...args));
   }
 
   public transferPhysicalItem(...args: Parameters<PhysicalSimulationRuntime['transferPhysicalItem']>): ReturnType<PhysicalSimulationRuntime['transferPhysicalItem']> {
-    return this.physical.transferPhysicalItem(...args);
+    return this.publishOwnerMutation(['physical'], () => this.physical.transferPhysicalItem(...args));
   }
 
   public openPhysicalContainer(...args: Parameters<PhysicalSimulationRuntime['openPhysicalContainer']>): ReturnType<PhysicalSimulationRuntime['openPhysicalContainer']> {
-    return this.physical.openPhysicalContainer(...args);
+    return this.publishOwnerMutation(['physical'], () => this.physical.openPhysicalContainer(...args));
   }
 
   public setActiveTravel(...args: Parameters<PhysicalSimulationRuntime['setActiveTravel']>): ReturnType<PhysicalSimulationRuntime['setActiveTravel']> {
@@ -810,7 +829,7 @@ export class SimulationKernel {
   }
 
   public startTravel(...args: Parameters<PhysicalSimulationRuntime['startTravel']>): ReturnType<PhysicalSimulationRuntime['startTravel']> {
-    return this.physical.startTravel(...args);
+    return this.publishOwnerMutation(['transit'], () => this.physical.startTravel(...args), (result) => result.success);
   }
 
   public getScenarioState(...args: Parameters<PhysicalSimulationRuntime['getScenarioState']>): ReturnType<PhysicalSimulationRuntime['getScenarioState']> {
