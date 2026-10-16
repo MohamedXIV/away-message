@@ -14,6 +14,7 @@ import type {
   SimulationMessengerRead,
   SimulationPresenceRead,
   SimulationWorldRead,
+  SimulationSituationRead,
   SimulationWebsiteRead,
   SimulationPulseProfileRead,
 } from '../engine/kernel/SimulationPublication';
@@ -46,6 +47,7 @@ export function useBoundedSimulationRead<T>(read: (engine: SimulationEngine) => 
 
 const readHud = (engine: SimulationEngine) => engine.getHudProjection();
 const readWorld = (engine: SimulationEngine) => engine.getWorldRead();
+const readSituation = (engine: SimulationEngine) => engine.getSituationRead();
 const readChrome = (engine: SimulationEngine) => engine.getChromeRead();
 const readApps = (engine: SimulationEngine) => engine.getAppRead();
 const readShop = (engine: SimulationEngine) => engine.getShopRead();
@@ -59,6 +61,10 @@ export function useSimulationHud(): SimulationHudProjection {
 
 export function useSimulationWorldRead(): SimulationWorldRead {
   return useBoundedSimulationRead(readWorld);
+}
+
+export function useSimulationSituation(): SimulationSituationRead {
+  return useBoundedSimulationRead(readSituation);
 }
 
 export function useSimulationDirectory(path: string): SimulationDirectoryRead {
