@@ -43,19 +43,22 @@ export class DesktopStorageCommands {
 
       case 'DOWNLOAD_PAUSE': {
         const ok = this.owners.downloads.pauseDownload(action.taskId);
-        this.publishState();
+        // A rejected/duplicate command did not mutate the canonical queue.
+        if (ok) this.publishState();
         return { success: ok };
       }
 
       case 'DOWNLOAD_RESUME': {
         const ok = this.owners.downloads.resumeDownload(action.taskId);
-        this.publishState();
+        // A rejected/duplicate command did not mutate the canonical queue.
+        if (ok) this.publishState();
         return { success: ok };
       }
 
       case 'DOWNLOAD_CANCEL': {
         const ok = this.owners.downloads.cancelDownload(action.taskId);
-        this.publishState();
+        // A rejected/duplicate command did not mutate the canonical queue.
+        if (ok) this.publishState();
         return { success: ok };
       }
 
@@ -71,7 +74,7 @@ export class DesktopStorageCommands {
 
       case 'VFS_DELETE_FILE': {
         const ok = this.owners.vfs.deletePermanently(action.path);
-        this.publishState();
+        if (ok) this.publishState();
         return { success: ok };
       }
 
@@ -96,6 +99,10 @@ export class DesktopStorageCommands {
       }
 
       case 'VFS_EMPTY_TRASH': {
+        // A zero-byte file still changes the filesystem when removed: use
+        // entry count, not the returned reclaimed-byte total, to detect no-op.
+        const hasEntries = this.owners.vfs.listDirectoryMetadata('C:/Trash').length > 0;
+        if (!hasEntries) return { success: true, data: { bytesReclaimed: 0 } };
         const reclaimed = this.owners.vfs.emptyTrash();
         this.publishState();
         return { success: true, data: { bytesReclaimed: reclaimed } };

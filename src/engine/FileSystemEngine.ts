@@ -266,7 +266,9 @@ export class FileSystemEngine {
       this.files.delete(file.path);
       bytesReclaimed += file.sizeBytes;
     }
-    this.eventBus.emit('vfs:trash_emptied', { bytesReclaimed });
+    // Emptying an already empty directory is a read/no-op; don't emit an
+    // owner mutation that would fabricate a simulation revision.
+    if (trashFiles.length > 0) this.eventBus.emit('vfs:trash_emptied', { bytesReclaimed });
     return bytesReclaimed;
   }
 
