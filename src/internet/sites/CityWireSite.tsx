@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
 import { SiteRouteProps } from '../types';
 import { useSimulationStore } from '../../store/useSimulationStore';
+import { useSimulationWebsite } from '../../store/useBoundedSimulationRead';
 import { ProceduralDirector } from '../../engine/ProceduralDirector';
 
 export const CityWireSite: React.FC<SiteRouteProps> = (props) => {
   const doNavigate = props.navigate || props.onNavigate || (() => {});
-  const world = useSimulationStore((s) => s.state.world);
-  const time = useSimulationStore((s) => s.state.time);
+  const { world, time } = useSimulationWebsite();
   const engine = useSimulationStore((s) => s.engine);
 
   const [generating, setGenerating] = useState(false);
