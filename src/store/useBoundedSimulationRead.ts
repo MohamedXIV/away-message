@@ -4,6 +4,7 @@ import type { SimulationEngine } from '../engine/SimulationEngine';
 import type {
   SimulationActorRead,
   SimulationAppRead,
+  SimulationShopRead,
   SimulationChromeRead,
   SimulationDesktopRead,
   SimulationDirectoryRead,
@@ -45,6 +46,7 @@ const readHud = (engine: SimulationEngine) => engine.getHudProjection();
 const readWorld = (engine: SimulationEngine) => engine.getWorldRead();
 const readChrome = (engine: SimulationEngine) => engine.getChromeRead();
 const readApps = (engine: SimulationEngine) => engine.getAppRead();
+const readShop = (engine: SimulationEngine) => engine.getShopRead();
 const readDesktop = (engine: SimulationEngine) => engine.getDesktopRead();
 const readPresence = (engine: SimulationEngine) => engine.getPresenceRead();
 
@@ -64,6 +66,10 @@ export function useSimulationDirectory(path: string): SimulationDirectoryRead {
 export function useSimulationFile(path: string): SimulationFileRead {
   const read = useCallback((engine: SimulationEngine) => engine.getFileRead(path), [path]);
   return useBoundedSimulationRead(read);
+}
+
+export function useSimulationShop(): SimulationShopRead {
+  return useBoundedSimulationRead(readShop);
 }
 
 export function useSimulationApps(): SimulationAppRead {
