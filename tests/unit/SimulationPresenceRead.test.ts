@@ -12,7 +12,10 @@ describe('#172 presence-only UI projection', () => {
     const broad = vi.spyOn(engine, 'getState');
     const exportSpy = vi.spyOn(engine, 'exportSnapshot');
     const read = engine.getPresenceRead();
-    expect(read.presence).toEqual(all);
+    // The owner retains private presence for all actors; player-facing reads
+    // expose the learned-contact subset, never private unknown identities.
+    expect(engine.social.getPresenceSummary()).toEqual(all);
+    expect(read.presence).toEqual(engine.social.getPresenceSummary(true));
     expect(read.revision).toBe(engine.getRevision());
     expect(JSON.stringify(read)).not.toContain('PRIVATE CHAT BODY');
     expect(JSON.parse(JSON.stringify(read))).toEqual(read);
@@ -30,7 +33,7 @@ describe('#172 presence-only UI projection', () => {
     engine.social.updatePresence(780);
     engine.publishExternalChange();
     expect(engine.getPresenceRead().revision).toBe(before + 1);
-    expect(engine.getPresenceRead().presence).toEqual(engine.social.getPresenceSummary());
+    expect(engine.getPresenceRead().presence).toEqual(engine.social.getPresenceSummary(true));
     expect(revisions.at(-1)).toBe(before + 1);
     expect(broad).not.toHaveBeenCalled();
     unsubscribe();
