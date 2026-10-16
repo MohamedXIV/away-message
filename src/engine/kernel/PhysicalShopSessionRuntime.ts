@@ -49,9 +49,21 @@ export class PhysicalShopSessionRuntime {
       storeId, worldSeed, physicalItems, fixtures,
       persistedState: this.states[storeId],
     });
-    // First entry deterministically materializes the exact stock once.
-    this.commit(storeId, shop, physicalItems);
+    // A projection never commits an owner write. Stock is deterministic in
+    // this temporary transaction until explicit initialization or a mutation.
     return { shop, physicalItems };
+  }
+
+  /** Explicit first-arrival command, separate from React/render-safe reads. */
+  public initializePhysicalShop(
+    storeId: string,
+    worldSeed: string,
+    fixtures: readonly PhysicalShopFixtureDefinition[],
+  ): boolean {
+    if (this.states[storeId]) return false;
+    const { shop, physicalItems } = this.open(storeId, worldSeed, fixtures);
+    this.commit(storeId, shop, physicalItems);
+    return true;
   }
 
   private commit(
@@ -115,7 +127,8 @@ export class PhysicalShopSessionRuntime {
   ): PhysicalShopCheckoutResult {
     const { shop, physicalItems } = this.open(storeId, worldSeed, fixtures);
     const result = checkoutPhysicalShop(this.cash, shop, pricesByDefinitionId);
-    this.commit(storeId, shop, physicalItems);
+    // An empty/failed checkout cannot secretly materialize stock on read.
+    if (result.success) this.commit(storeId, shop, physicalItems);
     return result;
   }
 }

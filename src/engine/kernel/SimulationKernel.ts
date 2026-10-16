@@ -745,6 +745,12 @@ export class SimulationKernel {
     }, before);
   }
 
+  /** First-entry materialization is an explicit command, never a getter side effect. */
+  public initializePhysicalShop(...args: Parameters<PhysicalSimulationRuntime['initializePhysicalShop']>): ReturnType<PhysicalSimulationRuntime['initializePhysicalShop']> {
+    return this.publishOwnerMutation(['physical', 'shop'], () => this.physical.initializePhysicalShop(...args),
+      (initialized) => initialized);
+  }
+
   public getPhysicalShopState(...args: Parameters<PhysicalSimulationRuntime['getPhysicalShopState']>): ReturnType<PhysicalSimulationRuntime['getPhysicalShopState']> {
     return this.physical.getPhysicalShopState(...args);
   }

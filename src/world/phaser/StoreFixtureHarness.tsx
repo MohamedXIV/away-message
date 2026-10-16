@@ -78,6 +78,10 @@ export const StoreFixtureHarness: React.FC<StoreFixtureHarnessProps> = ({ onExit
   const [simulation] = useState(() => {
     const engine = new SimulationEngine();
     ensureVenueRoleCharacter(engine, CASHIER_SETUP);
+    // First arrival is an explicit simulation command. Subsequent React
+    // renders only project stock and cashier capabilities without mutation.
+    const firstShop = getGeneratedPhysicalShop(STORE_PLACE_ID);
+    engine.initializePhysicalShop(firstShop.storeId, STORE_WORLD_SEED, firstShop.fixtures);
     return engine;
   });
   const shop = useMemo(() => getGeneratedPhysicalShop(STORE_PLACE_ID), []);

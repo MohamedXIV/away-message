@@ -237,6 +237,14 @@ export class PhysicalSimulationRuntime {
     return this.residenceCoordination.moveResidenceToOffer(offerId);
   }
 
+  public initializePhysicalShop(
+    storeId: string,
+    worldSeed: string,
+    fixtures: readonly PhysicalShopFixtureDefinition[],
+  ): boolean {
+    return this.physicalShop.initializePhysicalShop(storeId, worldSeed, fixtures);
+  }
+
   public getPhysicalShopState(
     storeId: string,
     worldSeed: string,

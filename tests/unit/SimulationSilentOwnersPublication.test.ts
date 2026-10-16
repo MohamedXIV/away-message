@@ -13,6 +13,49 @@ const FIXTURES: readonly PhysicalShopFixtureDefinition[] = [{
 }];
 
 describe('#172 silent owner publication boundaries', () => {
+  it('does not mutate canonical shop/item owners on React-safe reads; first arrival publishes exactly once', () => {
+    const game = new SimulationEngine();
+    const seen: Array<{ changedDomains: readonly string[] }> = [];
+    const stop = game.subscribeChanges(change => seen.push(change));
+    seen.length = 0;
+    const before = game.getRevision();
+    const physicalBefore = game.getPhysicalWorldState();
+    const broad = vi.spyOn(game, 'getState');
+
+    const stock = game.getPhysicalShopState(STORE, SEED, FIXTURES);
+    expect(stock.stockBySlot['fixture:shelf:0']).toBeDefined();
+    expect(game.getPhysicalShopCashierCapabilities(STORE, SEED, FIXTURES))
+      .toEqual({ talk: true, checkout: false });
+    expect(game.getPhysicalShopState(STORE, SEED, FIXTURES)).toEqual(stock);
+    expect(game.getPhysicalWorldState()).toEqual(physicalBefore);
+    expect(game.getRevision()).toBe(before);
+    expect(seen).toHaveLength(0);
+    expect(game.getAllPhysicalShopStates()[STORE]).toBeUndefined();
+
+    expect(game.initializePhysicalShop(STORE, SEED, FIXTURES)).toBe(true);
+    expect(seen).toHaveLength(1);
+    expect(seen[0]!.changedDomains).toEqual(expect.arrayContaining(['physical', 'shop', 'unknown']));
+    expect(game.getAllPhysicalShopStates()[STORE]).toEqual(stock);
+    expect(game.getPhysicalWorldState().items[stock.stockBySlot['fixture:shelf:0']!]).toBeDefined();
+    expect(game.initializePhysicalShop(STORE, SEED, FIXTURES)).toBe(false);
+    expect(game.getRevision()).toBe(before + 1);
+    expect(broad).not.toHaveBeenCalled();
+    stop();
+  });
+
+  it('keeps a rejected checkout from implicitly seeding a never-opened shop', () => {
+    const game = new SimulationEngine();
+    const before = game.getRevision();
+    const emptyWorld = game.getPhysicalWorldState();
+    const rejected = game.checkoutPhysicalShop(STORE, SEED, FIXTURES, {
+      'corner-mart:noodles_cup': 2,
+    });
+    expect(rejected.success).toBe(false);
+    expect(game.getPhysicalWorldState()).toEqual(emptyWorld);
+    expect(game.getAllPhysicalShopStates()[STORE]).toBeUndefined();
+    expect(game.getRevision()).toBe(before);
+  });
+
   it('publishes physical/shop domains for exact stock transfers, with stable ordering and no full snapshot', () => {
     const game = new SimulationEngine();
     const stock = game.getPhysicalShopState(STORE, SEED, FIXTURES);

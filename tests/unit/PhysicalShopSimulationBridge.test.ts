@@ -24,6 +24,9 @@ describe('SimulationEngine physical shop bridge (#28)', () => {
     const sim = new SimulationEngine();
     const first = sim.getPhysicalShopState(STORE_ID, WORLD_SEED, fixtures);
     expect(sim.getPhysicalShopState(STORE_ID, WORLD_SEED, fixtures)).toEqual(first);
+    // The first visit is a command, not a hidden write during UI read.
+    expect(sim.initializePhysicalShop(STORE_ID, WORLD_SEED, fixtures)).toBe(true);
+    expect(sim.initializePhysicalShop(STORE_ID, WORLD_SEED, fixtures)).toBe(false);
     expect(Object.keys(first.stockBySlot)).toEqual(['front_shelf:0', 'front_shelf:1']);
 
     const restored = new SimulationEngine(sim.exportSnapshot());
