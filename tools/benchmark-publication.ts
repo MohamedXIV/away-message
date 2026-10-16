@@ -8,7 +8,6 @@ import { performance } from 'node:perf_hooks';
 import { arch, cpus, platform } from 'node:os';
 import { writeFileSync } from 'node:fs';
 import { BENCHMARK_POPULATIONS, createSimulationBenchmarkFixture } from '../src/engine/benchmark/SimulationBenchmarkFixture';
-import type { SimulationEngine } from '../src/engine/SimulationEngine';
 
 interface Stats { samples: number; medianMs: number; p95Ms: number; maxMs: number }
 const sampleCount = Math.max(3, Math.min(40, Number(process.env.PUBLICATION_BENCH_SAMPLES || 9) || 9));
