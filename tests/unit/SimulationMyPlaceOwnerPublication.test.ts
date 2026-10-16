@@ -62,7 +62,9 @@ describe('#172 MyPlace website owner publication', () => {
 
   it('publishes a MyPlace upgrade and its procedural world announcement atomically', () => {
     const game = new SimulationEngine();
-    game.advanceGameMinutes(3 * 1440, 'reach release day');
+    // Set up a released day without running the normal NPC/world tick, which
+    // legitimately auto-upgrades MyPlace before a manual upgrade can be tested.
+    game.clock.setTotalMinutes(3 * 1440);
     const changes: Array<{ revision: number; domains: readonly string[] }> = [];
     const off = game.subscribeChanges(change => changes.push({
       revision: change.revision, domains: change.changedDomains,
