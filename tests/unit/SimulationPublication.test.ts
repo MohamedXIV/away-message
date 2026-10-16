@@ -103,20 +103,24 @@ describe('#172 revision-only publication and bounded HUD projection', () => {
       useSimulationStore.getState().setEngine(engine);
       expect(wholeState).not.toHaveBeenCalled();
       const before = useSimulationStore.getState().state;
+      // World flag mutation has no internal PC/NPC snapshot dependencies.
+      // Time advancement itself may call the legacy kernel read for NPC
+      // coordination; this assertion isolates Zustand publication cost.
       const result = useSimulationStore.getState().dispatchAction({
-        type: 'TIME_ADVANCE_MINUTES', minutes: 5, reason: 'store revision without snapshot',
+        type: 'WORLD_SET_FLAG', key: 'lazy_publisher_smoke', value: true,
       });
       expect(result.success).toBe(true);
       expect(wholeState).not.toHaveBeenCalled(); // no normal UI publication cost
       const after = useSimulationStore.getState().state;
       expect(after).not.toBe(before);
-      expect(after.time.totalMinutes).toBe(engine.clock.getTotalMinutes());
+      expect(after.world.flags.lazy_publisher_smoke).toBe(true);
       expect(after.player.cash).toBe(engine.economy.getState().cash);
       expect(wholeState).toHaveBeenCalledTimes(1); // one explicit read, reused within revision
 
-      engine.advanceGameMinutes(2, 'new revision');
+      engine.world.setFlag('lazy_publisher_next', true);
+      engine.publishExternalChange();
       expect(wholeState).toHaveBeenCalledTimes(1);
-      expect(useSimulationStore.getState().state.time.totalMinutes).toBe(engine.clock.getTotalMinutes());
+      expect(useSimulationStore.getState().state.world.flags.lazy_publisher_next).toBe(true);
       expect(wholeState).toHaveBeenCalledTimes(2);
     } finally {
       useSimulationStore.getState().setEngine(previous);
