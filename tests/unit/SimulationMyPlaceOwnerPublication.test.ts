@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { SimulationEngine } from '../../src/engine/SimulationEngine';
+import { MyPlaceEngine } from '../../src/engine/MyPlaceEngine';
+import { EventBus } from '../../src/engine/EventBus';
 
 describe('#172 MyPlace website owner publication', () => {
   it('commits profile edits once and suppresses identical owner writes', () => {
@@ -85,4 +87,64 @@ describe('#172 MyPlace website owner publication', () => {
     expect(changes).toHaveLength(1);
     off();
   });
+  it('publishes a late NPC profile and its social announcement once after the clock tick', async () => {
+    const game = new SimulationEngine();
+    let release!: () => void;
+    const gate = new Promise<void>(resolve => { release = resolve; });
+    vi.spyOn(game.myplace, 'maybeUpdateRandomNpcProfile').mockImplementation(async () => {
+      await gate;
+      game.myplace.updateNpcProfile('maya_x', { headline: 'A new day and a new headline' });
+      return { username: 'maya_x', profile: game.myplace.getNpcProfile('maya_x')! };
+    });
+    const changes: Array<{ revision: number; domains: readonly string[] }> = [];
+    const off = game.subscribeChanges(change => changes.push({
+      revision: change.revision, domains: change.changedDomains,
+    }));
+    game.advanceGameMinutes(2 * 1440, 'late MyPlace authoring');
+    const baseline = game.getRevision();
+    changes.length = 0;
+    const full = vi.spyOn(game, 'getState');
+    release();
+    await vi.waitFor(() => expect(game.getRevision()).toBe(baseline + 1));
+    expect(changes).toHaveLength(1);
+    expect(changes[0]!.domains).toEqual(expect.arrayContaining(['myplace', 'social', 'unknown']));
+    expect(game.getWebsiteRead().myplace.npcProfiles.maya_x?.headline)
+      .toBe('A new day and a new headline');
+    expect(JSON.parse(JSON.stringify(changes[0]))).toEqual(changes[0]);
+    expect(full).not.toHaveBeenCalled();
+    off();
+  });
+
+  it('does not publish a second revision when an async daily update selects nobody', async () => {
+    const game = new SimulationEngine();
+    vi.spyOn(game.myplace, 'maybeUpdateRandomNpcProfile').mockResolvedValue(null);
+    const changes: number[] = [];
+    const off = game.subscribeChanges(change => changes.push(change.revision));
+    game.advanceGameMinutes(2 * 1440, 'empty daily profile update');
+    const baseline = game.getRevision();
+    const count = changes.length;
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(game.getRevision()).toBe(baseline);
+    expect(changes).toHaveLength(count);
+    off();
+  });
+
+  it('discards an in-flight NPC profile edit after loading a different snapshot', async () => {
+    const owner = new MyPlaceEngine(new EventBus());
+    const state = owner.getState();
+    const hash = (input: string) => {
+      let value = 0;
+      for (const ch of input) value = (value * 31 + ch.charCodeAt(0)) >>> 0;
+      return value;
+    };
+    const day = Array.from({ length: 100 }, (_, index) => index + 3)
+      .find(candidate => hash(`${state.currentMyPlaceId}:${candidate}`) % 100 <= 35)!;
+    expect(day).toBeDefined();
+    const pending = owner.maybeUpdateRandomNpcProfile(day, day * 1440);
+    owner.loadState(state);
+    expect(await pending).toBeNull();
+    expect(owner.getState()).toEqual(state);
+  });
+
 });

@@ -109,7 +109,7 @@ export class CoreSimulationRuntime {
     const owners = createCoreDomainOwners(initialState);
     this.coreOwners = owners;
     this.jobBoard = new JobBoardCoordination(owners, () => this.notifySubscribers());
-    this.myplaceSocial = new MyPlaceSocialCycle(owners);
+    this.myplaceSocial = new MyPlaceSocialCycle(owners, () => this.notifySubscribers());
     this.rentCoordination = new RentCoordination(owners, () => this.notifySubscribers());
     this.appointmentCoordination = new AppointmentCoordination(owners);
     this.socialPresence = new SocialPresenceCycle(owners);

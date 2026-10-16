@@ -23,7 +23,11 @@ type SocialSiteOwners = Pick<
  * stores no second roster, account history, clock or daily progression state.
  */
 export class MyPlaceSocialCycle {
-  constructor(private readonly owners: SocialSiteOwners) {}
+  constructor(
+    private readonly owners: SocialSiteOwners,
+    /** Late AI/template completion occurs after the clock boundary has closed. */
+    private readonly publishAsyncCompletion: () => void = () => {},
+  ) {}
 
   public processDay(day: number): void {
     // Preserve historical order: Top 8 re-ranks can produce news, then the
@@ -167,6 +171,10 @@ export class MyPlaceSocialCycle {
         }
         this.maybeCoCommentProfileUpdate(res.username, day, currentMinutes);
       }
+      // The profile update, social announcement and guestbook side effects
+      // happen in this same microtask, after the original tick has returned.
+      // Publish one fresh revision only for a successfully committed update.
+      this.publishAsyncCompletion();
     }).catch(() => {});
   }
 

@@ -100,6 +100,8 @@ export class MyPlaceEngine {
   private userProfile: MyPlaceProfile;
   private npcProfiles: Map<string, MyPlaceProfile> = new Map();
   private guestbook: Map<string, Array<{ author: string; text: string; date: string; minute: number }>> = new Map();
+  /** Invalidates in-flight AI profile proposals when a saved world is loaded. */
+  private profileUpdateEpoch = 0;
 
   constructor(eventBus: EventBus, initialState?: Partial<MyPlaceEngineState>) {
     this.eventBus = eventBus;
@@ -163,6 +165,7 @@ export class MyPlaceEngine {
   }
 
   public loadState(state: Partial<MyPlaceEngineState>): void {
+    this.profileUpdateEpoch++;
     if (state.currentMyPlaceId) this.currentMyPlaceId = state.currentMyPlaceId;
     if (state.lastUpdateAtMinute !== undefined) this.lastUpdateAtMinute = state.lastUpdateAtMinute;
     if (state.lastUpdateLog) this.lastUpdateLog = [...state.lastUpdateLog];
@@ -289,6 +292,7 @@ export class MyPlaceEngine {
   // AI-driven periodic NPC profile mutation — governed, personality-consistent.
   // Candidates are ALL npc profiles (core 3 keep their exact legacy personas/picks).
   public async maybeUpdateRandomNpcProfile(currentDay: number, currentMinute: number, _socialEngine?: { getRelationships: (id: string) => unknown }): Promise<{ username: string; profile: MyPlaceProfile } | null> {
+    const requestEpoch = this.profileUpdateEpoch;
     // Throttle: only once every 2 days, 30% chance
     if (currentDay < 3) return null;
     const roll = this.hash(`${this.currentMyPlaceId}:${currentDay}`) % 100;
@@ -353,6 +357,9 @@ export class MyPlaceEngine {
             interests: (parsed.interests as string[]).slice(0, 5).map((s) => String(s).slice(0, 20)),
             songTitle: String(parsed.songTitle).slice(0, 50),
           };
+          // An asynchronous provider must not overwrite a different save
+          // that was loaded while its response was pending.
+          if (requestEpoch !== this.profileUpdateEpoch) return null;
           this.updateNpcProfile(username, patch);
           return { username, profile: this.getNpcProfile(username)! };
         }
@@ -367,6 +374,7 @@ export class MyPlaceEngine {
       interests: [...template.defaultInterests],
       songTitle: template.defaultSong,
     };
+    if (requestEpoch !== this.profileUpdateEpoch) return null;
     this.updateNpcProfile(username, patch);
     return { username, profile: this.getNpcProfile(username)! };
   }
