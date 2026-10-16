@@ -184,7 +184,7 @@ export const AILabApp: React.FC = () => {
     try {
       const allowed = buildWeightedAllowed();
       const prefer = buildPreferList();
-      const res = await engine.generateLabProceduralEvents({
+      const res = await engine.generateProceduralEvents({
         worldSeed: procSeed || 'oakhaven-lab',
         maxEvents: procMaxEvents,
         allowedCategories: allowed as any,

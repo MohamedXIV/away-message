@@ -540,7 +540,7 @@ export class SimulationKernel {
    * Generation never leaks a stale response across a loaded save, and
    * duplicate/invalid event IDs cannot fabricate a revision.
    */
-  public async generateLabProceduralEvents(options: DirectorGenerateOptions = {}):
+  public async generateProceduralEvents(options: DirectorGenerateOptions = {}):
     Promise<Awaited<ReturnType<ProceduralDirector['generateNextBatch']>>> {
     const epoch = this.snapshotEpoch;
     const generated = await new ProceduralDirector(this.world).generateNextBatch(
@@ -936,8 +936,12 @@ export class SimulationKernel {
     return this.core.doCityOuting(...args);
   }
 
-  public generateProceduralEventsNow(...args: Parameters<CoreSimulationRuntime['generateProceduralEventsNow']>): ReturnType<CoreSimulationRuntime['generateProceduralEventsNow']> {
-    return this.core.generateProceduralEventsNow(...args);
+  /** Legacy store shape delegates to the same canonical commit path. */
+  public async generateProceduralEventsNow(
+    options?: { maxEvents?: number; useAI?: boolean },
+  ): Promise<import('../types').GlobalEvent[]> {
+    const batch = await this.generateProceduralEvents(options);
+    return batch.events;
   }
 
   public getPcBootState(...args: Parameters<NpcComputerSimulationRuntime['getPcBootState']>): ReturnType<NpcComputerSimulationRuntime['getPcBootState']> {

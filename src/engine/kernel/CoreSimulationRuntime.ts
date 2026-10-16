@@ -444,19 +444,6 @@ export class CoreSimulationRuntime {
    * Which profile page belongs to a buddy. Legacy rich profiles win over stubs:
    * profile alias → handle → id, so notes land where players actually look.
    */
-  public async generateProceduralEventsNow(options?: { maxEvents?: number; useAI?: boolean }): Promise<import('../types').GlobalEvent[]> {
-    const currentDay = this.clock.getTime().day;
-    const totalMinutes = this.clock.getTotalMinutes();
-    const { ProceduralDirector } = await import('../ProceduralDirector');
-    const dir = new ProceduralDirector(this.world);
-    const res = await dir.generateNextBatch(currentDay, totalMinutes, {
-      maxEvents: options?.maxEvents ?? 2,
-      useAI: options?.useAI ?? true,
-    });
-    this.notifySubscribers();
-    return res.events;
-  }
-
   public dispatchAction(action: SimulationAction): ActionResult {
     return this.playerActions.dispatchAction(action);
   }

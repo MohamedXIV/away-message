@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import { SiteRouteProps } from '../types';
 import { useSimulationStore } from '../../store/useSimulationStore';
 import { useSimulationWebsite } from '../../store/useBoundedSimulationRead';
-import { ProceduralDirector } from '../../engine/ProceduralDirector';
 
 export const CityWireSite: React.FC<SiteRouteProps> = (props) => {
   const doNavigate = props.navigate || props.onNavigate || (() => {});
@@ -26,8 +25,7 @@ export const CityWireSite: React.FC<SiteRouteProps> = (props) => {
   const handleGenerate = async () => {
     setGenerating(true);
     try {
-      const director = new ProceduralDirector(engine.world);
-      const res = await director.generateNextBatch(time.day, time.totalMinutes, {
+      const res = await engine.generateProceduralEvents({
         worldSeed: `oakhaven-citywire-${time.day}-${Date.now()}`,
         maxEvents: 2,
         allowedCategories: ['city_news', 'site_launch', 'economy', 'culture'],

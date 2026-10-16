@@ -16,7 +16,7 @@ describe('#172 AI Lab source-backed world and OS publication', () => {
     const before = game.getRevision();
     const beforePending = new Set(game.world.getPendingEvents().map(event => event.id));
     const options = { worldSeed: 'lab-bounded-172', maxEvents: 2, useAI: false };
-    const first = await game.generateLabProceduralEvents(options);
+    const first = await game.generateProceduralEvents(options);
     expect(first.injectedIds.length).toBeGreaterThan(0);
     expect(first.events.map(event => event.id)).toEqual(first.injectedIds);
     expect(first.injectedIds.some(id => beforePending.has(id))).toBe(false);
@@ -41,7 +41,7 @@ describe('#172 AI Lab source-backed world and OS publication', () => {
     const game = new SimulationEngine();
     const snapshot = game.exportSnapshot();
     const beforeIds = game.world.getPendingEvents().map(event => event.id);
-    const pending = game.generateLabProceduralEvents({
+    const pending = game.generateProceduralEvents({
       worldSeed: 'stale-lab-172', maxEvents: 2, useAI: false,
     });
     game.loadSnapshot(snapshot);
@@ -51,6 +51,22 @@ describe('#172 AI Lab source-backed world and OS publication', () => {
     expect(result.injectedIds).toEqual([]);
     expect(game.world.getPendingEvents().map(event => event.id)).toEqual(beforeIds);
     expect(game.getRevision()).toBe(revisionAfterLoad);
+  });
+
+  it('keeps the legacy store entrypoint on the same one-revision generation boundary', async () => {
+    const game = new SimulationEngine();
+    const events: Array<readonly string[]> = [];
+    const stop = game.subscribeChanges(change => events.push(change.changedDomains));
+    events.length = 0;
+    const full = vi.spyOn(game, 'getState');
+    const before = game.getRevision();
+    const created = await game.generateProceduralEventsNow({ maxEvents: 2, useAI: false });
+    expect(created.length).toBeGreaterThan(0);
+    expect(game.getRevision()).toBe(before + 1);
+    expect(events).toHaveLength(1);
+    expect(events[0]).toEqual(expect.arrayContaining(['world', 'unknown']));
+    expect(full).not.toHaveBeenCalled();
+    stop();
   });
 
   it('commits OS release and public news once, and rejects duplicate IDs without publishing', () => {
