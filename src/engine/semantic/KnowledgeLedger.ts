@@ -149,6 +149,20 @@ export class KnowledgeLedger {
     return (this.learned.get(actorId) ?? []).some(e => e.kind === 'claim' && e.refId === claimId);
   }
 
+  /**
+   * Player-facing subject filter: a heard claim belongs to a subject even when
+   * the listener has NOT learned its underlying world fact. Resolve subject
+   * privately via the canonical fact map; never copy hidden fact values out.
+   */
+  public forActorSubject(actorId: string, subjectId: string): ActorKnowledgeView {
+    const view = this.forActor(actorId);
+    return {
+      actorId,
+      facts: view.facts.filter(fact => fact.subjectId === subjectId),
+      claims: view.claims.filter(claim => this.facts.get(claim.factId)?.subjectId === subjectId),
+    };
+  }
+
   public forActor(actorId: string): ActorKnowledgeView {
     const receipts = this.learned.get(actorId) ?? [];
     return {
