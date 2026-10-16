@@ -1578,13 +1578,18 @@ export class SocialEngine {
     return { ...msg };
   }
 
-  public markAsRead(rawConversationId: string): void {
+  /** Mutate the canonical conversation only if unread messages exist. */
+  public markAsRead(rawConversationId: string): boolean {
     const msgs = this.conversations.get(normalizeBuddyId(rawConversationId));
-    if (msgs) {
-      for (const m of msgs) {
+    if (!msgs) return false;
+    let changed = false;
+    for (const m of msgs) {
+      if (!m.isRead) {
         m.isRead = true;
+        changed = true;
       }
     }
+    return changed;
   }
 
   /** A derived public projection; callers cannot write to the live roster via status. */
@@ -1626,12 +1631,14 @@ export class SocialEngine {
   }
 
   /**
-   * Current public presence only, without the Social persistence tree.
-   * Includes remote/unknown characters to preserve the login activity watcher.
+   * Lightweight presence only, without Social persistence state.
+   * Internal simulation code may read all actor presence; player-facing
+   * projections may expose only learned contacts and the player's own status.
    */
-  public getPresenceSummary(): Record<string, BuddyPresence> {
+  public getPresenceSummary(playerKnownOnly = false): Record<string, BuddyPresence> {
     const rows: Record<string, BuddyPresence> = {};
     for (const [actorId, presence] of this.presence) {
+      if (playerKnownOnly && actorId !== 'player' && !this.isKnown(actorId)) continue;
       rows[actorId] = { ...presence };
     }
     return rows;

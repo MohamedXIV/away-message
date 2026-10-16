@@ -558,7 +558,19 @@ export class SimulationKernel {
   }
 
   public getPresenceRead(): SimulationPresenceRead {
-    return { revision: this.revision, presence: this.social.getPresenceSummary() };
+    // A player's Pulse presence feed may not reveal unknown NPC identities or
+    // away text; internal Social owner state remains intact for simulation.
+    return { revision: this.revision, presence: this.social.getPresenceSummary(true) };
+  }
+
+  /** One authoritative read receipt; rejected/duplicate opens stay silent. */
+  public markConversationAsRead(actorId: string): boolean {
+    if (!this.social.isKnown(actorId)) return false;
+    return this.publishOwnerMutation(
+      ['social'],
+      () => this.social.markAsRead(actorId),
+      changed => changed,
+    );
   }
 
   public getMessengerRead(maxContacts = 32): SimulationMessengerRead {
