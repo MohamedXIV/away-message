@@ -162,3 +162,11 @@ export interface SimulationWebsiteRead {
   narrativeFlags: Record<string, boolean | number | string>;
   myplace: ReturnType<import('../MyPlaceEngine').MyPlaceEngine['getState']>;
 }
+
+/** One opened Pulse profile card. No other actors' memories or event knowledge. */
+export interface SimulationPulseProfileRead {
+  revision: number;
+  buddyKnowledge: import('../types').BuddyEventKnowledge[];
+  worldEvents: import('../types').GlobalEvent[];
+  photoMemories: import('../types').CoreMemory[];
+}
