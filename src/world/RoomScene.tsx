@@ -2,7 +2,7 @@
 
 import React, { useMemo, useRef, useState } from 'react';
 import { useSimulationStore } from '../store/useSimulationStore';
-import { useSimulationHud, useSimulationWorldRead } from '../store/useBoundedSimulationRead';
+import { useSimulationHud, useSimulationWorldRead, useSimulationResidence, useSimulationTransit } from '../store/useBoundedSimulationRead';
 import { soundManager } from '../audio/SoundManager';
 import { PhysicalWorldBoundary } from './phaser/PhysicalWorldBoundary';
 import { createWorldSceneProjection } from './phaser/presentationAdapter';
@@ -44,6 +44,8 @@ export const RoomScene: React.FC = () => {
   // revisions, not the broad persisted world snapshot.
   const hud = useSimulationHud();
   const worldRead = useSimulationWorldRead();
+  const residenceRead = useSimulationResidence();
+  const transitRead = useSimulationTransit();
   const time = worldRead.time;
   const player = { cash: hud.cash, location: worldRead.playerLocation };
 
@@ -299,6 +301,11 @@ export const RoomScene: React.FC = () => {
             <Clock className="w-3.5 h-3.5 text-amber-400" />
             <span>Day {time.day} • {formattedTime}</span>
             <span className="text-[11px] text-slate-400 capitalize">({timeOfDay.replace('_', ' ')})</span>
+            {transitRead.active?.status === 'active' && (
+              <span className="text-[10px] text-sky-300" data-testid="player-transit-status">
+                Travel · {transitRead.active.minutesRemaining} min left
+              </span>
+            )}
           </div>
           <div className="h-3 w-[1px] bg-slate-700" />
           <div className="flex items-center gap-1 text-slate-400">
@@ -476,7 +483,7 @@ export const RoomScene: React.FC = () => {
               <button onClick={() => setActiveModal(null)} className="text-slate-400 hover:text-white">✕</button>
             </div>
             <div className="space-y-2">
-              {engine.getHousingOffers().map((offer) => (
+              {residenceRead.offers.map((offer) => (
                 <div key={offer.id} className="flex items-center justify-between gap-3 rounded border border-slate-700 bg-slate-800/80 p-2">
                   <div className="min-w-0">
                     <div className="truncate text-xs font-bold text-slate-100">
