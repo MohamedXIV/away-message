@@ -4,7 +4,8 @@ import type { MyPlaceProfile } from '../MyPlaceEngine';
 import type { BuddyPresence } from '../types';
 import type { OsRelease } from '../OsCatalog';
 import { ProceduralDirector, type DirectorGenerateOptions } from '../ProceduralDirector';
-import { buildRecentNpcMail, buildRentMailHistory } from '../BoardDirector';
+import { buildRecentNpcMail, buildRentMailHistory, buildWeeklyNpcThreads, buildWeeklyWeatherThread, npcThreadWeek } from '../BoardDirector';
+import { getWeatherForDay, gameDayName } from '../WeatherEngine';
 import { locationLabel } from '../AppointmentDirector';
 import { createEmptyComputerSetup, createEmptyDisplaySetup } from '../hardware/state';
 import { CoreSimulationRuntime } from './CoreSimulationRuntime';
@@ -25,6 +26,7 @@ import type {
   SimulationShopRead,
   SimulationWebsiteRead,
   SimulationMyPlacePageRead,
+  SimulationNightBoardRead,
   SimulationPulseProfileRead,
   SimulationChromeRead,
   SimulationDesktopRead,
@@ -50,6 +52,7 @@ export type {
   SimulationShopRead,
   SimulationWebsiteRead,
   SimulationMyPlacePageRead,
+  SimulationNightBoardRead,
   SimulationPulseProfileRead,
   SimulationChromeRead,
   SimulationDesktopRead,
@@ -612,6 +615,34 @@ export class SimulationKernel {
         : candidate,
       guestbook: locked ? [] : this.myplace.getGuestbook(username),
     };
+  }
+
+  /**
+   * Public NightBoard authored threads: the UI receives only this/previous
+   * week's displayed posts, not every Social identity and affinity pair.
+   */
+  public getNightBoardRead(): SimulationNightBoardRead {
+    const day = this.clock.getTime().day;
+    const buddies = this.social.getBuddies().map(buddy => ({
+      id: buddy.id,
+      displayName: buddy.displayName,
+      handle: buddy.handle,
+      archetype: buddy.archetype,
+      stage: this.social.getRelationshipStage(buddy.id),
+      status: buddy.status,
+      roles: buddy.roles ?? [],
+    }));
+    const affinity = (a: string, b: string): number => this.social.getAffinity(a, b);
+    const titles = this.world.getTriggeredEvents().slice(-256).map(event => event.title);
+    const week = npcThreadWeek(day);
+    const weeks = [week - 1, week].filter(value => value >= 0);
+    const threads = weeks.flatMap(value =>
+      buildWeeklyNpcThreads(value * 7 + 1, buddies, affinity, titles));
+    for (const value of weeks) {
+      const wx = buildWeeklyWeatherThread(value * 7 + 1, buddies, getWeatherForDay, gameDayName, affinity);
+      if (wx) threads.push(wx);
+    }
+    return { revision: this.revision, threads };
   }
 
   public getWebsiteRead(): SimulationWebsiteRead {

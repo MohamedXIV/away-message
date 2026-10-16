@@ -23,6 +23,7 @@ import type {
   SimulationCafeGuestRead,
   SimulationWebsiteRead,
   SimulationMyPlacePageRead,
+  SimulationNightBoardRead,
   SimulationPulseProfileRead,
 } from '../engine/kernel/SimulationPublication';
 
@@ -122,6 +123,12 @@ export function usePulseProfileRead(actorId: string): SimulationPulseProfileRead
 export function useMyPlacePageRead(username: string): SimulationMyPlacePageRead {
   const read = useCallback((engine: SimulationEngine) => engine.getMyPlacePageRead(username), [username]);
   return useBoundedSimulationRead(read);
+}
+
+const readNightBoard = (engine: SimulationEngine) => engine.getNightBoardRead();
+
+export function useNightBoardThreads(): SimulationNightBoardRead {
+  return useBoundedSimulationRead(readNightBoard);
 }
 
 export function useSimulationWebsite(): SimulationWebsiteRead {

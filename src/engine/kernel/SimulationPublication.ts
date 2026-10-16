@@ -183,6 +183,12 @@ export interface SimulationWebsiteRead {
   narrativeFlags: Record<string, boolean | number | string>;
 }
 
+/** Bounded, already-authored public forum posts; no roster reaches React. */
+export interface SimulationNightBoardRead {
+  revision: number;
+  threads: import('../BoardDirector').NpcThread[];
+}
+
 /** One MyPlace page, not all NPC pages or guestbooks. */
 export interface SimulationMyPlacePageRead {
   revision: number;

@@ -78,4 +78,32 @@ describe('#172 website/shop owner-only projections and lazy legacy state', () =>
       spy.mockRestore();
     }
   }, 30_000);
+  it('generates bounded public NightBoard threads without exposing the Social roster', () => {
+    const engine = new SimulationEngine();
+    const broad = vi.spyOn(engine, 'getState');
+    const social = vi.spyOn(engine.social, 'getState');
+    const world = vi.spyOn(engine.world, 'getState');
+    const before = engine.getNightBoardRead();
+    expect(before.revision).toBe(engine.getRevision());
+    expect(before.threads.length).toBeGreaterThan(0);
+    expect(before.threads.length).toBeLessThanOrEqual(8);
+    expect(Object.keys(before).sort()).toEqual(['revision', 'threads']);
+    expect(JSON.parse(JSON.stringify(before))).toEqual(before);
+    const stable = engine.getNightBoardRead();
+    expect(stable.threads).toEqual(before.threads);
+    expect(broad).not.toHaveBeenCalled();
+    expect(social).not.toHaveBeenCalled();
+    expect(world).not.toHaveBeenCalled();
+
+    const revision = engine.getRevision();
+    engine.advanceGameMinutes(7 * 1440);
+    const next = engine.getNightBoardRead();
+    expect(next.revision).toBeGreaterThan(revision);
+    expect(next.threads.length).toBeLessThanOrEqual(8);
+    expect(JSON.parse(JSON.stringify(next))).toEqual(next);
+    expect(broad).not.toHaveBeenCalled();
+    expect(social).not.toHaveBeenCalled();
+    expect(world).not.toHaveBeenCalled();
+  });
+
 });
