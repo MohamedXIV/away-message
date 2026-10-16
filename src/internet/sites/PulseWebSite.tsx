@@ -1,6 +1,6 @@
 import React from 'react';
 import type { SiteRouteProps } from '../types';
-import { useSimulationStore } from '../../store/useSimulationStore';
+import { useSimulationChrome } from '../../store/useBoundedSimulationRead';
 import { PulseMessengerApp } from '../../apps/pulse/PulseMessengerApp';
 
 /**
@@ -10,9 +10,7 @@ import { PulseMessengerApp } from '../../apps/pulse/PulseMessengerApp';
  */
 export const PulseWebSite: React.FC<SiteRouteProps> = (props) => {
   const doNavigate = props.navigate || props.onNavigate || (() => {});
-  const isInstalled = useSimulationStore((s) =>
-    s.state.installedSoftware.some((sw: any) => String(sw.appId).includes('pulse'))
-  );
+  const isInstalled = useSimulationChrome().pulseInstalled;
 
   if (isInstalled) {
     return (
