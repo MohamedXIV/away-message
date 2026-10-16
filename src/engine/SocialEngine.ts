@@ -1637,6 +1637,13 @@ export class SocialEngine {
     return rows;
   }
 
+  /** Player-authored away text is canonical Social state, not a Zustand-only overlay. */
+  public setPlayerPresence(presence: BuddyPresence): void {
+    const player = { ...presence };
+    this.presence.set('player', player);
+    this.eventBus.emit('social:status_changed', { buddyId: 'player', presence: { ...player } });
+  }
+
   public getPresence(rawId: string): BuddyPresence | undefined {
     const pres = this.presence.get(normalizeBuddyId(rawId));
     return pres ? { ...pres } : undefined;
