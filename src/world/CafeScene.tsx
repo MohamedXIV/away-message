@@ -150,7 +150,7 @@ export const CafeScene: React.FC<{ buddyId?: string }> = ({ buddyId: propBuddyId
     void refreshSuggestions(key, async () => {
       const slices = readMemorySlices();
       const buddyNow = engine.social.getBuddy(buddyId);
-      const recent = engine.social.getMessages(buddyId).slice(-6).map((message) => ({
+      const recent = engine.getConversationRead(buddyId, 0, 6).messages.map((message) => ({
         sender: message.senderId === 'player' ? 'player' : 'buddy',
         text: message.text,
       }));
@@ -358,7 +358,7 @@ export const CafeScene: React.FC<{ buddyId?: string }> = ({ buddyId: propBuddyId
             if (id === undefined) return;
             void refreshSuggestions(`${buddyId}:cafe:${id}:manual`, async () => {
               const slices = readMemorySlices();
-              const recent = engine.social.getMessages(buddyId).slice(-6).map((message) => ({
+              const recent = engine.getConversationRead(buddyId, 0, 6).messages.map((message) => ({
                 sender: message.senderId === 'player' ? 'player' : 'buddy',
                 text: message.text,
               }));

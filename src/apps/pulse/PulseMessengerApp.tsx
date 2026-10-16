@@ -375,8 +375,8 @@ export const PulseMessengerApp: React.FC = () => {
         const offset = 10 + (hash % Math.min( maxOffset, 720));
         const timestampMinute = Math.min(totalMinutes - 2, Math.max(pulseState.lastSeenTotalMinutes + 10, pulseState.lastSeenTotalMinutes + offset));
         // Anti-spam: never leave two link-bearing offline messages in a row
-        const previousOffline = engine.social.getMessages(buddy.id).filter((m) => m.senderId === buddy.id && m.tags?.includes('offline-message'));
-        const lastHadLink = previousOffline.length > 0 && extractLocalLinks(previousOffline[previousOffline.length - 1]!.text).length > 0;
+        const lastOfflineText = engine.social.getLastOfflineMessageText(buddy.id);
+        const lastHadLink = lastOfflineText !== null && extractLocalLinks(lastOfflineText).length > 0;
         const text = pickOfflineMessage(buddy.id, timestampMinute, buddy.archetype, lastHadLink);
         // Capture any .local links from offline message for sharedLinks / FindIt discovery
         extractLocalLinks(text).forEach((link) => {
@@ -1166,7 +1166,7 @@ export const PulseMessengerApp: React.FC = () => {
   // AI reply suggestions for the player (P8/B2): same live context as the NPC side.
   const suggestionFetcher = useCallback(async (bid: string): Promise<ReplySuggestionItem[]> => {
     const buddy = engine.social.getBuddy(bid);
-    const recent = engine.social.getMessages(bid).slice(-6).map((message) => ({
+    const recent = engine.getConversationRead(bid, 0, 6).messages.map((message) => ({
       sender: message.senderId === 'player' ? 'player' : 'buddy',
       text: message.text,
     }));

@@ -1781,6 +1781,26 @@ export class SocialEngine {
     return rows.slice(0, limit);
   }
 
+  /**
+   * Last actual offline message from this contact, for the login anti-link
+   * cadence. Scans canonical history backwards without copying transcripts,
+   * regardless of out-of-order offline delivery timestamps.
+   *
+   * This is an internal Social owner query, not a player-visible projection.
+   */
+  public getLastOfflineMessageText(rawConversationId: string): string | null {
+    const id = normalizeBuddyId(rawConversationId);
+    const messages = this.conversations.get(id);
+    if (!messages) return null;
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const message = messages[i]!;
+      if (message.senderId === id && message.tags?.includes('offline-message')) {
+        return message.text;
+      }
+    }
+    return null;
+  }
+
   public getMessages(rawConversationId: string): MessageRecord[] {
     const msgs = this.conversations.get(normalizeBuddyId(rawConversationId)) || [];
     return msgs.map(m => ({ ...m }));
