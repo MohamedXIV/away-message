@@ -213,4 +213,30 @@ describe('#172 MyPlace website owner publication', () => {
     stop();
   });
 
+  it('redacts friends-only MyPlace page content before it crosses the read boundary', () => {
+    const game = new SimulationEngine();
+    game.myplace.addGuestbookComment('maya_x', 'nightowl87', 'SECRET_GUESTBOOK', 250);
+    game.myplace.updateNpcProfile('maya_x', {
+      visibility: 'friendsOnly',
+      headline: 'SECRET_HEADLINE',
+      bio: 'SECRET_BIO',
+      interests: ['SECRET_INTEREST'],
+    });
+    const blocked = game.getMyPlacePageRead('maya_x');
+    expect(blocked.locked).toBe(true);
+    expect(blocked.profile?.username).toBe('maya_x');
+    expect(blocked.profile?.visibility).toBe('friendsOnly');
+    expect(blocked.guestbook).toEqual([]);
+    expect(JSON.stringify(blocked)).not.toMatch(/SECRET_HEADLINE|SECRET_BIO|SECRET_INTEREST|SECRET_GUESTBOOK/);
+
+    game.myplace.updateNpcProfile('maya_x', {
+      top8: [{ handle: game.myplace.getUserProfile().username, name: 'Wanderer', avatar: '💻' }],
+    });
+    const allowed = game.getMyPlacePageRead('maya_x');
+    expect(allowed.locked).toBe(false);
+    expect(allowed.profile?.headline).toBe('SECRET_HEADLINE');
+    expect(allowed.guestbook[0]?.text).toBe('SECRET_GUESTBOOK');
+    expect(JSON.parse(JSON.stringify(allowed))).toEqual(allowed);
+  });
+
 });

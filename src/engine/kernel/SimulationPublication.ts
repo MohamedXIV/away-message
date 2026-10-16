@@ -188,6 +188,8 @@ export interface SimulationMyPlacePageRead {
   revision: number;
   time: GameTime;
   currentMyPlaceId: string;
+  /** Private pages reveal only a public identity shell, never bio or comments. */
+  locked: boolean;
   userProfile: import('../MyPlaceEngine').MyPlaceProfile;
   profile: import('../MyPlaceEngine').MyPlaceProfile | null;
   guestbook: ReturnType<import('../MyPlaceEngine').MyPlaceEngine['getGuestbook']>;

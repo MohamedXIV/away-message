@@ -533,13 +533,20 @@ export class SimulationKernel {
   public getMyPlacePageRead(requestedUsername = ''): SimulationMyPlacePageRead {
     const userProfile = this.myplace.getUserProfile();
     const username = requestedUsername || userProfile.username;
+    const candidate = username === userProfile.username ? userProfile : this.myplace.getNpcProfile(username) ?? null;
+    const locked = !!candidate && username !== userProfile.username
+      && candidate.visibility === 'friendsOnly'
+      && !candidate.top8.some(friend => friend.handle === userProfile.username);
     return {
       revision: this.revision,
       time: { ...this.clock.getTime() },
       currentMyPlaceId: this.myplace.getCurrentMyPlaceId(),
+      locked,
       userProfile,
-      profile: username === userProfile.username ? userProfile : this.myplace.getNpcProfile(username) ?? null,
-      guestbook: this.myplace.getGuestbook(username),
+      profile: locked && candidate
+        ? { ...candidate, headline: '', bio: '', interests: [], songTitle: '', top8: [], glitterIntensity: 0 }
+        : candidate,
+      guestbook: locked ? [] : this.myplace.getGuestbook(username),
     };
   }
 

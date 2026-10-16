@@ -21,7 +21,7 @@ export const MyPlaceSite: React.FC<SiteRouteProps> = (props) => {
 
   const effectiveParams = { ...props.params, ...props.routeParams };
   const requestedUsername = effectiveParams['username'] || '';
-  const { userProfile, profile: selectedProfile, guestbook, time, currentMyPlaceId } = useMyPlacePageRead(requestedUsername);
+  const { userProfile, profile: selectedProfile, guestbook, time, currentMyPlaceId, locked: isLocked } = useMyPlacePageRead(requestedUsername);
   // Default to YOUR page (wanderer06) — not Maya — and routing is strict
   const currentUsername = requestedUsername || userProfile.username;
   const isOwnProfile = currentUsername === userProfile.username;
@@ -54,9 +54,8 @@ export const MyPlaceSite: React.FC<SiteRouteProps> = (props) => {
   const profile = getProfile(currentUsername);
 
   // Privacy: friendsOnly → only Top8 + self can view
-  const viewerHandle = userProfile.username;
-  const isViewerFriend = isOwnProfile || profile.top8.some((f) => f.handle === viewerHandle) || (profile as unknown as { visibility?: string }).visibility !== 'friendsOnly';
-  const isLocked = !isViewerFriend;
+  // Locking is enforced in the canonical player-visible read, not only JSX.
+  // An inaccessible page never transfers its private bio or guestbook.
   const [commentInput, setCommentInput] = useState('');
   const [editMode, setEditMode] = useState(false);
   const [editBio, setEditBio] = useState(userProfile.bio);
