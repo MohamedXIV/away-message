@@ -22,22 +22,20 @@ export const AwayMessageEditor: React.FC<AwayMessageEditorProps> = ({ isOpen, on
   };
 
   const handleSetAway = () => {
-    engine.social.setPlayerPresence({
+    engine.setPlayerPresence({
       status: 'away',
       awayMessage: messageInput.trim() || 'Away from desk',
       customAwayMessage: messageInput.trim(),
     });
-    engine.publishExternalChange();
     onClose();
   };
 
   const handleClearAway = () => {
-    engine.social.setPlayerPresence({
+    engine.setPlayerPresence({
       status: 'online',
       awayMessage: '',
       customAwayMessage: undefined,
     });
-    engine.publishExternalChange();
     onClose();
   };
 

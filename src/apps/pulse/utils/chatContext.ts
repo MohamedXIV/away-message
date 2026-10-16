@@ -59,6 +59,13 @@ export interface ChatEngine {
   };
   dispatchAction(action: { type: string; buddyId?: string; socialAction?: string; [key: string]: any }): unknown;
   handleMeetupChat?(buddyId: string, text: string, day: number): void;
+  /** Composed source-owned ledger command; optional for older isolated test stubs. */
+  commitPulseChatLedger?(
+    buddyId: string,
+    promises: Array<{ text: string; dueDayOffset?: number }>,
+    completed: boolean,
+    day: number,
+  ): boolean;
   /** Rules-stored reception hint for a bold player line (SimulationEngine implements it). */
   getReceptionHint?(buddyId: string, day: number): string;
   /** True when the installed Pulse release is the 6.x generation. */
@@ -195,17 +202,24 @@ export interface DmChatContext {
 export function runChatLedger(engine: ChatEngine, buddyId: string, text: string, totalMinutes: number): void {
   try {
     const gameDay = Math.floor(totalMinutes / 1440) + 1;
-    for (const extracted of extractPromisesFromPlayerMessage(text)) {
-      engine.social.addPromise(
-        buddyId,
-        extracted.text,
-        gameDay,
-        extracted.dueDayOffset !== undefined ? gameDay + extracted.dueDayOffset : undefined
-      );
-    }
-    if (looksLikeCompletion(text)) {
-      const open = engine.social.getOpenPromises(buddyId);
-      if (open.length > 0 && open[0]) engine.social.resolvePromise(buddyId, open[0].id, true, gameDay);
+    const promises = extractPromisesFromPlayerMessage(text);
+    const completed = looksLikeCompletion(text);
+    if (engine.commitPulseChatLedger) {
+      // Canonical owner command publishes actual changes (and no-ops stay
+      // silent) before async NPC generation begins.
+      engine.commitPulseChatLedger(buddyId, promises, completed, gameDay);
+    } else {
+      // Minimal test doubles retain the original ledger behavior.
+      for (const extracted of promises) {
+        engine.social.addPromise(
+          buddyId, extracted.text, gameDay,
+          extracted.dueDayOffset !== undefined ? gameDay + extracted.dueDayOffset : undefined,
+        );
+      }
+      if (completed) {
+        const open = engine.social.getOpenPromises(buddyId);
+        if (open.length > 0 && open[0]) engine.social.resolvePromise(buddyId, open[0].id, true, gameDay);
+      }
     }
     engine.handleMeetupChat?.(buddyId, text, gameDay);
   } catch { /* ledger never blocks chat */ }

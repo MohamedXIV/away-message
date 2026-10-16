@@ -1,6 +1,7 @@
 import type { SimulationState as TransportSimulationState, SimulationAction, ActionResult, HardwareState } from '../types';
 import type { Fulfillment } from '../DeliveryEngine';
 import type { MyPlaceProfile } from '../MyPlaceEngine';
+import type { BuddyPresence } from '../types';
 import type { OsRelease } from '../OsCatalog';
 import { ProceduralDirector, type DirectorGenerateOptions } from '../ProceduralDirector';
 import { buildRecentNpcMail, buildRentMailHistory } from '../BoardDirector';
@@ -776,6 +777,46 @@ export class SimulationKernel {
       }
       return bumped;
     }, bumped => bumped > 0);
+  }
+
+  /**
+   * Pulse presence is a canonical Social owner write, not a UI redraw.
+   * Identical presets and repeated Clear requests never publish revisions.
+   */
+  public setPlayerPresence(presence: BuddyPresence): boolean {
+    const current = this.social.getPresence('player');
+    if (current?.status === presence.status &&
+      current.awayMessage === presence.awayMessage &&
+      current.customAwayMessage === presence.customAwayMessage) return false;
+    return this.publishOwnerMutation(['social'], () => {
+      this.social.setPlayerPresence(presence);
+      return true;
+    });
+  }
+
+  /**
+   * Shared Pulse/Cafe text rules produce semantic ledger intents. Commit the
+   * canonical promises in one owner boundary; the UI never mutates Social
+   * directly after its already-published outbound message.
+   */
+  public commitPulseChatLedger(
+    buddyId: string,
+    promises: Array<{ text: string; dueDayOffset?: number }>,
+    completed: boolean,
+    day: number,
+  ): boolean {
+    return this.publishOwnerMutation(['social'], () => {
+      let changed = false;
+      for (const intent of promises) {
+        const dueDay = intent.dueDayOffset !== undefined ? day + intent.dueDayOffset : undefined;
+        if (this.social.addPromise(buddyId, intent.text, day, dueDay)) changed = true;
+      }
+      if (completed) {
+        const first = this.social.getOpenPromises(buddyId)[0];
+        if (first && this.social.resolvePromise(buddyId, first.id, true, day)) changed = true;
+      }
+      return changed;
+    }, changed => changed);
   }
 
   public markConversationAsRead(actorId: string): boolean {

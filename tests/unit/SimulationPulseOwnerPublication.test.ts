@@ -110,4 +110,83 @@ describe('#172 Pulse direct-owner mutations and focused profile reads', () => {
     expect(game.getRevision()).toBe(capped + 1);
     stop();
   });
+  it('publishes delayed NPC scripted messages through the inbound command and bounded conversation', () => {
+    const game = new SimulationEngine();
+    const actor = game.social.getBuddies()[0]!;
+    game.social.learnHandle(actor.id, actor.handle);
+    const broad = vi.spyOn(game, 'getState');
+    const source = vi.spyOn(game.social, 'getState');
+    const observed: Array<readonly string[]> = [];
+    const stop = game.subscribeChanges(change => observed.push(change.changedDomains));
+    observed.length = 0;
+    const revision = game.getRevision();
+    const action = game.dispatchAction({
+      type: 'SOCIAL_RECEIVE_MESSAGE',
+      buddyId: actor.id,
+      text: 'come by after the rain',
+      timestampMinute: 955,
+      tags: ['scripted'],
+      imageUrl: 'data:image/png;base64,aGVsbG8=',
+      imagePrompt: 'small Polaroid snapshot',
+      imageCaption: 'rain on the street',
+    });
+    expect(action.success).toBe(true);
+    expect(game.getRevision()).toBe(revision + 1);
+    expect(observed).toHaveLength(1);
+    expect(observed[0]).toEqual(expect.arrayContaining(['social', 'unknown']));
+    const page = game.getConversationRead(actor.id, 0, 10);
+    const message = page.messages.find(m => m.text === 'come by after the rain');
+    expect(message).toBeDefined();
+    expect(message?.senderId).toBe(actor.id);
+    expect(message?.timestampMinute).toBe(955);
+    expect(message?.tags).toContain('scripted');
+    expect(message?.imageUrl).toBe('data:image/png;base64,aGVsbG8=');
+    expect(JSON.parse(JSON.stringify(page))).toEqual(page);
+    expect(broad).not.toHaveBeenCalled();
+    expect(source).not.toHaveBeenCalled();
+    stop();
+  });
+
+  it('deduplicates presence presets and emits a real revision only on changes', () => {
+    const game = new SimulationEngine();
+    const changes: Array<readonly string[]> = [];
+    const stop = game.subscribeChanges(change => changes.push(change.changedDomains));
+    changes.length = 0;
+    const original = game.social.getPresence('player')!;
+    expect(game.setPlayerPresence(original)).toBe(false);
+    expect(changes).toHaveLength(0);
+    expect(game.setPlayerPresence({ status: 'away', awayMessage: 'On the porch', customAwayMessage: 'On the porch' })).toBe(true);
+    expect(changes).toHaveLength(1);
+    expect(changes[0]).toEqual(expect.arrayContaining(['social', 'unknown']));
+    expect(game.setPlayerPresence({ status: 'away', awayMessage: 'On the porch', customAwayMessage: 'On the porch' })).toBe(false);
+    expect(changes).toHaveLength(1);
+    expect(game.setPlayerPresence({ status: 'online', awayMessage: '', customAwayMessage: undefined })).toBe(true);
+    expect(changes).toHaveLength(2);
+    stop();
+  });
+
+  it('commits NPC promise capture and follow-through without false ledger publications', () => {
+    const game = new SimulationEngine();
+    const actor = game.social.getBuddies()[0]!;
+    const changes: Array<readonly string[]> = [];
+    const stop = game.subscribeChanges(change => changes.push(change.changedDomains));
+    changes.length = 0;
+    const intentions = [{ text: 'I will bring that old camera tomorrow', dueDayOffset: 1 }];
+    const start = game.getRevision();
+    expect(game.commitPulseChatLedger(actor.id, intentions, false, 3)).toBe(true);
+    expect(game.getRevision()).toBe(start + 1);
+    expect(changes[0]).toEqual(expect.arrayContaining(['social', 'unknown']));
+    expect(game.social.getOpenPromises(actor.id)).toHaveLength(1);
+    expect(game.social.getOpenPromises(actor.id)[0]!.dueDay).toBe(4);
+    expect(game.commitPulseChatLedger(actor.id, intentions, false, 3)).toBe(false);
+    expect(game.getRevision()).toBe(start + 1);
+    expect(game.commitPulseChatLedger(actor.id, [], true, 4)).toBe(true);
+    expect(game.social.getOpenPromises(actor.id)).toHaveLength(0);
+    expect(game.getRevision()).toBe(start + 2);
+    expect(game.commitPulseChatLedger(actor.id, [], true, 4)).toBe(false);
+    expect(game.getRevision()).toBe(start + 2);
+    expect(changes).toHaveLength(2);
+    stop();
+  });
+
 });
