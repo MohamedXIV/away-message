@@ -80,4 +80,53 @@ describe('#172 Zustand action publication matches canonical commits', () => {
       full.mockRestore();
     }
   });
+  it('does not fabricate Zustand revisions for successful no-op commands', () => {
+    const priorEngine = useSimulationStore.getState().engine;
+    const engine = new SimulationEngine();
+    const full = vi.spyOn(engine, 'getState');
+    const seen: Array<{ revision: number; domains: readonly string[] }> = [];
+    try {
+      useSimulationStore.getState().setEngine(engine);
+      const stop = engine.subscribeChanges(change => seen.push({
+        revision: change.revision, domains: change.changedDomains,
+      }));
+      seen.length = 0;
+      const initial = useSimulationStore.getState().state;
+      const baseline = engine.getRevision();
+      const dispatch = useSimulationStore.getState().dispatchAction;
+
+      // These commands are successful by contract but write nothing.
+      expect(dispatch({ type: 'TIME_ADVANCE_MINUTES', minutes: 0 }).success).toBe(true);
+      expect(dispatch({ type: 'VFS_EMPTY_TRASH' }).success).toBe(true);
+      expect(dispatch({ type: 'TIME_SET_PAUSED', paused: false }).success).toBe(true);
+      expect(engine.getRevision()).toBe(baseline);
+      expect(seen).toHaveLength(0);
+      expect(useSimulationStore.getState().state).toBe(initial);
+      expect(full).not.toHaveBeenCalled();
+
+      expect(dispatch({ type: 'TIME_SET_PAUSED', paused: true }).success).toBe(true);
+      expect(seen).toHaveLength(1);
+      expect(seen[0]!.domains).toContain('unknown');
+      const pausedView = useSimulationStore.getState().state;
+      expect(dispatch({ type: 'TIME_SET_PAUSED', paused: true }).success).toBe(true);
+      expect(engine.getRevision()).toBe(baseline + 1);
+      expect(seen).toHaveLength(1);
+      expect(useSimulationStore.getState().state).toBe(pausedView);
+
+      expect(dispatch({ type: 'WORLD_SET_FLAG', key: 'bounded_noop_172', value: true }).success).toBe(true);
+      expect(seen).toHaveLength(2);
+      const worldView = useSimulationStore.getState().state;
+      expect(dispatch({ type: 'WORLD_SET_FLAG', key: 'bounded_noop_172', value: true }).success).toBe(true);
+      expect(dispatch({ type: 'NARRATIVE_SET_FLAG', key: 'bounded_noop_172', value: true }).success).toBe(true);
+      expect(seen).toHaveLength(2);
+      expect(engine.getRevision()).toBe(baseline + 2);
+      expect(useSimulationStore.getState().state).toBe(worldView);
+      expect(full).not.toHaveBeenCalled();
+      stop();
+    } finally {
+      useSimulationStore.getState().setEngine(priorEngine);
+      full.mockRestore();
+    }
+  });
+
 });

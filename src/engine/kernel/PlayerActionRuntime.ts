@@ -85,6 +85,7 @@ export class PlayerActionRuntime {
       }
 
       case 'TIME_SET_PAUSED': {
+        if (this.clock.isPaused() === action.paused) return { success: true };
         this.clock.setPaused(action.paused);
         this.notifySubscribers();
         return { success: true };

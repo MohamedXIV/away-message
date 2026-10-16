@@ -172,14 +172,10 @@ export const useSimulationStore = create<SimulationStore>()(
 
       dispatchAction: (action: SimulationAction): ActionResult => {
         const { engine } = get();
-        const priorRevision = engine.getRevision();
-        const result = engine.dispatchAction(action);
-        // Rejected commands have not committed owner state and must not
-        // synthesize a new revision. Successful legacy writes without an
-        // owner notification retain the explicit compatibility fallback.
-        // Already-published commands never rebuild a second snapshot.
-        if (result.success && engine.getRevision() === priorRevision) get().syncStateFromEngine();
-        return result;
+        // The source owner is the ONLY authority for publishing revisions.
+        // In particular, successful no-ops (empty Trash, zero-minute jumps,
+        // idempotent commands) must not manufacture a state change.
+        return engine.dispatchAction(action);
       },
 
       // Convenience Action Wrappers
