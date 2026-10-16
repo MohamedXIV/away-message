@@ -68,8 +68,11 @@ describe('#172 revision-only publication and bounded HUD projection', () => {
       expect(engine.getRevision()).toBe(baseline + 1);
       expect(changes.at(-1)).toBe(baseline + 1);
       expect(engine.getWorldRead().metInPerson).toBe(true);
+      expect(getState.mock.calls.length - before).toBe(0); // change-only hot path
       expect(useSimulationStore.getState().state.world.flags.met_in_person).toBe(true);
-      expect(getState.mock.calls.length - before).toBe(1);
+      expect(getState.mock.calls.length - before).toBe(1); // explicit legacy read
+      expect(useSimulationStore.getState().state.time.totalMinutes).toBe(engine.clock.getTotalMinutes());
+      expect(getState.mock.calls.length - before).toBe(1); // one snapshot per revision
 
       // Full legacy listeners are removed when unbinding, change-only
       // reads still deliver no giant snapshots.
@@ -92,20 +95,29 @@ describe('#172 revision-only publication and bounded HUD projection', () => {
     stop();
   });
 
-  it('Zustand consumes the delivered snapshot and avoids command follow-up rebuild', () => {
+  it('publishes Zustand revisions without full snapshot construction until explicitly read', () => {
     const previous = useSimulationStore.getState().engine;
     const engine = new SimulationEngine();
     const wholeState = vi.spyOn(engine, 'getState');
     try {
       useSimulationStore.getState().setEngine(engine);
-      expect(wholeState).toHaveBeenCalledTimes(1);
-      const calls = wholeState.mock.calls.length;
+      expect(wholeState).not.toHaveBeenCalled();
+      const before = useSimulationStore.getState().state;
       const result = useSimulationStore.getState().dispatchAction({
-        type: 'TIME_ADVANCE_MINUTES', minutes: 5, reason: 'store read dedup',
+        type: 'TIME_ADVANCE_MINUTES', minutes: 5, reason: 'store revision without snapshot',
       });
       expect(result.success).toBe(true);
-      expect(wholeState.mock.calls.length - calls).toBe(1);
+      expect(wholeState).not.toHaveBeenCalled(); // no normal UI publication cost
+      const after = useSimulationStore.getState().state;
+      expect(after).not.toBe(before);
+      expect(after.time.totalMinutes).toBe(engine.clock.getTotalMinutes());
+      expect(after.player.cash).toBe(engine.economy.getState().cash);
+      expect(wholeState).toHaveBeenCalledTimes(1); // one explicit read, reused within revision
+
+      engine.advanceGameMinutes(2, 'new revision');
+      expect(wholeState).toHaveBeenCalledTimes(1);
       expect(useSimulationStore.getState().state.time.totalMinutes).toBe(engine.clock.getTotalMinutes());
+      expect(wholeState).toHaveBeenCalledTimes(2);
     } finally {
       useSimulationStore.getState().setEngine(previous);
       wholeState.mockRestore();
