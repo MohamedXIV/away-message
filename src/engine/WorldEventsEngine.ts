@@ -477,11 +477,49 @@ export class WorldEventsEngine {
     );
   }
 
-  /** Global knowledge context (shared) */
+  /**
+   * A rolling, day-eligible World read shared by public story/news surfaces.
+   * Retain chronological order and original insertion order at equal minutes,
+   * as Array.sort's stable legacy path did, without cloning all triggered
+   * events. The caller owns the finite display limit (never persistence).
+   */
+  private getRecentTriggeredEventsForDay(
+    currentDay: number, maxEvents: number, newestFirst = false,
+  ): GlobalEvent[] {
+    if (!Number.isFinite(currentDay) || !Number.isSafeInteger(maxEvents) || maxEvents <= 0) return [];
+    const selected: GlobalEvent[] = [];
+    for (const event of this.triggeredEvents.values()) {
+      if (event.triggerDay > currentDay) continue;
+      const minute = event.triggeredAtMinute ?? 0;
+      if (selected.length === maxEvents) {
+        const oldest = newestFirst ? selected[selected.length - 1]! : selected[0]!;
+        const cutoff = oldest.triggeredAtMinute ?? 0;
+        // Descending CityWire keeps EARLIER inserted records at tied minutes,
+        // while ascending prompt context keeps LATER inserted records at ties.
+        if (newestFirst ? minute <= cutoff : minute < cutoff) continue;
+      }
+      let lo = 0;
+      let hi = selected.length;
+      while (lo < hi) {
+        const mid = (lo + hi) >>> 1;
+        const at = selected[mid]!.triggeredAtMinute ?? 0;
+        if (newestFirst ? at >= minute : at <= minute) lo = mid + 1;
+        else hi = mid;
+      }
+      selected.splice(lo, 0, event);
+      if (selected.length > maxEvents) {
+        if (newestFirst) selected.pop();
+        else selected.shift();
+      }
+    }
+    return selected;
+  }
+
+  /** Compact global context for AI prompt generation, never a WorldState read. */
   public getKnowledgeContext(currentDay: number, maxEvents = 4): string {
-    const triggered = this.getTriggeredEvents().filter((e) => e.triggerDay <= currentDay);
-    if (triggered.length === 0) return 'No major world events yet — early days, quiet internet.';
-    const recent = triggered.slice(-maxEvents);
+    const limit = Number.isFinite(maxEvents) ? Math.max(1, Math.min(16, Math.trunc(maxEvents))) : 4;
+    const recent = this.getRecentTriggeredEventsForDay(currentDay, limit);
+    if (recent.length === 0) return 'No major world events yet — early days, quiet internet.';
     return recent.map((e) => `- [Day ${e.triggerDay}] ${e.title}: ${e.knowledgePrompt}`).join('\n');
   }
 
@@ -706,11 +744,9 @@ export class WorldEventsEngine {
     category: string;
     siteUrl?: string;
   }> {
-    const triggered = this.getTriggeredEvents().filter((e) => e.triggerDay <= currentDay);
-    // Most recent first, up to 12
-    return [...triggered]
-      .sort((a, b) => (b.triggeredAtMinute ?? 0) - (a.triggeredAtMinute ?? 0))
-      .slice(0, 12)
+    // Exactly the same 12 most recent eligible events as the stable legacy
+    // ascending-sort then descending-sort path, but never sort all history.
+    return this.getRecentTriggeredEventsForDay(currentDay, 12, true)
       .map((e) => ({
         id: e.id,
         headline: e.title,
