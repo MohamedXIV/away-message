@@ -38,7 +38,7 @@ describe('#172 scalar source reads for OS chrome', () => {
       downloadedBytes: 1000,
       sourceMaxKbps: 64,
       allocatedKbps: 0,
-      status: 'completed',
+      status: 'complete',
       resumable: true,
       manager: 'browser',
       startedAtMinute: 10,
