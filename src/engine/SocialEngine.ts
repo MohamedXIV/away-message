@@ -22,7 +22,7 @@ import {
 } from './types';
 import { EventBus } from './EventBus';
 import { getWeatherForDay, isWetWeather } from './WeatherEngine';
-import { validateCharacterId, isValidSchedule, traitsForBuddy, clampTraits, clampRelationships, resolveArchetype, rollSeeded100 } from './characterTemplates';
+import { validateCharacterId, isValidSchedule, traitsForBuddy, clampTraits, clampRelationships, resolveArchetype } from './characterTemplates';
 import { SEED_CHARACTERS, seedCharacterDef, isSeedCharacter, resolveAffinitySeeds } from './seedCharacters';
 import { validatePersistedBuddy, sanitizeLanguages } from './CharacterEngine';
 import { conditionFromLegacyStatus, projectLegacyBuddyStatus, validActorCondition } from './semantic/ActorCondition';
@@ -31,6 +31,8 @@ import { ConversationHistory } from './social/ConversationHistory';
 import { MAX_PHOTO_MEMORIES, SocialMemoryLedger, socialHashText } from './social/SocialMemoryLedger';
 import { NpcRelationshipGraph } from './social/NpcRelationshipGraph';
 import { PlayerRelationships, STRAINED_ANNOYANCE } from './social/PlayerRelationships';
+import { PlayerReadLedger } from './social/PlayerReadLedger';
+import { MediationLedger } from './social/MediationLedger';
 import { SocialPresence } from './social/SocialPresence';
 export { MAX_CORE_MEMORIES, MAX_OPEN_PROMISES, MAX_PHOTO_MEMORIES } from './social/SocialMemoryLedger';
 export { STRAINED_ANNOYANCE } from './social/PlayerRelationships';
@@ -181,10 +183,10 @@ export class SocialEngine {
   });
   // Agenda, mediation decisions and witness logs remain Social coordinator state.
   private agenda: Map<string, AgendaItem[]> = new Map();
-  private mediations: MediationRecord[] = [];
+  private readonly mediation = new MediationLedger(normalizeBuddyId, id => this.buddies.has(id), MAX_MEDIATIONS);
   private npcSocialLog: NpcInteractionLog[] = [];
   // Introvert protagonist: each buddy's read of the player (beliefs + certainty)
-  private playerReads: Map<string, PlayerReadState> = new Map();
+  private readonly playerRead = new PlayerReadLedger(normalizeBuddyId, id => this.buddies.has(id));
   // Free roster: pulse handles the player has learned, keyed by buddy id.
   // Empty at new game — contacts are earned, never granted.
   private knownHandles: Record<string, string[]> = {};
@@ -271,9 +273,9 @@ export class SocialEngine {
     this.memory.forget(id);
     this.graph.forget(id);
     this.agenda.delete(id);
-    this.mediations = this.mediations.filter(m => m.requesterId !== id && m.targetId !== id);
+    this.mediation.forgetActor(id);
     this.npcSocialLog = this.npcSocialLog.filter(l => l.firstId !== id && l.secondId !== id);
-    this.playerReads.delete(id);
+    this.playerRead.forget(id);
     delete this.knownHandles[id];
     this.eventBus.emit('social:buddy_removed', { buddyId: id });
     return true;
@@ -285,12 +287,9 @@ export class SocialEngine {
 
     const agenda: Record<string, AgendaItem[]> = {};
     for (const [id, items] of this.agenda.entries()) agenda[id] = items.map((a) => ({ ...a }));
-    const mediations = this.mediations.map((m) => ({ ...m }));
+    const mediations = this.mediation.exportRecords();
     const npcSocialLog = this.npcSocialLog.map((l) => ({ ...l }));
-    const playerReads: Record<string, PlayerReadState> = {};
-    for (const [id, read] of this.playerReads.entries()) {
-      playerReads[id] = { beliefs: { ...read.beliefs }, certainty: read.certainty, updatedDay: read.updatedDay };
-    }
+    const playerReads = this.playerRead.exportState();
     const knownHandles: Record<string, string[]> = {};
     for (const [id, handles] of Object.entries(this.knownHandles)) knownHandles[id] = [...handles];
     const epitaphs = [...this.epitaphs];
@@ -418,29 +417,7 @@ export class SocialEngine {
         if (clean.length > 0) this.agenda.set(id, clean);
       }
     }
-    this.mediations = [];
-    if (Array.isArray(state.mediations)) {
-      for (const item of state.mediations) {
-        if (!item || typeof item !== 'object') continue;
-        const kind = (item as MediationRecord).kind;
-        const status = (item as MediationRecord).status;
-        if (kind !== 'introduce' && kind !== 'strengthen' && kind !== 'ask_about') continue;
-        if (status !== 'open' && status !== 'fulfilled' && status !== 'ignored' && status !== 'sabotaged' && status !== 'exposed') continue;
-        const requesterId = normalizeBuddyId(String((item as MediationRecord).requesterId ?? ''));
-        const targetId = normalizeBuddyId(String((item as MediationRecord).targetId ?? ''));
-        if (!requesterId || !targetId || requesterId === targetId) continue;
-        this.mediations.push({
-          id: String((item as MediationRecord).id || `med_${this.mediations.length}`),
-          requesterId,
-          targetId,
-          kind,
-          status,
-          createdDay: Number.isFinite((item as MediationRecord).createdDay) ? Math.max(1, Math.floor((item as MediationRecord).createdDay)) : 1,
-          ...(Number.isFinite((item as MediationRecord).resolvedDay) ? { resolvedDay: Math.max(1, Math.floor((item as MediationRecord).resolvedDay as number)) } : {}),
-        });
-        if (this.mediations.length >= MAX_MEDIATIONS * 2) break;
-      }
-    }
+    this.mediation.restore(state.mediations);
     this.npcSocialLog = [];
     if (Array.isArray(state.npcSocialLog)) {
       for (const item of state.npcSocialLog) {
@@ -459,21 +436,8 @@ export class SocialEngine {
         if (this.npcSocialLog.length >= MAX_NPC_SOCIAL_LOG) break;
       }
     }
-    // Reads of the player (validated + clamped; absent in older saves → neutral priors)
-    this.playerReads.clear();
-    if (state.playerReads) {
-      for (const [rawId, read] of Object.entries(state.playerReads)) {
-        const id = normalizeBuddyId(rawId);
-        if (!read || typeof read !== 'object') continue;
-        const beliefs = clampTraits((read as PlayerReadState).beliefs as Partial<CharacterTraits>);
-        const certainty = (read as PlayerReadState).certainty;
-        this.playerReads.set(id, {
-          beliefs,
-          certainty: typeof certainty === 'number' && Number.isFinite(certainty) ? Math.max(0, Math.min(100, Math.round(certainty))) : 0,
-          updatedDay: Number.isFinite((read as PlayerReadState).updatedDay) ? Math.max(1, Math.floor((read as PlayerReadState).updatedDay)) : 1,
-        });
-      }
-    }
+    // Player-belief import is validated by its canonical owner.
+    this.playerRead.restore(state.playerReads);
     // Known handles (validated ids/handles; absent → strangers on the wire)
     this.knownHandles = {};
     if (state.knownHandles) {
@@ -776,49 +740,27 @@ export class SocialEngine {
 
   // ---------- Mediations ----------
 
-  /** Ask the player to mediate (introduce / strengthen / ask about). Capped + deduped. */
+  /** Mediation status is owned by MediationLedger; Social alone governs consequences and events. */
   public requestMediation(rawRequester: string, rawTarget: string, kind: MediationKind, day: number): MediationRecord | null {
-    const requesterId = normalizeBuddyId(rawRequester);
-    const targetId = normalizeBuddyId(rawTarget);
-    if (!requesterId || !targetId || requesterId === targetId) return null;
-    if (!this.buddies.has(requesterId) || !this.buddies.has(targetId)) return null;
-    if (kind !== 'introduce' && kind !== 'strengthen' && kind !== 'ask_about') return null;
-    if (this.mediations.some((m) => m.status === 'open' && m.requesterId === requesterId && m.targetId === targetId && m.kind === kind)) return null;
-    if (this.mediations.filter((m) => m.status === 'open').length >= MAX_MEDIATIONS) return null;
-    const safeDay = Math.max(1, Math.floor(day) || 1);
-    let id = `med_${requesterId}_${targetId}_${kind}_${safeDay}`;
-    let n = 2;
-    while (this.mediations.some((m) => m.id === id)) id = `med_${requesterId}_${targetId}_${kind}_${safeDay}_${n++}`;
-    const record: MediationRecord = { id, requesterId, targetId, kind, status: 'open', createdDay: safeDay };
-    this.mediations.push(record);
-    this.eventBus.emit('social:mediation_requested' as any, { mediation: { ...record } });
-    return { ...record };
+    const record = this.mediation.request(rawRequester, rawTarget, kind, day);
+    if (record) this.eventBus.emit('social:mediation_requested' as any, { mediation: { ...record } });
+    return record;
   }
 
   public getMediation(mediationId: string): MediationRecord | undefined {
-    const found = this.mediations.find((m) => m.id === mediationId);
-    return found ? { ...found } : undefined;
+    return this.mediation.get(mediationId);
   }
 
   public getOpenMediations(): MediationRecord[] {
-    return this.mediations.filter((m) => m.status === 'open').map((m) => ({ ...m }));
+    return this.mediation.getOpen();
   }
 
-  /**
-   * Resolve the player's answer. help → bond bump + requester trust up;
-   * ignore → mild annoyance; badmouth → 'sabotaged' (no immediate damage —
-   * the pair may expose it later when they interact, see checkMediationExposure).
-   */
   public respondMediation(mediationId: string, choice: 'help' | 'ignore' | 'badmouth', day: number): MediationRecord | null {
-    const record = this.mediations.find((m) => m.id === mediationId);
-    if (!record || record.status !== 'open') return null;
-    if (choice !== 'help' && choice !== 'ignore' && choice !== 'badmouth') return null;
+    const record = this.mediation.resolve(mediationId, choice, day);
+    if (!record) return null;
     const safeDay = Math.max(1, Math.floor(day) || 1);
     const rel = this.playerLinks.get(record.requesterId);
     if (choice === 'ignore') {
-      record.status = 'ignored';
-      record.resolvedDay = safeDay;
-      // Brushed off: the requester reads you a little colder and flakier.
       this.observePlayerTrait(record.requesterId, { warmth: 40, discipline: 45 }, safeDay);
       if (rel) {
         this.adjustRelationship(record.requesterId, {
@@ -828,70 +770,43 @@ export class SocialEngine {
         });
       }
     } else if (choice === 'help') {
-      record.status = 'fulfilled';
-      record.resolvedDay = safeDay;
       if (record.kind === 'introduce') {
         this.adjustNpcBond(record.requesterId, record.targetId, { familiarity: 6, comfort: 3 }, safeDay);
         this.adjustNpcBond(record.targetId, record.requesterId, { familiarity: 6, comfort: 3 }, safeDay);
-        // An introduction IS the handle: you learn who you were introduced to.
         const target = this.buddies.get(record.targetId);
         if (target) this.learnHandle(record.targetId, target.handle);
       } else {
         this.adjustNpcBond(record.requesterId, record.targetId, { trust: 3, comfort: 2 }, safeDay);
         this.adjustNpcBond(record.targetId, record.requesterId, { trust: 3, comfort: 2 }, safeDay);
       }
-      // You showed up: the requester reads you loyal and kind.
       this.observePlayerTrait(record.requesterId, { loyalty: 80, warmth: 70 }, safeDay);
       this.applySocialAction(record.requesterId, 'remembered_detail');
-    } else {
-      // badmouth: recorded, damage lands only if the pair compares notes later.
-      record.status = 'sabotaged';
     }
     this.eventBus.emit('social:mediation_resolved' as any, { mediation: { ...record } });
-    return { ...record };
+    return record;
   }
 
-  /**
-   * Discovery pass after an NPC↔NPC interaction between a and b: every
-   * 'sabotaged' mediation across this pair rolls exposure (seeded by
-   * mediation+day, weighted by the pair's suspicion). Exposed sabotage craters
-   * BOTH player relationships — they talked, and the player lied to both.
-   */
   public checkMediationExposure(rawA: string, rawB: string, day: number): MediationRecord[] {
-    const a = normalizeBuddyId(rawA);
-    const b = normalizeBuddyId(rawB);
-    if (!a || !b || a === b) return [];
-    const safeDay = Math.max(1, Math.floor(day) || 1);
-    const exposed: MediationRecord[] = [];
-    for (const m of this.mediations) {
-      if (m.status !== 'sabotaged') continue;
-      const onPair = (m.requesterId === a && m.targetId === b) || (m.requesterId === b && m.targetId === a);
-      if (!onPair) continue;
-      const suspicion = Math.max(
-        this.getNpcBond(m.requesterId, m.targetId).dims.suspicion,
-        this.getNpcBond(m.targetId, m.requesterId).dims.suspicion,
-      );
-      const roll = rollSeeded100(`expose:${m.id}:${safeDay}`);
-      if (roll >= 25 + suspicion * 0.5) continue;
-      m.status = 'exposed';
-      m.resolvedDay = safeDay;
-      const rName = this.buddies.get(m.requesterId)?.displayName ?? m.requesterId;
-      const tName = this.buddies.get(m.targetId)?.displayName ?? m.targetId;
-      for (const buddyId of [m.requesterId, m.targetId]) {
-        if (!this.buddies.has(buddyId)) continue;
-        this.applySocialAction(buddyId, 'betray_confidence');
-        this.addCoreMemory(buddyId, {
-          text: `Badmouthed ${buddyId === m.requesterId ? tName : rName} — they compared notes (day ${safeDay}). Trust is wrecked.`,
-          kind: 'fact',
-          day: safeDay,
-        });
-        // Both now read you as disloyal (they have proof).
-        this.observePlayerTrait(buddyId, { loyalty: 10 }, safeDay);
-      }
-      this.eventBus.emit('social:mediation_exposed' as any, { mediation: { ...m } });
-      exposed.push({ ...m });
-    }
-    return exposed;
+    return this.mediation.expose(rawA, rawB, day,
+      (requesterId, targetId) => Math.max(
+        this.getNpcBond(requesterId, targetId).dims.suspicion,
+        this.getNpcBond(targetId, requesterId).dims.suspicion,
+      ),
+      (record, safeDay) => {
+        const rName = this.buddies.get(record.requesterId)?.displayName ?? record.requesterId;
+        const tName = this.buddies.get(record.targetId)?.displayName ?? record.targetId;
+        for (const buddyId of [record.requesterId, record.targetId]) {
+          if (!this.buddies.has(buddyId)) continue;
+          this.applySocialAction(buddyId, 'betray_confidence');
+          this.addCoreMemory(buddyId, {
+            text: `Badmouthed ${buddyId === record.requesterId ? tName : rName} — they compared notes (day ${safeDay}). Trust is wrecked.`,
+            kind: 'fact',
+            day: safeDay,
+          });
+          this.observePlayerTrait(buddyId, { loyalty: 10 }, safeDay);
+        }
+        this.eventBus.emit('social:mediation_exposed' as any, { mediation: { ...record } });
+      });
   }
 
   // ---------- Witness log ----------
@@ -971,109 +886,17 @@ export class SocialEngine {
     return [...this.epitaphs];
   }
 
-  // ---------- Reads of the player ----------
+  // ---------- NPC beliefs about the player (single owner) ----------
 
-  /** Neutral prior: strangers assume an average stranger (certainty 0). */
-  public static neutralPlayerRead(): PlayerReadState {
-    return {
-      beliefs: { shyness: 50, warmth: 50, discipline: 50, spontaneity: 50, loyalty: 50 },
-      certainty: 0,
-      updatedDay: 1,
-    };
-  }
-
-  /** A buddy's current read of the player (copy; unknown buddies read neutral). */
-  public getPlayerRead(rawId: string): PlayerReadState {
-    const stored = this.playerReads.get(normalizeBuddyId(rawId));
-    if (!stored) return SocialEngine.neutralPlayerRead();
-    return { beliefs: { ...stored.beliefs }, certainty: stored.certainty, updatedDay: stored.updatedDay };
-  }
-
-  /**
-   * Fold one observation into a buddy's read (beliefs 0..100 per dim).
-   * Early observations swing hard; certainty (+8 each, capped) slows learning —
-   * first impressions form fast and correct slowly. Unknown buddies are ignored.
-   */
+  public static neutralPlayerRead(): PlayerReadState { return PlayerReadLedger.neutral(); }
+  public getPlayerRead(rawId: string): PlayerReadState { return this.playerRead.get(rawId); }
   public observePlayerTrait(rawId: string, obs: Partial<CharacterTraits>, day: number): void {
-    const id = normalizeBuddyId(rawId);
-    if (!this.buddies.has(id)) return;
-    const safeDay = Math.max(1, Math.floor(day) || 1);
-    const current = this.playerReads.get(id) ?? SocialEngine.neutralPlayerRead();
-    const beliefs: CharacterTraits = { ...current.beliefs };
-    for (const [k, v] of Object.entries(obs)) {
-      const key = k as keyof CharacterTraits;
-      if (typeof v !== 'number' || !Number.isFinite(v) || !(key in beliefs)) continue;
-      const target = Math.max(0, Math.min(100, Math.round(v)));
-      const rate = 0.25 * (1 - (current.certainty / 100) * 0.6);
-      beliefs[key] = Math.max(0, Math.min(100, Math.round(beliefs[key] + (target - beliefs[key]) * rate)));
-    }
-    this.playerReads.set(id, {
-      beliefs,
-      certainty: Math.min(100, current.certainty + 8),
-      updatedDay: safeDay,
-    });
+    this.playerRead.observe(rawId, obs, day);
   }
-
-  /**
-   * Blend two buddies' reads toward each other (they compared notes about the
-   * player). Only when both are fairly sure (certainty >= 40); silent by
-   * design — the shift surfaces in their "read of you" lines, not in a log.
-   */
   public alignPlayerReads(rawA: string, rawB: string, day: number): boolean {
-    const a = normalizeBuddyId(rawA);
-    const b = normalizeBuddyId(rawB);
-    if (!a || !b || a === b || !this.buddies.has(a) || !this.buddies.has(b)) return false;
-    const readA = this.playerReads.get(a);
-    const readB = this.playerReads.get(b);
-    if (!readA || !readB || readA.certainty < 40 || readB.certainty < 40) return false;
-    const safeDay = Math.max(1, Math.floor(day) || 1);
-    const blend = (mine: number, theirs: number): number =>
-      Math.max(0, Math.min(100, Math.round(mine + (theirs - mine) * 0.1)));
-    const beliefsA: CharacterTraits = {
-      shyness: blend(readA.beliefs.shyness, readB.beliefs.shyness),
-      warmth: blend(readA.beliefs.warmth, readB.beliefs.warmth),
-      discipline: blend(readA.beliefs.discipline, readB.beliefs.discipline),
-      spontaneity: blend(readA.beliefs.spontaneity, readB.beliefs.spontaneity),
-      loyalty: blend(readA.beliefs.loyalty, readB.beliefs.loyalty),
-    };
-    const beliefsB: CharacterTraits = {
-      shyness: blend(readB.beliefs.shyness, readA.beliefs.shyness),
-      warmth: blend(readB.beliefs.warmth, readA.beliefs.warmth),
-      discipline: blend(readB.beliefs.discipline, readA.beliefs.discipline),
-      spontaneity: blend(readB.beliefs.spontaneity, readA.beliefs.spontaneity),
-      loyalty: blend(readB.beliefs.loyalty, readA.beliefs.loyalty),
-    };
-    this.playerReads.set(a, { beliefs: beliefsA, certainty: readA.certainty, updatedDay: safeDay });
-    this.playerReads.set(b, { beliefs: beliefsB, certainty: readB.certainty, updatedDay: safeDay });
-    return true;
+    return this.playerRead.align(rawA, rawB, day);
   }
-
-  /**
-   * Qualitative "read of you" line for prompts ("quiet but kind, warming up").
-   * Empty while the buddy has no real impression yet (certainty < 25) so the
-   * model defaults to stranger-polite instead of inventing judgments.
-   */
-  public buildPlayerReadContext(rawId: string): string {
-    const id = normalizeBuddyId(rawId);
-    if (!this.buddies.has(id)) return '';
-    const read = this.playerReads.get(id);
-    if (!read || read.certainty < 25) return '';
-    const b = read.beliefs;
-    const labels: string[] = [];
-    if (b.shyness >= 65) labels.push('quiet');
-    else if (b.shyness <= 35) labels.push('outgoing');
-    if (b.warmth >= 65) labels.push('kind');
-    else if (b.warmth <= 35) labels.push('distant');
-    if (b.spontaneity >= 65) labels.push('spontaneous');
-    else if (b.spontaneity <= 35) labels.push('homebody');
-    if (b.loyalty >= 65) labels.push('trustworthy');
-    else if (b.loyalty <= 35) labels.push('unreliable');
-    if (b.discipline >= 65) labels.push('reliable');
-    else if (b.discipline <= 35) labels.push('flaky');
-    const confidence = read.certainty >= 60 ? 'clearly' : read.certainty >= 40 ? 'starting to seem' : 'maybe';
-    const traits = labels.slice(0, 3).join(', ') || 'hard to read';
-    return `Their read of you: ${traits} (${confidence})`;
-  }
+  public buildPlayerReadContext(rawId: string): string { return this.playerRead.buildContext(rawId); }
 
   public sendMessage(
     rawConversationId: string,
