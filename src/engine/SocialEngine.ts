@@ -28,6 +28,7 @@ import { validatePersistedBuddy, sanitizeLanguages } from './CharacterEngine';
 import { conditionFromLegacyStatus, projectLegacyBuddyStatus, validActorCondition } from './semantic/ActorCondition';
 import { parseCoreMemoryMeaning } from './semantic/CoreMemoryMeaning';
 import type { BoardBuddy } from './BoardDirector';
+import { ConversationHistory } from './social/ConversationHistory';
 
 // P3 long-term memory caps (keeps prompt injection bounded and saves small)
 export const MAX_CORE_MEMORIES = 8;
@@ -154,7 +155,8 @@ export class SocialEngine {
   private readonly actorConditions = new Map<string, ActorCondition>();
   private relationships: Map<string, RelationshipDimensions> = new Map();
   private presence: Map<string, BuddyPresence> = new Map();
-  private conversations: Map<string, MessageRecord[]> = new Map();
+  /** One canonical history owner; relationship/presence state never stores transcript bodies. */
+  private readonly conversations = new ConversationHistory(normalizeBuddyId);
   // P3 long-term memory: immortal facts + promise ledger per buddy
   private coreMemories: Map<string, CoreMemory[]> = new Map();
   private promises: Map<string, PromiseRecord[]> = new Map();
@@ -233,7 +235,7 @@ export class SocialEngine {
     this.buddies.set(id, stored);
     if (!this.relationships.has(id)) this.relationships.set(id, { ...stored.initialRelationships });
     if (!this.presence.has(id)) this.presence.set(id, { status: 'offline', awayMessage: '' });
-    if (!this.conversations.has(id)) this.conversations.set(id, []);
+    this.conversations.ensure(id);
     const registered = this.getBuddy(id)!;
     this.eventBus.emit('social:buddy_registered', { buddy: registered });
     return registered;
@@ -282,9 +284,6 @@ export class SocialEngine {
 
     const pres: Record<string, BuddyPresence> = {};
     for (const [id, p] of this.presence.entries()) pres[id] = { ...p };
-
-    const convs: Record<string, MessageRecord[]> = {};
-    for (const [id, msgs] of this.conversations.entries()) convs[id] = msgs.map(m => ({ ...m }));
 
     const mems: Record<string, CoreMemory[]> = {};
     for (const [id, items] of this.coreMemories.entries()) mems[id] = items.map(m => ({
@@ -352,7 +351,7 @@ export class SocialEngine {
     return {
       relationships: rels,
       presence: pres,
-      conversations: convs,
+      conversations: this.conversations.exportAll(),
       buddies: buddyDefs,
       actorConditions,
       removedSeedActorIds,
@@ -431,16 +430,7 @@ export class SocialEngine {
       this.presence.set(normalizeBuddyId(rawId), { ...p });
     }
 
-    this.conversations.clear();
-    for (const [rawId, msgs] of Object.entries(state.conversations)) {
-      const id = normalizeBuddyId(rawId);
-      this.conversations.set(id, msgs.map(m => ({
-        ...m,
-        conversationId: normalizeBuddyId(m.conversationId),
-        senderId: m.senderId === 'player' ? 'player' : normalizeBuddyId(m.senderId),
-        recipientId: m.recipientId === 'player' ? 'player' : normalizeBuddyId(m.recipientId),
-      })));
-    }
+    this.conversations.restore(state.conversations);
 
     // P3 long-term memory restore (validated + capped so corrupt saves can't bloat prompts)
     this.coreMemories.clear();
@@ -638,7 +628,7 @@ export class SocialEngine {
     for (const buddy of this.buddies.values()) {
       if (!this.relationships.has(buddy.id)) this.relationships.set(buddy.id, normalizeRelationshipDims(buddy.initialRelationships));
       if (!this.presence.has(buddy.id)) this.presence.set(buddy.id, { status: 'offline', awayMessage: '' });
-      if (!this.conversations.has(buddy.id)) this.conversations.set(buddy.id, []);
+      this.conversations.ensure(buddy.id);
     }
     // P4 affinity seeds: existing saves win, seeds only fill gaps (old saves get the core-4 ties)
     for (const [key, value] of Object.entries(SEED_AFFINITIES)) {
@@ -650,7 +640,7 @@ export class SocialEngine {
     for (const buddy of this.buddies.values()) {
       this.relationships.set(buddy.id, { ...buddy.initialRelationships });
       this.presence.set(buddy.id, { status: 'offline', awayMessage: '' });
-      this.conversations.set(buddy.id, []);
+      this.conversations.ensure(buddy.id);
     }
     for (const [key, value] of Object.entries(SEED_AFFINITIES)) this.affinities.set(key, value);
   }
@@ -1557,9 +1547,7 @@ export class SocialEngine {
       imageCaption,
     };
 
-    const existing = this.conversations.get(conversationId) || [];
-    existing.push(msg);
-    this.conversations.set(conversationId, existing);
+    this.conversations.append(msg);
 
     // P5.5 visual memory: buddy-sent photos become immortal (capped so facts survive too).
     // Covers every photo path (AI chat, scripts) since all funnel through here.
@@ -1581,16 +1569,7 @@ export class SocialEngine {
 
   /** Mutate the canonical conversation only if unread messages exist. */
   public markAsRead(rawConversationId: string): boolean {
-    const msgs = this.conversations.get(normalizeBuddyId(rawConversationId));
-    if (!msgs) return false;
-    let changed = false;
-    for (const m of msgs) {
-      if (!m.isRead) {
-        m.isRead = true;
-        changed = true;
-      }
-    }
-    return changed;
+    return this.conversations.markRead(rawConversationId);
   }
 
   /** A derived public projection; callers cannot write to the live roster via status. */
@@ -1915,92 +1894,34 @@ export class SocialEngine {
     total: number;
     hasOlder: boolean;
   } {
-    const conversationId = normalizeBuddyId(rawConversationId);
-    const list = this.conversations.get(conversationId) ?? [];
-    const safeOffset = Number.isFinite(offset) ? Math.max(0, Math.floor(offset)) : 0;
-    const safeLimit = Number.isFinite(limit) ? Math.max(0, Math.min(50, Math.floor(limit))) : 30;
-    const end = Math.max(0, list.length - safeOffset);
-    const start = Math.max(0, end - safeLimit);
-    return {
-      conversationId,
-      messages: list.slice(start, end).map(m => ({
-        ...m, ...(m.tags ? { tags: [...m.tags] } : {}),
-      })),
-      total: list.length,
-      hasOlder: start > 0,
-    };
+    return this.conversations.page(rawConversationId, offset, limit);
   }
 
-  /** A bounded 500-contact unread index, independent of any message payload.
-   * The player-visible projection must not reveal unlearned actors via IDs/counts.
-   * Internal simulation callers retain the unfiltered canonical index.
-   */
+  /** Source-owned unread counts, indexed by ConversationHistory (no transcript scan). */
   public getConversationUnreadCounts(maxConversations = 500, playerKnownOnly = false): Record<string, number> {
-    const limit = Number.isFinite(maxConversations)
-      ? Math.max(0, Math.min(500, Math.floor(maxConversations))) : 500;
-    const counts: Record<string, number> = {};
-    let indexed = 0;
-    for (const [actorId, messages] of this.conversations) {
-      if (playerKnownOnly && !this.isKnown(actorId)) continue;
-      if (indexed >= limit) break;
-      let unread = 0;
-      for (const message of messages) {
-        if (message.senderId !== 'player' && !message.isRead) unread++;
-      }
-      if (unread > 0) counts[actorId] = unread;
-      indexed++;
-    }
-    return counts;
+    return this.conversations.unreadCounts(
+      maxConversations, playerKnownOnly ? id => this.isKnown(id) : () => true,
+    );
   }
 
-  /** Day-presence check without copying a long conversation to React. */
+  /** Day presence is derived once by ConversationHistory; offline timestamps may be unordered. */
   public hasConversationMessageOnDay(rawConversationId: string, day: number): boolean {
-    const messages = this.conversations.get(normalizeBuddyId(rawConversationId));
-    if (!messages || !Number.isInteger(day)) return false;
-    for (let index = messages.length - 1; index >= 0; index--) {
-      const message = messages[index]!;
-      if (message.day === day) return true;
-      // Message inserts are not guaranteed chronological (offline delivery),
-      // so we scan through all entries rather than assume a sorted timeline.
-    }
-    return false;
+    return this.conversations.hasMessageOnDay(rawConversationId, day);
   }
 
-  /** Bounded System Tray read: totals stay exact for visible conversations.
-   * Canonical callers may retain private actor history without exposing it to UI.
-   */
+  /** Bounded preview of only source-owned unread messages, never all historical bodies. */
   public getUnreadTraySummary(maxPreview = 4, playerKnownOnly = false): {
     unreadCount: number;
     previews: Array<{ id: string; buddyId: string; buddyName: string; text: string }>;
   } {
-    const limit = Number.isFinite(maxPreview) ? Math.max(0, Math.min(10, Math.floor(maxPreview))) : 4;
-    let unreadCount = 0;
-    const newest: Array<{ id: string; buddyId: string; buddyName: string; text: string; minute: number }> = [];
-    for (const [buddyId, conversation] of this.conversations) {
-      if (playerKnownOnly && !this.isKnown(buddyId)) continue;
-      for (const message of conversation) {
-        if (message.senderId === 'player' || message.isRead) continue;
-        unreadCount++;
-        if (limit === 0) continue;
-        const row = {
-          id: message.id,
-          buddyId,
-          buddyName: this.buddies.get(buddyId)?.displayName ?? buddyId,
-          text: message.text,
-          minute: message.timestampMinute,
-        };
-        newest.push(row);
-        newest.sort((a, b) => b.minute - a.minute || b.id.localeCompare(a.id));
-        if (newest.length > limit) newest.pop();
-      }
-    }
-    return {
-      unreadCount,
-      previews: newest.map(({ id, buddyId, buddyName, text }) => ({ id, buddyId, buddyName, text })),
-    };
+    return this.conversations.unreadTray(
+      maxPreview,
+      playerKnownOnly ? id => this.isKnown(id) : () => true,
+      id => this.buddies.get(id)?.displayName ?? id,
+    );
   }
 
-  /** One row per visible contact; no full SocialEngineState projection. */
+  /** Public messenger rows use derived conversation indices, not historical message arrays. */
   public getMessengerSummary(maxContacts = 32): Array<{
     actorId: string;
     displayName: string;
@@ -2015,20 +1936,15 @@ export class SocialEngine {
     const rows = [];
     for (const [id, buddy] of this.buddies) {
       if (!this.isKnown(id)) continue;
-      const conversation = this.conversations.get(id) ?? [];
-      const latest = conversation[conversation.length - 1];
-      let unread = 0;
-      for (let i = conversation.length - 1; i >= 0 && unread < 9999; i--) {
-        if (conversation[i]?.senderId !== 'player' && !conversation[i]?.isRead) unread++;
-      }
+      const summary = this.conversations.summary(id);
       rows.push({
         actorId: id,
         displayName: buddy.displayName,
         handle: buddy.handle,
         onlineStatus: this.presence.get(id)?.status ?? 'offline',
         relationshipStage: this.getRelationshipStage(id),
-        lastMessageMinute: latest?.timestampMinute ?? null,
-        unread,
+        lastMessageMinute: summary.lastMessageMinute,
+        unread: summary.unread,
       });
     }
     rows.sort((a, b) => (b.lastMessageMinute ?? -1) - (a.lastMessageMinute ?? -1)
@@ -2036,63 +1952,24 @@ export class SocialEngine {
     return rows.slice(0, limit);
   }
 
-  /**
-   * Last actual offline message from this contact, for the login anti-link
-   * cadence. Scans canonical history backwards without copying transcripts,
-   * regardless of out-of-order offline delivery timestamps.
-   *
-   * This is an internal Social owner query, not a player-visible projection.
-   */
   public getLastOfflineMessageText(rawConversationId: string): string | null {
-    const id = normalizeBuddyId(rawConversationId);
-    const messages = this.conversations.get(id);
-    if (!messages) return null;
-    for (let i = messages.length - 1; i >= 0; i--) {
-      const message = messages[i]!;
-      if (message.senderId === id && message.tags?.includes('offline-message')) {
-        return message.text;
-      }
-    }
-    return null;
+    return this.conversations.lastOfflineMessage(rawConversationId);
   }
 
+  /** Explicit conversation export for Save Log/legacy; normal UI uses bounded pages. */
   public getMessages(rawConversationId: string): MessageRecord[] {
-    const msgs = this.conversations.get(normalizeBuddyId(rawConversationId)) || [];
-    return msgs.map(m => ({ ...m }));
+    return this.conversations.allMessages(rawConversationId);
   }
 
-  /** P6.5 last footprint: latest conversation minute with a buddy (either direction), 0 when never. */
   public getLastActivityMinute(rawBuddyId: string): number {
-    const msgs = this.conversations.get(normalizeBuddyId(rawBuddyId)) || [];
-    let last = 0;
-    for (const m of msgs) {
-      if (typeof m.timestampMinute === 'number' && m.timestampMinute > last) last = m.timestampMinute;
-    }
-    return last;
+    return this.conversations.lastActivity(rawBuddyId);
   }
 
-  /** Latest minute the PLAYER wrote anything (any buddy), 0 when never. Solitude accounting. */
   public getLastPlayerMessageMinute(): number {
-    let last = 0;
-    for (const msgs of this.conversations.values()) {
-      for (const m of msgs) {
-        if (m.senderId === 'player' && typeof m.timestampMinute === 'number' && m.timestampMinute > last) {
-          last = m.timestampMinute;
-        }
-      }
-    }
-    return last;
+    return this.conversations.lastPlayerMessageMinute();
   }
 
-  /** True when the player wrote at least one line on the given game day. */
   public didPlayerWriteOnDay(day: number): boolean {
-    const safeDay = Math.max(1, Math.floor(day) || 1);
-    for (const msgs of this.conversations.values()) {
-      for (const m of msgs) {
-        if (m.senderId !== 'player' || typeof m.timestampMinute !== 'number') continue;
-        if (Math.floor(m.timestampMinute / 1440) + 1 === safeDay) return true;
-      }
-    }
-    return false;
+    return this.conversations.playerWroteOnDay(day);
   }
 }
