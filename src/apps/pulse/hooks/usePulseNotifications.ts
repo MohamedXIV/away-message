@@ -5,56 +5,50 @@ import { soundManager } from '../../../audio/SoundManager';
 import { PulseNotification } from '../types';
 
 export function usePulseNotifications(activeTabBuddyId: string | null) {
-  const conversations = useSimulationStore((s) => s.state.social.conversations);
   const engine = useSimulationStore((s) => s.engine);
   const windows = useWindowStore((s) => s.windows);
   const activeWindowId = useWindowStore((s) => s.activeWindowId);
 
   const [activeToasts, setActiveToasts] = useState<PulseNotification[]>([]);
   const seenMessageIds = useRef<Set<string>>(new Set());
-  const isInitialMount = useRef(true);
 
   useEffect(() => {
-    if (isInitialMount.current) {
-      Object.values(conversations).forEach((msgs) => {
-        msgs.forEach((m) => seenMessageIds.current.add(m.id));
-      });
-      isInitialMount.current = false;
-      return;
-    }
+    // #172: listen to source events rather than scanning every saved message
+    // across every conversation after each simulation revision.
+    const off = engine.events.on('social:message_received', ({ message: msg }) => {
+      if (seenMessageIds.current.has(msg.id)) return;
+      seenMessageIds.current.add(msg.id);
+      if (seenMessageIds.current.size > 1024) {
+        const oldestId = seenMessageIds.current.values().next().value;
+        if (oldestId) seenMessageIds.current.delete(oldestId);
+      }
+      if (msg.senderId === 'player') return;
+      const buddyId = msg.conversationId;
+      // The source event is private simulation truth. Only a learned contact
+      // may generate a player-visible toast, text snippet or audible buzz.
+      if (!engine.social.isKnown(buddyId)) return;
 
-    const pulseWin = windows['pulse'];
-    const isPulseInactive = !pulseWin || !pulseWin.isOpen || pulseWin.isMinimized || activeWindowId !== 'pulse';
-
-    Object.entries(conversations).forEach(([buddyId, msgs]) => {
-      msgs.forEach((msg) => {
-        if (!seenMessageIds.current.has(msg.id)) {
-          seenMessageIds.current.add(msg.id);
-
-          // Incoming NPC buzz: MSN-style nudge (sound + window shake via 'pulse:buzz').
-          if (msg.senderId !== 'player' && (msg.tags ?? []).includes('buzz')) {
-            try { soundManager.play('buzz'); } catch { /* audio is best-effort */ }
-            try { window.dispatchEvent(new CustomEvent('pulse:buzz')); } catch { /* event is best-effort */ }
-          }
-          if (msg.senderId !== 'player' && (isPulseInactive || activeTabBuddyId !== buddyId)) {
-            const buddy = engine.social.getBuddy(buddyId);
-            const newToast: PulseNotification = {
-              id: 'toast_' + msg.id,
-              buddyId,
-              buddyName: buddy?.displayName || buddyId,
-              buddyHandle: buddy?.handle || buddyId,
-              avatarUrl: undefined,
-              textSnippet: msg.text,
-              timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-              createdAt: Date.now(),
-            };
-
-            setActiveToasts((prev) => [...prev.slice(-2), newToast]);
-          }
-        }
-      });
+      if ((msg.tags ?? []).includes('buzz')) {
+        try { soundManager.play('buzz'); } catch { /* best effort */ }
+        try { window.dispatchEvent(new CustomEvent('pulse:buzz')); } catch { /* best effort */ }
+      }
+      const pulseWin = windows['pulse'];
+      const isPulseInactive = !pulseWin || !pulseWin.isOpen || pulseWin.isMinimized || activeWindowId !== 'pulse';
+      if (!isPulseInactive && activeTabBuddyId === buddyId) return;
+      const buddy = engine.social.getBuddy(buddyId);
+      setActiveToasts(prev => [...prev.slice(-2), {
+        id: 'toast_' + msg.id,
+        buddyId,
+        buddyName: buddy?.displayName || buddyId,
+        buddyHandle: buddy?.handle || buddyId,
+        avatarUrl: undefined,
+        textSnippet: msg.text,
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        createdAt: Date.now(),
+      }]);
     });
-  }, [conversations, windows, activeWindowId, activeTabBuddyId, engine]);
+    return off;
+  }, [engine, windows, activeWindowId, activeTabBuddyId]);
 
   const dismissToast = (toastId: string) => {
     setActiveToasts((prev) => prev.filter((t) => t.id !== toastId));

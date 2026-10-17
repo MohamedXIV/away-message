@@ -79,6 +79,26 @@ export class HardwareEngine {
     };
   }
 
+  /** Small, allocation-free PC existence check for OS hotkeys. */
+  public hasAssembledComputer(): boolean {
+    return this.computer.assembled;
+  }
+
+  /** Owner-backed network indicators; does not build the full hardware compatibility state. */
+  public getNetworkSummary(): Pick<HardwareState, 'connectionType' | 'connectionSpeedKbps'> {
+    const card = this.computer.assembled ? this.computer.networkCard : null;
+    const connectionType = card && card.type !== 'ethernet_10_100' ? card.type : null;
+    return {
+      connectionType,
+      connectionSpeedKbps: connectionType ? card?.speedKbps ?? 0 : 0,
+    };
+  }
+
+  /** Scalar boot inputs; no RAM, drive or peripheral snapshots. */
+  public getComputerBootStatus(): Pick<ComputerSetupState, 'assembled' | 'poweredOn'> {
+    return { assembled: this.computer.assembled, poweredOn: this.computer.poweredOn };
+  }
+
   public getComputerState(): Readonly<ComputerSetupState> {
     return cloneComputer(this.computer);
   }
@@ -146,6 +166,7 @@ export class HardwareEngine {
 
   public setPower(isPoweredOn: boolean): void {
     const nextPower = this.computer.assembled ? isPoweredOn : false;
+    if (this.computer.poweredOn === nextPower) return;
     this.computer = { ...this.computer, poweredOn: nextPower };
     this.eventBus.emit('hardware:power_changed', { isPoweredOn: nextPower });
   }

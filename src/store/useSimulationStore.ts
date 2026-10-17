@@ -24,6 +24,29 @@ import {
 // Default singleton engine instance
 const defaultEngine = new SimulationEngine();
 
+/**
+ * #172: deprecated full-state compatibility is an explicit read, not hot
+ * publication. Every revision gets a fresh lazy facade and only the FIRST
+ * property access materializes a full composed snapshot. React views must use
+ * owner-backed projections instead; persistence uses engine.exportSnapshot().
+ *
+ * The facade is local legacy glue (not Worker wire data); bounded read models
+ * and SimulationChange remain plain serializable objects.
+ */
+function createLegacySnapshotView(engine: SimulationEngine): StrictSimulationState {
+  let materialized: StrictSimulationState | null = null;
+  const read = (): StrictSimulationState =>
+    (materialized ??= engine.getState() as StrictSimulationState);
+  return new Proxy({} as StrictSimulationState, {
+    get: (_target, property) => Reflect.get(read(), property),
+    has: (_target, property) => Reflect.has(read(), property),
+    ownKeys: () => Reflect.ownKeys(read()),
+    getOwnPropertyDescriptor: (_target, property) =>
+      Reflect.getOwnPropertyDescriptor(read(), property),
+    set: () => false,
+  });
+}
+
 export interface SimulationStoreState {
   engine: SimulationEngine;
   state: StrictSimulationState;
@@ -108,52 +131,51 @@ export const useSimulationStore = create<SimulationStore>()(
     let unsubscribeEngine: (() => void) | null = null;
 
     const setupEngineSubscription = (engineInstance: SimulationEngine) => {
-      if (unsubscribeEngine) {
-        unsubscribeEngine();
-      }
-      unsubscribeEngine = engineInstance.subscribe(() => {
-        const newState = engineInstance.getState();
+      unsubscribeEngine?.();
+      let initial = true;
+      unsubscribeEngine = engineInstance.subscribeChanges(() => {
+        // subscribeChanges synchronously supplies a baseline; setEngine
+        // publishes it once below, not twice.
+        if (initial) { initial = false; return; }
         set({
-          state: newState,
+          state: createLegacySnapshotView(engineInstance),
           isPaused: engineInstance.clock.isPaused(),
-          activeView: newState.activeView,
+          activeView: engineInstance.getHudProjection().activeView,
         });
       });
     };
 
-    // Initial subscription
     setupEngineSubscription(defaultEngine);
 
     return {
       engine: defaultEngine,
-      state: defaultEngine.getState(),
+      state: createLegacySnapshotView(defaultEngine),
       isPaused: defaultEngine.clock.isPaused(),
-      activeView: defaultEngine.getState().activeView,
+      activeView: defaultEngine.getHudProjection().activeView,
 
       setEngine: (engine: SimulationEngine) => {
         setupEngineSubscription(engine);
         set({
           engine,
-          state: engine.getState(),
+          state: createLegacySnapshotView(engine),
           isPaused: engine.clock.isPaused(),
-          activeView: engine.getState().activeView,
+          activeView: engine.getHudProjection().activeView,
         });
       },
 
       syncStateFromEngine: () => {
-        const { engine } = get();
-        set({
-          state: engine.getState(),
-          isPaused: engine.clock.isPaused(),
-          activeView: engine.getState().activeView,
-        });
+        // Explicit boundary for direct domain methods used by legacy modals.
+        // The existing store subscription consumes the single delivered
+        // snapshot; bounded hooks receive the same revision atomically.
+        get().engine.publishExternalChange();
       },
 
       dispatchAction: (action: SimulationAction): ActionResult => {
         const { engine } = get();
-        const result = engine.dispatchAction(action);
-        get().syncStateFromEngine();
-        return result;
+        // The source owner is the ONLY authority for publishing revisions.
+        // In particular, successful no-ops (empty Trash, zero-minute jumps,
+        // idempotent commands) must not manufacture a state change.
+        return engine.dispatchAction(action);
       },
 
       // Convenience Action Wrappers
@@ -214,26 +236,38 @@ export const useSimulationStore = create<SimulationStore>()(
       },
 
       setupComputerAtHome: () => {
-        const result = get().engine.setupComputerAtHome();
-        get().syncStateFromEngine();
+        const engine = get().engine;
+        const result = engine.setupComputerAtHome();
+        // Canonical Computer Ownership already publishes actual Inventory,
+        // Hardware, OS and clock changes atomically. Failed/idempotent calls
+        // deliberately do not publish another synthetic revision.
         return result;
       },
 
       setComputerPower: (poweredOn) => {
-        const result = get().engine.setComputerPower(poweredOn);
-        get().syncStateFromEngine();
+        const engine = get().engine;
+        const result = engine.setComputerPower(poweredOn);
+        // Canonical Computer Ownership already publishes actual Inventory,
+        // Hardware, OS and clock changes atomically. Failed/idempotent calls
+        // deliberately do not publish another synthetic revision.
         return result;
       },
 
       insertOwnedMediaAtHome: (instanceId) => {
-        const result = get().engine.insertOwnedMediaAtHome(instanceId);
-        get().syncStateFromEngine();
+        const engine = get().engine;
+        const result = engine.insertOwnedMediaAtHome(instanceId);
+        // Canonical Computer Ownership already publishes actual Inventory,
+        // Hardware, OS and clock changes atomically. Failed/idempotent calls
+        // deliberately do not publish another synthetic revision.
         return result;
       },
 
       ejectOwnedMediaAtHome: () => {
-        const result = get().engine.ejectOwnedMediaAtHome();
-        get().syncStateFromEngine();
+        const engine = get().engine;
+        const result = engine.ejectOwnedMediaAtHome();
+        // Canonical Computer Ownership already publishes actual Inventory,
+        // Hardware, OS and clock changes atomically. Failed/idempotent calls
+        // deliberately do not publish another synthetic revision.
         return result;
       },
 
@@ -242,8 +276,11 @@ export const useSimulationStore = create<SimulationStore>()(
       },
 
       commitOsInstall: (plan) => {
-        const result = get().engine.commitOsInstall(plan);
-        get().syncStateFromEngine();
+        const engine = get().engine;
+        const result = engine.commitOsInstall(plan);
+        // Canonical Computer Ownership already publishes actual Inventory,
+        // Hardware, OS and clock changes atomically. Failed/idempotent calls
+        // deliberately do not publish another synthetic revision.
         return result;
       },
 

@@ -1,10 +1,9 @@
 import React, { useState } from 'react';
 import { SiteRouteProps } from '../types';
 import { soundManager } from '../../audio/SoundManager';
-import { useSimulationStore } from '../../store/useSimulationStore';
+import { useNightBoardThreads, useSimulationWebsite } from '../../store/useBoundedSimulationRead';
 import { getNightBoardDynamicThreads } from '../worldSiteHelpers';
-import { buildWeeklyNpcThreads, buildWeeklyWeatherThread, npcThreadWeek, type NpcThread } from '../../engine/BoardDirector';
-import { getWeatherForDay, gameDayName } from '../../engine/WeatherEngine';
+import type { NpcThread } from '../../engine/BoardDirector';
 
 interface PostRecord {
   id: number;
@@ -104,37 +103,9 @@ const INITIAL_THREADS: ThreadRecord[] = [
 ];
 
 export const NightBoardSite: React.FC<SiteRouteProps> = (props) => {
-  const world = useSimulationStore((s) => s.state.world);
-  const time = useSimulationStore((s) => s.state.time);
-  const engine = useSimulationStore((s) => s.engine);
+  const { world, time } = useSimulationWebsite();
+  const { threads: npcThreads } = useNightBoardThreads();
   const dynamicThreads = getNightBoardDynamicThreads(world, time.day);
-  // P5.6 NPC-authored threads: deterministic per week (current + previous stay visible)
-  const npcThreads: NpcThread[] = (() => {
-    try {
-      const buddies = engine.social.getBuddies().map((b) => ({
-        id: b.id,
-        displayName: b.displayName,
-        handle: b.handle,
-        archetype: b.archetype,
-        stage: engine.social.getRelationshipStage(b.id),
-        status: b.status,
-        roles: b.roles ?? [],
-      }));
-      const aff = (a: string, b: string): number => {
-        try { return engine.social.getAffinity(a, b); } catch { return 0; }
-      };
-      const titles = world.triggeredEvents.map((e) => e.title);
-      const week = npcThreadWeek(time.day);
-      const weeks = [week - 1, week].filter((w) => w >= 0);
-      const out = weeks.flatMap((w) => buildWeeklyNpcThreads(w * 7 + 1, buddies, aff, titles));
-      // P6.2 weekly weather thread rides along (same weeks, deterministic ids)
-      for (const w of weeks) {
-        const wx = buildWeeklyWeatherThread(w * 7 + 1, buddies, getWeatherForDay, gameDayName, aff);
-        if (wx) out.push(wx);
-      }
-      return out;
-    } catch { return []; }
-  })();
   const toThreadRecord = (n: NpcThread): ThreadRecord => ({
     id: n.numericId,
     title: n.title,

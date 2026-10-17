@@ -1,7 +1,9 @@
 import React, { useEffect, useRef } from 'react';
-import { MessageRecord, BuddyCharacter } from '../../../engine/types';
+import type { MessageRecord } from '../../../engine/types';
+import type { SimulationPulseContact } from '../../../engine/kernel/SimulationPublication';
 import { formatSimulationMinutes } from '../utils/timeFormat';
 import { useSimulationStore } from '../../../store/useSimulationStore';
+import { useSimulationChrome } from '../../../store/useBoundedSimulationRead';
 import { useWindowStore } from '../../../store/useWindowStore';
 import { renderWithLinksAndEmoticons } from '../utils/linkDetector';
 import { pulseHasFeature } from '../../../engine/PulseCatalog';
@@ -11,14 +13,17 @@ import { soundManager } from '../../../audio/SoundManager';
 
 interface MessageHistoryViewProps {
   messages: MessageRecord[];
-  buddy: BuddyCharacter;
+  /** Total persisted messages, even when the current UI displays one page. */
+  totalMessages?: number;
+  buddy: SimulationPulseContact;
 }
 
-export const MessageHistoryView: React.FC<MessageHistoryViewProps> = ({ messages, buddy }) => {
-  const isOrion60 = useSimulationStore((s) => s.state.os.currentOsId === 'Orion_6.0');
+export const MessageHistoryView: React.FC<MessageHistoryViewProps> = ({ messages, totalMessages = messages.length, buddy }) => {
+  const chrome = useSimulationChrome();
+  const isOrion60 = chrome.osVersion === 'Orion_6.0';
   // Pulse 6 generation: buddies tint their own names + animated emoticons move.
-  const pulse6 = useSimulationStore((s) => pulseHasFeature(s.state.pulse.currentPulseId, 'buddy-colors'));
-  const pulse6Animated = useSimulationStore((s) => pulseHasFeature(s.state.pulse.currentPulseId, 'animated-emoticons'));
+  const pulse6 = pulseHasFeature(chrome.pulseVersion, 'buddy-colors');
+  const pulse6Animated = pulseHasFeature(chrome.pulseVersion, 'animated-emoticons');
   const openWindow = useWindowStore((s) => s.openWindow);
   const dispatchAction = useSimulationStore((s) => s.dispatchAction);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -47,10 +52,13 @@ export const MessageHistoryView: React.FC<MessageHistoryViewProps> = ({ messages
   };
 
   const handleSaveLog = () => {
-    if (messages.length === 0) return;
-    const day = Math.floor((messages[0]?.timestampMinute || 0) / 1440) + 1;
+    // Save is an explicit export operation, not the hot visual projection.
+    // A paged history must never silently truncate the player's saved log.
+    const completeLog = useSimulationStore.getState().engine.social.getMessages(buddy.id);
+    if (completeLog.length === 0) return;
+    const day = Math.floor((completeLog[0]?.timestampMinute || 0) / 1440) + 1;
     const fileName = `Pulse_${buddy.handle}_Day${day}.txt`;
-    const logContent = messages.map((msg) => {
+    const logContent = completeLog.map((msg) => {
       const time = formatSimulationMinutes(msg.timestampMinute);
       const sender = msg.senderId === 'player' ? 'wanderer06' : buddy.displayName;
       const offlineMark = msg.deliveredAway ? ' [offline]' : '';
@@ -80,8 +88,8 @@ export const MessageHistoryView: React.FC<MessageHistoryViewProps> = ({ messages
   return (
     <div className="flex flex-col flex-1 overflow-hidden">
       <div className="flex items-center justify-between border-b border-gray-300 bg-[#ece9d8] px-2 py-1">
-        <span className="text-[11px] font-bold text-gray-600">{messages.length} messages • {buddy.displayName}</span>
-        <button onClick={handleSaveLog} disabled={messages.length === 0} className="rounded border border-gray-400 bg-white px-2 py-0.5 text-[11px] hover:bg-blue-50 disabled:opacity-40">💾 Save log</button>
+        <span className="text-[11px] font-bold text-gray-600">{messages.length === totalMessages ? `${messages.length} messages` : `${messages.length} / ${totalMessages} messages`} • {buddy.displayName}</span>
+        <button onClick={handleSaveLog} disabled={totalMessages === 0} className="rounded border border-gray-400 bg-white px-2 py-0.5 text-[11px] hover:bg-blue-50 disabled:opacity-40">💾 Save log</button>
       </div>
     <div
       ref={scrollRef}

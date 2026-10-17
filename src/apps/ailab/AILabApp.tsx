@@ -5,6 +5,7 @@ import { loadAISettings, saveAISettings } from '../../ai/settings';
 import type { AIProviderId, AISettings, BenchmarkResult } from '../../ai/types';
 import { generateCharacterImage } from '../../ai/imageService';
 import { useSimulationStore } from '../../store/useSimulationStore';
+import { useSimulationHud } from '../../store/useBoundedSimulationRead';
 import { ProceduralDirector } from '../../engine/ProceduralDirector';
 import { pickTemplateEvents } from '../../ai/proceduralTemplates';
 import type { ProceduralWorldEvent } from '../../ai/proceduralSchemas';
@@ -33,7 +34,7 @@ export const AILabApp: React.FC = () => {
   const [imageResult, setImageResult] = useState<{ url: string; provider: string; fallback: boolean; error?: string } | null>(null);
 
   // Procedural Director tuning
-  const worldDay = useSimulationStore((s) => s.state.time.day);
+  const worldDay = useSimulationHud().time.day;
   const [procSeed, setProcSeed] = useState('oakhaven-lab');
   const [procTone, setProcTone] = useState<'grounded' | 'whimsical' | 'melancholy' | 'hopeful'>('grounded');
   const [procMaxEvents, setProcMaxEvents] = useState(2);
@@ -183,8 +184,7 @@ export const AILabApp: React.FC = () => {
     try {
       const allowed = buildWeightedAllowed();
       const prefer = buildPreferList();
-      const director = new ProceduralDirector(engine.world);
-      const res = await director.generateNextBatch(worldDay, engine.clock.getTotalMinutes(), {
+      const res = await engine.generateProceduralEvents({
         worldSeed: procSeed || 'oakhaven-lab',
         maxEvents: procMaxEvents,
         allowedCategories: allowed as any,
@@ -322,17 +322,7 @@ export const AILabApp: React.FC = () => {
         blurb: preview.blurb ?? '',
         isProcedural: true,
       } as unknown as import('../../engine/OsCatalog').OsRelease;
-      (engine as any).os.registerProceduralRelease(rel);
-      // Also create a world event so CityWire/NPCs know
-      engine.world.injectProceduralEvents([{
-        id: `os_${rel.id}`.replace(/[^a-z0-9_]/g,'_'),
-        title: rel.displayName,
-        description: rel.changelog.join(' • '),
-        category: 'os_release',
-        triggerDay: rel.releaseDay,
-        knowledgePrompt: `${rel.displayName} is out — ${rel.blurb} Needs ${rel.requirements.minRamMB}MB RAM.`,
-        siteUrl: 'http://orionsoft.local/',
-      } as any]);
+      engine.registerLabOsRelease(rel);
       setOsMeta({ source: 'injected' });
       setNotice(`OS injected: ${rel.displayName} for Day ${rel.releaseDay} — check TechMart/Control Panel.`);
     } catch (err) {

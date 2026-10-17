@@ -26,6 +26,11 @@ describe('PhysicalShopSessionRuntime — single persisted shop and item owner', 
     const owner = session(engine);
     const first = engine.getPhysicalShopState(STORE, SEED, FIXTURES);
     expect(owner.getPhysicalShopState(STORE, SEED, FIXTURES)).toEqual(first);
+    // Inspecting deterministic stock must not create canonical items or a
+    // hidden revision. Initial arrival explicitly commits the seed once.
+    expect(engine.exportSnapshot().physicalShops[STORE]).toBeUndefined();
+    expect(engine.initializePhysicalShop(STORE, SEED, FIXTURES)).toBe(true);
+    expect(engine.initializePhysicalShop(STORE, SEED, FIXTURES)).toBe(false);
     expect(engine.exportSnapshot().physicalShops[STORE]).toEqual(first);
 
     const itemId = first.stockBySlot['fixture:shelf:0']!;
@@ -93,6 +98,7 @@ describe('PhysicalShopSessionRuntime — single persisted shop and item owner', 
   it('returns defensive session projections without giving callers writable authority', () => {
     const engine = new SimulationEngine();
     const source = engine.getPhysicalShopState(STORE, SEED, FIXTURES);
+    engine.initializePhysicalShop(STORE, SEED, FIXTURES);
     const detached = session(engine).getState();
     detached[STORE]!.stockBySlot['fixture:shelf:0'] = 'fake';
     expect(engine.getPhysicalShopState(STORE, SEED, FIXTURES)).toEqual(source);

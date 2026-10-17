@@ -1,8 +1,9 @@
 import React from 'react';
-import { BuddyCharacter, BuddyPresence } from '../../../engine/types';
+import type { BuddyPresence } from '../../../engine/types';
+import type { SimulationPulseContact } from '../../../engine/kernel/SimulationPublication';
 
 interface BuddyItemProps {
-  buddy: BuddyCharacter;
+  buddy: SimulationPulseContact;
   presence: BuddyPresence;
   unreadCount?: number;
   onOpenChat: (buddyId: string) => void;

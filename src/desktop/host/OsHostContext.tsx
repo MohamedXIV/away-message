@@ -9,6 +9,7 @@ import type {
 } from '../../engine/types';
 import type { DownloadClientProfile } from '../../engine/DownloadManager';
 import { useSimulationStore } from '../../store/useSimulationStore';
+import { useSimulationApps } from '../../store/useBoundedSimulationRead';
 import { useWindowStore } from '../../store/useWindowStore';
 import { soundManager } from '../../audio/SoundManager';
 import { synthAudio } from '../../audio/SynthAudio';
@@ -110,15 +111,16 @@ export interface OsHostProviderProps {
 export const OsHostProvider: React.FC<OsHostProviderProps> = ({ windowId, children }) => {
   const engine = useSimulationStore((s) => s.engine);
   const syncStateFromEngine = useSimulationStore((s) => s.syncStateFromEngine);
-  const osVersion = useSimulationStore((s) => s.state.os.currentOsId);
-  const computerAssembled = useSimulationStore((s) => s.state.computer.assembled);
-  const computerPoweredOn = useSimulationStore((s) => s.state.computer.poweredOn);
-  const ramMb = useSimulationStore((s) => s.state.hardware.ramMB);
-  const hddFreeGB = useSimulationStore((s) => s.state.hardware.hddFreeGB);
-  const cpuTier = useSimulationStore((s) => s.state.hardware.cpuTier);
-  const connectionType = useSimulationStore((s) => s.state.hardware.connectionType);
-  const connectionSpeedKbps = useSimulationStore((s) => s.state.hardware.connectionSpeedKbps);
-  const downloads = useSimulationStore((s) => s.state.downloads || []);
+  const appRead = useSimulationApps();
+  const osVersion = appRead.os.currentOsId;
+  const computerAssembled = appRead.computer.assembled;
+  const computerPoweredOn = appRead.computer.poweredOn;
+  const ramMb = appRead.hardware.ramMB;
+  const hddFreeGB = appRead.hardware.hddFreeGB;
+  const cpuTier = appRead.hardware.cpuTier;
+  const connectionType = appRead.hardware.connectionType;
+  const connectionSpeedKbps = appRead.hardware.connectionSpeedKbps;
+  const downloads = appRead.downloads;
 
   const closeWindow = useWindowStore((s) => s.closeWindow);
   const minimizeWindow = useWindowStore((s) => s.minimizeWindow);
@@ -159,9 +161,7 @@ export const OsHostProvider: React.FC<OsHostProviderProps> = ({ windowId, childr
       },
       vfs: {
         readFile: async (path: string) => {
-          const files = useSimulationStore.getState().state.vfs.files;
-          const found = Object.values(files || {}).find((f) => f.path === path || f.name === path);
-          return found?.content ?? null;
+          return engine.vfs.findFileByPathOrName(path)?.content ?? null;
         },
         writeFile: async (path: string, content: string) => {
           const name = path.slice(path.lastIndexOf('/') + 1);

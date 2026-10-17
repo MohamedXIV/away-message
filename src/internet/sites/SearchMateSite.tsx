@@ -1,12 +1,13 @@
 import React, { useState } from 'react';
 import { SiteRouteProps } from '../types';
 import { useSimulationStore } from '../../store/useSimulationStore';
+import { useSimulationWebsite, useSimulationApps } from '../../store/useBoundedSimulationRead';
 import { searchInternet } from '../searchIndex';
 
 export const SearchMateSite: React.FC<SiteRouteProps> = ({ navigate, onNavigate, queryParams = {}, searchParams = {} }) => {
-  const currentDay = useSimulationStore((s) => s.state.time.day);
-  const narrativeFlags = useSimulationStore((s) => s.state.narrative.flags);
-  const installedSoftware = useSimulationStore((s) => s.state.installedSoftware || []);
+  const { time, narrativeFlags } = useSimulationWebsite();
+  const currentDay = time.day;
+  const installedSoftware = useSimulationApps().installedSoftware;
   const dispatchAction = useSimulationStore((s) => s.dispatchAction);
 
   const doNavigate = navigate || onNavigate || (() => {});

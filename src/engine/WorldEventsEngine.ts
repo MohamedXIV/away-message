@@ -145,6 +145,8 @@ export class WorldEventsEngine {
   private buddyKnowledge: Map<string, BuddyEventKnowledge[]> = new Map(); // learned public events
   /** Sole authority for structured world facts, rumors and scoped awareness. */
   private readonly semanticKnowledge = new KnowledgeLedger();
+  /** Load-only generation: normal event writes must not invalidate AI work. */
+  private loadEpoch = 0;
 
   constructor(
     eventBus: EventBus,
@@ -162,6 +164,8 @@ export class WorldEventsEngine {
       this.loadState(initialState);
     }
   }
+
+  public getLoadEpoch(): number { return this.loadEpoch; }
 
   public getState(): WorldEventsState {
     if (this._cachedState) return this._cachedState;
@@ -185,6 +189,7 @@ export class WorldEventsEngine {
   }
 
   public loadState(state: Partial<WorldEventsState>): void {
+    this.loadEpoch++;
     this.semanticKnowledge.loadState(state.semanticKnowledge);
     this.flags.clear();
     if (state.flags) {
@@ -340,6 +345,11 @@ export class WorldEventsEngine {
     return event;
   }
 
+  /** Website HUD-visible flags only; never clone NPC knowledge or semantic ledgers. */
+  public getPublicFlags(): Record<string, boolean | number | string> {
+    return Object.fromEntries(this.flags.entries());
+  }
+
   public getTriggeredEvents(): GlobalEvent[] {
     return Array.from(this.triggeredEvents.values()).sort((a, b) => (a.triggeredAtMinute ?? 0) - (b.triggeredAtMinute ?? 0));
   }
@@ -462,6 +472,11 @@ export class WorldEventsEngine {
     return this.semanticKnowledge.forActor(actorId);
   }
 
+  /** One subject's facts and heard claims known to a specified viewer. */
+  public getKnownSemanticContextForSubject(viewerId: string, subjectId: string): ActorKnowledgeView {
+    return this.semanticKnowledge.forActorSubject(viewerId, subjectId);
+  }
+
   // ---- Flags / Appointments / Observations (sandbox world state) ----
 
   public setFlag(key: string, value: boolean | number | string): void {
@@ -544,7 +559,12 @@ export class WorldEventsEngine {
       });
       added.push(evt.id);
     }
-    if (added.length > 0) this.bumpVersion();
+    if (added.length > 0) {
+      this.bumpVersion();
+      // Source provenance for async procedural writers. The consumer's
+      // outer boundary, not this event, decides when to publish a revision.
+      this.eventBus.emit('world:procedural_events_injected' as any, { ids: [...added] });
+    }
     return added;
   }
 

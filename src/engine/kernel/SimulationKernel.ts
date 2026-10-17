@@ -1,7 +1,16 @@
 import type { SimulationState as TransportSimulationState, SimulationAction, ActionResult, HardwareState } from '../types';
 import type { Fulfillment } from '../DeliveryEngine';
+import type { MyPlaceProfile } from '../MyPlaceEngine';
+import type { BuddyPresence, BuddyMetVia } from '../types';
+import type { CharacterDefinition } from '../CharacterEngine';
+import type { OsRelease } from '../OsCatalog';
+import { ProceduralDirector, type DirectorGenerateOptions } from '../ProceduralDirector';
+import { buildRecentNpcMail, buildRentMailHistory, buildWeeklyNpcThreads, buildWeeklyWeatherThread, npcThreadWeek } from '../BoardDirector';
+import { getWeatherForDay, gameDayName } from '../WeatherEngine';
+import { locationLabel } from '../AppointmentDirector';
 import { createEmptyComputerSetup, createEmptyDisplaySetup } from '../hardware/state';
 import { CoreSimulationRuntime } from './CoreSimulationRuntime';
+import { resolvePcBootStateFromOwnerStatus } from './ComputerOwnershipRuntime';
 import { NpcComputerSimulationRuntime } from './NpcComputerSimulationRuntime';
 import { PhysicalSimulationRuntime, type LiveSimulationState, type InitialSimulationState } from './PhysicalSimulationRuntime';
 import {
@@ -9,6 +18,62 @@ import {
   type ActorSemanticView, type SemanticInfluenceView,
 } from '../semantic/ActorSemantics';
 
+import { domainFromEmission } from './SimulationPublication';
+import type {
+  ObservedSimulationDomain,
+  SimulationActorRead,
+  SimulationAppRead,
+  SimulationShopRead,
+  SimulationWebsiteRead,
+  SimulationMyPlacePageRead,
+  SimulationNightBoardRead,
+  SimulationPulseProfileRead,
+  SimulationChromeRead,
+  SimulationDesktopRead,
+  SimulationDirectoryRead,
+  SimulationFileRead,
+  SimulationChange,
+  SimulationConversationRead,
+  SimulationHudProjection,
+  SimulationPlayerStatusRead,
+  SimulationMessengerRead,
+  SimulationPulseContactsRead,
+  SimulationPresenceRead,
+  SimulationMailboxRead,
+  SimulationWorldRead,
+  SimulationSituationRead,
+  SimulationResidenceRead,
+  SimulationJobBoardRead,
+  SimulationTransitRead,
+  SimulationCafeGuestRead,
+} from './SimulationPublication';
+export type {
+  SimulationActorRead,
+  SimulationAppRead,
+  SimulationShopRead,
+  SimulationWebsiteRead,
+  SimulationMyPlacePageRead,
+  SimulationNightBoardRead,
+  SimulationPulseProfileRead,
+  SimulationChromeRead,
+  SimulationDesktopRead,
+  SimulationDirectoryRead,
+  SimulationFileRead,
+  SimulationChange,
+  SimulationConversationRead,
+  SimulationHudProjection,
+  SimulationPlayerStatusRead,
+  SimulationMessengerRead,
+  SimulationPulseContactsRead,
+  SimulationPresenceRead,
+  SimulationMailboxRead,
+  SimulationWorldRead,
+  SimulationSituationRead,
+  SimulationResidenceRead,
+  SimulationJobBoardRead,
+  SimulationTransitRead,
+  SimulationCafeGuestRead,
+} from './SimulationPublication';
 export type { LiveSimulationState } from './PhysicalSimulationRuntime';
 
 /**
@@ -20,9 +85,15 @@ export class SimulationKernel {
   private readonly npc: NpcComputerSimulationRuntime;
   private readonly physical: PhysicalSimulationRuntime;
   private readonly subscribers = new Set<(state: Readonly<LiveSimulationState>) => void>();
+  private readonly changeSubscribers = new Set<(change: Readonly<SimulationChange>) => void>();
+  private revision = 0;
+  /** Ephemeral event provenance between atomic publication boundaries. */
+  private readonly observedDomains = new Set<ObservedSimulationDomain>();
   private hydrating = false;
   private simulationBoundaryDepth = 0;
   private publicationPending = false;
+  /** Discard pending Lab AI decisions if another save is loaded. */
+  private snapshotEpoch = 0;
 
   constructor(initialState?: InitialSimulationState) {
     const computer = initialState?.computer ?? createEmptyComputerSetup();
@@ -45,9 +116,10 @@ export class SimulationKernel {
       advanceGameMinutes: (minutes, reason) => this.advanceGameMinutes(minutes, reason),
       placeGroceryOrder: (items, fulfillment, minute) => this.placeGroceryOrder(items, fulfillment, minute),
       publishState: () => this.notifySubscribers(),
+      commitAutoDiscoveredNewcomer: (buddy, introText, metVia, day) =>
+        this.commitAutoDiscoveredNewcomer(buddy, introText, metVia, day),
     }, normalizedInitial);
     this.npc = new NpcComputerSimulationRuntime(this.core, {
-      getState: () => this.getState(),
       advanceGameMinutes: (minutes, reason) => this.advanceGameMinutes(minutes, reason),
       dispatchAction: (action) => this.dispatchAction(action),
       invalidate: () => this.invalidateStateCache(),
@@ -56,6 +128,12 @@ export class SimulationKernel {
       advanceGameMinutes: (minutes, reason) => this.advanceGameMinutes(minutes, reason),
       dispatchAction: (action) => this.dispatchAction(action),
     }, initialState);
+    // The same shared EventBus is the event source of truth; no polling or
+    // snapshot comparisons. Observations are proof of emitted domains only.
+    this.events.observeEmissions((event) => {
+      const domain = domainFromEmission(event);
+      if (domain) this.observedDomains.add(domain);
+    });
   }
 
   public get clock() { return this.core.clock; }
@@ -137,7 +215,7 @@ export class SimulationKernel {
 
   public dispatchAction(action: SimulationAction): ActionResult {
     if (action.type === 'STORE_PURCHASE_ITEM') {
-      return this.npc.purchaseStoreItem(action.storeId, action.skuId);
+      return this.purchaseStoreItem(action.storeId, action.skuId);
     }
     if (action.type === 'HARDWARE_UPGRADE_OS') {
       return { success: false, error: 'Legacy OS upgrades are retired. Buy, insert, and boot from owned setup media instead.' };
@@ -156,15 +234,699 @@ export class SimulationKernel {
       this.publicationPending = true;
       return;
     }
-    // Reconcile derived mood exactly at the authoritative publication boundary,
-    // never during getState() or a current-format snapshot read.
-    this.mood.publishIfChanged();
+    // A presentation-only Inner Voice update must not advance unrelated
+    // gameplay Mood state. If any other source event was observed, preserve
+    // the normal reconciliation for that combined atomic boundary.
+    const voiceOnly = this.observedDomains.size === 1 && this.observedDomains.has('innerVoice');
+    if (!voiceOnly) this.mood.publishIfChanged();
     this.invalidateStateCache();
-    const state = this.getState();
-    for (const listener of this.subscribers) {
-      try { listener(state); }
-      catch (err) { console.error('[SimulationKernel] Subscriber error:', err); }
+    const observed = [...this.observedDomains].sort();
+    this.observedDomains.clear();
+    // A malicious/buggy first subscriber must not rewrite the delivery for
+    // later subscribers. Frozen plain objects remain Worker-serializable.
+    const change: SimulationChange = Object.freeze({
+      revision: ++this.revision,
+      atMinute: this.clock.getTotalMinutes(),
+      // Conservatively retain 'unknown' until no silent domain writer exists.
+      changedDomains: Object.freeze([...observed, 'unknown'] as const),
+    });
+    for (const listener of this.changeSubscribers) {
+      try { listener(change); }
+      catch (err) { console.error('[SimulationKernel] Change subscriber error:', err); }
     }
+    // Legacy full-state consumers must be migrated under #172. Change-only
+    // subscriptions never pay for a broad snapshot by themselves.
+    if (this.subscribers.size > 0) {
+      const state = this.getState();
+      for (const listener of this.subscribers) {
+        try { listener(state); }
+        catch (err) { console.error('[SimulationKernel] Subscriber error:', err); }
+      }
+    }
+  }
+
+  /**
+   * Explicit publication boundary for direct legacy UI domain commands that
+   * do not go through dispatchAction. This is NOT a state write or snapshot;
+   * it delivers one revision to bounded readers and full state only to
+   * remaining legacy subscribers. Callers must invoke after the mutation.
+   */
+  public publishExternalChange(changedDomains: readonly ObservedSimulationDomain[] = []): void {
+    // Caller must name only owners it has just mutated. This augments
+    // source events and remains conservative: 'unknown' is still retained
+    // until every silent writer is covered.
+    for (const domain of changedDomains) this.observedDomains.add(domain);
+    this.notifySubscribers();
+  }
+
+  /**
+   * Source-backed publication for composed owner writes that emit no EventBus
+   * event. Hold nested action/event notifications (notably shop checkout cash
+   * spending) until the owner has committed. Never publish a failed operation.
+   * This is a notification boundary, not a second source of state authority.
+   */
+  private publishOwnerMutation<T>(
+    domains: readonly ObservedSimulationDomain[],
+    operation: () => T,
+    committed: (result: T) => boolean = () => true,
+  ): T {
+    const before = this.clock.getTotalMinutes();
+    return this.withinBoundary(() => {
+      const result = operation();
+      if (committed(result)) this.publishExternalChange(domains);
+      return result;
+    }, before);
+  }
+
+  public getRevision(): number { return this.revision; }
+
+  /** #172: Worker-serializable revision channel, no broad snapshot read. */
+  public subscribeChanges(listener: (change: Readonly<SimulationChange>) => void): () => void {
+    this.changeSubscribers.add(listener);
+    listener(Object.freeze({
+      revision: this.revision,
+      atMinute: this.clock.getTotalMinutes(),
+      changedDomains: Object.freeze(['unknown'] as const),
+    }));
+    return () => { this.changeSubscribers.delete(listener); };
+  }
+
+  /** Bounded read from canonical owners; never assembles CoreStateProjection. */
+  public getHudProjection(): SimulationHudProjection {
+    return {
+      revision: this.revision,
+      time: { ...this.clock.getTime() },
+      paused: this.clock.isPaused(),
+      cash: this.economy.getCash(),
+      socialBattery: this.needs.getSocialBattery(),
+      activeView: this.core.getActiveView(),
+    };
+  }
+
+  /** Owner-backed status for residence and city UI; never merges full PlayerState. */
+  public getPlayerStatusRead(): SimulationPlayerStatusRead {
+    return {
+      revision: this.revision,
+      needs: this.needs.getSnapshot(),
+      rent: this.economy.getRentStatus(),
+    };
+  }
+
+  /** Small viewport inputs for Phaser/React — no physical object graph. */
+  public getWorldRead(): SimulationWorldRead {
+    return {
+      revision: this.revision,
+      time: { ...this.clock.getTime() },
+      activeView: this.core.getActiveView(),
+      residencePlaceId: this.physical.getCurrentResidencePlaceId(),
+      playerLocation: this.economy.getLocation(),
+      environment: this.environment.getCurrentSnapshot(),
+      pcBootState: resolvePcBootStateFromOwnerStatus(
+        this.hardware.getComputerBootStatus(),
+        this.os.getCurrentOsId(),
+        () => this.inventory.hasUnassembledComputerItems(),
+      ),
+      metInPerson: !!this.world.getFlag('met_in_person'),
+    };
+  }
+
+  /** Public Situation: only triggered world events, bounded source-backed modifiers. */
+  /** Bounded player tenancy and offers, with affordability owned by Housing. */
+  public getResidenceRead(): SimulationResidenceRead {
+    return {
+      revision: this.revision,
+      tenancy: this.getResidenceState(),
+      offers: this.getHousingOffers(),
+    };
+  }
+
+  /** Capped, player-safe public job board. Never expose a private roster/name. */
+  public getJobBoardRead(): SimulationJobBoardRead {
+    return {
+      revision: this.revision,
+      jobs: this.getJobBoard().slice(0, 32).map(({ gig, pending }) => {
+        const contact = this.social.getBuddyWithRole(gig.contactRole);
+        return {
+          gigId: gig.id,
+          title: gig.title,
+          blurb: gig.blurb,
+          pay: gig.pay,
+          durationMin: gig.durationMin,
+          minEnergy: gig.minEnergy,
+          contactName: contact && this.social.isKnown(contact.id)
+            ? contact.displayName : gig.contactRole,
+          pending,
+        };
+      }),
+    };
+  }
+
+  /** Only the currently committed player trip; never a global NPC mobility snapshot. */
+  public getTransitRead(): SimulationTransitRead {
+    const atMinute = this.clock.getTotalMinutes();
+    const travel = this.getActiveTravel();
+    if (!travel) return { revision: this.revision, atMinute, active: null };
+    const currentLeg = travel.plan.legs[travel.currentLegIndex] ?? null;
+    return {
+      revision: this.revision,
+      atMinute,
+      active: {
+        status: travel.status,
+        originPlaceId: travel.plan.originPlaceId,
+        destinationPlaceId: travel.plan.destinationPlaceId,
+        currentLegIndex: travel.currentLegIndex,
+        currentLeg: currentLeg ? { ...currentLeg } : null,
+        arriveAtMinute: travel.plan.arriveAtMinute,
+        minutesRemaining: Math.max(0, travel.plan.arriveAtMinute - atMinute),
+      },
+    };
+  }
+
+  /**
+   * Factual in-person guest: Social owns knowledge and reach, NPC movement
+   * owns the current physical place. Online status is not location evidence.
+   */
+  public getCafeGuestRead(placeId: string, requestedActorId?: string): SimulationCafeGuestRead {
+    const candidates = requestedActorId
+      ? [this.social.getBuddy(requestedActorId)]
+      : this.social.getBuddies();
+    let guest: SimulationCafeGuestRead['guest'] = null;
+    let bestFamiliarity = -Infinity;
+    for (const candidate of candidates) {
+      if (!candidate || candidate.reach !== 'local' || !this.social.isKnown(candidate.id)) continue;
+      const location = this.npc.getNpcPlaceState(candidate.id);
+      if (location.status !== 'at_place' || location.placeId !== placeId) continue;
+      const semantics = this.getActorSemanticView(candidate.id);
+      if (!semantics || semantics.connection !== 'known' || !semantics.canMeetInPerson.allowed) continue;
+      const familiarity = this.social.getRelationships(candidate.id)?.familiarity ?? 0;
+      if (guest && familiarity <= bestFamiliarity) continue;
+      guest = { actorId: candidate.id, displayName: candidate.displayName };
+      bestFamiliarity = familiarity;
+    }
+    return { revision: this.revision, placeId, guest };
+  }
+
+  public getSituationRead(): SimulationSituationRead {
+    const atMinute = this.clock.getTotalMinutes();
+    const visibleEvents = this.world.getTriggeredEvents();
+    const visibleIds = new Set(visibleEvents.map(event => event.id));
+    const influences = this.world.queryActiveModifiers({ atMinute })
+      .filter(modifier => visibleIds.has(modifier.sourceEventId))
+      .slice(0, 32)
+      .map(modifier => ({ ...modifier, ...(modifier.targetIds
+        ? { targetIds: [...modifier.targetIds] } : {}) }));
+    return {
+      revision: this.revision,
+      atMinute,
+      activeEventIds: [...new Set(influences.map(modifier => modifier.sourceEventId))].slice(0, 16),
+      influences,
+    };
+  }
+
+  /** Selected actor read is player-safe; never reveal other actors' learned facts. */
+  public getPlayerActorRead(actorId: string): SimulationActorRead | null {
+    const actor = this.getActorSemanticView(actorId);
+    if (!actor || actor.connection === 'unknown') return null;
+    const learned = this.world.getKnownSemanticContextForSubject('player', actorId);
+    const visibleEventIds = new Set(this.world.getTriggeredEvents().map(event => event.id));
+    const influences = this.getActorLifeInfluences(actorId)
+      .filter(influence => visibleEventIds.has(influence.sourceEventId));
+    return {
+      revision: this.revision, actor,
+      playerKnowledge: learned,
+      influences,
+    };
+  }
+
+  /** Fixed-size directory page: one extra metadata record detects a next page. */
+  public getDirectoryRead(path: string, offset = 0, limit = 64): SimulationDirectoryRead {
+    const start = Number.isFinite(offset) ? Math.max(0, Math.trunc(offset)) : 0;
+    const size = Number.isFinite(limit) ? Math.max(1, Math.min(64, Math.trunc(limit))) : 64;
+    const page = this.vfs.listDirectoryMetadata(path, size + 1, start);
+    const capacity = this.vfs.getDiskCapacity();
+    return {
+      revision: this.revision,
+      path: this.vfs.normalizePath(path),
+      offset: start,
+      hasMore: page.length > size,
+      files: page.slice(0, size),
+      ...capacity,
+      freeDiskBytes: this.vfs.getFreeDiskBytes(),
+    };
+  }
+
+  public getFileRead(path: string): SimulationFileRead {
+    return { revision: this.revision, file: path ? this.vfs.readFileForDisplay(path) ?? null : null };
+  }
+
+  /** The desktop app ecosystem reads only Hardware, OS and Software owners. */
+  public getAppRead(): SimulationAppRead {
+    return {
+      revision: this.revision,
+      hardware: this.hardware.getState(),
+      computer: this.hardware.getComputerBootStatus(),
+      os: this.os.getState(),
+      installedSoftware: this.software.getInstalledSoftware(),
+      downloads: this.downloads.getRecentTasks(256),
+    };
+  }
+
+  public getPulseProfileRead(actorId: string): SimulationPulseProfileRead {
+    const playerActor = this.getPlayerActorRead(actorId);
+    // A profile lookup is not evidence that the player knows this identity.
+    // Keep owner-private knowledge and memories behind the same semantic gate.
+    if (!playerActor) return {
+      revision: this.revision,
+      buddyKnowledge: [],
+      worldEvents: [],
+      photoMemories: [],
+      semantics: null,
+      influences: [],
+    };
+    const buddyKnowledge = this.world.getBuddyKnowledge(actorId).slice(-8);
+    const eventIds = new Set(buddyKnowledge.map(k => k.eventId));
+    return {
+      revision: this.revision,
+      buddyKnowledge,
+      worldEvents: this.world.getTriggeredEvents().filter(event => eventIds.has(event.id))
+        .map(event => ({ ...event })),
+      photoMemories: this.social.getCoreMemories(actorId).filter(memory => memory.kind === 'shared_photo')
+        .slice(-12),
+      semantics: playerActor?.actor ?? null,
+      influences: playerActor?.influences ?? [],
+    };
+  }
+
+  /**
+   * Player profile and guestbook writes are canonical MyPlace owner mutations.
+   * Keep UI events and owner changes in one revision; never rely on a React
+   * local redraw to hide an unannounced simulation change.
+   */
+  public updateMyPlaceProfile(patch: Partial<MyPlaceProfile>): boolean {
+    return this.publishOwnerMutation(['myplace'],
+      () => this.myplace.updateUserProfile(patch), changed => changed);
+  }
+
+  public postMyPlaceComment(username: string, text: string): boolean {
+    return this.publishOwnerMutation(['myplace'],
+      () => this.myplace.addGuestbookComment(
+        username, this.myplace.getUserProfile().username, text, this.clock.getTotalMinutes(),
+      ), changed => changed);
+  }
+
+  /** Apply the site upgrade and its world news in one atomic boundary. */
+  public updateMyPlaceRelease(targetId: string): ReturnType<typeof this.myplace.updateTo> {
+    return this.publishOwnerMutation(['myplace', 'world'], () => {
+      const day = this.clock.getTime().day;
+      const minute = this.clock.getTotalMinutes();
+      const result = this.myplace.updateTo(targetId, day, minute);
+      if (result.success && result.release) {
+        const target = result.release;
+        this.world.injectProceduralEvents([{
+          id: `myplace_${target.version}`.replace(/[^a-z0-9_]/g, '_'),
+          title: target.displayName,
+          description: target.changelog.join(' • '),
+          category: 'site_launch',
+          triggerDay: day,
+          knowledgePrompt: `${target.displayName} is live — ${target.blurb}`,
+          siteUrl: 'http://myplace.local/',
+        }]);
+      }
+      return result;
+    }, result => result.success);
+  }
+
+  /** Read only the page currently displayed by the real MyPlace site. */
+  /**
+   * AI Lab stages its asynchronous world batch before writing the owner.
+   * Generation never leaks a stale response across a loaded save, and
+   * duplicate/invalid event IDs cannot fabricate a revision.
+   */
+  public async generateProceduralEvents(options: DirectorGenerateOptions = {}):
+    Promise<Awaited<ReturnType<ProceduralDirector['generateNextBatch']>>> {
+    const epoch = this.snapshotEpoch;
+    const generated = await new ProceduralDirector(this.world).generateNextBatch(
+      this.clock.getTime().day, this.clock.getTotalMinutes(), { ...options, inject: false },
+    );
+    if (epoch !== this.snapshotEpoch) {
+      return { ...generated, events: [], injectedIds: [] };
+    }
+    const injectedIds = this.commitLabProceduralEvents(generated.events);
+    const accepted = new Set(injectedIds);
+    return {
+      ...generated,
+      injectedIds,
+      events: generated.events.filter(event => accepted.has(event.id)),
+    };
+  }
+
+  /** A manually previewed or AI-generated batch is an idempotent source write. */
+  public commitLabProceduralEvents(
+    events: Parameters<typeof this.world.injectProceduralEvents>[0],
+  ): string[] {
+    return this.publishOwnerMutation(['world'],
+      () => this.world.injectProceduralEvents(events), ids => ids.length > 0);
+  }
+
+  /** Lab registration and the matching world announcement are one commit. */
+  public registerLabOsRelease(release: OsRelease): OsRelease {
+    return this.publishOwnerMutation(['os', 'world'], () => {
+      const added = this.os.registerProceduralRelease(release);
+      this.world.injectProceduralEvents([{
+        id: `os_${release.id}`.replace(/[^a-z0-9_]/g, '_'),
+        title: release.displayName,
+        description: release.changelog.join(' • '),
+        category: 'os_release',
+        triggerDay: release.releaseDay,
+        knowledgePrompt: `${release.displayName} is out — ${release.blurb ?? ''} Needs ${release.requirements.minRamMB}MB RAM.`,
+        siteUrl: 'http://orionsoft.local/',
+      }]);
+      return added;
+    });
+  }
+
+  public getMyPlacePageRead(requestedUsername = ''): SimulationMyPlacePageRead {
+    const userProfile = this.myplace.getUserProfile();
+    const username = requestedUsername || userProfile.username;
+    const candidate = username === userProfile.username ? userProfile : this.myplace.getNpcProfile(username) ?? null;
+    const locked = !!candidate && username !== userProfile.username
+      && candidate.visibility === 'friendsOnly'
+      && !candidate.top8.some(friend => friend.handle === userProfile.username);
+    return {
+      revision: this.revision,
+      time: { ...this.clock.getTime() },
+      currentMyPlaceId: this.myplace.getCurrentMyPlaceId(),
+      locked,
+      userProfile,
+      profile: locked && candidate
+        ? {
+            username: candidate.username,
+            displayName: candidate.displayName,
+            headline: '',
+            bio: '',
+            interests: [],
+            songTitle: '',
+            avatarGlyph: '👤',
+            top8: [],
+            glitterIntensity: 0,
+            visibility: 'friendsOnly',
+          }
+        : candidate,
+      guestbook: locked ? [] : this.myplace.getGuestbook(username),
+    };
+  }
+
+  /**
+   * Public NightBoard authored threads: the UI receives only this/previous
+   * week's displayed posts, not every Social identity and affinity pair.
+   */
+  public getNightBoardRead(): SimulationNightBoardRead {
+    const day = this.clock.getTime().day;
+    const buddies = this.social.getBuddies().map(buddy => ({
+      id: buddy.id,
+      displayName: buddy.displayName,
+      handle: buddy.handle,
+      archetype: buddy.archetype,
+      stage: this.social.getRelationshipStage(buddy.id),
+      status: buddy.status,
+      roles: buddy.roles ?? [],
+    }));
+    const affinity = (a: string, b: string): number => this.social.getAffinity(a, b);
+    const titles = this.world.getTriggeredEvents().slice(-256).map(event => event.title);
+    const week = npcThreadWeek(day);
+    const weeks = [week - 1, week].filter(value => value >= 0);
+    const threads = weeks.flatMap(value =>
+      buildWeeklyNpcThreads(value * 7 + 1, buddies, affinity, titles));
+    for (const value of weeks) {
+      const wx = buildWeeklyWeatherThread(value * 7 + 1, buddies, getWeatherForDay, gameDayName, affinity);
+      if (wx) threads.push(wx);
+    }
+    return { revision: this.revision, threads };
+  }
+
+  public getWebsiteRead(): SimulationWebsiteRead {
+    const flags = this.world.getPublicFlags();
+    return {
+      revision: this.revision,
+      time: { ...this.clock.getTime() },
+      cash: this.economy.getCash(),
+      narrativeFlags: { ...flags },
+      world: {
+        flags,
+        appointments: [],
+        windowObservationHistory: [],
+        triggeredEvents: this.world.getTriggeredEvents().slice(-256).map(event => ({ ...event })),
+        buddyKnowledge: {},
+      },
+    };
+  }
+
+  public getShopRead(): SimulationShopRead {
+    const inventory = this.inventory.getShopSummary();
+    return {
+      revision: this.revision,
+      cash: this.economy.getCash(),
+      hardware: this.hardware.getState(),
+      osVersion: this.os.getCurrentOsId(),
+      ...inventory,
+    };
+  }
+
+  /** File-body-free desktop read. Only visible shortcut metadata crosses UI. */
+  public getDesktopRead(): SimulationDesktopRead {
+    const osVersion = this.os.getCurrentOsId();
+    const desktopFiles = this.vfs.listDirectoryMetadata('C:/Desktop', 256).map(
+      ({ id, name, path, parentPath, kind, appAssociation }) => ({
+        id, name, path, parentPath, kind, appAssociation,
+      }),
+    );
+    return {
+      revision: this.revision,
+      osVersion,
+      pcBootState: resolvePcBootStateFromOwnerStatus(
+        this.hardware.getComputerBootStatus(),
+        osVersion,
+        () => this.inventory.hasUnassembledComputerItems(),
+      ),
+      monitor: this.hardware.getDisplayState().monitor,
+      bootMediaItems: this.inventory.getBootMediaItems(256),
+      desktopFiles,
+    };
+  }
+
+  /** Desktop chrome and Pulse tray use only domain-scoped, serializable reads. */
+  public getChromeRead(): SimulationChromeRead {
+    const network = this.hardware.getNetworkSummary();
+    const unread = this.social.getUnreadTraySummary(4, true);
+    return {
+      revision: this.revision,
+      time: { ...this.clock.getTime() },
+      osVersion: this.os.getCurrentOsId(),
+      pulseVersion: this.pulse.getState().currentPulseId,
+      pulseInstalled: this.software.hasInstalledAppIdContaining('pulse'),
+      connectionType: network.connectionType,
+      connectionSpeedKbps: network.connectionSpeedKbps,
+      activeDownloadCount: this.downloads.getActiveDownloadCount(),
+      unreadCount: unread.unreadCount,
+      unreadPreviews: unread.previews,
+    };
+  }
+
+  /** Mailbox only needs the most recent player-known NPC letters and parcel
+   * receipts; day-loop / roster walks never execute in the React render.
+   */
+  public getMailboxRead(): SimulationMailboxRead {
+    const today = this.clock.getTime().day;
+    const buddies = this.social.getKnownMailboxBuddies();
+    const knownIds = new Set(buddies.map(buddy => buddy.id));
+    const mailContext = {
+      buddies: buddies.map(buddy => ({
+        id: buddy.id,
+        displayName: buddy.displayName,
+        handle: buddy.handle,
+        archetype: buddy.archetype,
+        stage: buddy.stage,
+        status: buddy.status,
+      })),
+      sharps: buddies.map(buddy => {
+        const state = this.world.getFlag(`sharp_${buddy.id}`);
+        const stateDay = this.world.getFlag(`sharp_${buddy.id}_day`);
+        return {
+          buddyId: buddy.id,
+          state: typeof state === 'string' ? state : '',
+          stateDay: typeof stateDay === 'number' ? stateDay : 0,
+        };
+      }),
+      meetings: this.world.getAppointments()
+        .filter(appointment => knownIds.has(appointment.characterId))
+        .map(appointment => ({
+          buddyId: appointment.characterId,
+          targetDay: appointment.targetDay,
+          status: appointment.status,
+          npcShowed: appointment.npcShowed,
+          playerShowed: appointment.playerShowed,
+          locationLabel: locationLabel(appointment.locationId),
+        })),
+    };
+    const npcMails = buildRecentNpcMail(mailContext, today, 10);
+    const landlordId = buddies.find(buddy =>
+      buddy.roles?.includes('landlord') && buddy.status !== 'gone' && buddy.status !== 'blocked',
+    )?.id;
+    // Rent notices survive payment and retain their existing mailbox priority.
+    for (const rent of buildRentMailHistory(this.world.getFlags(), landlordId)) {
+      if (!npcMails.some(mail => mail.key === rent.key)) npcMails.push(rent);
+    }
+
+    return {
+      revision: this.revision,
+      npcMails: npcMails.slice(-12),
+      orders: this.delivery.getMailboxReceiptRead(),
+    };
+  }
+
+  public getPresenceRead(): SimulationPresenceRead {
+    // A player's Pulse presence feed may not reveal unknown NPC identities or
+    // away text; internal Social owner state remains intact for simulation.
+    return { revision: this.revision, presence: this.social.getPresenceSummary(true) };
+  }
+
+  /** One authoritative read receipt; rejected/duplicate opens stay silent. */
+  /**
+   * Commit a real Pulse room turn to the canonical NPC affinity graph.
+   * A room may touch many symmetric pairs (plus directed address bonuses);
+   * the room must publish one social revision only if at least one owner cap
+   * or affinity changed. Keep SocialEngine's original daily cap/rules intact.
+   */
+  public commitPulseRoomTurn(
+    responderIds: string[],
+    day: number,
+    points: number,
+    directedPairs: ReadonlyArray<readonly [string, string]> = [],
+  ): number {
+    return this.publishOwnerMutation(['social'], () => {
+      // Match the actual room rule: a solo responder has no group affinity.
+      if (responderIds.length < 2) return 0;
+      let bumped = this.social.bumpRoomAffinity(responderIds, day, points);
+      for (const [from, to] of directedPairs) {
+        bumped += this.social.bumpRoomAffinity([from, to], day, 1);
+      }
+      return bumped;
+    }, bumped => bumped > 0);
+  }
+
+  /**
+   * Pulse presence is a canonical Social owner write, not a UI redraw.
+   * Identical presets and repeated Clear requests never publish revisions.
+   */
+  public setPlayerPresence(presence: BuddyPresence): boolean {
+    const current = this.social.getPresence('player');
+    if (current?.status === presence.status &&
+      current.awayMessage === presence.awayMessage &&
+      current.customAwayMessage === presence.customAwayMessage) return false;
+    return this.publishOwnerMutation(['social'], () => {
+      this.social.setPlayerPresence(presence);
+      return true;
+    });
+  }
+
+  /**
+   * Shared Pulse/Cafe text rules produce semantic ledger intents. Commit the
+   * canonical promises in one owner boundary; the UI never mutates Social
+   * directly after its already-published outbound message.
+   */
+  public commitPulseChatLedger(
+    buddyId: string,
+    promises: Array<{ text: string; dueDayOffset?: number }>,
+    completed: boolean,
+    day: number,
+  ): boolean {
+    return this.publishOwnerMutation(['social'], () => {
+      let changed = false;
+      for (const intent of promises) {
+        const dueDay = intent.dueDayOffset !== undefined ? day + intent.dueDayOffset : undefined;
+        if (this.social.addPromise(buddyId, intent.text, day, dueDay)) changed = true;
+      }
+      if (completed) {
+        const first = this.social.getOpenPromises(buddyId)[0];
+        if (first && this.social.resolvePromise(buddyId, first.id, true, day)) changed = true;
+      }
+      return changed;
+    }, changed => changed);
+  }
+
+  public markConversationAsRead(actorId: string): boolean {
+    if (!this.social.isKnown(actorId)) return false;
+    return this.publishOwnerMutation(
+      ['social'],
+      () => this.social.markAsRead(actorId),
+      changed => changed,
+    );
+  }
+
+  /**
+   * One bounded player-facing Pulse buddy list. Only learned identities,
+   * authored recall suggestions and numeric public-room totals leave Social.
+   * Static room membership rules are an explicit argument; the engine never
+   * imports or owns the React site's room catalog.
+   */
+  public getPulseContactsRead(
+    rooms: ReadonlyArray<{
+      id: string;
+      participantIds: readonly string[];
+      participantRoles: readonly string[];
+    }> = [],
+  ): SimulationPulseContactsRead {
+    return { revision: this.revision, ...this.social.getPulseDirectoryRead(rooms) };
+  }
+
+  public getMessengerRead(maxContacts = 32): SimulationMessengerRead {
+    return {
+      revision: this.revision,
+      contacts: this.social.getMessengerSummary(maxContacts),
+      unreadCounts: this.social.getConversationUnreadCounts(500, true),
+    };
+  }
+
+  public getConversationRead(actorId: string, offset = 0, limit = 30): SimulationConversationRead {
+    // An arbitrary/guessed actor ID is NOT authorization to read their
+    // transcript. Source-owned learned handles are the Pulse discovery gate.
+    // Keep full canonical histories for future contact unlock and Save Log.
+    if (!this.social.isKnown(actorId)) {
+      return { revision: this.revision, conversationId: actorId, messages: [], total: 0, hasOlder: false };
+    }
+    return { revision: this.revision, ...this.social.getConversationPage(actorId, offset, limit) };
+  }
+
+  /**
+   * Atomically commit an auto-discovered newcomer, its MyPlace stub and
+   * public world trace. Rejected duplicates must not synthesize revisions.
+   */
+  public commitAutoDiscoveredNewcomer(
+    buddy: CharacterDefinition, introText: string, metVia: BuddyMetVia, day: number,
+  ): boolean {
+    return this.publishOwnerMutation(['social', 'world', 'myplace'], () => {
+      if (this.social.getBuddy(buddy.id)) return false;
+      const result = this.core.dispatchAction({
+        type: 'SOCIAL_ADD_BUDDY', buddy, introText,
+      });
+      if (!result.success) return false;
+      if (metVia === 'nightboard') {
+        try {
+          this.world.injectProceduralEvents([{
+            id: `met_${buddy.id}`.replace(/[^a-z0-9_]/g, '_').slice(0, 40),
+            title: `New voice on NightBoard: ${buddy.displayName}`,
+            description: `${buddy.displayName} (${buddy.handle}) showed up asking about the canal hum thread.`,
+            category: 'city_news',
+            triggerDay: day,
+            triggerHour: 22,
+            knowledgePrompt: `A newcomer (${buddy.displayName}) appeared on NightBoard and added you on Pulse.`,
+            siteUrl: 'http://nightboard.local/',
+          }]);
+        } catch { /* Public trace is best-effort; retain the admitted NPC. */ }
+      }
+      this.world.setFlag('newcomer_last_day', day);
+      return true;
+    }, committed => committed);
   }
 
   public subscribe(listener: (state: Readonly<LiveSimulationState>) => void): () => void {
@@ -203,6 +965,7 @@ export class SimulationKernel {
   }
 
   public loadSnapshot(snapshot: TransportSimulationState): void {
+    this.snapshotEpoch++;
     const computer = snapshot.computer ?? createEmptyComputerSetup();
     const display = snapshot.display ?? createEmptyDisplaySetup();
     this.hydrating = true;
@@ -235,7 +998,13 @@ export class SimulationKernel {
   }
 
   public handleMeetupChat(...args: Parameters<CoreSimulationRuntime['handleMeetupChat']>): ReturnType<CoreSimulationRuntime['handleMeetupChat']> {
-    return this.core.handleMeetupChat(...args);
+    // A cancelled meeting returns null despite changing canonical World and
+    // Social truth. Detect actual appointment updates, not just the return
+    // value, and publish the single source-backed boundary for both paths.
+    const before = JSON.stringify(this.world.getAppointments());
+    return this.publishOwnerMutation(['world', 'social', 'player'],
+      () => this.core.handleMeetupChat(...args),
+      () => before !== JSON.stringify(this.world.getAppointments()));
   }
 
   public travelTo(...args: Parameters<CoreSimulationRuntime['travelTo']>): ReturnType<CoreSimulationRuntime['travelTo']> {
@@ -250,8 +1019,12 @@ export class SimulationKernel {
     return this.core.doCityOuting(...args);
   }
 
-  public generateProceduralEventsNow(...args: Parameters<CoreSimulationRuntime['generateProceduralEventsNow']>): ReturnType<CoreSimulationRuntime['generateProceduralEventsNow']> {
-    return this.core.generateProceduralEventsNow(...args);
+  /** Legacy store shape delegates to the same canonical commit path. */
+  public async generateProceduralEventsNow(
+    options?: { maxEvents?: number; useAI?: boolean },
+  ): Promise<import('../types').GlobalEvent[]> {
+    const batch = await this.generateProceduralEvents(options);
+    return batch.events;
   }
 
   public getPcBootState(...args: Parameters<NpcComputerSimulationRuntime['getPcBootState']>): ReturnType<NpcComputerSimulationRuntime['getPcBootState']> {
@@ -299,15 +1072,24 @@ export class SimulationKernel {
   }
 
   public relocateActorSpatially(...args: Parameters<NpcComputerSimulationRuntime['relocateActorSpatially']>): ReturnType<NpcComputerSimulationRuntime['relocateActorSpatially']> {
-    return this.npc.relocateActorSpatially(...args);
+    const before = this.npc.getActorSpatialProjection(args[0]);
+    return this.publishOwnerMutation(['transit'],
+      () => this.npc.relocateActorSpatially(...args),
+      (after) => JSON.stringify(before) !== JSON.stringify(after));
   }
 
   public clearActorSpatialForTravel(...args: Parameters<NpcComputerSimulationRuntime['clearActorSpatialForTravel']>): ReturnType<NpcComputerSimulationRuntime['clearActorSpatialForTravel']> {
-    return this.npc.clearActorSpatialForTravel(...args);
+    const before = this.npc.getActorSpatialProjection(args[0]);
+    return this.publishOwnerMutation(['transit'],
+      () => this.npc.clearActorSpatialForTravel(...args),
+      () => before !== null && this.npc.getActorSpatialProjection(args[0]) === null);
   }
 
   public relocateActorToGeneratedPlaceEntry(...args: Parameters<NpcComputerSimulationRuntime['relocateActorToGeneratedPlaceEntry']>): ReturnType<NpcComputerSimulationRuntime['relocateActorToGeneratedPlaceEntry']> {
-    return this.npc.relocateActorToGeneratedPlaceEntry(...args);
+    const before = this.npc.getActorSpatialProjection(args[0]);
+    return this.publishOwnerMutation(['transit'],
+      () => this.npc.relocateActorToGeneratedPlaceEntry(...args),
+      (success) => success && JSON.stringify(before) !== JSON.stringify(this.npc.getActorSpatialProjection(args[0])));
   }
 
   public getNpcTrip(...args: Parameters<NpcComputerSimulationRuntime['getNpcTrip']>): ReturnType<NpcComputerSimulationRuntime['getNpcTrip']> {
@@ -334,20 +1116,46 @@ export class SimulationKernel {
     return this.physical.decideEncounter(...args);
   }
 
+  /**
+   * PC ownership commands can write silent Inventory and OS owner state even
+   * when Hardware emits no event. Diff only those small canonical owner roots;
+   * all nested time/economy publications remain one atomic revision.
+   */
+  private publishComputerMutation<T extends { success: boolean }>(action: () => T): T {
+    const beforeMinute = this.clock.getTotalMinutes();
+    const beforeInventory = JSON.stringify(this.inventory.getState());
+    const hardwareKey = () => JSON.stringify({
+      computer: this.hardware.getComputerState(), display: this.hardware.getDisplayState(),
+    });
+    const beforeHardware = hardwareKey();
+    const beforeOs = JSON.stringify(this.os.getState());
+    return this.withinBoundary(() => {
+      const result = action();
+      if (result.success) {
+        const domains: ObservedSimulationDomain[] = [];
+        if (beforeInventory !== JSON.stringify(this.inventory.getState())) domains.push('inventory');
+        if (beforeHardware !== hardwareKey()) domains.push('hardware');
+        if (beforeOs !== JSON.stringify(this.os.getState())) domains.push('os');
+        if (domains.length > 0) this.publishExternalChange(domains);
+      }
+      return result;
+    }, beforeMinute);
+  }
+
   public setComputerPower(...args: Parameters<NpcComputerSimulationRuntime['setComputerPower']>): ReturnType<NpcComputerSimulationRuntime['setComputerPower']> {
-    return this.npc.setComputerPower(...args);
+    return this.publishComputerMutation(() => this.npc.setComputerPower(...args));
   }
 
   public installOwnedHardwareAtHome(...args: Parameters<NpcComputerSimulationRuntime['installOwnedHardwareAtHome']>): ReturnType<NpcComputerSimulationRuntime['installOwnedHardwareAtHome']> {
-    return this.npc.installOwnedHardwareAtHome(...args);
+    return this.publishComputerMutation(() => this.npc.installOwnedHardwareAtHome(...args));
   }
 
   public insertOwnedMediaAtHome(...args: Parameters<NpcComputerSimulationRuntime['insertOwnedMediaAtHome']>): ReturnType<NpcComputerSimulationRuntime['insertOwnedMediaAtHome']> {
-    return this.npc.insertOwnedMediaAtHome(...args);
+    return this.publishComputerMutation(() => this.npc.insertOwnedMediaAtHome(...args));
   }
 
   public ejectOwnedMediaAtHome(...args: Parameters<NpcComputerSimulationRuntime['ejectOwnedMediaAtHome']>): ReturnType<NpcComputerSimulationRuntime['ejectOwnedMediaAtHome']> {
-    return this.npc.ejectOwnedMediaAtHome(...args);
+    return this.publishComputerMutation(() => this.npc.ejectOwnedMediaAtHome(...args));
   }
 
   public prepareOsInstallFromInsertedMedia(...args: Parameters<NpcComputerSimulationRuntime['prepareOsInstallFromInsertedMedia']>): ReturnType<NpcComputerSimulationRuntime['prepareOsInstallFromInsertedMedia']> {
@@ -355,15 +1163,15 @@ export class SimulationKernel {
   }
 
   public commitOsInstall(...args: Parameters<NpcComputerSimulationRuntime['commitOsInstall']>): ReturnType<NpcComputerSimulationRuntime['commitOsInstall']> {
-    return this.npc.commitOsInstall(...args);
+    return this.publishComputerMutation(() => this.npc.commitOsInstall(...args));
   }
 
   public purchaseStoreItem(...args: Parameters<NpcComputerSimulationRuntime['purchaseStoreItem']>): ReturnType<NpcComputerSimulationRuntime['purchaseStoreItem']> {
-    return this.npc.purchaseStoreItem(...args);
+    return this.publishComputerMutation(() => this.npc.purchaseStoreItem(...args));
   }
 
   public setupComputerAtHome(...args: Parameters<NpcComputerSimulationRuntime['setupComputerAtHome']>): ReturnType<NpcComputerSimulationRuntime['setupComputerAtHome']> {
-    return this.npc.setupComputerAtHome(...args);
+    return this.publishComputerMutation(() => this.npc.setupComputerAtHome(...args));
   }
 
   public getResidenceState(...args: Parameters<PhysicalSimulationRuntime['getResidenceState']>): ReturnType<PhysicalSimulationRuntime['getResidenceState']> {
@@ -379,7 +1187,25 @@ export class SimulationKernel {
   }
 
   public moveResidenceToOffer(...args: Parameters<PhysicalSimulationRuntime['moveResidenceToOffer']>): ReturnType<PhysicalSimulationRuntime['moveResidenceToOffer']> {
-    return this.physical.moveResidenceToOffer(...args);
+    const before = this.clock.getTotalMinutes();
+    return this.withinBoundary(() => {
+      const result = this.physical.moveResidenceToOffer(...args);
+      // The tenancy owner is a silent writer. Mark the changed domain
+      // BEFORE the outer atomic boundary publishes source-event changes.
+      if (result.success) {
+        this.observedDomains.add('residence');
+        // ResidenceCoordination can update tenancy without an engine-level
+        // event; request exactly one publication after the outer boundary.
+        this.notifySubscribers();
+      }
+      return result;
+    }, before);
+  }
+
+  /** First-entry materialization is an explicit command, never a getter side effect. */
+  public initializePhysicalShop(...args: Parameters<PhysicalSimulationRuntime['initializePhysicalShop']>): ReturnType<PhysicalSimulationRuntime['initializePhysicalShop']> {
+    return this.publishOwnerMutation(['physical', 'shop'], () => this.physical.initializePhysicalShop(...args),
+      (initialized) => initialized);
   }
 
   public getPhysicalShopState(...args: Parameters<PhysicalSimulationRuntime['getPhysicalShopState']>): ReturnType<PhysicalSimulationRuntime['getPhysicalShopState']> {
@@ -391,15 +1217,15 @@ export class SimulationKernel {
   }
 
   public takePhysicalShopItem(...args: Parameters<PhysicalSimulationRuntime['takePhysicalShopItem']>): ReturnType<PhysicalSimulationRuntime['takePhysicalShopItem']> {
-    return this.physical.takePhysicalShopItem(...args);
+    return this.publishOwnerMutation(['physical', 'shop'], () => this.physical.takePhysicalShopItem(...args));
   }
 
   public returnPhysicalShopItem(...args: Parameters<PhysicalSimulationRuntime['returnPhysicalShopItem']>): ReturnType<PhysicalSimulationRuntime['returnPhysicalShopItem']> {
-    return this.physical.returnPhysicalShopItem(...args);
+    return this.publishOwnerMutation(['physical', 'shop'], () => this.physical.returnPhysicalShopItem(...args));
   }
 
   public checkoutPhysicalShop(...args: Parameters<PhysicalSimulationRuntime['checkoutPhysicalShop']>): ReturnType<PhysicalSimulationRuntime['checkoutPhysicalShop']> {
-    return this.physical.checkoutPhysicalShop(...args);
+    return this.publishOwnerMutation(['physical', 'shop'], () => this.physical.checkoutPhysicalShop(...args), (result) => result.success);
   }
 
   public getPhysicalWorldState(...args: Parameters<PhysicalSimulationRuntime['getPhysicalWorldState']>): ReturnType<PhysicalSimulationRuntime['getPhysicalWorldState']> {
@@ -415,7 +1241,7 @@ export class SimulationKernel {
   }
 
   public setVenueRoleAssignment(...args: Parameters<PhysicalSimulationRuntime['setVenueRoleAssignment']>): ReturnType<PhysicalSimulationRuntime['setVenueRoleAssignment']> {
-    return this.physical.setVenueRoleAssignment(...args);
+    return this.publishOwnerMutation(['venue'], () => this.physical.setVenueRoleAssignment(...args));
   }
 
   public getVenueServiceAvailability(...args: Parameters<PhysicalSimulationRuntime['getVenueServiceAvailability']>): ReturnType<PhysicalSimulationRuntime['getVenueServiceAvailability']> {
@@ -427,11 +1253,11 @@ export class SimulationKernel {
   }
 
   public startVenueActivityFromIntent(...args: Parameters<PhysicalSimulationRuntime['startVenueActivityFromIntent']>): ReturnType<PhysicalSimulationRuntime['startVenueActivityFromIntent']> {
-    return this.physical.startVenueActivityFromIntent(...args);
+    return this.publishOwnerMutation(['venue'], () => this.physical.startVenueActivityFromIntent(...args), (result) => result.ok);
   }
 
   public startCurrentVenueActivity(...args: Parameters<PhysicalSimulationRuntime['startCurrentVenueActivity']>): ReturnType<PhysicalSimulationRuntime['startCurrentVenueActivity']> {
-    return this.physical.startCurrentVenueActivity(...args);
+    return this.publishOwnerMutation(['venue'], () => this.physical.startCurrentVenueActivity(...args), (result) => result.ok);
   }
 
   public getActiveVenueActivity(...args: Parameters<PhysicalSimulationRuntime['getActiveVenueActivity']>): ReturnType<PhysicalSimulationRuntime['getActiveVenueActivity']> {
@@ -447,23 +1273,27 @@ export class SimulationKernel {
   }
 
   public movePhysicalObject(...args: Parameters<PhysicalSimulationRuntime['movePhysicalObject']>): ReturnType<PhysicalSimulationRuntime['movePhysicalObject']> {
-    return this.physical.movePhysicalObject(...args);
+    return this.publishOwnerMutation(['physical'], () => this.physical.movePhysicalObject(...args));
   }
 
   public detachPhysicalObject(...args: Parameters<PhysicalSimulationRuntime['detachPhysicalObject']>): ReturnType<PhysicalSimulationRuntime['detachPhysicalObject']> {
-    return this.physical.detachPhysicalObject(...args);
+    return this.publishOwnerMutation(['physical'], () => this.physical.detachPhysicalObject(...args));
   }
 
   public transferPhysicalItem(...args: Parameters<PhysicalSimulationRuntime['transferPhysicalItem']>): ReturnType<PhysicalSimulationRuntime['transferPhysicalItem']> {
-    return this.physical.transferPhysicalItem(...args);
+    return this.publishOwnerMutation(['physical'], () => this.physical.transferPhysicalItem(...args));
   }
 
   public openPhysicalContainer(...args: Parameters<PhysicalSimulationRuntime['openPhysicalContainer']>): ReturnType<PhysicalSimulationRuntime['openPhysicalContainer']> {
-    return this.physical.openPhysicalContainer(...args);
+    return this.publishOwnerMutation(['physical'], () => this.physical.openPhysicalContainer(...args));
   }
 
   public setActiveTravel(...args: Parameters<PhysicalSimulationRuntime['setActiveTravel']>): ReturnType<PhysicalSimulationRuntime['setActiveTravel']> {
-    return this.physical.setActiveTravel(...args);
+    const result = this.physical.setActiveTravel(...args);
+    // A direct owner setter has no source event. Its caller already owns
+    // the explicit publication boundary; annotate the next revision.
+    this.observedDomains.add('transit');
+    return result;
   }
 
   public getActiveTravel(...args: Parameters<PhysicalSimulationRuntime['getActiveTravel']>): ReturnType<PhysicalSimulationRuntime['getActiveTravel']> {
@@ -471,7 +1301,7 @@ export class SimulationKernel {
   }
 
   public startTravel(...args: Parameters<PhysicalSimulationRuntime['startTravel']>): ReturnType<PhysicalSimulationRuntime['startTravel']> {
-    return this.physical.startTravel(...args);
+    return this.publishOwnerMutation(['transit'], () => this.physical.startTravel(...args), (result) => result.success);
   }
 
   public getScenarioState(...args: Parameters<PhysicalSimulationRuntime['getScenarioState']>): ReturnType<PhysicalSimulationRuntime['getScenarioState']> {
@@ -479,7 +1309,10 @@ export class SimulationKernel {
   }
 
   public initializeScenarios(...args: Parameters<PhysicalSimulationRuntime['initializeScenarios']>): ReturnType<PhysicalSimulationRuntime['initializeScenarios']> {
-    return this.physical.initializeScenarios(...args);
+    // Initialization can record attempted definitions even if no thread binds.
+    const before = JSON.stringify(this.physical.getScenarioState());
+    return this.publishOwnerMutation(['scenario'], () => this.physical.initializeScenarios(...args),
+      () => JSON.stringify(this.physical.getScenarioState()) !== before);
   }
 
   public getScenarioHookOpportunities(...args: Parameters<PhysicalSimulationRuntime['getScenarioHookOpportunities']>): ReturnType<PhysicalSimulationRuntime['getScenarioHookOpportunities']> {
@@ -491,11 +1324,15 @@ export class SimulationKernel {
   }
 
   public consumeScenarioHook(...args: Parameters<PhysicalSimulationRuntime['consumeScenarioHook']>): ReturnType<PhysicalSimulationRuntime['consumeScenarioHook']> {
-    return this.physical.consumeScenarioHook(...args);
+    const before = JSON.stringify(this.physical.getScenarioState());
+    return this.publishOwnerMutation(['scenario'], () => this.physical.consumeScenarioHook(...args),
+      () => JSON.stringify(this.physical.getScenarioState()) !== before);
   }
 
   public setScenarioLifecycle(...args: Parameters<PhysicalSimulationRuntime['setScenarioLifecycle']>): ReturnType<PhysicalSimulationRuntime['setScenarioLifecycle']> {
-    return this.physical.setScenarioLifecycle(...args);
+    const before = JSON.stringify(this.physical.getScenarioState());
+    return this.publishOwnerMutation(['scenario'], () => this.physical.setScenarioLifecycle(...args),
+      () => JSON.stringify(this.physical.getScenarioState()) !== before);
   }
 
   public getInnerVoiceEngine(...args: Parameters<PhysicalSimulationRuntime['getInnerVoiceEngine']>): ReturnType<PhysicalSimulationRuntime['getInnerVoiceEngine']> {
@@ -506,15 +1343,31 @@ export class SimulationKernel {
     return this.physical.getInnerVoiceState(...args);
   }
 
+  /** The voice's small presentation queue is not part of its persisted cooldowns. */
+  private innerVoicePublicationKey(): string {
+    const voice = this.physical.getInnerVoiceEngine();
+    return JSON.stringify({
+      saved: voice.getPersistedState(),
+      activeId: voice.peekActive()?.id ?? null,
+      queued: voice.getQueueLength(),
+    });
+  }
+
   public requestInnerThought(...args: Parameters<PhysicalSimulationRuntime['requestInnerThought']>): ReturnType<PhysicalSimulationRuntime['requestInnerThought']> {
-    return this.physical.requestInnerThought(...args);
+    const before = this.innerVoicePublicationKey();
+    return this.publishOwnerMutation(['innerVoice'], () => this.physical.requestInnerThought(...args),
+      () => this.innerVoicePublicationKey() !== before);
   }
 
   public requestInspectThought(...args: Parameters<PhysicalSimulationRuntime['requestInspectThought']>): ReturnType<PhysicalSimulationRuntime['requestInspectThought']> {
-    return this.physical.requestInspectThought(...args);
+    const before = this.innerVoicePublicationKey();
+    return this.publishOwnerMutation(['innerVoice'], () => this.physical.requestInspectThought(...args),
+      () => this.innerVoicePublicationKey() !== before);
   }
 
   public dismissInnerThought(...args: Parameters<PhysicalSimulationRuntime['dismissInnerThought']>): ReturnType<PhysicalSimulationRuntime['dismissInnerThought']> {
-    return this.physical.dismissInnerThought(...args);
+    const before = this.innerVoicePublicationKey();
+    return this.publishOwnerMutation(['innerVoice'], () => this.physical.dismissInnerThought(...args),
+      () => this.innerVoicePublicationKey() !== before);
   }
 }

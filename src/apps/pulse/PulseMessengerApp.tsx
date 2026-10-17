@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useSimulationStore } from '../../store/useSimulationStore';
+import { useMessengerRead, usePulseContactsRead, useSimulationHud, useSimulationPresence } from '../../store/useBoundedSimulationRead';
 import { BuddyListWindow } from './components/BuddyListWindow';
 import { ChatWindow } from './components/ChatWindow';
 import { PulseLoginSplash, PulseLoginSession } from './components/PulseLoginSplash';
@@ -209,14 +210,19 @@ export function getRoomResponderSequence(roomId: string, participantIds: string[
 
 export const PulseMessengerApp: React.FC = () => {
   const engine = useSimulationStore((s) => s.engine);
-  const conversations = useSimulationStore((s) => s.state.social.conversations);
-  const currentDay = useSimulationStore((s) => s.state.time.day);
-  const totalMinutes = useSimulationStore((s) => s.state.time.totalMinutes);
-  const presenceMap = useSimulationStore((s) => s.state.social.presence);
+  // Pulse message bodies are never selected from the giant Zustand snapshot.
+  const hud = useSimulationHud();
+  const messenger = useMessengerRead();
+  const pulseContacts = usePulseContactsRead();
+  const currentDay = hud.time.day;
+  const totalMinutes = hud.time.totalMinutes;
+  const presenceMap = useSimulationPresence().presence;
 
   usePulseAudio();
 
-  const initialBuddyId = engine.social.getBuddies()[0]?.id ?? '';
+  // Do not open the first authored NPC merely because it exists in the
+  // roster: Pulse starts with the first *learned* contact, if any.
+  const initialBuddyId = messenger.contacts[0]?.actorId ?? '';
   const [session, setSession] = useState<PulseLoginSession | null>(() => tryAutoSign());
   const [openBuddyIds, setOpenBuddyIds] = useState<string[]>(initialBuddyId ? [initialBuddyId] : []);
   const [activeBuddyId, setActiveBuddyId] = useState<string>(initialBuddyId);
@@ -372,8 +378,8 @@ export const PulseMessengerApp: React.FC = () => {
         const offset = 10 + (hash % Math.min( maxOffset, 720));
         const timestampMinute = Math.min(totalMinutes - 2, Math.max(pulseState.lastSeenTotalMinutes + 10, pulseState.lastSeenTotalMinutes + offset));
         // Anti-spam: never leave two link-bearing offline messages in a row
-        const previousOffline = engine.social.getMessages(buddy.id).filter((m) => m.senderId === buddy.id && m.tags?.includes('offline-message'));
-        const lastHadLink = previousOffline.length > 0 && extractLocalLinks(previousOffline[previousOffline.length - 1]!.text).length > 0;
+        const lastOfflineText = engine.social.getLastOfflineMessageText(buddy.id);
+        const lastHadLink = lastOfflineText !== null && extractLocalLinks(lastOfflineText).length > 0;
         const text = pickOfflineMessage(buddy.id, timestampMinute, buddy.archetype, lastHadLink);
         // Capture any .local links from offline message for sharedLinks / FindIt discovery
         extractLocalLinks(text).forEach((link) => {
@@ -510,11 +516,7 @@ export const PulseMessengerApp: React.FC = () => {
       }));
     } catch { /* day-pass never breaks the session */ }
   }, [engine, session, totalMinutes, currentDay, pulseState.blockedBuddyIds, pulseState.initiatedToday]);
-  const unreadCounts: Record<string, number> = {};
-  Object.entries(conversations).forEach(([buddyId, msgs]) => {
-    const unreads = msgs.filter((message) => !message.isRead && message.senderId !== 'player').length;
-    if (unreads > 0) unreadCounts[buddyId] = unreads;
-  });
+  const unreadCounts = messenger.unreadCounts;
   const roomUnreadCounts: Record<string, number> = Object.fromEntries(PULSE_ROOMS.map((room) => {
     const total = pulseState.roomMessages[room.id]?.length ?? 0;
     const readThrough = pulseState.roomReadThrough[room.id] ?? 0;
@@ -522,12 +524,16 @@ export const PulseMessengerApp: React.FC = () => {
   }));
 
   const handleOpenChat = (buddyId: string) => {
+    // Defensive UI boundary for stale activity entries / guessed actor IDs.
+    if (!engine.social.isKnown(buddyId)) return;
     if (!openBuddyIds.includes(buddyId)) setOpenBuddyIds((previous) => [...previous, buddyId]);
     setSelectedBuddyId(null);
     setActiveBuddyId(buddyId);
     setActiveRoomId(null);
     setView('contacts');
-    engine.social.markAsRead(buddyId);
+    // Kernel publishes only when the canonical unread state actually changed.
+    // Reopening an already-read tab must not fabricate another revision.
+    engine.markConversationAsRead(buddyId);
     setPulseState((previous) => ({
       ...previous,
       activityFeed: previous.activityFeed.map((entry) => entry.buddyId === buddyId ? { ...entry, isRead: true } : entry),
@@ -977,9 +983,9 @@ export const PulseMessengerApp: React.FC = () => {
         const responders = responderIds.filter((id) => engine.social.getBuddy(id));
         if (responders.length >= 2) {
           const points = roomMood === 'lively' ? 3 : roomMood === 'tense' ? 1 : roomMood === 'cold' ? 0 : 2;
-          engine.social.bumpRoomAffinity(responders, currentDay, points);
-          // Directed-address pairs earn one extra point through the same daily cap
-          for (const [a, b] of directedPairs) engine.social.bumpRoomAffinity([a, b], currentDay, 1);
+          // One committed owner command: group pairs and directed-address
+          // bonuses share the real daily cap and a single revision.
+          engine.commitPulseRoomTurn(responders, currentDay, points, directedPairs);
         }
       } catch { /* affinity bump never breaks rooms */ }
     } finally {
@@ -1147,8 +1153,7 @@ export const PulseMessengerApp: React.FC = () => {
     const key = `${activeBuddyId}_day${currentDay}`;
     if (triggeredDayScripts.current.has(key)) return;
 
-    const buddyMsgs = conversations[activeBuddyId] || [];
-    const hasTodayMsg = buddyMsgs.some((message) => message.day === currentDay);
+    const hasTodayMsg = engine.social.hasConversationMessageOnDay(activeBuddyId, currentDay);
     if (!hasTodayMsg) {
       const script = DIALOGUE_SCRIPTS.find((item) => item.buddyId === activeBuddyId && item.day === currentDay);
       if (script) {
@@ -1157,16 +1162,17 @@ export const PulseMessengerApp: React.FC = () => {
         return () => window.clearTimeout(timer);
       }
     }
-  }, [activeBuddyId, currentDay, conversations, triggerNpcScript, session]);
+  }, [activeBuddyId, currentDay, hud.revision, engine, triggerNpcScript, session]);
 
-  const buddiesMap: Record<string, any> = {};
-  engine.social.getBuddies().forEach((buddy) => { buddiesMap[buddy.id] = buddy; });
+  // Player-learned display identities only; never project a full NPC roster
+  // or pass internal buddy memories/relationships to the React chat subtree.
+  const buddiesMap = Object.fromEntries(pulseContacts.contacts.map(buddy => [buddy.id, buddy]));
   const activeRoom = activeRoomId ? getPulseRoom(activeRoomId) : undefined;
 
   // AI reply suggestions for the player (P8/B2): same live context as the NPC side.
   const suggestionFetcher = useCallback(async (bid: string): Promise<ReplySuggestionItem[]> => {
     const buddy = engine.social.getBuddy(bid);
-    const recent = engine.social.getMessages(bid).slice(-6).map((message) => ({
+    const recent = engine.getConversationRead(bid, 0, 6).messages.map((message) => ({
       sender: message.senderId === 'player' ? 'player' : 'buddy',
       text: message.text,
     }));
@@ -1229,7 +1235,7 @@ export const PulseMessengerApp: React.FC = () => {
           <PulseRoomWindow
             room={activeRoom}
             messages={roomMessages[activeRoom.id] || []}
-            participantNames={Object.fromEntries(engine.social.getBuddies().map((buddy) => [buddy.id, buddy.displayName]))}
+            participantNames={pulseContacts.roomParticipantNames}
             username={session.username}
             topic={roomTopics[activeRoom.id] || activeRoom.topic}
             isTyping={roomTyping}
@@ -1253,7 +1259,6 @@ export const PulseMessengerApp: React.FC = () => {
             openBuddyIds={openBuddyIds}
             activeBuddyId={activeBuddyId}
             buddies={buddiesMap}
-            conversations={conversations}
             unreadCounts={unreadCounts}
             typingIndicatorText={typingState.activeBuddyId === activeBuddyId ? typingState.typingIndicatorText : undefined}
             availableChoices={typingState.activeBuddyId === activeBuddyId ? typingState.availableChoices : []}

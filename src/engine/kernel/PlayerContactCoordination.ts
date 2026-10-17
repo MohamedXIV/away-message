@@ -28,6 +28,7 @@ export class PlayerContactCoordination {
     private readonly owners: Pick<CoreDomainOwners, 'clock' | 'social' | 'world' | 'needs' | 'telemetry'>,
     private readonly registerNewcomer: (action: Extract<SimulationAction, { type: 'SOCIAL_ADD_BUDDY' }>) => ActionResult,
     private readonly publishState: () => void,
+    private readonly createNewcomer: typeof generateNewcomer = generateNewcomer,
   ) {}
 
   public addContactByHandle(rawHandle: string, currentMinutes: number): { success: boolean; error?: string; data?: unknown } {
@@ -104,10 +105,12 @@ export class PlayerContactCoordination {
     this.owners.world.setFlag(`nbmeet_${day}`, true);
     const metVia = NEWCOMER_METVIA_ROTATION[this.owners.social.getBuddies().filter((b) => b.isProcedural).length % NEWCOMER_METVIA_ROTATION.length]!;
     const existingIds = this.owners.social.getBuddies().map((b) => b.id);
-    void generateNewcomer({ metVia, day, seed: `nbmeet-day-${day}`, useAI: true }, { existingIds })
+    const loadEpoch = this.owners.world.getLoadEpoch();
+    void this.createNewcomer({ metVia, day, seed: `nbmeet-day-${day}`, useAI: true }, { existingIds })
       .then((res) => {
-        const added = this.registerNewcomer({ type: 'SOCIAL_ADD_BUDDY', buddy: res.definition, introText: res.introText });
-        if (added.success) this.publishState();
+        if (loadEpoch !== this.owners.world.getLoadEpoch()) return;
+        // SOCIAL_ADD_BUDDY already publishes its own completed owner write.
+        this.registerNewcomer({ type: 'SOCIAL_ADD_BUDDY', buddy: res.definition, introText: res.introText });
       })
       .catch(() => {});
     this.owners.telemetry.logEvent('social', 'nightboard_meet', currentMinutes, { day });

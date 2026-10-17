@@ -1,15 +1,13 @@
 import React, { useState } from 'react';
 import { useSimulationStore } from '../../store/useSimulationStore';
+import { useSimulationDirectory } from '../../store/useBoundedSimulationRead';
 import { FileRecord } from '../../engine/types';
 
 export const TrashApp: React.FC = () => {
-  const vfs = useSimulationStore((s) => s.state.vfs);
+  const { files: trashFiles } = useSimulationDirectory('C:/Trash');
   const dispatchAction = useSimulationStore((s) => s.dispatchAction);
   const [selectedFile, setSelectedFile] = useState<FileRecord | null>(null);
 
-  const trashFiles = Object.values(vfs.files).filter(
-    (f) => f.parentPath === 'C:/Trash' && f.path !== 'C:/Trash'
-  );
   const totalTrashBytes = trashFiles.reduce((acc, f) => acc + f.sizeBytes, 0);
 
   const handleEmptyTrash = () => {

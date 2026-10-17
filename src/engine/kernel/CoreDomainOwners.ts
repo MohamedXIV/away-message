@@ -53,16 +53,18 @@ export function createCoreDomainOwners(initialState?: Partial<SimulationState>) 
   const environment = new EnvironmentEngine(events, world, () => clock.getTotalMinutes());
 
   const moodContext = (): MoodContext => {
-    const finance = economy.getState();
+    // Mood samples the finance owner, not the merged Economy+Needs
+    // compatibility PlayerState. Needs has its own canonical snapshot.
+    const rent = economy.getRentStatus();
     return {
       atMinute: clock.getTotalMinutes(),
       needs: needs.getSnapshot(),
       environment: environment.getCurrentSnapshot(),
       finance: {
-        cash: finance.cash,
-        rentDueDay: finance.rentDueDay,
-        rentAmount: finance.rentAmount,
-        rentPaid: finance.rentPaid,
+        cash: economy.getCash(),
+        rentDueDay: rent.rentDueDay,
+        rentAmount: rent.rentAmount,
+        rentPaid: rent.rentPaid,
         currentDay: clock.getTime().day,
       },
     };

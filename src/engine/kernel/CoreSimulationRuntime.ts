@@ -47,6 +47,8 @@ import { SocialPresenceCycle } from './SocialPresenceCycle';
 import { RelationshipContinuity } from './RelationshipContinuity';
 import { NpcSocialLifeCycle } from './NpcSocialLifeCycle';
 import { ProceduralWorldCycle } from './ProceduralWorldCycle';
+import type { CharacterDefinition } from '../CharacterEngine';
+import type { BuddyMetVia } from '../types';
 import { PlayerContactCoordination } from './PlayerContactCoordination';
 import { CityActivityCoordination } from './CityActivityCoordination';
 import { DesktopStorageCommands } from './DesktopStorageCommands';
@@ -59,6 +61,9 @@ export interface CoreRuntimePorts {
   advanceGameMinutes(minutes: number, reason?: string): void;
   placeGroceryOrder(items: Array<{ sku: string; qty: number }>, fulfillment: Fulfillment, nowMinute: number): ActionResult;
   publishState(): void;
+  commitAutoDiscoveredNewcomer(
+    buddy: CharacterDefinition, introText: string, metVia: BuddyMetVia, day: number,
+  ): boolean;
 }
 
 export class CoreSimulationRuntime {
@@ -109,7 +114,7 @@ export class CoreSimulationRuntime {
     const owners = createCoreDomainOwners(initialState);
     this.coreOwners = owners;
     this.jobBoard = new JobBoardCoordination(owners, () => this.notifySubscribers());
-    this.myplaceSocial = new MyPlaceSocialCycle(owners);
+    this.myplaceSocial = new MyPlaceSocialCycle(owners, () => this.notifySubscribers());
     this.rentCoordination = new RentCoordination(owners, () => this.notifySubscribers());
     this.appointmentCoordination = new AppointmentCoordination(owners);
     this.socialPresence = new SocialPresenceCycle(owners);
@@ -117,11 +122,8 @@ export class CoreSimulationRuntime {
     this.npcSocialLife = new NpcSocialLifeCycle(owners);
     this.proceduralWorld = new ProceduralWorldCycle(
       owners,
-      (buddy, introText) => this.ports.dispatchAction({
-        type: 'SOCIAL_ADD_BUDDY',
-        buddy,
-        introText,
-      }).success,
+      (buddy, introText, metVia, day) =>
+        this.ports.commitAutoDiscoveredNewcomer(buddy, introText, metVia, day),
       () => this.notifySubscribers(),
     );
     this.groceryDelivery = new GroceryDeliveryCoordination(
@@ -274,6 +276,11 @@ export class CoreSimulationRuntime {
     this.events.on('hardware:os_migrated' as any, () => {
       this.notifySubscribers();
     });
+  }
+
+  /** Bounded read for OS/HUD; no whole CoreState projection. */
+  public getActiveView(): 'pc' | 'room' | 'cafe' | 'work' | 'city' {
+    return this.activeView;
   }
 
   public getState(): Readonly<SimulationState> {
@@ -439,19 +446,6 @@ export class CoreSimulationRuntime {
    * Which profile page belongs to a buddy. Legacy rich profiles win over stubs:
    * profile alias → handle → id, so notes land where players actually look.
    */
-  public async generateProceduralEventsNow(options?: { maxEvents?: number; useAI?: boolean }): Promise<import('../types').GlobalEvent[]> {
-    const currentDay = this.clock.getTime().day;
-    const totalMinutes = this.clock.getTotalMinutes();
-    const { ProceduralDirector } = await import('../ProceduralDirector');
-    const dir = new ProceduralDirector(this.world);
-    const res = await dir.generateNextBatch(currentDay, totalMinutes, {
-      maxEvents: options?.maxEvents ?? 2,
-      useAI: options?.useAI ?? true,
-    });
-    this.notifySubscribers();
-    return res.events;
-  }
-
   public dispatchAction(action: SimulationAction): ActionResult {
     return this.playerActions.dispatchAction(action);
   }

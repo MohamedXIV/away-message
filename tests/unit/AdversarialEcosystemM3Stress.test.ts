@@ -5,6 +5,8 @@ import { AWAY_MESSAGE_PRESETS } from '../../src/apps/pulse/data/awayMessagePrese
 import { DIALOGUE_SCRIPTS, validateDialogueScripts } from '../../src/apps/pulse/data/dialogueTrees';
 import type { NpcDialogueScript } from '../../src/apps/pulse/types';
 import { useSimulationStore } from '../../src/store/useSimulationStore';
+import { SimulationEngine } from '../../src/engine/SimulationEngine';
+import type { InstalledSoftwareRecord } from '../../src/engine/types';
 import { useWindowStore } from '../../src/store/useWindowStore';
 
 describe('Adversarial M3 Stress & Quality Suite: Pulse Messenger & Ecosystem Apps', () => {
@@ -239,44 +241,41 @@ describe('Adversarial M3 Stress & Quality Suite: Pulse Messenger & Ecosystem App
       expect(adwareThreats[0]?.id).toBe('sw_2');
     });
 
-    it('removes adware software and clears toolbar injection when uninstalled', () => {
-      const installedRecords = [
-        {
-          id: 'sw_weatherbuddy',
-          appId: 'weatherbuddy',
-          name: 'WeatherBuddy 3.1',
-          version: '3.1',
-          installDateMinute: 10,
-        },
-        {
-          id: 'sw_searchmate',
-          appId: 'searchmate',
-          name: 'SearchMate Toolbar',
-          version: '2.0',
-          isAdware: true,
-          installDateMinute: 10,
-        },
-      ];
-
-      useSimulationStore.setState((prev) => ({
-        state: {
-          ...prev.state,
-          installedSoftware: installedRecords as any,
-        },
-      }));
-
-      // Simulate uninstallation action
-      const store = useSimulationStore.getState();
-      store.dispatchAction({
-        type: 'SOFTWARE_UNINSTALL',
-        installedId: 'sw_searchmate',
-      });
-
-      const remainingSoftware = useSimulationStore.getState().state.installedSoftware;
-      const remainingThreats = remainingSoftware.filter(
-        (sw: any) => sw.appId === 'searchmate' || sw.isAdware
-      );
-      expect(remainingThreats.length).toBe(0);
+    it('removes canonical adware software and clears toolbar injection when uninstalled', () => {
+      const previousEngine = useSimulationStore.getState().engine;
+      const engine = new SimulationEngine();
+      const adware: InstalledSoftwareRecord = {
+        id: 'sw_searchmate',
+        appId: 'searchmate',
+        name: 'SearchMate Toolbar',
+        version: '2.0',
+        installedBytes: 2048,
+        installPath: 'C:/Program Files/SearchMate',
+        installedAtMinute: 10,
+        isPortable: false,
+        isAdware: true,
+        adwarePayload: { toolbarInjected: true, homepageHijacked: 'http://searchmate.local' },
+        shortcuts: [],
+      };
+      // Seed the actual owner before attaching the engine to the real store.
+      // An injected Zustand snapshot is not authority for SOFTWARE_UNINSTALL.
+      engine.software.loadState([adware]);
+      try {
+        useSimulationStore.getState().setEngine(engine);
+        expect(useSimulationStore.getState().state.installedSoftware).toHaveLength(1);
+        const before = engine.getRevision();
+        const result = useSimulationStore.getState().dispatchAction({
+          type: 'SOFTWARE_UNINSTALL',
+          installedId: adware.id,
+        });
+        expect(result.success).toBe(true);
+        expect(engine.getRevision()).toBe(before + 1);
+        expect(engine.software.getInstalledSoftware()).toEqual([]);
+        const remainingSoftware = useSimulationStore.getState().state.installedSoftware;
+        expect(remainingSoftware.filter(sw => sw.appId === 'searchmate' || sw.isAdware)).toEqual([]);
+      } finally {
+        useSimulationStore.getState().setEngine(previousEngine);
+      }
     });
   });
 

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useSimulationStore } from '../../../store/useSimulationStore';
+import { useSimulationPresence } from '../../../store/useBoundedSimulationRead';
 import { AWAY_MESSAGE_PRESETS, AwayPreset } from '../data/awayMessagePresets';
 
 interface AwayMessageEditorProps {
@@ -8,7 +9,8 @@ interface AwayMessageEditorProps {
 }
 
 export const AwayMessageEditor: React.FC<AwayMessageEditorProps> = ({ isOpen, onClose }) => {
-  const presence = useSimulationStore((s) => s.state.social.presence);
+  const engine = useSimulationStore((s) => s.engine);
+  const presence = useSimulationPresence().presence;
   const playerPresence = presence['player'] || { status: 'online', awayMessage: '' };
 
   const [messageInput, setMessageInput] = useState(playerPresence.awayMessage || '');
@@ -20,42 +22,20 @@ export const AwayMessageEditor: React.FC<AwayMessageEditorProps> = ({ isOpen, on
   };
 
   const handleSetAway = () => {
-    useSimulationStore.setState((prev) => ({
-      state: {
-        ...prev.state,
-        social: {
-          ...prev.state.social,
-          presence: {
-            ...prev.state.social.presence,
-            player: {
-              status: 'away',
-              awayMessage: messageInput.trim() || 'Away from desk',
-              customAwayMessage: messageInput.trim(),
-            },
-          },
-        },
-      },
-    }));
+    engine.setPlayerPresence({
+      status: 'away',
+      awayMessage: messageInput.trim() || 'Away from desk',
+      customAwayMessage: messageInput.trim(),
+    });
     onClose();
   };
 
   const handleClearAway = () => {
-    useSimulationStore.setState((prev) => ({
-      state: {
-        ...prev.state,
-        social: {
-          ...prev.state.social,
-          presence: {
-            ...prev.state.social.presence,
-            player: {
-              status: 'online',
-              awayMessage: '',
-              customAwayMessage: undefined,
-            },
-          },
-        },
-      },
-    }));
+    engine.setPlayerPresence({
+      status: 'online',
+      awayMessage: '',
+      customAwayMessage: undefined,
+    });
     onClose();
   };
 

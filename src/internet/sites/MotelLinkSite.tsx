@@ -1,9 +1,9 @@
 import React from 'react';
 import { SiteRouteProps } from '../types';
-import { useSimulationStore } from '../../store/useSimulationStore';
+import { useSimulationApps } from '../../store/useBoundedSimulationRead';
 
 export const MotelLinkSite: React.FC<SiteRouteProps> = () => {
-  const hardware = useSimulationStore((s) => s.state.hardware);
+  const hardware = useSimulationApps().hardware;
 
   return (
     <div className="w-full min-h-full bg-[#1e293b] text-white font-sans text-xs p-4 flex flex-col items-center">

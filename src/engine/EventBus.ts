@@ -5,6 +5,13 @@ type EventHandler<T> = (payload: T) => void;
 export class EventBus {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private listeners: Map<keyof SimulationEventMap, Set<EventHandler<any>>> = new Map();
+  /** Source-event witnesses; no event log or second mutable domain authority. */
+  private readonly observers = new Set<(event: keyof SimulationEventMap) => void>();
+
+  public observeEmissions(witness: (event: keyof SimulationEventMap) => void): () => void {
+    this.observers.add(witness);
+    return () => { this.observers.delete(witness); };
+  }
 
   public on<K extends keyof SimulationEventMap>(
     event: K,
@@ -37,6 +44,10 @@ export class EventBus {
     event: K,
     payload: SimulationEventMap[K]
   ): void {
+    for (const observer of this.observers) {
+      try { observer(event); }
+      catch (error) { console.error('[EventBus] Emission observer error:', error); }
+    }
     const set = this.listeners.get(event);
     if (!set || set.size === 0) return;
 
@@ -52,6 +63,7 @@ export class EventBus {
 
   public clear(): void {
     this.listeners.clear();
+    this.observers.clear();
   }
 
   public listenerCount<K extends keyof SimulationEventMap>(event: K): number {

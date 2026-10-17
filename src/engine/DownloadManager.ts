@@ -153,6 +153,31 @@ export class DownloadManager {
     return true;
   }
 
+  /**
+   * UI-safe bounded task window. The Map remains canonical; archived tasks
+   * beyond the requested page are never materialized into cloned records.
+   */
+  public getRecentTasks(limit = 256): DownloadTask[] {
+    const bounded = Number.isFinite(limit) ? Math.max(0, Math.min(256, Math.trunc(limit))) : 256;
+    if (bounded === 0) return [];
+    const latest: ProfiledDownloadTask[] = [];
+    for (const task of this.tasks.values()) {
+      if (latest.length === bounded) latest.shift();
+      latest.push(task);
+    }
+    // Do not expose mutable owner records or private bandwidth client profiles.
+    return latest.map(({ clientProfile: _profile, ...task }) => ({ ...task }));
+  }
+
+  /** Tray read: count only, without allocating/copying the download ledger. */
+  public getActiveDownloadCount(): number {
+    let count = 0;
+    for (const task of this.tasks.values()) {
+      if (task.status === 'downloading') count++;
+    }
+    return count;
+  }
+
   public getActiveDownloads(): DownloadTask[] {
     return Array.from(this.tasks.values()).filter(t => t.status === 'downloading');
   }

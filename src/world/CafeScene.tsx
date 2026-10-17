@@ -1,9 +1,10 @@
 // src/world/CafeScene.tsx
-// Starlight Café — optional in-person sandbox conversation with whichever local
-// actor is selected. Uses the same governed relationship/memory/world inputs as Pulse.
+// Starlight Café — optional in-person sandbox conversation with an actually present
+// player-known actor. Presence is a canonical NPC fact, never a roster guess.
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useSimulationStore } from '../store/useSimulationStore';
+import { useSimulationHud, useSimulationWorldRead, useCafeGuestRead } from '../store/useBoundedSimulationRead';
 import { soundManager } from '../audio/SoundManager';
 import { PhysicalWorldBoundary } from './phaser/PhysicalWorldBoundary';
 import { createWorldSceneProjection } from './phaser/presentationAdapter';
@@ -34,23 +35,6 @@ interface CafeTurn {
 const CAFE_OPENER =
   "Hey! You made it! It's... honestly so strange seeing you outside of that little chat box. But in a really good way. I grabbed the booth by the radiator — sit, sit.";
 
-/** Default meeting buddy: most-familiar available local buddy (remote buddies never meet in person). */
-function defaultCafeBuddyId(engine: { social: { getBuddies(): Array<{ id: string; status?: string; reach?: string }>; getRelationships(id: string): { familiarity: number } | undefined } }): string {
-  const buddies = engine.social.getBuddies();
-  const locals = buddies.filter((b) => (b.reach ?? 'local') === 'local' && b.status !== 'distant' && b.status !== 'gone' && b.status !== 'blocked');
-  const pool = locals;
-  let best = pool[0];
-  let bestFam = -1;
-  for (const b of pool) {
-    const fam = engine.social.getRelationships(b.id)?.familiarity ?? 0;
-    if (fam > bestFam) {
-      bestFam = fam;
-      best = b;
-    }
-  }
-  return best?.id ?? '';
-}
-
 export function toneToExpression(tone: string | undefined, fallback: CafeExpression): CafeExpression {
   const normalized = (tone || '').toLowerCase();
   if (/happy|laugh|excit|playful|joy|grin/.test(normalized)) return 'smile';
@@ -60,23 +44,27 @@ export function toneToExpression(tone: string | undefined, fallback: CafeExpress
   return fallback;
 }
 
+const cafeService = GENERATED_VENUE_SERVICES.find(service => service.tags.includes('cafe'));
+if (!cafeService) throw new Error('Generated world has no authored café venue service.');
+
 export const CafeScene: React.FC<{ buddyId?: string }> = ({ buddyId: propBuddyId }) => {
   const historyRef = useRef<HTMLDivElement>(null);
   const turnId = useRef(0);
 
   const engine = useSimulationStore((s) => s.engine);
-  const buddyId = propBuddyId ?? defaultCafeBuddyId(engine);
-  const time = useSimulationStore((s) => s.state.time);
-  const totalMinutes = useSimulationStore((s) => s.state.time.totalMinutes);
-  const currentDay = useSimulationStore((s) => s.state.time.day);
+  const guest = useCafeGuestRead(cafeService.placeId, propBuddyId).guest;
+  const buddyId = guest?.actorId ?? '';
+  const time = useSimulationHud().time;
+  const worldRead = useSimulationWorldRead();
+  const totalMinutes = time.totalMinutes;
+  const currentDay = time.day;
   const switchView = useSimulationStore((s) => s.switchView);
   const spendCash = useSimulationStore((s) => s.spendCash);
   const advanceTime = useSimulationStore((s) => s.advanceTime);
   const applySocialAction = useSimulationStore((s) => s.applySocialAction);
-  useSimulationStore((s) => s.state.world.triggeredEvents);
 
   const buddy = buddyId ? engine.social.getBuddy(buddyId) : undefined;
-  const buddyName = buddy?.displayName || buddyId;
+  const buddyName = guest?.displayName ?? '';
 
   // Dialogue State
   const [turns, setTurns] = useState<CafeTurn[]>([
@@ -91,9 +79,7 @@ export const CafeScene: React.FC<{ buddyId?: string }> = ({ buddyId: propBuddyId
 
   const { suggestions, loading: suggestionsLoading, refresh: refreshSuggestions } = useReplySuggestions();
 
-  const cafeService = GENERATED_VENUE_SERVICES.find((service) => service.tags.includes('cafe'));
-  if (!cafeService) throw new Error('Generated world has no authored café venue service.');
-  const cafeEnvironment = engine.gameContext.environment.current();
+  const cafeEnvironment = worldRead.environment;
   const cafeProjection = useMemo(
     () => createWorldSceneProjection({
       placeId: cafeService.placeId,
@@ -164,7 +150,7 @@ export const CafeScene: React.FC<{ buddyId?: string }> = ({ buddyId: propBuddyId
     void refreshSuggestions(key, async () => {
       const slices = readMemorySlices();
       const buddyNow = engine.social.getBuddy(buddyId);
-      const recent = engine.social.getMessages(buddyId).slice(-6).map((message) => ({
+      const recent = engine.getConversationRead(buddyId, 0, 6).messages.map((message) => ({
         sender: message.senderId === 'player' ? 'player' : 'buddy',
         text: message.text,
       }));
@@ -372,7 +358,7 @@ export const CafeScene: React.FC<{ buddyId?: string }> = ({ buddyId: propBuddyId
             if (id === undefined) return;
             void refreshSuggestions(`${buddyId}:cafe:${id}:manual`, async () => {
               const slices = readMemorySlices();
-              const recent = engine.social.getMessages(buddyId).slice(-6).map((message) => ({
+              const recent = engine.getConversationRead(buddyId, 0, 6).messages.map((message) => ({
                 sender: message.senderId === 'player' ? 'player' : 'buddy',
                 text: message.text,
               }));

@@ -5,6 +5,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import type { OsVersion } from '../../engine/types';
 import type { OsInstallPlan } from '../../engine/SimulationEngine';
 import { useSimulationStore } from '../../store/useSimulationStore';
+import { useSimulationApps } from '../../store/useBoundedSimulationRead';
 import { synthAudio } from '../../audio/SynthAudio';
 import { soundManager } from '../../audio/SoundManager';
 import type { OsInstallPhase } from '../../engine/os/OsInstallerEngine';
@@ -39,7 +40,7 @@ function installModeDescription(plan: OsInstallPlan): string {
 }
 
 export const OsSetupWizard: React.FC<OsSetupWizardProps> = ({ targetOs, onClose }) => {
-  const hardware = useSimulationStore((s) => s.state.hardware);
+  const hardware = useSimulationApps().hardware;
   const prepareOsInstallFromInsertedMedia = useSimulationStore(
     (s) => s.prepareOsInstallFromInsertedMedia,
   );

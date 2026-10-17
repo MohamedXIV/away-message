@@ -74,8 +74,21 @@ jobs:
           SIM_BENCH_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: npm run bench:simulation
 
+      # #172: cheap, exact-head Node timings. Not a browser FPS benchmark.
+      - name: Benchmark bounded publication (20 / 100 / 250 / 500 actors)
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.ref == 'feat/172-bounded-publication'
+        env:
+          PUBLICATION_BENCH_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PUBLICATION_BENCH_SAMPLES: 5
+        run: npm run bench:publication
+
       - name: Install Playwright Chromium
         run: npx playwright install --with-deps chromium
 
       - name: Browser living-world smoke
         run: npx playwright test tests/e2e/tier1_features/07_RoomViewAndInteractables.spec.ts tests/e2e/tier4_scenarios/ScenarioF_LivingWorldGate.spec.ts
+
+      # #172: real mounted React Pulse paging and full-log export, not unit-only.
+      - name: Browser Pulse bounded paging gate
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.ref == 'feat/172-bounded-publication'
+        run: npx playwright test tests/e2e/tier4_scenarios/ScenarioG_PulsePaging.spec.ts

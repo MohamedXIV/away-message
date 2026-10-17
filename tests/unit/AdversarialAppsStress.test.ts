@@ -189,10 +189,11 @@ describe('Adversarial Stress Test Suite — Pulse Messenger & Ecosystem Applicat
       const registry = new SoftwareRegistry(eventBus, vfs, hwProvider);
 
       const session = registry.startInstallerWizard('sw_weatherbuddy_14');
-      session.selectedOptions.acceptedBundledOffers['searchmate_toolbar'] = false;
-      session.selectedOptions.acceptedBundledOffers['autorun_startup'] = false;
+      // Opt-outs belong to the canonical install commit, not a mutable wizard return.
 
-      const installedRecord = registry.completeInstallation(session.sessionId, 120);
+      const installedRecord = registry.completeInstallation(session.sessionId, 120, {
+        searchmate_toolbar: false, autorun_startup: false,
+      });
 
       expect(installedRecord.adwarePayload?.toolbarInjected).toBe(false);
       expect(installedRecord.adwarePayload?.homepageHijacked).toBeUndefined();

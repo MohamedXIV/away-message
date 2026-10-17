@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { SiteRouteProps } from '../types';
 import { useSimulationStore } from '../../store/useSimulationStore';
+import { useSimulationWebsite, useSimulationApps } from '../../store/useBoundedSimulationRead';
 import { soundManager } from '../../audio/SoundManager';
 import { getTechMartDynamicState } from '../worldSiteHelpers';
 import { getAllReleases, getReleaseById } from '../../engine/OsCatalog';
@@ -121,12 +122,9 @@ const PRODUCTS: ProductItem[] = [
 ];
 
 export const TechMartSite: React.FC<SiteRouteProps> = () => {
-  const hardware = useSimulationStore((s) => s.state.hardware);
-  const osState = useSimulationStore((s) => s.state.os);
-  const playerCash = useSimulationStore((s) => s.state.player?.cash ?? 150.00);
+  const { hardware, os: osState } = useSimulationApps();
+  const { cash: playerCash, world, time } = useSimulationWebsite();
   const dispatchAction = useSimulationStore((s) => s.dispatchAction);
-  const world = useSimulationStore((s) => s.state.world);
-  const time = useSimulationStore((s) => s.state.time);
 
   const [cart, setCart] = useState<ProductItem[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<string>('ALL');
@@ -141,7 +139,7 @@ export const TechMartSite: React.FC<SiteRouteProps> = () => {
   const osProducts: ProductItem[] = (() => {
     try {
       const engineOs = (useSimulationStore.getState().engine as any).os as { getAvailableReleases: (day:number, hw:any)=>any[] };
-      const hw = useSimulationStore.getState().state.hardware;
+      const hw = hardware;
       const available = engineOs ? engineOs.getAvailableReleases(time.day, hw as any) : (getAllReleases() as any[]).filter((r: any) => r.releaseDay <= time.day);
       // Map to ProductItem
       return available.map((r: any) => ({
@@ -312,7 +310,7 @@ export const TechMartSite: React.FC<SiteRouteProps> = () => {
               if (!isOs) return { can: true, reason: '' };
               try {
                 const engOs = (useSimulationStore.getState().engine as any).os as { canInstall: (id:string, hw:any, day:number)=>{ok:boolean; reasons:string[]} };
-                const hw = useSimulationStore.getState().state.hardware;
+                const hw = hardware;
                 const res = engOs.canInstall(prod.payloadValue as string, hw as any, time.day);
                 return { can: res.ok, reason: res.reasons[0] ?? '' };
               } catch { return { can: true, reason: '' }; }

@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useSimulationStore } from '../../store/useSimulationStore';
+import { useSimulationFile } from '../../store/useBoundedSimulationRead';
 
 export const NotepadApp: React.FC<{ filePath?: string }> = ({ filePath }) => {
-  const vfs = useSimulationStore((s) => s.state.vfs);
+  const { file: selectedFile } = useSimulationFile(filePath ?? '');
   const dispatchAction = useSimulationStore((s) => s.dispatchAction);
 
   const [currentFilePath, setCurrentFilePath] = useState<string | null>(filePath || null);
@@ -15,14 +16,13 @@ export const NotepadApp: React.FC<{ filePath?: string }> = ({ filePath }) => {
 
   useEffect(() => {
     if (filePath) {
-      const file = vfs.files[filePath];
-      if (file) {
-        setContent(file.content || String(file.metadata?.textContent || ''));
+      if (selectedFile) {
+        setContent(selectedFile.content || String(selectedFile.metadata?.textContent || ''));
         setCurrentFilePath(filePath);
         setIsDirty(false);
       }
     }
-  }, [filePath, vfs]);
+  }, [filePath, selectedFile?.id, selectedFile?.content, selectedFile?.metadata?.textContent]);
 
   const handleTextChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setContent(e.target.value);

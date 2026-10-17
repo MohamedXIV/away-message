@@ -1,7 +1,7 @@
 import React from 'react';
 import { PulseNotification } from '../types';
 import { useWindowStore } from '../../../store/useWindowStore';
-import { useSimulationStore } from '../../../store/useSimulationStore';
+import { useSimulationChrome } from '../../../store/useBoundedSimulationRead';
 
 interface PulseNotificationToastProps {
   toast: PulseNotification;
@@ -14,7 +14,7 @@ export const PulseNotificationToast: React.FC<PulseNotificationToastProps> = ({
   onDismiss,
   onOpenChat,
 }) => {
-  const isOrion60 = useSimulationStore((s) => s.state.os.currentOsId === 'Orion_6.0');
+  const isOrion60 = useSimulationChrome().osVersion === 'Orion_6.0';
   const restoreWindow = useWindowStore((s) => s.restoreWindow);
   const focusWindow = useWindowStore((s) => s.focusWindow);
 
