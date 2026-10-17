@@ -27,6 +27,7 @@ import { SEED_CHARACTERS, seedCharacterDef, isSeedCharacter, resolveAffinitySeed
 import { validatePersistedBuddy, sanitizeLanguages } from './CharacterEngine';
 import { conditionFromLegacyStatus, projectLegacyBuddyStatus, validActorCondition } from './semantic/ActorCondition';
 import { parseCoreMemoryMeaning } from './semantic/CoreMemoryMeaning';
+import type { BoardBuddy } from './BoardDirector';
 
 // P3 long-term memory caps (keeps prompt injection bounded and saves small)
 export const MAX_CORE_MEMORIES = 8;
@@ -1603,6 +1604,33 @@ export class SocialEngine {
 
   public getBuddies(): BuddyCharacter[] {
     return Array.from(this.buddies.keys()).map(id => this.getBuddy(id)!);
+  }
+
+  /**
+   * Mailbox's player-known sender identities, scoped to rendered mail fields.
+   * Keep Social's conditions, identity and relationship stages in one owner;
+   * never copy roster payloads, conversations or private NPC memories.
+   */
+  public getKnownMailboxBuddies(maxContacts = 500): BoardBuddy[] {
+    const limit = Number.isFinite(maxContacts) ? Math.max(0, Math.min(500, Math.trunc(maxContacts))) : 500;
+    const senders: BoardBuddy[] = [];
+    if (limit === 0) return senders;
+    for (const [id, buddy] of this.buddies) {
+      if (!this.isKnown(id)) continue;
+      const stage = this.getRelationshipStage(id);
+      const condition = this.actorConditions.get(id) ?? conditionFromLegacyStatus();
+      senders.push({
+        id,
+        displayName: buddy.displayName,
+        handle: buddy.handle,
+        ...(buddy.archetype ? { archetype: buddy.archetype } : {}),
+        stage,
+        status: projectLegacyBuddyStatus(condition, stage),
+        ...(buddy.roles ? { roles: [...buddy.roles] } : {}),
+      });
+      if (senders.length >= limit) break;
+    }
+    return senders;
   }
 
   /**

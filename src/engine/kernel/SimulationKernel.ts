@@ -737,7 +737,7 @@ export class SimulationKernel {
    */
   public getMailboxRead(): SimulationMailboxRead {
     const today = this.clock.getTime().day;
-    const buddies = this.social.getBuddies().filter(buddy => this.social.isKnown(buddy.id));
+    const buddies = this.social.getKnownMailboxBuddies();
     const knownIds = new Set(buddies.map(buddy => buddy.id));
     const mailContext = {
       buddies: buddies.map(buddy => ({
@@ -745,7 +745,7 @@ export class SimulationKernel {
         displayName: buddy.displayName,
         handle: buddy.handle,
         archetype: buddy.archetype,
-        stage: this.social.getRelationshipStage(buddy.id),
+        stage: buddy.stage,
         status: buddy.status,
       })),
       sharps: buddies.map(buddy => {
@@ -776,21 +776,11 @@ export class SimulationKernel {
     for (const rent of buildRentMailHistory(this.world.getFlags(), landlordId)) {
       if (!npcMails.some(mail => mail.key === rent.key)) npcMails.push(rent);
     }
-    const orders = this.delivery.getState().orders;
-    const selected = [
-      ...orders.filter(order => order.status === 'transit'),
-      ...orders.filter(order => order.status === 'done').slice(-3),
-    ];
+
     return {
       revision: this.revision,
       npcMails: npcMails.slice(-12),
-      orders: selected.map(order => ({
-        id: order.id,
-        items: order.items.map(item => ({ sku: item.sku, qty: item.qty })),
-        fulfillment: order.fulfillment,
-        readyMinute: order.readyMinute,
-        status: order.status,
-      })),
+      orders: this.delivery.getMailboxReceiptRead(),
     };
   }
 

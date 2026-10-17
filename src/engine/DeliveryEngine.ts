@@ -105,6 +105,31 @@ export class DeliveryEngine {
   }
 
   /**
+   * Mailbox-only parcel read. Keeps payment, destination and dispatch details
+   * inside DeliveryEngine; preserve in-flight orders then last three receipts.
+   */
+  public getMailboxReceiptRead(): Array<Pick<DeliveryOrder,
+    'id' | 'items' | 'fulfillment' | 'readyMinute' | 'status'>> {
+    const select = (order: DeliveryOrder) => ({
+      id: order.id,
+      items: order.items.map(item => ({ sku: item.sku, qty: item.qty })),
+      fulfillment: order.fulfillment,
+      readyMinute: order.readyMinute,
+      status: order.status,
+    });
+    const inTransit: ReturnType<DeliveryEngine['getMailboxReceiptRead']> = [];
+    const completed: ReturnType<DeliveryEngine['getMailboxReceiptRead']> = [];
+    for (const order of this.orders) {
+      if (order.status === 'transit') inTransit.push(select(order));
+      else if (order.status === 'done') {
+        completed.push(select(order));
+        if (completed.length > 3) completed.shift();
+      }
+    }
+    return [...inTransit, ...completed];
+  }
+
+  /**
    * Canonical SimulationEngine can claim courier arrivals into the physical-world
    * authority. Returning true means the order was materialized physically and
    * legacy pantry crediting must be skipped. Without a handler, P6 behavior is

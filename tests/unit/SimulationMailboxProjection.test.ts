@@ -46,7 +46,7 @@ describe('#172 bounded player mailbox read', () => {
     const privateRead = game.getMailboxRead();
     expect(privateRead.npcMails.every(mail => mail.buddyId !== hidden.id)).toBe(true);
     expect(JSON.stringify(privateRead)).not.toContain('HIDDEN_MAIL_SENDER');
-    expect(roster).toHaveBeenCalledTimes(1);
+    expect(roster).not.toHaveBeenCalled();
     expect(game.getRevision()).toBe(before);
 
     expect(game.social.learnHandle(hidden.id, hidden.handle)).toBe(true);
@@ -56,6 +56,7 @@ describe('#172 bounded player mailbox read', () => {
     expect(JSON.parse(JSON.stringify(revealed))).toEqual(revealed);
     expect(broad).not.toHaveBeenCalled();
     expect(social).not.toHaveBeenCalled();
+    expect(roster).not.toHaveBeenCalled();
   });
 
   it('sends only relevant bounded courier receipt fields, never raw delivery owner internals', () => {
@@ -64,6 +65,7 @@ describe('#172 bounded player mailbox read', () => {
       game.delivery.placeDelivery([{ sku: `parcel_${i}`, qty: 1 }], 10, 500 + i);
     }
     const source = game.delivery.getState().orders;
+    const stateRead = vi.spyOn(game.delivery, 'getState');
     const all = game.getMailboxRead();
     expect(all.orders).toHaveLength(10);
     expect(all.orders[0]?.id).toBe(source[0]?.id);
@@ -71,6 +73,60 @@ describe('#172 bounded player mailbox read', () => {
     expect(JSON.stringify(all.orders)).not.toContain('placedMinute');
     expect(JSON.stringify(all.orders)).not.toContain('"total"');
     all.orders[0]!.items[0]!.sku = 'bad actor';
+    expect(stateRead).not.toHaveBeenCalled();
+    stateRead.mockRestore();
     expect(game.delivery.getState().orders[0]?.items[0]?.sku).toBe('parcel_0');
   });
+  it('preserves the previous mailbox sender and receipt semantics without source-wide clones', () => {
+    const game = new SimulationEngine();
+    const buddies = game.social.getBuddies().filter(buddy => game.social.isKnown(buddy.id));
+    const expected = buddies.map(buddy => ({
+      id: buddy.id, displayName: buddy.displayName, handle: buddy.handle,
+      archetype: buddy.archetype, stage: game.social.getRelationshipStage(buddy.id),
+      status: buddy.status, roles: buddy.roles,
+    }));
+    const projected = game.social.getKnownMailboxBuddies();
+    expect(projected.map(({ id, displayName, handle, archetype, stage, status, roles }) => ({
+      id, displayName, handle, archetype, stage, status, roles,
+    }))).toEqual(expected);
+    expect(game.social.getKnownMailboxBuddies(0)).toEqual([]);
+
+    // Deliveries retain transit first, then the last three done receipts.
+    for (let i = 0; i < 5; i++) {
+      game.delivery.recordPickup([{ sku: `pickup_${i}`, qty: i + 1 }], 10, i);
+    }
+    for (let i = 0; i < 2; i++) {
+      game.delivery.placeDelivery([{ sku: `courier_${i}`, qty: 1 }], 10, i + 10);
+    }
+    const old = game.delivery.getState().orders;
+    const selected = [
+      ...old.filter(order => order.status === 'transit'),
+      ...old.filter(order => order.status === 'done').slice(-3),
+    ].map(order => ({
+      id: order.id, items: order.items.map(item => ({ sku: item.sku, qty: item.qty })),
+      fulfillment: order.fulfillment, readyMinute: order.readyMinute, status: order.status,
+    }));
+    const rosterRead = vi.spyOn(game.social, 'getBuddies');
+    const socialRead = vi.spyOn(game.social, 'getState');
+    const deliveryRead = vi.spyOn(game.delivery, 'getState');
+    const broad = vi.spyOn(game, 'getState');
+    const view = game.getMailboxRead();
+    expect(view.orders).toEqual(selected);
+    expect(JSON.parse(JSON.stringify(view))).toEqual(view);
+    expect(JSON.stringify(view.orders)).not.toContain('deliveryTarget');
+    expect(JSON.stringify(view.orders)).not.toContain('placedMinute');
+    expect(rosterRead).not.toHaveBeenCalled();
+    expect(socialRead).not.toHaveBeenCalled();
+    expect(deliveryRead).not.toHaveBeenCalled();
+    expect(broad).not.toHaveBeenCalled();
+    const name = projected[0];
+    if (name) {
+      name.displayName = 'SPOOFED';
+      name.roles?.push('invented');
+      const next = game.social.getKnownMailboxBuddies().find(buddy => buddy.id === name.id);
+      expect(next?.displayName).not.toBe('SPOOFED');
+      expect(next?.roles).not.toContain('invented');
+    }
+  });
+
 });
