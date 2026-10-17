@@ -1634,7 +1634,7 @@ export class SocialEngine {
           id,
           displayName: buddy.displayName,
           handle: buddy.handle,
-          archetype: buddy.archetype,
+          ...(buddy.archetype ? { archetype: buddy.archetype } : {}),
           status: projectLegacyBuddyStatus(condition, this.getRelationshipStage(id)),
         });
       }

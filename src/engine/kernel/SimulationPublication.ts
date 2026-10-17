@@ -292,8 +292,8 @@ export interface SimulationLabInspectorRead {
     id: string;
     displayName: string;
     handle: string;
-    archetype: import('../types').BuddyCharacter['archetype'];
-    status: import('../types').BuddyCharacter['status'];
+    archetype?: import('../types').BuddyCharacter['archetype'];
+    status?: import('../types').BuddyCharacter['status'];
     relationship: import('../types').RelationshipDimensions | null;
     stage: import('../types').RelationshipStage;
     dailyMood: import('../types').DailyMood;

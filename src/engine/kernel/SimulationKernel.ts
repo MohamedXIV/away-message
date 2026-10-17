@@ -375,7 +375,7 @@ export class SimulationKernel {
         dailyMood: this.social.getDailyMood(buddy.id, day),
         memories: this.social.getCoreMemories(buddy.id),
         promises: this.social.getOpenPromises(buddy.id),
-        sharp: String(this.world.getFlag(`sharp_${buddy.id}`) ?? ''),
+        sharp: String(this.world.getFlag(`sharp_${buddy.id}`) || ''),
         affinityText: this.social.buildAffinityContext(buddy.id),
       })),
       appointments,
