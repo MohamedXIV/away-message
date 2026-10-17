@@ -22,9 +22,8 @@ import {
 } from './types';
 import { EventBus } from './EventBus';
 import { getWeatherForDay, isWetWeather } from './WeatherEngine';
-import { validateCharacterId, isValidSchedule, traitsForBuddy, clampTraits, clampRelationships, resolveArchetype } from './characterTemplates';
-import { SEED_CHARACTERS, seedCharacterDef, isSeedCharacter, resolveAffinitySeeds } from './seedCharacters';
-import { validatePersistedBuddy, sanitizeLanguages } from './CharacterEngine';
+import { clampRelationships } from './characterTemplates';
+import { SEED_CHARACTERS, resolveAffinitySeeds } from './seedCharacters';
 import { conditionFromLegacyStatus, projectLegacyBuddyStatus, validActorCondition } from './semantic/ActorCondition';
 import type { BoardBuddy } from './BoardDirector';
 import { ConversationHistory } from './social/ConversationHistory';
@@ -36,6 +35,7 @@ import { MediationLedger } from './social/MediationLedger';
 import { SocialPresence } from './social/SocialPresence';
 import { SocialActivityLedger } from './social/SocialActivityLedger';
 import { SocialContactDirectory } from './social/SocialContactDirectory';
+import { SocialRoster } from './social/SocialRoster';
 export { MAX_CORE_MEMORIES, MAX_OPEN_PROMISES, MAX_PHOTO_MEMORIES } from './social/SocialMemoryLedger';
 export { STRAINED_ANNOYANCE } from './social/PlayerRelationships';
 
@@ -147,19 +147,20 @@ export const SEED_AFFINITIES: Record<string, number> = resolveAffinitySeeds();
 
 
 export class SocialEngine {
-  private buddies: Map<string, BuddyCharacter> = new Map();
+  /** Canonical actor identity registry: no duplicate roster or status truth. */
+  private readonly roster = new SocialRoster(normalizeBuddyId, normalizeRelationshipDims);
   // Only authoritative departure/contact state. BuddyCharacter.status is an
   // authored input or derived compatibility read; never stored on live actors.
   /** Canonical actor↔player dimensions and structural contact/lifecycle are one owner. */
   private readonly playerLinks = new PlayerRelationships({
     normalize: normalizeBuddyId,
     normalizeDims: normalizeRelationshipDims,
-    actorExists: id => this.buddies.has(id),
+    actorExists: id => this.roster.has(id),
   });
   /** Presence reads contact law; it never duplicates condition or relationship truth. */
   private readonly online = new SocialPresence({
     normalize: normalizeBuddyId,
-    actors: () => this.buddies.entries(),
+    actors: () => this.roster.entries(),
     condition: id => this.playerLinks.getCondition(id),
     emit: (buddyId, presence) => this.eventBus.emit('social:status_changed', { buddyId, presence }),
     isKnown: id => this.isKnown(id),
@@ -167,7 +168,7 @@ export class SocialEngine {
   /** One canonical history owner; relationship/presence state never stores transcript bodies. */
   private readonly conversations = new ConversationHistory(normalizeBuddyId);
   // One canonical owner for structured memory facts and player commitments.
-  private readonly memory = new SocialMemoryLedger(normalizeBuddyId, id => this.buddies.has(id));
+  private readonly memory = new SocialMemoryLedger(normalizeBuddyId, id => this.roster.has(id));
   /** One authoritative sparse graph for NPC↔NPC affinity, directed bonds and romance. */
   private readonly graph = new NpcRelationshipGraph({
     normalize: normalizeBuddyId,
@@ -175,8 +176,8 @@ export class SocialEngine {
     bondKey: npcBondKey,
     neutral: neutralNpcBond,
     normalizeDims: normalizeRelationshipDims,
-    actorExists: id => this.buddies.has(id),
-    actors: () => this.buddies.values(),
+    actorExists: id => this.roster.has(id),
+    actors: () => this.roster.values(),
     emit: (kind, payload) => this.eventBus.emit(kind as any, payload as any),
     actionDeltas: NPC_SOCIAL_ACTION_DELTAS,
     maxAffinity: MAX_AFFINITY,
@@ -185,12 +186,12 @@ export class SocialEngine {
   });
   /** Canonical NPC agendas/witness moments; event coordination stays in SocialEngine. */
   private readonly activity = new SocialActivityLedger(
-    normalizeBuddyId, id => this.buddies.has(id), MAX_AGENDA_PER_BUDDY_DAY, MAX_NPC_SOCIAL_LOG);
-  private readonly mediation = new MediationLedger(normalizeBuddyId, id => this.buddies.has(id), MAX_MEDIATIONS);
-  private readonly playerRead = new PlayerReadLedger(normalizeBuddyId, id => this.buddies.has(id));
+    normalizeBuddyId, id => this.roster.has(id), MAX_AGENDA_PER_BUDDY_DAY, MAX_NPC_SOCIAL_LOG);
+  private readonly mediation = new MediationLedger(normalizeBuddyId, id => this.roster.has(id), MAX_MEDIATIONS);
+  private readonly playerRead = new PlayerReadLedger(normalizeBuddyId, id => this.roster.has(id));
   /** Earned Pulse contacts are separate from relationship, physical presence and actor identity. */
   private readonly directory = new SocialContactDirectory(
-    normalizeBuddyId, id => this.buddies.has(id), MAX_KNOWN_HANDLES, MAX_EPITAPHS);
+    normalizeBuddyId, id => this.roster.has(id), MAX_KNOWN_HANDLES, MAX_EPITAPHS);
   private eventBus: EventBus;
 
   constructor(eventBus: EventBus, initialState?: SocialEngineState) {
@@ -210,45 +211,9 @@ export class SocialEngine {
    * Throws on invalid/duplicate ids. Never overwrites existing state.
    */
   public registerBuddy(def: BuddyCharacter): BuddyCharacter {
-    const id = normalizeBuddyId(def.id);
-    const idCheck = validateCharacterId(id);
-    if (!idCheck.ok) throw new Error(idCheck.error);
-    if (this.buddies.has(id)) throw new Error(`Buddy already registered: ${id}`);
-    if (!def.displayName?.trim()) throw new Error('Buddy displayName must be non-empty.');
-    if (!def.handle?.trim()) throw new Error('Buddy handle must be non-empty.');
-    if (!isValidSchedule(def.schedule)) throw new Error(`Buddy '${id}' has an invalid schedule.`);
-    if (typeof def.typingSpeedWpm !== 'number' || def.typingSpeedWpm < 20 || def.typingSpeedWpm > 140) {
-      throw new Error(`Buddy '${id}' has an invalid typingSpeedWpm.`);
-    }
-    const stored: BuddyCharacter = {
-      ...def,
-      id,
-      displayName: def.displayName.slice(0, 40),
-      handle: def.handle.slice(0, 40),
-      initialRelationships: normalizeRelationshipDims(def.initialRelationships),
-      // v3-era defs predate temperament: backfill deterministically (never random).
-      traits: clampTraits({
-        ...traitsForBuddy(id, def.archetype ?? resolveArchetype(id, undefined)),
-        ...((def as Partial<BuddyCharacter>).traits ?? {}),
-      }),
-      // Free roster identity backfills (older defs predate these fields).
-      reach: (def as Partial<BuddyCharacter>).reach === 'remote' ? 'remote' : 'local',
-      appearance: {
-        hair: String((def as Partial<BuddyCharacter>).appearance?.hair || 'brown').trim().slice(0, 24) || 'brown',
-        eyes: String((def as Partial<BuddyCharacter>).appearance?.eyes || 'brown').trim().slice(0, 24) || 'brown',
-      },
-      languages: sanitizeLanguages((def as Partial<BuddyCharacter>).languages),
-      roles: Array.isArray((def as Partial<BuddyCharacter>).roles)
-        ? ((def as Partial<BuddyCharacter>).roles as unknown[]).filter((r): r is string => typeof r === 'string' && /^[a-z][a-z0-9_-]{1,23}$/.test(r)).slice(0, 6)
-        : [],
-      schedule: Object.fromEntries(
-        Object.entries(def.schedule).map(([day, blks]) => [Number(day), blks.map((b) => ({ ...b }))])
-      ),
-    };
-    this.playerLinks.putCondition(id, conditionFromLegacyStatus(def.status));
-    delete stored.status;
-    this.buddies.set(id, stored);
-    if (!this.playerLinks.has(id)) this.playerLinks.put(id, { ...stored.initialRelationships });
+    const { id, initialRelationships, status } = this.roster.register(def);
+    this.playerLinks.putCondition(id, conditionFromLegacyStatus(status));
+    if (!this.playerLinks.has(id)) this.playerLinks.put(id, initialRelationships);
     if (!this.online.has(id)) this.online.put(id, { status: 'offline', awayMessage: '' });
     this.conversations.ensure(id);
     const registered = this.getBuddy(id)!;
@@ -263,8 +228,8 @@ export class SocialEngine {
    */
   public removeBuddy(rawId: string): boolean {
     const id = normalizeBuddyId(rawId);
-    if (!this.buddies.has(id)) return false;
-    this.buddies.delete(id);
+    if (!this.roster.has(id)) return false;
+    this.roster.remove(id);
     this.playerLinks.forgetCondition(id);
     this.playerLinks.forget(id);
     this.online.forget(id);
@@ -288,31 +253,7 @@ export class SocialEngine {
     const playerReads = this.playerRead.exportState();
     const { knownHandles, epitaphs } = this.directory.exportState();
 
-    // Persist generated/non-registry definitions. Seed definitions come from content,
-    // while their per-save lifecycle divergence is persisted separately.
-    const buddyDefs: Record<string, BuddyCharacter> = {};
-    for (const [id, b] of this.buddies.entries()) {
-      if (isSeedCharacter(id)) continue;
-      const identity = { ...b };
-      delete identity.status; // an old exported status would duplicate canonical truth
-      buddyDefs[id] = {
-        ...identity,
-        initialRelationships: { ...b.initialRelationships },
-        traits: { ...b.traits },
-        appearance: { ...(b.appearance ?? { hair: 'brown', eyes: 'brown' }) },
-        languages: (b.languages ?? [{ lang: 'en', level: 5 }]).map((l) => ({ ...l })),
-        roles: [...(b.roles ?? [])],
-        backstory: b.backstory
-          ? { ...b.backstory, candidates: b.backstory.candidates.map((c) => ({ ...c })) }
-          : undefined,
-        schedule: Object.fromEntries(
-          Object.entries(b.schedule).map(([day, blks]) => [Number(day), blks.map((blk) => ({ ...blk }))])
-        ),
-      };
-    }
-
-     const removedSeedActorIds = SEED_CHARACTERS
-      .filter(seed => !this.buddies.has(seed.id)).map(seed => seed.id);
+    const { buddies: buddyDefs, removedSeedActorIds } = this.roster.exportState();
 
     return {
       relationships: rels,
@@ -333,43 +274,22 @@ export class SocialEngine {
   }
 
   public restoreState(state: SocialEngineState): void {
-    // Loading a new current-format world replaces roster/condition truth, not
-    // just its relationship graph. Otherwise a prior removed actor may leak.
-    this.buddies.clear();
+    // Roster owns identity import. Contact conditions remain with PlayerRelationships.
     this.playerLinks.clearConditions();
-    this.initializeCharacters();
-    // Apply per-save seed-roster divergence before restoring dependent state.
-    for (const rawId of state.removedSeedActorIds ?? []) {
-      const id = normalizeBuddyId(rawId);
-      if (isSeedCharacter(id)) {
-        this.buddies.delete(id);
-        this.playerLinks.forgetCondition(id);
-      }
-    }
-    // Import-only legacy snapshots. New snapshots contain actorConditions.
+    this.roster.restore(state,
+      (id, status) => this.playerLinks.putCondition(id, conditionFromLegacyStatus(status)),
+      id => this.playerLinks.forgetCondition(id));
+    // Import-only legacy contact conditions; friendship stages are derived.
     if (!state.actorConditions) {
       for (const [rawId, status] of Object.entries(state.seedActorStatuses ?? {})) {
         const id = normalizeBuddyId(rawId);
-        if (this.buddies.has(id)) this.playerLinks.putCondition(id, conditionFromLegacyStatus(status));
+        if (this.roster.has(id)) this.playerLinks.putCondition(id, conditionFromLegacyStatus(status));
       }
     }
 
-    // Re-register persisted non-seed definitions first so rel/presence/convos land on real buddies.
-    if (state.buddies) {
-      for (const [rawId, def] of Object.entries(state.buddies)) {
-        const id = normalizeBuddyId(rawId);
-        if (this.buddies.has(id) || isSeedCharacter(id)) continue;
-        const res = validatePersistedBuddy({ ...def, id });
-        if (!res.ok || !res.definition) continue;
-        const stored: BuddyCharacter = { ...res.definition };
-        this.playerLinks.putCondition(id, conditionFromLegacyStatus(stored.status));
-        delete stored.status;
-        this.buddies.set(id, stored);
-      }
-    }
     for (const [rawId, condition] of Object.entries(state.actorConditions ?? {})) {
       const id = normalizeBuddyId(rawId);
-      if (this.buddies.has(id) && validActorCondition(condition)) {
+      if (this.roster.has(id) && validActorCondition(condition)) {
         this.playerLinks.putCondition(id, { ...condition });
       }
     }
@@ -391,7 +311,7 @@ export class SocialEngine {
     this.directory.restore(state);
 
     // Backfill empty presence/conversations for any buddy missing them (old saves).
-    for (const buddy of this.buddies.values()) {
+    for (const buddy of this.roster.values()) {
       if (!this.playerLinks.has(buddy.id)) this.playerLinks.put(buddy.id, normalizeRelationshipDims(buddy.initialRelationships));
       if (!this.online.has(buddy.id)) this.online.put(buddy.id, { status: 'offline', awayMessage: '' });
       this.conversations.ensure(buddy.id);
@@ -401,7 +321,7 @@ export class SocialEngine {
   }
 
   private initializeDefaultState(): void {
-    for (const buddy of this.buddies.values()) {
+    for (const buddy of this.roster.values()) {
       this.playerLinks.put(buddy.id, { ...buddy.initialRelationships });
       this.online.put(buddy.id, { status: 'offline', awayMessage: '' });
       this.conversations.ensure(buddy.id);
@@ -409,17 +329,10 @@ export class SocialEngine {
     this.graph.seedMissing(SEED_AFFINITIES);
   }
 
-  /**
-   * Authored seed roster, sourced from the registry (content/store.json → generated).
-   * These actors are starting content, not mandatory product identities.
-   */
+  /** Authored seed identities go to the roster; conditions go to PlayerRelationships. */
   private initializeCharacters(): void {
-    for (const buddy of SEED_CHARACTERS) {
-      const stored = seedCharacterDef(buddy.id);
-      this.playerLinks.putCondition(buddy.id, conditionFromLegacyStatus(stored.status));
-      delete stored.status;
-      this.buddies.set(buddy.id, stored);
-    }
+    this.roster.initializeSeeds((id, status) =>
+      this.playerLinks.putCondition(id, conditionFromLegacyStatus(status)));
   }
 
   /**
@@ -521,7 +434,7 @@ export class SocialEngine {
     else if (roll < 88) mood = 'tired';
     else mood = 'off';
     // Rain lovers lift one step on wet days (data tag, not an id — strained-cold exempt above)
-    if ((this.buddies.get(id)?.roles ?? []).includes('rain-lover') && isWetWeather(getWeatherForDay(day).condition)) {
+    if ((this.roster.get(id)?.roles ?? []).includes('rain-lover') && isWetWeather(getWeatherForDay(day).condition)) {
       if (mood === 'off') mood = 'tired';
       else if (mood === 'tired') mood = 'steady';
       else if (mood === 'steady') mood = 'warm';
@@ -536,7 +449,7 @@ export class SocialEngine {
   /** Canonical owner for lifecycle/contact. This is not the relationship stage. */
   public setActorCondition(rawId: string, next: ActorCondition): ActorCondition {
     const id = normalizeBuddyId(rawId);
-    if (!this.buddies.has(id)) throw new Error(`Buddy not found: ${id}`);
+    if (!this.roster.has(id)) throw new Error(`Buddy not found: ${id}`);
     if (!validActorCondition(next)) throw new Error('Invalid actor condition');
     const previous = this.playerLinks.getCondition(id);
     if (previous?.lifecycle === next.lifecycle && previous.contact === next.contact) return { ...previous };
@@ -548,7 +461,7 @@ export class SocialEngine {
 
   public getActorCondition(rawId: string): ActorCondition | undefined {
     const id = normalizeBuddyId(rawId);
-    if (!this.buddies.has(id)) return undefined;
+    if (!this.roster.has(id)) return undefined;
     return { ...(this.playerLinks.getCondition(id) ?? conditionFromLegacyStatus()) };
   }
 
@@ -601,7 +514,7 @@ export class SocialEngine {
 
   /** Fixed temperament for a buddy (never mutated after creation). Unknown ids read neutral. */
   public getTraits(rawId: string): CharacterTraits {
-    const buddy = this.buddies.get(normalizeBuddyId(rawId));
+    const buddy = this.roster.get(normalizeBuddyId(rawId));
     return clampTraits({
       ...traitsForBuddy(normalizeBuddyId(rawId), buddy?.archetype ?? resolveArchetype(normalizeBuddyId(rawId), undefined)),
       ...((buddy as Partial<BuddyCharacter>)?.traits ?? {}),
@@ -677,7 +590,7 @@ export class SocialEngine {
       if (record.kind === 'introduce') {
         this.adjustNpcBond(record.requesterId, record.targetId, { familiarity: 6, comfort: 3 }, safeDay);
         this.adjustNpcBond(record.targetId, record.requesterId, { familiarity: 6, comfort: 3 }, safeDay);
-        const target = this.buddies.get(record.targetId);
+        const target = this.roster.get(record.targetId);
         if (target) this.learnHandle(record.targetId, target.handle);
       } else {
         this.adjustNpcBond(record.requesterId, record.targetId, { trust: 3, comfort: 2 }, safeDay);
@@ -697,10 +610,10 @@ export class SocialEngine {
         this.getNpcBond(targetId, requesterId).dims.suspicion,
       ),
       (record, safeDay) => {
-        const rName = this.buddies.get(record.requesterId)?.displayName ?? record.requesterId;
-        const tName = this.buddies.get(record.targetId)?.displayName ?? record.targetId;
+        const rName = this.roster.get(record.requesterId)?.displayName ?? record.requesterId;
+        const tName = this.roster.get(record.targetId)?.displayName ?? record.targetId;
         for (const buddyId of [record.requesterId, record.targetId]) {
-          if (!this.buddies.has(buddyId)) continue;
+          if (!this.roster.has(buddyId)) continue;
           this.applySocialAction(buddyId, 'betray_confidence');
           this.addCoreMemory(buddyId, {
             text: `Badmouthed ${buddyId === record.requesterId ? tName : rName} — they compared notes (day ${safeDay}). Trust is wrecked.`,
@@ -799,7 +712,7 @@ export class SocialEngine {
 
     // P5.5 visual memory: buddy-sent photos become immortal (capped so facts survive too).
     // Covers every photo path (AI chat, scripts) since all funnel through here.
-    if (senderId !== 'player' && (imagePrompt || imageUrl) && this.buddies.has(conversationId)) {
+    if (senderId !== 'player' && (imagePrompt || imageUrl) && this.roster.has(conversationId)) {
       if (this.memory.photoCount(conversationId) < MAX_PHOTO_MEMORIES) {
         const caption = String(imageCaption || imagePrompt || 'a photo').trim().replace(/\s+/g, ' ').slice(0, 100);
         this.addCoreMemory(conversationId, {
@@ -822,14 +735,14 @@ export class SocialEngine {
   /** A derived public projection; callers cannot write to the live roster via status. */
   public getBuddy(rawId: string): BuddyCharacter | undefined {
     const id = normalizeBuddyId(rawId);
-    const buddy = this.buddies.get(id);
+    const buddy = this.roster.get(id);
     if (!buddy) return undefined;
     const condition = this.playerLinks.getCondition(id) ?? conditionFromLegacyStatus();
     return { ...buddy, status: projectLegacyBuddyStatus(condition, this.getRelationshipStage(id)) };
   }
 
   public getBuddies(): BuddyCharacter[] {
-    return Array.from(this.buddies.keys()).map(id => this.getBuddy(id)!);
+    return Array.from(this.roster.keys()).map(id => this.getBuddy(id)!);
   }
 
   /**
@@ -844,7 +757,7 @@ export class SocialEngine {
   }): string[] {
     const resolved = new Set<string>();
     const eligible = (id: string): boolean => {
-      if (!this.buddies.has(id)) return false;
+      if (!this.roster.has(id)) return false;
       const condition = this.playerLinks.getCondition(id) ?? conditionFromLegacyStatus();
       const status = projectLegacyBuddyStatus(condition, this.getRelationshipStage(id));
       return status !== 'gone' && status !== 'blocked';
@@ -852,7 +765,7 @@ export class SocialEngine {
     for (const id of room.participantIds) {
       if (eligible(id)) resolved.add(id);
     }
-    for (const [id, buddy] of this.buddies) {
+    for (const [id, buddy] of this.roster) {
       if (!(buddy.roles ?? []).some(role => room.participantRoles.includes(role))) continue;
       if (eligible(id)) resolved.add(id);
     }
@@ -876,7 +789,7 @@ export class SocialEngine {
     const imageOptions: Array<{ id: string; displayName: string; handle: string }> = [];
     const page: Array<Pick<BuddyCharacter, 'id' | 'displayName' | 'handle' | 'archetype' | 'status'>> = [];
     let index = 0;
-    for (const [id, buddy] of this.buddies) {
+    for (const [id, buddy] of this.roster) {
       if (buddy.isProcedural) procedural++;
       if (imageOptions.length < 500) imageOptions.push({
         id, displayName: buddy.displayName, handle: buddy.handle,
@@ -893,12 +806,12 @@ export class SocialEngine {
       }
       index++;
     }
-    return { total: this.buddies.size, procedural, imageOptions, page };
+    return { total: this.roster.size, procedural, imageOptions, page };
   }
 
   /** Intent-time authoring input only: no actor bodies, memory or relationships. */
   public getLabActorIds(): string[] {
-    return [...this.buddies.keys()];
+    return [...this.roster.keys()];
   }
 
   /**
@@ -913,7 +826,7 @@ export class SocialEngine {
       ? Math.max(0, Math.min(500, Math.trunc(maxAuthors))) : 500;
     const authors: BoardBuddy[] = [];
     if (limit === 0) return authors;
-    for (const [id, buddy] of this.buddies) {
+    for (const [id, buddy] of this.roster) {
       const stage = this.getRelationshipStage(id);
       const condition = this.playerLinks.getCondition(id) ?? conditionFromLegacyStatus();
       authors.push({
@@ -939,7 +852,7 @@ export class SocialEngine {
     const limit = Number.isFinite(maxContacts) ? Math.max(0, Math.min(500, Math.trunc(maxContacts))) : 500;
     const senders: BoardBuddy[] = [];
     if (limit === 0) return senders;
-    for (const [id, buddy] of this.buddies) {
+    for (const [id, buddy] of this.roster) {
       if (!this.isKnown(id)) continue;
       const stage = this.getRelationshipStage(id);
       const condition = this.playerLinks.getCondition(id) ?? conditionFromLegacyStatus();
@@ -977,7 +890,7 @@ export class SocialEngine {
     const contacts: Array<Pick<BuddyCharacter, 'id' | 'displayName' | 'handle' | 'roles' | 'archetype'>> = [];
     const suggestions: Array<{ handle: string; note: string; buddyName: string }> = [];
     const lastSeenMinutes: Record<string, number> = {};
-    for (const [id, buddy] of this.buddies) {
+    for (const [id, buddy] of this.roster) {
       if (this.isKnown(id)) {
         if (contacts.length >= 500) continue;
         contacts.push({
@@ -1007,7 +920,7 @@ export class SocialEngine {
     // Preserve room-first actor ordering for the 500-name presentation cap.
     const eligibleForRooms = new Set<string>();
     if (publicRooms.length > 0) {
-      for (const [id] of this.buddies) {
+      for (const [id] of this.roster) {
         const condition = this.playerLinks.getCondition(id) ?? conditionFromLegacyStatus();
         const status = projectLegacyBuddyStatus(condition, this.getRelationshipStage(id));
         if (status !== 'gone' && status !== 'blocked') eligibleForRooms.add(id);
@@ -1018,7 +931,7 @@ export class SocialEngine {
       const memberIds = new Set(room.participantIds);
       const memberRoles = new Set(room.participantRoles);
       let participantCount = 0;
-      for (const [id, buddy] of this.buddies) {
+      for (const [id, buddy] of this.roster) {
         if (!eligibleForRooms.has(id)) continue;
         if (!memberIds.has(id) && !(buddy.roles ?? []).some(role => memberRoles.has(role))) continue;
         participantCount++;
@@ -1041,7 +954,7 @@ export class SocialEngine {
    */
   public getPublicJobContactName(role: string): string {
     let best: { id: string; displayName: string; distant: number } | null = null;
-    for (const [id, buddy] of this.buddies) {
+    for (const [id, buddy] of this.roster) {
       if (!(buddy.roles ?? []).includes(role)) continue;
       const condition = this.playerLinks.getCondition(id) ?? conditionFromLegacyStatus();
       const status = projectLegacyBuddyStatus(condition, this.getRelationshipStage(id));
@@ -1066,12 +979,12 @@ export class SocialEngine {
   }> {
     if (requestedActorId) {
       const id = normalizeBuddyId(requestedActorId);
-      const buddy = this.buddies.get(id);
+      const buddy = this.roster.get(id);
       return buddy?.reach === 'local' && this.isKnown(id)
         ? [{ id, displayName: buddy.displayName }] : [];
     }
     const candidates: Array<{ id: string; displayName: string }> = [];
-    for (const [id, buddy] of this.buddies) {
+    for (const [id, buddy] of this.roster) {
       if (buddy.reach !== 'local' || !this.isKnown(id)) continue;
       candidates.push({ id, displayName: buddy.displayName });
       if (candidates.length >= 500) break;
@@ -1156,7 +1069,7 @@ export class SocialEngine {
     return this.conversations.unreadTray(
       maxPreview,
       playerKnownOnly ? id => this.isKnown(id) : () => true,
-      id => this.buddies.get(id)?.displayName ?? id,
+      id => this.roster.get(id)?.displayName ?? id,
     );
   }
 
@@ -1173,7 +1086,7 @@ export class SocialEngine {
     const limit = Number.isFinite(maxContacts) ? Math.max(0, Math.min(100, Math.floor(maxContacts))) : 32;
     if (limit === 0) return [];
     const rows = [];
-    for (const [id, buddy] of this.buddies) {
+    for (const [id, buddy] of this.roster) {
       if (!this.isKnown(id)) continue;
       const summary = this.conversations.summary(id);
       rows.push({
