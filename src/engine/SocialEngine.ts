@@ -30,10 +30,12 @@ import type { BoardBuddy } from './BoardDirector';
 import { ConversationHistory } from './social/ConversationHistory';
 import { MAX_PHOTO_MEMORIES, SocialMemoryLedger, socialHashText } from './social/SocialMemoryLedger';
 import { NpcRelationshipGraph } from './social/NpcRelationshipGraph';
+import { PlayerRelationships, STRAINED_ANNOYANCE } from './social/PlayerRelationships';
+import { SocialPresence } from './social/SocialPresence';
 export { MAX_CORE_MEMORIES, MAX_OPEN_PROMISES, MAX_PHOTO_MEMORIES } from './social/SocialMemoryLedger';
+export { STRAINED_ANNOYANCE } from './social/PlayerRelationships';
 
 // P3 sharp-event thresholds (annoyance scale 0..100; dismissive gives +8)
-export const STRAINED_ANNOYANCE = 60;
 export const DISTANT_ANNOYANCE = 85;
 export const GONE_ANNOYANCE = 95;
 
@@ -144,9 +146,20 @@ export class SocialEngine {
   private buddies: Map<string, BuddyCharacter> = new Map();
   // Only authoritative departure/contact state. BuddyCharacter.status is an
   // authored input or derived compatibility read; never stored on live actors.
-  private readonly actorConditions = new Map<string, ActorCondition>();
-  private relationships: Map<string, RelationshipDimensions> = new Map();
-  private presence: Map<string, BuddyPresence> = new Map();
+  /** Canonical actor↔player dimensions and structural contact/lifecycle are one owner. */
+  private readonly playerLinks = new PlayerRelationships({
+    normalize: normalizeBuddyId,
+    normalizeDims: normalizeRelationshipDims,
+    actorExists: id => this.buddies.has(id),
+  });
+  /** Presence reads contact law; it never duplicates condition or relationship truth. */
+  private readonly online = new SocialPresence({
+    normalize: normalizeBuddyId,
+    actors: () => this.buddies.entries(),
+    condition: id => this.playerLinks.getCondition(id),
+    emit: (buddyId, presence) => this.eventBus.emit('social:status_changed', { buddyId, presence }),
+    isKnown: id => this.isKnown(id),
+  });
   /** One canonical history owner; relationship/presence state never stores transcript bodies. */
   private readonly conversations = new ConversationHistory(normalizeBuddyId);
   // One canonical owner for structured memory facts and player commitments.
@@ -231,11 +244,11 @@ export class SocialEngine {
         Object.entries(def.schedule).map(([day, blks]) => [Number(day), blks.map((b) => ({ ...b }))])
       ),
     };
-    this.actorConditions.set(id, conditionFromLegacyStatus(def.status));
+    this.playerLinks.putCondition(id, conditionFromLegacyStatus(def.status));
     delete stored.status;
     this.buddies.set(id, stored);
-    if (!this.relationships.has(id)) this.relationships.set(id, { ...stored.initialRelationships });
-    if (!this.presence.has(id)) this.presence.set(id, { status: 'offline', awayMessage: '' });
+    if (!this.playerLinks.has(id)) this.playerLinks.put(id, { ...stored.initialRelationships });
+    if (!this.online.has(id)) this.online.put(id, { status: 'offline', awayMessage: '' });
     this.conversations.ensure(id);
     const registered = this.getBuddy(id)!;
     this.eventBus.emit('social:buddy_registered', { buddy: registered });
@@ -251,9 +264,9 @@ export class SocialEngine {
     const id = normalizeBuddyId(rawId);
     if (!this.buddies.has(id)) return false;
     this.buddies.delete(id);
-    this.actorConditions.delete(id);
-    this.relationships.delete(id);
-    this.presence.delete(id);
+    this.playerLinks.forgetCondition(id);
+    this.playerLinks.forget(id);
+    this.online.forget(id);
     this.conversations.delete(id);
     this.memory.forget(id);
     this.graph.forget(id);
@@ -267,11 +280,8 @@ export class SocialEngine {
   }
 
   public getState(): SocialEngineState {
-    const rels: Record<string, RelationshipDimensions> = {};
-    for (const [id, r] of this.relationships.entries()) rels[id] = { ...r };
-
-    const pres: Record<string, BuddyPresence> = {};
-    for (const [id, p] of this.presence.entries()) pres[id] = { ...p };
+    const { relationships: rels, actorConditions } = this.playerLinks.exportState();
+    const { presence: pres } = this.online.exportState();
 
     const agenda: Record<string, AgendaItem[]> = {};
     for (const [id, items] of this.agenda.entries()) agenda[id] = items.map((a) => ({ ...a }));
@@ -308,11 +318,7 @@ export class SocialEngine {
       };
     }
 
-    const actorConditions: Record<string, ActorCondition> = {};
-    for (const [id, condition] of this.actorConditions) {
-      if (this.buddies.has(id)) actorConditions[id] = { ...condition };
-    }
-    const removedSeedActorIds = SEED_CHARACTERS
+     const removedSeedActorIds = SEED_CHARACTERS
       .filter(seed => !this.buddies.has(seed.id)).map(seed => seed.id);
 
     return {
@@ -337,21 +343,21 @@ export class SocialEngine {
     // Loading a new current-format world replaces roster/condition truth, not
     // just its relationship graph. Otherwise a prior removed actor may leak.
     this.buddies.clear();
-    this.actorConditions.clear();
+    this.playerLinks.clearConditions();
     this.initializeCharacters();
     // Apply per-save seed-roster divergence before restoring dependent state.
     for (const rawId of state.removedSeedActorIds ?? []) {
       const id = normalizeBuddyId(rawId);
       if (isSeedCharacter(id)) {
         this.buddies.delete(id);
-        this.actorConditions.delete(id);
+        this.playerLinks.forgetCondition(id);
       }
     }
     // Import-only legacy snapshots. New snapshots contain actorConditions.
     if (!state.actorConditions) {
       for (const [rawId, status] of Object.entries(state.seedActorStatuses ?? {})) {
         const id = normalizeBuddyId(rawId);
-        if (this.buddies.has(id)) this.actorConditions.set(id, conditionFromLegacyStatus(status));
+        if (this.buddies.has(id)) this.playerLinks.putCondition(id, conditionFromLegacyStatus(status));
       }
     }
 
@@ -363,7 +369,7 @@ export class SocialEngine {
         const res = validatePersistedBuddy({ ...def, id });
         if (!res.ok || !res.definition) continue;
         const stored: BuddyCharacter = { ...res.definition };
-        this.actorConditions.set(id, conditionFromLegacyStatus(stored.status));
+        this.playerLinks.putCondition(id, conditionFromLegacyStatus(stored.status));
         delete stored.status;
         this.buddies.set(id, stored);
       }
@@ -371,20 +377,12 @@ export class SocialEngine {
     for (const [rawId, condition] of Object.entries(state.actorConditions ?? {})) {
       const id = normalizeBuddyId(rawId);
       if (this.buddies.has(id) && validActorCondition(condition)) {
-        this.actorConditions.set(id, { ...condition });
+        this.playerLinks.putCondition(id, { ...condition });
       }
     }
 
-    this.relationships.clear();
-    for (const [rawId, r] of Object.entries(state.relationships)) {
-      // v3 records carry 5 dims; normalizeRelationshipDims backfills the v4 rest.
-      this.relationships.set(normalizeBuddyId(rawId), normalizeRelationshipDims(r));
-    }
-
-    this.presence.clear();
-    for (const [rawId, p] of Object.entries(state.presence)) {
-      this.presence.set(normalizeBuddyId(rawId), { ...p });
-    }
+    this.playerLinks.restoreDimensions(state.relationships);
+    this.online.restore(state.presence);
 
     this.conversations.restore(state.conversations);
 
@@ -497,8 +495,8 @@ export class SocialEngine {
 
     // Backfill empty presence/conversations for any buddy missing them (old saves).
     for (const buddy of this.buddies.values()) {
-      if (!this.relationships.has(buddy.id)) this.relationships.set(buddy.id, normalizeRelationshipDims(buddy.initialRelationships));
-      if (!this.presence.has(buddy.id)) this.presence.set(buddy.id, { status: 'offline', awayMessage: '' });
+      if (!this.playerLinks.has(buddy.id)) this.playerLinks.put(buddy.id, normalizeRelationshipDims(buddy.initialRelationships));
+      if (!this.online.has(buddy.id)) this.online.put(buddy.id, { status: 'offline', awayMessage: '' });
       this.conversations.ensure(buddy.id);
     }
     // P4 affinity seeds: existing saves win, seeds only fill gaps (old saves get the core-4 ties)
@@ -507,8 +505,8 @@ export class SocialEngine {
 
   private initializeDefaultState(): void {
     for (const buddy of this.buddies.values()) {
-      this.relationships.set(buddy.id, { ...buddy.initialRelationships });
-      this.presence.set(buddy.id, { status: 'offline', awayMessage: '' });
+      this.playerLinks.put(buddy.id, { ...buddy.initialRelationships });
+      this.online.put(buddy.id, { status: 'offline', awayMessage: '' });
       this.conversations.ensure(buddy.id);
     }
     this.graph.seedMissing(SEED_AFFINITIES);
@@ -521,7 +519,7 @@ export class SocialEngine {
   private initializeCharacters(): void {
     for (const buddy of SEED_CHARACTERS) {
       const stored = seedCharacterDef(buddy.id);
-      this.actorConditions.set(buddy.id, conditionFromLegacyStatus(stored.status));
+      this.playerLinks.putCondition(buddy.id, conditionFromLegacyStatus(stored.status));
       delete stored.status;
       this.buddies.set(buddy.id, stored);
     }
@@ -533,85 +531,14 @@ export class SocialEngine {
    * Authored and dynamic actors use repeating weekly schedules unless a specific day override exists.
    */
   public updatePresence(currentTotalMinutes: number): void {
-    const day = Math.floor(currentTotalMinutes / 1440) + 1;
-    const minuteOfDay = currentTotalMinutes % 1440;
-
-    for (const [id, buddy] of this.buddies.entries()) {
-      // P3 sharp lifecycle: distant/gone/blocked buddies stay dark regardless of schedule.
-      const condition = this.actorConditions.get(id);
-      if (condition?.lifecycle === 'departed' || condition?.contact === 'distant' || condition?.contact === 'blocked') {
-        const prev = this.presence.get(id);
-        if (!prev || prev.status !== 'offline') {
-          this.presence.set(id, { status: 'offline', awayMessage: '' });
-          this.eventBus.emit('social:status_changed', { buddyId: id, presence: { status: 'offline', awayMessage: '' } });
-        }
-        continue;
-      }
-      const weeklyDay = ((day - 1) % 7) + 1;
-      const daySched = buddy.schedule[day] || buddy.schedule[weeklyDay] || buddy.schedule[1];
-      let currentBlock = daySched?.find(
-        b => minuteOfDay >= b.startMinuteOfDay && minuteOfDay < b.endMinuteOfDay
-      );
-
-      if (!currentBlock && daySched && daySched.length > 0) {
-        currentBlock = daySched[0];
-      }
-
-      if (currentBlock) {
-        const prev = this.presence.get(id);
-        if (!prev || prev.status !== currentBlock.status || prev.awayMessage !== currentBlock.awayMessage) {
-          const newPresence: BuddyPresence = {
-            status: currentBlock.status,
-            awayMessage: currentBlock.awayMessage,
-          };
-          this.presence.set(id, newPresence);
-          this.eventBus.emit('social:status_changed', { buddyId: id, presence: newPresence });
-        }
-      }
-    }
+    this.online.update(currentTotalMinutes);
   }
 
   public applySocialAction(rawBuddyId: string, actionType: string): RelationshipDimensions {
     const buddyId = normalizeBuddyId(rawBuddyId);
-    const current = this.relationships.get(buddyId);
-    if (!current) throw new Error(`Buddy not found: ${buddyId}`);
-
-    const deltas: Record<string, Partial<RelationshipDimensions>> = {
-      empathy: { familiarity: 3, trust: 4, comfort: 5, respect: 2, annoyance: -2, affection: 1 },
-      remembered_detail: { familiarity: 5, trust: 6, comfort: 6, respect: 4, annoyance: -1, affection: 1 },
-      tease_playful: { familiarity: 4, trust: 2, comfort: 3, respect: 2, annoyance: 0, affection: 1 },
-      dismissive: { familiarity: -1, trust: -5, comfort: -6, respect: -3, annoyance: 8, suspicion: 2, resentment: 4 },
-      vulnerable_share: { familiarity: 6, trust: 7, comfort: 8, respect: 3, annoyance: -2, affection: 4 },
-      work_camaraderie: { familiarity: 4, trust: 3, comfort: 4, respect: 3, annoyance: 0, affection: 1 },
-      intellectual_curiosity: { familiarity: 4, trust: 5, comfort: 2, respect: 6, annoyance: 0 },
-      // Engine-only (mediation/romance paths — never AI-honoured, not in the chat allowlist)
-      apologize: { trust: 2, respect: 2, comfort: 2, annoyance: -3, resentment: -3 },
-      betray_confidence: { trust: -12, respect: -8, comfort: -8, annoyance: 10, suspicion: 8, resentment: 12, affection: -6 },
-    };
-
-    const delta = deltas[actionType] || { familiarity: 1 };
-    const base = normalizeRelationshipDims(current);
-
-    const updated: RelationshipDimensions = {
-      familiarity: Math.max(0, Math.min(100, base.familiarity + (delta.familiarity ?? 0))),
-      trust: Math.max(0, Math.min(100, base.trust + (delta.trust ?? 0))),
-      comfort: Math.max(0, Math.min(100, base.comfort + (delta.comfort ?? 0))),
-      respect: Math.max(0, Math.min(100, base.respect + (delta.respect ?? 0))),
-      annoyance: Math.max(0, Math.min(100, base.annoyance + (delta.annoyance ?? 0))),
-      affection: Math.max(0, Math.min(100, base.affection + (delta.affection ?? 0))),
-      attraction: Math.max(0, Math.min(100, base.attraction + (delta.attraction ?? 0))),
-      suspicion: Math.max(0, Math.min(100, base.suspicion + (delta.suspicion ?? 0))),
-      resentment: Math.max(0, Math.min(100, base.resentment + (delta.resentment ?? 0))),
-    };
-
-    this.relationships.set(buddyId, updated);
-    this.eventBus.emit('social:relationship_updated', {
-      buddyId,
-      dimensions: { ...updated },
-      delta,
-    });
-
-    return { ...updated };
+    const { dimensions, delta } = this.playerLinks.applyAction(buddyId, actionType);
+    this.eventBus.emit('social:relationship_updated', { buddyId, dimensions: { ...dimensions }, delta });
+    return dimensions;
   }
 
   // ==========================================
@@ -682,19 +609,13 @@ export class SocialEngine {
 
   /** Relationship stage derived from dimensions (strained overrides everything at high annoyance). */
   public getRelationshipStage(rawBuddyId: string): RelationshipStage {
-    const rel = this.relationships.get(normalizeBuddyId(rawBuddyId));
-    if (!rel) return 'stranger';
-    if (rel.annoyance >= STRAINED_ANNOYANCE) return 'strained';
-    if (rel.familiarity < 10) return 'stranger';
-    if (rel.familiarity < 35) return 'acquaintance';
-    if (rel.familiarity < 65 || rel.trust < 50) return 'friend';
-    return 'close';
+    return this.playerLinks.stage(rawBuddyId);
   }
 
   /** Daily mood: deterministic per (buddy, day); strained buddies are always cold. */
   public getDailyMood(rawBuddyId: string, day: number): DailyMood {
     const id = normalizeBuddyId(rawBuddyId);
-    const rel = this.relationships.get(id);
+    const rel = this.playerLinks.get(id);
     if (rel && rel.annoyance >= STRAINED_ANNOYANCE) return 'cold';
     const roll = socialHashText(`${id}:${Math.max(1, Math.floor(day) || 1)}`) % 100;
     let mood: DailyMood;
@@ -720,9 +641,9 @@ export class SocialEngine {
     const id = normalizeBuddyId(rawId);
     if (!this.buddies.has(id)) throw new Error(`Buddy not found: ${id}`);
     if (!validActorCondition(next)) throw new Error('Invalid actor condition');
-    const previous = this.actorConditions.get(id);
+    const previous = this.playerLinks.getCondition(id);
     if (previous?.lifecycle === next.lifecycle && previous.contact === next.contact) return { ...previous };
-    this.actorConditions.set(id, { ...next });
+    this.playerLinks.putCondition(id, { ...next });
     const status = projectLegacyBuddyStatus(next, this.getRelationshipStage(id));
     this.eventBus.emit('social:buddy_status_changed', { buddyId: id, status });
     return { ...next };
@@ -731,7 +652,7 @@ export class SocialEngine {
   public getActorCondition(rawId: string): ActorCondition | undefined {
     const id = normalizeBuddyId(rawId);
     if (!this.buddies.has(id)) return undefined;
-    return { ...(this.actorConditions.get(id) ?? conditionFromLegacyStatus()) };
+    return { ...(this.playerLinks.getCondition(id) ?? conditionFromLegacyStatus()) };
   }
 
   /** Legacy action adapter: friend/close are not mutable actor statuses. */
@@ -744,20 +665,9 @@ export class SocialEngine {
   /** Governed direct adjustment (used by the distant-return path). Values clamped 0..100. */
   public adjustRelationship(rawBuddyId: string, partial: Partial<RelationshipDimensions>): RelationshipDimensions {
     const buddyId = normalizeBuddyId(rawBuddyId);
-    const current = this.relationships.get(buddyId);
-    if (!current) throw new Error(`Buddy not found: ${buddyId}`);
-    const clamp = (n: number) => Math.max(0, Math.min(100, Math.round(n)));
-    const base = normalizeRelationshipDims(current);
-    const updated: RelationshipDimensions = { ...base };
-    for (const [k, v] of Object.entries(partial)) {
-      const key = k as keyof RelationshipDimensions;
-      if (typeof v === 'number' && Number.isFinite(v) && key in base) {
-        updated[key] = clamp(v);
-      }
-    }
-    this.relationships.set(buddyId, updated);
+    const updated = this.playerLinks.adjust(buddyId, partial);
     this.eventBus.emit('social:relationship_updated', { buddyId, dimensions: { ...updated }, delta: partial });
-    return { ...updated };
+    return updated;
   }
 
   /** Compact, governed context from authored Social memory/commitment truth. */
@@ -904,7 +814,7 @@ export class SocialEngine {
     if (!record || record.status !== 'open') return null;
     if (choice !== 'help' && choice !== 'ignore' && choice !== 'badmouth') return null;
     const safeDay = Math.max(1, Math.floor(day) || 1);
-    const rel = this.relationships.get(record.requesterId);
+    const rel = this.playerLinks.get(record.requesterId);
     if (choice === 'ignore') {
       record.status = 'ignored';
       record.resolvedDay = safeDay;
@@ -1226,7 +1136,7 @@ export class SocialEngine {
     const id = normalizeBuddyId(rawId);
     const buddy = this.buddies.get(id);
     if (!buddy) return undefined;
-    const condition = this.actorConditions.get(id) ?? conditionFromLegacyStatus();
+    const condition = this.playerLinks.getCondition(id) ?? conditionFromLegacyStatus();
     return { ...buddy, status: projectLegacyBuddyStatus(condition, this.getRelationshipStage(id)) };
   }
 
@@ -1247,7 +1157,7 @@ export class SocialEngine {
     const resolved = new Set<string>();
     const eligible = (id: string): boolean => {
       if (!this.buddies.has(id)) return false;
-      const condition = this.actorConditions.get(id) ?? conditionFromLegacyStatus();
+      const condition = this.playerLinks.getCondition(id) ?? conditionFromLegacyStatus();
       const status = projectLegacyBuddyStatus(condition, this.getRelationshipStage(id));
       return status !== 'gone' && status !== 'blocked';
     };
@@ -1284,7 +1194,7 @@ export class SocialEngine {
         id, displayName: buddy.displayName, handle: buddy.handle,
       });
       if (index >= start && index < start + size) {
-        const condition = this.actorConditions.get(id) ?? conditionFromLegacyStatus();
+        const condition = this.playerLinks.getCondition(id) ?? conditionFromLegacyStatus();
         page.push({
           id,
           displayName: buddy.displayName,
@@ -1317,7 +1227,7 @@ export class SocialEngine {
     if (limit === 0) return authors;
     for (const [id, buddy] of this.buddies) {
       const stage = this.getRelationshipStage(id);
-      const condition = this.actorConditions.get(id) ?? conditionFromLegacyStatus();
+      const condition = this.playerLinks.getCondition(id) ?? conditionFromLegacyStatus();
       authors.push({
         id,
         displayName: buddy.displayName,
@@ -1344,7 +1254,7 @@ export class SocialEngine {
     for (const [id, buddy] of this.buddies) {
       if (!this.isKnown(id)) continue;
       const stage = this.getRelationshipStage(id);
-      const condition = this.actorConditions.get(id) ?? conditionFromLegacyStatus();
+      const condition = this.playerLinks.getCondition(id) ?? conditionFromLegacyStatus();
       senders.push({
         id,
         displayName: buddy.displayName,
@@ -1410,7 +1320,7 @@ export class SocialEngine {
     const eligibleForRooms = new Set<string>();
     if (publicRooms.length > 0) {
       for (const [id] of this.buddies) {
-        const condition = this.actorConditions.get(id) ?? conditionFromLegacyStatus();
+        const condition = this.playerLinks.getCondition(id) ?? conditionFromLegacyStatus();
         const status = projectLegacyBuddyStatus(condition, this.getRelationshipStage(id));
         if (status !== 'gone' && status !== 'blocked') eligibleForRooms.add(id);
       }
@@ -1445,7 +1355,7 @@ export class SocialEngine {
     let best: { id: string; displayName: string; distant: number } | null = null;
     for (const [id, buddy] of this.buddies) {
       if (!(buddy.roles ?? []).includes(role)) continue;
-      const condition = this.actorConditions.get(id) ?? conditionFromLegacyStatus();
+      const condition = this.playerLinks.getCondition(id) ?? conditionFromLegacyStatus();
       const status = projectLegacyBuddyStatus(condition, this.getRelationshipStage(id));
       if (status === 'gone' || status === 'blocked') continue;
       const distant = status === 'distant' ? 1 : 0;
@@ -1502,7 +1412,7 @@ export class SocialEngine {
   }
 
   public getRelationships(rawId: string): RelationshipDimensions | undefined {
-    const rel = this.relationships.get(normalizeBuddyId(rawId));
+    const rel = this.playerLinks.get(normalizeBuddyId(rawId));
     return rel ? { ...rel } : undefined;
   }
 
@@ -1512,24 +1422,16 @@ export class SocialEngine {
    * projections may expose only learned contacts and the player's own status.
    */
   public getPresenceSummary(playerKnownOnly = false): Record<string, BuddyPresence> {
-    const rows: Record<string, BuddyPresence> = {};
-    for (const [actorId, presence] of this.presence) {
-      if (playerKnownOnly && actorId !== 'player' && !this.isKnown(actorId)) continue;
-      rows[actorId] = { ...presence };
-    }
-    return rows;
+    return this.online.summary(playerKnownOnly);
   }
 
-  /** Player-authored away text is canonical Social state, not a Zustand-only overlay. */
+  /** Player away text stays canonical Social state, not a UI overlay. */
   public setPlayerPresence(presence: BuddyPresence): void {
-    const player = { ...presence };
-    this.presence.set('player', player);
-    this.eventBus.emit('social:status_changed', { buddyId: 'player', presence: { ...player } });
+    this.online.setPlayer(presence);
   }
 
   public getPresence(rawId: string): BuddyPresence | undefined {
-    const pres = this.presence.get(normalizeBuddyId(rawId));
-    return pres ? { ...pres } : undefined;
+    return this.online.get(rawId);
   }
 
   /**
@@ -1590,7 +1492,7 @@ export class SocialEngine {
         actorId: id,
         displayName: buddy.displayName,
         handle: buddy.handle,
-        onlineStatus: this.presence.get(id)?.status ?? 'offline',
+        onlineStatus: this.online.get(id)?.status ?? 'offline',
         relationshipStage: this.getRelationshipStage(id),
         lastMessageMinute: summary.lastMessageMinute,
         unread: summary.unread,
