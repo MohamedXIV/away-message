@@ -29,6 +29,7 @@ import { conditionFromLegacyStatus, projectLegacyBuddyStatus, validActorConditio
 import type { BoardBuddy } from './BoardDirector';
 import { ConversationHistory } from './social/ConversationHistory';
 import { MAX_PHOTO_MEMORIES, SocialMemoryLedger, socialHashText } from './social/SocialMemoryLedger';
+import { NpcRelationshipGraph } from './social/NpcRelationshipGraph';
 export { MAX_CORE_MEMORIES, MAX_OPEN_PROMISES, MAX_PHOTO_MEMORIES } from './social/SocialMemoryLedger';
 
 // P3 sharp-event thresholds (annoyance scale 0..100; dismissive gives +8)
@@ -150,12 +151,22 @@ export class SocialEngine {
   private readonly conversations = new ConversationHistory(normalizeBuddyId);
   // One canonical owner for structured memory facts and player commitments.
   private readonly memory = new SocialMemoryLedger(normalizeBuddyId, id => this.buddies.has(id));
-  // P4 buddy-to-buddy affinities ("a__b" sorted keys) + room-bump daily caps
-  private affinities: Map<string, number> = new Map();
-  private affinityCaps: Map<string, number> = new Map();
-  // Character Lives: directed NPC↔NPC bonds ("from__to"), per-buddy agenda,
-  // player mediations, and a capped witness log of NPC↔NPC moments
-  private npcBonds: Map<string, NpcBondState> = new Map();
+  /** One authoritative sparse graph for NPC↔NPC affinity, directed bonds and romance. */
+  private readonly graph = new NpcRelationshipGraph({
+    normalize: normalizeBuddyId,
+    affinityKey,
+    bondKey: npcBondKey,
+    neutral: neutralNpcBond,
+    normalizeDims: normalizeRelationshipDims,
+    actorExists: id => this.buddies.has(id),
+    actors: () => this.buddies.values(),
+    emit: (kind, payload) => this.eventBus.emit(kind as any, payload as any),
+    actionDeltas: NPC_SOCIAL_ACTION_DELTAS,
+    maxAffinity: MAX_AFFINITY,
+    roomBumpPerTurn: ROOM_BUMP_PER_TURN,
+    roomBumpDailyCap: ROOM_BUMP_DAILY_CAP,
+  });
+  // Agenda, mediation decisions and witness logs remain Social coordinator state.
   private agenda: Map<string, AgendaItem[]> = new Map();
   private mediations: MediationRecord[] = [];
   private npcSocialLog: NpcInteractionLog[] = [];
@@ -245,24 +256,12 @@ export class SocialEngine {
     this.presence.delete(id);
     this.conversations.delete(id);
     this.memory.forget(id);
-    // Character Lives: drop directed bonds, agenda and mediations touching this buddy
-    for (const key of Array.from(this.npcBonds.keys())) {
-      if (key.split('__').includes(id)) this.npcBonds.delete(key);
-    }
+    this.graph.forget(id);
     this.agenda.delete(id);
-    this.mediations = this.mediations.filter((m) => m.requesterId !== id && m.targetId !== id);
-    this.npcSocialLog = this.npcSocialLog.filter((l) => l.firstId !== id && l.secondId !== id);
+    this.mediations = this.mediations.filter(m => m.requesterId !== id && m.targetId !== id);
+    this.npcSocialLog = this.npcSocialLog.filter(l => l.firstId !== id && l.secondId !== id);
     this.playerReads.delete(id);
     delete this.knownHandles[id];
-    // P4: drop every affinity pair and cap entry involving this buddy
-    for (const key of Array.from(this.affinities.keys())) {
-      const parts = key.split('__');
-      if (parts.includes(id)) this.affinities.delete(key);
-    }
-    for (const key of Array.from(this.affinityCaps.keys())) {
-      const pairPart = key.slice(0, key.lastIndexOf('_'));
-      if (pairPart.split('__').includes(id)) this.affinityCaps.delete(key);
-    }
     this.eventBus.emit('social:buddy_removed', { buddyId: id });
     return true;
   }
@@ -274,19 +273,6 @@ export class SocialEngine {
     const pres: Record<string, BuddyPresence> = {};
     for (const [id, p] of this.presence.entries()) pres[id] = { ...p };
 
-    const affs: Record<string, number> = {};
-    for (const [key, value] of this.affinities.entries()) affs[key] = value;
-
-    const caps: Record<string, number> = {};
-    for (const [key, value] of this.affinityCaps.entries()) caps[key] = value;
-
-    // Character Lives: directed bonds (validated pairs only), agenda (pruned),
-    // mediations (capped), witness log (capped) — all rebuilt deterministically
-    // on load when absent, so v3 saves restore cleanly.
-    const bonds: Record<string, NpcBondState> = {};
-    for (const [key, bond] of this.npcBonds.entries()) {
-      bonds[key] = { dims: { ...bond.dims }, romance: bond.romance, romanceSinceDay: bond.romanceSinceDay, updatedDay: bond.updatedDay };
-    }
     const agenda: Record<string, AgendaItem[]> = {};
     for (const [id, items] of this.agenda.entries()) agenda[id] = items.map((a) => ({ ...a }));
     const mediations = this.mediations.map((m) => ({ ...m }));
@@ -337,9 +323,7 @@ export class SocialEngine {
       actorConditions,
       removedSeedActorIds,
       ...this.memory.exportState(),
-      affinities: affs,
-      affinityCaps: caps,
-      npcBonds: bonds,
+      ...this.graph.exportState(),
       agenda,
       mediations,
       npcSocialLog,
@@ -407,48 +391,8 @@ export class SocialEngine {
     // Structured memories/commitments are restored by their sole owner.
     this.memory.restoreState(state);
 
-    // P4 affinities restore (validated + clamped; corrupt values fall back to 0/seed)
-    this.affinities.clear();
-    if (state.affinities) {
-      for (const [key, value] of Object.entries(state.affinities)) {
-        if (typeof key !== 'string' || typeof value !== 'number' || !Number.isFinite(value)) continue;
-        const parts = key.split('__');
-        if (parts.length !== 2 || !parts[0] || !parts[1] || parts[0] === parts[1]) continue;
-        const canonical = affinityKey(parts[0], parts[1]);
-        if (canonical !== key) continue;
-        this.affinities.set(key, Math.max(-MAX_AFFINITY, Math.min(MAX_AFFINITY, Math.round(value))));
-      }
-    }
-    this.affinityCaps.clear();
-    if (state.affinityCaps) {
-      for (const [key, value] of Object.entries(state.affinityCaps)) {
-        if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) continue;
-        this.affinityCaps.set(key, Math.min(ROOM_BUMP_DAILY_CAP, Math.round(value)));
-      }
-    }
-
-    // Character Lives restore (validated + clamped; absent in v3 saves → neutral defaults)
-    this.npcBonds.clear();
-    if (state.npcBonds) {
-      for (const [key, bond] of Object.entries(state.npcBonds)) {
-        if (typeof key !== 'string' || !bond || typeof bond !== 'object') continue;
-        const parts = key.split('__');
-        if (parts.length !== 2 || !parts[0] || !parts[1] || parts[0] === parts[1]) continue;
-        if (npcBondKey(parts[0]!, parts[1]!) !== key) continue;
-        const dims = normalizeRelationshipDims((bond as NpcBondState).dims as Partial<RelationshipDimensions>);
-        const romance = (bond as NpcBondState).romance;
-        this.npcBonds.set(key, {
-          dims: {
-            familiarity: dims.familiarity, trust: dims.trust, comfort: dims.comfort,
-            respect: dims.respect, affection: dims.affection, attraction: dims.attraction,
-            annoyance: dims.annoyance, suspicion: dims.suspicion, resentment: dims.resentment,
-          },
-          romance: romance === 'crush' || romance === 'dating' ? romance : 'none',
-          romanceSinceDay: Number.isFinite((bond as NpcBondState).romanceSinceDay) ? Math.max(1, Math.floor((bond as NpcBondState).romanceSinceDay)) : 1,
-          updatedDay: Number.isFinite((bond as NpcBondState).updatedDay) ? Math.max(1, Math.floor((bond as NpcBondState).updatedDay)) : 1,
-        });
-      }
-    }
+    // Restore one canonical sparse NPC graph, with the same validation law.
+    this.graph.restoreState(state);
     this.agenda.clear();
     if (state.agenda) {
       for (const [rawId, items] of Object.entries(state.agenda)) {
@@ -558,9 +502,7 @@ export class SocialEngine {
       this.conversations.ensure(buddy.id);
     }
     // P4 affinity seeds: existing saves win, seeds only fill gaps (old saves get the core-4 ties)
-    for (const [key, value] of Object.entries(SEED_AFFINITIES)) {
-      if (!this.affinities.has(key)) this.affinities.set(key, value);
-    }
+    this.graph.seedMissing(SEED_AFFINITIES);
   }
 
   private initializeDefaultState(): void {
@@ -569,7 +511,7 @@ export class SocialEngine {
       this.presence.set(buddy.id, { status: 'offline', awayMessage: '' });
       this.conversations.ensure(buddy.id);
     }
-    for (const [key, value] of Object.entries(SEED_AFFINITIES)) this.affinities.set(key, value);
+    this.graph.seedMissing(SEED_AFFINITIES);
   }
 
   /**
@@ -827,79 +769,21 @@ export class SocialEngine {
   // P4 — BUDDY-TO-BUDDY AFFINITIES (C2 matrix)
   // ==========================================
 
-  /** Current affinity between two buddies (-100..100, 0 = neutral strangers). */
   public getAffinity(rawA: string, rawB: string): number {
-    const a = normalizeBuddyId(rawA);
-    const b = normalizeBuddyId(rawB);
-    if (a === b) return 0;
-    return this.affinities.get(affinityKey(a, b)) ?? 0;
+    return this.graph.getAffinity(rawA, rawB);
   }
 
-  /**
-   * Shift an affinity pair by delta (clamped -100..100). Both buddies must exist
-   * and differ; self-pairs and unknown ids are ignored (returns current value).
-   */
   public adjustAffinity(rawA: string, rawB: string, delta: number): number {
-    const a = normalizeBuddyId(rawA);
-    const b = normalizeBuddyId(rawB);
-    if (a === b || !this.buddies.has(a) || !this.buddies.has(b)) return this.getAffinity(a, b);
-    if (typeof delta !== 'number' || !Number.isFinite(delta) || delta === 0) return this.getAffinity(a, b);
-    const next = Math.max(-MAX_AFFINITY, Math.min(MAX_AFFINITY, Math.round(this.getAffinity(a, b) + delta)));
-    this.affinities.set(affinityKey(a, b), next);
-    return next;
+    return this.graph.adjustAffinity(rawA, rawB, delta);
   }
 
-  /**
-   * Shared room turn: every pair among participants grows closer by `points`
-   * (P5.3 mood-weighted: lively 3, warm/steady 2, tense 1, cold 0),
-   * capped at +6 per pair per day (anti-farming). Returns bumped pair count.
-   */
+  /** Deterministic per-pair/per-day anti-farming cap remains source-owned. */
   public bumpRoomAffinity(rawParticipantIds: string[], day: number, points = ROOM_BUMP_PER_TURN): number {
-    const ids = Array.from(new Set(rawParticipantIds.map(normalizeBuddyId))).filter((id) => this.buddies.has(id));
-    if (ids.length < 2) return 0;
-    const gain = Math.max(0, Math.min(ROOM_BUMP_PER_TURN + 1, Math.floor(points) || 0));
-    if (gain === 0) return 0;
-    const safeDay = Math.max(1, Math.floor(day) || 1);
-    let bumped = 0;
-    for (let i = 0; i < ids.length; i++) {
-      for (let j = i + 1; j < ids.length; j++) {
-        const key = affinityKey(ids[i]!, ids[j]!);
-        const capKey = `${key}_${safeDay}`;
-        const used = this.affinityCaps.get(capKey) ?? 0;
-        if (used >= ROOM_BUMP_DAILY_CAP) continue;
-        const add = Math.min(gain, ROOM_BUMP_DAILY_CAP - used);
-        this.adjustAffinity(ids[i]!, ids[j]!, add);
-        this.affinityCaps.set(capKey, used + add);
-        bumped++;
-      }
-    }
-    // Prune caps older than the window so the map stays tiny
-    for (const capKey of Array.from(this.affinityCaps.keys())) {
-      const dayPart = Number(capKey.slice(capKey.lastIndexOf('_') + 1));
-      if (Number.isFinite(dayPart) && dayPart < safeDay - 2) this.affinityCaps.delete(capKey);
-    }
-    return bumped;
+    return this.graph.bumpRoomAffinity(rawParticipantIds, day, points);
   }
 
-  /**
-   * Compact buddy-to-buddy context for prompt injection ("Others: Maya↔Ryan: warm (+15)").
-   * Only notable ties (|v| >= 5), max 6, strongest first. Empty string when none.
-   */
   public buildAffinityContext(rawBuddyId: string): string {
-    const buddyId = normalizeBuddyId(rawBuddyId);
-    if (!this.buddies.has(buddyId)) return '';
-    const entries: Array<{ name: string; label: string; value: number }> = [];
-    for (const other of this.buddies.values()) {
-      if (other.id === buddyId) continue;
-      const value = this.getAffinity(buddyId, other.id);
-      if (Math.abs(value) < 5) continue;
-      const label = value >= 30 ? 'deep bond' : value >= 10 ? 'warm' : value <= -30 ? 'bitter' : 'tense';
-      entries.push({ name: other.displayName, label, value });
-    }
-    if (entries.length === 0) return '';
-    entries.sort((a, b) => Math.abs(b.value) - Math.abs(a.value));
-    const parts = entries.slice(0, 6).map((e) => `${e.name}: ${e.label} (${e.value >= 0 ? '+' : ''}${e.value})`);
-    return `Others: ${parts.join(' • ')}`;
+    return this.graph.buildAffinityContext(rawBuddyId);
   }
 
   // ==========================================
@@ -917,80 +801,24 @@ export class SocialEngine {
     });
   }
 
-  /** Directed bond read (a→b). Absent pairs read neutral — the matrix is sparse, never auto-filled. */
   public getNpcBond(rawFrom: string, rawTo: string): NpcBondState {
-    const key = npcBondKey(rawFrom, rawTo);
-    const stored = key ? this.npcBonds.get(key) : undefined;
-    if (!stored) return neutralNpcBond();
-    return {
-      dims: { ...stored.dims },
-      romance: stored.romance,
-      romanceSinceDay: stored.romanceSinceDay,
-      updatedDay: stored.updatedDay,
-    };
+    return this.graph.getBond(rawFrom, rawTo);
   }
 
-  /**
-   * Shift a directed bond by deltas (clamped 0..100). Both buddies must exist
-   * and differ; anything else returns null (no silent writes).
-   */
   public adjustNpcBond(rawFrom: string, rawTo: string, partial: Partial<NpcBondDims>, day: number): NpcBondState | null {
-    const from = normalizeBuddyId(rawFrom);
-    const to = normalizeBuddyId(rawTo);
-    if (!from || !to || from === to || !this.buddies.has(from) || !this.buddies.has(to)) return null;
-    const clamp = (n: number) => Math.max(0, Math.min(100, Math.round(n)));
-    const current = this.getNpcBond(from, to);
-    const dims: NpcBondDims = { ...current.dims };
-    for (const [k, v] of Object.entries(partial)) {
-      const key = k as keyof NpcBondDims;
-      if (typeof v === 'number' && Number.isFinite(v) && key in dims) {
-        dims[key] = clamp(dims[key] + v);
-      }
-    }
-    const safeDay = Math.max(1, Math.floor(day) || 1);
-    const next: NpcBondState = { dims, romance: current.romance, romanceSinceDay: current.romanceSinceDay, updatedDay: safeDay };
-    this.npcBonds.set(npcBondKey(from, to), next);
-    this.eventBus.emit('social:npc_bond_updated' as any, { fromId: from, toId: to, bond: { ...next, dims: { ...dims } } });
-    return this.getNpcBond(from, to);
+    return this.graph.adjustBond(rawFrom, rawTo, partial, day);
   }
 
-  /** Apply a named NPC↔NPC action from the fixed table (unknown names read, never write). */
   public applyNpcSocialAction(rawFrom: string, rawTo: string, action: string, day: number): NpcBondState | null {
-    const delta = NPC_SOCIAL_ACTION_DELTAS[action];
-    if (!delta) return this.getNpcBond(rawFrom, rawTo);
-    return this.adjustNpcBond(rawFrom, rawTo, delta, day);
+    return this.graph.applyAction(rawFrom, rawTo, action, day);
   }
 
-  /** Set the directed romance stage (validated pair only). Same-stage writes are no-ops. */
   public setNpcRomance(rawFrom: string, rawTo: string, stage: NpcRomanceStage, day: number): NpcBondState | null {
-    const from = normalizeBuddyId(rawFrom);
-    const to = normalizeBuddyId(rawTo);
-    if (!from || !to || from === to || !this.buddies.has(from) || !this.buddies.has(to)) return null;
-    if (stage !== 'none' && stage !== 'crush' && stage !== 'dating') return null;
-    const current = this.getNpcBond(from, to);
-    const safeDay = Math.max(1, Math.floor(day) || 1);
-    if (current.romance === stage) return current;
-    const next: NpcBondState = {
-      ...current,
-      dims: { ...current.dims },
-      romance: stage,
-      romanceSinceDay: stage === 'none' ? 1 : safeDay,
-      updatedDay: safeDay,
-    };
-    this.npcBonds.set(npcBondKey(from, to), next);
-    this.eventBus.emit('social:npc_romance_changed' as any, { fromId: from, toId: to, stage, day: safeDay });
-    return this.getNpcBond(from, to);
+    return this.graph.setRomance(rawFrom, rawTo, stage, day);
   }
 
-  /** True when the buddy is informally dating anyone (either direction counts). */
   public isDatingAnyone(rawId: string): boolean {
-    const id = normalizeBuddyId(rawId);
-    for (const other of this.buddies.values()) {
-      if (other.id === id) continue;
-      if (this.getNpcBond(id, other.id).romance === 'dating') return true;
-      if (this.getNpcBond(other.id, id).romance === 'dating') return true;
-    }
-    return false;
+    return this.graph.isDatingAnyone(rawId);
   }
 
   // ---------- Agenda ----------
@@ -1182,54 +1010,12 @@ export class SocialEngine {
 
   // ---------- Prompt contexts (bounded, never quoted literally) ----------
 
-  /**
-   * Compact directed-tie context ("Ties: Ryan — warm, dating since d8").
-   * Only notable ties (romance, |net| >= 10), max 6, strongest first.
-   */
   public buildBondContext(rawBuddyId: string): string {
-    const buddyId = normalizeBuddyId(rawBuddyId);
-    if (!this.buddies.has(buddyId)) return '';
-    const entries: Array<{ text: string; weight: number }> = [];
-    for (const other of this.buddies.values()) {
-      if (other.id === buddyId) continue;
-      const out = this.getNpcBond(buddyId, other.id);
-      const back = this.getNpcBond(other.id, buddyId);
-      const net = out.dims.affection - out.dims.annoyance - out.dims.resentment
-        + back.dims.affection - back.dims.annoyance - back.dims.resentment;
-      const romance = out.romance === 'dating' || back.romance === 'dating' ? 'dating'
-        : out.romance === 'crush' || back.romance === 'crush' ? 'crush' : 'none';
-      if (romance === 'none' && Math.abs(net) < 10) continue;
-      const since = out.romance !== 'none' ? out.romanceSinceDay : back.romanceSinceDay;
-      const label = romance === 'dating' ? `dating since d${since}`
-        : romance === 'crush' ? 'crush'
-        : net >= 30 ? 'deep bond' : net >= 10 ? 'warm' : net <= -30 ? 'bitter' : 'tense';
-      entries.push({ text: `${other.displayName}: ${label}`, weight: romance !== 'none' ? 1000 + Math.abs(net) : Math.abs(net) });
-    }
-    if (entries.length === 0) return '';
-    entries.sort((x, y) => y.weight - x.weight);
-    return `Ties: ${entries.slice(0, 6).map((e) => e.text).join(' • ')}`;
+    return this.graph.buildBondContext(rawBuddyId);
   }
 
-  /**
-   * Compact romance line answering "are you seeing anyone?" ("Romance: dating
-   * Sam since day 8"). Always present (single when uninvolved) so the model
-   * never invents partners.
-   */
   public buildRomanceContext(rawBuddyId: string): string {
-    const buddyId = normalizeBuddyId(rawBuddyId);
-    if (!this.buddies.has(buddyId)) return 'Romance: single';
-    const involvements: string[] = [];
-    for (const other of this.buddies.values()) {
-      if (other.id === buddyId) continue;
-      const out = this.getNpcBond(buddyId, other.id);
-      const back = this.getNpcBond(other.id, buddyId);
-      const stage: NpcRomanceStage = out.romance === 'dating' || back.romance === 'dating' ? 'dating'
-        : out.romance === 'crush' || back.romance === 'crush' ? 'crush' : 'none';
-      if (stage === 'none') continue;
-      const since = out.romance !== 'none' ? out.romanceSinceDay : back.romanceSinceDay;
-      involvements.push(stage === 'dating' ? `dating ${other.displayName} since day ${since}` : `crush on ${other.displayName}`);
-    }
-    return involvements.length > 0 ? `Romance: ${involvements.slice(0, 3).join('; ')}` : 'Romance: single';
+    return this.graph.buildRomanceContext(rawBuddyId);
   }
 
   // ---------- Known handles (earned contacts) ----------
