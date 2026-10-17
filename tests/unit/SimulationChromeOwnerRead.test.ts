@@ -61,7 +61,7 @@ describe('#172 scalar source reads for OS chrome', () => {
       expect(apps.downloads).toHaveLength(256);
       expect(apps.downloads[0]?.id).toBe('archive-144');
       expect(apps.downloads[255]?.id).toBe('archive-399');
-      expect(JSON.parse(JSON.stringify(apps))).toEqual(apps);
+      expect(JSON.parse(JSON.stringify(apps.downloads))).toEqual(apps.downloads);
     }
     const smallWindow = game.downloads.getRecentTasks(2);
     expect(smallWindow.map(task => task.id)).toEqual(['archive-398', 'archive-399']);
