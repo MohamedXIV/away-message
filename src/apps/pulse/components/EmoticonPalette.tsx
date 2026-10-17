@@ -1,6 +1,6 @@
 import React from 'react';
 import { EMOTICON_LIST } from '../utils/emoticonParser';
-import { useSimulationStore } from '../../../store/useSimulationStore';
+import { useSimulationChrome } from '../../../store/useBoundedSimulationRead';
 
 interface EmoticonPaletteProps {
   isOpen: boolean;
@@ -13,7 +13,8 @@ export const EmoticonPalette: React.FC<EmoticonPaletteProps> = ({
   onSelectEmoticon,
   onClose,
 }) => {
-  const isOrion60 = useSimulationStore((s) => s.state.os.currentOsId === 'Orion_6.0');
+  const { osVersion } = useSimulationChrome();
+  const isOrion60 = osVersion === 'Orion_6.0';
 
   if (!isOpen) return null;
 
