@@ -79,6 +79,21 @@ export class HardwareEngine {
     };
   }
 
+  /** Small, allocation-free PC existence check for OS hotkeys. */
+  public hasAssembledComputer(): boolean {
+    return this.computer.assembled;
+  }
+
+  /** Owner-backed network indicators; does not build the full hardware compatibility state. */
+  public getNetworkSummary(): Pick<HardwareState, 'connectionType' | 'connectionSpeedKbps'> {
+    const card = this.computer.assembled ? this.computer.networkCard : null;
+    const connectionType = card && card.type !== 'ethernet_10_100' ? card.type : null;
+    return {
+      connectionType,
+      connectionSpeedKbps: connectionType ? card!.speedKbps : 0,
+    };
+  }
+
   public getComputerState(): Readonly<ComputerSetupState> {
     return cloneComputer(this.computer);
   }

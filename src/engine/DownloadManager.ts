@@ -153,6 +153,15 @@ export class DownloadManager {
     return true;
   }
 
+  /** Tray read: count only, without allocating/copying the download ledger. */
+  public getActiveDownloadCount(): number {
+    let count = 0;
+    for (const task of this.tasks.values()) {
+      if (task.status === 'downloading') count++;
+    }
+    return count;
+  }
+
   public getActiveDownloads(): DownloadTask[] {
     return Array.from(this.tasks.values()).filter(t => t.status === 'downloading');
   }

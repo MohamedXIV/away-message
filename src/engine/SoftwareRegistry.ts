@@ -220,6 +220,15 @@ export class SoftwareRegistry {
     }
   }
 
+  /** Tray badge query without cloning every installed package or its metadata. */
+  public hasInstalledAppIdContaining(fragment: string): boolean {
+    if (!fragment) return false;
+    for (const sw of this.installedSoftware.values()) {
+      if (String(sw.appId).includes(fragment)) return true;
+    }
+    return false;
+  }
+
   public isInstalled(appId: string): boolean {
     for (const sw of this.installedSoftware.values()) {
       if (sw.appId === appId || sw.appId === `app.${appId}` || sw.id.includes(appId)) return true;

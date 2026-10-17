@@ -709,21 +709,17 @@ export class SimulationKernel {
 
   /** Desktop chrome and Pulse tray use only domain-scoped, serializable reads. */
   public getChromeRead(): SimulationChromeRead {
-    const hardware = this.hardware.getState();
+    const network = this.hardware.getNetworkSummary();
     const unread = this.social.getUnreadTraySummary(4, true);
     return {
       revision: this.revision,
       time: { ...this.clock.getTime() },
       osVersion: this.os.getCurrentOsId(),
       pulseVersion: this.pulse.getState().currentPulseId,
-      pulseInstalled: this.software.getInstalledSoftware().some(
-        sw => String(sw.appId).includes('pulse'),
-      ),
-      connectionType: hardware.connectionType,
-      connectionSpeedKbps: hardware.connectionSpeedKbps,
-      activeDownloadCount: this.downloads.getState().tasks.filter(
-        task => task.status === 'downloading',
-      ).length,
+      pulseInstalled: this.software.hasInstalledAppIdContaining('pulse'),
+      connectionType: network.connectionType,
+      connectionSpeedKbps: network.connectionSpeedKbps,
+      activeDownloadCount: this.downloads.getActiveDownloadCount(),
       unreadCount: unread.unreadCount,
       unreadPreviews: unread.previews,
     };

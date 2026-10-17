@@ -191,11 +191,11 @@ export const App: React.FC = () => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'F2' || (e.altKey && e.key.toLowerCase() === 'r')) {
         e.preventDefault();
-        const hardwareState = useSimulationStore.getState().engine.hardware.getState();
+        const hasComputer = useSimulationStore.getState().engine.hardware.hasAssembledComputer();
         if (activeView === 'pc') {
           switchView('room');
         } else if (activeView === 'room') {
-          if (!hardwareState?.hasComputer) {
+          if (!hasComputer) {
             return;
           }
           switchView('pc');
