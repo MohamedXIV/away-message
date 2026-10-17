@@ -12,6 +12,7 @@ function incoming(index: number, id = 'contact'): MessageRecord {
     senderId: id, recipientId: 'player', text: `voice-${index}`,
     timestampMinute, day: Math.floor(timestampMinute / 1440) + 1,
     isRead: index % 3 === 0,
+    deliveredAway: false,
     tags: index % 4 === 0 ? ['offline-message'] : undefined,
   };
 }
@@ -88,9 +89,11 @@ describe('#173 single-owner Social conversation history', () => {
     }
     social.sendMessage(a!.id, 'player', a!.id, 'outbound', 4800);
     const snapshot = social.getState();
-    const legacyCounts = Object.fromEntries(Object.entries(snapshot.conversations)
-      .map(([id, messages]) => [id, messages.filter(m => m.senderId !== 'player' && !m.isRead).length])
-      .filter(([, count]) => count > 0));
+    const legacyCounts: Record<string, number> = {};
+    for (const [id, messages] of Object.entries(snapshot.conversations)) {
+      const unread = messages.filter(m => m.senderId !== 'player' && !m.isRead).length;
+      if (unread > 0) legacyCounts[id] = unread;
+    }
     expect(social.getConversationUnreadCounts()).toEqual(legacyCounts);
     const previews = Object.entries(snapshot.conversations).flatMap(([id, msgs]) => msgs
       .filter(m => m.senderId !== 'player' && !m.isRead)
@@ -112,7 +115,7 @@ describe('#173 single-owner Social conversation history', () => {
     expect(restored.markAsRead(a!.id)).toBe(true);
     expect(restored.markAsRead(a!.id)).toBe(false);
     expect(restored.getConversationUnreadCounts()[a!.id]).toBeUndefined();
-    expect(restored.getState().conversations[a!.id].every(m => m.isRead)).toBe(true);
+    expect(restored.getState().conversations[a!.id]?.every(m => m.isRead)).toBe(true);
   });
 
   it('scales 500-actor visible summaries without full historical state assembly', () => {
