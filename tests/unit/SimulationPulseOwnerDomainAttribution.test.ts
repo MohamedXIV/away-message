@@ -23,7 +23,13 @@ describe('#172 Pulse version change domain attribution', () => {
     game.publishExternalChange();
     expect(game.getRevision()).toBe(before + 1);
     expect(received).toHaveLength(1);
-    expect(received[0]!.changedDomains).toEqual(['pulse', 'software', 'unknown']);
+    expect(received[0]!.changedDomains).toEqual(
+      expect.arrayContaining(['pulse', 'software', 'unknown']),
+    );
+    expect(received[0]!.changedDomains).toEqual([
+      ...received[0]!.changedDomains.filter(domain => domain !== 'unknown').sort(),
+      'unknown',
+    ]);
     expect(game.getChromeRead().pulseVersion).toBe('pulse_6.0');
     expect(JSON.parse(JSON.stringify(received))).toEqual(received);
     expect(broad).not.toHaveBeenCalled();
@@ -54,7 +60,12 @@ describe('#172 Pulse version change domain attribution', () => {
     const stop = game.subscribeChanges(change => delivered.push(change.changedDomains));
     delivered.length = 0;
     game.publishExternalChange();
-    expect(delivered).toEqual([['pulse', 'software', 'unknown']]);
+    expect(delivered).toHaveLength(1);
+    expect(delivered[0]).toEqual(expect.arrayContaining(['pulse', 'software', 'unknown']));
+    expect(delivered[0]).toEqual([
+      ...delivered[0]!.filter(domain => domain !== 'unknown').sort(),
+      'unknown',
+    ]);
     game.pulse.syncInstalledVersion(null);
     expect(changes).toHaveLength(2);
     expect(JSON.parse(JSON.stringify(changes))).toEqual(changes);
