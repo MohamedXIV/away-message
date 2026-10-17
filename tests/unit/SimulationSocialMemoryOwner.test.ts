@@ -47,7 +47,7 @@ describe('#173 canonical Social memory / commitment owner', () => {
     const actorId = 'ledger_actor';
     const ledger = new SocialMemoryLedger(id => id, id => id === actorId);
     expect(ledger.addPromise('unknown', 'Promise to meet Friday', 1, 2)).toBeNull();
-    expect(ledger.addPromise(actorId, ' too short ', 1)).toBeNull();
+    expect(ledger.addPromise(actorId, ' tiny ', 1)).toBeNull();
     for (let i = 0; i < MAX_OPEN_PROMISES + 2; i++) {
       ledger.addPromise(actorId, `Come back with groceries ${i}`, 2, i + 3);
     }
