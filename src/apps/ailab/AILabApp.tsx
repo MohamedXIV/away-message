@@ -5,7 +5,7 @@ import { loadAISettings, saveAISettings } from '../../ai/settings';
 import type { AIProviderId, AISettings, BenchmarkResult } from '../../ai/types';
 import { generateCharacterImage } from '../../ai/imageService';
 import { useSimulationStore } from '../../store/useSimulationStore';
-import { useSimulationHud } from '../../store/useBoundedSimulationRead';
+import { useSimulationHud, useLabInspectorRead } from '../../store/useBoundedSimulationRead';
 import { ProceduralDirector } from '../../engine/ProceduralDirector';
 import { pickTemplateEvents } from '../../ai/proceduralTemplates';
 import type { ProceduralWorldEvent } from '../../ai/proceduralSchemas';
@@ -29,12 +29,16 @@ export const AILabApp: React.FC = () => {
   const [results, setResults] = useState<BenchmarkResult[]>([]);
   const [notice, setNotice] = useState('Ready. Benchmark mode bypasses the ten-day cache.');
   const [imagePrompt, setImagePrompt] = useState('character at their desk with warm lamp light, small period photo');
-  const [imageBuddy, setImageBuddy] = useState(() => engine.social.getBuddies()[0]?.id ?? '');
+  const [imageBuddy, setImageBuddy] = useState('');
   const [imageRunning, setImageRunning] = useState(false);
   const [imageResult, setImageResult] = useState<{ url: string; provider: string; fallback: boolean; error?: string } | null>(null);
 
   // Procedural Director tuning
   const worldDay = useSimulationHud().time.day;
+  const [actorPage, setActorPage] = useState(0);
+  const [meetingPage, setMeetingPage] = useState(0);
+  const inspector = useLabInspectorRead(actorPage, meetingPage);
+  const selectedImageBuddy = imageBuddy || inspector.roster.imageOptions[0]?.id || '';
   const [procSeed, setProcSeed] = useState('oakhaven-lab');
   const [procTone, setProcTone] = useState<'grounded' | 'whimsical' | 'melancholy' | 'hopeful'>('grounded');
   const [procMaxEvents, setProcMaxEvents] = useState(2);
@@ -102,9 +106,9 @@ export const AILabApp: React.FC = () => {
     setImageResult(null);
     setNotice('Generating character image via Fal (small, era-appropriate)...');
     try {
-      const buddy = engine.social.getBuddy(imageBuddy);
+      const buddy = engine.social.getBuddy(selectedImageBuddy);
       const res = await generateCharacterImage(
-        { buddyId: imageBuddy, buddyName: buddy?.displayName || imageBuddy || 'Character', prompt: imagePrompt, size: { width: 320, height: 240 } },
+        { buddyId: selectedImageBuddy, buddyName: buddy?.displayName || selectedImageBuddy || 'Character', prompt: imagePrompt, size: { width: 320, height: 240 } },
         settings
       );
       setImageResult({ url: res.url, provider: res.provider, fallback: res.fallback, error: res.error });
@@ -338,7 +342,7 @@ export const AILabApp: React.FC = () => {
     setCharPreview(null);
     setCharMeta(null);
     try {
-      const existingIds = engine.social.getBuddies().map((b) => b.id);
+      const existingIds = engine.social.getLabActorIds();
       const res = await generateNewcomer(
         {
           metVia: charMetVia,
@@ -475,8 +479,8 @@ export const AILabApp: React.FC = () => {
         <div className="text-[11px] text-gray-600">When a Pulse buddy agrees to send a photo, a small 320×240 image is generated. Fal key is required; otherwise a local placeholder is used and stored.</div>
         <div className="mt-2 flex flex-wrap items-center gap-2">
           <label className="font-semibold" htmlFor="image-buddy">Buddy:</label>
-          <select id="image-buddy" value={imageBuddy} onChange={(e) => setImageBuddy(e.target.value)} className="border border-gray-500 bg-white px-2 py-1">
-            {engine.social.getBuddies().map((b) => (
+          <select id="image-buddy" value={selectedImageBuddy} onChange={(e) => setImageBuddy(e.target.value)} className="border border-gray-500 bg-white px-2 py-1">
+            {inspector.roster.imageOptions.map((b) => (
               <option key={b.id} value={b.id}>{b.displayName} — {b.handle}</option>
             ))}
           </select>
@@ -522,7 +526,7 @@ export const AILabApp: React.FC = () => {
               </div>
             ))}
           </div>
-          <div className="mt-2 text-[10px] text-gray-600">Current day: <b>{worldDay}</b> • world pending: <b>{engine.world.getPendingEvents().length}</b> • triggered: <b>{engine.world.getTriggeredEvents().length}</b> • injected last: {procInjectedIds.join(', ') || '—'}</div>
+          <div className="mt-2 text-[10px] text-gray-600">Current day: <b>{worldDay}</b> • world pending: <b>{inspector.eventCounts.pending}</b> • triggered: <b>{inspector.eventCounts.triggered}</b> • injected last: {procInjectedIds.join(', ') || '—'}</div>
         </div>
 
         <div className="mt-3 flex flex-wrap gap-2">
@@ -557,7 +561,7 @@ export const AILabApp: React.FC = () => {
           <label className="flex flex-col gap-1">Kind<select value={osKind} onChange={(e) => setOsKind(e.target.value as any)} className="border border-gray-500 bg-white px-2 py-1"><option value="major">major</option><option value="minor">minor</option><option value="patch">patch</option><option value="beta">beta</option><option value="hotfix">hotfix</option></select></label>
           <label className="flex items-center gap-2 mt-4"><input type="checkbox" checked={osUseAI} onChange={(e) => setOsUseAI(e.target.checked)} /> Use AI</label>
         </div>
-        <div className="mt-2 text-[10px] text-gray-600">Current OS: <b>{(engine as any).os.getCurrentOsId()}</b> • catalog: <b>{getAllReleases().length}</b> releases • pending OS events: <b>{engine.world.getPendingEvents().filter((e:any)=>e.category==='os_release').length}</b></div>
+        <div className="mt-2 text-[10px] text-gray-600">Current OS: <b>{inspector.currentOsId}</b> • catalog: <b>{getAllReleases().length}</b> releases • pending OS events: <b>{inspector.eventCounts.pendingOs}</b></div>
         <div className="mt-3 flex flex-wrap gap-2">
           <button disabled={osBusy} onClick={runOsPreview} className="border border-gray-700 bg-white px-4 py-1 font-bold hover:bg-gray-50 disabled:opacity-60">{osBusy ? 'Working…' : 'Preview OS (dry)'}</button>
           <button disabled={osBusy || (osPreview as unknown) == null} onClick={runOsInject} className="border border-gray-700 bg-[#0f4a3c] px-4 py-1 font-bold text-white hover:bg-[#15604e] disabled:opacity-60">{osBusy ? 'Working…' : 'Inject OS into Catalog & World'}</button>
@@ -581,7 +585,7 @@ export const AILabApp: React.FC = () => {
           <label className="flex flex-col gap-1">Met via<select value={charMetVia} onChange={(e) => setCharMetVia(e.target.value as BuddyMetVia)} className="border border-gray-500 bg-white px-2 py-1">{NEWCOMER_METVIA_ROTATION.map((m) => <option key={m} value={m}>{m}</option>)}</select></label>
           <label className="flex items-center gap-2 mt-4"><input type="checkbox" checked={charUseAI} onChange={(e) => setCharUseAI(e.target.checked)} /> Use AI</label>
         </div>
-        <div className="mt-2 text-[10px] text-gray-600">Buddies now: <b>{engine.social.getBuddies().length}</b> • procedural: <b>{engine.social.getBuddies().filter((b) => b.isProcedural).length}</b> • Day <b>{worldDay}</b></div>
+        <div className="mt-2 text-[10px] text-gray-600">Buddies now: <b>{inspector.roster.total}</b> • procedural: <b>{inspector.roster.procedural}</b> • Day <b>{worldDay}</b></div>
         <div className="mt-3 flex flex-wrap gap-2">
           <button disabled={charBusy} onClick={runCharPreview} className="border border-gray-700 bg-white px-4 py-1 font-bold hover:bg-gray-50 disabled:opacity-60">{charBusy ? 'Working…' : 'Preview newcomer (dry)'}</button>
           <button disabled={charBusy || (charPreview as unknown) == null} onClick={runCharInject} className="border border-gray-700 bg-[#1d4e89] px-4 py-1 font-bold text-white hover:bg-[#27619f] disabled:opacity-60">{charBusy ? 'Working…' : 'Add to World + Pulse'}</button>
@@ -601,10 +605,10 @@ export const AILabApp: React.FC = () => {
         <h2 className="mb-1 font-bold text-[#2f6b2f]">Life Board — body, weather, rent (read-only)</h2>
         <div className="text-[11px] text-gray-600">The real side at a glance: hunger/health/sleep, the sky, and the countdown to rent. Lenient by design — floors, never traps.</div>
         {(() => {
-          const body = engine.economy.getState();
-          const maxEnergy = engine.economy.effectiveMaxEnergy();
-          const rentOverdue = engine.world.getFlag('rent_overdue');
-          const todayAppts = engine.world.getAppointments().filter((a) => a.targetDay === worldDay);
+          const body = inspector.body;
+          const maxEnergy = body.maxEnergy;
+          const rentOverdue = body.rentOverdue;
+          const todayAppts = inspector.appointments.today;
           return (
             <div className="mt-2 grid grid-cols-1 gap-2 md:grid-cols-3 text-[11px]">
               <div className="border border-gray-300 bg-[#fafafa] p-2">
@@ -629,10 +633,11 @@ export const AILabApp: React.FC = () => {
               <div className="border border-gray-300 bg-[#fafafa] p-2">
                 <div className="font-bold">Today (day {worldDay})</div>
                 <div className="font-mono text-[10px] text-gray-600">
-                  meetings: {todayAppts.length} • cash ${body.cash.toFixed(2)}
+                  meetings: {inspector.appointments.todayCount} • cash ${body.cash.toFixed(2)}
                 </div>
                 <div className="mt-1 text-gray-600">
-                  {todayAppts.length === 0 ? 'nothing scheduled — propose something on Pulse.' : todayAppts.map((a) => `${a.characterId}@${a.locationId} (${a.status ?? 'scheduled'})`).join(' • ')}
+                  {inspector.appointments.todayCount === 0 ? 'nothing scheduled — propose something on Pulse.' : todayAppts.map((a) => `${a.characterId}@${a.locationId} (${a.status ?? 'scheduled'})`).join(' • ')}
+                  {inspector.appointments.todayCount > todayAppts.length ? ` • +${inspector.appointments.todayCount - todayAppts.length} more` : ''}
                 </div>
               </div>
             </div>
@@ -643,26 +648,33 @@ export const AILabApp: React.FC = () => {
       <section className="mb-3 border-2 border-[#6a4a00] bg-white p-2">
         <h2 className="mb-1 font-bold text-[#6a4a00]">Meeting Board — live appointments (read-only)</h2>        <div className="text-[11px] text-gray-600">Plans emerge from chat (“lets meet at the cafe tomorrow”). NPCs RSVP the day before, then show or flake by rules. Visit the place (or DM for the lobby) on the day to show up yourself.</div>
         <div className="mt-2 space-y-1">
-          {engine.world.getAppointments().length === 0 && <div className="text-[11px] italic text-gray-500">No appointments yet — propose one in Pulse chat.</div>}
-          {engine.world.getAppointments().map((a) => (
+          {inspector.appointments.total === 0 && <div className="text-[11px] italic text-gray-500">No appointments yet — propose one in Pulse chat.</div>}
+          {inspector.appointments.page.map((a) => (
             <div key={a.id} className="border border-gray-300 bg-[#fafafa] p-2 font-mono text-[10px] text-gray-700">
               <b>{a.characterId}</b> @ {a.locationId} • day {a.targetDay} • status: <b>{a.status ?? 'scheduled'}</b> • rsvp: {a.rsvp ?? '—'} • npc: {a.npcShowed === undefined ? '—' : a.npcShowed ? 'showed' : 'no-show'} • you: {a.playerShowed === undefined ? '—' : a.playerShowed ? 'showed' : 'absent'}
             </div>
           ))}
+          {inspector.appointments.total > 16 && (
+            <div className="flex items-center gap-2 text-[10px]">
+              <button disabled={meetingPage === 0} onClick={() => setMeetingPage(p => Math.max(0, p - 1))}>Previous</button>
+              <span>{meetingPage + 1} / {Math.max(1, Math.ceil(inspector.appointments.total / 16))}</span>
+              <button disabled={(meetingPage + 1) * 16 >= inspector.appointments.total} onClick={() => setMeetingPage(p => p + 1)}>Next</button>
+            </div>
+          )}
         </div>
       </section>
 
       <section className="mb-3 border-2 border-[#8a4b00] bg-white p-2">
         <h2 className="mb-1 font-bold text-[#8a4b00]">Relationship Lab — memory, stages &amp; sharp events (read-only)</h2>        <div className="text-[11px] text-gray-600">Hidden dimensions, derived stage, daily mood, immortal memories, open promises and lifecycle status per buddy. Rules decide, AI only paraphrases.</div>
         <div className="mt-2 space-y-1">
-          {engine.social.getBuddies().map((b) => {
-            const rel = engine.social.getRelationships(b.id);
-            const stage = engine.social.getRelationshipStage(b.id);
-            const mood = engine.social.getDailyMood(b.id, worldDay);
-            const mems = engine.social.getCoreMemories(b.id);
-            const open = engine.social.getOpenPromises(b.id);
-            const sharp = (engine.world.getFlag(`sharp_${b.id}`) as string) || '—';
-            const ties = engine.social.buildAffinityContext(b.id);
+          {inspector.actors.map((b) => {
+            const rel = b.relationship;
+            const stage = b.stage;
+            const mood = b.dailyMood;
+            const mems = b.memories;
+            const open = b.promises;
+            const sharp = b.sharp || '—';
+            const ties = b.affinityText;
             return (
               <div key={b.id} className="border border-gray-300 bg-[#fafafa] p-2 text-[11px]">
                 <div className="flex flex-wrap items-center gap-2">
@@ -679,6 +691,13 @@ export const AILabApp: React.FC = () => {
               </div>
             );
           })}
+          {inspector.roster.total > 16 && (
+            <div className="flex items-center gap-2 text-[10px]">
+              <button disabled={actorPage === 0} onClick={() => setActorPage(p => Math.max(0, p - 1))}>Previous</button>
+              <span>{actorPage + 1} / {Math.max(1, Math.ceil(inspector.roster.total / 16))}</span>
+              <button disabled={(actorPage + 1) * 16 >= inspector.roster.total} onClick={() => setActorPage(p => p + 1)}>Next</button>
+            </div>
+          )}
         </div>
       </section>
 

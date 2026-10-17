@@ -277,6 +277,42 @@ export interface SimulationCafeGuestRead {
   guest: null | { actorId: string; displayName: string };
 }
 
+/**
+ * Explicit developer Lab inspection, not a player-safe app contract. A fixed
+ * 16-actor/appointment page protects the renderer from accidental full roster
+ * and private-history materialization on every revision.
+ */
+export interface SimulationLabInspectorRead {
+  revision: number;
+  day: number;
+  currentOsId: string | null;
+  eventCounts: { pending: number; triggered: number; pendingOs: number };
+  roster: ReturnType<import('../SocialEngine').SocialEngine['getLabRosterRead']>;
+  actors: Array<{
+    id: string;
+    displayName: string;
+    handle: string;
+    archetype: import('../types').BuddyCharacter['archetype'];
+    status: import('../types').BuddyCharacter['status'];
+    relationship: import('../types').RelationshipDimensions | null;
+    stage: import('../types').RelationshipStage;
+    dailyMood: import('../types').DailyMood;
+    memories: import('../types').CoreMemory[];
+    promises: import('../types').PromiseRecord[];
+    sharp: string;
+    affinityText: string;
+  }>;
+  appointments: ReturnType<import('../WorldEventsEngine').WorldEventsEngine['getLabAppointmentRead']>;
+  body: Pick<import('../PlayerNeedsEngine').PlayerNeedsState, 'energy' | 'hunger' | 'health' | 'sleepDebt'> & {
+    maxEnergy: number;
+    cash: number;
+    rentAmount: number;
+    rentDueDay: number;
+    rentPaid: boolean;
+    rentOverdue: boolean;
+  };
+}
+
 /** Player's active journey only: no NPC trips, all-actor positions or transit network. */
 export interface SimulationTransitRead {
   revision: number;

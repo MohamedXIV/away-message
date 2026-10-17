@@ -37,6 +37,7 @@ import type {
   SimulationHudProjection,
   SimulationPlayerStatusRead,
   SimulationWeatherBuddyRead,
+  SimulationLabInspectorRead,
   SimulationMessengerRead,
   SimulationPulseContactsRead,
   SimulationPresenceRead,
@@ -65,6 +66,7 @@ export type {
   SimulationHudProjection,
   SimulationPlayerStatusRead,
   SimulationWeatherBuddyRead,
+  SimulationLabInspectorRead,
   SimulationMessengerRead,
   SimulationPulseContactsRead,
   SimulationPresenceRead,
@@ -344,6 +346,49 @@ export class SimulationKernel {
         atMinute: this.clock.getTotalMinutes() + 1440,
         count: 5,
       }),
+    };
+  }
+
+  /**
+   * Developer Lab view only. All body/status data comes from owner reads,
+   * while private relationship diagnostics stay within a 16-actor page.
+   * Never publish these private fields as a general player-facing projection.
+   */
+  public getLabInspectorRead(actorPage = 0, meetingPage = 0): SimulationLabInspectorRead {
+    const day = this.clock.getTime().day;
+    const actorStart = Number.isFinite(actorPage) ? Math.max(0, Math.trunc(actorPage)) * 16 : 0;
+    const meetingStart = Number.isFinite(meetingPage) ? Math.max(0, Math.trunc(meetingPage)) * 16 : 0;
+    const roster = this.social.getLabRosterRead(actorStart, 16);
+    const appointments = this.world.getLabAppointmentRead(day, meetingStart, 16);
+    const needs = this.needs.getSnapshot();
+    const rent = this.economy.getRentStatus();
+    return {
+      revision: this.revision,
+      day,
+      currentOsId: this.os.getCurrentOsId(),
+      eventCounts: this.world.getLabEventCounts(),
+      roster,
+      actors: roster.page.map(buddy => ({
+        ...buddy,
+        relationship: this.social.getRelationships(buddy.id) ?? null,
+        stage: this.social.getRelationshipStage(buddy.id),
+        dailyMood: this.social.getDailyMood(buddy.id, day),
+        memories: this.social.getCoreMemories(buddy.id),
+        promises: this.social.getOpenPromises(buddy.id),
+        sharp: String(this.world.getFlag(`sharp_${buddy.id}`) ?? ''),
+        affinityText: this.social.buildAffinityContext(buddy.id),
+      })),
+      appointments,
+      body: {
+        energy: needs.energy,
+        hunger: needs.hunger,
+        health: needs.health,
+        sleepDebt: needs.sleepDebt,
+        maxEnergy: needs.effectiveMaxEnergy,
+        cash: this.economy.getCash(),
+        ...rent,
+        rentOverdue: !!this.world.getFlag('rent_overdue'),
+      },
     };
   }
 

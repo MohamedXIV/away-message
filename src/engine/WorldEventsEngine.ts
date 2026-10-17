@@ -417,6 +417,15 @@ export class WorldEventsEngine {
     return Array.from(this.pendingEvents.values());
   }
 
+  /** Inspector-only counts. Never clone queued definitions or public headlines. */
+  public getLabEventCounts(): { pending: number; triggered: number; pendingOs: number } {
+    let pendingOs = 0;
+    for (const event of this.pendingEvents.values()) {
+      if (event.category === 'os_release') pendingOs++;
+    }
+    return { pending: this.pendingEvents.size, triggered: this.triggeredEvents.size, pendingOs };
+  }
+
   /**
    * Bounded active-modifier query (#46). Pure projection over authored specs
    * × canonical triggered events × time: deterministic, idempotent, and
@@ -561,6 +570,29 @@ export class WorldEventsEngine {
 
   public getAppointments(): Appointment[] {
     return this.appointments.map((a) => ({ ...a }));
+  }
+
+  /** Inspector-only, bounded appointment page plus a short today summary. */
+  public getLabAppointmentRead(day: number, offset = 0, limit = 16): {
+    total: number;
+    todayCount: number;
+    today: Appointment[];
+    page: Appointment[];
+  } {
+    const start = Number.isFinite(offset) ? Math.max(0, Math.trunc(offset)) : 0;
+    const size = Number.isFinite(limit) ? Math.max(1, Math.min(16, Math.trunc(limit))) : 16;
+    let todayCount = 0;
+    const today: Appointment[] = [];
+    const page: Appointment[] = [];
+    for (let i = 0; i < this.appointments.length; i++) {
+      const appt = this.appointments[i]!;
+      if (appt.targetDay === day) {
+        todayCount++;
+        if (today.length < 8) today.push({ ...appt });
+      }
+      if (i >= start && i < start + size) page.push({ ...appt });
+    }
+    return { total: this.appointments.length, todayCount, today, page };
   }
 
   /**

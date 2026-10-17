@@ -1607,6 +1607,48 @@ export class SocialEngine {
   }
 
   /**
+   * Explicit developer-only inspector: counts and a page of visible identities.
+   * Never make a BuddyCharacter roster or chat/memory snapshot merely to render
+   * the Lab. Full private diagnostics require a separate selected-page read.
+   */
+  public getLabRosterRead(offset = 0, limit = 16): {
+    total: number;
+    procedural: number;
+    imageOptions: Array<{ id: string; displayName: string; handle: string }>;
+    page: Array<Pick<BuddyCharacter, 'id' | 'displayName' | 'handle' | 'archetype' | 'status'>>;
+  } {
+    const start = Number.isFinite(offset) ? Math.max(0, Math.trunc(offset)) : 0;
+    const size = Number.isFinite(limit) ? Math.max(1, Math.min(16, Math.trunc(limit))) : 16;
+    let procedural = 0;
+    const imageOptions: Array<{ id: string; displayName: string; handle: string }> = [];
+    const page: Array<Pick<BuddyCharacter, 'id' | 'displayName' | 'handle' | 'archetype' | 'status'>> = [];
+    let index = 0;
+    for (const [id, buddy] of this.buddies) {
+      if (buddy.isProcedural) procedural++;
+      if (imageOptions.length < 500) imageOptions.push({
+        id, displayName: buddy.displayName, handle: buddy.handle,
+      });
+      if (index >= start && index < start + size) {
+        const condition = this.actorConditions.get(id) ?? conditionFromLegacyStatus();
+        page.push({
+          id,
+          displayName: buddy.displayName,
+          handle: buddy.handle,
+          archetype: buddy.archetype,
+          status: projectLegacyBuddyStatus(condition, this.getRelationshipStage(id)),
+        });
+      }
+      index++;
+    }
+    return { total: this.buddies.size, procedural, imageOptions, page };
+  }
+
+  /** Intent-time authoring input only: no actor bodies, memory or relationships. */
+  public getLabActorIds(): string[] {
+    return [...this.buddies.keys()];
+  }
+
+  /**
    * Public NightBoard authors only: finite, detached render identities from
    * the Social owner. Public forum authorship is not a claim that the player
    * knows a person privately; the generated threads may include strangers.

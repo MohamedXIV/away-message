@@ -14,6 +14,7 @@ import type {
   SimulationHudProjection,
   SimulationPlayerStatusRead,
   SimulationWeatherBuddyRead,
+  SimulationLabInspectorRead,
   SimulationMessengerRead,
   SimulationPulseContactsRead,
   SimulationPresenceRead,
@@ -82,6 +83,15 @@ export function useSimulationPlayerStatus(): SimulationPlayerStatusRead {
 
 export function useWeatherBuddyRead(): SimulationWeatherBuddyRead {
   return useBoundedSimulationRead(readWeatherBuddy);
+}
+
+/** Explicit developer diagnostics; never reuse as a player-facing read. */
+export function useLabInspectorRead(actorPage: number, meetingPage: number): SimulationLabInspectorRead {
+  const read = useCallback(
+    (engine: SimulationEngine) => engine.getLabInspectorRead(actorPage, meetingPage),
+    [actorPage, meetingPage],
+  );
+  return useBoundedSimulationRead(read);
 }
 
 export function useSimulationWorldRead(): SimulationWorldRead {
