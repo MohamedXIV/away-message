@@ -29,9 +29,11 @@ export class FileSystemEngine {
   }
 
   /** Directory view with no file bodies, image payloads or unrelated folders. */
-  public listDirectoryMetadata(dirPath: string): FileRecord[] {
+  public listDirectoryMetadata(dirPath: string, limit = Infinity): FileRecord[] {
     const normalized = this.normalizePath(dirPath);
+    const max = Number.isFinite(limit) ? Math.max(0, Math.trunc(limit)) : Infinity;
     const result: FileRecord[] = [];
+    if (max === 0) return result;
     for (const record of this.files.values()) {
       if (record.parentPath !== normalized || record.path === normalized) continue;
       const { id, name, path, parentPath, kind, sizeBytes, createdAtMinute, modifiedAtMinute,
@@ -43,6 +45,7 @@ export class FileSystemEngine {
         ...(record.metadata?.originalTrashPath
           ? { metadata: { originalTrashPath: record.metadata.originalTrashPath } } : {}),
       });
+      if (result.length >= max) break;
     }
     return result;
   }

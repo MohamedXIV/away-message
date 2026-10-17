@@ -10,8 +10,7 @@ import { getWeatherForDay, gameDayName } from '../WeatherEngine';
 import { locationLabel } from '../AppointmentDirector';
 import { createEmptyComputerSetup, createEmptyDisplaySetup } from '../hardware/state';
 import { CoreSimulationRuntime } from './CoreSimulationRuntime';
-import { resolvePcBootState } from './ComputerOwnershipRuntime';
-import { getPhysicalCatalogItem } from '../hardware/catalog';
+import { resolvePcBootStateFromOwnerStatus } from './ComputerOwnershipRuntime';
 import { NpcComputerSimulationRuntime } from './NpcComputerSimulationRuntime';
 import { PhysicalSimulationRuntime, type LiveSimulationState, type InitialSimulationState } from './PhysicalSimulationRuntime';
 import {
@@ -342,7 +341,11 @@ export class SimulationKernel {
       residencePlaceId: this.physical.getCurrentResidencePlaceId(),
       playerLocation: this.economy.getLocation(),
       environment: this.environment.getCurrentSnapshot(),
-      pcBootState: resolvePcBootState({ computer: this.hardware.getComputerState(), inventory: this.inventory.getState(), os: this.os.getState() }),
+      pcBootState: resolvePcBootStateFromOwnerStatus(
+        this.hardware.getComputerBootStatus(),
+        this.os.getCurrentOsId(),
+        () => this.inventory.hasUnassembledComputerItems(),
+      ),
       metInPerson: !!this.world.getFlag('met_in_person'),
     };
   }
@@ -686,23 +689,22 @@ export class SimulationKernel {
 
   /** File-body-free desktop read. Only visible shortcut metadata crosses UI. */
   public getDesktopRead(): SimulationDesktopRead {
-    const inventory = this.inventory.getState();
-    const computer = this.hardware.getComputerState();
-    const os = this.os.getState();
-    const desktopFiles = this.vfs.listDirectory('C:/Desktop').slice(0, 256).map(
+    const osVersion = this.os.getCurrentOsId();
+    const desktopFiles = this.vfs.listDirectoryMetadata('C:/Desktop', 256).map(
       ({ id, name, path, parentPath, kind, appAssociation }) => ({
         id, name, path, parentPath, kind, appAssociation,
       }),
     );
     return {
       revision: this.revision,
-      osVersion: os.currentOsId ?? null,
-      pcBootState: resolvePcBootState({ computer, inventory, os }),
+      osVersion,
+      pcBootState: resolvePcBootStateFromOwnerStatus(
+        this.hardware.getComputerBootStatus(),
+        osVersion,
+        () => this.inventory.hasUnassembledComputerItems(),
+      ),
       monitor: this.hardware.getDisplayState().monitor,
-      bootMediaItems: inventory.items.filter(item =>
-        getPhysicalCatalogItem(item.catalogItemId)?.media?.type === 'os_installer'
-        && (item.location === 'inventory' || item.location === 'room_package' || item.location === 'inserted')
-      ).map(item => ({ ...item })),
+      bootMediaItems: this.inventory.getBootMediaItems(256),
       desktopFiles,
     };
   }

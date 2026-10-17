@@ -94,6 +94,11 @@ export class HardwareEngine {
     };
   }
 
+  /** Scalar boot inputs; no RAM, drive or peripheral snapshots. */
+  public getComputerBootStatus(): Pick<ComputerSetupState, 'assembled' | 'poweredOn'> {
+    return { assembled: this.computer.assembled, poweredOn: this.computer.poweredOn };
+  }
+
   public getComputerState(): Readonly<ComputerSetupState> {
     return cloneComputer(this.computer);
   }

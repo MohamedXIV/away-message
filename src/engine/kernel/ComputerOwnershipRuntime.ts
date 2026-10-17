@@ -29,21 +29,30 @@ export interface OsInstallPlan {
   preparedAtTotalMinutes: number;
 }
 
+/** Shared boot semantics for explicit snapshots and scalar live owner reads. */
+export function resolvePcBootStateFromOwnerStatus(
+  computer: { assembled: boolean; poweredOn: boolean },
+  currentOsId: OsVersion | null,
+  hasUnassembledComputerItems: () => boolean,
+): PcBootState {
+  if (!computer.assembled) {
+    return hasUnassembledComputerItems() ? 'awaiting_setup' : 'no_computer';
+  }
+  if (!computer.poweredOn) return 'powered_off';
+  if (!currentOsId) return 'no_boot_device';
+  return 'desktop';
+}
+
 export function resolvePcBootState(
   state: Pick<LiveSimulationState, 'computer' | 'inventory' | 'os'>,
 ): PcBootState {
-  if (!state.computer.assembled) {
-    const hasUnassembledComputerItems = state.inventory.items.some(
-      (item) =>
-        item.location === 'room_package' &&
-        (item.kind === 'hardware' || item.kind === 'display'),
-    );
-    return hasUnassembledComputerItems ? 'awaiting_setup' : 'no_computer';
-  }
-
-  if (!state.computer.poweredOn) return 'powered_off';
-  if (!state.os.currentOsId) return 'no_boot_device';
-  return 'desktop';
+  return resolvePcBootStateFromOwnerStatus(
+    state.computer,
+    state.os.currentOsId,
+    () => state.inventory.items.some(item =>
+      item.location === 'room_package' &&
+      (item.kind === 'hardware' || item.kind === 'display')),
+  );
 }
 
 

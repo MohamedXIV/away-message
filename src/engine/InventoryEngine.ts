@@ -138,6 +138,27 @@ export class InventoryEngine {
     };
   }
 
+  /** Boot decision without cloning the canonical owned-item ledger. */
+  public hasUnassembledComputerItems(): boolean {
+    return this.state.items.some(item =>
+      item.location === 'room_package' &&
+      (item.kind === 'hardware' || item.kind === 'display'));
+  }
+
+  /** Bounded installer media for Desktop; never hand the UI mutable owner records. */
+  public getBootMediaItems(limit = 256): OwnedItem[] {
+    const max = Number.isFinite(limit) ? Math.max(0, Math.min(256, Math.trunc(limit))) : 256;
+    const items: OwnedItem[] = [];
+    if (max === 0) return items;
+    for (const item of this.state.items) {
+      if (item.location !== 'inventory' && item.location !== 'room_package' && item.location !== 'inserted') continue;
+      if (getPhysicalCatalogItem(item.catalogItemId)?.media?.type !== 'os_installer') continue;
+      items.push({ ...item });
+      if (items.length >= max) break;
+    }
+    return items;
+  }
+
   public getState(): Readonly<PlayerInventoryState> {
     return cloneState(this.state);
   }

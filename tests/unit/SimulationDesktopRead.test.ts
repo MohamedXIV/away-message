@@ -49,4 +49,57 @@ describe('#172 DesktopShell metadata-only read', () => {
     expect(full).not.toHaveBeenCalled();
     full.mockRestore();
   });
+  it('reads boot status and desktop icons without cloning Inventory, Hardware or VFS bodies', () => {
+    const game = new SimulationEngine();
+    expect(game.purchaseStoreItem('silicon_spares', 'bundle_scrapyard').success).toBe(true);
+    const baseline = game.getDesktopRead();
+    expect(baseline.pcBootState).toBe('awaiting_setup');
+    const broad = vi.spyOn(game, 'getState');
+    const inventory = vi.spyOn(game.inventory, 'getState');
+    const hardware = vi.spyOn(game.hardware, 'getComputerState');
+    const os = vi.spyOn(game.os, 'getState');
+    const wholeDirectory = vi.spyOn(game.vfs, 'listDirectory');
+    const metadata = vi.spyOn(game.vfs, 'listDirectoryMetadata');
+
+    const desktop = game.getDesktopRead();
+    const world = game.getWorldRead();
+    expect(desktop).toEqual(baseline);
+    expect(world.pcBootState).toBe('awaiting_setup');
+    expect(desktop.bootMediaItems.some(item => item.catalogItemId === 'media_orion_48_setup')).toBe(true);
+    expect(desktop.desktopFiles.length).toBeLessThanOrEqual(256);
+    expect(desktop.bootMediaItems.length).toBeLessThanOrEqual(256);
+    expect(metadata).toHaveBeenCalledWith('C:/Desktop', 256);
+    expect(JSON.parse(JSON.stringify(desktop))).toEqual(desktop);
+    expect(broad).not.toHaveBeenCalled();
+    expect(inventory).not.toHaveBeenCalled();
+    expect(hardware).not.toHaveBeenCalled();
+    expect(os).not.toHaveBeenCalled();
+    expect(wholeDirectory).not.toHaveBeenCalled();
+  });
+
+  it('bounds installer media and never exposes canonical mutable inventory items', () => {
+    const game = new SimulationEngine();
+    game.inventory.loadState({
+      purchaseCounts: {},
+      items: Array.from({ length: 400 }, (_, i) => ({
+        instanceId: `boot-media-${i}`,
+        catalogItemId: 'media_orion_48_setup',
+        kind: 'media' as const,
+        location: 'inventory' as const,
+      })),
+    });
+    const broad = vi.spyOn(game, 'getState');
+    const inventory = vi.spyOn(game.inventory, 'getState');
+    const desktop = game.getDesktopRead();
+    expect(desktop.pcBootState).toBe('no_computer');
+    expect(desktop.bootMediaItems).toHaveLength(256);
+    expect(desktop.bootMediaItems[0]?.instanceId).toBe('boot-media-0');
+    expect(desktop.bootMediaItems[255]?.instanceId).toBe('boot-media-255');
+    desktop.bootMediaItems[0]!.catalogItemId = 'tampered';
+    expect(game.getDesktopRead().bootMediaItems[0]?.catalogItemId).toBe('media_orion_48_setup');
+    expect(game.inventory.getBootMediaItems(0)).toEqual([]);
+    expect(broad).not.toHaveBeenCalled();
+    expect(inventory).not.toHaveBeenCalled();
+  });
+
 });
