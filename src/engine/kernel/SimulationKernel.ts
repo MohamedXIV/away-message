@@ -657,19 +657,14 @@ export class SimulationKernel {
   }
 
   public getWebsiteRead(): SimulationWebsiteRead {
-    const flags = this.world.getPublicFlags();
+    const feed = this.world.getPublicWebsiteFeed(256);
     return {
       revision: this.revision,
       time: { ...this.clock.getTime() },
       cash: this.economy.getCash(),
-      narrativeFlags: { ...flags },
-      world: {
-        flags,
-        appointments: [],
-        windowObservationHistory: [],
-        triggeredEvents: this.world.getTriggeredEvents().slice(-256).map(event => ({ ...event })),
-        buddyKnowledge: {},
-      },
+      narrativeFlags: this.world.getPublicFlags(),
+      world: { triggeredEvents: feed.triggeredEvents },
+      pendingEventCount: feed.pendingEventCount,
     };
   }
 

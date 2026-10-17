@@ -25,14 +25,81 @@ describe('#172 website/shop owner-only projections and lazy legacy state', () =>
     expect('myplace' in site).toBe(false);
     expect(allMyPlace).not.toHaveBeenCalled();
     expect(allProfiles).not.toHaveBeenCalled();
-    expect(site.world.flags.test_public_site_flag).toBe(true);
     expect(site.narrativeFlags.test_public_site_flag).toBe(true);
-    expect(site.world.semanticKnowledge).toBeUndefined();
-    expect(site.world.buddyKnowledge).toEqual({});
+    expect(Object.keys(site.world)).toEqual(['triggeredEvents']);
+    expect('semanticKnowledge' in site.world).toBe(false);
+    expect('buddyKnowledge' in site.world).toBe(false);
+    expect('appointments' in site.world).toBe(false);
+    expect('flags' in site.world).toBe(false);
+    expect(site.pendingEventCount).toBe(engine.world.getPendingEvents().length);
     expect(JSON.stringify(site)).not.toContain('SECRET_ONLY_IN_WORLD_LEDGER');
     expect(JSON.parse(JSON.stringify(site))).toEqual(site);
     expect(broad).not.toHaveBeenCalled();
     expect(worldState).not.toHaveBeenCalled();
+  });
+
+  it('keeps a bounded stable public event feed without fetching the full World or queued event list', () => {
+    const game = new SimulationEngine();
+    const events = Array.from({ length: 300 }, (_, i) => ({
+      id: `site_feed_${i}`,
+      title: `Public headline ${i}`,
+      description: `News ${i}`,
+      category: 'city_news' as const,
+      triggerDay: 1,
+      triggerHour: 9,
+      knowledgePrompt: `Public note ${i}`,
+      isTriggered: true,
+      // Deliberately out of insertion order, with multiple equal-minute ties.
+      triggeredAtMinute: 480 + ((i * 17) % 29) * 30,
+    }));
+    game.world.loadState({ triggeredEvents: events });
+    const expected = game.world.getTriggeredEvents().slice(-256);
+    const broad = vi.spyOn(game, 'getState');
+    const world = vi.spyOn(game.world, 'getState');
+    const unboundedEvents = vi.spyOn(game.world, 'getTriggeredEvents');
+    const pending = vi.spyOn(game.world, 'getPendingEvents');
+    const result = game.getWebsiteRead();
+    expect(result.world.triggeredEvents).toEqual(expected);
+    expect(result.world.triggeredEvents).toHaveLength(256);
+    expect(result.pendingEventCount).toBeGreaterThanOrEqual(0);
+    expect(JSON.parse(JSON.stringify(result))).toEqual(result);
+    expect(game.world.getPublicWebsiteFeed(0).triggeredEvents).toEqual([]);
+    expect(game.world.getPublicWebsiteFeed(5.7).triggeredEvents).toEqual(expected.slice(-5));
+    expect(game.world.getPublicWebsiteFeed(-5).triggeredEvents).toEqual([]);
+    expect(unboundedEvents).not.toHaveBeenCalled();
+    expect(pending).not.toHaveBeenCalled();
+    expect(world).not.toHaveBeenCalled();
+    expect(broad).not.toHaveBeenCalled();
+    // A consumer cannot mutate the World owner's canonical headlines.
+    result.world.triggeredEvents[0]!.title = 'UI_EDIT_SHOULD_NOT_REACH_OWNER';
+    expect(game.getWebsiteRead().world.triggeredEvents[0]!.title).toBe(expected[0]!.title);
+  });
+
+  it('publishes a live pending-news count after injection and trigger without exposing queue definitions', () => {
+    const game = new SimulationEngine();
+    const before = game.getWebsiteRead();
+    const queued = {
+      id: 'website_public_queue_regression',
+      title: 'CityWire queue boundary',
+      description: 'Authored future city event',
+      category: 'city_news' as const,
+      triggerDay: 30,
+      triggerHour: 10,
+      knowledgePrompt: 'Future public news',
+      siteUrl: 'http://citywire.local/',
+    };
+    expect(game.commitLabProceduralEvents([queued])).toEqual([queued.id]);
+    const pendingSpy = vi.spyOn(game.world, 'getPendingEvents');
+    const queuedRead = game.getWebsiteRead();
+    expect(queuedRead.pendingEventCount).toBe(before.pendingEventCount + 1);
+    expect(JSON.stringify(queuedRead)).not.toContain(queued.title);
+    expect(pendingSpy).not.toHaveBeenCalled();
+    expect(game.world.triggerEventById(queued.id, game.clock.getTotalMinutes())).not.toBeNull();
+    const published = game.getWebsiteRead();
+    expect(published.pendingEventCount).toBe(before.pendingEventCount);
+    expect(published.world.triggeredEvents.some(event => event.id === queued.id)).toBe(true);
+    expect(JSON.parse(JSON.stringify(published))).toEqual(published);
+    expect(pendingSpy).not.toHaveBeenCalled();
   });
 
   it('provides room-package counts and purchase flags without serializing owned hardware', () => {

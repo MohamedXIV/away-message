@@ -1,6 +1,5 @@
 import { SearchIndexEntry, SearchResultSummary } from './types';
-import type { WorldState } from '../engine/types';
-import { getProceduralSearchEntries } from './worldSiteHelpers';
+import { getProceduralSearchEntries, type PublicWorldEventFeed } from './worldSiteHelpers';
 
 export const SEARCH_INDEX_DATABASE: SearchIndexEntry[] = [
   // ----------------------------------------------------
@@ -241,7 +240,7 @@ export class SearchEngine {
       category?: string;
       currentDay?: number;
       narrativeFlags?: Record<string, any>;
-      world?: WorldState;
+      world?: PublicWorldEventFeed;
       limit?: number;
     }
   ): SearchResultSummary {
@@ -358,7 +357,7 @@ export function searchInternet(
   query: string,
   currentDay: number = 1,
   narrativeFlags: Record<string, any> = {},
-  world?: WorldState,
+  world?: PublicWorldEventFeed,
 ): SearchIndexEntry[] {
   return SearchEngine.search(query, { currentDay, narrativeFlags, world }).results;
 }

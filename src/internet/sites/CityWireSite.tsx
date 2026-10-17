@@ -5,7 +5,7 @@ import { useSimulationWebsite } from '../../store/useBoundedSimulationRead';
 
 export const CityWireSite: React.FC<SiteRouteProps> = (props) => {
   const doNavigate = props.navigate || props.onNavigate || (() => {});
-  const { world, time } = useSimulationWebsite();
+  const { world, time, pendingEventCount } = useSimulationWebsite();
   const engine = useSimulationStore((s) => s.engine);
 
   const [generating, setGenerating] = useState(false);
@@ -19,8 +19,8 @@ export const CityWireSite: React.FC<SiteRouteProps> = (props) => {
   const lead = triggered[0];
   const sidebar = triggered.slice(1, 4);
 
-  // Controls info for procedural generation
-  const pendingCount = engine.world.getPendingEvents().length;
+  // World-owned scalar; no pending event payloads or direct owner read in React.
+  const pendingCount = pendingEventCount;
 
   const handleGenerate = async () => {
     setGenerating(true);

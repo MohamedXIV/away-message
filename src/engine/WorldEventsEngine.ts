@@ -350,6 +350,40 @@ export class WorldEventsEngine {
     return Object.fromEntries(this.flags.entries());
   }
 
+  /**
+   * Website-only public event feed, owned by World. Keep the most recent
+   * authored events in chronological/stable insertion order with bounded
+   * allocation; do not copy pending event definitions or NPC knowledge.
+   */
+  public getPublicWebsiteFeed(maxEvents = 256): {
+    triggeredEvents: GlobalEvent[];
+    pendingEventCount: number;
+  } {
+    const limit = Number.isFinite(maxEvents)
+      ? Math.max(0, Math.min(256, Math.trunc(maxEvents))) : 256;
+    const latest: GlobalEvent[] = [];
+    if (limit > 0) {
+      for (const event of this.triggeredEvents.values()) {
+        const at = event.triggeredAtMinute ?? 0;
+        if (latest.length === limit && at < (latest[0]!.triggeredAtMinute ?? 0)) continue;
+        // Insert after equal times: identical ordering to stable getTriggeredEvents().
+        let lo = 0;
+        let hi = latest.length;
+        while (lo < hi) {
+          const mid = (lo + hi) >>> 1;
+          if ((latest[mid]!.triggeredAtMinute ?? 0) <= at) lo = mid + 1;
+          else hi = mid;
+        }
+        latest.splice(lo, 0, event);
+        if (latest.length > limit) latest.shift();
+      }
+    }
+    return {
+      triggeredEvents: latest.map(event => ({ ...event })),
+      pendingEventCount: this.pendingEvents.size,
+    };
+  }
+
   public getTriggeredEvents(): GlobalEvent[] {
     return Array.from(this.triggeredEvents.values()).sort((a, b) => (a.triggeredAtMinute ?? 0) - (b.triggeredAtMinute ?? 0));
   }

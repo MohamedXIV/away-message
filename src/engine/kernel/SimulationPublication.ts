@@ -190,14 +190,16 @@ export interface SimulationShopRead {
   roomPackageCount: number;
 }
 
-/** Internet sites get a player-visible world feed, not private NPC state. */
+/** Website wire contract: public event feed, flags and scalar counts only. */
 export interface SimulationWebsiteRead {
   revision: number;
   time: GameTime;
   cash: number;
-  /** Compatibility with published site helper shapes; private banks are empty. */
-  world: import('../types').WorldState;
+  /** Public events only; never pose as a persistence WorldState with dummy banks. */
+  world: Pick<import('../types').WorldState, 'triggeredEvents'>;
   narrativeFlags: Record<string, boolean | number | string>;
+  /** Number of queued authored events, never their private queued definitions. */
+  pendingEventCount: number;
 }
 
 /** Bounded, already-authored public forum posts; no roster reaches React. */
