@@ -5,6 +5,9 @@
 export * from './slotsV5Core';
 
 import { db } from './db';
+import {
+  splitConversationArchive, hydrateConversationArchive, isConversationArchiveManifest,
+} from './conversationArchive';
 import type { SaveSlotRecord } from './schema';
 import type { SimulationState } from '../engine/types';
 import type { SimulationEngine } from '../engine/SimulationEngine';
@@ -80,6 +83,12 @@ export async function saveSlot(
   saveName?: string,
 ): Promise<SlotSummary> {
   const snapshot = engine.exportSnapshot() as SimulationState;
+  const { recent, pages, manifest } = splitConversationArchive(slotId, snapshot.social.conversations);
+  // Only the last 32 messages/contact remain in the document; older history
+  // is stored once in slot-bound IndexedDB archive pages. Live source unchanged.
+  const compactSnapshot: SimulationState = {
+    ...snapshot, social: { ...snapshot.social, conversations: recent },
+  };
   const now = Date.now();
   const existing = await db.saves.get(slotId).catch(() => undefined);
   const pulseSlotId = getCurrentPulseSlotId();
@@ -127,24 +136,46 @@ export async function saveSlot(
     meta: {
       pulseSlotId,
       pulsePayload: readPulsePayload(pulseSlotId),
+      conversationArchive: manifest,
     },
-    snapshot,
+    snapshot: compactSnapshot,
   };
 
-  await db.saves.put(record);
+  // A slot and all its conversation pages are one durable unit. If bulkPut
+  // fails, IndexedDB rolls back the previous save AND previous archive.
+  await db.transaction('rw', db.saves, db.conversation_pages, async () => {
+    await db.conversation_pages.where('slotId').equals(slotId).delete();
+    if (pages.length > 0) await db.conversation_pages.bulkPut(pages);
+    await db.saves.put(record);
+  });
   return toSummary(record);
 }
 
 /** Load and deterministically chain any supported document through v4/v5/v6. */
 export async function loadSlotSnapshot(slotId: string): Promise<SimulationState | null> {
   try {
-    const record = await db.saves.get(slotId);
-    if (checkSaveCompatibility(record).status !== 'ok') return null;
-    const snapshot = record?.snapshot;
-    if (!snapshot || typeof snapshot !== 'object') return null;
-
-    const sourceVersion = record.version ?? SAVE_FORMAT_VERSION;
-    let upgraded = snapshot as SimulationState;
+    // Snapshot and cold pages must be read from the SAME committed save.
+    const loaded = await db.transaction('r', db.saves, db.conversation_pages, async () => {
+      const record = await db.saves.get(slotId);
+      if (checkSaveCompatibility(record).status !== 'ok') return null;
+      const snapshot = record?.snapshot;
+      if (!snapshot || typeof snapshot !== 'object') return null;
+      const rawArchive = record.meta?.conversationArchive;
+      if (rawArchive === undefined) return { snapshot, version: record.version ?? SAVE_FORMAT_VERSION };
+      if (!isConversationArchiveManifest(rawArchive)) return null;
+      const pages = await db.conversation_pages.where('slotId').equals(slotId).toArray();
+      const conversations = hydrateConversationArchive(
+        slotId, snapshot.social.conversations, rawArchive, pages,
+      );
+      if (!conversations) return null;
+      return {
+        snapshot: { ...snapshot, social: { ...snapshot.social, conversations } },
+        version: record.version ?? SAVE_FORMAT_VERSION,
+      };
+    });
+    if (!loaded) return null;
+    const sourceVersion = loaded.version;
+    let upgraded = loaded.snapshot as SimulationState;
     if (sourceVersion < 4) upgraded = migrateSnapshotToV4(upgraded, sourceVersion);
     if (sourceVersion < 5) upgraded = migrateSnapshotToV5(upgraded, sourceVersion);
     if (sourceVersion < 6) upgraded = migrateSnapshotToV6(upgraded, sourceVersion);

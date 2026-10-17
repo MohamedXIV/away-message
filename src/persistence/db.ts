@@ -1,4 +1,14 @@
 import Dexie, { type Table } from 'dexie';
+import type { MessageRecord as CanonicalMessageRecord } from '../engine/types';
+
+/** Slot-specific cold chronological pages, never the old global messages table. */
+export interface ConversationArchivePage {
+  key: string;
+  slotId: string;
+  conversationId: string;
+  pageIndex: number;
+  messages: CanonicalMessageRecord[];
+}
 import type {
   SaveSlotRecord,
   VfsFileRecord,
@@ -14,6 +24,7 @@ import type {
 
 export class AwayMessageDB extends Dexie {
   saves!: Table<SaveSlotRecord, string>;
+  conversation_pages!: Table<ConversationArchivePage, string>;
   vfs_files!: Table<VfsFileRecord, string>;
   downloads!: Table<DownloadTaskRecord, string>;
   installed_software!: Table<InstalledSoftwareRecord, string>;
@@ -82,6 +93,12 @@ export class AwayMessageDB extends Dexie {
       telemetry_logs: '++id, timestamp, gameDay, eventType',
       ai_cache: 'key, kind, expiresAt, providerId',
       pulse_state: 'saveSlotId',
+    });
+
+    // #173: append-only schema migration; unlike legacy messages these
+    // pages are per save slot and replaced atomically with that slot document.
+    this.version(5).stores({
+      conversation_pages: 'key, slotId, [slotId+conversationId+pageIndex]',
     });
   }
 }
