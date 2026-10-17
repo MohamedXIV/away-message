@@ -36,6 +36,7 @@ import type {
   SimulationConversationRead,
   SimulationHudProjection,
   SimulationPlayerStatusRead,
+  SimulationWeatherBuddyRead,
   SimulationMessengerRead,
   SimulationPulseContactsRead,
   SimulationPresenceRead,
@@ -63,6 +64,7 @@ export type {
   SimulationConversationRead,
   SimulationHudProjection,
   SimulationPlayerStatusRead,
+  SimulationWeatherBuddyRead,
   SimulationMessengerRead,
   SimulationPulseContactsRead,
   SimulationPresenceRead,
@@ -329,6 +331,19 @@ export class SimulationKernel {
       revision: this.revision,
       needs: this.needs.getSnapshot(),
       rent: this.economy.getRentStatus(),
+      moodBand: this.mood.getCurrentSnapshot().band,
+    };
+  }
+
+  /** Owner-backed five-day outlook, capped at five forecast entries. */
+  public getWeatherBuddyRead(): SimulationWeatherBuddyRead {
+    return {
+      revision: this.revision,
+      current: this.environment.getCurrentSnapshot(),
+      forecast: this.environment.getForecast({
+        atMinute: this.clock.getTotalMinutes() + 1440,
+        count: 5,
+      }),
     };
   }
 

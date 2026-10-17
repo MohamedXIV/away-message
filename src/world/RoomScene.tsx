@@ -69,7 +69,7 @@ export const RoomScene: React.FC = () => {
   const environmentPresentation = projectEnvironmentPresentation(environment);
   const weather: WeatherType = environmentPresentation.weather;
   const needs = playerStatus.needs;
-  const mood = engine.gameContext.player.mood();
+  const moodBand = playerStatus.moodBand;
   const timeOfDay = time.timeOfDay;
 
   // Outing result notice (city outings report back: encounters, rumors, failures)
@@ -498,7 +498,7 @@ export const RoomScene: React.FC = () => {
           weather={weather}
           thoughtText={windowData.thought}
           entity={windowData.entity}
-          mood={mood.band}
+          mood={moodBand}
           onClose={() => setActiveModal(null)}
         />
       )}

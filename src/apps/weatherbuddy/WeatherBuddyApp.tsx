@@ -1,11 +1,9 @@
 import React, { useState } from 'react';
-import { useSimulationStore } from '../../store/useSimulationStore';
-import { useSimulationApps, useSimulationHud } from '../../store/useBoundedSimulationRead';
-import type { EnvironmentSnapshot } from '../../engine/GameContext';
+import { useSimulationApps, useWeatherBuddyRead } from '../../store/useBoundedSimulationRead';
+import type { EnvironmentSnapshot } from '../../engine/EnvironmentEngine';
 
 export const WeatherBuddyApp: React.FC = () => {
-  const engine = useSimulationStore((s) => s.engine);
-  const currentTime = useSimulationHud().time;
+  const { current: currentCondition, forecast } = useWeatherBuddyRead();
   const installedSoftware = useSimulationApps().installedSoftware;
 
   const [isCelsius, setIsCelsius] = useState(false);
@@ -23,11 +21,7 @@ export const WeatherBuddyApp: React.FC = () => {
     return `${c}°C`;
   };
 
-  const currentCondition = engine.gameContext.environment.current();
-  const forecast: EnvironmentSnapshot[] = engine.gameContext.environment.forecast({
-    atMinute: currentTime.totalMinutes + 1440,
-    count: 5,
-  });
+  // Current weather and authored outlook arrive from one revision-safe read.
   const displayMeta = (condition: EnvironmentSnapshot['weather']['condition']) => ({
     rain: { label: 'Canal Rain', icon: '🌧️' },
     drizzle: { label: 'Light Drizzle', icon: '🌦️' },

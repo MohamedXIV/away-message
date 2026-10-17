@@ -60,6 +60,8 @@ export interface SimulationPlayerStatusRead {
   revision: number;
   needs: import('../PlayerNeedsEngine').PlayerNeedsSnapshot;
   rent: Pick<import('../types').PlayerState, 'rentAmount' | 'rentDueDay' | 'rentPaid'>;
+  /** Semantic mood for room HUD, never the persisted effect list. */
+  moodBand: import('../MoodEngine').MoodBand;
 }
 
 /** Render-specific dependencies, not a copy of the persisted world. */
@@ -73,6 +75,13 @@ export interface SimulationWorldRead {
   /** Only the room's active authored capability and explicitly used window flag. */
   pcBootState: import('./ComputerOwnershipRuntime').PcBootState;
   metInPerson: boolean;
+}
+
+/** A five-day weather window, not a live GameContext or owner handle. */
+export interface SimulationWeatherBuddyRead {
+  revision: number;
+  current: import('../EnvironmentEngine').EnvironmentSnapshot;
+  forecast: import('../EnvironmentEngine').EnvironmentSnapshot[];
 }
 
 /** Player-visible read of a single selected real actor. */
