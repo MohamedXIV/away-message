@@ -57,7 +57,17 @@ describe('#172 scalar source reads for OS chrome', () => {
       const view = game.getChromeRead();
       expect(view.activeDownloadCount).toBe(expected);
       expect(JSON.parse(JSON.stringify(view))).toEqual(view);
+      const apps = game.getAppRead();
+      expect(apps.downloads).toHaveLength(256);
+      expect(apps.downloads[0]?.id).toBe('archive-144');
+      expect(apps.downloads[255]?.id).toBe('archive-399');
+      expect(JSON.parse(JSON.stringify(apps))).toEqual(apps);
     }
+    const smallWindow = game.downloads.getRecentTasks(2);
+    expect(smallWindow.map(task => task.id)).toEqual(['archive-398', 'archive-399']);
+    expect(game.downloads.getRecentTasks(0)).toEqual([]);
+    smallWindow[0]!.fileName = 'mutated';
+    expect(game.downloads.getRecentTasks(2)[0]!.fileName).toBe('archive.bin');
     expect(all).not.toHaveBeenCalled();
     expect(full).not.toHaveBeenCalled();
     expect(game.downloads.getActiveDownloadCount()).toBe(expected);

@@ -90,7 +90,7 @@ export class HardwareEngine {
     const connectionType = card && card.type !== 'ethernet_10_100' ? card.type : null;
     return {
       connectionType,
-      connectionSpeedKbps: connectionType ? card!.speedKbps : 0,
+      connectionSpeedKbps: connectionType ? card?.speedKbps ?? 0 : 0,
     };
   }
 

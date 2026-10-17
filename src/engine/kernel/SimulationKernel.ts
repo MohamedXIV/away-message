@@ -479,7 +479,7 @@ export class SimulationKernel {
       computer: { assembled: computer.assembled, poweredOn: computer.poweredOn },
       os: this.os.getState(),
       installedSoftware: this.software.getInstalledSoftware(),
-      downloads: this.downloads.getState().tasks.slice(-256),
+      downloads: this.downloads.getRecentTasks(256),
     };
   }
 
