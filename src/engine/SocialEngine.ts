@@ -1737,6 +1737,53 @@ export class SocialEngine {
     return { contacts, suggestions, lastSeenMinutes, roomParticipantCounts, roomParticipantNames };
   }
 
+  /**
+   * Job-board identity only. Select the same first eligible role-holder as
+   * getBuddyWithRole (non-distant before distant, then locale id order) in
+   * one owner-owned scan, without cloning a whole BuddyCharacter roster.
+   * Knowledge gates the chosen winner, not the selection itself: an unknown
+   * winner must not be replaced with a conveniently known lower-priority actor.
+   */
+  public getPublicJobContactName(role: string): string {
+    let best: { id: string; displayName: string; distant: number } | null = null;
+    for (const [id, buddy] of this.buddies) {
+      if (!(buddy.roles ?? []).includes(role)) continue;
+      const condition = this.actorConditions.get(id) ?? conditionFromLegacyStatus();
+      const status = projectLegacyBuddyStatus(condition, this.getRelationshipStage(id));
+      if (status === 'gone' || status === 'blocked') continue;
+      const distant = status === 'distant' ? 1 : 0;
+      if (!best || distant < best.distant
+        || (distant === best.distant && id.localeCompare(best.id) < 0)) {
+        best = { id, displayName: buddy.displayName, distant };
+      }
+    }
+    return best && this.isKnown(best.id) ? best.displayName : role;
+  }
+
+  /**
+   * Café guest candidate identities only. Public presence is decided by the
+   * NPC place owner and semantic eligibility afterward, not by this roster
+   * query. Only player-learned local identities cross into coordination.
+   */
+  public getKnownLocalCafeCandidatesRead(requestedActorId?: string): Array<{
+    id: string;
+    displayName: string;
+  }> {
+    if (requestedActorId) {
+      const id = normalizeBuddyId(requestedActorId);
+      const buddy = this.buddies.get(id);
+      return buddy?.reach === 'local' && this.isKnown(id)
+        ? [{ id, displayName: buddy.displayName }] : [];
+    }
+    const candidates: Array<{ id: string; displayName: string }> = [];
+    for (const [id, buddy] of this.buddies) {
+      if (buddy.reach !== 'local' || !this.isKnown(id)) continue;
+      candidates.push({ id, displayName: buddy.displayName });
+      if (candidates.length >= 500) break;
+    }
+    return candidates;
+  }
+
   /** Resolve current actors by capability role. Seed content has no runtime privilege. */
   public getBuddiesWithRole(role: string): BuddyCharacter[] {
     return this.getBuddies()

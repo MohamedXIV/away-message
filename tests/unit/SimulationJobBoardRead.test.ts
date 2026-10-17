@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { SimulationEngine } from '../../src/engine/SimulationEngine';
+import { createSimulationBenchmarkFixture } from '../../src/engine/benchmark/SimulationBenchmarkFixture';
 
 describe('#172 owner-scoped public job-board projection', () => {
   it('delivers capped serializable job offers without copying Social or World state', () => {
@@ -35,6 +36,34 @@ describe('#172 owner-scoped public job-board projection', () => {
     expect(after.contactName).toBe(matching!.contact!.displayName);
     expect(JSON.stringify(after)).not.toContain(matching!.contact!.handle);
   });
+
+  it('matches legacy role selection at 500 actors without cloning full Social rosters', () => {
+    const game = createSimulationBenchmarkFixture(500).engine;
+    const roles = [...new Set(game.getJobBoard().map(entry => entry.gig.contactRole))];
+    const baseline = new Map(roles.map(role => {
+      const winner = game.social.getBuddyWithRole(role);
+      return [role, winner && game.social.isKnown(winner.id) ? winner.displayName : role];
+    }));
+    const roster = vi.spyOn(game.social, 'getBuddies');
+    const fullBuddy = vi.spyOn(game.social, 'getBuddy');
+    const roleLists = vi.spyOn(game.social, 'getBuddiesWithRole');
+    const socialState = vi.spyOn(game.social, 'getState');
+    const full = vi.spyOn(game, 'getState');
+    for (const role of roles) {
+      expect(game.social.getPublicJobContactName(role)).toBe(baseline.get(role));
+    }
+    expect(game.social.getPublicJobContactName('missing_capability_role')).toBe('missing_capability_role');
+    const jobs = game.getJobBoardRead();
+    expect(jobs.jobs.map(row => row.contactName)).toEqual(
+      game.getJobBoard().slice(0, 32).map(row => baseline.get(row.gig.contactRole)),
+    );
+    expect(JSON.parse(JSON.stringify(jobs))).toEqual(jobs);
+    expect(roster).not.toHaveBeenCalled();
+    expect(fullBuddy).not.toHaveBeenCalled();
+    expect(roleLists).not.toHaveBeenCalled();
+    expect(socialState).not.toHaveBeenCalled();
+    expect(full).not.toHaveBeenCalled();
+  }, 30_000);
 
   it('tracks canonical pending applications as revisions without whole-world publication', () => {
     const game = new SimulationEngine();

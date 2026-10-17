@@ -365,7 +365,7 @@ export class SimulationKernel {
     return {
       revision: this.revision,
       jobs: this.getJobBoard().slice(0, 32).map(({ gig, pending }) => {
-        const contact = this.social.getBuddyWithRole(gig.contactRole);
+        const contactName = this.social.getPublicJobContactName(gig.contactRole);
         return {
           gigId: gig.id,
           title: gig.title,
@@ -373,8 +373,7 @@ export class SimulationKernel {
           pay: gig.pay,
           durationMin: gig.durationMin,
           minEnergy: gig.minEnergy,
-          contactName: contact && this.social.isKnown(contact.id)
-            ? contact.displayName : gig.contactRole,
+          contactName,
           pending,
         };
       }),
@@ -407,13 +406,10 @@ export class SimulationKernel {
    * owns the current physical place. Online status is not location evidence.
    */
   public getCafeGuestRead(placeId: string, requestedActorId?: string): SimulationCafeGuestRead {
-    const candidates = requestedActorId
-      ? [this.social.getBuddy(requestedActorId)]
-      : this.social.getBuddies();
+    const candidates = this.social.getKnownLocalCafeCandidatesRead(requestedActorId);
     let guest: SimulationCafeGuestRead['guest'] = null;
     let bestFamiliarity = -Infinity;
     for (const candidate of candidates) {
-      if (!candidate || candidate.reach !== 'local' || !this.social.isKnown(candidate.id)) continue;
       const location = this.npc.getNpcPlaceState(candidate.id);
       if (location.status !== 'at_place' || location.placeId !== placeId) continue;
       const semantics = this.getActorSemanticView(candidate.id);

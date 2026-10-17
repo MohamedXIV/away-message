@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { SimulationEngine } from '../../src/engine/SimulationEngine';
 import type { ActiveTravelState } from '../../src/engine/transit/types';
 import { GENERATED_VENUE_SERVICES } from '../../src/engine/worldContent.generated';
+import { createSimulationBenchmarkFixture } from '../../src/engine/benchmark/SimulationBenchmarkFixture';
 
 describe('#172 owner-scoped residence and player-only transit projections', () => {
   it('projects canonical tenancy and the shop-visible offer list without world snapshots', () => {
@@ -52,6 +53,53 @@ describe('#172 owner-scoped residence and player-only transit projections', () =
     expect(noMobilityDump).not.toHaveBeenCalled();
     expect(noSocialDump).not.toHaveBeenCalled();
   });
+
+  it('derives known local café candidates without roster copies at 500 actors', () => {
+    const game = createSimulationBenchmarkFixture(500).engine;
+    const cafe = GENERATED_VENUE_SERVICES.find(service => service.tags.includes('cafe'))!;
+    const locals = game.social.getBuddies().filter(actor => actor.reach === 'local');
+    const [first, second] = locals;
+    expect(first).toBeDefined();
+    expect(second).toBeDefined();
+    // Unknown actors must not become physical guest candidates.
+    expect(game.social.getKnownLocalCafeCandidatesRead()).toEqual([]);
+    expect(game.social.learnHandle(first!.id, first!.handle)).toBe(true);
+    expect(game.social.learnHandle(second!.id, second!.handle)).toBe(true);
+    expect(game.relocateActorToGeneratedPlaceEntry(first!.id, cafe.placeId)).toBe(true);
+    expect(game.relocateActorToGeneratedPlaceEntry(second!.id, cafe.placeId)).toBe(true);
+    const reference = [first!, second!].sort((a, b) =>
+      (game.social.getRelationships(b.id)?.familiarity ?? 0)
+      - (game.social.getRelationships(a.id)?.familiarity ?? 0));
+    const roster = vi.spyOn(game.social, 'getBuddies');
+    const full = vi.spyOn(game, 'getState');
+    const social = vi.spyOn(game.social, 'getState');
+    const mobility = vi.spyOn(game, 'getNpcMobilityState');
+    const candidates = game.social.getKnownLocalCafeCandidatesRead();
+    expect(candidates).toEqual(expect.arrayContaining([
+      { id: first!.id, displayName: first!.displayName },
+      { id: second!.id, displayName: second!.displayName },
+    ]));
+    expect(candidates.length).toBeLessThanOrEqual(500);
+    expect(JSON.parse(JSON.stringify(candidates))).toEqual(candidates);
+    expect(game.social.getKnownLocalCafeCandidatesRead('nonexistent')).toEqual([]);
+    expect(game.social.getKnownLocalCafeCandidatesRead(first!.id)).toEqual([
+      { id: first!.id, displayName: first!.displayName },
+    ]);
+    const guest = game.getCafeGuestRead(cafe.placeId);
+    expect(guest.guest).toEqual({
+      actorId: reference[0]!.id,
+      displayName: reference[0]!.displayName,
+    });
+    expect(game.getCafeGuestRead(cafe.placeId, second!.id).guest?.actorId).toBe(second!.id);
+    expect(JSON.parse(JSON.stringify(guest))).toEqual(guest);
+    expect(roster).not.toHaveBeenCalled();
+    expect(full).not.toHaveBeenCalled();
+    expect(social).not.toHaveBeenCalled();
+    expect(mobility).not.toHaveBeenCalled();
+    // The returned names are detached and cannot change the actual actor.
+    candidates[0]!.displayName = 'UI_WRITTEN';
+    expect(game.getCafeGuestRead(cafe.placeId).guest?.displayName).not.toBe('UI_WRITTEN');
+  }, 30_000);
 
   it('shows one player trip and one leg, never NPC mobility or an entire route graph', () => {
     const game = new SimulationEngine();
