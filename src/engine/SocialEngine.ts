@@ -1607,6 +1607,33 @@ export class SocialEngine {
   }
 
   /**
+   * Resolve one Pulse room's live members at the Social owner. An action needs
+   * IDs, not 500 BuddyCharacter copies with private schedules, bio and status.
+   * Preserves explicit-member eligibility, dynamic role inclusion, derived
+   * gone/blocked semantics, de-duplication and sorted responder order.
+   */
+  public getPulseRoomParticipantIdsRead(room: {
+    participantIds: readonly string[];
+    participantRoles: readonly string[];
+  }): string[] {
+    const resolved = new Set<string>();
+    const eligible = (id: string): boolean => {
+      if (!this.buddies.has(id)) return false;
+      const condition = this.actorConditions.get(id) ?? conditionFromLegacyStatus();
+      const status = projectLegacyBuddyStatus(condition, this.getRelationshipStage(id));
+      return status !== 'gone' && status !== 'blocked';
+    };
+    for (const id of room.participantIds) {
+      if (eligible(id)) resolved.add(id);
+    }
+    for (const [id, buddy] of this.buddies) {
+      if (!(buddy.roles ?? []).some(role => room.participantRoles.includes(role))) continue;
+      if (eligible(id)) resolved.add(id);
+    }
+    return [...resolved].sort();
+  }
+
+  /**
    * Explicit developer-only inspector: counts and a page of visible identities.
    * Never make a BuddyCharacter roster or chat/memory snapshot merely to render
    * the Lab. Full private diagnostics require a separate selected-page read.

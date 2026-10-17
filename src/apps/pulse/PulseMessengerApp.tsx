@@ -8,7 +8,7 @@ import { PulseRoomWindow, PulseRoomMessage } from './components/PulseRoomWindow'
 import { PulseProfileCard } from './components/PulseProfileCard';
 import { PulseFriendRequest } from './components/PulseFriendRequest';
 import type { PulseListView } from './components/BuddyListWindow';
-import { getPulseRoom, PULSE_ROOMS, resolvePulseRoomParticipantIds } from './data/pulseRooms';
+import { getPulseRoom, PULSE_ROOMS } from './data/pulseRooms';
 import { usePulseAudio } from './hooks/usePulseAudio';
 import { useSimulatedTyping } from './hooks/useSimulatedTyping';
 import { usePulseNotifications } from './hooks/usePulseNotifications';
@@ -357,8 +357,21 @@ export const PulseMessengerApp: React.FC = () => {
     deliveredOfflineForSession.current = true;
     deliveredOfflineKeys.add(offlineKey);
     const elapsed = totalMinutes - pulseState.lastSeenTotalMinutes;
-    const buddyIds = engine.social.getBuddies().map((buddy) => buddy.id).filter((id) => !pulseState.blockedBuddyIds.includes(id));
-    const missedActivities = collectMissedPresenceActivities(pulseState.lastSeenTotalMinutes, totalMinutes, (id) => engine.social.getBuddy(id) as any, buddyIds);
+    // One login-time roster read, never a full actor clone per missed activity
+    // or a new 500-actor sort for every message. All later comparisons are
+    // based on unchanged authored identity/schedule and fixed temperament.
+    const blockedOffline = new Set(pulseState.blockedBuddyIds);
+    const offlineRoster = engine.social.getBuddies().filter(buddy => !blockedOffline.has(buddy.id));
+    const offlineById = new Map(offlineRoster.map(buddy => [buddy.id, buddy] as const));
+    const buddyIds = offlineRoster.map(buddy => buddy.id);
+    const missedActivities = collectMissedPresenceActivities(
+      pulseState.lastSeenTotalMinutes, totalMinutes, (id) => offlineById.get(id), buddyIds,
+    );
+    const warmestOfflineIds = elapsed >= 240
+      ? new Set([...offlineRoster]
+          .sort((a, b) => engine.social.getTraits(b.id).warmth - engine.social.getTraits(a.id).warmth)
+          .slice(0, 2).map(buddy => buddy.id))
+      : new Set<string>();
     const offlineActivities: PulseActivityEntry[] = [];
     const offlineNewLinks: import('./persistence').PulseSharedLink[] = [];
     // Generate varied offline messages when the player was away long enough.
@@ -370,8 +383,7 @@ export const PulseMessengerApp: React.FC = () => {
         const roll = hashString(`${buddyId}:${pulseState.lastSeenTotalMinutes}:${totalMinutes}`) % 100;
         return roll < 75;
       };
-      engine.social.getBuddies().forEach((buddy) => {
-        if (pulseState.blockedBuddyIds.includes(buddy.id)) return;
+      offlineRoster.forEach((buddy) => {
         if (!shouldLeaveMessage(buddy.id)) return;
         const hash = hashString(`${buddy.id}:${totalMinutes}:${pulseState.lastSeenTotalMinutes}`);
         const maxOffset = Math.max(10, elapsed - 12);
@@ -399,11 +411,7 @@ export const PulseMessengerApp: React.FC = () => {
         engine.dispatchAction({ type: 'SOCIAL_RECEIVE_MESSAGE', buddyId: buddy.id, text, timestampMinute, deliveredAway: true, tags: ['offline-message', 'offline'] });
         if (elapsed >= 240) {
           // Very long absence: second message from the two warmest buddies, staggered.
-          const warmthRank = [...engine.social.getBuddies()]
-            .filter((b) => !pulseState.blockedBuddyIds.includes(b.id))
-            .sort((a, b) => engine.social.getTraits(b.id).warmth - engine.social.getTraits(a.id).warmth)
-            .findIndex((b) => b.id === buddy.id);
-          if (warmthRank !== -1 && warmthRank < 2) {
+          if (warmestOfflineIds.has(buddy.id)) {
             const secondOffset = Math.min(offset + 45, elapsed - 4);
             const secondMinute = Math.min(totalMinutes - 1, pulseState.lastSeenTotalMinutes + secondOffset);
             const secondText = pickOfflineMessage(buddy.id, secondMinute + 999, buddy.archetype, extractLocalLinks(text).length > 0);
@@ -827,7 +835,7 @@ export const PulseMessengerApp: React.FC = () => {
     setPulseState((previous) => ({ ...previous, roomMessages: { ...previous.roomMessages, [room.id]: [...(previous.roomMessages[room.id] || []), playerMessage].slice(-80) } }));
     setRoomTyping(true);
 
-    const liveParticipantIds = resolvePulseRoomParticipantIds(room, engine.social.getBuddies());
+    const liveParticipantIds = engine.social.getPulseRoomParticipantIdsRead(room);
     const responderIds = getRoomResponderSequence(room.id, liveParticipantIds, existingMessages.length, text);
     const roomTopic = roomTopics[room.id] || room.topic;
     let recentMessages = [...existingMessages, playerMessage].slice(-10).map((message) => ({
@@ -996,7 +1004,7 @@ export const PulseMessengerApp: React.FC = () => {
   const handleWhisper = async (targetId: string, text: string) => {
     if (!activeRoomId || !session) return;
     const room = getPulseRoom(activeRoomId);
-    if (!room || !resolvePulseRoomParticipantIds(room, engine.social.getBuddies()).includes(targetId)) return;
+    if (!room || !engine.social.getPulseRoomParticipantIdsRead(room).includes(targetId)) return;
     const target = engine.social.getBuddy(targetId);
     const whisper: PulseRoomMessage = { id: `whisper_${Date.now()}`, senderId: 'player', senderName: session.username, text, minute: totalMinutes, kind: 'whisper', targetId };
     setPulseState((previous) => ({ ...previous, roomMessages: { ...previous.roomMessages, [room.id]: [...(previous.roomMessages[room.id] || []), whisper].slice(-80) }, roomReadThrough: { ...previous.roomReadThrough, [room.id]: (previous.roomMessages[room.id]?.length ?? 0) + 1 } }));
@@ -1060,7 +1068,7 @@ export const PulseMessengerApp: React.FC = () => {
     pendingRooms.forEach((room) => {
       const existingMessages = pulseState.roomMessages[room.id] || [];
       const ambientCount = hashString(`${room.id}:${activityBucket}`) % 100 < 22 ? 2 : 1;
-      const liveParticipantIds = resolvePulseRoomParticipantIds(room, engine.social.getBuddies());
+      const liveParticipantIds = engine.social.getPulseRoomParticipantIdsRead(room);
       const responderSequence = getRoomResponderSequence(room.id, liveParticipantIds, existingMessages.length + activityBucket, `ambient-${activityBucket}`);
       const selectedResponders = responderSequence.slice(0, ambientCount);
       selectedResponders.forEach((responderId, responderIndex) => {
