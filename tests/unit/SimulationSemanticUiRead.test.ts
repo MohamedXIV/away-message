@@ -85,6 +85,68 @@ describe('#172 player-safe semantic and Situation projections', () => {
     expect(snapshot).not.toHaveBeenCalled();
   });
 
+  it('returns bounded source-owned public event lookups with stable tied timestamps', () => {
+    const game = new SimulationEngine();
+    const events = Array.from({ length: 300 }, (_, index) => ({
+      id: `source_event_${index}`,
+      title: `World news ${index}`,
+      description: `Public news ${index}`,
+      category: 'city_news' as const,
+      triggerDay: 1,
+      knowledgePrompt: `Context ${index}`,
+      isTriggered: true,
+      triggeredAtMinute: 480 + ((index * 17) % 19) * 60,
+    }));
+    game.world.loadState({ triggeredEvents: events });
+    const requested = new Set(events.filter((_, index) => index % 13 === 0).map(event => event.id));
+    const reference = game.world.getTriggeredEvents()
+      .filter(event => requested.has(event.id)).slice(-8);
+    const fullEvents = vi.spyOn(game.world, 'getTriggeredEvents');
+    const worldState = vi.spyOn(game.world, 'getState');
+    const actual = game.world.getTriggeredEventsForIds(requested);
+    expect(actual).toEqual(reference);
+    expect(actual).toHaveLength(8);
+    expect(game.world.getTriggeredEventsForIds(new Set())).toEqual([]);
+    expect(JSON.parse(JSON.stringify(actual))).toEqual(actual);
+    actual[0]!.title = 'UI-MUTATION-IGNORED';
+    expect(game.world.getTriggeredEventsForIds(requested)[0]!.title).toEqual(reference[0]!.title);
+    expect(fullEvents).not.toHaveBeenCalled();
+    expect(worldState).not.toHaveBeenCalled();
+  });
+
+  it('preserves Situation and selected-actor semantics without sorting all World events', () => {
+    const game = new SimulationEngine();
+    const actor = game.social.getBuddies()[0]!;
+    expect(game.social.learnHandle(actor.id, actor.handle)).toBe(true);
+    const minute = game.clock.getTotalMinutes();
+    expect(game.world.triggerEventById('city_canal_festival', minute)).not.toBeNull();
+    expect(game.world.triggerEventById('orion_os_7_release', minute + 5)).not.toBeNull();
+    // Legacy reference: active modifiers are already sourced from triggered World events.
+    const legacyModifiers = game.world.queryActiveModifiers({ atMinute: minute }).slice(0, 32);
+    const legacyActor = game.getPlayerActorRead(actor.id);
+    const knownEventIds = new Set(game.world.getBuddyKnowledge(actor.id).slice(-8).map(event => event.eventId));
+    const legacyProfileEvents = game.world.getTriggeredEvents().filter(event => knownEventIds.has(event.id));
+    const broadEvents = vi.spyOn(game.world, 'getTriggeredEvents');
+    const worldState = vi.spyOn(game.world, 'getState');
+    const simulationState = vi.spyOn(game, 'getState');
+    const situation = game.getSituationRead();
+    expect(situation.influences).toEqual(legacyModifiers);
+    expect(situation.activeEventIds).toEqual([...new Set(legacyModifiers.map(item => item.sourceEventId))].slice(0, 16));
+    const actorRead = game.getPlayerActorRead(actor.id);
+    expect(actorRead).toEqual(legacyActor);
+    const profile = game.getPulseProfileRead(actor.id);
+    expect(profile.worldEvents).toEqual(legacyProfileEvents);
+    expect(profile.worldEvents.length).toBeLessThanOrEqual(8);
+    const forum = game.getNightBoardRead();
+    expect(forum.threads.length).toBeLessThanOrEqual(8);
+    for (const read of [situation, actorRead, profile, forum]) {
+      expect(JSON.parse(JSON.stringify(read))).toEqual(read);
+    }
+    expect(broadEvents).not.toHaveBeenCalled();
+    expect(worldState).not.toHaveBeenCalled();
+    expect(simulationState).not.toHaveBeenCalled();
+  });
+
   it('returns bounded source-backed situation and focused Pulse semantics without full snapshots', () => {
     const game = new SimulationEngine();
     const actor = game.social.getBuddies()[0]!;

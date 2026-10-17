@@ -424,10 +424,9 @@ export class SimulationKernel {
 
   public getSituationRead(): SimulationSituationRead {
     const atMinute = this.clock.getTotalMinutes();
-    const visibleEvents = this.world.getTriggeredEvents();
-    const visibleIds = new Set(visibleEvents.map(event => event.id));
+    // World.queryActiveModifiers already joins against canonical triggered
+    // events. A second full sorted event list adds no visibility gate.
     const influences = this.world.queryActiveModifiers({ atMinute })
-      .filter(modifier => visibleIds.has(modifier.sourceEventId))
       .slice(0, 32)
       .map(modifier => ({ ...modifier, ...(modifier.targetIds
         ? { targetIds: [...modifier.targetIds] } : {}) }));
@@ -444,9 +443,8 @@ export class SimulationKernel {
     const actor = this.getActorSemanticView(actorId);
     if (!actor || actor.connection === 'unknown') return null;
     const learned = this.world.getKnownSemanticContextForSubject('player', actorId);
-    const visibleEventIds = new Set(this.world.getTriggeredEvents().map(event => event.id));
-    const influences = this.getActorLifeInfluences(actorId)
-      .filter(influence => visibleEventIds.has(influence.sourceEventId));
+    // World modifier provenance is drawn exclusively from triggered events.
+    const influences = this.getActorLifeInfluences(actorId);
     return {
       revision: this.revision, actor,
       playerKnowledge: learned,
@@ -504,8 +502,7 @@ export class SimulationKernel {
     return {
       revision: this.revision,
       buddyKnowledge,
-      worldEvents: this.world.getTriggeredEvents().filter(event => eventIds.has(event.id))
-        .map(event => ({ ...event })),
+      worldEvents: this.world.getTriggeredEventsForIds(eventIds),
       photoMemories: this.social.getCoreMemories(actorId).filter(memory => memory.kind === 'shared_photo')
         .slice(-12),
       semantics: playerActor?.actor ?? null,
@@ -640,7 +637,7 @@ export class SimulationKernel {
     const day = this.clock.getTime().day;
     const buddies = this.social.getNightBoardAuthorsRead(500);
     const affinity = (a: string, b: string): number => this.social.getAffinity(a, b);
-    const titles = this.world.getTriggeredEvents().slice(-256).map(event => event.title);
+    const titles = this.world.getPublicWebsiteFeed(256).triggeredEvents.map(event => event.title);
     const week = npcThreadWeek(day);
     const weeks = [week - 1, week].filter(value => value >= 0);
     const threads = weeks.flatMap(value =>

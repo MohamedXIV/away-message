@@ -384,6 +384,31 @@ export class WorldEventsEngine {
     };
   }
 
+  /**
+   * Public selected-actor event lookup. At most eight detached events are
+   * returned, in the same stable time/insertion order as the legacy filtered
+   * triggered-event feed. Only requested IDs can cross the UI boundary.
+   */
+  public getTriggeredEventsForIds(ids: ReadonlySet<string>): GlobalEvent[] {
+    if (ids.size === 0) return [];
+    const selected: GlobalEvent[] = [];
+    for (const event of this.triggeredEvents.values()) {
+      if (!ids.has(event.id)) continue;
+      const minute = event.triggeredAtMinute ?? 0;
+      // Stable insertion after equal timestamps; oldest drops first.
+      let low = 0;
+      let high = selected.length;
+      while (low < high) {
+        const mid = (low + high) >>> 1;
+        if ((selected[mid]!.triggeredAtMinute ?? 0) <= minute) low = mid + 1;
+        else high = mid;
+      }
+      selected.splice(low, 0, event);
+      if (selected.length > 8) selected.shift();
+    }
+    return selected.map(event => ({ ...event }));
+  }
+
   public getTriggeredEvents(): GlobalEvent[] {
     return Array.from(this.triggeredEvents.values()).sort((a, b) => (a.triggeredAtMinute ?? 0) - (b.triggeredAtMinute ?? 0));
   }
@@ -409,7 +434,7 @@ export class WorldEventsEngine {
     if (!Number.isFinite(atMinute)) return [];
     return projectActiveModifiers(
       this.modifierSpecs,
-      this.getTriggeredEvents(),
+      this.triggeredEvents.values(),
       atMinute,
       { domain: options.domain, kind: options.kind, targetId: options.targetId },
     );
