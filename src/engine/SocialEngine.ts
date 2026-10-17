@@ -22,7 +22,7 @@ import {
 } from './types';
 import { EventBus } from './EventBus';
 import { getWeatherForDay, isWetWeather } from './WeatherEngine';
-import { clampRelationships } from './characterTemplates';
+import { clampRelationships, clampTraits, traitsForBuddy, resolveArchetype } from './characterTemplates';
 import { SEED_CHARACTERS, resolveAffinitySeeds } from './seedCharacters';
 import { conditionFromLegacyStatus, projectLegacyBuddyStatus, validActorCondition } from './semantic/ActorCondition';
 import type { BoardBuddy } from './BoardDirector';
