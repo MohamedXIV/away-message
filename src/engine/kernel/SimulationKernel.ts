@@ -642,15 +642,7 @@ export class SimulationKernel {
    */
   public getNightBoardRead(): SimulationNightBoardRead {
     const day = this.clock.getTime().day;
-    const buddies = this.social.getBuddies().map(buddy => ({
-      id: buddy.id,
-      displayName: buddy.displayName,
-      handle: buddy.handle,
-      archetype: buddy.archetype,
-      stage: this.social.getRelationshipStage(buddy.id),
-      status: buddy.status,
-      roles: buddy.roles ?? [],
-    }));
+    const buddies = this.social.getNightBoardAuthorsRead(500);
     const affinity = (a: string, b: string): number => this.social.getAffinity(a, b);
     const titles = this.world.getTriggeredEvents().slice(-256).map(event => event.title);
     const week = npcThreadWeek(day);

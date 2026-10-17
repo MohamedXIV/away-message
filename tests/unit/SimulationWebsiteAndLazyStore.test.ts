@@ -2,6 +2,8 @@ import { describe, expect, it, vi } from 'vitest';
 import { SimulationEngine } from '../../src/engine/SimulationEngine';
 import { useSimulationStore } from '../../src/store/useSimulationStore';
 import { createSimulationBenchmarkFixture } from '../../src/engine/benchmark/SimulationBenchmarkFixture';
+import { buildWeeklyNpcThreads, buildWeeklyWeatherThread, npcThreadWeek } from '../../src/engine/BoardDirector';
+import { getWeatherForDay, gameDayName } from '../../src/engine/WeatherEngine';
 
 describe('#172 website/shop owner-only projections and lazy legacy state', () => {
   it('publishes player-visible website events and flags without NPC semantic records', () => {
@@ -77,6 +79,71 @@ describe('#172 website/shop owner-only projections and lazy legacy state', () =>
       useSimulationStore.getState().setEngine(previous);
       spy.mockRestore();
     }
+  }, 30_000);
+
+  it('preserves the generated public NightBoard story and author ordering without broad Social reads', () => {
+    const game = new SimulationEngine();
+    const day = game.clock.getTime().day;
+    const buddies = game.social.getBuddies().map(buddy => ({
+      id: buddy.id,
+      displayName: buddy.displayName,
+      handle: buddy.handle,
+      archetype: buddy.archetype,
+      stage: game.social.getRelationshipStage(buddy.id),
+      status: buddy.status,
+      roles: buddy.roles ?? [],
+    }));
+    const affinity = (a: string, b: string) => game.social.getAffinity(a, b);
+    const titles = game.world.getTriggeredEvents().slice(-256).map(event => event.title);
+    const week = npcThreadWeek(day);
+    const weeks = [week - 1, week].filter(value => value >= 0);
+    const expected = weeks.flatMap(value => buildWeeklyNpcThreads(value * 7 + 1, buddies, affinity, titles));
+    for (const value of weeks) {
+      const weather = buildWeeklyWeatherThread(value * 7 + 1, buddies, getWeatherForDay, gameDayName, affinity);
+      if (weather) expected.push(weather);
+    }
+    const broad = vi.spyOn(game, 'getState');
+    const roster = vi.spyOn(game.social, 'getBuddies');
+    const individual = vi.spyOn(game.social, 'getBuddy');
+    const actual = game.getNightBoardRead();
+    expect(actual.threads).toEqual(expected);
+    expect(roster).not.toHaveBeenCalled();
+    expect(individual).not.toHaveBeenCalled();
+    expect(broad).not.toHaveBeenCalled();
+    expect(JSON.parse(JSON.stringify(actual))).toEqual(actual);
+  });
+
+  it('bounds a 500-actor public forum source read without cloning BuddyCharacter or private history', () => {
+    const game = createSimulationBenchmarkFixture(500).engine;
+    const broad = vi.spyOn(game, 'getState');
+    const roster = vi.spyOn(game.social, 'getBuddies');
+    const socialState = vi.spyOn(game.social, 'getState');
+    const individual = vi.spyOn(game.social, 'getBuddy');
+    const stages = vi.spyOn(game.social, 'getRelationshipStage');
+    const authors = game.social.getNightBoardAuthorsRead(999999);
+    expect(authors).toHaveLength(500);
+    expect(game.social.getNightBoardAuthorsRead(-10)).toEqual([]);
+    expect(game.social.getNightBoardAuthorsRead(3.9)).toHaveLength(3);
+    expect(JSON.parse(JSON.stringify(authors))).toEqual(authors);
+    for (const author of authors) {
+      expect(Object.keys(author).sort()).toEqual([
+        'archetype', 'displayName', 'handle', 'id', 'roles', 'stage', 'status',
+      ]);
+    }
+    const before = game.getNightBoardRead();
+    expect(before.threads.length).toBeGreaterThan(0);
+    expect(before.threads.length).toBeLessThanOrEqual(8);
+    expect(JSON.parse(JSON.stringify(before))).toEqual(before);
+    expect(stages.mock.calls.length).toBeLessThanOrEqual(1003);
+    expect(roster).not.toHaveBeenCalled();
+    expect(individual).not.toHaveBeenCalled();
+    expect(socialState).not.toHaveBeenCalled();
+    expect(broad).not.toHaveBeenCalled();
+    // The renderer never receives private dialogue/memory/canonical actor state.
+    const rendered = JSON.stringify(before);
+    expect(rendered).not.toContain('initialRelationships');
+    expect(rendered).not.toContain('backstory');
+    expect(rendered).not.toContain('schedule');
   }, 30_000);
   it('generates bounded public NightBoard threads without exposing the Social roster', () => {
     const engine = new SimulationEngine();

@@ -1607,6 +1607,35 @@ export class SocialEngine {
   }
 
   /**
+   * Public NightBoard authors only: finite, detached render identities from
+   * the Social owner. Public forum authorship is not a claim that the player
+   * knows a person privately; the generated threads may include strangers.
+   * Never build BuddyCharacter snapshots, conversation history or NPC memory.
+   * The 500-author window matches the largest supported simulation gate.
+   */
+  public getNightBoardAuthorsRead(maxAuthors = 500): BoardBuddy[] {
+    const limit = Number.isFinite(maxAuthors)
+      ? Math.max(0, Math.min(500, Math.trunc(maxAuthors))) : 500;
+    const authors: BoardBuddy[] = [];
+    if (limit === 0) return authors;
+    for (const [id, buddy] of this.buddies) {
+      const stage = this.getRelationshipStage(id);
+      const condition = this.actorConditions.get(id) ?? conditionFromLegacyStatus();
+      authors.push({
+        id,
+        displayName: buddy.displayName,
+        handle: buddy.handle,
+        archetype: buddy.archetype,
+        stage,
+        status: projectLegacyBuddyStatus(condition, stage),
+        roles: buddy.roles ? [...buddy.roles] : [],
+      });
+      if (authors.length >= limit) break;
+    }
+    return authors;
+  }
+
+  /**
    * Mailbox's player-known sender identities, scoped to rendered mail fields.
    * Keep Social's conditions, identity and relationship stages in one owner;
    * never copy roster payloads, conversations or private NPC memories.
