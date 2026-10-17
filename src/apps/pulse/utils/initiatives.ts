@@ -37,6 +37,8 @@ export interface InitiativeEngine {
   };
   world?: {
     getTriggeredEvents?: () => Array<{ title?: string; triggerDay?: number }>;
+    /** Canonical World owner returns <=256 detached recent public headlines. */
+    getInitiativeEventTitlesRead?: (day: number) => Array<{ title: string; triggerDay: number }>;
   };
 }
 
@@ -95,16 +97,20 @@ export function planInitiatives(
   const done = { ...opts.initiatedToday };
   const candidates: Array<InitiativePlan & { stage: RelationshipStage }> = [];
   try {
-    const worldEvents = engine.world?.getTriggeredEvents?.() || [];
+    const worldEvents = engine.world?.getInitiativeEventTitlesRead?.(day)
+      ?? engine.world?.getTriggeredEvents?.() ?? [];
     const freshEvents = worldEvents.filter(
       (e) => typeof e.triggerDay === 'number' && (e.triggerDay === day || e.triggerDay === day - 1)
         && typeof e.title === 'string' && e.title.trim().length > 3
     );
     // C2 gossip targets: buddies currently distant/gone (visible absence, worth mentioning)
-    const gossipTargets = engine.social.getBuddies().filter(
+    // One snapshot per decision pass. The roster does not change while the
+    // synchronous planner runs, and no BuddyCharacter is cloned twice.
+    const roster = engine.social.getBuddies();
+    const gossipTargets = roster.filter(
       (b) => (b.status === 'distant' || b.status === 'gone') && !blocked.has(b.id)
     );
-    for (const buddy of engine.social.getBuddies()) {
+    for (const buddy of roster) {
       if (blocked.has(buddy.id)) continue;
       if (done[buddy.id] === day) continue;
       if (buddy.status === 'distant' || buddy.status === 'gone' || buddy.status === 'blocked') continue;

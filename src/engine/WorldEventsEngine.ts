@@ -389,11 +389,11 @@ export class WorldEventsEngine {
    * returned, in the same stable time/insertion order as the legacy filtered
    * triggered-event feed. Only requested IDs can cross the UI boundary.
    */
-  public getTriggeredEventsForIds(ids: ReadonlySet<string>): GlobalEvent[] {
+  public getTriggeredEventsForIds(ids: ReadonlySet<string>, atMostDay = Number.POSITIVE_INFINITY): GlobalEvent[] {
     if (ids.size === 0) return [];
     const selected: GlobalEvent[] = [];
     for (const event of this.triggeredEvents.values()) {
-      if (!ids.has(event.id)) continue;
+      if (!ids.has(event.id) || event.triggerDay > atMostDay) continue;
       const minute = event.triggeredAtMinute ?? 0;
       // Stable insertion after equal timestamps; oldest drops first.
       let low = 0;
@@ -407,6 +407,34 @@ export class WorldEventsEngine {
       if (selected.length > 8) selected.shift();
     }
     return selected.map(event => ({ ...event }));
+  }
+
+  /**
+   * Pulse initiative decisions only need authored headlines from the current
+   * and previous game day. Keep the latest 256 such events in stable
+   * chronological/insertion order; never transport the full World event feed
+   * (or the private knowledge banks) just to choose a gossip topic.
+   */
+  public getInitiativeEventTitlesRead(day: number): Array<{ title: string; triggerDay: number }> {
+    if (!Number.isFinite(day)) return [];
+    const latest: GlobalEvent[] = [];
+    const limit = 256;
+    for (const event of this.triggeredEvents.values()) {
+      if ((event.triggerDay !== day && event.triggerDay !== day - 1) || event.title.trim().length <= 3) continue;
+      const minute = event.triggeredAtMinute ?? 0;
+      if (latest.length === limit && minute < (latest[0]!.triggeredAtMinute ?? 0)) continue;
+      // Keep insertion order for equal timestamps, as the stable legacy sort did.
+      let lo = 0;
+      let hi = latest.length;
+      while (lo < hi) {
+        const mid = (lo + hi) >>> 1;
+        if ((latest[mid]!.triggeredAtMinute ?? 0) <= minute) lo = mid + 1;
+        else hi = mid;
+      }
+      latest.splice(lo, 0, event);
+      if (latest.length > limit) latest.shift();
+    }
+    return latest.map(({ title, triggerDay }) => ({ title, triggerDay }));
   }
 
   public getTriggeredEvents(): GlobalEvent[] {
@@ -464,8 +492,10 @@ export class WorldEventsEngine {
     const map = new Map(knowledge.map((k) => [k.eventId, k]));
     const limit = Number.isFinite(maxEvents) ? Math.max(0, Math.min(8, Math.floor(maxEvents))) : 4;
     if (limit === 0) return 'No known major world events yet.';
-    const triggered = this.getTriggeredEvents()
-      .filter((e) => e.triggerDay <= currentDay && map.has(e.id)).slice(-limit);
+    // The public-event knowledge bank is already bounded per actor. Scan
+    // event references once and keep at most eight known, day-eligible records;
+    // never sort/clone every event just to build one chat context.
+    const triggered = this.getTriggeredEventsForIds(new Set(map.keys()), currentDay).slice(-limit);
     const eventLines = triggered.map((e) => {
       const k = map.get(e.id);
       const att = k ? ` [${k.attitude}]` : '';
