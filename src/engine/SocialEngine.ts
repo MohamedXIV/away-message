@@ -1605,6 +1605,71 @@ export class SocialEngine {
     return Array.from(this.buddies.keys()).map(id => this.getBuddy(id)!);
   }
 
+  /**
+   * Pulse's exact player-visible directory, scoped to known handles and
+   * authored public-room membership. Never copies the whole BuddyCharacter
+   * roster, its private relationships, schedules or conversation history.
+   * Storage and learned-handle authority remain in this one Social owner.
+   */
+  public getPulseDirectoryRead(rooms: ReadonlyArray<{
+    id: string;
+    participantIds: readonly string[];
+    participantRoles: readonly string[];
+  }> = []): {
+    contacts: Array<Pick<BuddyCharacter, 'id' | 'displayName' | 'handle' | 'roles' | 'archetype'>>;
+    suggestions: Array<{ handle: string; note: string; buddyName: string }>;
+    lastSeenMinutes: Record<string, number>;
+    roomParticipantCounts: Record<string, number>;
+    roomParticipantNames: Record<string, string>;
+  } {
+    const contacts: Array<Pick<BuddyCharacter, 'id' | 'displayName' | 'handle' | 'roles' | 'archetype'>> = [];
+    const suggestions: Array<{ handle: string; note: string; buddyName: string }> = [];
+    const lastSeenMinutes: Record<string, number> = {};
+    for (const [id, buddy] of this.buddies) {
+      if (this.isKnown(id)) {
+        if (contacts.length >= 500) continue;
+        contacts.push({
+          id,
+          displayName: buddy.displayName,
+          handle: buddy.handle,
+          ...(buddy.archetype ? { archetype: buddy.archetype } : {}),
+          ...(buddy.roles ? { roles: [...buddy.roles] } : {}),
+        });
+        lastSeenMinutes[id] = this.getLastActivityMinute(id);
+      } else if (suggestions.length < 500) {
+        for (const candidate of buddy.backstory?.candidates ?? []) {
+          if (suggestions.length >= 500) break;
+          suggestions.push({
+            handle: candidate.handle,
+            note: candidate.note || buddy.backstory?.label || 'From your past',
+            buddyName: buddy.displayName,
+          });
+        }
+      }
+    }
+
+    const roomParticipantCounts: Record<string, number> = {};
+    const roomParticipantNames: Record<string, string> = {};
+    let namedCount = 0;
+    for (const room of rooms.slice(0, 32)) {
+      let participantCount = 0;
+      for (const [id, buddy] of this.buddies) {
+        const condition = this.actorConditions.get(id) ?? conditionFromLegacyStatus();
+        const status = projectLegacyBuddyStatus(condition, this.getRelationshipStage(id));
+        if (status === 'gone' || status === 'blocked') continue;
+        if (!room.participantIds.includes(id) &&
+          !(buddy.roles ?? []).some(role => room.participantRoles.includes(role))) continue;
+        participantCount++;
+        if (!Object.prototype.hasOwnProperty.call(roomParticipantNames, id) && namedCount < 500) {
+          roomParticipantNames[id] = buddy.displayName;
+          namedCount++;
+        }
+      }
+      roomParticipantCounts[room.id] = participantCount;
+    }
+    return { contacts, suggestions, lastSeenMinutes, roomParticipantCounts, roomParticipantNames };
+  }
+
   /** Resolve current actors by capability role. Seed content has no runtime privilege. */
   public getBuddiesWithRole(role: string): BuddyCharacter[] {
     return this.getBuddies()

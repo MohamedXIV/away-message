@@ -886,51 +886,7 @@ export class SimulationKernel {
       participantRoles: readonly string[];
     }> = [],
   ): SimulationPulseContactsRead {
-    const roster = this.social.getBuddies();
-    const contacts: SimulationPulseContactsRead['contacts'] = [];
-    const suggestions: SimulationPulseContactsRead['suggestions'] = [];
-    const lastSeenMinutes: Record<string, number> = {};
-    for (const buddy of roster) {
-      if (this.social.isKnown(buddy.id)) {
-        if (contacts.length >= 500) continue;
-        contacts.push({
-          id: buddy.id,
-          displayName: buddy.displayName,
-          handle: buddy.handle,
-          ...(buddy.archetype ? { archetype: buddy.archetype } : {}),
-          ...(buddy.roles ? { roles: [...buddy.roles] } : {}),
-        });
-        lastSeenMinutes[buddy.id] = this.social.getLastActivityMinute(buddy.id);
-      } else if (suggestions.length < 500) {
-        for (const candidate of buddy.backstory?.candidates ?? []) {
-          if (suggestions.length >= 500) break;
-          suggestions.push({
-            handle: candidate.handle,
-            note: candidate.note || buddy.backstory?.label || 'From your past',
-            buddyName: buddy.displayName,
-          });
-        }
-      }
-    }
-    const roomParticipantCounts: Record<string, number> = {};
-    const roomParticipantNames: Record<string, string> = {};
-    let namedCount = 0;
-    for (const room of rooms.slice(0, 32)) {
-      const present = new Set<string>();
-      for (const buddy of roster) {
-        if (buddy.status === 'gone' || buddy.status === 'blocked') continue;
-        if (room.participantIds.includes(buddy.id) ||
-          (buddy.roles ?? []).some(role => room.participantRoles.includes(role))) {
-          present.add(buddy.id);
-          if (!Object.prototype.hasOwnProperty.call(roomParticipantNames, buddy.id) && namedCount < 500) {
-            roomParticipantNames[buddy.id] = buddy.displayName;
-            namedCount++;
-          }
-        }
-      }
-      roomParticipantCounts[room.id] = present.size;
-    }
-    return { revision: this.revision, contacts, suggestions, lastSeenMinutes, roomParticipantCounts, roomParticipantNames };
+    return { revision: this.revision, ...this.social.getPulseDirectoryRead(rooms) };
   }
 
   public getMessengerRead(maxContacts = 32): SimulationMessengerRead {
