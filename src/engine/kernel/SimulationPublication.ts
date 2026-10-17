@@ -176,7 +176,7 @@ export interface SimulationDirectoryRead {
 /** An explicit one-file editor/document read, not a whole VFS snapshot. */
 export interface SimulationFileRead {
   revision: number;
-  file: import('../types').FileRecord | null;
+  file: import('../FileSystemEngine').DisplayFileRecord | null;
 }
 
 /** Shop UI only, no equipment list or WorldState transport. */

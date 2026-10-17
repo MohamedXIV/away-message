@@ -476,16 +476,15 @@ export class SimulationKernel {
   }
 
   public getFileRead(path: string): SimulationFileRead {
-    return { revision: this.revision, file: path ? this.vfs.readFile(path) ?? null : null };
+    return { revision: this.revision, file: path ? this.vfs.readFileForDisplay(path) ?? null : null };
   }
 
   /** The desktop app ecosystem reads only Hardware, OS and Software owners. */
   public getAppRead(): SimulationAppRead {
-    const computer = this.hardware.getComputerState();
     return {
       revision: this.revision,
       hardware: this.hardware.getState(),
-      computer: { assembled: computer.assembled, poweredOn: computer.poweredOn },
+      computer: this.hardware.getComputerBootStatus(),
       os: this.os.getState(),
       installedSoftware: this.software.getInstalledSoftware(),
       downloads: this.downloads.getRecentTasks(256),

@@ -1,4 +1,12 @@
-import { FileRecord, VirtualFileSystemState } from './types';
+import type { FileRecord, VirtualFileSystemState } from './types';
+
+/** Editor-facing data for exactly one explicitly opened file. */
+export type DisplayFileRecord = Pick<FileRecord,
+  'id' | 'name' | 'path' | 'parentPath' | 'kind' | 'sizeBytes'
+  | 'createdAtMinute' | 'modifiedAtMinute' | 'appAssociation'
+  | 'targetPath' | 'content' | 'isReadOnly'> & {
+  metadata?: { textContent?: string };
+};
 import { EventBus } from './EventBus';
 
 export class FileSystemEngine {
@@ -179,6 +187,29 @@ export class FileSystemEngine {
     this.files.set(path, record);
     this.eventBus.emit('vfs:file_created', { file: { ...record } });
     return { ...record };
+  }
+
+  /**
+   * Selected-file projection for the editor. Arbitrary VFS metadata can
+   * contain owner-private extensions and non-cloneable values; only the
+   * authored text fallback travels to React or a future Worker boundary.
+   */
+  public readFileForDisplay(path: string): DisplayFileRecord | undefined {
+    const record = this.files.get(this.normalizePath(path));
+    if (!record) return undefined;
+    const {
+      id, name, path: filePath, parentPath, kind, sizeBytes, createdAtMinute,
+      modifiedAtMinute, appAssociation, targetPath, content, isReadOnly,
+    } = record;
+    const textContent = record.metadata?.textContent;
+    return {
+      id, name, path: filePath, parentPath, kind, sizeBytes, createdAtMinute,
+      modifiedAtMinute, ...(appAssociation !== undefined ? { appAssociation } : {}),
+      ...(targetPath !== undefined ? { targetPath } : {}),
+      ...(content !== undefined ? { content } : {}),
+      ...(isReadOnly !== undefined ? { isReadOnly } : {}),
+      ...(typeof textContent === 'string' ? { metadata: { textContent } } : {}),
+    };
   }
 
   public readFile(path: string): FileRecord | undefined {
