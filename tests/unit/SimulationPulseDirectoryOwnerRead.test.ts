@@ -7,8 +7,19 @@ describe('#172 Social-owned Pulse directory read', () => {
     const game = new SimulationEngine();
     const roster = game.social.getBuddies();
     const known = roster[0]!;
-    const publicOnly = roster[1]!;
+    // Seed actors can be authored as already known; create an explicitly
+    // undiscovered attendee instead of assuming roster index 1 is private.
+    const publicOnly = game.social.registerBuddy({
+      ...roster[1]!,
+      id: 'pulse_public_unknown_172',
+      handle: 'pulse_public_unknown_172',
+      displayName: 'Undiscovered Public Attendee',
+      status: 'stranger',
+      backstory: undefined,
+      roles: [],
+    });
     expect(game.social.learnHandle(known.id, known.handle)).toBe(true);
+    expect(game.social.isKnown(publicOnly.id)).toBe(false);
     const rooms = [
       { id: 'invited', participantIds: [publicOnly.id], participantRoles: [] },
       { id: 'friends', participantIds: [known.id], participantRoles: [] },
@@ -57,11 +68,19 @@ describe('#172 Social-owned Pulse directory read', () => {
     const all = vi.spyOn(game.social, 'getBuddies');
     const whole = vi.spyOn(game, 'getState');
     const source = vi.spyOn(game.social, 'getState');
+    const stage = vi.spyOn(game.social, 'getRelationshipStage');
     const rooms = [
       { id: 'public-room', participantIds: [], participantRoles: ['landlord'] },
       { id: 'empty-room', participantIds: [], participantRoles: [] },
+      ...Array.from({ length: 30 }, (_, i) => ({
+        id: `fixture-room-${i}`,
+        participantIds: [] as string[],
+        participantRoles: ['benchmark_actor'],
+      })),
     ];
     const projection = game.getPulseContactsRead(rooms);
+    // 32 rooms must not recalculate the same 500 actors' derived status 32 times.
+    expect(stage.mock.calls.length).toBeLessThanOrEqual(500);
     expect(projection.contacts.length).toBeLessThanOrEqual(500);
     expect(projection.suggestions.length).toBeLessThanOrEqual(500);
     expect(Object.keys(projection.roomParticipantNames).length).toBeLessThanOrEqual(500);

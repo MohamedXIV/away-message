@@ -1650,15 +1650,25 @@ export class SocialEngine {
 
     const roomParticipantCounts: Record<string, number> = {};
     const roomParticipantNames: Record<string, string> = {};
-    let namedCount = 0;
-    for (const room of rooms.slice(0, 32)) {
-      let participantCount = 0;
-      for (const [id, buddy] of this.buddies) {
+    const publicRooms = rooms.slice(0, 32);
+    // Status derives once per actor, not 32 times when Pulse shows 32 rooms.
+    // Preserve room-first actor ordering for the 500-name presentation cap.
+    const eligibleForRooms = new Set<string>();
+    if (publicRooms.length > 0) {
+      for (const [id] of this.buddies) {
         const condition = this.actorConditions.get(id) ?? conditionFromLegacyStatus();
         const status = projectLegacyBuddyStatus(condition, this.getRelationshipStage(id));
-        if (status === 'gone' || status === 'blocked') continue;
-        if (!room.participantIds.includes(id) &&
-          !(buddy.roles ?? []).some(role => room.participantRoles.includes(role))) continue;
+        if (status !== 'gone' && status !== 'blocked') eligibleForRooms.add(id);
+      }
+    }
+    let namedCount = 0;
+    for (const room of publicRooms) {
+      const memberIds = new Set(room.participantIds);
+      const memberRoles = new Set(room.participantRoles);
+      let participantCount = 0;
+      for (const [id, buddy] of this.buddies) {
+        if (!eligibleForRooms.has(id)) continue;
+        if (!memberIds.has(id) && !(buddy.roles ?? []).some(role => memberRoles.has(role))) continue;
         participantCount++;
         if (!Object.prototype.hasOwnProperty.call(roomParticipantNames, id) && namedCount < 500) {
           roomParticipantNames[id] = buddy.displayName;
