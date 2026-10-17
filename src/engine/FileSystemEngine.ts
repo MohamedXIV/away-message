@@ -29,13 +29,16 @@ export class FileSystemEngine {
   }
 
   /** Directory view with no file bodies, image payloads or unrelated folders. */
-  public listDirectoryMetadata(dirPath: string, limit = Infinity): FileRecord[] {
+  public listDirectoryMetadata(dirPath: string, limit = Infinity, offset = 0): FileRecord[] {
     const normalized = this.normalizePath(dirPath);
     const max = Number.isFinite(limit) ? Math.max(0, Math.trunc(limit)) : Infinity;
+    const skip = Number.isFinite(offset) ? Math.max(0, Math.trunc(offset)) : 0;
     const result: FileRecord[] = [];
     if (max === 0) return result;
+    let seen = 0;
     for (const record of this.files.values()) {
       if (record.parentPath !== normalized || record.path === normalized) continue;
+      if (seen++ < skip) continue;
       const { id, name, path, parentPath, kind, sizeBytes, createdAtMinute, modifiedAtMinute,
         appAssociation, targetPath } = record;
       result.push({

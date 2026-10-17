@@ -458,12 +458,18 @@ export class SimulationKernel {
     };
   }
 
-  public getDirectoryRead(path: string): SimulationDirectoryRead {
+  /** Fixed-size directory page: one extra metadata record detects a next page. */
+  public getDirectoryRead(path: string, offset = 0, limit = 64): SimulationDirectoryRead {
+    const start = Number.isFinite(offset) ? Math.max(0, Math.trunc(offset)) : 0;
+    const size = Number.isFinite(limit) ? Math.max(1, Math.min(64, Math.trunc(limit))) : 64;
+    const page = this.vfs.listDirectoryMetadata(path, size + 1, start);
     const capacity = this.vfs.getDiskCapacity();
     return {
       revision: this.revision,
       path: this.vfs.normalizePath(path),
-      files: this.vfs.listDirectoryMetadata(path),
+      offset: start,
+      hasMore: page.length > size,
+      files: page.slice(0, size),
       ...capacity,
       freeDiskBytes: this.vfs.getFreeDiskBytes(),
     };

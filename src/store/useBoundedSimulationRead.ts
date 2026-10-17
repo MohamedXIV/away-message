@@ -107,8 +107,11 @@ export function useCafeGuestRead(placeId: string, requestedActorId?: string): Si
   return useBoundedSimulationRead(read);
 }
 
-export function useSimulationDirectory(path: string): SimulationDirectoryRead {
-  const read = useCallback((engine: SimulationEngine) => engine.getDirectoryRead(path), [path]);
+export function useSimulationDirectory(path: string, page = 0): SimulationDirectoryRead {
+  const read = useCallback(
+    (engine: SimulationEngine) => engine.getDirectoryRead(path, page * 64, 64),
+    [path, page],
+  );
   return useBoundedSimulationRead(read);
 }
 

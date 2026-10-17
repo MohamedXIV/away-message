@@ -165,6 +165,8 @@ export interface SimulationAppRead {
 export interface SimulationDirectoryRead {
   revision: number;
   path: string;
+  offset: number;
+  hasMore: boolean;
   files: import('../types').FileRecord[];
   totalDiskBytes: number;
   baseSystemBytes: number;
