@@ -62,10 +62,18 @@ export class PulseEngine {
     return this.currentPulseId;
   }
 
+  /**
+   * Software install/uninstall reconciliation belongs to Pulse, not callers
+   * writing a private field. A real change emits owner provenance; loading a
+   * snapshot deliberately still uses loadState (no publication).
+   */
   public syncInstalledVersion(version: string | null): void {
     if (version === null) {
+      const previousPulseId = this.currentPulseId;
+      const changed = previousPulseId !== null || this.installedPatchIds.size > 0;
       this.currentPulseId = null;
       this.installedPatchIds.clear();
+      if (changed) this.eventBus.emit('pulse:changed', { previousPulseId, currentPulseId: null });
       return;
     }
 
@@ -73,7 +81,10 @@ export class PulseEngine {
     if (!release) {
       throw new Error(`Unknown installed Pulse version: ${version}`);
     }
+    if (this.currentPulseId === release.id) return;
+    const previousPulseId = this.currentPulseId;
     this.currentPulseId = release.id;
+    this.eventBus.emit('pulse:changed', { previousPulseId, currentPulseId: release.id });
   }
 
   public getState(): PulseEngineState {
@@ -139,6 +150,7 @@ export class PulseEngine {
     this.lastUpdateLog = [];
     this.log(`Checking ${target.displayName}…`);
     this.log(`Copying ${target.installSizeMB}MB…`);
+    const previousPulseId = this.currentPulseId;
     const isPatch = target.kind === 'patch' || target.kind === 'hotfix';
     if (isPatch) {
       this.installedPatchIds.add(target.id);
@@ -149,6 +161,12 @@ export class PulseEngine {
       this.currentPulseId = target.id;
       this.lastUpdateAtMinute = currentMinute;
       this.log(`Upgraded ${prev ?? 'not installed'} → ${target.id} (${target.version}).`);
+    }
+    // The patch ledger is owner state even if the release id did not change.
+    if (isPatch || this.currentPulseId !== previousPulseId) {
+      this.eventBus.emit('pulse:changed', {
+        previousPulseId, currentPulseId: this.currentPulseId,
+      });
     }
     this.eventBus.emit('software:installed' as any, { software: { appId: 'app.pulse', version: target.version } });
     return { success: true, release: target };

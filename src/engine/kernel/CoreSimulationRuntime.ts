@@ -254,7 +254,7 @@ export class CoreSimulationRuntime {
           const all = getAllPulseReleases() as Array<{ id: string; version: string }>;
           const match = all.find((r) => r.version === version) || all.find((r) => r.id.includes(version.replace('.', '_')));
           if (match) {
-            (this.pulse as any).currentPulseId = match.id;
+            this.pulse.syncInstalledVersion(match.version);
           }
         } catch {}
       }
