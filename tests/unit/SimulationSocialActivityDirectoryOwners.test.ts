@@ -65,7 +65,7 @@ describe('#173 activity + earned-contact canonical owners', () => {
     expect(social.isKnown(actor.id)).toBe(false);
     expect(social.learnHandle(actor.id, '  alias  ')).toBe(true);
     expect(social.learnHandle(actor.id, 'alias')).toBe(true);
-    expect(emit.mock.calls.filter(([kind]) => kind === 'social:handle_learned')).toHaveLength(1);
+    expect(emit.mock.calls.filter(([kind]) => String(kind) === 'social:handle_learned')).toHaveLength(1);
     expect(emit).toHaveBeenCalledWith('social:handle_learned', { buddyId: actor.id, handle: 'alias' });
     for (let i = 0; i < MAX_KNOWN_HANDLES - 1; i++) {
       expect(social.learnHandle(actor.id, `alias_${i}`)).toBe(true);
