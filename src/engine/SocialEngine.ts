@@ -34,6 +34,8 @@ import { PlayerRelationships, STRAINED_ANNOYANCE } from './social/PlayerRelation
 import { PlayerReadLedger } from './social/PlayerReadLedger';
 import { MediationLedger } from './social/MediationLedger';
 import { SocialPresence } from './social/SocialPresence';
+import { SocialActivityLedger } from './social/SocialActivityLedger';
+import { SocialContactDirectory } from './social/SocialContactDirectory';
 export { MAX_CORE_MEMORIES, MAX_OPEN_PROMISES, MAX_PHOTO_MEMORIES } from './social/SocialMemoryLedger';
 export { STRAINED_ANNOYANCE } from './social/PlayerRelationships';
 
@@ -181,17 +183,14 @@ export class SocialEngine {
     roomBumpPerTurn: ROOM_BUMP_PER_TURN,
     roomBumpDailyCap: ROOM_BUMP_DAILY_CAP,
   });
-  // Agenda, mediation decisions and witness logs remain Social coordinator state.
-  private agenda: Map<string, AgendaItem[]> = new Map();
+  /** Canonical NPC agendas/witness moments; event coordination stays in SocialEngine. */
+  private readonly activity = new SocialActivityLedger(
+    normalizeBuddyId, id => this.buddies.has(id), MAX_AGENDA_PER_BUDDY_DAY, MAX_NPC_SOCIAL_LOG);
   private readonly mediation = new MediationLedger(normalizeBuddyId, id => this.buddies.has(id), MAX_MEDIATIONS);
-  private npcSocialLog: NpcInteractionLog[] = [];
-  // Introvert protagonist: each buddy's read of the player (beliefs + certainty)
   private readonly playerRead = new PlayerReadLedger(normalizeBuddyId, id => this.buddies.has(id));
-  // Free roster: pulse handles the player has learned, keyed by buddy id.
-  // Empty at new game — contacts are earned, never granted.
-  private knownHandles: Record<string, string[]> = {};
-  // Free roster: one-line epitaphs for pruned gone buddies, oldest-first.
-  private epitaphs: string[] = [];
+  /** Earned Pulse contacts are separate from relationship, physical presence and actor identity. */
+  private readonly directory = new SocialContactDirectory(
+    normalizeBuddyId, id => this.buddies.has(id), MAX_KNOWN_HANDLES, MAX_EPITAPHS);
   private eventBus: EventBus;
 
   constructor(eventBus: EventBus, initialState?: SocialEngineState) {
@@ -272,11 +271,10 @@ export class SocialEngine {
     this.conversations.delete(id);
     this.memory.forget(id);
     this.graph.forget(id);
-    this.agenda.delete(id);
+    this.activity.forget(id);
     this.mediation.forgetActor(id);
-    this.npcSocialLog = this.npcSocialLog.filter(l => l.firstId !== id && l.secondId !== id);
     this.playerRead.forget(id);
-    delete this.knownHandles[id];
+    this.directory.forget(id);
     this.eventBus.emit('social:buddy_removed', { buddyId: id });
     return true;
   }
@@ -285,14 +283,10 @@ export class SocialEngine {
     const { relationships: rels, actorConditions } = this.playerLinks.exportState();
     const { presence: pres } = this.online.exportState();
 
-    const agenda: Record<string, AgendaItem[]> = {};
-    for (const [id, items] of this.agenda.entries()) agenda[id] = items.map((a) => ({ ...a }));
+    const { agenda, npcSocialLog } = this.activity.exportState();
     const mediations = this.mediation.exportRecords();
-    const npcSocialLog = this.npcSocialLog.map((l) => ({ ...l }));
     const playerReads = this.playerRead.exportState();
-    const knownHandles: Record<string, string[]> = {};
-    for (const [id, handles] of Object.entries(this.knownHandles)) knownHandles[id] = [...handles];
-    const epitaphs = [...this.epitaphs];
+    const { knownHandles, epitaphs } = this.directory.exportState();
 
     // Persist generated/non-registry definitions. Seed definitions come from content,
     // while their per-save lifecycle divergence is persisted separately.
@@ -390,72 +384,11 @@ export class SocialEngine {
 
     // Restore one canonical sparse NPC graph, with the same validation law.
     this.graph.restoreState(state);
-    this.agenda.clear();
-    if (state.agenda) {
-      for (const [rawId, items] of Object.entries(state.agenda)) {
-        const id = normalizeBuddyId(rawId);
-        if (!Array.isArray(items)) continue;
-        const clean: AgendaItem[] = [];
-        for (const item of items) {
-          if (!item || typeof item !== 'object') continue;
-          const kind = (item as AgendaItem).kind;
-          if (kind !== 'sleep' && kind !== 'work' && kind !== 'social' && kind !== 'errand') continue;
-          const start = (item as AgendaItem).startMinute;
-          const end = (item as AgendaItem).endMinute;
-          const day = (item as AgendaItem).day;
-          if (!Number.isFinite(start) || !Number.isFinite(end) || !Number.isFinite(day)) continue;
-          clean.push({
-            id: String((item as AgendaItem).id || `ag_${clean.length}`),
-            kind,
-            label: String((item as AgendaItem).label || kind).trim().replace(/\s+/g, ' ').slice(0, 60) || kind,
-            day: Math.max(1, Math.floor(day)),
-            startMinute: Math.max(0, Math.min(1439, Math.floor(start))),
-            endMinute: Math.max(1, Math.min(1440, Math.floor(end))),
-          });
-          if (clean.length >= MAX_AGENDA_PER_BUDDY_DAY * 7) break;
-        }
-        if (clean.length > 0) this.agenda.set(id, clean);
-      }
-    }
+    this.activity.restore(state);
     this.mediation.restore(state.mediations);
-    this.npcSocialLog = [];
-    if (Array.isArray(state.npcSocialLog)) {
-      for (const item of state.npcSocialLog) {
-        if (!item || typeof item !== 'object') continue;
-        const firstId = normalizeBuddyId(String((item as NpcInteractionLog).firstId ?? ''));
-        const secondId = normalizeBuddyId(String((item as NpcInteractionLog).secondId ?? ''));
-        if (!firstId || !secondId || firstId === secondId) continue;
-        this.npcSocialLog.push({
-          id: String((item as NpcInteractionLog).id || `nl_${this.npcSocialLog.length}`),
-          day: Number.isFinite((item as NpcInteractionLog).day) ? Math.max(1, Math.floor((item as NpcInteractionLog).day)) : 1,
-          firstId,
-          secondId,
-          location: String((item as NpcInteractionLog).location || 'around town').slice(0, 40),
-          line: String((item as NpcInteractionLog).line || '').slice(0, 140),
-        });
-        if (this.npcSocialLog.length >= MAX_NPC_SOCIAL_LOG) break;
-      }
-    }
     // Player-belief import is validated by its canonical owner.
     this.playerRead.restore(state.playerReads);
-    // Known handles (validated ids/handles; absent → strangers on the wire)
-    this.knownHandles = {};
-    if (state.knownHandles) {
-      for (const [rawId, handles] of Object.entries(state.knownHandles)) {
-        const id = normalizeBuddyId(rawId);
-        if (!Array.isArray(handles)) continue;
-        const clean = handles
-          .filter((h): h is string => typeof h === 'string' && !!h.trim())
-          .map((h) => h.trim().slice(0, 40))
-          .filter((h, i, arr) => arr.indexOf(h) === i)
-          .slice(0, MAX_KNOWN_HANDLES);
-        if (clean.length > 0) this.knownHandles[id] = clean;
-      }
-    }
-    // Epitaphs (capped one-liners)
-    this.epitaphs = Array.isArray(state.epitaphs)
-      ? state.epitaphs.filter((l): l is string => typeof l === 'string' && !!l.trim()).map((l) => l.trim().slice(0, 140)).slice(-MAX_EPITAPHS)
-      : [];
+    this.directory.restore(state);
 
     // Backfill empty presence/conversations for any buddy missing them (old saves).
     for (const buddy of this.buddies.values()) {
@@ -697,45 +630,16 @@ export class SocialEngine {
 
   // ---------- Agenda ----------
 
-  /** Planned blocks for a buddy (optionally one day), earliest-first. Copies, never live refs. */
+  /** Planning truth owned by SocialActivityLedger; SocialEngine publishes the event. */
   public getAgenda(rawId: string, day?: number): AgendaItem[] {
-    const items = this.agenda.get(normalizeBuddyId(rawId)) ?? [];
-    const list = (day === undefined ? items : items.filter((a) => a.day === day)).map((a) => ({ ...a }));
-    list.sort((x, y) => x.startMinute - y.startMinute);
-    return list;
+    return this.activity.getAgenda(rawId, day);
   }
 
-  /** Replace a buddy's agenda (validated, per-day capped). Throws for unknown buddies. */
   public setAgenda(rawId: string, items: AgendaItem[]): AgendaItem[] {
+    const result = this.activity.setAgenda(rawId, items);
     const id = normalizeBuddyId(rawId);
-    if (!this.buddies.has(id)) throw new Error(`Buddy not found: ${id}`);
-    const perDay = new Map<number, number>();
-    const clean: AgendaItem[] = [];
-    for (const item of items) {
-      if (!item || typeof item !== 'object') continue;
-      const kind = (item as AgendaItem).kind;
-      if (kind !== 'sleep' && kind !== 'work' && kind !== 'social' && kind !== 'errand') continue;
-      const day = (item as AgendaItem).day;
-      const start = (item as AgendaItem).startMinute;
-      const end = (item as AgendaItem).endMinute;
-      if (!Number.isFinite(day) || !Number.isFinite(start) || !Number.isFinite(end)) continue;
-      const safeDay = Math.max(1, Math.floor(day));
-      const used = perDay.get(safeDay) ?? 0;
-      if (used >= MAX_AGENDA_PER_BUDDY_DAY) continue;
-      perDay.set(safeDay, used + 1);
-      clean.push({
-        id: String((item as AgendaItem).id || `ag_${safeDay}_${clean.length}`),
-        kind,
-        label: String((item as AgendaItem).label || kind).trim().replace(/\s+/g, ' ').slice(0, 60) || kind,
-        day: safeDay,
-        startMinute: Math.max(0, Math.min(1439, Math.floor(start))),
-        endMinute: Math.max(1, Math.min(1440, Math.floor(end))),
-      });
-    }
-    clean.sort((x, y) => x.day - y.day || x.startMinute - y.startMinute);
-    this.agenda.set(id, clean);
-    this.eventBus.emit('social:agenda_updated' as any, { buddyId: id, count: clean.length });
-    return clean.map((a) => ({ ...a }));
+    this.eventBus.emit('social:agenda_updated' as any, { buddyId: id, count: result.length });
+    return result;
   }
 
   // ---------- Mediations ----------
@@ -811,26 +715,13 @@ export class SocialEngine {
 
   // ---------- Witness log ----------
 
-  /** Record a witnessable NPC↔NPC moment (capped; oldest evicted). */
+  /** Witness log is capped, source-owned and read detached. */
   public logNpcInteraction(entry: Omit<NpcInteractionLog, 'id'>): NpcInteractionLog {
-    const record: NpcInteractionLog = {
-      id: `nl_${entry.day}_${entry.firstId}_${entry.secondId}`,
-      day: Math.max(1, Math.floor(entry.day) || 1),
-      firstId: normalizeBuddyId(entry.firstId),
-      secondId: normalizeBuddyId(entry.secondId),
-      location: String(entry.location || 'around town').slice(0, 40),
-      line: String(entry.line || '').slice(0, 140),
-    };
-    const existing = this.npcSocialLog.findIndex((l) => l.id === record.id);
-    if (existing !== -1) this.npcSocialLog.splice(existing, 1);
-    this.npcSocialLog.push(record);
-    while (this.npcSocialLog.length > MAX_NPC_SOCIAL_LOG) this.npcSocialLog.shift();
-    return { ...record };
+    return this.activity.logNpcInteraction(entry);
   }
 
   public getNpcSocialLog(day?: number): NpcInteractionLog[] {
-    const list = day === undefined ? this.npcSocialLog : this.npcSocialLog.filter((l) => l.day === day);
-    return list.map((l) => ({ ...l }));
+    return this.activity.getNpcSocialLog(day);
   }
 
   // ---------- Prompt contexts (bounded, never quoted literally) ----------
@@ -845,46 +736,20 @@ export class SocialEngine {
 
   // ---------- Known handles (earned contacts) ----------
 
-  /** Pulse handles the player has learned for a buddy (copies). Empty = stranger on the wire. */
-  public getKnownHandles(rawId: string): string[] {
-    return [...(this.knownHandles[normalizeBuddyId(rawId)] ?? [])];
-  }
-
-  /** True when the player knows at least one handle for the buddy. */
-  public isKnown(rawId: string): boolean {
-    return (this.knownHandles[normalizeBuddyId(rawId)] ?? []).length > 0;
-  }
-
-  /**
-   * Learn a handle for a buddy (meeting, intro, backstory, NightBoard...).
-   * Capped + deduped; false when unknown buddy, blank handle, or capped out.
-   */
+  /** Earned handles are not inferred from friend stage or public room visibility. */
+  public getKnownHandles(rawId: string): string[] { return this.directory.getKnownHandles(rawId); }
+  public isKnown(rawId: string): boolean { return this.directory.isKnown(rawId); }
   public learnHandle(rawId: string, rawHandle: string): boolean {
-    const id = normalizeBuddyId(rawId);
-    if (!this.buddies.has(id)) return false;
-    const handle = (rawHandle || '').trim().slice(0, 40);
-    if (!handle) return false;
-    const known = this.knownHandles[id] ?? [];
-    if (known.includes(handle)) return true;
-    if (known.length >= MAX_KNOWN_HANDLES) return false;
-    this.knownHandles[id] = [...known, handle];
-    this.eventBus.emit('social:handle_learned' as any, { buddyId: id, handle });
-    return true;
+    const result = this.directory.learn(rawId, rawHandle);
+    if (result.newlyLearned) {
+      this.eventBus.emit('social:handle_learned' as any,
+        { buddyId: normalizeBuddyId(rawId), handle: result.handle });
+    }
+    return result.accepted;
   }
 
-  // ---------- Epitaphs (pruned gone buddies) ----------
-
-  /** Fold a one-line epitaph (capped, oldest evicted). */
-  public addEpitaph(line: string): void {
-    const clean = (line || '').trim().replace(/\s+/g, ' ').slice(0, 140);
-    if (!clean) return;
-    this.epitaphs.push(clean);
-    while (this.epitaphs.length > MAX_EPITAPHS) this.epitaphs.shift();
-  }
-
-  public getEpitaphs(): string[] {
-    return [...this.epitaphs];
-  }
+  public addEpitaph(line: string): void { this.directory.addEpitaph(line); }
+  public getEpitaphs(): string[] { return this.directory.getEpitaphs(); }
 
   // ---------- NPC beliefs about the player (single owner) ----------
 
