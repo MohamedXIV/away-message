@@ -60,7 +60,7 @@ export const MessageHistoryView: React.FC<MessageHistoryViewProps> = ({ messages
     try {
     // Explicit full-history export must support cold saved pages as well.
     const engine = useSimulationStore.getState().engine;
-    const completeLog = await engine.social.getMessagesAsync(buddy.id);
+    const completeLog = await engine.getConversationLogAsync(buddy.id);
     if (useSimulationStore.getState().engine !== engine) throw new Error('Save changed');
     if (completeLog.length === 0) return;
     const day = Math.floor((completeLog[0]?.timestampMinute || 0) / 1440) + 1;

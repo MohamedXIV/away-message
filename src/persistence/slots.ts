@@ -13,7 +13,7 @@ import {
 import type { ConversationColdIndex } from '../engine/social/ConversationHistory';
 import type { SaveSlotRecord } from './schema';
 import type { SimulationState } from '../engine/types';
-import type { SimulationEngine } from '../engine/SimulationEngine';
+import { SimulationEngine } from '../engine/SimulationEngine';
 import { APP_VERSION } from '../version';
 import {
   getCurrentPulseSlotId,
@@ -205,8 +205,8 @@ export async function loadSlotSnapshot(slotId: string): Promise<SimulationState 
  * reading historical message values. Page contents remain verified by
  * readSavedConversationPage when requested; missing keys fail closed now.
  *
- * Not yet used by production boot: never silently pass this partial snapshot
- * to the existing synchronous SimulationKernel without a cold reader attached.
+ * Never construct a live engine from this partial snapshot without attaching
+ * a matching, generation-guarded cold reader via loadSlotEngine.
  */
 export async function loadSlotColdBootstrap(slotId: string): Promise<{
   snapshot: SimulationState;
@@ -247,6 +247,34 @@ export async function loadSlotColdBootstrap(slotId: string): Promise<{
   } catch {
     return null;
   }
+}
+
+/**
+ * Production boot. The single Social owner starts with a bounded recent tail,
+ * canonical derived indices and a validated slot-scoped cold reader. Older
+ * index-free save documents use the existing explicit eager load path.
+ * A malformed/unavailable archive cannot silently produce a playable game.
+ */
+export async function loadSlotEngine(slotId: string): Promise<SimulationEngine | null> {
+  const boot = await loadSlotColdBootstrap(slotId);
+  if (boot) {
+    const engine = new SimulationEngine(boot.snapshot);
+    engine.social.attachColdConversations(
+      boot.snapshot.social.conversations,
+      boot.archive.counts,
+      boot.archive.indexes,
+      (id, pageIndex) =>
+        readSavedColdConversationChunk(slotId, id, pageIndex, boot.archive.updatedAt),
+      slotId,
+    );
+    // The source must still be the same committed slot after engine construction.
+    // Future pages independently recheck this generation in each read transaction.
+    const current = await db.saves.get(slotId);
+    if (current?.updatedAt !== boot.archive.updatedAt) return null;
+    return engine;
+  }
+  const snapshot = await loadSlotSnapshot(slotId);
+  return snapshot ? new SimulationEngine(snapshot) : null;
 }
 
 /** Compatibility verdict using the current v6 document range. */

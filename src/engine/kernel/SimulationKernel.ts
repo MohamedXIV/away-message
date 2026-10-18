@@ -1,4 +1,4 @@
-import type { SimulationState as TransportSimulationState, SimulationAction, ActionResult, HardwareState } from '../types';
+import type { SimulationState as TransportSimulationState, SimulationAction, ActionResult, HardwareState, MessageRecord } from '../types';
 import type { Fulfillment } from '../DeliveryEngine';
 import type { MyPlaceProfile } from '../MyPlaceEngine';
 import type { BuddyPresence, BuddyMetVia } from '../types';
@@ -949,6 +949,18 @@ export class SimulationKernel {
       throw new Error('Conversation changed during cold read');
     }
     return { revision, ...page };
+  }
+
+  /** Explicit user-initiated complete Save Log export; never let a guessed
+   * contact ID bypass the player-known gate or an await race disclose it. */
+  public async getConversationLogAsync(actorId: string): Promise<MessageRecord[]> {
+    if (!this.social.isKnown(actorId)) return [];
+    const revision = this.revision;
+    const messages = await this.social.getMessagesAsync(actorId);
+    if (revision !== this.revision || !this.social.isKnown(actorId)) {
+      throw new Error('Conversation changed during log export');
+    }
+    return messages;
   }
 
   /**

@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import type { SimulationPulseContact } from '../../../engine/kernel/SimulationPublication';
 import { useConversationRead } from '../../../store/useBoundedSimulationRead';
+import { useConversationPage } from '../hooks/useConversationPage';
 import { ChatTabHeader } from './ChatTabHeader';
 import { MessageHistoryView } from './MessageHistoryView';
 import { MessageInputBar } from './MessageInputBar';
@@ -51,9 +52,10 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   // 50-message slices from canonical Social authority; never hand React a
   // complete conversation map. Suggestions always use the newest messages,
   // even when the player browses older pages.
-  const page = useConversationRead(activeBuddyId ?? '', pageOffset, 50);
+  const { page, error: pageError, loading: pageLoading, retry: retryPage } =
+    useConversationPage(activeBuddyId ?? '', pageOffset, 50);
   const latest = useConversationRead(activeBuddyId ?? '', 0, 8);
-  const activeMessages = page.messages;
+  const activeMessages = page?.messages ?? [];
   const lastNpcMessage = [...latest.messages].reverse().find((m) => m.senderId !== 'player') || null;
 
   // Fetch fresh suggestions whenever a new NPC reply lands (or tab/refresh changes)
@@ -98,15 +100,24 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
 
       <div className="flex-1 flex flex-col p-2 gap-2 overflow-hidden bg-white">
         <div className="flex shrink-0 items-center justify-between gap-2 border-b border-gray-300 bg-[#ece9d8] px-2 py-1 text-[10px] text-gray-700">
-          <span>{page.total === 0 ? 'No messages' : `${Math.max(1, page.total - pageOffset - activeMessages.length + 1)}–${Math.max(0, page.total - pageOffset)} of ${page.total} messages`}</span>
+          <span>{pageLoading ? 'Loading messages…' : pageError ? 'Conversation unavailable' : !page || page.total === 0 ? 'No messages' : `${Math.max(1, page.total - pageOffset - activeMessages.length + 1)}–${Math.max(0, page.total - pageOffset)} of ${page.total} messages`}</span>
           <div className="flex items-center gap-1">
-            <button type="button" disabled={!page.hasOlder} onClick={() => setPageOffset(offset => offset + 50)}
+            <button type="button" disabled={!page || pageLoading || !!pageError || !page.hasOlder} onClick={() => setPageOffset(offset => offset + 50)}
               className="rounded border border-gray-400 px-1.5 py-0.5 disabled:opacity-40">← Older</button>
-            <button type="button" disabled={pageOffset === 0} onClick={() => setPageOffset(offset => Math.max(0, offset - 50))}
+            <button type="button" disabled={pageLoading || pageOffset === 0} onClick={() => setPageOffset(offset => Math.max(0, offset - 50))}
               className="rounded border border-gray-400 px-1.5 py-0.5 disabled:opacity-40">Newer →</button>
           </div>
         </div>
-        <MessageHistoryView messages={activeMessages} totalMessages={page.total} buddy={activeBuddy as SimulationPulseContact} />
+        {pageError ? (
+          <div role="alert" className="flex flex-1 flex-col items-center justify-center gap-2 text-red-700">
+            <span>{pageError} The saved history was not modified.</span>
+            <button type="button" onClick={retryPage} className="rounded border border-gray-400 px-3 py-1 text-gray-800">Retry</button>
+          </div>
+        ) : pageLoading ? (
+          <div role="status" className="flex flex-1 items-center justify-center text-gray-500">Loading conversation…</div>
+        ) : (
+          <MessageHistoryView messages={activeMessages} totalMessages={page?.total ?? 0} buddy={activeBuddy as SimulationPulseContact} />
+        )}
 
         {typingIndicatorText && (
           <div className="text-[11px] text-blue-700 italic px-2 animate-pulse">
