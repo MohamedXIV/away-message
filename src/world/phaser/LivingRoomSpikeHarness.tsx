@@ -32,6 +32,7 @@ interface SpikeStatus {
   lampOn: boolean;
   bedVariant: BedVariant;
   rugHidden: boolean;
+  deskMoved: boolean;
   focus: LivingRoomFocusTarget;
   windIntensity: number;
   minuteOfDay: number;
@@ -56,6 +57,10 @@ export const LivingRoomSpikeHarness: React.FC<LivingRoomSpikeHarnessProps> = ({ 
   const [rugHidden, setRugHidden] = useState(false);
   const [focus, setFocus] = useState<LivingRoomFocusTarget>('hero');
   const [windIntensity, setWindIntensity] = useState(0.2);
+  // QA geometry toggle: shifts the desk fixture to a second authored pose.
+  // Geometry is part of the room structure signature, so this exercises the
+  // structural rebuild path while swaps/toggles stay visibility-only.
+  const [deskMoved, setDeskMoved] = useState(false);
   const [mounted, setMounted] = useState(true);
   const [mountKey, setMountKey] = useState(0);
   const [intents, setIntents] = useState<SpikeStatus['intents']>([]);
@@ -73,6 +78,10 @@ export const LivingRoomSpikeHarness: React.FC<LivingRoomSpikeHarnessProps> = ({ 
     () => (rugHidden ? ['spike_prop_rug'] : []),
     [rugHidden],
   );
+  const propGeometryOverrides = useMemo(
+    () => (deskMoved ? { spike_prop_desk: { x: 0.44, y: 0.6 } } : undefined),
+    [deskMoved],
+  );
 
   const projection = useMemo(
     () => createLivingRoomSpikeProjection({
@@ -82,9 +91,10 @@ export const LivingRoomSpikeHarness: React.FC<LivingRoomSpikeHarnessProps> = ({ 
       lampOn,
       fixtureVariants,
       hiddenPropIds,
+      propGeometryOverrides,
       focus,
     }),
-    [timeOfDay, weather, windIntensity, lampOn, fixtureVariants, hiddenPropIds, focus],
+    [timeOfDay, weather, windIntensity, lampOn, fixtureVariants, hiddenPropIds, propGeometryOverrides, focus],
   );
 
   const handleIntent = (intent: WorldInteractionIntent) => {
@@ -138,6 +148,7 @@ export const LivingRoomSpikeHarness: React.FC<LivingRoomSpikeHarnessProps> = ({ 
     lampOn,
     bedVariant,
     rugHidden,
+    deskMoved,
     focus,
     windIntensity,
     minuteOfDay: projection.minuteOfDay ?? 0,
@@ -210,6 +221,13 @@ export const LivingRoomSpikeHarness: React.FC<LivingRoomSpikeHarnessProps> = ({ 
           className={buttonClass(rugHidden)}
         >
           rug {rugHidden ? 'hidden' : 'shown'}
+        </button>
+        <button
+          data-testid="spike-desk-move"
+          onClick={() => setDeskMoved((value) => !value)}
+          className={buttonClass(deskMoved)}
+        >
+          desk {deskMoved ? 'moved' : 'authored'}
         </button>
         {(['hero', 'desk', 'window'] as LivingRoomFocusTarget[]).map((target) => (
           <button

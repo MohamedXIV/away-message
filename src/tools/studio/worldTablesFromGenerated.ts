@@ -75,6 +75,9 @@ export function worldTablesFromGenerated(): Tables {
       name: place.name,
       transitAccess: [...place.transitAccess],
       legacyIds: [...(place.legacyIds ?? [])],
+      // Emitted only when true, so reconstructing the store row keeps the
+      // QA fixture marker without inventing cells for ordinary places.
+      ...(place.qaFixture === true ? { qaFixture: true } : {}),
       ...(place.spatialBounds
         ? { spatialBounds: spatialBoundsCell(place.spatialBounds) }
         : {}),

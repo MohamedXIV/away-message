@@ -3,9 +3,11 @@
 // Issue #167 — pure layering/swap/mask planning decisions. Phaser-free.
 
 import { describe, expect, it } from 'vitest';
+import type { SoftSurfaceMotionDef } from '../../src/world/phaser/environment/ambientMotion';
 import type { WorldScenePropProjection, WorldWeatherWindowZone } from '../../src/world/phaser/types';
 import {
   applyRoomDisplayOverrides,
+  computeRoomStructureSignature,
   planRoomPropPlacements,
   resolveRoomWeatherDepth,
 } from '../../src/world/phaser/layeredRoom/roomPropPlan';
@@ -114,5 +116,92 @@ describe('independent fixture display overrides', () => {
     // than silently borrowing another visual.
     expect(result.find((p) => p.id === 'bed_a')!.hidden).toBe(true);
     expect(result.find((p) => p.id === 'bed_b')!.hidden).toBe(true);
+  });
+});
+
+describe('room structure signature (PR #198 review item 1)', () => {
+  const soft: SoftSurfaceMotionDef = {
+    id: 'soft-curtain',
+    targetName: 'curtain',
+    type: 'soft_sway',
+    speed: 1.4,
+    amplitude: 0.05,
+  };
+  const base = () => ({
+    viewId: 'room_view',
+    props: [prop('desk'), prop('glass', { maskZone: true, maskedMember: true }), prop('curtain', { softSurface: true, maskedMember: true })],
+    windowZones: [zone('glass')],
+    softSurfaces: [soft],
+  });
+  const unchanged = () => computeRoomStructureSignature(base());
+
+  it('stays stable for pure display state: hidden flags, overrides, weather', () => {
+    const unchanged = computeRoomStructureSignature(base());
+    // Same geometry, different visibility/hidden flags — visibility is not
+    // structure, so the fast path stays valid.
+    const hidden = base();
+    hidden.props = hidden.props.map((p) => ({ ...p, hidden: true }));
+    expect(computeRoomStructureSignature(hidden)).toBe(unchanged);
+    // Motion suppression and swap membership are creation-time flags too,
+    // as long as geometry is untouched.
+    const swapped = base();
+    swapped.props = swapped.props.map((p) => ({ ...p, swapGroup: 'beds', variant: 'a' }));
+    expect(computeRoomStructureSignature(swapped)).toBe(unchanged);
+  });
+
+  it('changes when any same-id prop geometry changes', () => {
+    for (const patch of [
+      { x: 0.6 }, { y: 0.4 }, { width: 0.2 }, { height: 0.3 }, { depth: 24 },
+    ] as const) {
+      const moved = base();
+      moved.props = moved.props.map((p) => (p.id === 'desk' ? { ...p, ...patch } : p));
+      expect(computeRoomStructureSignature(moved)).not.toBe(unchanged());
+    }
+  });
+
+  it('changes when a window-zone rect moves even with the same zone id', () => {
+    const movedZones = base();
+    movedZones.windowZones = [{ id: 'glass', x: 0.25, y: 0.2, width: 0.2, height: 0.3 }];
+    expect(computeRoomStructureSignature(movedZones)).not.toBe(unchanged());
+  });
+
+  it('changes when a soft-surface wave def changes dimensions', () => {
+    const faster = base();
+    faster.softSurfaces = [{ ...soft, speed: 2.1 }];
+    expect(computeRoomStructureSignature(faster)).not.toBe(unchanged());
+    const segmented = base();
+    segmented.softSurfaces = [{ ...soft, segments: 20 }];
+    expect(computeRoomStructureSignature(segmented)).not.toBe(unchanged());
+  });
+
+  it('changes when an asset, object kind, layer slot, blend or mask membership changes', () => {
+    const assetSwap = base();
+    assetSwap.props = assetSwap.props.map((p) => (p.id === 'desk' ? { ...p, assetId: 'other_asset' } : p));
+    expect(computeRoomStructureSignature(assetSwap)).not.toBe(unchanged());
+
+    const kindSwap = base();
+    kindSwap.props = kindSwap.props.map((p) => (p.id === 'desk' ? { ...p, softSurface: true } : p));
+    expect(computeRoomStructureSignature(kindSwap)).not.toBe(unchanged());
+
+    const layerSwap = base();
+    layerSwap.props = layerSwap.props.map((p) => (p.id === 'desk' ? { ...p, renderLayer: 'backdrop' as const } : p));
+    expect(computeRoomStructureSignature(layerSwap)).not.toBe(unchanged());
+
+    const blendSwap = base();
+    blendSwap.props = blendSwap.props.map((p) => (p.id === 'desk' ? { ...p, blendMode: 'add' as const } : p));
+    expect(computeRoomStructureSignature(blendSwap)).not.toBe(unchanged());
+
+    const maskSwap = base();
+    maskSwap.props = maskSwap.props.map((p) => (p.id === 'desk' ? { ...p, maskZone: true, maskedMember: true } : p));
+    expect(computeRoomStructureSignature(maskSwap)).not.toBe(unchanged());
+  });
+
+  it('changes when the prop set itself changes', () => {
+    const fewer = base();
+    fewer.props = fewer.props.filter((p) => p.id !== 'desk');
+    expect(computeRoomStructureSignature(fewer)).not.toBe(unchanged());
+    const differentView = base();
+    differentView.viewId = 'other_view';
+    expect(computeRoomStructureSignature(differentView)).not.toBe(unchanged());
   });
 });

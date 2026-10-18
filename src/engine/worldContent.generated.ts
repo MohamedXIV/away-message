@@ -1,6 +1,6 @@
 // GENERATED — do not edit by hand.
-// Source: content/store.json (content v2689b00d). Regenerate: npm run content:pull.
-export const WORLD_CONTENT_VERSION = '2689b00d';
+// Source: content/store.json (content v4d320275). Regenerate: npm run content:pull.
+export const WORLD_CONTENT_VERSION = '4d320275';
 
 export interface GeneratedSpatialPoint {
   x: number;
@@ -40,6 +40,8 @@ export interface GeneratedPlaceDef {
   name: string;
   transitAccess: GeneratedPlaceTransitAccess[];
   legacyIds?: string[];
+  /** QA-only technical slice: excluded from player-facing world surfaces. */
+  qaFixture?: boolean;
   spatialBounds?: GeneratedSpatialBounds;
   entryPosition?: GeneratedSpatialPosition;
 }
@@ -129,6 +131,7 @@ export const GENERATED_PLACES: GeneratedPlaceDef[] = [
     name: "Starter Room Spike",
     transitAccess: [],
     legacyIds: [],
+    qaFixture: true,
   },
   {
     id: "tiny_apartment_1",

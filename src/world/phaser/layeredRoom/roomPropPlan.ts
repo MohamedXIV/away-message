@@ -3,6 +3,7 @@
 // Pure planning helpers for layered room props (issue #167). Phaser-free so
 // Node unit tests can cover the layering/swap/mask decisions directly.
 
+import type { SoftSurfaceMotionDef } from '../environment/ambientMotion';
 import type { WorldScenePropProjection, WorldWeatherWindowZone } from '../types';
 
 export type RoomPropSlot = 'backdrop' | 'scenery' | 'actors' | 'foreground';
@@ -53,6 +54,56 @@ export function planRoomPropPlacements(
       unmasked: prop.maskZone === true && windowZones.length === 0,
     };
   });
+}
+
+/**
+ * Identity of the authored room graph, geometry included (PR #198 review
+ * item 1). Two projections sharing a signature are guaranteed to agree on
+ * everything the runtime only resolves at object-creation time: prop ids,
+ * assets, object kind, x/y/width/height/depth, layer slot, blend mode,
+ * window-mask membership, window-zone rects, and soft-surface wave
+ * definitions. Same-signature updates therefore differ only in
+ * visibility/toggle state, so a visibility-only refresh is provably enough
+ * and can never leave stale images, ropes, clips or streak zones behind.
+ * Any structural or geometric change moves the signature and takes the
+ * rebuild path.
+ */
+export interface RoomStructureSignatureInput {
+  viewId: string;
+  props: readonly WorldScenePropProjection[];
+  windowZones: readonly WorldWeatherWindowZone[];
+  softSurfaces: readonly SoftSurfaceMotionDef[];
+}
+
+export function computeRoomStructureSignature(input: RoomStructureSignatureInput): string {
+  return [
+    input.viewId,
+    input.props.map((prop) => [
+      prop.id,
+      prop.assetId,
+      prop.softSurface ? 'rope' : 'img',
+      prop.x,
+      prop.y,
+      prop.width,
+      prop.height,
+      prop.depth,
+      prop.renderLayer ?? 'auto',
+      prop.blendMode ?? 'normal',
+      prop.maskedMember === true || prop.maskZone === true ? 'masked' : 'plain',
+    ].join(':'),
+    ).join('|'),
+    input.windowZones.map((zone) => `${zone.id}:${zone.x}:${zone.y}:${zone.width}:${zone.height}`).join('|'),
+    input.softSurfaces.map((def) => [
+      def.id,
+      def.targetName,
+      def.speed,
+      def.amplitude,
+      def.segments ?? '',
+      def.windFactor ?? '',
+      def.phaseOffset ?? '',
+    ].join(':'),
+    ).join('|'),
+  ].join('#');
 }
 
 /**

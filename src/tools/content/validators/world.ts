@@ -26,6 +26,11 @@ export function validateWorldContent(tables: ContentTables): string[] {
   const places = tables['places'] ?? {};
   const transitStops = tables['transitStops'] ?? {};
   const busLines = tables['busLines'] ?? {};
+  const spaces = tables['spaces'] ?? {};
+  const views = tables['views'] ?? {};
+  const housingOffers = tables['housingOffers'] ?? {};
+  const shopFixtures = tables['shopFixtures'] ?? {};
+  const venueStations = tables['venueStations'] ?? {};
 
   const num = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
   const checkId = (table: string, id: string): boolean => {
@@ -132,6 +137,93 @@ export function validateWorldContent(tables: ContentTables): string[] {
       for (const [i, legacyId] of legacyIds.entries()) {
         if (typeof legacyId !== 'string' || legacyId.trim() === '' || legacyId.length > 60) {
           errors.push(`places/${id}.legacyIds[${i}]: must be a non-empty string <= 60 chars.`);
+        }
+      }
+    }
+  }
+
+  // QA fixture isolation (PR #198 review item 2): a technical vertical
+  // slice may live in the same canonical catalog, but it must never leak
+  // into a player-facing world surface. These invariants are what let the
+  // runtime treat GENERATED_PLACES/SPACES/VIEWS as safe to enumerate.
+  const qaPlaceIds = new Set<string>();
+  for (const [id, row] of Object.entries(places)) {
+    if (row && typeof row === 'object' && (row as Record<string, unknown>)['qaFixture'] === true) {
+      qaPlaceIds.add(id);
+    }
+  }
+  const qaSpaceIds = new Set<string>();
+  const qaViewIds = new Set<string>();
+  for (const placeId of qaPlaceIds) {
+    const place = places[placeId] as Record<string, unknown> | undefined;
+    if (!place) continue;
+    // The town map and spatial presence enumerate every place; a QA fixture
+    // that stays presentation-only must not claim world geometry.
+    if (place['spatialBounds'] !== undefined) {
+      errors.push(`places/${placeId}: a QA fixture place must not author spatialBounds (it would join the player-facing town map).`);
+    }
+    if (place['entryPosition'] !== undefined) {
+      errors.push(`places/${placeId}: a QA fixture place must not author an entryPosition (spatial presence would treat it as a real destination).`);
+    }
+  }
+  for (const [id, row] of Object.entries(spaces)) {
+    const placeId = (row as Record<string, unknown> | undefined)?.['placeId'];
+    if (typeof placeId === 'string' && qaPlaceIds.has(placeId)) qaSpaceIds.add(id);
+  }
+  for (const [id, row] of Object.entries(views)) {
+    const spaceId = (row as Record<string, unknown> | undefined)?.['spaceId'];
+    if (typeof spaceId === 'string' && qaSpaceIds.has(spaceId)) qaViewIds.add(id);
+  }
+  if (qaPlaceIds.size > 0) {
+    for (const [id, row] of Object.entries(transitStops)) {
+      const placeId = (row as Record<string, unknown> | undefined)?.['placeId'];
+      if (typeof placeId === 'string' && qaPlaceIds.has(placeId)) {
+        errors.push(`transitStops/${id}.placeId: transit stop must not reference QA fixture place '${placeId}'.`);
+      }
+    }
+    for (const [id, row] of Object.entries(places)) {
+      const legacyIds = (row as Record<string, unknown> | undefined)?.['legacyIds'];
+      if (!Array.isArray(legacyIds)) continue;
+      for (const legacyId of legacyIds) {
+        if (typeof legacyId === 'string' && qaPlaceIds.has(legacyId)) {
+          errors.push(`places/${id}.legacyIds: legacy alias must not target QA fixture place '${legacyId}'.`);
+        }
+      }
+    }
+    for (const [id, row] of Object.entries(housingOffers)) {
+      const placeId = (row as Record<string, unknown> | undefined)?.['placeId'];
+      if (typeof placeId === 'string' && qaPlaceIds.has(placeId)) {
+        errors.push(`housingOffers/${id}.placeId: housing offer must not target QA fixture place '${placeId}'.`);
+      }
+    }
+    for (const [id, row] of Object.entries(shopFixtures)) {
+      const placeId = (row as Record<string, unknown> | undefined)?.['placeId'];
+      if (typeof placeId === 'string' && qaPlaceIds.has(placeId)) {
+        errors.push(`shopFixtures/${id}.placeId: shop fixture must not target QA fixture place '${placeId}'.`);
+      }
+    }
+    for (const [id, row] of Object.entries(venueStations)) {
+      const placeId = (row as Record<string, unknown> | undefined)?.['placeId'];
+      const spaceId = (row as Record<string, unknown> | undefined)?.['spaceId'];
+      if (typeof placeId === 'string' && qaPlaceIds.has(placeId)) {
+        errors.push(`venueStations/${id}.placeId: venue station must not target QA fixture place '${placeId}'.`);
+      }
+      if (typeof spaceId === 'string' && qaSpaceIds.has(spaceId)) {
+        errors.push(`venueStations/${id}.spaceId: venue station must not target a QA fixture space.`);
+      }
+    }
+    // View adjacency is how the player walks between rooms: no real view
+    // may link to a fixture view, and fixture views may not link out.
+    for (const [id, row] of Object.entries(views)) {
+      const neighbors = (row as Record<string, unknown> | undefined)?.['neighbors'];
+      if (!Array.isArray(neighbors)) continue;
+      const isQaView = qaViewIds.has(id);
+      for (const neighbor of neighbors) {
+        if (typeof neighbor !== 'string') continue;
+        if (qaViewIds.has(neighbor)) {
+          errors.push(`views/${id}.neighbors: player-facing view graph must not link to QA fixture view '${neighbor}'.`);
+        } else if (isQaView) {
+          errors.push(`views/${id}.neighbors: QA fixture view must not link into the player-facing view graph ('${neighbor}').`);
         }
       }
     }

@@ -24,6 +24,7 @@ interface RoomRuntimeStats {
     topPinned: boolean;
   }[];
   windowZones: number;
+  propTransforms: Record<string, { x: number; y: number; width: number; height: number }>;
   maskedMembers: string[];
   masking: {
     renderer: 'webgl' | 'canvas' | 'other';
@@ -42,6 +43,7 @@ interface SpikeStatus {
   lampOn: boolean;
   bedVariant: string;
   rugHidden: boolean;
+  deskMoved: boolean;
   focus: string;
   windIntensity: number;
   minuteOfDay: number;
@@ -307,6 +309,36 @@ test.describe('Issue #167 layered living starter-room Phaser spike', () => {
     await clickSpikeControl(page, 'spike-focus-hero');
     await expect.poll(async () => (await currentFocus(page))?.zoom).toBe(1);
     expect((await readRoomStats(page)).renderIdentity).toBe(1);
+
+    // --- Same-ID geometry update (PR #198 review item 1): moving a
+    // furnishing is structural, so the room must rebuild and the live
+    // GameObject must actually take the new transform. The chair shares the
+    // desk's authored anchor, so it is the witness that nothing else moved.
+    const canvasBox = await page.getByTestId('phaser-container').locator('canvas').boundingBox();
+    if (!canvasBox) throw new Error('Room spike canvas has no measurable bounds');
+    const before = await readRoomStats(page);
+    const deskHome = before.propTransforms['spike_prop_desk']!;
+    const chairHome = before.propTransforms['spike_prop_chair']!;
+    expect(deskHome.x).toBeCloseTo(0.32 * canvasBox.width, 0);
+    const authoredIdentity = before.renderIdentity;
+
+    await clickSpikeControl(page, 'spike-desk-move');
+    await expect.poll(async () => (await readSpikeState(page)).deskMoved).toBe(true);
+    const movedStats = await readRoomStats(page);
+    expect(movedStats.renderIdentity).toBe(authoredIdentity + 1);
+    expect(movedStats.propIds).toEqual(expect.arrayContaining(['spike_prop_desk', 'spike_prop_chair']));
+    expect(movedStats.propTransforms['spike_prop_desk']!.x).toBeCloseTo(0.44 * canvasBox.width, 0);
+    expect(movedStats.propTransforms['spike_prop_desk']!.y).toBeCloseTo(0.6 * canvasBox.height, 0);
+    expect(movedStats.propTransforms['spike_prop_chair']).toEqual(chairHome);
+    // Still one canvas, one graph: the rebuild replaced objects, not surfaces.
+    expect((await readSpikeState(page)).canvasCount).toBe(1);
+    await capture(page, '167-room-desk-moved');
+
+    await clickSpikeControl(page, 'spike-desk-move');
+    await expect.poll(async () => (await readSpikeState(page)).deskMoved).toBe(false);
+    const restoredStats = await readRoomStats(page);
+    expect(restoredStats.renderIdentity).toBe(authoredIdentity + 2);
+    expect(restoredStats.propTransforms['spike_prop_desk']).toEqual(deskHome);
 
     // --- One canvas the whole time; no duplicate surfaces or listeners.
     expect((await readSpikeState(page)).canvasCount).toBe(1);

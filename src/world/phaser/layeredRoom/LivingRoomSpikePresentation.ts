@@ -66,7 +66,22 @@ export interface LivingRoomSpikeOptions {
   focusZoom?: number;
   /** Runtime-resolved authored prop ids to hide without repainting the room. */
   hiddenPropIds?: readonly string[];
+  /**
+   * QA/runtime geometry overrides (movable furnishings). Only the named props
+   * move/resize; authored content stays the source of truth for everything
+   * else. Geometry is part of the room structure signature, so a change here
+   * takes the rebuild path instead of leaving stale sprites behind.
+   */
+  propGeometryOverrides?: Readonly<Record<string, RoomPropGeometry>>;
   actorByAnchorId?: Readonly<Record<string, string>>;
+}
+
+export interface RoomPropGeometry {
+  x?: number;
+  y?: number;
+  width?: number;
+  height?: number;
+  depth?: number;
 }
 
 export interface RoomPresentationInput {
@@ -77,6 +92,7 @@ export interface RoomPresentationInput {
   lampOn?: boolean;
   fixtureVariants?: Readonly<Record<string, string | null>>;
   hiddenPropIds?: readonly string[];
+  propGeometryOverrides?: Readonly<Record<string, RoomPropGeometry>>;
 }
 
 export interface RoomPresentationResult {
@@ -224,24 +240,34 @@ export function projectRoomPresentation(input: RoomPresentationInput): RoomPrese
       : true;
     const isSoftSurface = prop.motionType === 'soft_sway';
     const isMasked = prop.maskZone;
+    // Geometry overrides (movable furnishings) replace the effective anchor
+    // and size BEFORE any derivation, so the emitted prop, its window zone,
+    // and its light/audio placements all move together — a moved window
+    // cannot leave a stale clip rect behind.
+    const geometry = input.propGeometryOverrides?.[prop.id];
+    const ax = geometry?.x ?? anchor.x;
+    const ay = geometry?.y ?? anchor.y;
+    const pw = geometry?.width ?? prop.width;
+    const ph = geometry?.height ?? prop.height;
+    const pdepth = geometry?.depth ?? prop.depth;
     if (isMasked) maskedContainerIds.push(prop.id);
     if (prop.renderLayer === 'backdrop') backdropPropIds.push(prop.id);
     if (prop.tags.includes('weather-window')) {
       const zone = {
-        x: anchor.x - prop.width / 2,
-        y: anchor.y - prop.height / 2,
-        width: prop.width,
-        height: prop.height,
+        x: ax - pw / 2,
+        y: ay - ph / 2,
+        width: pw,
+        height: ph,
       };
       weatherWindowZones.push({ id: prop.id, ...zone });
-      if (!windowCenter) windowCenter = { x: anchor.x, y: anchor.y };
+      if (!windowCenter) windowCenter = { x: ax, y: ay };
     }
 
     for (const profileId of prop.lightProfileIds) {
       const light = propLightForProfile(
         prop,
         profileId,
-        anchor,
+        { x: ax, y: ay },
         // Only the active member of a swap group contributes the shared light.
         !prop.swapGroup || groupActive,
       );
@@ -253,7 +279,7 @@ export function projectRoomPresentation(input: RoomPresentationInput): RoomPrese
     }
 
     for (const profileId of prop.audioProfileIds) {
-      const source = propAudioForProfile(prop, profileId, anchor);
+      const source = propAudioForProfile(prop, profileId, { x: ax, y: ay });
       if (source) spatialAudioSources.push(source);
     }
 
@@ -264,13 +290,13 @@ export function projectRoomPresentation(input: RoomPresentationInput): RoomPrese
     props.push({
       id: prop.id,
       assetId: prop.assetId,
-      x: anchor.x,
+      x: ax,
       // A hanging soft surface is pinned at its top edge, so its anchor is
       // the header, not the centre.
-      y: isSoftSurface ? anchor.y - prop.height / 2 : anchor.y,
-      width: prop.width,
-      height: prop.height,
-      depth: prop.depth,
+      y: isSoftSurface ? ay - ph / 2 : ay,
+      width: pw,
+      height: ph,
+      depth: pdepth,
       renderLayer: prop.renderLayer === 'backdrop' ? 'backdrop' : 'auto',
       maskZone: isMasked,
       // Runtime membership in the window-mask group: masked glass AND the
@@ -407,6 +433,7 @@ export function createLivingRoomSpikeProjection(
     lampOn,
     fixtureVariants: options.fixtureVariants,
     hiddenPropIds: options.hiddenPropIds,
+    propGeometryOverrides: options.propGeometryOverrides,
   });
 
   const base = createWorldSceneProjection({

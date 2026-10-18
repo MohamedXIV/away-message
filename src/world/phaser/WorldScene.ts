@@ -27,6 +27,7 @@ import {
 } from './layeredRoom/softSurfaceMotion';
 import {
   applyRoomDisplayOverrides,
+  computeRoomStructureSignature,
   planRoomPropPlacements,
 } from './layeredRoom/roomPropPlan';
 import type { SoftSurfaceMotionDef } from './environment/ambientMotion';
@@ -771,21 +772,30 @@ export class WorldScene extends Phaser.Scene {
     );
   }
 
-  /** Identity of the authored prop graph; overrides/toggles never change it. */
+  /**
+   * Identity of the authored prop graph INCLUDING geometry. Display
+   * overrides and toggles never change it; any prop x/y/size/depth,
+   * window-zone rect, or soft-surface def change does, so same-signature
+   * updates can never leave stale image/rope/clip/streak geometry behind
+   * (PR #198 review item 1).
+   */
   private roomStructureSignature(projection: WorldSceneProjection = this.projection): string {
-    const props = projection.sceneProps ?? [];
-    return [
-      projection.viewId,
-      props.map((prop) => `${prop.id}:${prop.assetId}:${prop.softSurface ? 'rope' : 'img'}`).join('|'),
-      (projection.weatherWindowZones ?? []).map((zone) => zone.id).join('|'),
-    ].join('#');
+    return computeRoomStructureSignature({
+      viewId: projection.viewId,
+      props: projection.sceneProps ?? [],
+      windowZones: projection.weatherWindowZones ?? [],
+      softSurfaces: projection.softSurfaces ?? [],
+    });
   }
 
   /**
-   * Targeted visual refresh when the authored graph is unchanged: fixture
-   * swap/hide resolves to per-object visibility, the window clip zones are
-   * re-synced, and the streak emitter follows weather. No room image, light,
-   * or prop object is destroyed and recreated.
+   * Targeted visual refresh when the authored graph is unchanged. Because
+   * the structure signature includes prop geometry, mask membership, zone
+   * rects and soft-surface defs, a matching signature proves only
+   * visibility/toggle state differs: fixture swap/hide resolves to
+   * per-object visibility and the streak emitter follows weather. No room
+   * image, light, or prop object is destroyed and recreated, and no
+   * geometry can silently go stale.
    */
   private applyRoomSpriteVisuals(): void {
     const props = this.roomDisplayProps();
@@ -887,6 +897,7 @@ export class WorldScene extends Phaser.Scene {
     propIds: string[];
     swapGroups: Record<string, { variants: string[]; active: string | null }>;
     hiddenPropIds: string[];
+    propTransforms: Record<string, { x: number; y: number; width: number; height: number }>;
     ropes: {
       propId: string;
       segments: number;
@@ -958,6 +969,19 @@ export class WorldScene extends Phaser.Scene {
       hiddenPropIds: this.roomDisplayProps()
         .filter((prop) => prop.hidden && (this.projectionPropImages.has(prop.id) || this.roomRopesById.has(prop.id)))
         .map((prop) => prop.id),
+      // Live GameObject transforms, so a browser test can prove geometry
+      // updates actually reached the rendered objects (PR #198 item 1).
+      propTransforms: Object.fromEntries(
+        [...this.projectionPropImages.entries()].map(([id, image]) => [
+          id,
+          {
+            x: Math.round(image.x * 100) / 100,
+            y: Math.round(image.y * 100) / 100,
+            width: Math.round(image.displayWidth * 100) / 100,
+            height: Math.round(image.displayHeight * 100) / 100,
+          },
+        ]),
+      ),
       ropes,
       windowZones: this.projection.weatherWindowZones?.length ?? 0,
       maskedMembers: this.windowGroupMembers

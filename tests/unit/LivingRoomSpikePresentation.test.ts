@@ -16,6 +16,7 @@ import {
   resolveLivingRoomSpikeViewId,
 } from '../../src/world/phaser/layeredRoom/LivingRoomSpikePresentation';
 import type { WorldScenePropProjection } from '../../src/world/phaser/types';
+import { computeRoomStructureSignature } from '../../src/world/phaser/layeredRoom/roomPropPlan';
 
 const VIEW_ID = 'spike_room_view';
 const LAMP_ID = LIVING_ROOM_LAMP_LIGHT_ID;
@@ -240,6 +241,74 @@ describe('masked members, soft surfaces, and backdrop layers', () => {
   it('the lamp glow keeps its authored additive blend', () => {
     const glow = propById(createLivingRoomSpikeProjection({}).sceneProps!, 'spike_prop_lamp_glow');
     expect(glow.blendMode).toBe('add');
+  });
+});
+
+describe('same-ID geometry updates stay consistent (PR #198 review item 1)', () => {
+  it('moves the emitted prop and its derived window zone together', () => {
+    const moved = createLivingRoomSpikeProjection({
+      propGeometryOverrides: { spike_prop_glass: { x: 0.35, y: 0.4, width: 0.2, height: 0.3 } },
+    });
+    const glass = propById(moved.sceneProps!, 'spike_prop_glass');
+    expect(glass).toMatchObject({ x: 0.35, y: 0.4, width: 0.2, height: 0.3 });
+    // The zone is derived from the moved geometry, not the authored anchor:
+    // a moved window can never leave a stale clip rect behind.
+    expect(moved.weatherWindowZones!.length).toBe(1);
+    const zone = moved.weatherWindowZones![0]!;
+    expect(zone.id).toBe('spike_prop_glass');
+    expect(zone.x).toBeCloseTo(0.35 - 0.2 / 2, 10);
+    expect(zone.y).toBeCloseTo(0.4 - 0.3 / 2, 10);
+    expect(zone.width).toBe(0.2);
+    expect(zone.height).toBe(0.3);
+    expect(moved.roomPresentation!.hasWindowZone).toBe(true);
+  });
+
+  it('moves the window daylight light with the moved glass', () => {
+    const moved = createLivingRoomSpikeProjection({
+      propGeometryOverrides: { spike_prop_glass: { x: 0.35, y: 0.4 } },
+    });
+    const light = (moved.authoredLights ?? []).find((item) => item.id === WINDOW_LIGHT_ID);
+    expect(light).toMatchObject({ x: 0.35, y: 0.4 });
+  });
+
+  it('re-pins a moved soft surface at its new top edge', () => {
+    const moved = createLivingRoomSpikeProjection({
+      propGeometryOverrides: { spike_prop_curtain: { x: 0.4, y: 0.5, height: 0.2 } },
+    });
+    const curtain = propById(moved.sceneProps!, 'spike_prop_curtain');
+    expect(curtain.x).toBe(0.4);
+    // Top-pinned: y = anchor y − height/2.
+    expect(curtain.y).toBeCloseTo(0.5 - 0.2 / 2, 10);
+    expect(curtain.height).toBe(0.2);
+  });
+
+  it('leaves every other prop at its authored geometry', () => {
+    const moved = createLivingRoomSpikeProjection({
+      propGeometryOverrides: { spike_prop_desk: { x: 0.44, y: 0.6 } },
+    });
+    const desk = propById(moved.sceneProps!, 'spike_prop_desk');
+    expect(desk).toMatchObject({ x: 0.44, y: 0.6 });
+    const chair = propById(moved.sceneProps!, 'spike_prop_chair');
+    expect(chair).toMatchObject({ x: 0.32, y: 0.665 });
+    // The authored desk anchor itself is untouched: this is presentation.
+    expect(desk.depth).toBe(22);
+  });
+
+  it('geometry overrides change the room structure signature the runtime routes on', () => {
+    const authored = createLivingRoomSpikeProjection({});
+    const moved = createLivingRoomSpikeProjection({
+      propGeometryOverrides: { spike_prop_desk: { x: 0.44, y: 0.6 } },
+    });
+    const signature = (projection: typeof authored) => computeRoomStructureSignature({
+      viewId: projection.viewId,
+      props: projection.sceneProps ?? [],
+      windowZones: projection.weatherWindowZones ?? [],
+      softSurfaces: projection.softSurfaces ?? [],
+    });
+    expect(signature(moved)).not.toBe(signature(authored));
+    // A pure visibility change (the supported fast path) must NOT.
+    const swapped = createLivingRoomSpikeProjection({ fixtureVariants: { spike_bed: 'b' } });
+    expect(signature(swapped)).toBe(signature(authored));
   });
 });
 

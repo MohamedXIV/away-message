@@ -21,6 +21,9 @@ describe('content schema source of truth (#100)', () => {
       name: 'Test Place',
       transitAccess: [],
       legacyIds: [],
+      // QA fixture isolation (#167 / PR #198): ordinary places default to
+      // non-fixture, so the marker is always materialized in the store.
+      qaFixture: false,
     });
   });
 

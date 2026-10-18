@@ -298,6 +298,10 @@ export const CONTENT_ROW_SCHEMAS = {
     name: stringCell(),
     transitAccess: z.array(z.object({ stopId: z.string(), walkMinutes: z.number() })).default([]),
     legacyIds: z.array(z.string()).default([]),
+    // Technical vertical slices (e.g. the #167 room spike) live in the same
+    // canonical catalog but are QA fixtures, not player-facing world content.
+    // Validators enforce the isolation invariants; see validators/world.ts.
+    qaFixture: booleanCell(false),
     spatialBounds: spatialBoundsSchema.optional(),
     entryPosition: spatialPositionSchema.optional(),
   }),

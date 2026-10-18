@@ -613,7 +613,8 @@
       "districtId": "district_a",
       "name": "Starter Room Spike",
       "transitAccess": [],
-      "legacyIds": []
+      "legacyIds": [],
+      "qaFixture": true
     }
   },
   "transitStops": {
