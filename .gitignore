@@ -43,3 +43,7 @@ Thumbs.db
 
 # itch.io upload artifact (rebuilt via npm run build:itch)
 itch/
+
+# Python art-tool build products
+__pycache__/
+*.py[cod]

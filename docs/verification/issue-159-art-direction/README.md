@@ -43,10 +43,12 @@ Final state:
 - **Raster hybrid (optional third)** — not attempted; budget went to
   completing two directions honestly.
 
-Reproduction after quota reset: `tools/art/layers.json` +
-`tools/art/treatments.json` fully specify every remaining prompt; the same
-two commands per layer (ImageGen → `mat.py`) finish the set with zero
-runtime changes.
+After quota reset, `tools/art/layers.json` and `tools/art/treatments.json`
+record the prompt and layer-processing recipes for the remaining art.
+The **processing and alignment are repeatable**, but ImageGen may produce
+different source imagery from the same prompt; original Gen-AI pixels are
+**not guaranteed reproducible**. The runtime does not need changes to
+accept newly authored layers.
 
 ## The camera / reference contract
 
@@ -69,7 +71,10 @@ Hard rules the tooling enforces mechanically:
    normalized x/y/width/height keep their exact meaning across treatments.
 2. **Openings are canonical.** `tools/art/treatments.json` declares the
    window `(284,154,432×376)` and door `(1438,98,146×442)` rects plus the
-   fixed casing rects. `tools/art/architecture.py` cover-fits a generated
+   fixed casing rects. `ArtCameraContract.test.ts` checks these against the
+   authored scene-prop/anchor geometry. The window matches within rounding;
+   the existing door panel sits about 10px below the cutout (bounded in the
+   test, not represented as a perfect match until visual alignment). `tools/art/architecture.py` cover-fits a generated
    wall plate, warps its detected floor line onto the blockout's contract
    line (y=670), punches the openings, and draws the treatment-colored
    casing — a generated plate can change paint but cannot drift the holes
@@ -142,6 +147,19 @@ contains no furniture, no window, no door (prompt-enforced, opening-punch
 verified).
 
 ## How to look at it
+
+For the offline compositing/compare tools, use **Python 3.12** and install
+pinned dependencies in a clean environment first:
+
+```bash
+python3 -m pip install -r tools/art/requirements.txt
+```
+
+This installs NumPy, SciPy, Pillow and CairoSVG. The source images from the
+ImageGen pass are separate inputs; these tools reproduce the matte, camera
+reference, compositing and comparison steps, not the original generated
+pixels. The geometry contract also has a Python-free Vitest guard:
+`tests/unit/ArtCameraContract.test.ts`.
 
 ```bash
 npm run content:pull && npm run content:check

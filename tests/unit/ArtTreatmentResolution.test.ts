@@ -37,8 +37,9 @@ describe('treatment registry', () => {
 
   it('labels any treatment whose layer set still contains drafts', () => {
     const draft = ART_TREATMENTS.filter((variant) => variant.draftNote).map((variant) => variant.id);
-    // The #159 batch ran out of Gen-AI quota mid-set: sr is fully generated,
-    // gn is a real generated bed plus deterministic paint-over drafts. If a
+    // ImageGen quota interrupted production: sr has 9 genuinely generated
+    // layers (with blockout fallbacks), while gn has one real generated bed
+    // plus deterministic paint-over drafts. If a
     // later batch finishes gn, this assertion must be updated with it —
     // silently shipping an unlabeled draft is the failure mode this guards.
     expect(draft).toEqual(['gn']);
