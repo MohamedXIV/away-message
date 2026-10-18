@@ -36,6 +36,13 @@ on #173 / PR #196 (and #172 / PR #195). No save-compatibility freeze.
    are refused by policy rather than upgraded by v4→v5→v6 runtime chains.
    UI metadata and Pulse local-storage attachment remain non-authoritative.
 
+5. **Remove unused table-row migration runners:** the old exported
+   `schemaV5Core.MIGRATIONS` schema-row patch engine was not invoked by
+   `AwayMessageDB`. It is removed; Dexie's real versioned schema upgrade
+   history is still declared in `db.ts` and retained to open existing
+   IndexedDB databases. Character Lives now tests current-format canonical
+   traits/bonds rather than relying on a retired v3 loader.
+
 ## Verified contract and limits
 
 - PR branch remains stacked, Draft and unmerged. #174 stays open.

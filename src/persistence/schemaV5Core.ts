@@ -1,5 +1,4 @@
 import { z } from 'zod';
-import type Dexie from 'dexie';
 import type { SimulationState } from '../engine/types';
 
 // ==========================================
@@ -238,43 +237,3 @@ export const FullSimulationSnapshotSchema = z.object({
   pulseState: z.any().optional(),
 });
 
-// ==========================================
-// 4. Migration Engine Framework
-// ==========================================
-
-export interface SchemaMigration {
-  fromVersion: number;
-  toVersion: number;
-  migrate: (db: Dexie) => Promise<void>;
-}
-
-export const MIGRATIONS: SchemaMigration[] = [
-  {
-    fromVersion: 1,
-    toVersion: 2,
-    migrate: async (database: Dexie) => {
-      const saves = database.table<SaveSlotRecord>('saves');
-      await saves.toCollection().modify((save) => {
-        if (save.version === 1) {
-          save.version = 2;
-        }
-      });
-    },
-  },
-  {
-    // P0.1: canonical buddy ids (maya/ryan/nora/henderson). Old saves used handles
-    // (starlight_maya/ryan_foodcart/NightOwl87/motel_office). Rows are normalized
-    // lazily at restore (SocialEngine.normalizeBuddyId + WorldEvents buddyKnowledge),
-    // this migration only bumps the save version marker.
-    fromVersion: 2,
-    toVersion: 3,
-    migrate: async (database: Dexie) => {
-      const saves = database.table<SaveSlotRecord>('saves');
-      await saves.toCollection().modify((save) => {
-        if (save.version === 2) {
-          save.version = 3;
-        }
-      });
-    },
-  },
-];

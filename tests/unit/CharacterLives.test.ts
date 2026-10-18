@@ -11,7 +11,6 @@ import { NPC_BUZZ_LINES } from '../../src/engine/characterTemplates';
 import {
   checkSaveCompatibility,
   loadSlotSnapshot,
-  migrateSnapshotToV4,
   saveSlot,
   SAVE_FORMAT_VERSION,
 } from '../../src/persistence/slots';
@@ -21,85 +20,43 @@ function advanceDays(engine: SimulationEngine, days: number): void {
   for (let i = 0; i < days; i++) engine.advanceGameMinutes(1440, `test day ${i + 1}`);
 }
 
-describe('Character Lives v4 save migration', () => {
+describe('Character Lives canonical v6 persistence', () => {
   beforeEach(async () => {
     await db.saves.clear().catch(() => {});
   });
 
-  it('bumps the format to 4 but keeps v2/v3 snapshots loadable', () => {
-    expect(SAVE_FORMAT_VERSION).toBeGreaterThanOrEqual(4);
-    expect(checkSaveCompatibility({ version: 2, snapshot: {} } as any).status).toBe('ok');
-    expect(checkSaveCompatibility({ version: 3, snapshot: {} } as any).status).toBe('ok');
-    expect(checkSaveCompatibility({ version: 4, snapshot: {} } as any).status).toBe('ok');
-    expect(checkSaveCompatibility({ version: 5, snapshot: {} } as any).status).toBe('ok');
+  it('accepts current-format documents but refuses historical development versions', () => {
+    for (const version of [2, 3, 4, 5]) {
+      expect(checkSaveCompatibility({ version, snapshot: {} } as any).status).toBe('refused');
+    }
     expect(checkSaveCompatibility({ version: SAVE_FORMAT_VERSION, snapshot: {} } as any).status).toBe('ok');
     expect(checkSaveCompatibility({ version: SAVE_FORMAT_VERSION + 1, snapshot: {} } as any).status).toBe('refused');
     expect(checkSaveCompatibility({ version: 3 } as any).status).toBe('legacy');
   });
 
-  it('migrates a v3 snapshot deterministically without mutating input', () => {
-    const v3 = {
-      social: {
-        relationships: {
-          maya: { familiarity: 10, trust: 20, comfort: 30, respect: 40, annoyance: 0 },
-        },
-        presence: {},
-        conversations: {},
-        buddies: {
-          sam_guitar: {
-            id: 'sam_guitar', displayName: 'Sam', handle: 'sam_guitar',
-            schedule: { 1: [{ startMinuteOfDay: 0, endMinuteOfDay: 1440, status: 'online', awayMessage: 'hi' }] },
-            initialRelationships: { familiarity: 10, trust: 10, comfort: 10, respect: 10, annoyance: 0 },
-            typingSpeedWpm: 70, archetype: 'artist', status: 'acquaintance', metVia: 'intro', isProcedural: true, createdDay: 2,
-          },
-        },
-      },
-    } as any;
-    const migrated = migrateSnapshotToV4(v3, 3);
-    // Input untouched
-    expect(v3.social.buddies.sam_guitar.traits).toBeUndefined();
-    expect(v3.social.relationships.maya.affection).toBeUndefined();
-    // Dims backfilled honest-neutral
-    const mayaRel = migrated.social.relationships.maya!;
-    expect(mayaRel.affection).toBe(0);
-    expect(mayaRel.suspicion).toBe(0);
-    expect(mayaRel.resentment).toBe(0);
-    expect(mayaRel.trust).toBe(20);
-    // Traits match a fresh build for the same id (same deterministic formula)
-    const fresh = buildCharacter({ id: 'sam_guitar', displayName: 'Sam', handle: 'sam_guitar', archetype: 'artist' });
-    expect(migrated.social.buddies!.sam_guitar!.traits).toEqual(fresh.definition.traits);
-    // New sections default empty
-    expect(migrated.social.npcBonds).toEqual({});
-    expect(migrated.social.agenda).toEqual({});
-    expect(migrated.social.mediations).toEqual([]);
-    expect(migrated.social.npcSocialLog).toEqual([]);
-    // Stable across calls
-    expect(migrateSnapshotToV4(v3, 3)).toEqual(migrated);
+  it('preserves canonical actor traits and NPC bonds through v6 save/load', async () => {
+    const sim = new SimulationEngine();
+    const [left, right] = sim.social.getBuddies();
+    expect(left && right).toBeTruthy();
+    const traits = sim.social.getTraits(left!.id);
+    sim.social.adjustNpcBond(left!.id, right!.id, { familiarity: 20, trust: 8 }, 2);
+    const bond = sim.social.getNpcBond(left!.id, right!.id);
+    await saveSlot(sim, 'character_v6');
+    const restoredSnapshot = await loadSlotSnapshot('character_v6');
+    expect(restoredSnapshot).not.toBeNull();
+    const revived = new SimulationEngine(restoredSnapshot!);
+    expect(revived.social.getTraits(left!.id)).toEqual(traits);
+    expect(revived.social.getNpcBond(left!.id, right!.id)).toEqual(bond);
   });
 
-  it('loadSlotSnapshot upgrades a stored v3 record on the way in', async () => {
+  it('refuses a development-era v3 document instead of mutating it by migration', async () => {
     const sim = new SimulationEngine();
-    await saveSlot(sim, 'slot_1');
-    const record = await db.saves.get('slot_1');
-    expect(record?.version).toBe(SAVE_FORMAT_VERSION);
-    // Rewrite the row as a v3 document (no traits anywhere)
-    const snapshot = JSON.parse(JSON.stringify(record!.snapshot)) as any;
-    for (const def of Object.values(snapshot.social.buddies ?? {})) delete (def as any).traits;
-    for (const rel of Object.values(snapshot.social.relationships ?? {})) {
-      delete (rel as any).affection; delete (rel as any).attraction;
-      delete (rel as any).suspicion; delete (rel as any).resentment;
-    }
-    delete snapshot.social.npcBonds;
-    await db.saves.put({ ...record!, version: 3, snapshot });
-    const loaded = await loadSlotSnapshot('slot_1');
-    expect(loaded).not.toBeNull();
-    const maya = (loaded!.social.relationships as any).maya;
-    expect(maya.affection).toBe(0);
-    expect(maya.trust).toBeGreaterThanOrEqual(0);
-    // Restored engine backfills procedural traits and reads neutral bonds
-    const revived = new SimulationEngine(loaded as any);
-    expect(revived.social.getNpcBond('maya', 'ryan').romance).toBe('none');
-    await db.saves.delete('slot_1');
+    await saveSlot(sim, 'old_character_version');
+    const current = (await db.saves.get('old_character_version'))!;
+    const oldRow = { ...current, version: 3 };
+    await db.saves.put(oldRow);
+    expect(await loadSlotSnapshot('old_character_version')).toBeNull();
+    expect(await db.saves.get('old_character_version')).toEqual(oldRow);
   });
 });
 
