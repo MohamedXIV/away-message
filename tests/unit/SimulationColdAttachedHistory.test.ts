@@ -31,12 +31,9 @@ describe('#173 cold runtime conversation authority and async page seam', () => {
       { test: saved }, read);
     expect(owner.getStorageFootprint('test')).toEqual({ total: 250, materialized: 32, serializedPages: 0 });
     expect(owner.unreadCounts()).toEqual({ test: all.filter(m => m.senderId !== 'player' && !m.isRead).length });
-    expect(owner.unreadTray(4).previews).toEqual(
-      new ConversationHistory(id => id) && (() => {
-        const full = new ConversationHistory(id => id); full.restore({ test: all });
-        return full.unreadTray(4).previews;
-      })(),
-    );
+    const full = new ConversationHistory(id => id);
+    full.restore({ test: all });
+    expect(owner.unreadTray(4).previews).toEqual(full.unreadTray(4).previews);
     expect(() => owner.exportAll()).toThrow(/async export/);
     expect(() => owner.allMessages('test')).toThrow(/async export/);
     expect(() => owner.page('test', 80, 50)).toThrow(/async read/);
@@ -84,7 +81,7 @@ describe('#173 cold runtime conversation authority and async page seam', () => {
       () => new Promise(done => { resolve = done; }));
     const inFlight = delayed.pageAsync('test', 90, 20);
     delayed.delete('test');
-    resolve(all.slice(64, 88));
+    resolve(all.slice(0, 64));
     await expect(inFlight).rejects.toThrow(/changed during async/);
   });
 

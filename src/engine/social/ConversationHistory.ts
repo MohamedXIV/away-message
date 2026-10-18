@@ -59,7 +59,10 @@ type ConversationIndex = {
 const detach = (m: MessageRecord): MessageRecord =>
   ({ ...m, ...(m.tags ? { tags: [...m.tags] } : {}) });
 
-const ranked = (a: MessageRecord, b: MessageRecord): number =>
+const ranked = (
+  a: Pick<MessageRecord, 'id' | 'timestampMinute'>,
+  b: Pick<MessageRecord, 'id' | 'timestampMinute'>,
+): number =>
   b.timestampMinute - a.timestampMinute || b.id.localeCompare(a.id);
 
 function emptyIndex(): ConversationIndex {
