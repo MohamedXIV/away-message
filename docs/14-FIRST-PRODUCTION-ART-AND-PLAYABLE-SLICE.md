@@ -138,6 +138,39 @@ The blockout is production reference only.
 
 Do not convert the game to realtime 3D.
 
+### Authored place, view, focus, and anchor decisions (binding for Phase A)
+
+The canonical interaction topology is **Place → Space → authored View(s) → Focus / Anchor(s)**; see `docs/11-SPATIAL-PRESENCE-VENUES-AND-ACTOR-PRESENTATION.md` for the physical-world and spatial-ownership rules.
+
+- A **Place** is the canonical physical destination; its **Space(s)** describe semantic/spatial sub-areas where necessary. Neither is a single background image.
+- A **View** is an authored camera/composition of a Space. A Place/Space can have **one or multiple Views**. Multiple Views do **not** imply multiple independent game worlds or separate copies of canonical items/actors.
+- A **Focus** changes framing/zoom/attention **within** an existing View when this is sufficient. A distinct View is appropriate when the camera direction, meaningful occlusion, readable surface, or interaction context truly needs another authored composition.
+- An **Anchor / hotspot** is a semantic interaction or presentation placement in its authored View. **Multiple anchors in one View are normal**. The number of anchors does not determine the number of Views. Anchors emit requests/intents outward; Phaser never owns the resulting domain outcome.
+- **View navigation** changes presentation and interaction visibility. It must not silently teleport the player/actors, change ownership, or create a second spatial truth. Real movement between Spaces/Places continues through their canonical systems.
+
+Choose the **fewest Views that clearly express the actual place and gameplay**, not a universal one-view or multi-view template:
+
+| Place/use case | Practical authored-view decision |
+| --- | --- |
+| Small, rarely visited, or visually simple place | One strong View with multiple Anchors/Focus targets can be sufficient. |
+| Frequently visited residence, workplace, or service | Add a secondary View **when needed** to expose a distinct side/corner, interactions, characters, objects, or useful spatial relationship that focus alone cannot communicate. |
+| Complex or hero place | Use multiple connected authored Views if they materially improve readability, atmosphere, or play. No fixed quota; avoid needless near-duplicate shots. |
+
+The #167 layered starter-room spike intentionally proves **one** strong main View as a bounded runtime test. **It is not an architectural cap** on other rooms, residences, or public places. Likewise, more Views are never required merely to make an implementation look advanced. Production decisions should identify their actual Place/Space/View/Anchor mapping.
+
+### Shared 3D reference → consistent 2D/AI-assisted production
+
+Using a shared **3D model/blockout/space as an authoring reference is explicitly allowed and encouraged when it improves consistency**, especially for multi-view places. It is an optional production tool for simple one-view locations, **not a real-time 3D runtime requirement**.
+
+1. Establish one coherent spatial/layout reference per Place/Space: architecture, room dimensions, permanent fixtures, meaningful object locations, and camera/view definitions. Record camera framing and scale/lens/perspective conventions where they matter.
+2. Render reference images from the **authored cameras**, including depth/object-ID/mask passes where useful. Derive alternate viewpoints and lighting reference from the **same geometry**, rather than asking generative AI to invent unrelated versions of one location.
+3. Use Gen-AI generation, inpainting, editing, and/or paint-over to produce the **final 2D/2.5D art**. Preserve the selected visual language across camera angles, time/weather variants, and named shared objects.
+4. Separate static architecture from anything that can change: fixture swaps, player-owned props, inventory/parcel state, actors, curtains/foliage, window/outside/weather, lamps/lights, and foreground occluders **as gameplay requires**. A final full-frame reference render is not a license to flatten mutable layers.
+5. Map each shared semantic object/fixture to **per-View presentation assets/placements** when needed. Different camera-angle images are representations of the **same canonical item**, not new identities or duplicate ownership. Author stable asset IDs, masks, anchors, and view relationships through the existing content pipeline.
+6. Validate a representative multi-view place in the **real Phaser runtime**: recognizable shared geometry across views, appropriate hotspots, focus transitions, correct props/masks/light/weather, and no duplicate domain effects. A beautiful standalone render cannot substitute for this test.
+
+These are scalable production constraints, **not a mandate to build a complex 3D asset pipeline before #159 can compare a few treatments**. Phase A locks a repeatable reference convention first; more elaborate tooling needs a measured production need.
+
 ---
 
 ## 5. Vertical-slice content
@@ -149,7 +182,7 @@ The first production slice should cover a deliberately small set of environments
 This is the deepest scene in the slice.
 
 It must support:
-- one strong main authored view, plus another view only if spatial clarity genuinely benefits;
+- one strong main authored View for the first slice, with additional Views if spatial clarity, interaction legibility, or a meaningfully different camera composition benefits (this does not limit future residences to one View);
 - cheap-room material identity;
 - PC-capable desk/work surface;
 - bed/sleep fixture;
