@@ -43,15 +43,20 @@ on #173 / PR #196 (and #172 / PR #195). No save-compatibility freeze.
    IndexedDB databases. Character Lives now tests current-format canonical
    traits/bonds rather than relying on a retired v3 loader.
 
+6. **Collapse the v5 schema facade:** `schema.ts` now directly owns the
+   v6 Zod save validator, current save-record and the type-only historical
+   table definitions required by Dexie's frozen upgrade history. No v5
+   schema file survives. Null connection/OS represent a valid no-PC save;
+   the active writer never loads historical migration blobs.
+
 ## Verified contract and limits
 
 - PR branch remains stacked, Draft and unmerged. #174 stays open.
-- `schemaV5Core.ts` still provides legacy typed Dexie table models used by
-  `db.ts` and a v6 Zod composition base. These are **types/validation**, not
-  a second game writer. Dexie's v1–v5 upgrade declarations stay to open
-  existing IndexedDB databases, especially the v5 `conversation_pages` table.
-  Future cleanup must audit obsolete physical tables before dropping schema
-  versions or IndexedDB stores.
+- `schema.ts` now owns one v6 document schema plus the type-only
+  historical table records required by `db.ts`. Dexie's v1–v5 upgrade
+  declarations remain, especially the v5 `conversation_pages` table.
+  Retiring physical stores requires a separate usage/upgrade audit; none
+  is a second active simulation writer.
 - **#174 deterministic VFS/Downloads identity cutover:** Both
   `FileSystemEngine` and `DownloadManager` now allocate IDs from monotonic,
   owner-held ordinals. `VirtualFileSystemState.nextFileOrdinal` and

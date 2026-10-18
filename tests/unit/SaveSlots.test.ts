@@ -18,6 +18,7 @@ import {
   migrateSnapshotToV6,
 } from '../../src/persistence/migrations/v6ComputerState';
 import { APP_VERSION } from '../../src/version';
+import { SaveSlotSchema } from '../../src/persistence/schema';
 import { setCurrentPulseSlotId } from '../../src/apps/pulse/persistence';
 
 describe('P9 save slots (Dexie documents + Pulse coherence)', () => {
@@ -64,6 +65,7 @@ describe('P9 save slots (Dexie documents + Pulse coherence)', () => {
     expect(record?.hardwareState.osVersion).toBeNull();
     expect(record?.snapshot?.computer?.assembled).toBe(false);
     expect(record?.snapshot?.os?.currentOsId).toBeNull();
+    expect(SaveSlotSchema.safeParse(record).success).toBe(true);
   });
 
   it('mostRecentSlot prefers the freshest snapshot', async () => {
