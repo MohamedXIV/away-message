@@ -1,138 +1,116 @@
-# #173 — Slot-scoped cold conversation archive
+# #173 — Canonical Social ownership and cold conversation persistence
 
-Tracking: [#173](https://github.com/MohamedXIV/away-message/issues/173),
-stacked [PR #196](https://github.com/MohamedXIV/away-message/pull/196) above #172.
+Tracking: [Issue #173](https://github.com/MohamedXIV/away-message/issues/173),
+stacked [Draft PR #196](https://github.com/MohamedXIV/away-message/pull/196) on #172.
+This document describes the **implemented production path**, not the intermediate
+cold-bootstrap spikes. No Ready transition, merge or issue closure is implied.
 
-## What this milestone actually implements
+## Authority and storage contract
 
-The current-format `saveSlot` transaction now stores the **last 32 messages per
-conversation** inside the save document and writes older messages as ordered
-**64-message IndexedDB archive pages**, scoped by `slotId` and
-`conversationId`. Pages use an isolated `conversation_pages` Dexie table
-(v5 table schema, not the legacy global `messages` table). The save's
-`meta.conversationArchive` contains only the archive version and per-contact
-**cold message counts**. There is exactly one durable copy of any message:
-recent messages live in the slot document, older ones live in its archive.
+- `SocialEngine` remains the sole public mutation/event coordinator. Internal
+  `ConversationHistory` owns **all canonical chat writes, read receipts,
+  summary indexes and live history**. Roster, player relationships, sparse
+  NPC bonds, presence, memory/promises, contact directory, mediations and
+  player-belief projections have distinct private domain owners.
+- The live owner retains at most **32 recent + 63 pending** materialized
+  message objects per conversation; completed local older groups are serialized.
+  After a cold save boots, older saved messages are not allocated into a
+  parallel live message graph: one immutable slot-scoped archive supplies them.
+- An explicit `saveSlot` stores the **32 newest** messages/contact in the v6
+  save document and all earlier messages in **64-message** IndexedDB
+  `conversation_pages`. Its v1 archive manifest carries exact cold counts
+  and compact *derived from ConversationHistory* unread/last-activity/player-day/
+  offline-message indexes and up to 10 unread previews. The historical global
+  `db.messages` table is **not** a second writer.
+- Archive pages and the save document are overwritten/deleted in **one Dexie
+  transaction**. The generation token `updatedAt` advances inside the write
+  transaction even when writes occur in the same millisecond. A reader of a
+  different save generation fails closed. Unread overlays on immutable saved
+  pages remain owned by ConversationHistory and are exported into the next save.
 
-On explicit `loadSlotSnapshot`, the whole canonical current-format snapshot
-is reassembled **inside one read transaction** before handing it to the
-synchronous composed `SimulationKernel`. This is deliberately not ordinary
-UI publication. A separate `readSavedConversationPage` selects at most the
-necessary cold page(s) plus the small saved tail, preserving the existing
-newest-offset and chronological-display ordering even if messages have
-out-of-order world timestamps.
+## Actual production boot
 
-Overwriting or deleting a slot updates its document and archived pages in
-one write transaction. Missing, extra or malformed archive pages **fail the
-load closed** instead of silently manufacturing a truncated social history.
-Old complete snapshots without the archive marker still load normally.
-`social.getConversationPage`, source-owned unread indexes and legacy
-`SocialEngineState` runtime shape are unchanged.
+`App.tsx` uses `loadSlotEngine(slotId)`, not eager
+`loadSlotSnapshot(slotId)`, for an indexed cold archive:
 
-## Limits / acceptance boundary
+1. `loadSlotColdBootstrap` reads the saved **recent tails + derived indexes**
+   and inventories expected archive **keys** in one transaction. It loads no
+   historical message bodies. Missing/extra page keys and bad metadata reject
+   the bootstrap.
+2. A single `SimulationKernel` is constructed from the matching partial
+   snapshot, then `SocialEngine.attachColdConversations` attaches its **existing**
+   ConversationHistory to the slot-specific, generation-checked page reader.
+   No partially restored engine is exposed to the React store.
+3. The saved slot generation is checked again after construction. If it changed,
+   the boot is refused. Each subsequent cold-page read independently checks
+   the source generation and validates content/page size.
+4. An **index-free older full save** uses `loadSlotSnapshot`, which atomically
+   reassembles complete history before constructing the kernel. This is a
+   compatibility fallback, *never* permission to boot a partial archive.
 
-- The archive is **durable cold save storage** and supports targeted async
-  saved-history pages. It does **not** yet turn the live game into an async
-  page-backed social runtime: `ConversationHistory` still owns complete
-  transcripts in memory after a load, and an explicit export gathers them.
-- The production chat UI still consumes the already-bounded
-  `SimulationKernel.getConversationRead` owner query; it does not reach into
-  another slot's archive. A future Worker-hosted async chat storage interface
-  must preserve this privacy/authority boundary.
-- `db.messages` and the old multi-table `SaveManager` remain historical
-  persistence architecture, to be reconciled under **#174**. This work does
-  not make the old shared messages table a second writer.
-- No deterministic ID policy or historical migration reset is introduced
-  here; **#174** owns those decisions.
-- No benchmark claim that full simulation ticks are constant-time follows
-  from paged durable save storage. Use #177 for integrated stress.
+**Integrity limit:** cold boot inventories keys without reading historical
+values, so damaged page *contents* may be discovered only when the page is
+requested/exported. Such reads throw or surface an error; they never present
+truncated history as complete.
 
-## Proof obligations
+## UI, privacy and save contract
 
-`SimulationColdConversationArchive.test.ts` covers 64-page rollover,
-chronological ordering under backdated arrivals, detachable recent/page
-projections, exact reconstruction of saved history, per-slot independence,
-overwrite/delete cleanup, broken-page fail-closed loading, and full-snapshot
-compatibility without an archive manifest.
+- `ChatWindow` requests 50-message historical pages through
+  `useConversationPage` → `SimulationKernel.getConversationReadAsync`.
+  Page queries are bounded, detachable and authorized by the **player-known
+  handle** rule, including a second authorization/revision check after awaits.
+  The hook cancels stale actor/tab/offset/engine/revision results; the UI shows
+  loading, Retry or an error instead of quietly omitting cold messages.
+- The latest eight messages needed for reply suggestions still use a bounded
+  synchronous hot owner projection. No normal page load or revision publishes
+  a full Social transcript/world snapshot. Only explicit exports load all
+  historical bodies.
+- `MessageHistoryView` Save Log uses the distinct
+  `SimulationKernel.getConversationLogAsync` API, enforcing the same
+  known-handle and revision policy. Failed exports do not create partial logs.
+- `SimulationKernel.exportSnapshotAsync` obtains complete conversations
+  from the canonical Social owner, then composes the other owners' save state.
+  If the world changes during the await or any cold page is unreadable,
+  the operation throws and `saveSlot` writes nothing. Synchronous full
+  export deliberately **throws** on attached, unmaterialized cold history.
+- Saving over the cold reader's **originating slot** atomically persists all
+  history and rebinds that owner's immutable prefix to the new generation
+  without duplicating appended turns. Saving to another slot leaves the
+  source reader bound to its original generation.
 
-Do not mark #173 complete on this milestone alone: live history lifecycle and
-remaining relationship/graph/presence owner decomposition need explicit closure
-evidence before a Ready/merge decision.
+## Acceptance evidence
 
-## Incremental cold-runtime bootstrap contract
+- `SimulationSocialConversationOwner.test.ts`,
+  `SimulationColdConversationArchive.test.ts`,
+  `SimulationColdBootstrapIndex.test.ts`,
+  `SimulationColdAttachedHistory.test.ts`,
+  `SimulationColdLiveConversationOwner.test.ts`,
+  `SimulationColdAsyncSlotSave.test.ts`,
+  `SimulationProductionColdBoot.test.ts` cover one-writer invariants, bounded
+  hot pages, read/index parity, key-only bootstrap, source slot generation,
+  full async save/reload, unread overlays, source isolation, corrupt-page
+  refusal, old index-free fallback and player-knowledge safety.
+- `ScenarioG_PulsePaging.spec.ts` and
+  `ScenarioH_PulseColdPaging.spec.ts` use the **mounted real React ChatWindow
+  in Chromium**. Scenario H loads a 200-message saved cold archive via the
+  production loader, browses older/newer pages, verifies full Save Log,
+  re-saves/reloads through the same persistence path and checks unknown-contact
+  privacy.
+- [Exact-head Verify #39161890697](https://github.com/MohamedXIV/away-message/actions/runs/39161890697)
+  succeeded on implementation commit `44c8273`: content check, typecheck,
+  build, baseline guard, **312/312 files and 1,794/1,794 tests**, living-world
+  Chromium **6/6**, Pulse normal paging **1/1**, Pulse cold paging **1/1**.
+  The population and publication benchmarks were **skipped by the workflow**
+  on this stacked branch, not verified. A separate Vercel status reported failure.
 
-A cold bootstrap seam is now available via `loadSlotColdBootstrap(slotId)`. Each
-new save persists **small owner-derived indexes** from `ConversationHistory`
-inside the existing v1 `meta.conversationArchive` manifest: unread totals,
-last activity, player-day presence, latest offline-message text, and at most
-10 unread previews per contact. The archive page *keys* are inventoried under
-a read transaction without retrieving the messages. A missing or extraneous
-page key, malformed metadata, or absent index fails closed. Historical pages
-are still verified when `readSavedConversationPage` requests them. Legacy v1
-manifests without indexes can still use `loadSlotSnapshot` (the eager path).
+## Boundaries and follow-ons
 
-### Attached read-only cold runtime seam
-
-`ConversationHistory.restoreCold` can attach the saved cold prefix to its
-**one canonical message owner** without allocating old transcript bodies.
-`pageAsync` reads only intersecting 64-message pages, enforces detached reads,
-and merges post-load appends with the saved tail. All read receipts remain
-owned by ConversationHistory; `markRead` marks the immutable cold prefix
-through a single overlay, and `exportAllAsync` composes a complete snapshot
-without mutating the slot. A synchronous full export or an unmaterialized cold
-page read **throws** rather than returning a truncated history.
-
-`readSavedColdConversationChunk` validates the page under the recorded
-`updatedAt` save generation; slot overwrites increment the generation
-monotonically and invalidate old readers. `SimulationKernel.getConversationReadAsync`
-retains the known-handle privacy gate, including after the await.
-
-The production boot still uses the eager `loadSlotSnapshot` path.
-However, `saveSlot` now selects `SimulationKernel.exportSnapshotAsync()` when
-available: this explicit export awaits complete old pages, rejects changed
-simulation revisions/failed pages, and writes the complete snapshot plus
-64-message pages in one atomic transaction. The transaction derives the
-monotonic slot generation inside its write lock. When a cold-backed engine
-writes **its originating slot**, its live cold reader rebinds to that new
-generation without hydrating the old message-object graph. A save to another
-slot leaves the source reader unchanged. The Pulse **Save log** action also
-uses async complete-history export and reports read failures.
-
-`SimulationColdAsyncSlotSave.test.ts` verifies save→load parity, appended
-messages and read receipts, original-slot rebind, page-count growth and
-fail-closed saves. `SimulationColdAttachedHistory.test.ts` also verifies that
-saving a cold-backed game to a second slot produces a full transcript while
-an independent overwrite of its **source** slot still invalidates the old
-reader.
-
-### Production cutover (#173)
-
-The live App boot path now calls `loadSlotEngine(slotId)`. When the slot has
-a validated cold index and complete archive-page key inventory, this creates the
-single composed SimulationKernel from the saved recent tails and attaches the
-same SocialEngine's `ConversationHistory` to an immutable slot-scoped, generation-
-guarded page reader **before publishing the engine to Zustand/React**. It then
-rechecks the source slot version; invalid/missing archives refuse boot. Existing
-index-free v1 archives retain a complete eager `loadSlotSnapshot` fallback, never
-a partial-history fallback. The initial boot loads zero historical page values.
-
-`ChatWindow` uses `useConversationPage` / `getConversationReadAsync` for its
-visible 50-message pages, while newest eight-message suggestions still use a
-small synchronous owner-backed page. The hook drops cancelled, old actor/offset,
-old engine and stale-revision results. A failed page shows Retry rather than a
-truncated transcript; log export uses an independently authorized async path.
-Real browser proof is `ScenarioH_PulseColdPaging.spec.ts`, running against
-IndexedDB, the production loader and the mounted React ChatWindow.
-
-The pre-save-format-freeze legacy path remains only for complete index-free
-snapshots; future #174 owns unrelated old persistence cleanup. A future Worker
-transport remains #175's responsibility.
-
-**Safety boundary:** cold bootstrap returns a **partial conversation snapshot**
-plus the index metadata. It is explicitly **not** used by the production boot
-until the normal boot path attaches the single Social owner to its validated
-slot-bound cold reader and routes older Pulse pages through async projections.
-Passing the bootstrap snapshot directly to the synchronous kernel without
-that attachment would truncate history and is forbidden. The new tests prove
-that a **test-owned attachment** supports complete async saves and reads;
-they do not claim production boot or Pulse older-page UI has been switched.
+- **#174** owns deterministic ID and obsolete persistence cleanup;
+  older multi-table `SaveManager` and `db.messages` are not hot authorities.
+- **#175** owns actual Dedicated Worker hosting and transport/recovery;
+  this work only establishes serialization- and async-friendly contracts.
+- **#177** owns integrated deterministic 20/100/250/500 actor benchmarks and
+  long-running gameplay/performance acceptance; this PR does **not** claim FPS
+  or constant-time full simulation ticks.
+- PR #196 remains **Draft** and issue #173 **Open** pending review/explicit
+  merge authorization and any acceptance gap a reviewer substantiates.
