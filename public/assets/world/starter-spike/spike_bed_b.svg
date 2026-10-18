@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="340" height="220" viewBox="0 0 340 220">
+<!-- cheap motel bed variant B (swappable): same frame, different bedding, no headboard pillow -->
+<rect x="10" y="120" width="320" height="70" rx="8" fill="#4a3b2e"/>
+<rect x="18" y="72" width="304" height="66" rx="10" fill="#cfd0cb"/>
+<rect x="18" y="96" width="304" height="44" rx="8" fill="#3f5c66"/>
+<g stroke="#587a86" stroke-width="4" opacity=".8"><line x1="40" y1="118" x2="300" y2="112"/></g>
+<rect x="200" y="56" width="118" height="38" rx="12" fill="#dfe4e2"/>
+<rect x="10" y="184" width="320" height="16" rx="4" fill="#332619"/>
+</svg>

@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="150" height="360" viewBox="0 0 150 360">
+<!-- nearer foliage cutout; independent layer so it drifts against the distant tree -->
+<rect x="68" y="150" width="14" height="210" fill="#2c2318"/>
+<g fill="#26402f"><ellipse cx="75" cy="104" rx="66" ry="52"/><ellipse cx="36" cy="168" rx="40" ry="30"/><ellipse cx="116" cy="164" rx="38" ry="28"/></g>
+<g fill="#33553d" opacity=".9"><ellipse cx="74" cy="92" rx="48" ry="36"/><ellipse cx="44" cy="158" rx="28" ry="20"/><ellipse cx="108" cy="156" rx="26" ry="18"/></g>
+</svg>

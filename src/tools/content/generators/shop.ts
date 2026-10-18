@@ -49,6 +49,13 @@ export function generateShopWorldSource(tables: ContentTables): string {
   lines.push('  motionType: string | null;');
   lines.push('  motionSpeed: number;');
   lines.push('  motionAmplitude: number;');
+  lines.push('  renderLayer: string;');
+  lines.push('  maskZone: boolean;');
+  lines.push('  swapGroup: string | null;');
+  lines.push('  variant: string | null;');
+  lines.push('  blendMode: string;');
+  lines.push('  lightProfileIds: string[];');
+  lines.push('  audioProfileIds: string[];');
   lines.push('  tags: string[];');
   lines.push('}');
   lines.push('');
@@ -98,6 +105,13 @@ export function generateShopWorldSource(tables: ContentTables): string {
     lines.push('    motionType: ' + nullableString(row['motionType']) + ',');
     lines.push('    motionSpeed: ' + Number(row['motionSpeed'] ?? 0) + ',');
     lines.push('    motionAmplitude: ' + Number(row['motionAmplitude'] ?? 0) + ',');
+    lines.push('    renderLayer: ' + tsString(String(row['renderLayer'] ?? 'auto')) + ',');
+    lines.push('    maskZone: ' + (row['maskZone'] === true) + ',');
+    lines.push('    swapGroup: ' + nullableString(row['swapGroup']) + ',');
+    lines.push('    variant: ' + nullableString(row['variant']) + ',');
+    lines.push('    blendMode: ' + tsString(String(row['blendMode'] ?? 'normal')) + ',');
+    lines.push('    lightProfileIds: [' + stringArray(row['lightProfileIds']).map(tsString).join(', ') + '],');
+    lines.push('    audioProfileIds: [' + stringArray(row['audioProfileIds']).map(tsString).join(', ') + '],');
     lines.push('    tags: [' + stringArray(row['tags']).map(tsString).join(', ') + '],');
     lines.push('  },');
   }

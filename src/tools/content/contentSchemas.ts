@@ -273,6 +273,17 @@ export const CONTENT_ROW_SCHEMAS = {
     motionType: stringCell(),
     motionSpeed: numberCell(0),
     motionAmplitude: numberCell(0),
+    // Presentation-only layering flags (#167): backdrop props render below the
+    // view image, masked props clip their layer to the authored window rect,
+    // variant props share a swap group, emissive props use additive blending.
+    renderLayer: stringCell('auto'),
+    maskZone: booleanCell(false),
+    swapGroup: stringCell(),
+    variant: stringCell(),
+    blendMode: stringCell('normal'),
+    // Authored practical/ambience profiles attached to a rendered prop.
+    lightProfileIds: z.array(z.string()).default([]),
+    audioProfileIds: z.array(z.string()).default([]),
     tags: z.array(z.string()).default([]),
   }),
   districts: z.object({

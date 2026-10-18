@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="432" height="376" viewBox="0 0 432 376">
+<defs>
+  <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#79a6c9"/><stop offset=".55" stop-color="#b9cad2"/><stop stop-color="#d8ccc0"/></linearGradient>
+</defs>
+<!-- exterior backplate seen through the fixed window: parking lot, gallery rail, low court buildings -->
+<rect width="432" height="376" fill="url(#sky)"/>
+<rect y="238" width="432" height="138" fill="#5d5a52"/>
+<g fill="#3f4a55"><rect x="-8" y="150" width="150" height="96"/><rect x="176" y="128" width="120" height="118"/><rect x="318" y="158" width="120" height="88"/></g>
+<g fill="#28313a"><rect x="18" y="166" width="26" height="20"/><rect x="64" y="166" width="26" height="20"/><rect x="200" y="146" width="24" height="18"/><rect x="242" y="146" width="24" height="18"/></g>
+<rect y="236" width="432" height="8" fill="#20262e"/>
+<g stroke="#2c3340" stroke-width="2" fill="none"><path d="M0 60 Q216 96 432 52"/><path d="M0 82 Q216 118 432 74"/></g>
+<g fill="#6a3b3b"><rect x="252" y="252" width="120" height="30" rx="10"/><rect x="276" y="236" width="70" height="20" rx="8"/></g>
+<rect x="84" y="256" width="96" height="26" rx="6" fill="#4c5259"/>
+</svg>

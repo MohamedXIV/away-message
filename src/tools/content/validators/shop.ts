@@ -5,7 +5,11 @@ import { validateWorldId } from '../shared';
 const FIXTURE_KINDS = new Set([
   'shelf', 'fridge', 'freezer', 'counterDisplay', 'rack', 'bin', 'cashierCounter',
 ]);
-const MOTION_TYPES = new Set(['rotation', 'sway', 'vibration', 'light_sweep', 'drift']);
+const MOTION_TYPES = new Set(['rotation', 'sway', 'vibration', 'light_sweep', 'drift', 'soft_sway']);
+const SCENE_PROP_LAYERS = new Set(['auto', 'backdrop']);
+const SCENE_PROP_BLEND_MODES = new Set(['normal', 'add', 'screen']);
+const PROJECTION_CELL_PATTERN = /^[a-z][a-z0-9_]*$/;
+const PROJECTION_SWAP_GROUP_PATTERN = /^[a-z][a-z0-9_]{1,31}$/;
 const TAG_PATTERN = /^[a-z][a-z0-9_-]{1,31}$/;
 
 function tags(errors: string[], table: string, id: string, field: string, value: unknown): string[] {
@@ -143,7 +147,61 @@ export function validateShopContent(tables: ContentTables): string[] {
     if (motionType !== '' && motionType !== undefined && motionType !== null && (typeof motionType !== 'string' || !MOTION_TYPES.has(motionType))) {
       errors.push(`sceneProps/${id}.motionType: unsupported motion type '${String(motionType)}'.`);
     }
+    // Presentation-only layering flags (#167). Empty strings are "unset".
+    const renderLayer = row['renderLayer'];
+    if (renderLayer !== undefined && renderLayer !== null && (typeof renderLayer !== 'string' || !SCENE_PROP_LAYERS.has(renderLayer))) {
+      errors.push(`sceneProps/${id}.renderLayer: unsupported layer '${String(renderLayer)}'.`);
+    }
+    if (row['maskZone'] !== undefined && row['maskZone'] !== null && typeof row['maskZone'] !== 'boolean') {
+      errors.push(`sceneProps/${id}.maskZone: must be a boolean.`);
+    }
+    const blendMode = row['blendMode'];
+    if (blendMode !== undefined && blendMode !== null && (typeof blendMode !== 'string' || !SCENE_PROP_BLEND_MODES.has(blendMode))) {
+      errors.push(`sceneProps/${id}.blendMode: unsupported blend mode '${String(blendMode)}'.`);
+    }
+    for (const field of ['swapGroup', 'variant'] as const) {
+      const value = row[field];
+      if (value === undefined || value === null || value === '') continue;
+      const pattern = field === 'swapGroup' ? PROJECTION_SWAP_GROUP_PATTERN : PROJECTION_CELL_PATTERN;
+      if (typeof value !== 'string' || !pattern.test(value)) {
+        errors.push(`sceneProps/${id}.${field}: must be a snake_case cell <= 32 chars.`);
+      }
+    }
+    if (typeof row['swapGroup'] === 'string' && row['swapGroup'] && (typeof row['variant'] !== 'string' || !row['variant'])) {
+      errors.push(`sceneProps/${id}.variant: a swap-group member must name its variant.`);
+    }
+    // Optional authored profile links (row schema defaults to []).
+    const optionalProfileIds = (field: string): string[] => {
+      const value = row[field];
+      if (value === undefined || value === null) return [];
+      return tags(errors, 'sceneProps', id, field, value);
+    };
+    for (const profileId of optionalProfileIds('lightProfileIds')) {
+      if (!lightProfiles[profileId]) errors.push(`sceneProps/${id}.lightProfileIds: unknown light profile '${profileId}'.`);
+    }
+    for (const profileId of optionalProfileIds('audioProfileIds')) {
+      if (!audioProfiles[profileId]) errors.push(`sceneProps/${id}.audioProfileIds: unknown audio profile '${profileId}'.`);
+    }
     tags(errors, 'sceneProps', id, 'tags', row['tags']);
+  }
+
+  // Swap groups are presentation variants of one fixture: every group needs
+  // at least two members and unique variant names inside the group.
+  const groups = new Map<string, { variants: Set<string>; ids: string[] }>();
+  for (const [id, value] of Object.entries(props)) {
+    if (!value || typeof value !== 'object') continue;
+    const row = value as Record<string, unknown>;
+    const group = typeof row['swapGroup'] === 'string' ? row['swapGroup'] : '';
+    if (!group) continue;
+    const entry = groups.get(group) ?? { variants: new Set<string>(), ids: [] };
+    const variant = String(row['variant'] ?? '');
+    if (entry.variants.has(variant)) errors.push(`sceneProps/${id}.variant: duplicate variant '${variant}' in swap group '${group}'.`);
+    entry.variants.add(variant);
+    entry.ids.push(id);
+    groups.set(group, entry);
+  }
+  for (const [group, entry] of groups) {
+    if (entry.ids.length < 2) errors.push(`sceneProps: swap group '${group}' needs at least two variants.`);
   }
 
   return errors;

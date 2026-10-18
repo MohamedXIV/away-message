@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="180" height="360" viewBox="0 0 180 360">
+<!-- distant tree cutout seen through the window; trunk base at the bottom edge is the sway pivot -->
+<rect x="84" y="180" width="12" height="180" fill="#3a2f22"/>
+<g fill="#2f4438"><ellipse cx="90" cy="140" rx="72" ry="58"/><ellipse cx="52" cy="196" rx="44" ry="34"/><ellipse cx="130" cy="192" rx="42" ry="32"/></g>
+<g fill="#3d5544" opacity=".92"><ellipse cx="88" cy="128" rx="54" ry="40"/><ellipse cx="60" cy="186" rx="30" ry="22"/><ellipse cx="122" cy="184" rx="28" ry="20"/></g>
+</svg>

@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900">
+<!-- tangent-space normal map for the architecture layer: flat base (128,128,255),
+     beveled window/door frames and floor seam carry real slopes so movable lights read depth -->
+<rect width="1600" height="900" fill="#8080ff"/>
+<polygon points="0,700 1600,640 1600,660 0,720" fill="#8074fb"/>
+<polygon points="0,688 1600,628 1600,648 0,708" fill="#8880f8"/>
+<!-- window frame inner slopes -->
+<g fill="#7489f6">
+  <rect x="244" y="114" width="512" height="18"/>
+  <rect x="244" y="150" width="18" height="424"/>
+</g>
+<g fill="#9679f8">
+  <rect x="738" y="114" width="18" height="424"/>
+  <rect x="244" y="556" width="512" height="18"/>
+</g>
+<!-- door frame slopes -->
+<g fill="#7489f6"><rect x="1404" y="64" width="18" height="478"/></g>
+<g fill="#9679f8"><rect x="1580" y="64" width="18" height="478"/></g>
+<!-- wallpaper stripe bump -->
+<g fill="#8a80fa" opacity=".7"><rect y="120" width="1600" height="10"/><rect y="560" width="1600" height="8"/></g>
+</svg>
