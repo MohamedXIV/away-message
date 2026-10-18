@@ -43,6 +43,7 @@ export function projectCoreState(
     myplace: myplaceState,
     vfs: vfsState,
     downloads: downloadState.tasks,
+    downloadNextOrdinal: downloadState.nextDownloadOrdinal,
     deliveries: deliveryState,
     installedSoftware: owners.software.getInstalledSoftware(),
     social: owners.social.getState(conversationOverride),
