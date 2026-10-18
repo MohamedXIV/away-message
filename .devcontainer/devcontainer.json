@@ -1,9 +1,11 @@
 {
   "name": "Away Message - Desktop Lite",
-  "image": "mcr.microsoft.com/devcontainers/universal:2",
+  "image": "mcr.microsoft.com/devcontainers/javascript-node:24-bookworm",
   "features": {
     "ghcr.io/devcontainers/features/desktop-lite:1": {}
   },
+  "overrideCommand": false,
+  "runArgs": ["--init"],
   "forwardPorts": [6080],
   "portsAttributes": {
     "6080": {
