@@ -1,6 +1,6 @@
 // GENERATED — do not edit by hand.
-// Source: content/store.json (content v4d320275). Regenerate: npm run content:pull.
-export const WORLD_CONTENT_VERSION = '4d320275';
+// Source: content/store.json (content v7e87d7c7). Regenerate: npm run content:pull.
+export const WORLD_CONTENT_VERSION = '7e87d7c7';
 
 export interface GeneratedSpatialPoint {
   x: number;
@@ -1211,6 +1211,22 @@ export const GENERATED_ASSETS: GeneratedAssetDef[] = [
     tags: ["production", "starter-spike", "architecture", "normal-map", "layer-architecture"],
   },
   {
+    id: "spike_architecture_gn",
+    name: "Spike Room Architecture [Graphic Novel]",
+    kind: "image",
+    uri: "assets/world/starter-spike/gn/spike_architecture_gn.png",
+    normalMapAssetId: "spike_architecture_gn_n",
+    tags: ["production", "starter-spike", "architecture", "normal-map", "layer-architecture", "gn", "draft-paintover"],
+  },
+  {
+    id: "spike_architecture_gn_n",
+    name: "Spike Room Architecture [Graphic Novel] Normal",
+    kind: "image",
+    uri: "assets/world/starter-spike/gn/spike_architecture_gn_n.png",
+    normalMapAssetId: null,
+    tags: ["production", "starter-spike", "normal", "gn"],
+  },
+  {
     id: "spike_architecture_n",
     name: "Spike Room Architecture Normal",
     kind: "image",
@@ -1219,12 +1235,36 @@ export const GENERATED_ASSETS: GeneratedAssetDef[] = [
     tags: ["production", "starter-spike", "normal"],
   },
   {
+    id: "spike_architecture_sr",
+    name: "Spike Room Architecture [Stylized Realism]",
+    kind: "image",
+    uri: "assets/world/starter-spike/sr/spike_architecture_sr.png",
+    normalMapAssetId: "spike_architecture_sr_n",
+    tags: ["production", "starter-spike", "architecture", "normal-map", "layer-architecture", "sr"],
+  },
+  {
+    id: "spike_architecture_sr_n",
+    name: "Spike Room Architecture [Stylized Realism] Normal",
+    kind: "image",
+    uri: "assets/world/starter-spike/sr/spike_architecture_sr_n.png",
+    normalMapAssetId: null,
+    tags: ["production", "starter-spike", "normal", "sr"],
+  },
+  {
     id: "spike_bed_a",
     name: "Spike Bed Variant A",
     kind: "image",
     uri: "assets/world/starter-spike/spike_bed_a.svg",
     normalMapAssetId: null,
     tags: ["production", "starter-spike", "fixture-variant", "layer-fixture"],
+  },
+  {
+    id: "spike_bed_a_gn",
+    name: "Spike Bed Variant A [Graphic Novel]",
+    kind: "image",
+    uri: "assets/world/starter-spike/gn/spike_bed_a_gn.png",
+    normalMapAssetId: null,
+    tags: ["production", "starter-spike", "fixture-variant", "layer-fixture", "gn"],
   },
   {
     id: "spike_bed_b",
@@ -1251,12 +1291,44 @@ export const GENERATED_ASSETS: GeneratedAssetDef[] = [
     tags: ["production", "starter-spike", "soft-surface", "layer-fixture"],
   },
   {
+    id: "spike_curtain_gn",
+    name: "Spike Curtain Strip [Graphic Novel]",
+    kind: "image",
+    uri: "assets/world/starter-spike/gn/spike_curtain_gn.png",
+    normalMapAssetId: null,
+    tags: ["production", "starter-spike", "soft-surface", "layer-fixture", "gn", "draft-paintover"],
+  },
+  {
+    id: "spike_curtain_sr",
+    name: "Spike Curtain Strip [Stylized Realism]",
+    kind: "image",
+    uri: "assets/world/starter-spike/sr/spike_curtain_sr.png",
+    normalMapAssetId: null,
+    tags: ["production", "starter-spike", "soft-surface", "layer-fixture", "sr"],
+  },
+  {
     id: "spike_desk",
     name: "Spike Desk",
     kind: "image",
     uri: "assets/world/starter-spike/spike_desk.svg",
     normalMapAssetId: null,
     tags: ["production", "starter-spike", "fixture", "layer-fixture"],
+  },
+  {
+    id: "spike_desk_gn",
+    name: "Spike Desk [Graphic Novel]",
+    kind: "image",
+    uri: "assets/world/starter-spike/gn/spike_desk_gn.png",
+    normalMapAssetId: null,
+    tags: ["production", "starter-spike", "fixture", "layer-fixture", "gn", "draft-paintover"],
+  },
+  {
+    id: "spike_desk_sr",
+    name: "Spike Desk [Stylized Realism]",
+    kind: "image",
+    uri: "assets/world/starter-spike/sr/spike_desk_sr.png",
+    normalMapAssetId: null,
+    tags: ["production", "starter-spike", "fixture", "layer-fixture", "sr"],
   },
   {
     id: "spike_door_panel",
@@ -1283,6 +1355,22 @@ export const GENERATED_ASSETS: GeneratedAssetDef[] = [
     tags: ["production", "starter-spike", "exterior", "layer-exterior"],
   },
   {
+    id: "spike_exterior_gn",
+    name: "Spike Window Exterior Backdrop [Graphic Novel]",
+    kind: "image",
+    uri: "assets/world/starter-spike/gn/spike_exterior_gn.png",
+    normalMapAssetId: null,
+    tags: ["production", "starter-spike", "exterior", "layer-exterior", "gn", "draft-paintover"],
+  },
+  {
+    id: "spike_exterior_sr",
+    name: "Spike Window Exterior Backdrop [Stylized Realism]",
+    kind: "image",
+    uri: "assets/world/starter-spike/sr/spike_exterior_sr.png",
+    normalMapAssetId: null,
+    tags: ["production", "starter-spike", "exterior", "layer-exterior", "sr"],
+  },
+  {
     id: "spike_lamp",
     name: "Spike Bedside Lamp",
     kind: "image",
@@ -1297,6 +1385,22 @@ export const GENERATED_ASSETS: GeneratedAssetDef[] = [
     uri: "assets/world/starter-spike/spike_lamp_glow.svg",
     normalMapAssetId: null,
     tags: ["production", "starter-spike", "emissive", "practical", "layer-light"],
+  },
+  {
+    id: "spike_lamp_gn",
+    name: "Spike Bedside Lamp [Graphic Novel]",
+    kind: "image",
+    uri: "assets/world/starter-spike/gn/spike_lamp_gn.png",
+    normalMapAssetId: null,
+    tags: ["production", "starter-spike", "fixture", "practical", "layer-light", "gn", "draft-paintover"],
+  },
+  {
+    id: "spike_lamp_sr",
+    name: "Spike Bedside Lamp [Stylized Realism]",
+    kind: "image",
+    uri: "assets/world/starter-spike/sr/spike_lamp_sr.png",
+    normalMapAssetId: null,
+    tags: ["production", "starter-spike", "fixture", "practical", "layer-light", "sr"],
   },
   {
     id: "spike_parcel",
@@ -1315,6 +1419,22 @@ export const GENERATED_ASSETS: GeneratedAssetDef[] = [
     tags: ["production", "starter-spike", "fixture", "computer", "layer-fixture"],
   },
   {
+    id: "spike_pc_placeholder_gn",
+    name: "Spike Desk Computer Placeholder [Graphic Novel]",
+    kind: "image",
+    uri: "assets/world/starter-spike/gn/spike_pc_placeholder_gn.png",
+    normalMapAssetId: null,
+    tags: ["production", "starter-spike", "fixture", "computer", "layer-fixture", "gn", "draft-paintover"],
+  },
+  {
+    id: "spike_pc_placeholder_sr",
+    name: "Spike Desk Computer Placeholder [Stylized Realism]",
+    kind: "image",
+    uri: "assets/world/starter-spike/sr/spike_pc_placeholder_sr.png",
+    normalMapAssetId: null,
+    tags: ["production", "starter-spike", "fixture", "computer", "layer-fixture", "sr"],
+  },
+  {
     id: "spike_rug",
     name: "Spike Rug",
     kind: "image",
@@ -1331,6 +1451,22 @@ export const GENERATED_ASSETS: GeneratedAssetDef[] = [
     tags: ["production", "starter-spike", "foliage", "layer-exterior"],
   },
   {
+    id: "spike_tree_back_gn",
+    name: "Spike Courtyard Tree Far [Graphic Novel]",
+    kind: "image",
+    uri: "assets/world/starter-spike/gn/spike_tree_back_gn.png",
+    normalMapAssetId: null,
+    tags: ["production", "starter-spike", "foliage", "layer-exterior", "gn", "draft-paintover"],
+  },
+  {
+    id: "spike_tree_back_sr",
+    name: "Spike Courtyard Tree Far [Stylized Realism]",
+    kind: "image",
+    uri: "assets/world/starter-spike/sr/spike_tree_back_sr.png",
+    normalMapAssetId: null,
+    tags: ["production", "starter-spike", "foliage", "layer-exterior", "sr"],
+  },
+  {
     id: "spike_tree_mid",
     name: "Spike Courtyard Tree Near",
     kind: "image",
@@ -1339,12 +1475,44 @@ export const GENERATED_ASSETS: GeneratedAssetDef[] = [
     tags: ["production", "starter-spike", "foliage", "layer-exterior"],
   },
   {
+    id: "spike_tree_mid_gn",
+    name: "Spike Courtyard Tree Near [Graphic Novel]",
+    kind: "image",
+    uri: "assets/world/starter-spike/gn/spike_tree_mid_gn.png",
+    normalMapAssetId: null,
+    tags: ["production", "starter-spike", "foliage", "layer-exterior", "gn", "draft-paintover"],
+  },
+  {
+    id: "spike_tree_mid_sr",
+    name: "Spike Courtyard Tree Near [Stylized Realism]",
+    kind: "image",
+    uri: "assets/world/starter-spike/sr/spike_tree_mid_sr.png",
+    normalMapAssetId: null,
+    tags: ["production", "starter-spike", "foliage", "layer-exterior", "sr"],
+  },
+  {
     id: "spike_window_glass",
     name: "Spike Window Glass Overlay",
     kind: "image",
     uri: "assets/world/starter-spike/spike_window_glass.svg",
     normalMapAssetId: null,
     tags: ["production", "starter-spike", "glass", "weather-window", "layer-glass"],
+  },
+  {
+    id: "spike_window_glass_gn",
+    name: "Spike Window Glass Overlay [Graphic Novel]",
+    kind: "image",
+    uri: "assets/world/starter-spike/gn/spike_window_glass_gn.png",
+    normalMapAssetId: null,
+    tags: ["production", "starter-spike", "glass", "weather-window", "layer-glass", "gn", "draft-paintover"],
+  },
+  {
+    id: "spike_window_glass_sr",
+    name: "Spike Window Glass Overlay [Stylized Realism]",
+    kind: "image",
+    uri: "assets/world/starter-spike/sr/spike_window_glass_sr.png",
+    normalMapAssetId: null,
+    tags: ["production", "starter-spike", "glass", "weather-window", "layer-glass", "sr"],
   },
 ];
 

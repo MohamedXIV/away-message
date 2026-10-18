@@ -1,0 +1,140 @@
+{
+  "$comment": [
+    "Issue #159 — authored layer production manifest.",
+    "One row per blockout layer the treatments may re-author. 'subject' is",
+    "shared across treatments; the full prompt is subject + keying suffix +",
+    "the treatment's promptStyle from treatments.json. mat.py reads 'frame'",
+    "from --blockout so the authored normalized geometry never drifts.",
+    "key: magenta = chroma-keyed cut-out; none = full-frame plate (cover-fit);",
+    "black = additive/emissive layer keyed against black.",
+    "Status legend: generated = PNG exists and was visually checked."
+  ],
+  "layers": {
+    "spike_architecture": {
+      "blockout": "spike_architecture.svg",
+      "size": "1792x1024",
+      "mode": "architecture",
+      "subject": "empty 2005 motel room wall shell, straight-on flat elevation, no furniture, no window, no door"
+    },
+    "spike_exterior": {
+      "blockout": "spike_exterior.svg",
+      "size": "1280x1024",
+      "key": "none",
+      "align": "center",
+      "subject": "roadside motel courtyard seen straight-on from a window: asphalt strip, low office-wing buildings, chain-link fence, utility pole, one faded sedan, overcast sky, no people, no text"
+    },
+    "spike_tree_back": {
+      "blockout": "spike_tree_back.svg",
+      "size": "1024x1792",
+      "key": "magenta",
+      "align": "bottom",
+      "subject": "distant courtyard tree, thin straight trunk at bottom center, sparse muted dark-green canopy"
+    },
+    "spike_tree_mid": {
+      "blockout": "spike_tree_mid.svg",
+      "size": "1024x1792",
+      "key": "magenta",
+      "align": "bottom",
+      "subject": "nearer small leafy tree, dark trunk at bottom center, fuller dark-green canopy"
+    },
+    "spike_curtain": {
+      "blockout": "spike_curtain.svg",
+      "size": "1024x1792",
+      "key": "none",
+      "align": "center",
+      "subject": "vertical strip of faded burgundy polyester curtain fabric, soft vertical pleats, flat front view, fabric fills the whole frame edge to edge"
+    },
+    "spike_window_glass": {
+      "blockout": "spike_window_glass.svg",
+      "size": "1280x1024",
+      "key": "none",
+      "alpha": 0.4,
+      "align": "center",
+      "subject": "full rectangular old window glass plate filling the whole frame, faint diagonal reflections, dust streaks, slight green-grey tint, dirty edges"
+    },
+    "spike_bed_a": {
+      "blockout": "spike_bed_a.svg",
+      "size": "1536x1024",
+      "key": "magenta",
+      "align": "bottom",
+      "subject": "cheap 2005 motel bed, straight-on side elevation: thin sagging mattress, dated dusty-rose floral quilt, one white pillow at the left, low dark wooden base frame"
+    },
+    "spike_bed_b": {
+      "blockout": "spike_bed_b.svg",
+      "size": "1536x1024",
+      "key": "magenta",
+      "align": "bottom",
+      "subject": "same cheap 2005 motel bed frame with different bedding, straight-on side elevation: grey-teal striped blanket, one pillow at the right, low dark wooden base frame"
+    },
+    "spike_desk": {
+      "blockout": "spike_desk.svg",
+      "size": "1280x1024",
+      "key": "magenta",
+      "align": "bottom",
+      "subject": "cheap 2005 motel desk, straight-on view: light oak laminate top with a cigarette burn, thin metal legs, low drawer pedestal"
+    },
+    "spike_chair": {
+      "blockout": "spike_chair.svg",
+      "size": "1024x1536",
+      "key": "magenta",
+      "align": "bottom",
+      "subject": "molded plastic patio chair, faded teal seat shell, four thin dark legs, straight-on view"
+    },
+    "spike_pc_placeholder": {
+      "blockout": "spike_pc_placeholder.svg",
+      "size": "1024x1024",
+      "key": "magenta",
+      "align": "bottom",
+      "subject": "2005 desktop computer set, straight-on view: beige mini-tower case with floppy slot and round power button beside a bulky beige CRT monitor with a dark curved screen"
+    },
+    "spike_dresser": {
+      "blockout": "spike_dresser.svg",
+      "size": "1024x1024",
+      "key": "magenta",
+      "align": "bottom",
+      "subject": "2005 motel dresser, straight-on view: two wide drawers, light oak veneer cabinet, small metal knobs, scuffed top edge"
+    },
+    "spike_rug": {
+      "blockout": "spike_rug.svg",
+      "size": "2560x1080",
+      "key": "magenta",
+      "align": "center",
+      "subject": "worn burnt-orange low-pile area rug with a faded geometric border, flattened top-down view, fraying corners"
+    },
+    "spike_lamp": {
+      "blockout": "spike_lamp.svg",
+      "size": "1024x1792",
+      "key": "magenta",
+      "align": "bottom",
+      "subject": "2005 floor lamp, straight-on view: dark metal round base, thin black pole, tapered beige fabric shade, shade unlit"
+    },
+    "spike_lamp_glow": {
+      "blockout": "spike_lamp_glow.svg",
+      "size": "1024x1280",
+      "key": "black",
+      "align": "center",
+      "subject": "soft warm amber lamp glow radiating from a lampshade shape, fading smoothly to pure black at every edge, no room, no object outline"
+    },
+    "spike_ac_unit": {
+      "blockout": "spike_ac_unit.svg",
+      "size": "1536x1024",
+      "key": "magenta",
+      "align": "center",
+      "subject": "2005 through-the-window air conditioner, straight-on view: yellowed off-white metal case, dark front louvre grille, single round control dial on the right"
+    },
+    "spike_parcel": {
+      "blockout": "spike_parcel.svg",
+      "size": "1024x1280",
+      "key": "magenta",
+      "align": "bottom",
+      "subject": "soft-sided dark navy rolling suitcase with the handle extended, small taped cardboard box leaning against it, straight-on view"
+    },
+    "spike_door_panel": {
+      "blockout": "spike_door_panel.svg",
+      "size": "1024x1792",
+      "key": "magenta",
+      "align": "center",
+      "subject": "cheap motel gallery door panel, straight-on flat view: dark plum painted wood, two recessed panels, brass doorknob on the right edge, one small blank paper sign hanging from a nail"
+    }
+  }
+}
