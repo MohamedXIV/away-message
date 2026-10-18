@@ -161,11 +161,11 @@ describe('Current-format computer and item ownership persistence', () => {
     await saveSlot(initial, 'canonical_pc');
     const snapshot = (await loadSlotSnapshot('canonical_pc'))!;
     expect(snapshot).not.toBeNull();
-    expect(snapshot.computer.assembled).toBe(true);
-    expect(snapshot.computer.cpu?.id).toBe(canonical.computer.cpu?.id);
-    expect(snapshot.display.monitor?.id).toBe(canonical.display.monitor?.id);
+    expect(snapshot.computer!.assembled).toBe(true);
+    expect(snapshot.computer!.cpu?.id).toBe(canonical.computer.cpu?.id);
+    expect(snapshot.display!.monitor?.id).toBe(canonical.display.monitor?.id);
     expect(snapshot.os.currentOsId).toBe('Orion_4.8');
-    expect(snapshot.inventory.items).toContainEqual({
+    expect(snapshot.inventory!.items).toContainEqual({
       instanceId: 'owned:monitor:0',
       catalogItemId: canonical.display.monitor!.id,
       kind: 'display',
@@ -174,7 +174,7 @@ describe('Current-format computer and item ownership persistence', () => {
     const restored = new SimulationEngine(snapshot);
     expect(restored.hardware.getState().hasComputer).toBe(true);
     expect(restored.os.getCurrentOsId()).toBe('Orion_4.8');
-    expect(restored.exportSnapshot().inventory.items).toEqual(snapshot.inventory.items);
+    expect(restored.exportSnapshot().inventory.items).toEqual(snapshot.inventory!.items);
   });
 
   it('keeps inserted-media identity and inventory ownership in a current save', async () => {
@@ -190,8 +190,8 @@ describe('Current-format computer and item ownership persistence', () => {
     } as any);
     await saveSlot(sim, 'inserted_cd');
     const snapshot = (await loadSlotSnapshot('inserted_cd'))!;
-    expect(snapshot.computer.insertedMediaId).toBe('owned:inserted-cd');
-    expect(snapshot.inventory.items).toContainEqual({
+    expect(snapshot.computer!.insertedMediaId).toBe('owned:inserted-cd');
+    expect(snapshot.inventory!.items).toContainEqual({
       instanceId: 'owned:inserted-cd', catalogItemId: 'disc_orion_48_recovery',
       kind: 'media', location: 'inserted',
     });
