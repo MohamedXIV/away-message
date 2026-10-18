@@ -1,5 +1,9 @@
+// @vitest-environment jsdom
 import { describe, expect, it, vi } from 'vitest';
 import { SimulationEngine } from '../../src/engine/SimulationEngine';
+import { createScrapYardBundle } from '../../src/engine/hardware/catalog';
+import { saveSlot, loadSlotEngine } from '../../src/persistence/slots';
+import { db } from '../../src/persistence/db';
 import { EventBus } from '../../src/engine/EventBus';
 import { FileSystemEngine } from '../../src/engine/FileSystemEngine';
 import { DownloadManager } from '../../src/engine/DownloadManager';
@@ -76,6 +80,10 @@ describe('#174 deterministic canonical FileSystem and Download identities', () =
   it('preserves both allocators through canonical composed SimulationKernel export and reload', () => {
     const make = () => {
       const game = new SimulationEngine();
+      // Download validation is a gameplay invariant: equip a real network
+      // card through its owner before testing identity persistence.
+      game.hardware.installModularHardware(createScrapYardBundle());
+      expect(game.hardware.upgradeConnection('dsl_256k')).toBe(true);
       const path = 'C:/Documents/user-file.txt';
       const firstFile = game.vfs.createFile(file(path), 480);
       game.vfs.deletePermanently(path);
@@ -105,5 +113,34 @@ describe('#174 deterministic canonical FileSystem and Download identities', () =
       ...state, nextFileOrdinal: undefined,
     });
     expect(restored.createFile(file('C:/Documents/new.txt')).id).toBe('file_101');
+  });
+
+  it('keeps cancelled download and deleted-file IDs consumed in a real IndexedDB slot', async () => {
+    await db.transaction('rw', db.saves, db.conversation_pages, async () => {
+      await db.saves.clear();
+      await db.conversation_pages.clear();
+    });
+    const game = new SimulationEngine();
+    game.hardware.installModularHardware(createScrapYardBundle());
+    expect(game.hardware.upgradeConnection('dsl_256k')).toBe(true);
+    const removedFile = game.vfs.createFile(file('C:/Documents/reused.txt'), 640);
+    const cancelled = game.downloads.startDownload(dl);
+    expect(game.vfs.deletePermanently(removedFile.path)).toBe(true);
+    expect(game.downloads.cancelDownload(cancelled.id)).toBe(true);
+
+    await saveSlot(game, 'identity-checkpoint');
+    const engine = (await loadSlotEngine('identity-checkpoint'))!;
+    expect(engine).toBeDefined();
+    const nextFile = engine.vfs.createFile(file('C:/Documents/reused.txt'), 640);
+    const nextDownload = engine.downloads.startDownload(dl);
+    expect(nextFile.id).not.toBe(removedFile.id);
+    expect(nextDownload.id).not.toBe(cancelled.id);
+
+    await saveSlot(engine, 'identity-checkpoint');
+    const again = (await loadSlotEngine('identity-checkpoint'))!;
+    const file3 = again.vfs.createFile(file('C:/Documents/reused-again.txt'), 640);
+    const download3 = again.downloads.startDownload(dl);
+    expect(new Set([removedFile.id, nextFile.id, file3.id]).size).toBe(3);
+    expect(new Set([cancelled.id, nextDownload.id, download3.id]).size).toBe(3);
   });
 });
