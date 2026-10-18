@@ -1,8 +1,7 @@
-// v6 save-document facade.
-// Historical v2->v5 migrations are preserved byte-for-byte in slotsV5Core.ts.
-// This file owns only the current format, v6 summary shape, and v6 chaining.
+// Current-format v6 document + cold archive: the sole production save writer/reader.
+// Pre-freeze development saves from older formats may be refused; no migration chain.
 
-export * from './slotsV5Core';
+export * from './slotUi';
 
 import { db } from './db';
 import {
@@ -19,16 +18,15 @@ import {
   getCurrentPulseSlotId,
   getPulseSlotStorageKey,
 } from '../apps/pulse/persistence';
-import {
-  migrateSnapshotToV4,
-  migrateSnapshotToV5,
-  type SaveCompatibility,
-  type SlotSummary,
-} from './slotsV5Core';
-import { migrateSnapshotToV6 } from './migrations/v6ComputerState';
+import { toSummary, type SlotSummary } from './slotUi';
+
+export type SaveCompatibility = {
+  status: 'ok' | 'legacy' | 'refused';
+  reason?: string;
+};
 
 export const SAVE_FORMAT_VERSION = 6;
-export const SAVE_FORMAT_MIN_SUPPORTED = 2;
+export const SAVE_FORMAT_MIN_SUPPORTED = SAVE_FORMAT_VERSION;
 
 function readPulsePayload(slotId: string): unknown {
   try {
@@ -40,18 +38,6 @@ function readPulsePayload(slotId: string): unknown {
     // Pulse payload is best-effort; the engine snapshot remains authoritative.
   }
   return null;
-}
-
-function toSummary(record: SaveSlotRecord): SlotSummary {
-  return {
-    id: record.id,
-    name: record.name,
-    day: record.day,
-    totalMinutes: record.totalMinutes,
-    updatedAt: record.updatedAt,
-    createdAt: record.createdAt,
-    hasSnapshot: Boolean(record.snapshot),
-  };
 }
 
 export function checkSaveCompatibility(record: SaveSlotRecord | undefined | null): SaveCompatibility {
@@ -161,7 +147,7 @@ export async function saveSlot(
   return committed.summary;
 }
 
-/** Load and deterministically chain any supported document through v4/v5/v6. */
+/** Load one current-format document and its verified cold pages atomically. */
 export async function loadSlotSnapshot(slotId: string): Promise<SimulationState | null> {
   try {
     // Snapshot and cold pages must be read from the SAME committed save.
@@ -171,7 +157,7 @@ export async function loadSlotSnapshot(slotId: string): Promise<SimulationState 
       const snapshot = record?.snapshot;
       if (!snapshot || typeof snapshot !== 'object') return null;
       const rawArchive = record.meta?.conversationArchive;
-      if (rawArchive === undefined) return { snapshot, version: record.version ?? SAVE_FORMAT_VERSION };
+      if (rawArchive === undefined) return { snapshot };
       if (!isConversationArchiveManifest(rawArchive)) return null;
       const pages = await db.conversation_pages.where('slotId').equals(slotId).toArray();
       const conversations = hydrateConversationArchive(
@@ -179,17 +165,11 @@ export async function loadSlotSnapshot(slotId: string): Promise<SimulationState 
       );
       if (!conversations) return null;
       return {
-        snapshot: { ...snapshot, social: { ...snapshot.social, conversations } },
-        version: record.version ?? SAVE_FORMAT_VERSION,
+        snapshot: { ...snapshot, social: { ...snapshot.social, conversations } }
       };
     });
     if (!loaded) return null;
-    const sourceVersion = loaded.version;
-    let upgraded = loaded.snapshot as SimulationState;
-    if (sourceVersion < 4) upgraded = migrateSnapshotToV4(upgraded, sourceVersion);
-    if (sourceVersion < 5) upgraded = migrateSnapshotToV5(upgraded, sourceVersion);
-    if (sourceVersion < 6) upgraded = migrateSnapshotToV6(upgraded, sourceVersion);
-    return upgraded;
+    return loaded.snapshot as SimulationState;
   } catch {
     return null;
   }

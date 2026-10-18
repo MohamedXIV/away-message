@@ -109,14 +109,25 @@ describe('P9 save compatibility matrix', () => {
     await db.saves.delete('slot_2');
   });
 
-  it('accepts older supported formats, refuses newer and legacy', () => {
+  it('refuses pre-freeze development formats, newer writers and pre-snapshot saves', () => {
     expect(checkSaveCompatibility(undefined).status).toBe('refused');
     expect(checkSaveCompatibility(null).status).toBe('refused');
-    expect(checkSaveCompatibility({ version: 2, snapshot: {} } as any).status).toBe('ok');
+    expect(checkSaveCompatibility({ version: 2, snapshot: {} } as any).status).toBe('refused');
+    expect(checkSaveCompatibility({ version: 5, snapshot: {} } as any).status).toBe('refused');
     const newer = checkSaveCompatibility({ version: SAVE_FORMAT_VERSION + 1, snapshot: {} } as any);
     expect(newer.status).toBe('refused');
     expect(checkSaveCompatibility({ version: 1 } as any).status).toBe('legacy');
     expect(checkSaveCompatibility({ version: 3 } as any).status).toBe('legacy');
+  });
+
+  it('refuses an old-format document even when a complete snapshot exists', async () => {
+    const sim = new SimulationEngine();
+    const record = await saveSlot(sim, 'old-doc');
+    const stored = (await db.saves.get(record.id))!;
+    await db.saves.put({ ...stored, version: 5 });
+    expect(checkSaveCompatibility(await db.saves.get(record.id)).status).toBe('refused');
+    expect(await loadSlotSnapshot(record.id)).toBeNull();
+    await db.saves.delete(record.id);
   });
 
   it('loadSlotSnapshot returns null for incompatible saves', async () => {
