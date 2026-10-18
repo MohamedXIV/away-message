@@ -56,7 +56,7 @@ export class DownloadManager {
     let maxSeen = 0;
     for (const task of state.tasks) {
       this.tasks.set(task.id, { ...task });
-      const match = /^dl_(\\d+)$/.exec(task.id);
+      const match = /^dl_(\d+)$/.exec(task.id);
       if (match) maxSeen = Math.max(maxSeen, Number(match[1]));
     }
     const saved = state.nextDownloadOrdinal;

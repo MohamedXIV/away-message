@@ -108,7 +108,7 @@ export class FileSystemEngine {
     let maxSeen = 0;
     for (const [path, record] of Object.entries(state.files)) {
       this.putFile(this.normalizePath(path), { ...record });
-      const match = /^file_(\\d+)$/.exec(record.id);
+      const match = /^file_(\d+)$/.exec(record.id);
       if (match) maxSeen = Math.max(maxSeen, Number(match[1]));
     }
     const saved = state.nextFileOrdinal;
@@ -167,14 +167,12 @@ export class FileSystemEngine {
   }
 
   private allocateFileId(): string {
-    const liveIds = new Set<string>();
-    for (const file of this.files.values()) liveIds.add(file.id);
-    let id: string;
-    do {
-      if (!Number.isSafeInteger(this.nextFileOrdinal)) throw new Error('VFS file ID space exhausted');
-      id = `file_${this.nextFileOrdinal++}`;
-    } while (liveIds.has(id));
-    return id;
+    if (!Number.isSafeInteger(this.nextFileOrdinal)) {
+      throw new Error('VFS file ID space exhausted');
+    }
+    // The counter already exceeds every generated/explicit file_N ID. Do not
+    // scan the entire VFS for every file creation (500 files must remain cheap).
+    return `file_${this.nextFileOrdinal++}`;
   }
 
   public createFile(
@@ -203,6 +201,12 @@ export class FileSystemEngine {
       }
     }
 
+    // Explicit ID callers remain responsible for their own identities. If
+    // they insert file_N, advance this owner's allocator past it as well.
+    if (fileData.id) {
+      const match = /^file_(\d+)$/.exec(fileData.id);
+      if (match) this.nextFileOrdinal = Math.max(this.nextFileOrdinal, Number(match[1]) + 1);
+    }
     const record: FileRecord = {
       id: fileData.id || this.allocateFileId(),
       name: fileData.name,
