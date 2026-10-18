@@ -6,11 +6,50 @@ import { interpolateDayPhase, type DayPhaseParameters } from './dayPhases';
 import { updatePuddleZones, type PuddleZoneState } from './puddles';
 import { resolveWeatherLayers, type WeatherLayerResolution } from './weatherLayers';
 import { projectEnvironmentPresentation } from './environmentProjection';
-import { evaluateAmbientMotion } from './ambientMotion';
+import {
+  evaluateAmbientMotion,
+} from './ambientMotion';
+import {
+  computeSoftSurfacePoints,
+  type SoftSurfaceParams,
+} from '../layeredRoom/softSurfaceMotion';
 import {
   evaluateAuthoredLight,
+  type AuthoredLightDef,
   type LightningFlashState,
 } from './lightingEngine';
+
+/**
+ * The minimal surface a soft-surface driver needs from a Phaser Rope: a
+ * mutable points array, a dirty flag so the next render rebuilds vertices,
+ * and a setPoints for when the segment count changes. Kept structural so
+ * Node unit tests can drive a fake without booting Phaser.
+ */
+export interface SoftSurfaceRopeLike {
+  points: { x: number; y: number }[];
+  dirty: boolean;
+  setDirty(): void;
+  setPoints(points: { x: number; y: number }[]): void;
+}
+
+export interface SoftSurfaceHandle {
+  defId: string;
+  targetName: string;
+  rope: SoftSurfaceRopeLike;
+  params: SoftSurfaceParams;
+  /** Number of frames this handle has driven; QA evidence of live motion. */
+  frames: number;
+  /** Largest absolute x-offset observed since registration. */
+  peakOffsetPx: number;
+}
+
+/** Registration input from the layered-room runtime. */
+export interface SoftSurfaceHandleInit {
+  defId: string;
+  targetName: string;
+  rope: SoftSurfaceRopeLike;
+  params: SoftSurfaceParams;
+}
 
 export class EnvironmentManager {
   private scene: Phaser.Scene;
@@ -39,6 +78,13 @@ export class EnvironmentManager {
     string,
     { x: number; y: number; angle: number; scaleX: number; scaleY: number; alpha: number }
   > = new Map();
+
+  /**
+   * Soft-surface (Rope) handles registered by WorldScene for #167. The
+   * manager only drives vertex points from authored motion defs — no
+   * physics body, no rigid transform, no simulation authority.
+   */
+  private softSurfaceHandles = new Map<string, SoftSurfaceHandle>();
 
   // Puddles
   private puddleStates: Map<string, PuddleZoneState> = new Map();
@@ -101,6 +147,63 @@ export class EnvironmentManager {
   }
 
   /**
+   * Registers a Rope-backed soft surface. Re-registering the same def id
+   * replaces the previous handle so a remount never double-drives a rope.
+   */
+  public registerSoftSurface(init: SoftSurfaceHandleInit): void {
+    this.softSurfaceHandles.set(init.defId, {
+      defId: init.defId,
+      targetName: init.targetName,
+      rope: init.rope,
+      params: init.params,
+      frames: 0,
+      peakOffsetPx: 0,
+    });
+  }
+
+  public unregisterSoftSurface(defId: string): void {
+    this.softSurfaceHandles.delete(defId);
+  }
+
+  public clearSoftSurfaces(): void {
+    this.softSurfaceHandles.clear();
+  }
+
+  public getSoftSurfaceStats(): {
+    count: number;
+    surfaces: {
+      defId: string;
+      targetName: string;
+      segments: number;
+      lengthPx: number;
+      frames: number;
+      peakOffsetPx: number;
+    }[];
+  } {
+    return {
+      count: this.softSurfaceHandles.size,
+      surfaces: [...this.softSurfaceHandles.values()].map((handle) => ({
+        defId: handle.defId,
+        targetName: handle.targetName,
+        segments: handle.params.segments,
+        lengthPx: Math.round(handle.params.lengthPx * 100) / 100,
+        frames: handle.frames,
+        peakOffsetPx: Math.round(handle.peakOffsetPx * 1000) / 1000,
+      })),
+    };
+  }
+
+  /**
+   * Current wind used by all environmental motion. Canonical environment
+   * presentation wins; the projection's authored fallback follows.
+   */
+  public getResolvedWindIntensity(): number {
+    return this.projection.environment
+      ? projectEnvironmentPresentation(this.projection.environment).windIntensity
+      : this.projection.windIntensity ?? 0;
+  }
+
+  /**
    * Frame-by-frame living update hook called from WorldScene.update()
    */
   public update(timeMs: number, deltaMs: number): void {
@@ -121,7 +224,10 @@ export class EnvironmentManager {
     // 4. Ambient motion bindings
     this.updateAmbientMotions(timeMs);
 
-    // 5. Puddle simulation
+    // 5. Soft-surface vertex sway (issue #167)
+    this.updateSoftSurfaces(timeMs);
+
+    // 6. Puddle simulation
     this.updatePuddles(timeMs, deltaMinutes);
   }
 
@@ -133,6 +239,10 @@ export class EnvironmentManager {
     this.currentDayPhaseParams = interpolateDayPhase(this.currentMinuteOfDay);
 
     this.applyAmbientLighting();
+    // Authored light identity set may change on any projection update
+    // (lamp toggle, focus swap that re-resolves practicals). Sync add/remove
+    // once here — the per-frame path only modulates what already exists.
+    this.syncAuthoredLights();
     if (this.scene?.scale) {
       this.syncWeatherWindowZones(this.scene.scale.width, this.scene.scale.height);
     }
@@ -257,6 +367,47 @@ export class EnvironmentManager {
     const finalB = Math.min(255, Math.max(0, Math.round(b)));
 
     this.scene.lights.setAmbientColor((finalR << 16) | (finalG << 8) | finalB);
+  }
+
+  /**
+   * Keeps the live light set in sync with the projection's authored lights.
+   * updateLights() only modulates lights that already exist, so a runtime
+   * toggle (lamp on/off, a fixture swap that changes lights) would
+   * otherwise never add or remove a Phaser light. This is the single place
+   * authored light identities are created/destroyed at runtime: a toggle
+   * adds or removes exactly one light and leaves every other light —
+   * including the adapter point lights — untouched.
+   */
+  private syncAuthoredLights(): void {
+    if (!this.scene?.lights) return;
+
+    const defs = this.projection.authoredLights ?? [];
+    const wanted = new Map<string, AuthoredLightDef | null>(
+      defs.map((def) => [def.id, def] as [string, AuthoredLightDef]),
+    );
+    // Adapter point lights are created at setup and always stay wanted.
+    for (const pointLight of this.projection.lighting.pointLights) {
+      if (!wanted.has(pointLight.id)) wanted.set(pointLight.id, null);
+    }
+
+    for (const [id, light] of [...this.dynamicLights.entries()]) {
+      if (wanted.has(id)) continue;
+      this.scene.lights.removeLight(light);
+      this.dynamicLights.delete(id);
+      if (this.movableLight === light) this.movableLight = undefined;
+    }
+
+    for (const def of defs) {
+      if (this.dynamicLights.has(def.id)) continue;
+      const colorNum = parseInt(def.color.replace('#', ''), 16) || 0xffffff;
+      const lx = def.x <= 1 ? def.x * this.scene.scale.width : def.x;
+      const ly = def.y <= 1 ? def.y * this.scene.scale.height : def.y;
+      const light = this.scene.lights.addLight(lx, ly, def.radius, colorNum, def.baseIntensity);
+      this.dynamicLights.set(def.id, light);
+      if (def.movable && !this.movableLight) {
+        this.movableLight = light;
+      }
+    }
   }
 
   private updateLights(timeMs: number): void {
@@ -459,9 +610,7 @@ export class EnvironmentManager {
 
   private updateAmbientMotions(timeMs: number): void {
     if (!this.projection.ambientMotions) return;
-    const wind = this.projection.environment
-      ? projectEnvironmentPresentation(this.projection.environment).windIntensity
-      : this.projection.windIntensity ?? 0;
+    const wind = this.getResolvedWindIntensity();
 
     for (const motionDef of this.projection.ambientMotions) {
       const target = this.motionTargets.get(motionDef.targetName);
@@ -492,6 +641,41 @@ export class EnvironmentManager {
       } else {
         objAny.x = base.x + motion.xOffset;
         objAny.y = base.y + motion.yOffset;
+      }
+    }
+  }
+
+  // --------------------------------------------------------------------------
+  // Soft-Surface Vertex Sway (issue #167)
+  // --------------------------------------------------------------------------
+
+  /**
+   * Drives Rope-backed hanging soft surfaces from the same wind resolution
+   * the rigid motions use. Each frame mutates the rope's local points and
+   * flags it dirty; the pinned top point never moves. This is presentation
+   * math — Matter.js cloth/rope physics is deliberately NOT used here.
+   */
+  private updateSoftSurfaces(timeMs: number): void {
+    if (this.softSurfaceHandles.size === 0) return;
+    const wind = this.getResolvedWindIntensity();
+
+    for (const handle of this.softSurfaceHandles.values()) {
+      const points = computeSoftSurfacePoints(handle.params, timeMs, wind);
+      if (handle.rope.points.length !== points.length) {
+        handle.rope.setPoints(points);
+      } else {
+        const ropePoints = handle.rope.points;
+        for (let i = 0; i < points.length; i++) {
+          const target = ropePoints[i];
+          if (!target) continue;
+          target.x = points[i]!.x;
+          target.y = points[i]!.y;
+        }
+        handle.rope.setDirty();
+      }
+      handle.frames += 1;
+      for (const point of points) {
+        if (Math.abs(point.x) > handle.peakOffsetPx) handle.peakOffsetPx = Math.abs(point.x);
       }
     }
   }
@@ -627,5 +811,6 @@ export class EnvironmentManager {
     this.dynamicLights.clear();
     this.motionTargets.clear();
     this.baseTransforms.clear();
+    this.softSurfaceHandles.clear();
   }
 }
