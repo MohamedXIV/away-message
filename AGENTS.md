@@ -77,6 +77,18 @@ its acceptance gate?" If not, simplify or change the task. Do not treat
 production-art work as optional merely because the simulation still has
 interesting refactor opportunities.
 
+## Mandatory documentation routing (all agents, all entry points)
+
+`AGENTS.md` is the **entry point**, not a replacement for canonical design docs. Before implementation, an agent (GPT-6, Qoder, OpenCode, or any future tool) **must**:
+
+1. Read this root file and inspect the current issue, canonical branch/PR, and relevant live code.
+2. Follow **`## Canonical design docs`** below to the documents owning the affected domain; read the relevant sections *before* changing code, content, art, or architecture. Issue comments and agent handoffs do not supersede canonical documents unless a later explicitly approved decision says so.
+3. For any authored physical place, Phaser scene, room/art, prop, camera, or Gen-AI asset work, read **both** `docs/11-SPATIAL-PRESENCE-VENUES-AND-ACTOR-PRESENTATION.md` (Place/Space/View/Focus/Anchor semantics) and `docs/14-FIRST-PRODUCTION-ART-AND-PLAYABLE-SLICE.md` (production visuals, view-count choice, 3D-reference/AI workflow). For content changes also read the relevant authoring/schema/validation code. #167's single-view *technical spike* is not a rule that all locations get one view.
+4. State in the PR description (see `.github/pull_request_template.md`) the **exact documentation paths consulted** and the architectural decisions relevant to the change. For physical-place work, explain why the chosen authored views and anchors suffice; for art, explain how mutable layers and any cross-view asset identity stay consistent. A bare "read docs" assertion without decisions/evidence is insufficient.
+5. If a proposed implementation conflicts with these documents, **stop, surface the conflict, and obtain an explicit owner decision** before making it a new product law. Update the owning canonical document in the same approved PR; do not silently introduce a competing design note or duplicate truth.
+
+Reviewers must request the missing documentation/decision evidence before accepting a domain-affecting PR. This is a human/review contract, **not proof that a model actually read a file**; neither a checked box nor green CI can independently verify comprehension.
+
 ## Product identity — do not regress
 
 Away Message is an **open-ended sandbox**, not a fixed campaign.
