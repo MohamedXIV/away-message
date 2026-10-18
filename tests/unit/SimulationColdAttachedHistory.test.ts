@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ConversationHistory } from '../../src/engine/social/ConversationHistory';
 import { SimulationEngine } from '../../src/engine/SimulationEngine';
 import { db } from '../../src/persistence/db';
-import { loadSlotColdBootstrap, saveSlot } from '../../src/persistence/slots';
+import { loadSlotColdBootstrap, loadSlotSnapshot, saveSlot } from '../../src/persistence/slots';
 import { readSavedColdConversationChunk } from '../../src/persistence/conversationArchive';
 import type { MessageRecord } from '../../src/engine/types';
 
@@ -114,8 +114,10 @@ describe('#173 cold runtime conversation authority and async page seam', () => {
     const selected = await engine.getConversationReadAsync(buddy.id, 105, 30);
     expect(selected.messages).toEqual(messages.slice(65, 95));
     expect((await engine.social.getMessagesAsync(buddy.id))).toEqual(messages);
-    // Synchronous save is rejected, never writes a silently truncated slot.
-    await expect(saveSlot(engine, 'new')).rejects.toThrow(/async export/);
+    // Async slot save exports all cold pages, rather than truncating or rejecting.
+    const copy = await saveSlot(engine, 'new');
+    expect(copy.hasSnapshot).toBe(true);
+    expect((await loadSlotSnapshot('new'))?.social.conversations[buddy.id]).toEqual(messages);
     engine.markConversationAsRead(buddy.id);
     expect((await engine.getConversationReadAsync(buddy.id, 105, 30)).messages.every(m => m.isRead)).toBe(true);
     expect(engine.social.getUnreadTraySummary(4).unreadCount).toBe(0);

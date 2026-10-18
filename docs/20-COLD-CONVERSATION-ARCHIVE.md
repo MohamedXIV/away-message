@@ -87,15 +87,34 @@ page read **throws** rather than returning a truncated history.
 monotonically and invalidate old readers. `SimulationKernel.getConversationReadAsync`
 retains the known-handle privacy gate, including after the await.
 
-The production boot and `saveSlot` remain on the synchronous full-history path:
-**do not pass a partially bootstrapped engine to the synchronous save path**.
-The cold async owner and read side are now testable; async atomic save and a
-durable reader rebind after saving are still required for production cutover.
+The production boot still uses the eager `loadSlotSnapshot` path.
+However, `saveSlot` now selects `SimulationKernel.exportSnapshotAsync()` when
+available: this explicit export awaits complete old pages, rejects changed
+simulation revisions/failed pages, and writes the complete snapshot plus
+64-message pages in one atomic transaction. The transaction derives the
+monotonic slot generation inside its write lock. When a cold-backed engine
+writes **its originating slot**, its live cold reader rebinds to that new
+generation without hydrating the old message-object graph. A save to another
+slot leaves the source reader unchanged. The Pulse **Save log** action also
+uses async complete-history export and reports read failures.
+
+`SimulationColdAsyncSlotSave.test.ts` verifies save→load parity, appended
+messages and read receipts, original-slot rebind, page-count growth and
+fail-closed saves. `SimulationColdAttachedHistory.test.ts` also verifies that
+saving a cold-backed game to a second slot produces a full transcript while
+an independent overwrite of its **source** slot still invalidates the old
+reader.
+
+**Not a production cold-boot cutover:** normal game boot must still not use
+the partial `loadSlotColdBootstrap` result until an owned, slot-bound cold
+attachment is wired into boot and the normal Pulse conversation UI loads
+older pages through the authorized async projection.
 
 **Safety boundary:** cold bootstrap returns a **partial conversation snapshot**
 plus the index metadata. It is explicitly **not** used by the production boot
-until the single Social owner can attach the cold source, merge new messages
-and read receipts, and asynchronously export complete history on save. Passing
-the bootstrap snapshot directly to the synchronous kernel would truncate
-history and is forbidden. The new tests prove the bootstrap avoids historical
-message-body fetches; they do not claim that live game loads do so yet.
+until the normal boot path attaches the single Social owner to its validated
+slot-bound cold reader and routes older Pulse pages through async projections.
+Passing the bootstrap snapshot directly to the synchronous kernel without
+that attachment would truncate history and is forbidden. The new tests prove
+that a **test-owned attachment** supports complete async saves and reads;
+they do not claim production boot or Pulse older-page UI has been switched.
