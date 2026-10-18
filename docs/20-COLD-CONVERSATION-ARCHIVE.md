@@ -59,7 +59,7 @@ Do not mark #173 complete on this milestone alone: live history lifecycle and
 remaining relationship/graph/presence owner decomposition need explicit closure
 evidence before a Ready/merge decision.
 
-## Incremental cold-runtime bootstrap contract (not yet production boot)
+## Incremental cold-runtime bootstrap contract
 
 A cold bootstrap seam is now available via `loadSlotColdBootstrap(slotId)`. Each
 new save persists **small owner-derived indexes** from `ConversationHistory`
@@ -105,10 +105,28 @@ saving a cold-backed game to a second slot produces a full transcript while
 an independent overwrite of its **source** slot still invalidates the old
 reader.
 
-**Not a production cold-boot cutover:** normal game boot must still not use
-the partial `loadSlotColdBootstrap` result until an owned, slot-bound cold
-attachment is wired into boot and the normal Pulse conversation UI loads
-older pages through the authorized async projection.
+### Production cutover (#173)
+
+The live App boot path now calls `loadSlotEngine(slotId)`. When the slot has
+a validated cold index and complete archive-page key inventory, this creates the
+single composed SimulationKernel from the saved recent tails and attaches the
+same SocialEngine's `ConversationHistory` to an immutable slot-scoped, generation-
+guarded page reader **before publishing the engine to Zustand/React**. It then
+rechecks the source slot version; invalid/missing archives refuse boot. Existing
+index-free v1 archives retain a complete eager `loadSlotSnapshot` fallback, never
+a partial-history fallback. The initial boot loads zero historical page values.
+
+`ChatWindow` uses `useConversationPage` / `getConversationReadAsync` for its
+visible 50-message pages, while newest eight-message suggestions still use a
+small synchronous owner-backed page. The hook drops cancelled, old actor/offset,
+old engine and stale-revision results. A failed page shows Retry rather than a
+truncated transcript; log export uses an independently authorized async path.
+Real browser proof is `ScenarioH_PulseColdPaging.spec.ts`, running against
+IndexedDB, the production loader and the mounted React ChatWindow.
+
+The pre-save-format-freeze legacy path remains only for complete index-free
+snapshots; future #174 owns unrelated old persistence cleanup. A future Worker
+transport remains #175's responsibility.
 
 **Safety boundary:** cold bootstrap returns a **partial conversation snapshot**
 plus the index metadata. It is explicitly **not** used by the production boot
