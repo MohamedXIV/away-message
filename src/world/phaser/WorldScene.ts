@@ -785,6 +785,7 @@ export class WorldScene extends Phaser.Scene {
       props: projection.sceneProps ?? [],
       windowZones: projection.weatherWindowZones ?? [],
       softSurfaces: projection.softSurfaces ?? [],
+      backgroundAssetId: projection.assetId,
     });
   }
 
@@ -898,6 +899,10 @@ export class WorldScene extends Phaser.Scene {
     swapGroups: Record<string, { variants: string[]; active: string | null }>;
     hiddenPropIds: string[];
     propTransforms: Record<string, { x: number; y: number; width: number; height: number }>;
+    /** Texture key bound per live room object (#159 treatment evidence). */
+    propTextures: Record<string, string>;
+    /** Texture key of the view background sprite, when one exists. */
+    backgroundTexture: string | null;
     ropes: {
       propId: string;
       segments: number;
@@ -982,6 +987,14 @@ export class WorldScene extends Phaser.Scene {
           },
         ]),
       ),
+      // Texture actually bound to each room object plus the view background,
+      // so the #159 art-treatment comparison can prove the authored variant
+      // (not just a geometry change) reached the live renderer.
+      propTextures: Object.fromEntries([
+        ...[...this.projectionPropImages.entries()].map(([id, image]) => [id, image.texture.key] as const),
+        ...[...this.roomRopesById.entries()].map(([id, rope]) => [id, rope.texture.key] as const),
+      ]),
+      backgroundTexture: this.bgImage?.texture.key ?? null,
       ropes,
       windowZones: this.projection.weatherWindowZones?.length ?? 0,
       maskedMembers: this.windowGroupMembers

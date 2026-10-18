@@ -85,6 +85,12 @@ export function buildProjectionAssetLoadPlan(
   for (const view of projection.availableViews ?? []) {
     if (view.assetId) candidateIds.push(view.assetId);
   }
+  // Authored alternates the presentation may switch to at runtime (#159 art
+  // treatments). Same production gate as everything else: an untagged or
+  // unknown id is reported and queued nowhere, never substituted.
+  for (const assetId of projection.preloadAssetIds ?? []) {
+    if (assetId) candidateIds.push(assetId);
+  }
   for (const prop of projection.sceneProps ?? []) {
     if (prop.assetId) candidateIds.push(prop.assetId);
   }
