@@ -1,200 +1,107 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+// @vitest-environment jsdom
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { SimulationEngine } from '../../src/engine/SimulationEngine';
 import { db } from '../../src/persistence/db';
-import { SaveManager } from '../../src/persistence/SaveManager';
-import type { FullSimulationSnapshot } from '../../src/persistence/schema';
+import {
+  deleteSlot, listSlots, loadSlotEngine, loadSlotSnapshot,
+  saveSlot, slotCompatibility,
+} from '../../src/persistence/slots';
+import { conversationArchivePageKey } from '../../src/persistence/conversationArchive';
 
-describe('Persistence Integration Suite (Dexie + fake-indexeddb)', () => {
-  let saveManager: SaveManager;
+/**
+ * #174 replaces the retired multi-table SaveManager integration tests.
+ * This is the actual shipping save document + per-slot cold archive writer.
+ */
+beforeEach(async () => {
+  await db.transaction('rw', db.saves, db.conversation_pages, db.messages, async () => {
+    await db.saves.clear();
+    await db.conversation_pages.clear();
+    await db.messages.clear();
+  });
+});
+afterEach(() => vi.restoreAllMocks());
 
-  const createMockSnapshot = (day = 1, cash = 38): FullSimulationSnapshot => ({
-    saveSlot: {
-      id: 'slot_1',
-      name: `Test Save Day ${day}`,
-      version: 1,
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-      day,
-      totalMinutes: (day - 1) * 1440 + 480,
-      clockState: {
-        day,
-        hour: 8,
-        minute: 0,
-        totalMinutes: (day - 1) * 1440 + 480,
-        timeOfDay: 'morning',
-        isPaused: false,
-      },
-      playerState: {
-        cash,
-        energy: 100,
-        fatigue: 0,
-        socialBattery: 100,
-        rentDueDay: 7,
-        rentAmount: 140,
-        rentPaid: false,
-        consecutiveLateWarnings: 0,
-      },
-      hardwareState: {
-        cpuTier: 1,
-        ramMB: 512,
-        hddTotalGB: 40,
-        hddFreeGB: 32,
-        connectionType: 'dsl_256k',
-        connectionSpeedKbps: 256,
-        osVersion: 'Orion_4.8',
-        theme: 'orion_4_8',
-        wallpaper: 'default_clouds',
-      },
-      narrativeFlags: {
-        knows_ryan_pulse: true,
-        visited_cafe: false,
-      },
-    },
-    vfsFiles: [
-      {
-        id: 'vfs_file_1',
-        name: 'readme.txt',
-        path: 'C:/Documents/readme.txt',
-        parentPath: 'C:/Documents',
-        kind: 'text',
-        sizeBytes: 1024,
-        content: 'Welcome to Orion OS',
-        createdAt: Date.now(),
-        modifiedAt: Date.now(),
-      },
-    ],
-    downloads: [
-      {
-        id: 'dl_pulse_52',
-        sourceId: 'downloadhub',
-        url: 'http://downloadhub.local/pulse52.exe',
-        fileName: 'PulseSetup.exe',
-        destinationPath: 'C:/Downloads/PulseSetup.exe',
-        totalBytes: 8388608,
-        downloadedBytes: 4194304,
-        sourceMaxKbps: 512,
-        status: 'downloading',
-        resumable: true,
-        startedAt: Date.now(),
-      },
-    ],
-    installedSoftware: [
-      {
-        appId: 'voyager_browser',
-        version: '1.0',
-        installPath: 'C:/Program Files/Voyager',
-        occupiedSizeBytes: 15728640,
-        isPortable: false,
-        bundledComponents: [],
-        registeredInAddRemove: false,
-        desktopShortcut: true,
-        startMenuEntry: true,
-        installedAt: Date.now(),
-      },
-    ],
-    messages: [
-      {
-        id: 'msg_1',
-        buddyId: 'ryan_foodcart',
-        sender: 'buddy',
-        text: 'hey man did you get pulse installed yet?',
-        timestamp: 490,
-        day: 1,
-        isRead: false,
-      },
-    ],
-    relationships: [
-      {
-        buddyId: 'ryan_foodcart',
-        familiarity: 40,
-        trust: 50,
-        comfort: 50,
-        respect: 40,
-        annoyance: 0,
-        lastInteractionDay: 1,
-        unlockedNotes: [],
-        flags: {},
-      },
-    ],
-    narrativeState: [
-      {
-        key: 'current_knot',
-        value: 'friend_intro_fixture',
-        updatedAt: Date.now(),
-      },
-    ],
-    telemetryLogs: [
-      {
-        id: 1,
-        timestamp: Date.now(),
-        gameDay: 1,
-        gameMinutes: 480,
-        eventType: 'game_started',
-        payload: { startingCash: 38 },
-      },
-    ],
+describe('#174 current-format persistence integration (one slot writer)', () => {
+  it('boots complete playable Social state using only the saved document and its cold pages', async () => {
+    const source = new SimulationEngine();
+    const actor = source.social.getBuddies()[0]!;
+    source.social.learnHandle(actor.id, actor.handle);
+    for (let i = 0; i < 195; i++) {
+      source.social.sendMessage(actor.id, actor.id, 'player', `conversation-${i}`, 1200 + i);
+    }
+    source.advanceGameMinutes(20, 'integration test');
+    const before = source.social.getMessages(actor.id);
+    const summary = await saveSlot(source, 'slot_1', 'First run');
+    expect(summary.name).toBe('First run');
+    const record = (await db.saves.get('slot_1'))!;
+    expect(record.version).toBe(6);
+    expect(record.snapshot?.social.conversations[actor.id]).toHaveLength(32);
+    expect(await db.conversation_pages.where('slotId').equals('slot_1').count()).toBeGreaterThan(0);
+    // The old global message table is never another writable Social source.
+    expect(await db.messages.count()).toBe(0);
+
+    const engine = (await loadSlotEngine('slot_1'))!;
+    expect(engine.social.hasColdConversations()).toBe(true);
+    expect(engine.clock.getTotalMinutes()).toBe(source.clock.getTotalMinutes());
+    expect((await engine.getConversationLogAsync(actor.id))).toEqual(before);
+    const whole = (await loadSlotSnapshot('slot_1'))!;
+    expect(whole.social.conversations[actor.id]).toEqual(before);
+    expect((await listSlots()).some(slot => slot.id === 'slot_1')).toBe(true);
+    expect((await slotCompatibility('slot_1')).status).toBe('ok');
   });
 
-  beforeEach(async () => {
-    saveManager = new SaveManager(db);
-    await saveManager.clearAll();
+  it('keeps two independent game timelines and their historical pages isolated', async () => {
+    const one = new SimulationEngine();
+    const two = new SimulationEngine();
+    const actor = one.social.getBuddies()[0]!;
+    one.social.learnHandle(actor.id, actor.handle);
+    two.social.learnHandle(actor.id, actor.handle);
+    for (let i = 0; i < 140; i++)
+      one.social.sendMessage(actor.id, actor.id, 'player', `ONE-${i}`, 1000 + i);
+    for (let i = 0; i < 97; i++)
+      two.social.sendMessage(actor.id, actor.id, 'player', `TWO-${i}`, 1300 + i);
+    await saveSlot(one, 'slot_1');
+    await saveSlot(two, 'slot_2');
+    const a = (await loadSlotEngine('slot_1'))!;
+    const b = (await loadSlotEngine('slot_2'))!;
+    expect((await a.getConversationLogAsync(actor.id))).toHaveLength(140);
+    expect((await b.getConversationLogAsync(actor.id))).toHaveLength(97);
+    expect((await a.getConversationLogAsync(actor.id))[0]!.text).toBe('ONE-0');
+    expect((await b.getConversationLogAsync(actor.id))[0]!.text).toBe('TWO-0');
+    await deleteSlot('slot_1');
+    expect(await loadSlotEngine('slot_1')).toBeNull();
+    expect(await db.conversation_pages.where('slotId').equals('slot_1').count()).toBe(0);
+    expect((await loadSlotEngine('slot_2'))).not.toBeNull();
+    expect(await db.conversation_pages.where('slotId').equals('slot_2').count()).toBeGreaterThan(0);
   });
 
-  it('performs lossless save and load round-trip across all 8 tables', async () => {
-    const originalSnapshot = createMockSnapshot(2, 95);
-    await saveManager.saveGame('slot_1', 'Day 2 Save', () => originalSnapshot);
-
-    const loadedSnapshot = await saveManager.loadGame('slot_1');
-
-    expect(loadedSnapshot.saveSlot.day).toBe(2);
-    expect(loadedSnapshot.saveSlot.playerState.cash).toBe(95);
-    expect(loadedSnapshot.vfsFiles).toHaveLength(1);
-    expect(loadedSnapshot.vfsFiles[0]?.name).toBe('readme.txt');
-    expect(loadedSnapshot.downloads).toHaveLength(1);
-    expect(loadedSnapshot.downloads[0]?.downloadedBytes).toBe(4194304);
-    expect(loadedSnapshot.messages).toHaveLength(1);
-    expect(loadedSnapshot.messages[0]?.isRead).toBe(false);
-    expect(loadedSnapshot.relationships[0]?.trust).toBe(50);
-    expect(loadedSnapshot.installedSoftware[0]?.appId).toBe('voyager_browser');
-    expect(loadedSnapshot.narrativeState[0]?.key).toBe('current_knot');
-  });
-
-  it('performs auto-save with debounce on time jump', async () => {
-    const snapshot = createMockSnapshot(3, 150);
-    await saveManager.autoSave(() => snapshot);
-
-    // Allow debounce timer to settle
-    await new Promise((r) => setTimeout(r, 60));
-
-    const autosave = await saveManager.loadGame('autosave');
-    expect(autosave).toBeDefined();
-    expect(autosave.saveSlot.day).toBe(3);
-    expect(autosave.saveSlot.playerState.cash).toBe(150);
-  });
-
-  it('exports and imports valid save JSON with Zod validation', async () => {
-    const original = createMockSnapshot(4, 210);
-    await saveManager.saveGame('slot_1', 'Day 4 Save', () => original);
-
-    const jsonString = await saveManager.exportSaveJson('slot_1');
-    expect(typeof jsonString).toBe('string');
-
-    // Clear DB and re-import
-    await saveManager.clearAll();
-    expect(await saveManager.hasSave('slot_1')).toBe(false);
-
-    await saveManager.importSaveJson(jsonString, 'slot_imported');
-    const imported = await saveManager.loadGame('slot_imported');
-
-    expect(imported.saveSlot.day).toBe(4);
-    expect(imported.saveSlot.playerState.cash).toBe(210);
-    expect(imported.vfsFiles[0]?.path).toBe('C:/Documents/readme.txt');
-  });
-
-  it('rejects corrupted save JSON during import', async () => {
-    const corruptedJson = JSON.stringify({
-      saveSlot: { id: 'bad_slot', day: 'invalid_number' },
+  it('rolls back both the document and old page inventory if an overwrite fails', async () => {
+    const game = new SimulationEngine();
+    const actor = game.social.getBuddies()[0]!;
+    for (let i = 0; i < 180; i++)
+      game.social.sendMessage(actor.id, actor.id, 'player', `earlier-${i}`, 1400 + i);
+    await saveSlot(game, 'slot_1');
+    const before = await db.saves.get('slot_1');
+    const pagesBefore = await db.conversation_pages.where('slotId').equals('slot_1').toArray();
+    game.social.sendMessage(actor.id, actor.id, 'player', 'should-not-commit', 1600);
+    const put = vi.spyOn(db.saves, 'put').mockImplementation(() => {
+      throw new Error('simulated slot write failure');
     });
+    await expect(saveSlot(game, 'slot_1')).rejects.toThrow('simulated slot write failure');
+    put.mockRestore();
+    expect(await db.saves.get('slot_1')).toEqual(before);
+    expect(await db.conversation_pages.where('slotId').equals('slot_1').toArray()).toEqual(pagesBefore);
+    expect((await loadSlotSnapshot('slot_1'))?.social.conversations[actor.id]).toHaveLength(180);
+  });
 
-    await expect(saveManager.importSaveJson(corruptedJson)).rejects.toThrow();
+  it('refuses a broken current archive without returning partial conversation truth', async () => {
+    const game = new SimulationEngine();
+    const actor = game.social.getBuddies()[0]!;
+    for (let i = 0; i < 100; i++)
+      game.social.sendMessage(actor.id, actor.id, 'player', `old-${i}`, 1500 + i);
+    await saveSlot(game, 'slot_3');
+    await db.conversation_pages.delete(conversationArchivePageKey('slot_3', actor.id, 0));
+    expect(await loadSlotEngine('slot_3')).toBeNull();
+    expect(await loadSlotSnapshot('slot_3')).toBeNull();
   });
 });
