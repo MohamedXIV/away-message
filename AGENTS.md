@@ -9,6 +9,86 @@ Cozy open-ended life-sim set in 2005: a desktop OS sim (React 19 + Vite + Tailwi
 where a dynamic roster of characters can chat with live AI, remember meaningful history,
 and live governed sandbox lives. Online AI-heavy, offline-safe via templates.
 
+## Delivery-first execution contract (2026-10-18; applies to EVERY agent)
+
+**Optimize for completed, usable game deliverables, not the number of commits, PRs,
+architecture layers, tests, or status reports.** Safety, canonical authority,
+correctness and actual acceptance criteria still apply; speed does not excuse
+invented evidence or data loss.
+
+1. **Inspect and finish real work.** At each work invocation, read the live
+   `main` HEAD, open issues/PRs, issue dependencies, exact-head checks and relevant
+   prior handoffs. Prefer finishing an existing canonical branch/PR and its
+   acceptance criteria over creating competing work, another tracking issue,
+   a new scaffold, or a speculative abstraction.
+2. **"Continue" means execute.** Select the highest-impact, dependency-ready
+   work and implement a meaningful coherent batch in that run. Do not stop after
+   a small helper, test-only change, design note, or status report when the
+   integration is already specified and executable. Only stop for a genuine
+   blocker, unsafe action requiring approval, or completed acceptance boundary.
+3. **Plan backward from an end-to-end result.** State the target behavior and
+   acceptance proof first; implement all dependent pieces together (domain
+   owner, persistence, UI, integration, tests) when they belong to one vertical
+   slice. A technically correct internal seam is a checkpoint, **not** a
+   finished feature when users cannot yet exercise the required behavior.
+4. **Use cohesive batches, not micro-commits.** Explore and run focused checks
+   while implementing, then commit/push a reasonable integrated chunk. Avoid
+   a push/full-CI/report cycle after each minor edit. Keep PRs reviewable and
+   reduce long-lived stacked Draft PRs; finish or explicitly unblock the
+   existing work before accumulating more work in progress.
+5. **Verification must be risk-proportionate, never fictional.** During a batch,
+   run affected unit/integration tests, typecheck and relevant builds as
+   available. At a coherent milestone, release/merge boundary, or after
+   broad/high-risk changes, run the full green suite and relevant browser/
+   performance/asset checks. If CI automatically triggers per push, batch
+   pushes rather than repeatedly paying for redundant full runs. Do not mark
+   skipped gates as passed, suppress failures to claim progress, or bypass
+   required repository/branch protections.
+6. **No speculative infrastructure treadmill.** New architecture,
+   generalization, compatibility code, Worker/Rust experiments and additional
+   documents must be justified by a currently needed acceptance condition or
+   measured blocker. Prefer the smallest safe implementation that completes
+   the product behavior. Before the approved save freeze, do not slow down
+   feature delivery to preserve disposable historical development saves;
+   refuse incompatible formats cleanly and **never silently lose current
+   canonical state**.
+7. **Keep the game visible.** Infrastructure is a means to better gameplay.
+   Reassess open product lanes (production art/playable scene, character kit,
+   narrative/Ink, interaction/content) instead of tunneling indefinitely on
+   backend refactoring. Advance independent dependency-ready lanes where
+   feasible without conflicting ownership, unapproved delegation, or breaking
+   the canonical work branch.
+8. **Report outcomes rather than activity.** A useful milestone report states
+   what actually works, what was verified on which exact HEAD, remaining
+   acceptance gaps, and the next concrete deliverable. Distinguish
+   `implemented`, `CI green`, `production-wired`, `playable` and
+   `human/device-accepted`. Commit counts, test counts and green badges are
+   evidence, **not** the definition of finished gameplay.
+9. **Close the loop.** Once acceptance is genuinely met, prepare the existing
+   PR for review/integration, update issue/roadmap status truthfully, and move
+   to the next dependency-ready issue rather than extending a completed
+   branch with unrelated polish. Respect explicit user permissions for
+   merges, release, external agents and other high-impact actions; never
+   imply approval or closure that has not occurred.
+
+**Default decision test:** "Will this batch remove a real blocker or make a
+complete part of Away Message playable, shippable, or objectively closer to
+its acceptance gate?" If not, simplify or change the task. Do not treat
+production-art work as optional merely because the simulation still has
+interesting refactor opportunities.
+
+## Mandatory documentation routing (all agents, all entry points)
+
+`AGENTS.md` is the **entry point**, not a replacement for canonical design docs. Before implementation, an agent (GPT-6, Qoder, OpenCode, or any future tool) **must**:
+
+1. Read this root file and inspect the current issue, canonical branch/PR, and relevant live code.
+2. Follow **`## Canonical design docs`** below to the documents owning the affected domain; read the relevant sections *before* changing code, content, art, or architecture. Issue comments and agent handoffs do not supersede canonical documents unless a later explicitly approved decision says so.
+3. For any authored physical place, Phaser scene, room/art, prop, camera, or Gen-AI asset work, read **both** `docs/11-SPATIAL-PRESENCE-VENUES-AND-ACTOR-PRESENTATION.md` (Place/Space/View/Focus/Anchor semantics) and `docs/14-FIRST-PRODUCTION-ART-AND-PLAYABLE-SLICE.md` (production visuals, view-count choice, 3D-reference/AI workflow). For content changes also read the relevant authoring/schema/validation code. #167's single-view *technical spike* is not a rule that all locations get one view.
+4. State in the PR description (see `.github/pull_request_template.md`) the **exact documentation paths consulted** and the architectural decisions relevant to the change. For physical-place work, explain why the chosen authored views and anchors suffice; for art, explain how mutable layers and any cross-view asset identity stay consistent. A bare "read docs" assertion without decisions/evidence is insufficient.
+5. If a proposed implementation conflicts with these documents, **stop, surface the conflict, and obtain an explicit owner decision** before making it a new product law. Update the owning canonical document in the same approved PR; do not silently introduce a competing design note or duplicate truth.
+
+Reviewers must request the missing documentation/decision evidence before accepting a domain-affecting PR. This is a human/review contract, **not proof that a model actually read a file**; neither a checked box nor green CI can independently verify comprehension.
+
 ## Product identity — do not regress
 
 Away Message is an **open-ended sandbox**, not a fixed campaign.
@@ -60,10 +140,11 @@ The approved spatial-presence direction keeps **WHERE**, **WHY/WHAT**, and **HOW
 
 **Canonical for #171:** `docs/18-SIMULATION-CLEAN-REPLACEMENT-DECISION.md` supersedes earlier advice to land a long-lived "strangler" runtime with old inherited facades underneath. On the unmerged implementation branch, temporary migration code is permitted; by merge time **all production paths must use only the composed kernel** and obsolete Core/LegacyFacade inheritance execution must be deleted. There must be a single writer/owner per canonical fact. Prove wiring, deterministic behavior, current-format save safety, tests and #169/#170 performance comparison. Pure, valid domain algorithms should be reused; rewrite incorrect ownership freely. Tests of gameplay invariants remain mandatory; implementation-shaped tests may change only with equivalent/stronger contract coverage. No obsolete dev-save compatibility burden before the save freeze. Avoid both an oversized kernel monolith and needless tiny files. No #171 merge/closure with a partially wired or dual-running architecture. Do not start #175 Worker or #176 Rust in #171.
 
-## Verification before every push
-`npm run content:check` when generated content is touched → `npx tsc --noEmit` clean → `npm run build` succeeds → full `npm run test` with zero new failures.
-For exact repository CI policy, run `node scripts/verify-vitest-baseline.mjs --self-test` then `node scripts/verify-vitest-baseline.mjs`; the latter is green only for a fully green suite and rejects any failure.
-Verify fixes by execution (run the code/tests), not by reading. Trust evidence over speculation; state discrepancies plainly.
+## Verification policy — focused during development, full at acceptance boundaries
+- **During one coherent implementation batch:** run relevant focused unit/integration tests, `npx tsc --noEmit` and applicable build/content checks where available. Fix failures before advancing. Do not demand a full repository run between every tiny edit or every micro-commit.
+- **Before declaring a major milestone complete, requesting merge/release, or completing broad/high-risk changes:** `npm run content:check` when applicable, `npx tsc --noEmit`, `npm run build`, full `npm run test` (zero failures), plus relevant browser/performance and exact-head acceptance gates. Run `node scripts/verify-vitest-baseline.mjs --self-test` and `node scripts/verify-vitest-baseline.mjs` for the full-suite baseline guard when the complete gate is due.
+- Repository CI and required branch protections remain authoritative. If auto-CI runs on every push, reduce pushes by batching meaningful changes; **do not bypass gates or downgrade a failure to green**. If a local/remote runner is unavailable, disclose the unverified part and never invent results.
+- Verify fixes by executing code/tests, not by reading alone. Distinguish unit success, full-suite success, browser/runtime proof and human acceptance; do not claim skipped evidence. Prefer not to consume GitHub Actions minutes needlessly when suitable local checks are available.
 
 ## Canonical design docs
 Read the relevant core docs before changing a system.
@@ -146,5 +227,5 @@ If a useful Orion concept overlaps an existing Away system, follow the salvage d
 - Prefer editing existing files; never create files unless required. No proactive docs/*.md; create/update docs when a user request, issue acceptance criteria, architecture change, or approved plan requires them.
 - Specialized reads over bash (Read/Grep/Glob); `bash` is for real commands (git/npm/build/test), chained with `&&`.
 - Windows + PowerShell: quote spaced paths, use `workdir` param (never `cd`), `Select-Object -First` for truncating (never `head`).
-- Keep edits minimal and local; preserve exact indentation; re-read edited regions before finalizing.
+- Minimize unnecessary complexity and churn, **not** the size of a justified coherent batch. Keep changes scoped and reviewable; avoid both giant monoliths and one-file-per-ten-lines fragmentation. Preserve indentation and re-read edited regions before finalizing.
 - Short, factual communication. Reference code as `file_path:line_number`. Never emit emojis unless asked.
