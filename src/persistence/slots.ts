@@ -91,8 +91,10 @@ export async function saveSlot(
   const compactSnapshot: SimulationState = {
     ...snapshot, social: { ...snapshot.social, conversations: recent },
   };
-  const now = Date.now();
   const existing = await db.saves.get(slotId).catch(() => undefined);
+  // A cold reader holds the originating slot generation. Every overwrite
+  // must invalidate that reader, even if two saves land in one millisecond.
+  const now = Math.max(Date.now(), (existing?.updatedAt ?? 0) + 1);
   const pulseSlotId = getCurrentPulseSlotId();
 
   const record: SaveSlotRecord = {

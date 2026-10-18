@@ -119,13 +119,11 @@ describe('#173 cold runtime conversation authority and async page seam', () => {
     engine.markConversationAsRead(buddy.id);
     expect((await engine.getConversationReadAsync(buddy.id, 105, 30)).messages.every(m => m.isRead)).toBe(true);
     expect(engine.social.getUnreadTraySummary(4).unreadCount).toBe(0);
-    // Overwrite of originating slot invalidates the generation-bound source.
+    // An overwrite ALWAYS changes the slot generation, including saves
+    // occurring in the very same millisecond. Old readers fail closed.
     await saveSlot(source, 'source');
-    const changed = await engine.getConversationReadAsync(buddy.id, 105, 30);
-    expect(changed.messages).toHaveLength(30);
     const record = (await db.saves.get('source'))!;
-    record.updatedAt += 1;
-    await db.saves.put(record);
+    expect(record.updatedAt).toBeGreaterThan(boot.archive.updatedAt);
     await expect(engine.getConversationReadAsync(buddy.id, 105, 30))
       .rejects.toThrow(/cold conversation page/);
   });

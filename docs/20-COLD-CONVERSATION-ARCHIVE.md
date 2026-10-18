@@ -71,6 +71,27 @@ page key, malformed metadata, or absent index fails closed. Historical pages
 are still verified when `readSavedConversationPage` requests them. Legacy v1
 manifests without indexes can still use `loadSlotSnapshot` (the eager path).
 
+### Attached read-only cold runtime seam
+
+`ConversationHistory.restoreCold` can attach the saved cold prefix to its
+**one canonical message owner** without allocating old transcript bodies.
+`pageAsync` reads only intersecting 64-message pages, enforces detached reads,
+and merges post-load appends with the saved tail. All read receipts remain
+owned by ConversationHistory; `markRead` marks the immutable cold prefix
+through a single overlay, and `exportAllAsync` composes a complete snapshot
+without mutating the slot. A synchronous full export or an unmaterialized cold
+page read **throws** rather than returning a truncated history.
+
+`readSavedColdConversationChunk` validates the page under the recorded
+`updatedAt` save generation; slot overwrites increment the generation
+monotonically and invalidate old readers. `SimulationKernel.getConversationReadAsync`
+retains the known-handle privacy gate, including after the await.
+
+The production boot and `saveSlot` remain on the synchronous full-history path:
+**do not pass a partially bootstrapped engine to the synchronous save path**.
+The cold async owner and read side are now testable; async atomic save and a
+durable reader rebind after saving are still required for production cutover.
+
 **Safety boundary:** cold bootstrap returns a **partial conversation snapshot**
 plus the index metadata. It is explicitly **not** used by the production boot
 until the single Social owner can attach the cold source, merge new messages
