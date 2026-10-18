@@ -58,3 +58,23 @@ compatibility without an archive manifest.
 Do not mark #173 complete on this milestone alone: live history lifecycle and
 remaining relationship/graph/presence owner decomposition need explicit closure
 evidence before a Ready/merge decision.
+
+## Incremental cold-runtime bootstrap contract (not yet production boot)
+
+A cold bootstrap seam is now available via `loadSlotColdBootstrap(slotId)`. Each
+new save persists **small owner-derived indexes** from `ConversationHistory`
+inside the existing v1 `meta.conversationArchive` manifest: unread totals,
+last activity, player-day presence, latest offline-message text, and at most
+10 unread previews per contact. The archive page *keys* are inventoried under
+a read transaction without retrieving the messages. A missing or extraneous
+page key, malformed metadata, or absent index fails closed. Historical pages
+are still verified when `readSavedConversationPage` requests them. Legacy v1
+manifests without indexes can still use `loadSlotSnapshot` (the eager path).
+
+**Safety boundary:** cold bootstrap returns a **partial conversation snapshot**
+plus the index metadata. It is explicitly **not** used by the production boot
+until the single Social owner can attach the cold source, merge new messages
+and read receipts, and asynchronously export complete history on save. Passing
+the bootstrap snapshot directly to the synchronous kernel would truncate
+history and is forbidden. The new tests prove the bootstrap avoids historical
+message-body fetches; they do not claim that live game loads do so yet.

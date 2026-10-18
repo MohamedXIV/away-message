@@ -21,6 +21,22 @@ type ConversationRecords = {
   total: number;
 };
 
+/**
+ * Derived, bounded metadata used to bootstrap cold history without loading
+ * historical message bodies. Never a second writable social authority.
+ */
+export interface ConversationColdIndex {
+  unread: number;
+  anyUnread: number;
+  lastMessageMinute: number | null;
+  lastActivityMinute: number;
+  lastPlayerMinute: number;
+  days: number[];
+  playerDays: number[];
+  unreadPreview: Array<{ id: string; text: string; timestampMinute: number }>;
+  lastOfflineText: string | null;
+}
+
 type ConversationIndex = {
   unread: number;
   anyUnread: number;
@@ -60,6 +76,29 @@ export class ConversationHistory {
   private readonly playerDays = new Set<number>();
 
   constructor(private readonly normalizeId: (id: string) => string) {}
+
+  /**
+   * Explicit persistence boundary: derive cold bootstrap metadata by running
+   * the exact same index logic as live history, without retaining transcript
+   * arrays or introducing another unread/knowledge rule implementation.
+   */
+  public static summarizeForColdBootstrap(id: string, messages: readonly MessageRecord[]): ConversationColdIndex {
+    const owner = new ConversationHistory(value => value);
+    const index = emptyIndex();
+    for (const message of messages) owner.track(index, id, message);
+    return {
+      unread: index.unread,
+      anyUnread: index.anyUnread,
+      lastMessageMinute: index.lastMessageMinute,
+      lastActivityMinute: index.lastActivityMinute,
+      lastPlayerMinute: index.lastPlayerMinute,
+      days: [...index.daySet].sort((a, b) => a - b),
+      playerDays: [...index.playerDays].sort((a, b) => a - b),
+      unreadPreview: index.unreadPreview.map(m =>
+        ({ id: m.id, text: m.text, timestampMinute: m.timestampMinute })),
+      lastOfflineText: index.lastOfflineText,
+    };
+  }
 
   public ensure(rawId: string): void {
     const id = this.normalizeId(rawId);

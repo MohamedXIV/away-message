@@ -7,7 +7,9 @@ export * from './slotsV5Core';
 import { db } from './db';
 import {
   splitConversationArchive, hydrateConversationArchive, isConversationArchiveManifest,
+  RECENT_CONVERSATION_MESSAGES, CONVERSATION_ARCHIVE_PAGE_SIZE, conversationArchivePageKey,
 } from './conversationArchive';
+import type { ConversationColdIndex } from '../engine/social/ConversationHistory';
 import type { SaveSlotRecord } from './schema';
 import type { SimulationState } from '../engine/types';
 import type { SimulationEngine } from '../engine/SimulationEngine';
@@ -180,6 +182,56 @@ export async function loadSlotSnapshot(slotId: string): Promise<SimulationState 
     if (sourceVersion < 5) upgraded = migrateSnapshotToV5(upgraded, sourceVersion);
     if (sourceVersion < 6) upgraded = migrateSnapshotToV6(upgraded, sourceVersion);
     return upgraded;
+  } catch {
+    return null;
+  }
+}
+
+
+/**
+ * #173 cold-load seam. Unlike loadSlotSnapshot this does NOT hydrate old chat
+ * bodies; it returns a snapshot containing only the saved 32-message tails
+ * and owner-derived small indices needed for the future async Social adapter.
+ *
+ * A complete inventory of expected archive page KEYS is checked without
+ * reading historical message values. Page contents remain verified by
+ * readSavedConversationPage when requested; missing keys fail closed now.
+ *
+ * Not yet used by production boot: never silently pass this partial snapshot
+ * to the existing synchronous SimulationKernel without a cold reader attached.
+ */
+export async function loadSlotColdBootstrap(slotId: string): Promise<{
+  snapshot: SimulationState;
+  archive: { slotId: string; counts: Record<string, number>;
+    indexes: Record<string, ConversationColdIndex> };
+} | null> {
+  try {
+    return await db.transaction('r', db.saves, db.conversation_pages, async () => {
+      const record = await db.saves.get(slotId);
+      if (checkSaveCompatibility(record).status !== 'ok') return null;
+      const snapshot = record?.snapshot;
+      const raw = record?.meta?.conversationArchive;
+      if (!snapshot || !isConversationArchiveManifest(raw) || !raw.indexes) return null;
+      const savedIds = Object.keys(snapshot.social.conversations);
+      if (savedIds.length !== Object.keys(raw.counts).length) return null;
+      for (const id of savedIds) {
+        const recent = snapshot.social.conversations[id];
+        if (!Object.hasOwn(raw.counts, id) || !Array.isArray(recent)
+          || recent.length > RECENT_CONVERSATION_MESSAGES) return null;
+        const index = raw.indexes[id];
+        if (!index || index.anyUnread > raw.counts[id]! + recent.length
+          || index.unread > raw.counts[id]! + recent.length) return null;
+      }
+      const keys = await db.conversation_pages.where('slotId').equals(slotId).primaryKeys();
+      const expected = new Set<string>();
+      for (const [conversationId, count] of Object.entries(raw.counts)) {
+        for (let page = 0; page < Math.ceil(count / CONVERSATION_ARCHIVE_PAGE_SIZE); page++) {
+          expected.add(conversationArchivePageKey(slotId, conversationId, page));
+        }
+      }
+      if (keys.length !== expected.size || keys.some(key => !expected.has(String(key)))) return null;
+      return { snapshot, archive: { slotId, counts: { ...raw.counts }, indexes: raw.indexes } };
+    });
   } catch {
     return null;
   }
