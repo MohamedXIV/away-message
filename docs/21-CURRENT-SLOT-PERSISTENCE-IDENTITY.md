@@ -23,7 +23,7 @@ on #173 / PR #196 (and #172 / PR #195). No save-compatibility freeze.
 3. **Preserve adversarial behavior tests:** tests formerly operating on the
    unused multi-table writer have been moved onto the actual save contract:
    repeated 100-cycle save/load, 25 simultaneous distinct slots, DownloadTask
-   progress, 14 days of world time, corruption/missing archive pages and
+   progress, repeated open-ended world-time advancement, corruption/missing archive pages and
    invalid indexes, atomic transaction rollback, 500 VFS files and 500
    historical messages. Independent software-installation/adware gates remain
    unchanged. No game invariant test was silently removed to retire old code.
