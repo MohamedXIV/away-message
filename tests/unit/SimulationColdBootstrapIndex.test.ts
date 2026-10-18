@@ -4,7 +4,7 @@ import { SimulationEngine } from '../../src/engine/SimulationEngine';
 import { ConversationHistory } from '../../src/engine/social/ConversationHistory';
 import { db } from '../../src/persistence/db';
 import { saveSlot, loadSlotSnapshot, loadSlotColdBootstrap } from '../../src/persistence/slots';
-import { readSavedConversationPage, conversationArchivePageKey } from '../../src/persistence/conversationArchive';
+import { readSavedConversationPage, conversationArchivePageKey, type ConversationArchiveManifest } from '../../src/persistence/conversationArchive';
 
 describe('#173 cold slot bootstrapping without eager transcript bodies', () => {
   beforeEach(async () => {
@@ -57,14 +57,14 @@ describe('#173 cold slot bootstrapping without eager transcript bodies', () => {
     expect(await loadSlotColdBootstrap('slot_1')).toBeNull();
     await saveSlot(game, 'slot_1');
     const slot = (await db.saves.get('slot_1'))!;
-    delete slot.meta!.conversationArchive?.indexes;
+    delete (slot.meta!.conversationArchive as ConversationArchiveManifest).indexes;
     await db.saves.put(slot);
     expect(await loadSlotColdBootstrap('slot_1')).toBeNull();
     // Existing full-history loading is still supported with old metadata.
     expect((await loadSlotSnapshot('slot_1'))?.social.conversations[buddy.id]).toHaveLength(120);
     await saveSlot(game, 'slot_1');
     const tampered = (await db.saves.get('slot_1'))!;
-    const manifest = tampered.meta!.conversationArchive!;
+    const manifest = tampered.meta!.conversationArchive as ConversationArchiveManifest;
     manifest.indexes![buddy.id]!.unread = -1;
     await db.saves.put(tampered);
     expect(await loadSlotColdBootstrap('slot_1')).toBeNull();
