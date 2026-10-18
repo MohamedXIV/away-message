@@ -8,6 +8,7 @@ import { db } from './db';
 import {
   splitConversationArchive, hydrateConversationArchive, isConversationArchiveManifest,
   RECENT_CONVERSATION_MESSAGES, CONVERSATION_ARCHIVE_PAGE_SIZE, conversationArchivePageKey,
+  readSavedColdConversationChunk,
 } from './conversationArchive';
 import type { ConversationColdIndex } from '../engine/social/ConversationHistory';
 import type { SaveSlotRecord } from './schema';
@@ -80,24 +81,25 @@ export function checkSaveCompatibility(record: SaveSlotRecord | undefined | null
 
 /** Persist the canonical v6 engine snapshot (+ current Pulse moment) into a slot. */
 export async function saveSlot(
-  engine: Pick<SimulationEngine, 'exportSnapshot'>,
+  engine: Pick<SimulationEngine, 'exportSnapshot'> & Partial<Pick<SimulationEngine,
+    'exportSnapshotAsync' | 'rebindColdConversationReader'>>,
   slotId: string,
   saveName?: string,
 ): Promise<SlotSummary> {
-  const snapshot = engine.exportSnapshot() as SimulationState;
+  const snapshot = await (engine.exportSnapshotAsync?.() ?? engine.exportSnapshot()) as SimulationState;
   const { recent, pages, manifest } = splitConversationArchive(slotId, snapshot.social.conversations);
   // Only the last 32 messages/contact remain in the document; older history
   // is stored once in slot-bound IndexedDB archive pages. Live source unchanged.
   const compactSnapshot: SimulationState = {
     ...snapshot, social: { ...snapshot.social, conversations: recent },
   };
-  const existing = await db.saves.get(slotId).catch(() => undefined);
-  // A cold reader holds the originating slot generation. Every overwrite
-  // must invalidate that reader, even if two saves land in one millisecond.
-  const now = Math.max(Date.now(), (existing?.updatedAt ?? 0) + 1);
   const pulseSlotId = getCurrentPulseSlotId();
-
-  const record: SaveSlotRecord = {
+  // Generate the slot version *within* the same write transaction to avoid
+  // two overlapping saves assigning the same cold-reader generation.
+  const committed = await db.transaction('rw', db.saves, db.conversation_pages, async () => {
+    const existing = await db.saves.get(slotId);
+    const now = Math.max(Date.now(), (existing?.updatedAt ?? 0) + 1);
+    const record: SaveSlotRecord = {
     id: slotId,
     name: saveName || `Day ${snapshot.time.day} • ${snapshot.time.timeOfDay}`,
     version: SAVE_FORMAT_VERSION,
@@ -145,14 +147,18 @@ export async function saveSlot(
     snapshot: compactSnapshot,
   };
 
-  // A slot and all its conversation pages are one durable unit. If bulkPut
-  // fails, IndexedDB rolls back the previous save AND previous archive.
-  await db.transaction('rw', db.saves, db.conversation_pages, async () => {
+    // Atomic document + archive replacement: a failed page write rolls back both.
     await db.conversation_pages.where('slotId').equals(slotId).delete();
     if (pages.length > 0) await db.conversation_pages.bulkPut(pages);
     await db.saves.put(record);
+    return { summary: toSummary(record), updatedAt: now };
   });
-  return toSummary(record);
+  // The existing in-memory cold owner remains authoritative. Rebind its
+  // immutable prefix only when this save overwrote its source slot; a new
+  // generation must never leave a live reader pointing at deleted pages.
+  engine.rebindColdConversationReader?.(slotId, (id, pageIndex) =>
+    readSavedColdConversationChunk(slotId, id, pageIndex, committed.updatedAt));
+  return committed.summary;
 }
 
 /** Load and deterministically chain any supported document through v4/v5/v6. */

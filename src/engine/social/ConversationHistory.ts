@@ -213,6 +213,23 @@ export class ConversationHistory {
     this.rebuildGlobalPlayerIndex();
   }
 
+  /** Rebind immutable prefix after atomic overwrite of its originating slot.
+   * The new archive may have a longer last page; retain this owner's original
+   * prefix length and never incorporate newly saved turns twice.
+   */
+  public rebindColdReader(reader: ColdConversationReader): void {
+    for (const entry of this.records.values()) {
+      if (entry.coldBaseCount === 0) continue;
+      const originalCount = entry.coldBaseCount;
+      entry.coldReader = async (id, pageIndex) => {
+        const page = await reader(id, pageIndex);
+        if (!page) return null;
+        const remaining = originalCount - pageIndex * LIVE_COLD_CONVERSATION_PAGE_SIZE;
+        return page.slice(0, Math.min(LIVE_COLD_CONVERSATION_PAGE_SIZE, remaining));
+      };
+    }
+  }
+
   /** True if a full synchronous snapshot would silently omit saved messages. */
   public hasColdHistory(): boolean {
     for (const entry of this.records.values()) if (entry.coldBaseCount > 0) return true;

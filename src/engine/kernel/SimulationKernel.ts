@@ -990,8 +990,12 @@ export class SimulationKernel {
   }
 
   public getState(): Readonly<LiveSimulationState> {
+    return this.assembleState(this.core.getState());
+  }
+
+  private assembleState(coreState: Readonly<TransportSimulationState>): Readonly<LiveSimulationState> {
     return {
-      ...this.core.getState(),
+      ...coreState,
       hardware: this.hardware.getState(),
       computer: this.hardware.getComputerState(),
       display: this.hardware.getDisplayState(),
@@ -1016,6 +1020,27 @@ export class SimulationKernel {
   public exportSnapshot(): LiveSimulationState {
     this.invalidateStateCache();
     return JSON.parse(JSON.stringify(this.getState())) as LiveSimulationState;
+  }
+
+  /** Full history is read explicitly, never on a revision/UI publication.
+   * A mutation or load across an await invalidates the complete export.
+   */
+  public async exportSnapshotAsync(): Promise<LiveSimulationState> {
+    const revision = this.revision;
+    const epoch = this.snapshotEpoch;
+    const conversations = await this.social.exportConversationsAsync();
+    if (revision !== this.revision || epoch !== this.snapshotEpoch) {
+      throw new Error('Simulation changed during async snapshot export; retry the save');
+    }
+    const coreState = this.core.getStateForConversationExport(conversations);
+    return JSON.parse(JSON.stringify(this.assembleState(coreState))) as LiveSimulationState;
+  }
+
+  /** Only rebind a cold prefix when its *originating* slot was overwritten. */
+  public rebindColdConversationReader(
+    slotId: string, reader: (id: string, pageIndex: number) => Promise<import('../types').MessageRecord[] | null>,
+  ): void {
+    this.social.rebindColdConversations(slotId, reader);
   }
 
   public loadSnapshot(snapshot: TransportSimulationState): void {

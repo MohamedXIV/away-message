@@ -11,6 +11,7 @@ import type { CoreDomainOwners } from './CoreDomainOwners';
 export function projectCoreState(
   owners: CoreDomainOwners,
   activeView: SimulationState['activeView'],
+  conversationOverride?: SimulationState['social']['conversations'],
 ): Readonly<SimulationState> {
   const vfsState = owners.vfs.getState();
   const downloadState = owners.downloads.getState();
@@ -44,7 +45,7 @@ export function projectCoreState(
     downloads: downloadState.tasks,
     deliveries: deliveryState,
     installedSoftware: owners.software.getInstalledSoftware(),
-    social: owners.social.getState(),
+    social: owners.social.getState(conversationOverride),
     world: worldState,
     narrative: narrativeAlias,
     telemetry: {

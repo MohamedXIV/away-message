@@ -168,6 +168,8 @@ export class SocialEngine {
   });
   /** One canonical history owner; relationship/presence state never stores transcript bodies. */
   private readonly conversations = new ConversationHistory(normalizeBuddyId);
+  /** Cold-page source identity for safe same-slot rebinds, not social truth. */
+  private coldArchiveSlotId: string | null = null;
   // One canonical owner for structured memory facts and player commitments.
   private readonly memory = new SocialMemoryLedger(normalizeBuddyId, id => this.roster.has(id));
   /** One authoritative sparse graph for NPC↔NPC affinity, directed bonds and romance. */
@@ -251,14 +253,21 @@ export class SocialEngine {
     counts: Record<string, number>,
     indexes: Record<string, ConversationColdIndex>,
     reader: ColdConversationReader,
+    sourceSlotId: string | null = null,
   ): void {
     this.conversations.restoreCold(recent, counts, indexes, reader);
+    this.coldArchiveSlotId = sourceSlotId;
     for (const buddy of this.roster.values()) this.conversations.ensure(buddy.id);
+  }
+
+  /** After overwriting the origin slot, cold reads must use the new generation. */
+  public rebindColdConversations(slotId: string, reader: ColdConversationReader): void {
+    if (this.coldArchiveSlotId === slotId) this.conversations.rebindColdReader(reader);
   }
 
   public hasColdConversations(): boolean { return this.conversations.hasColdHistory(); }
 
-  public getState(): SocialEngineState {
+  public getState(conversationOverride?: Record<string, MessageRecord[]>): SocialEngineState {
     const { relationships: rels, actorConditions } = this.playerLinks.exportState();
     const { presence: pres } = this.online.exportState();
 
@@ -272,7 +281,7 @@ export class SocialEngine {
     return {
       relationships: rels,
       presence: pres,
-      conversations: this.conversations.exportAll(),
+      conversations: conversationOverride ?? this.conversations.exportAll(),
       buddies: buddyDefs,
       actorConditions,
       removedSeedActorIds,
@@ -288,6 +297,7 @@ export class SocialEngine {
   }
 
   public restoreState(state: SocialEngineState): void {
+    this.coldArchiveSlotId = null;
     // Roster owns identity import. Contact conditions remain with PlayerRelationships.
     this.playerLinks.clearConditions();
     this.roster.restore(state,
