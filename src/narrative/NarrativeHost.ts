@@ -6,6 +6,7 @@ import {
   NarrativeHostState,
   NarrativeStartContext,
   validateNarrativeEffectRequest,
+  APPROVED_SEMANTIC_EFFECT_IDS,
   queryNarrativeContext,
   type NarrativeContextProjection,
   type NarrativeHost,
@@ -18,8 +19,10 @@ export interface NarrativeHostOptions {
   loadCompiledStory: (flowKey: string) => unknown | null;
   /** Initial bounded context projection. */
   context: NarrativeContextProjection;
+  /** Optional approved semantic-effect id allowlist (defaults to canonical registry). */
+  approvedEffectIds?: readonly string[];
   /** Optional domain owner callback. If provided, validated requests are forwarded; otherwise queued. */
-  onEffectRequest?: (request: NarrativeEffectRequest) => { accepted: boolean; result?: unknown; error?: string };
+  onEffectRequest?: (request: NarrativeEffectRequest) => { accepted: boolean; committed?: boolean; result?: unknown; error?: string };
 }
 
 /**
@@ -33,6 +36,7 @@ export interface NarrativeHostOptions {
 export class NarrativeHostImpl implements NarrativeHost {
   private readonly loadCompiledStory: (key: string) => unknown | null;
   private readonly onEffectRequest?: NarrativeHostOptions['onEffectRequest'];
+  private readonly approvedEffectIds: readonly string[];
   private ink: InkRuntime | null = null;
   private flowId: string | null = null;
   private compiledStoryKey: string | null = null;
@@ -42,6 +46,7 @@ export class NarrativeHostImpl implements NarrativeHost {
   constructor(options: NarrativeHostOptions) {
     this.loadCompiledStory = options.loadCompiledStory;
     this.onEffectRequest = options.onEffectRequest;
+    this.approvedEffectIds = options.approvedEffectIds ?? [...APPROVED_SEMANTIC_EFFECT_IDS];
     this.context = NarrativeContextProjectionSchema.parse(options.context);
   }
 
@@ -98,6 +103,7 @@ export class NarrativeHostImpl implements NarrativeHost {
       flowId: this.flowId ?? '',
       compiledStoryKey: this.compiledStoryKey ?? this.flowId ?? '',
       inkState: inkState as InkRuntimeState,
+      pendingEffects: this.pendingEffects.map((e) => clone(e) as NarrativeEffectRequest),
     };
   }
 
@@ -108,25 +114,41 @@ export class NarrativeHostImpl implements NarrativeHost {
     this.ink = new InkRuntime(compiled as any);
     this.flowId = state.flowId;
     this.compiledStoryKey = state.compiledStoryKey;
-    this.pendingEffects = [];
+    this.pendingEffects = Array.isArray(state.pendingEffects)
+      ? state.pendingEffects.map((e) => clone(e) as NarrativeEffectRequest)
+      : [];
     this.ink.loadState(state.inkState);
     this.bindExternalFunctions();
   }
 
   getContext(): NarrativeContextProjection {
-    return this.context;
+    return clone(this.context) as NarrativeContextProjection;
   }
 
   updateContext(projection: NarrativeContextProjection): void {
-    this.context = NarrativeContextProjectionSchema.parse(projection);
+    this.context = NarrativeContextProjectionSchema.parse(clone(projection));
   }
 
   getPendingEffects(): NarrativeEffectRequest[] {
-    return [...this.pendingEffects];
+    return this.pendingEffects.map((e) => clone(e) as NarrativeEffectRequest);
   }
 
   clearPendingEffects(): void {
     this.pendingEffects = [];
+  }
+
+  acknowledgeEffect(effect: NarrativeEffectRequest): boolean {
+    const idx = this.pendingEffects.findIndex((e) => sameEffect(e, effect));
+    if (idx < 0) return false;
+    this.pendingEffects.splice(idx, 1);
+    return true;
+  }
+
+  rejectEffect(effect: NarrativeEffectRequest, _reason?: string): boolean {
+    const idx = this.pendingEffects.findIndex((e) => sameEffect(e, effect));
+    if (idx < 0) return false;
+    this.pendingEffects.splice(idx, 1);
+    return true;
   }
 
   private ensureInk(): void {
@@ -138,7 +160,7 @@ export class NarrativeHostImpl implements NarrativeHost {
     // Bounded context query function (lookahead-safe).
     ink.bindExternalFunction('narrative_query', (key: string, arg?: string) => {
       try {
-        return queryContextSafe(this.context, key, arg);
+        return queryContextSafe(this.context, key, arg === '' ? undefined : arg);
       } catch {
         return null;
       }
@@ -149,7 +171,7 @@ export class NarrativeHostImpl implements NarrativeHost {
     //   request_effect('{"type":"world_set_flag",...}')   (full typed request as JSON)
     //   request_effect('effect_id')                      (generic request_effect)
     //   request_effect('effect_id', 'arg' | '{...}')     (generic with arg/payload)
-    ink.bindExternalFunction('request_effect', (first: string, second?: string) => {
+    ink.bindExternalFunction('request_effect', (first: string, second: string) => {
       let candidate: unknown;
       // Try full JSON request in first arg
       try {
@@ -162,7 +184,7 @@ export class NarrativeHostImpl implements NarrativeHost {
       }
       if (!candidate) {
         let payload: Record<string, unknown> = {};
-        if (second !== undefined) {
+        if (second !== undefined && second !== null) {
           try {
             const p = JSON.parse(second);
             if (p && typeof p === 'object' && !Array.isArray(p)) payload = p as Record<string, unknown>;
@@ -173,7 +195,7 @@ export class NarrativeHostImpl implements NarrativeHost {
         }
         candidate = { type: 'request_effect', effectId: String(first), payload };
       }
-      const result = validateNarrativeEffectRequest(candidate);
+      const result = validateNarrativeEffectRequest(candidate, { approvedEffectIds: this.approvedEffectIds });
       if (!result.ok) {
         return `rejected:${result.error}`;
       }
@@ -197,11 +219,14 @@ export class NarrativeHostImpl implements NarrativeHost {
   private handleEffectRequest(req: NarrativeEffectRequest): string {
     if (this.onEffectRequest) {
       const res = this.onEffectRequest(req);
-      if (res.accepted) {
-        this.pendingEffects.push(req);
-        return res.result !== undefined ? `accepted:${String(res.result)}` : 'accepted';
+      if (!res.accepted) {
+        return `rejected:${res.error ?? 'domain rejected'}`;
       }
-      return `rejected:${res.error ?? 'domain rejected'}`;
+      if (res.committed) {
+        return res.result !== undefined ? `committed:${String(res.result)}` : 'committed';
+      }
+      this.pendingEffects.push(req);
+      return res.result !== undefined ? `accepted:${String(res.result)}` : 'accepted';
     }
     this.pendingEffects.push(req);
     return 'queued';
@@ -210,6 +235,15 @@ export class NarrativeHostImpl implements NarrativeHost {
 
 function queryContextSafe(ctx: NarrativeContextProjection, key: string, arg?: string): unknown {
   return queryNarrativeContext(ctx, key, arg);
+}
+
+function clone<T>(value: T): T {
+  if (typeof structuredClone === 'function') return structuredClone(value);
+  return JSON.parse(JSON.stringify(value));
+}
+
+function sameEffect(a: NarrativeEffectRequest, b: NarrativeEffectRequest): boolean {
+  return JSON.stringify(a) === JSON.stringify(b);
 }
 
 function InkRuntimeStateSchemaCheck(state: unknown): void {

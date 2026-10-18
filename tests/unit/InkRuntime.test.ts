@@ -10,6 +10,7 @@ const compiledJson = JSON.parse(readFileSync(compiledPath, 'utf8'));
 
 function bind(rt: InkRuntime) {
   rt.bindExternalFunction('request_effect', () => 'queued', false);
+  rt.bindExternalFunction('narrative_query', (_key: string, _arg?: string) => null, true);
   return rt;
 }
 
@@ -25,6 +26,7 @@ describe('InkRuntime', () => {
   it('surfaces choices and tags through continuation', () => {
     const rt = bind(InkRuntime.compile(source));
     rt.continue(); // Hello there.
+    rt.continue(); // I trust you. (or untrusted)
     const c = rt.continue(); // What would you like to do? + choices
     expect(c.choices.map((x) => x.text)).toEqual(['Ask about the exam', 'Say goodbye']);
     expect(c.canContinue).toBe(false);
@@ -32,6 +34,7 @@ describe('InkRuntime', () => {
 
   it('updates Ink-local variables on a branch', () => {
     const rt = bind(InkRuntime.compile(source));
+    rt.continue();
     rt.continue();
     rt.continue();
     rt.choose(0);
@@ -49,24 +52,22 @@ describe('InkRuntime', () => {
   });
 
   it('restores flow deterministically after save/reload', () => {
-    const rt = bind(InkRuntime.compile(source));
-    rt.continue(); // Hello there.
-    rt.continue(); // choices
-    rt.choose(0);
-    rt.continue(); // exam text
-    // Now at end; save before the final consume? Instead test mid-flow restore:
     const rt2 = bind(InkRuntime.compile(source));
     rt2.continue(); // Hello there.
+    rt2.continue(); // branch text
     rt2.continue(); // choices
     const saved = rt2.saveState();
     // restore into a fresh runtime built from committed compiled JSON
     const restored = bind(new InkRuntime(compiledJson));
     restored.loadState(saved);
-    // After restore, the next continuation should match a fresh run choosing same path
+    // After restore, the next continuation should match a fresh run at the same point
     const fresh = bind(InkRuntime.compile(source));
     fresh.continue();
     fresh.continue();
-    fresh.choose(0);
+    fresh.continue();
+    // Compare canContinue and choice availability
+    expect(restored.canContinue).toBe(fresh.canContinue);
+    expect(restored.currentChoicesCount).toBe(fresh.currentChoicesCount);
     // Compare variable + canContinue
     expect(restored.getVariable('asked')).toBe(fresh.getVariable('asked'));
   });

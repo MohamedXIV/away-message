@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { NarrativeHostImpl } from '../../src/narrative/NarrativeHost';
 import { NarrativeContextProjectionSchema } from '../../src/narrative/contracts';
+import { InkRuntime } from '../../src/narrative/ink/InkRuntime';
 
 const compiledPath = join(__dirname, '../../src/narrative/ink/fixtures/hello.ink.json');
 const compiledJson = JSON.parse(readFileSync(compiledPath, 'utf8'));
@@ -34,6 +35,7 @@ describe('NarrativeHost', () => {
       context: baseContext,
     });
     host.start('hello');
+    host.continue(); // branch text
     const frame2 = host.continue();
     expect(frame2.choices.map((c) => c.text)).toEqual(['Ask about the exam', 'Say goodbye']);
     const frame3 = host.choose(0);
@@ -59,6 +61,7 @@ describe('NarrativeHost', () => {
     });
     host.start('hello');
     host.continue();
+    host.continue();
     host.choose(0);
     host.continue();
     const pending = host.getPendingEffects();
@@ -73,28 +76,167 @@ describe('NarrativeHost', () => {
     expect(() => host.start('nope')).toThrow();
   });
 
-  it('saves and restores flow position and variables', () => {
+  it('saves and restores flow position, choices, tags, variables and pending effects', () => {
     const host = new NarrativeHostImpl({
       loadCompiledStory: () => compiledJson,
       context: baseContext,
     });
     host.start('hello');
+    host.continue(); // branch text
     host.continue(); // choices
+    const saved = host.save(); // checkpoint at choice point
+    // advance original
     host.choose(0);
-    host.continue(); // exam text
-    const saved = host.save();
-    expect(saved.version).toBe(1);
-    expect(saved.compiledStoryKey).toBe('hello');
+    const origFrame = host.continue(); // exam text + effect
 
+    // restore into a fresh host
     const host2 = new NarrativeHostImpl({
       loadCompiledStory: () => compiledJson,
       context: baseContext,
     });
     host2.load(saved);
-    // after restore, variable should persist
-    // (Ink variable 'asked' set during the branch)
-    // We can't read directly; but load should not throw and pending cleared
+    // pending effects from checkpoint: none yet
     expect(host2.getPendingEffects()).toEqual([]);
+
+    // restored flow must offer the same choices as the checkpoint
+    const restoredFrame = host2.continue();
+    expect(restoredFrame.choices.map((c) => c.text)).toEqual(['Ask about the exam', 'Say goodbye']);
+
+    // now take the same branch on restored host
+    const restoredAfterChoose = host2.choose(0);
+    const restoredEffectFrame = host2.continue();
+    expect(restoredAfterChoose.text).toContain('You asked about the exam.');
+    expect(restoredEffectFrame.text).toBe(origFrame.text === '' ? '' : origFrame.text);
+
+    // pending effect captured exactly once on restored path
+    const pending = host2.getPendingEffects();
+    expect(pending.length).toBe(1);
+    const pendingFirst = pending[0];
+    expect(pendingFirst).toBeDefined();
+    expect(pendingFirst!.type).toBe('request_effect');
+
+    // acknowledge it; reload again must not duplicate
+    host2.acknowledgeEffect(pendingFirst!);
+    expect(host2.getPendingEffects()).toEqual([]);
+    const saved2 = host2.save();
+    const host3 = new NarrativeHostImpl({ loadCompiledStory: () => compiledJson, context: baseContext });
+    host3.load(saved2);
+    expect(host3.getPendingEffects()).toEqual([]);
+  });
+
+  it('persists pending effects across save/reload without duplicating', () => {
+    const host = new NarrativeHostImpl({
+      loadCompiledStory: () => compiledJson,
+      context: baseContext,
+    });
+    host.start('hello');
+    host.continue();
+    host.continue();
+    host.choose(0);
+    host.continue(); // captures effect
+    const before = host.getPendingEffects();
+    expect(before.length).toBe(1);
+
+    const saved = host.save();
+    expect(saved.pendingEffects).toHaveLength(1);
+
+    const host2 = new NarrativeHostImpl({ loadCompiledStory: () => compiledJson, context: baseContext });
+    host2.load(saved);
+    const after = host2.getPendingEffects();
+    expect(after).toHaveLength(1);
+    expect(JSON.stringify(after)).toBe(JSON.stringify(before));
+    // resuming does not re-run the effect line (already past it), so no duplicate
+    host2.continue();
+    expect(host2.getPendingEffects()).toHaveLength(1);
+  });
+
+  it('compiled Ink branches on approved bounded context queries', () => {
+    const trustedCtx = NarrativeContextProjectionSchema.parse({ ...baseContext, actor: { id: 'a', reach: 'local', roles: [], lifecycle: 'active', connection: 'known', relationshipStage: 'friend', trusted: true, conflicted: false } });
+    const untrustedCtx = NarrativeContextProjectionSchema.parse({ ...baseContext, actor: { id: 'a', reach: 'local', roles: [], lifecycle: 'active', connection: 'known', relationshipStage: 'stranger', trusted: false, conflicted: false } });
+
+    const h1 = new NarrativeHostImpl({ loadCompiledStory: () => compiledJson, context: trustedCtx });
+    h1.start('hello');
+    const f1 = h1.continue();
+    expect(f1.text).toContain('I trust you.');
+    expect(f1.tags).toContain('trusted');
+
+    const h2 = new NarrativeHostImpl({ loadCompiledStory: () => compiledJson, context: untrustedCtx });
+    h2.start('hello');
+    const f2 = h2.continue();
+    expect(f2.text).toContain("I don't know you yet.");
+    expect(f2.tags).toContain('untrusted');
+  });
+
+  it('compiled Ink safely handles unknown context queries', () => {
+    const ink = `EXTERNAL narrative_query(key, arg)
+-> start
+=== start ===
+{ narrative_query("secret_field", ""):
+    leaked
+- else:
+    safe
+}
+-> END
+`;
+    const rt = InkRuntime.compile(ink);
+    rt.bindExternalFunction('narrative_query', (_k: string) => null, true);
+    const c = rt.continueMaximally();
+    expect(c.text).toContain('safe');
+    expect(c.text).not.toContain('leaked');
+  });
+
+  it('rejects unknown semantic effects through the host', () => {
+    const ink = `EXTERNAL request_effect(type, payload)
+-> start
+=== start ===
+~ request_effect("does_not_exist", "null")
+-> END
+`;
+    const { Compiler } = require('inkjs/compiler/Compiler');
+    const { SimpleJson } = require('inkjs/engine/SimpleJson');
+    const compiler = new Compiler(ink);
+    const story = compiler.Compile();
+    const writer = new SimpleJson.Writer();
+    story.ToJson(writer);
+    const compiled = JSON.parse(writer.toString());
+
+    const host = new NarrativeHostImpl({
+      loadCompiledStory: () => compiled,
+      context: baseContext,
+      approvedEffectIds: ['social_act'],
+    });
+    host.start('x');
+    host.continue();
+    expect(host.getPendingEffects()).toEqual([]);
+  });
+
+  it('getContext and getPendingEffects return defensive copies', () => {
+    const host = new NarrativeHostImpl({
+      loadCompiledStory: () => compiledJson,
+      context: baseContext,
+    });
+    host.start('hello');
+    host.continue();
+    host.continue();
+    host.choose(0);
+    host.continue(); // captures effect
+
+    const ctx = host.getContext();
+    ctx.currentDay = 999;
+    ctx.flags.mutated = true;
+    expect(host.getContext().currentDay).toBe(baseContext.currentDay);
+    expect(host.getContext().flags.mutated).toBeUndefined();
+
+    const pending = host.getPendingEffects();
+    expect(pending.length).toBeGreaterThan(0);
+    const pendingFirst = pending[0];
+    expect(pendingFirst).toBeDefined();
+    (pendingFirst as any).effectId = 'tampered';
+    if (pendingFirst && pendingFirst.type === 'request_effect') (pendingFirst as any).payload.x = 1;
+    const again = host.getPendingEffects();
+    const againFirst = again[0];
+    expect(againFirst).toBeDefined();
+    expect((againFirst as any).effectId).not.toBe('tampered');
   });
 
   it('updates context immutably', () => {
@@ -115,6 +257,7 @@ describe('NarrativeHost', () => {
       context: baseContext,
     });
     host.start('hello');
+    host.continue();
     host.continue();
     host.choose(0);
     host.continue();

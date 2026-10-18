@@ -75,6 +75,14 @@ describe('Narrative contracts', () => {
     }
   });
 
+  it('validateNarrativeEffectRequest rejects unknown semantic effects', () => {
+    const r = validateNarrativeEffectRequest({ type: 'request_effect', effectId: 'does_not_exist', payload: {} });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toContain('unknown or unapproved');
+    const r2 = validateNarrativeEffectRequest({ type: 'request_effect', effectId: 'social_act', payload: {} });
+    expect(r2.ok).toBe(true);
+  });
+
   it('validateNarrativeEffectRequest rejects unknown/malformed', () => {
     const bad = [
       { type: 'money_mutate', amount: 5 },

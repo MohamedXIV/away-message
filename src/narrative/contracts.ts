@@ -192,6 +192,28 @@ const AppointmentSchema = z.object({
   description: z.string(),
 });
 
+// Small explicit approved semantic-effect registry (generic request_effect boundary).
+// Unknown effect identifiers are rejected; domain owners remain the final authority
+// on preconditions and commits. Extend this list only when a domain owner exists.
+export const APPROVED_SEMANTIC_EFFECT_IDS = [
+  'social_act',
+  'pay_meal',
+  'study_together',
+  'schedule_meetup',
+  'confide',
+  'apologize',
+  'knowledge_reveal',
+  'travel_request',
+] as const;
+
+export type ApprovedSemanticEffectId = (typeof APPROVED_SEMANTIC_EFFECT_IDS)[number];
+
+export const ApprovedSemanticEffectIdSchema = z.enum(APPROVED_SEMANTIC_EFFECT_IDS);
+
+// Effect request lifecycle (Ink side only; canonical commits stay with domain owners).
+export const EFFECT_LIFECYCLE_STATUSES = ['queued', 'accepted', 'committed', 'rejected'] as const;
+export type EffectLifecycleStatus = (typeof EFFECT_LIFECYCLE_STATUSES)[number];
+
 export const NarrativeEffectRequestSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('world_set_flag'), key: z.string().min(1), value: z.union([z.boolean(), z.number(), z.string()]) }),
   z.object({ type: z.literal('world_trigger_event'), eventId: z.string().min(1) }),
@@ -226,7 +248,14 @@ function payloadWithinBounds(value: unknown, depth = 0): boolean {
   return keys.every((k) => payloadWithinBounds((value as Record<string, unknown>)[k], depth + 1));
 }
 
-export function validateNarrativeEffectRequest(input: unknown): EffectValidationResult {
+export interface EffectValidationOptions {
+  approvedEffectIds?: readonly string[];
+}
+
+export function validateNarrativeEffectRequest(
+  input: unknown,
+  options?: EffectValidationOptions,
+): EffectValidationResult {
   const parsed = NarrativeEffectRequestSchema.safeParse(input);
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ') };
@@ -235,6 +264,10 @@ export function validateNarrativeEffectRequest(input: unknown): EffectValidation
   if (req.type === 'request_effect') {
     if (!payloadWithinBounds(req.payload)) {
       return { ok: false, error: 'request_effect payload exceeds size/depth bounds' };
+    }
+    const allowed = options?.approvedEffectIds ?? APPROVED_SEMANTIC_EFFECT_IDS;
+    if (!allowed.includes(req.effectId)) {
+      return { ok: false, error: `unknown or unapproved semantic effect: ${req.effectId}` };
     }
   }
   // Bound string sizes for flag keys/values sanity
@@ -273,6 +306,8 @@ export interface NarrativeHostState {
   flowId: string;
   compiledStoryKey: string;
   inkState: InkRuntimeState;
+  /** Queued/accepted effect requests awaiting domain acknowledgement/commit. */
+  pendingEffects?: NarrativeEffectRequest[];
 }
 
 export interface NarrativeStartContext {
@@ -294,4 +329,6 @@ export interface NarrativeHost {
   updateContext(projection: NarrativeContextProjection): void;
   getPendingEffects(): NarrativeEffectRequest[];
   clearPendingEffects(): void;
+  acknowledgeEffect(effect: NarrativeEffectRequest): boolean;
+  rejectEffect(effect: NarrativeEffectRequest, reason?: string): boolean;
 }

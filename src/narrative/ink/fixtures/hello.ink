@@ -1,4 +1,5 @@
 EXTERNAL request_effect(type, payload)
+EXTERNAL narrative_query(key, arg)
 
 VAR asked = false
 
@@ -6,6 +7,11 @@ VAR asked = false
 
 === start ===
 Hello there. # greeting
+{ narrative_query("actor_trusted", ""):
+    I trust you. # trusted
+- else:
+    I don't know you yet. # untrusted
+}
 What would you like to do?
 * [Ask about the exam] -> ask_exam
 * [Say goodbye] -> goodbye
@@ -19,4 +25,3 @@ You asked about the exam. # effect:flag:asked_exam:true
 === goodbye ===
 Goodbye! # farewell
 -> END
-EOF
