@@ -58,6 +58,10 @@ Anchors / objects / actors / Focus Views
 
 An exterior street, park, bus stop, motel frontage, shopping strip, café, store, apartment or workplace may all be normal Places with one or more authored views.
 
+**Do not collapse View and Anchor.** One authored View can expose several independent anchors/hotspots and focus targets. Add a distinct View only when another camera composition or interaction surface is actually useful; important locations may have several Views, while small places may need only one. View/focus changes are presentation transitions, never a new source of canonical location, item, or actor truth. Multiple view-specific drawings/placements of the same fixture still represent **one** canonical object. The #167 single-main-view spike proves a bounded rendering case, not a one-view limit on all interiors.
+
+For the approved **3D spatial-reference → authored cameras → Gen-AI/paint-over → layered 2D runtime** workflow, and the criteria for choosing view counts and protecting modular assets across views, consult `docs/14-FIRST-PRODUCTION-ART-AND-PLAYABLE-SLICE.md` §4. This document owns the spatial/semantic distinction; that production document owns the art pipeline.
+
 A district overview may itself be an authored horizontal or top-down navigation composition. That does not make it a free-roam game map.
 
 Explicit non-goals:
