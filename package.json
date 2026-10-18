@@ -16,6 +16,7 @@
     "test:all": "npm run test:unit && npm run test:integration && npm run test:e2e",
     "content:pull": "tsx tools/pull-content.ts",
     "content:check": "tsx tools/pull-content.ts --check",
+    "ink:compile": "tsx tools/compile-ink.ts",
     "bench:simulation": "tsx tools/benchmark-simulation.ts",
     "bench:publication": "tsx tools/benchmark-publication.ts"
   },
@@ -23,6 +24,7 @@
     "clsx": "^2.1.1",
     "dexie": "^4.0.11",
     "dexie-react-hooks": "^1.1.7",
+    "inkjs": "^2.4.0",
     "lucide-react": "^0.475.0",
     "phaser": "^4.2.1",
     "react": "^19.0.0",
