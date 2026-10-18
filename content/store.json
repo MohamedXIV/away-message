@@ -427,13 +427,13 @@
       "lines": [
         "shift time, gotta run. later!",
         "work calls. back this evening",
-        "on the clock now — hmu later"
+        "on the clock now \u2014 hmu later"
       ],
       "version": 1
     },
     "leave:work:soft": {
       "lines": [
-        "ahh sorry, shift starts — gotta run. talk later?",
+        "ahh sorry, shift starts \u2014 gotta run. talk later?",
         "boss is glaring lol. brb after work",
         "duty calls... ill ping you when im back"
       ],
@@ -1947,6 +1947,59 @@
         "layer-architecture"
       ]
     },
+    "spike_architecture_sr": {
+      "name": "Spike Room Architecture [Stylized Realism]",
+      "kind": "image",
+      "uri": "assets/world/starter-spike/sr/spike_architecture_sr.png",
+      "tags": [
+        "production",
+        "starter-spike",
+        "architecture",
+        "normal-map",
+        "layer-architecture",
+        "sr"
+      ],
+      "normalMapAssetId": "spike_architecture_sr_n"
+    },
+    "spike_architecture_sr_n": {
+      "name": "Spike Room Architecture [Stylized Realism] Normal",
+      "kind": "image",
+      "uri": "assets/world/starter-spike/sr/spike_architecture_sr_n.png",
+      "tags": [
+        "production",
+        "starter-spike",
+        "normal",
+        "sr"
+      ],
+      "normalMapAssetId": ""
+    },
+    "spike_architecture_gn": {
+      "name": "Spike Room Architecture [Graphic Novel]",
+      "kind": "image",
+      "uri": "assets/world/starter-spike/gn/spike_architecture_gn.png",
+      "tags": [
+        "production",
+        "starter-spike",
+        "architecture",
+        "normal-map",
+        "layer-architecture",
+        "gn",
+        "draft-paintover"
+      ],
+      "normalMapAssetId": "spike_architecture_gn_n"
+    },
+    "spike_architecture_gn_n": {
+      "name": "Spike Room Architecture [Graphic Novel] Normal",
+      "kind": "image",
+      "uri": "assets/world/starter-spike/gn/spike_architecture_gn_n.png",
+      "tags": [
+        "production",
+        "starter-spike",
+        "normal",
+        "gn"
+      ],
+      "normalMapAssetId": ""
+    },
     "spike_architecture_n": {
       "name": "Spike Room Architecture Normal",
       "kind": "image",
@@ -1970,6 +2023,33 @@
         "layer-exterior"
       ]
     },
+    "spike_exterior_sr": {
+      "name": "Spike Window Exterior Backdrop [Stylized Realism]",
+      "kind": "image",
+      "uri": "assets/world/starter-spike/sr/spike_exterior_sr.png",
+      "tags": [
+        "production",
+        "starter-spike",
+        "exterior",
+        "layer-exterior",
+        "sr"
+      ],
+      "normalMapAssetId": ""
+    },
+    "spike_exterior_gn": {
+      "name": "Spike Window Exterior Backdrop [Graphic Novel]",
+      "kind": "image",
+      "uri": "assets/world/starter-spike/gn/spike_exterior_gn.png",
+      "tags": [
+        "production",
+        "starter-spike",
+        "exterior",
+        "layer-exterior",
+        "gn",
+        "draft-paintover"
+      ],
+      "normalMapAssetId": ""
+    },
     "spike_tree_back": {
       "name": "Spike Courtyard Tree Far",
       "kind": "image",
@@ -1981,6 +2061,33 @@
         "foliage",
         "layer-exterior"
       ]
+    },
+    "spike_tree_back_sr": {
+      "name": "Spike Courtyard Tree Far [Stylized Realism]",
+      "kind": "image",
+      "uri": "assets/world/starter-spike/sr/spike_tree_back_sr.png",
+      "tags": [
+        "production",
+        "starter-spike",
+        "foliage",
+        "layer-exterior",
+        "sr"
+      ],
+      "normalMapAssetId": ""
+    },
+    "spike_tree_back_gn": {
+      "name": "Spike Courtyard Tree Far [Graphic Novel]",
+      "kind": "image",
+      "uri": "assets/world/starter-spike/gn/spike_tree_back_gn.png",
+      "tags": [
+        "production",
+        "starter-spike",
+        "foliage",
+        "layer-exterior",
+        "gn",
+        "draft-paintover"
+      ],
+      "normalMapAssetId": ""
     },
     "spike_tree_mid": {
       "name": "Spike Courtyard Tree Near",
@@ -1994,6 +2101,33 @@
         "layer-exterior"
       ]
     },
+    "spike_tree_mid_sr": {
+      "name": "Spike Courtyard Tree Near [Stylized Realism]",
+      "kind": "image",
+      "uri": "assets/world/starter-spike/sr/spike_tree_mid_sr.png",
+      "tags": [
+        "production",
+        "starter-spike",
+        "foliage",
+        "layer-exterior",
+        "sr"
+      ],
+      "normalMapAssetId": ""
+    },
+    "spike_tree_mid_gn": {
+      "name": "Spike Courtyard Tree Near [Graphic Novel]",
+      "kind": "image",
+      "uri": "assets/world/starter-spike/gn/spike_tree_mid_gn.png",
+      "tags": [
+        "production",
+        "starter-spike",
+        "foliage",
+        "layer-exterior",
+        "gn",
+        "draft-paintover"
+      ],
+      "normalMapAssetId": ""
+    },
     "spike_curtain": {
       "name": "Spike Curtain Strip",
       "kind": "image",
@@ -2006,6 +2140,33 @@
         "layer-fixture"
       ]
     },
+    "spike_curtain_sr": {
+      "name": "Spike Curtain Strip [Stylized Realism]",
+      "kind": "image",
+      "uri": "assets/world/starter-spike/sr/spike_curtain_sr.png",
+      "tags": [
+        "production",
+        "starter-spike",
+        "soft-surface",
+        "layer-fixture",
+        "sr"
+      ],
+      "normalMapAssetId": ""
+    },
+    "spike_curtain_gn": {
+      "name": "Spike Curtain Strip [Graphic Novel]",
+      "kind": "image",
+      "uri": "assets/world/starter-spike/gn/spike_curtain_gn.png",
+      "tags": [
+        "production",
+        "starter-spike",
+        "soft-surface",
+        "layer-fixture",
+        "gn",
+        "draft-paintover"
+      ],
+      "normalMapAssetId": ""
+    },
     "spike_bed_a": {
       "name": "Spike Bed Variant A",
       "kind": "image",
@@ -2017,6 +2178,19 @@
         "fixture-variant",
         "layer-fixture"
       ]
+    },
+    "spike_bed_a_gn": {
+      "name": "Spike Bed Variant A [Graphic Novel]",
+      "kind": "image",
+      "uri": "assets/world/starter-spike/gn/spike_bed_a_gn.png",
+      "tags": [
+        "production",
+        "starter-spike",
+        "fixture-variant",
+        "layer-fixture",
+        "gn"
+      ],
+      "normalMapAssetId": ""
     },
     "spike_bed_b": {
       "name": "Spike Bed Variant B",
@@ -2041,6 +2215,33 @@
         "fixture",
         "layer-fixture"
       ]
+    },
+    "spike_desk_sr": {
+      "name": "Spike Desk [Stylized Realism]",
+      "kind": "image",
+      "uri": "assets/world/starter-spike/sr/spike_desk_sr.png",
+      "tags": [
+        "production",
+        "starter-spike",
+        "fixture",
+        "layer-fixture",
+        "sr"
+      ],
+      "normalMapAssetId": ""
+    },
+    "spike_desk_gn": {
+      "name": "Spike Desk [Graphic Novel]",
+      "kind": "image",
+      "uri": "assets/world/starter-spike/gn/spike_desk_gn.png",
+      "tags": [
+        "production",
+        "starter-spike",
+        "fixture",
+        "layer-fixture",
+        "gn",
+        "draft-paintover"
+      ],
+      "normalMapAssetId": ""
     },
     "spike_chair": {
       "name": "Spike Desk Chair",
@@ -2090,6 +2291,35 @@
         "practical",
         "layer-light"
       ]
+    },
+    "spike_lamp_sr": {
+      "name": "Spike Bedside Lamp [Stylized Realism]",
+      "kind": "image",
+      "uri": "assets/world/starter-spike/sr/spike_lamp_sr.png",
+      "tags": [
+        "production",
+        "starter-spike",
+        "fixture",
+        "practical",
+        "layer-light",
+        "sr"
+      ],
+      "normalMapAssetId": ""
+    },
+    "spike_lamp_gn": {
+      "name": "Spike Bedside Lamp [Graphic Novel]",
+      "kind": "image",
+      "uri": "assets/world/starter-spike/gn/spike_lamp_gn.png",
+      "tags": [
+        "production",
+        "starter-spike",
+        "fixture",
+        "practical",
+        "layer-light",
+        "gn",
+        "draft-paintover"
+      ],
+      "normalMapAssetId": ""
     },
     "spike_lamp_glow": {
       "name": "Spike Lamp Glow",
@@ -2143,6 +2373,35 @@
         "layer-fixture"
       ]
     },
+    "spike_pc_placeholder_sr": {
+      "name": "Spike Desk Computer Placeholder [Stylized Realism]",
+      "kind": "image",
+      "uri": "assets/world/starter-spike/sr/spike_pc_placeholder_sr.png",
+      "tags": [
+        "production",
+        "starter-spike",
+        "fixture",
+        "computer",
+        "layer-fixture",
+        "sr"
+      ],
+      "normalMapAssetId": ""
+    },
+    "spike_pc_placeholder_gn": {
+      "name": "Spike Desk Computer Placeholder [Graphic Novel]",
+      "kind": "image",
+      "uri": "assets/world/starter-spike/gn/spike_pc_placeholder_gn.png",
+      "tags": [
+        "production",
+        "starter-spike",
+        "fixture",
+        "computer",
+        "layer-fixture",
+        "gn",
+        "draft-paintover"
+      ],
+      "normalMapAssetId": ""
+    },
     "spike_window_glass": {
       "name": "Spike Window Glass Overlay",
       "kind": "image",
@@ -2155,6 +2414,35 @@
         "weather-window",
         "layer-glass"
       ]
+    },
+    "spike_window_glass_sr": {
+      "name": "Spike Window Glass Overlay [Stylized Realism]",
+      "kind": "image",
+      "uri": "assets/world/starter-spike/sr/spike_window_glass_sr.png",
+      "tags": [
+        "production",
+        "starter-spike",
+        "glass",
+        "weather-window",
+        "layer-glass",
+        "sr"
+      ],
+      "normalMapAssetId": ""
+    },
+    "spike_window_glass_gn": {
+      "name": "Spike Window Glass Overlay [Graphic Novel]",
+      "kind": "image",
+      "uri": "assets/world/starter-spike/gn/spike_window_glass_gn.png",
+      "tags": [
+        "production",
+        "starter-spike",
+        "glass",
+        "weather-window",
+        "layer-glass",
+        "gn",
+        "draft-paintover"
+      ],
+      "normalMapAssetId": ""
     },
     "spike_door_panel": {
       "name": "Spike Gallery Door Panel",

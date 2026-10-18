@@ -342,3 +342,74 @@ describe('semantic anchors emit outward intents only', () => {
     expect(createLivingRoomSpikeProjection({ focus: 'window' }).focus).toEqual({ x: 0.3125, y: 0.38, zoom: 1.35 });
   });
 });
+
+// #159 — art treatments are presentation-only asset re-resolution. These
+// tests pin the two halves of that claim: the visuals swap, and everything
+// the simulation could read (ids, geometry, anchors, intents, zones) does
+// not move.
+describe('art direction treatments (#159)', () => {
+  const signatureOf = (projection: ReturnType<typeof createLivingRoomSpikeProjection>) =>
+    computeRoomStructureSignature({
+      viewId: projection.viewId,
+      props: projection.sceneProps ?? [],
+      windowZones: projection.weatherWindowZones ?? [],
+      softSurfaces: projection.softSurfaces ?? [],
+      backgroundAssetId: projection.assetId,
+    });
+
+  it('defaults to the blockout: every prop keeps its authored base asset', () => {
+    const blockout = createLivingRoomSpikeProjection({});
+    expect(propById(blockout.sceneProps!, 'spike_prop_desk').assetId).toBe('spike_desk');
+    expect(blockout.assetId).toBe('spike_architecture');
+  });
+
+  it('swaps prop and background asset ids without touching identity or geometry', () => {
+    const blockout = createLivingRoomSpikeProjection({});
+    const sr = createLivingRoomSpikeProjection({ artTreatment: 'sr' });
+    expect(sr.sceneProps).toHaveLength(blockout.sceneProps!.length);
+    for (const before of blockout.sceneProps!) {
+      const after = propById(sr.sceneProps!, before.id);
+      // Same normalized transform, depth, layer, motion, mask membership.
+      expect(after).toEqual({ ...before, assetId: after.assetId });
+    }
+    expect(propById(sr.sceneProps!, 'spike_prop_desk').assetId).toBe('spike_desk_sr');
+    expect(propById(sr.sceneProps!, 'spike_prop_pc').assetId).toBe('spike_pc_placeholder_sr');
+    expect(sr.assetId).toBe('spike_architecture_sr');
+    expect(sr.normalMapAssetId).toBe('spike_architecture_sr_n');
+  });
+
+  it('falls back per-layer for unauthored variants instead of skipping the prop', () => {
+    // gn authored the bed A variant but not bed B (quota): the swap pair
+    // keeps working with one painted and one blockout layer.
+    const gn = createLivingRoomSpikeProjection({ artTreatment: 'gn' });
+    expect(propById(gn.sceneProps!, 'spike_prop_bed_a').assetId).toBe('spike_bed_a_gn');
+    expect(propById(gn.sceneProps!, 'spike_prop_bed_b').assetId).toBe('spike_bed_b');
+  });
+
+  it('changes the structure signature so the runtime rebuilds textures', () => {
+    const blockout = createLivingRoomSpikeProjection({});
+    const sr = createLivingRoomSpikeProjection({ artTreatment: 'sr' });
+    expect(signatureOf(sr)).not.toBe(signatureOf(blockout));
+    // Same treatment, different toggles: still the fast path.
+    const srLamp = createLivingRoomSpikeProjection({ artTreatment: 'sr', lampOn: true });
+    expect(signatureOf(srLamp)).toBe(signatureOf(sr));
+  });
+
+  it('preloads the resolved union of all treatments for hitch-free switching', () => {
+    const sr = createLivingRoomSpikeProjection({ artTreatment: 'sr' });
+    const preload = sr.preloadAssetIds ?? [];
+    expect(new Set(preload).size).toBe(preload.length);
+    // Authored variants win; unauthored layers preload their base fallback.
+    expect(preload).toContain('spike_desk_sr');
+    expect(preload).toContain('spike_bed_a_gn');
+    expect(preload).toContain('spike_bed_b');
+    // Normals are NOT preload entries: the generic load plan resolves each
+    // diffuse row's linked normalMapAssetId itself, so listing them here
+    // would duplicate work the gate already does.
+    expect(preload).not.toContain('spike_architecture_sr_n');
+    // The blockout baseline is preloaded too — the QA bar switches to it.
+    expect(preload).toContain('spike_desk');
+    // Preload is load-hint only: the active visuals stay the sr set.
+    expect(sr.assetId).toBe('spike_architecture_sr');
+  });
+});

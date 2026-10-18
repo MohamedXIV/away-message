@@ -1,0 +1,6 @@
+# Issue #159 offline art processing (Python 3.12)
+# Pinned tool dependencies; Gen-AI source plate pixels are not reproducible by prompt alone.
+numpy==2.2.6
+scipy==1.15.3
+Pillow==11.3.0
+CairoSVG==2.7.1

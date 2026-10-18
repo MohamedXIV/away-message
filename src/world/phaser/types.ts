@@ -120,6 +120,14 @@ export interface WorldSceneProjection {
   particles: WorldParticleProjection;
   anchors: WorldAnchorProjection[];
   availableViews: WorldViewSummary[];
+  /**
+   * Extra generated asset ids the runtime should have loaded before the
+   * first frame, resolved through the same production gate as the active
+   * view's own assets. Used for authored alternates that a presentation
+   * toggle can switch to without a visible load hitch (#159 art
+   * treatments). Purely a load hint: it never selects a visual by itself.
+   */
+  preloadAssetIds?: string[];
   focus?: WorldCameraFocus | null;
   minuteOfDay?: number;
   isInterior?: boolean;

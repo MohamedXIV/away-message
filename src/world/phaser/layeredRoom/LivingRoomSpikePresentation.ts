@@ -28,6 +28,12 @@ import type { AmbientMotionDef, SoftSurfaceMotionDef } from '../environment/ambi
 import type { AuthoredLightDef } from '../environment/lightingEngine';
 import { projectEnvironmentPresentation } from '../environment/environmentProjection';
 import {
+  ART_TREATMENTS,
+  BLOCKOUT_TREATMENT,
+  resolveTreatmentAssetId,
+  type ArtTreatment,
+} from './artTreatments';
+import {
   createWorldSceneProjection,
   getMinuteForTimeOfDay,
 } from '../presentationAdapter';
@@ -73,6 +79,12 @@ export interface LivingRoomSpikeOptions {
    * takes the rebuild path instead of leaving stale sprites behind.
    */
   propGeometryOverrides?: Readonly<Record<string, RoomPropGeometry>>;
+  /**
+   * #159 art-direction comparison: swap every authored layer to one
+   * treatment's production variants (same ids, same geometry, different
+   * art). Defaults to the blockout/shared-reference baseline.
+   */
+  artTreatment?: ArtTreatment;
   actorByAnchorId?: Readonly<Record<string, string>>;
 }
 
@@ -93,6 +105,8 @@ export interface RoomPresentationInput {
   fixtureVariants?: Readonly<Record<string, string | null>>;
   hiddenPropIds?: readonly string[];
   propGeometryOverrides?: Readonly<Record<string, RoomPropGeometry>>;
+  /** #159: authored art treatment for every layer in this view. */
+  artTreatment?: ArtTreatment;
 }
 
 export interface RoomPresentationResult {
@@ -289,7 +303,10 @@ export function projectRoomPresentation(input: RoomPresentationInput): RoomPrese
     // exact runtime identity.
     props.push({
       id: prop.id,
-      assetId: prop.assetId,
+      // #159: one authored layer id per treatment. Unauthored variants
+      // fall back to the blockout row, so a partially produced treatment
+      // set still renders through the same generic pipeline.
+      assetId: resolveTreatmentAssetId(prop.assetId, input.artTreatment ?? BLOCKOUT_TREATMENT),
       x: ax,
       // A hanging soft surface is pinned at its top edge, so its anchor is
       // the header, not the centre.
@@ -434,6 +451,7 @@ export function createLivingRoomSpikeProjection(
     fixtureVariants: options.fixtureVariants,
     hiddenPropIds: options.hiddenPropIds,
     propGeometryOverrides: options.propGeometryOverrides,
+    artTreatment: options.artTreatment,
   });
 
   const base = createWorldSceneProjection({
@@ -456,8 +474,39 @@ export function createLivingRoomSpikeProjection(
     actorByAnchorId: options.actorByAnchorId,
   });
 
+  // #159: the view background (static architecture) follows the same
+  // treatment convention as the props. The variant row owns its normal map,
+  // so both are re-read from the generated registry rather than inherited
+  // from the blockout row.
+  const treatment = options.artTreatment ?? BLOCKOUT_TREATMENT;
+  const backgroundAssetId = base.assetId
+    ? resolveTreatmentAssetId(base.assetId, treatment, GENERATED_ASSETS)
+    : null;
+  const backgroundNormalMapId = backgroundAssetId
+    ? GENERATED_ASSETS.find((candidate) => candidate.id === backgroundAssetId)?.normalMapAssetId ?? null
+    : null;
+
+  // Load every authored treatment up front so the QA comparison switches
+  // treatments on the rebuild path without a visible download hitch. Base
+  // ids come from the authored rows (room.props already carries resolved
+  // variant ids), and the generic plan still gates each id through the
+  // production tag.
+  const authoredBaseAssetIds = new Set<string>();
+  if (base.assetId) authoredBaseAssetIds.add(base.assetId);
+  for (const prop of GENERATED_SCENE_PROPS) {
+    if (prop.viewId === viewId && prop.assetId) authoredBaseAssetIds.add(prop.assetId);
+  }
+  const preloadAssetIds = new Set<string>();
+  for (const variant of ART_TREATMENTS) {
+    for (const baseId of authoredBaseAssetIds) {
+      preloadAssetIds.add(resolveTreatmentAssetId(baseId, variant.id, GENERATED_ASSETS));
+    }
+  }
+
   return {
     ...base,
+    ...(base.assetId ? { assetId: backgroundAssetId, normalMapAssetId: backgroundNormalMapId } : {}),
+    preloadAssetIds: [...preloadAssetIds],
     sceneProps: room.props,
     weatherWindowZones: room.weatherWindowZones,
     softSurfaces: room.softSurfaces,

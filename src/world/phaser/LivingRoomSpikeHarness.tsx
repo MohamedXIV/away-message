@@ -13,12 +13,29 @@ import {
   createLivingRoomSpikeProjection,
   type LivingRoomFocusTarget,
 } from './layeredRoom/LivingRoomSpikePresentation';
+import {
+  ART_TREATMENTS,
+  BLOCKOUT_TREATMENT,
+  isArtTreatment,
+  type ArtTreatment,
+} from './layeredRoom/artTreatments';
 import type { WorldFixtureCapabilityReport, WorldInteractionIntent } from './types';
 import type { TimeOfDay, WeatherType } from '../types';
 
 type BedVariant = 'a' | 'b' | 'hidden';
 
 const TIME_PHASES: TimeOfDay[] = ['day', 'evening', 'night'];
+
+// #159: the treatment is also readable from the URL (?treatment=sr|gn) so
+// evidence scripts and the owner can open one treatment directly.
+function initialTreatment(): ArtTreatment {
+  try {
+    const raw = new URLSearchParams(window.location.search).get('treatment');
+    return isArtTreatment(raw) ? raw : BLOCKOUT_TREATMENT;
+  } catch {
+    return BLOCKOUT_TREATMENT;
+  }
+}
 
 export interface LivingRoomSpikeHarnessProps {
   onExit?: () => void;
@@ -27,6 +44,7 @@ export interface LivingRoomSpikeHarnessProps {
 interface SpikeStatus {
   placeId: string;
   viewId: string;
+  artTreatment: ArtTreatment;
   timeOfDay: TimeOfDay;
   weather: WeatherType;
   lampOn: boolean;
@@ -61,6 +79,10 @@ export const LivingRoomSpikeHarness: React.FC<LivingRoomSpikeHarnessProps> = ({ 
   // Geometry is part of the room structure signature, so this exercises the
   // structural rebuild path while swaps/toggles stay visibility-only.
   const [deskMoved, setDeskMoved] = useState(false);
+  // #159: authored art treatment for the whole room (blockout baseline plus
+  // the compared production treatments). Presentation-only: ids, geometry,
+  // anchors and intents never change with it.
+  const [artTreatment, setArtTreatment] = useState<ArtTreatment>(initialTreatment);
   const [mounted, setMounted] = useState(true);
   const [mountKey, setMountKey] = useState(0);
   const [intents, setIntents] = useState<SpikeStatus['intents']>([]);
@@ -92,9 +114,10 @@ export const LivingRoomSpikeHarness: React.FC<LivingRoomSpikeHarnessProps> = ({ 
       fixtureVariants,
       hiddenPropIds,
       propGeometryOverrides,
+      artTreatment,
       focus,
     }),
-    [timeOfDay, weather, windIntensity, lampOn, fixtureVariants, hiddenPropIds, propGeometryOverrides, focus],
+    [timeOfDay, weather, windIntensity, lampOn, fixtureVariants, hiddenPropIds, propGeometryOverrides, artTreatment, focus],
   );
 
   const handleIntent = (intent: WorldInteractionIntent) => {
@@ -143,6 +166,7 @@ export const LivingRoomSpikeHarness: React.FC<LivingRoomSpikeHarnessProps> = ({ 
   const status: SpikeStatus = {
     placeId: projection.placeId,
     viewId: projection.viewId,
+    artTreatment,
     timeOfDay,
     weather,
     lampOn,
@@ -178,6 +202,21 @@ export const LivingRoomSpikeHarness: React.FC<LivingRoomSpikeHarnessProps> = ({ 
           {timeOfDay}/{weather} · bed {bedVariant} · lamp {lampOn ? 'on' : 'off'} · focus {focus} ·
           {' '}canvas {snapshot.canvasCount}
         </span>
+        {/* #159 art-direction comparison: one authored treatment at a time. */}
+        <span className="mr-1 text-[9px] uppercase tracking-wide text-slate-500">art</span>
+        {ART_TREATMENTS.map((variant) => (
+          <button
+            key={variant.id}
+            data-testid={`spike-art-${variant.id}`}
+            data-draft={variant.draftNote ?? ''}
+            title={variant.draftNote ? `${variant.summary} — ${variant.draftNote}` : variant.summary}
+            onClick={() => setArtTreatment(variant.id)}
+            className={buttonClass(artTreatment === variant.id)}
+          >
+            {variant.label}
+            {variant.draftNote ? ' *' : ''}
+          </button>
+        ))}
         {TIME_PHASES.map((phase) => (
           <button
             key={phase}

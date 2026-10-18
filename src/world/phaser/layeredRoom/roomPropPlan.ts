@@ -73,11 +73,19 @@ export interface RoomStructureSignatureInput {
   props: readonly WorldScenePropProjection[];
   windowZones: readonly WorldWeatherWindowZone[];
   softSurfaces: readonly SoftSurfaceMotionDef[];
+  /**
+   * Resolved view background (static architecture) texture, when the view
+   * authors one. #159 art treatments can re-author the architecture alone,
+   * and the background sprite is only created on the rebuild path, so the
+   * signature must cover it like any other creation-time identity.
+   */
+  backgroundAssetId?: string | null;
 }
 
 export function computeRoomStructureSignature(input: RoomStructureSignatureInput): string {
   return [
     input.viewId,
+    input.backgroundAssetId ?? 'none',
     input.props.map((prop) => [
       prop.id,
       prop.assetId,
