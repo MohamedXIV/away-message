@@ -36,11 +36,22 @@ on #173 / PR #196 (and #172 / PR #195). No save-compatibility freeze.
   dependency audit** before removal. They currently provide required names,
   schemas and historical migration functions — they are not another live
   snapshot writer on the production import path.
-- FileSystemEngine and DownloadManager still have timestamp/random ID
-  allocation for certain canonical records. Fix each only after confirming
-  ownership, deletion/recreation behavior, and deterministic save/replay
-  fixtures. A current-format identity policy cannot assume a mutable
-  `Map.size` is a durable monotonic counter where deletion is possible.
+- **#174 deterministic VFS/Downloads identity cutover:** Both
+  `FileSystemEngine` and `DownloadManager` now allocate IDs from monotonic,
+  owner-held ordinals. `VirtualFileSystemState.nextFileOrdinal` and
+  `SimulationState.downloadNextOrdinal` checkpoint those ordinals in the
+  existing canonical slot document. File deletion, trash operations, and
+  cancelled download removal do not roll the counters back; restoring a
+  partial/older development state derives a safe lower bound from remaining
+  IDs. Files created with explicit `file_N` IDs also advance the VFS
+  sequence. Creation does not scan the VFS. The new fields are domain-owner
+  truth, not UI publication or an independent database table.
+- `SoftwareRegistry.startInstallerWizard` uses a transient wizard-session ID;
+  installed software truth uses stable `inst_<catalog-id>` identity instead.
+  `TelemetryEngine` records real timestamps for diagnostics; those are not
+  deterministic domain-entity identities. Neither diagnostic clock nor
+  ephemeral wizard session is used to allocate these canonical VFS/download
+  records.
 - `#175` Worker transport, `#176` Rust and `#177` population benchmarks
   are out of scope. The pre-freeze policy allows refusing obsolete saves;
   **corruption of a current-format save must still fail closed**.
@@ -60,5 +71,22 @@ That workflow did not run the PR-branch-restricted Pulse browser gates. This
 branch enables both normal and cold Pulse gates in the CI config so the final
 exact head checks them alongside living-world Chromium.
 
-Do not call this the complete #174 issue until remaining authoritative
-ID sources and obsolete facades are reconciled, and no partial save boots.
+## New deterministic storage acceptance
+
+`SimulationDeterministicStorageIdentity.test.ts` exercises deterministic
+replay, no wall-clock/RNG calls for FileSystem, renamed/moved/restored file
+identity, same-path recreation after deletion, cancelled-transfer tombstone
+semantics, explicit `file_N` allocator reconciliation, composed
+SimulationKernel export/reload, and **real Dexie IndexedDB save → cold boot
+→ save → cold boot**. The test equips an actual modular network card using
+HardwareEngine policy: download attempts without connectivity remain illegal.
+
+Exact-head implementation [`7284a94`](https://github.com/MohamedXIV/away-message/commit/7284a946f1aba71e19724c24e7668e921e3c974e)
+passed [Verify #39169985889](https://github.com/MohamedXIV/away-message/actions/runs/39169985889):
+**314/314 Vitest files and 1,802/1,802 tests**, typecheck, production build,
+living-world Chromium **6/6**, normal Pulse paging **1/1**, cold Pulse paging
+**1/1**. Population benchmarks remain #177. Separate Vercel status failed.
+
+Do not call this the complete #174 issue until the historical persistence
+facades and table schema are audited/retired or justified and all remaining
+genuinely canonical identity sources are accounted for. No partial save boots.
