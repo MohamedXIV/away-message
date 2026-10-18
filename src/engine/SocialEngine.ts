@@ -26,7 +26,8 @@ import { clampRelationships, clampTraits, traitsForBuddy, resolveArchetype } fro
 import { SEED_CHARACTERS, resolveAffinitySeeds } from './seedCharacters';
 import { conditionFromLegacyStatus, projectLegacyBuddyStatus, validActorCondition } from './semantic/ActorCondition';
 import type { BoardBuddy } from './BoardDirector';
-import { ConversationHistory } from './social/ConversationHistory';
+import { ConversationHistory, type ConversationColdIndex } from './social/ConversationHistory';
+import type { ColdConversationReader } from './social/ColdConversationPageReader';
 import { MAX_PHOTO_MEMORIES, SocialMemoryLedger, socialHashText } from './social/SocialMemoryLedger';
 import { NpcRelationshipGraph } from './social/NpcRelationshipGraph';
 import { PlayerRelationships, STRAINED_ANNOYANCE } from './social/PlayerRelationships';
@@ -243,6 +244,19 @@ export class SocialEngine {
     this.eventBus.emit('social:buddy_removed', { buddyId: id });
     return true;
   }
+
+  /** Cold restore replaces only the one canonical message owner, not Social relationships. */
+  public attachColdConversations(
+    recent: Record<string, MessageRecord[]>,
+    counts: Record<string, number>,
+    indexes: Record<string, ConversationColdIndex>,
+    reader: ColdConversationReader,
+  ): void {
+    this.conversations.restoreCold(recent, counts, indexes, reader);
+    for (const buddy of this.roster.values()) this.conversations.ensure(buddy.id);
+  }
+
+  public hasColdConversations(): boolean { return this.conversations.hasColdHistory(); }
 
   public getState(): SocialEngineState {
     const { relationships: rels, actorConditions } = this.playerLinks.exportState();
@@ -1049,6 +1063,10 @@ export class SocialEngine {
     return this.conversations.page(rawConversationId, offset, limit);
   }
 
+  public getConversationPageAsync(id: string, offset = 0, limit = 30) {
+    return this.conversations.pageAsync(id, offset, limit);
+  }
+
   /** Source-owned unread counts, indexed by ConversationHistory (no transcript scan). */
   public getConversationUnreadCounts(maxConversations = 500, playerKnownOnly = false): Record<string, number> {
     return this.conversations.unreadCounts(
@@ -1109,6 +1127,14 @@ export class SocialEngine {
   }
 
   /** Explicit conversation export for Save Log/legacy; normal UI uses bounded pages. */
+  public getMessagesAsync(rawConversationId: string): Promise<MessageRecord[]> {
+    return this.conversations.allMessagesAsync(rawConversationId);
+  }
+
+  public exportConversationsAsync(): Promise<Record<string, MessageRecord[]>> {
+    return this.conversations.exportAllAsync();
+  }
+
   public getMessages(rawConversationId: string): MessageRecord[] {
     return this.conversations.allMessages(rawConversationId);
   }

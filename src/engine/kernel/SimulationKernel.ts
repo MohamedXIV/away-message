@@ -937,6 +937,20 @@ export class SimulationKernel {
     return { revision: this.revision, ...this.social.getConversationPage(actorId, offset, limit) };
   }
 
+  /** Async cold pages pass through the SAME player-known contact gate. */
+  public async getConversationReadAsync(actorId: string, offset = 0, limit = 30): Promise<SimulationConversationRead> {
+    if (!this.social.isKnown(actorId)) {
+      return { revision: this.revision, conversationId: actorId, messages: [], total: 0, hasOlder: false };
+    }
+    const revision = this.revision;
+    const page = await this.social.getConversationPageAsync(actorId, offset, limit);
+    // Never publish a stale after-await view if contact access or world changes.
+    if (revision !== this.revision || !this.social.isKnown(actorId)) {
+      throw new Error('Conversation changed during cold read');
+    }
+    return { revision, ...page };
+  }
+
   /**
    * Atomically commit an auto-discovered newcomer, its MyPlace stub and
    * public world trace. Rejected duplicates must not synthesize revisions.

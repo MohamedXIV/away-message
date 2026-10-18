@@ -1,4 +1,5 @@
 import type { MessageRecord } from '../types';
+import { readColdMessageRange, type ColdConversationReader } from './ColdConversationPageReader';
 
 /**
  * One canonical Social conversation owner. At most 32 recent + 63 pending
@@ -19,6 +20,11 @@ type ConversationRecords = {
   /** Only the most recent messages are always materialized. */
   recent: MessageRecord[];
   total: number;
+  /** Immutable saved prefix; its only truth lives in slot-scoped cold pages. */
+  coldBaseCount: number;
+  coldReader: ColdConversationReader | null;
+  /** One receipt overlay on the saved prefix; never rewrite old pages in place. */
+  coldReadAll: boolean;
 };
 
 /**
@@ -46,7 +52,7 @@ type ConversationIndex = {
   daySet: Set<number>;
   playerDays: Set<number>;
   /** Bounded derived preview, never a second transcript or full unread list. */
-  unreadPreview: MessageRecord[];
+  unreadPreview: Array<Pick<MessageRecord, 'id' | 'text' | 'timestampMinute'>>;
   lastOfflineText: string | null;
 };
 
@@ -66,7 +72,10 @@ function emptyIndex(): ConversationIndex {
 }
 
 function emptyRecords(): ConversationRecords {
-  return { coldPages: [], pendingCold: [], recent: [], total: 0 };
+  return {
+    coldPages: [], pendingCold: [], recent: [], total: 0,
+    coldBaseCount: 0, coldReader: null, coldReadAll: false,
+  };
 }
 
 export class ConversationHistory {
@@ -152,8 +161,85 @@ export class ConversationHistory {
     this.rebuildGlobalPlayerIndex();
   }
 
+
+  /**
+   * Attach the saved immutable cold prefix to this same canonical owner.
+   * The supplied partial snapshot MUST be the matching saved recent tails.
+   * Reject inconsistent metadata BEFORE replacing live state. This is a boot
+   * operation, never a second authority or UI cache.
+   */
+  public restoreCold(
+    recent: Record<string, MessageRecord[]>,
+    counts: Record<string, number>,
+    indexes: Record<string, ConversationColdIndex>,
+    reader: ColdConversationReader,
+  ): void {
+    const ids = Object.keys(recent);
+    if (ids.length !== Object.keys(counts).length
+      || ids.length !== Object.keys(indexes).length
+      || ids.some(id => !Object.hasOwn(counts, id) || !Object.hasOwn(indexes, id)
+        || !Number.isSafeInteger(counts[id]) || counts[id]! < 0
+        || !Array.isArray(recent[id])
+        || recent[id]!.length > LIVE_RECENT_CONVERSATION_MESSAGES
+        || !indexes[id] || indexes[id]!.unread < 0
+        || indexes[id]!.anyUnread < indexes[id]!.unread
+        || indexes[id]!.anyUnread > counts[id]! + recent[id]!.length)) {
+      throw new Error('Invalid cold conversation bootstrap');
+    }
+    this.restore(recent);
+    for (const id of ids) {
+      const key = this.normalizeId(id);
+      if (key !== id) throw new Error('Cold conversation ID is not canonical');
+      const entry = this.records.get(key)!;
+      const saved = indexes[key]!;
+      entry.coldBaseCount = counts[key]!;
+      entry.coldReader = reader;
+      entry.total += entry.coldBaseCount;
+      this.indexes.set(key, {
+        unread: saved.unread,
+        anyUnread: saved.anyUnread,
+        lastMessageMinute: saved.lastMessageMinute,
+        lastActivityMinute: saved.lastActivityMinute,
+        lastPlayerMinute: saved.lastPlayerMinute,
+        daySet: new Set(saved.days),
+        playerDays: new Set(saved.playerDays),
+        unreadPreview: saved.unreadPreview.map(m => ({ ...m })),
+        lastOfflineText: saved.lastOfflineText,
+      });
+    }
+    this.rebuildGlobalPlayerIndex();
+  }
+
+  /** True if a full synchronous snapshot would silently omit saved messages. */
+  public hasColdHistory(): boolean {
+    for (const entry of this.records.values()) if (entry.coldBaseCount > 0) return true;
+    return false;
+  }
+
+  /** Explicit full export: never materialize this in a normal React revision. */
+  public async exportAllAsync(): Promise<Record<string, MessageRecord[]>> {
+    const data: Record<string, MessageRecord[]> = {};
+    for (const [id, entry] of this.records) {
+      const total = entry.total;
+      const base = entry.coldBaseCount
+        ? await readColdMessageRange(entry.coldReader!, id, entry.coldBaseCount, 0, entry.coldBaseCount)
+        : [];
+      if (this.records.get(id) !== entry || entry.total !== total) {
+        throw new Error('Conversation changed during async export; retry the save');
+      }
+      if (entry.coldReadAll) for (const msg of base) msg.isRead = true;
+      data[id] = [
+        ...base,
+        ...entry.coldPages.flatMap(p => (JSON.parse(p) as MessageRecord[]).map(detach)),
+        ...entry.pendingCold.map(detach), ...entry.recent.map(detach),
+      ];
+    }
+    return data;
+  }
+
   /** Persistence/debug only — full materialization remains explicit and costly. */
   public exportAll(): Record<string, MessageRecord[]> {
+    if (this.hasColdHistory()) throw new Error('Cold history requires async export');
     const data: Record<string, MessageRecord[]> = {};
     for (const [id, entry] of this.records) {
       data[id] = [
@@ -193,6 +279,7 @@ export class ConversationHistory {
     const entry = this.records.get(id);
     const index = this.indexes.get(id);
     if (!entry || !index || index.anyUnread === 0) return false;
+    if (entry.coldBaseCount > 0) entry.coldReadAll = true;
     for (let at = 0; at < entry.coldPages.length; at++) {
       const messages = JSON.parse(entry.coldPages[at]!) as MessageRecord[];
       if (messages.some(m => !m.isRead)) {
@@ -219,17 +306,20 @@ export class ConversationHistory {
     const start = Math.max(0, end - safeLimit);
     const messages: MessageRecord[] = [];
     if (entry && start < end) {
+      if (start < entry.coldBaseCount) {
+        throw new Error('Cold history page requires async read');
+      }
       // Only pages overlapping the requested window are deserialized. Backdated
       // world minutes never change append/chronological transcript ordering.
       for (let at = 0; at < entry.coldPages.length; at++) {
-        const chunkStart = at * LIVE_COLD_CONVERSATION_PAGE_SIZE;
+        const chunkStart = entry.coldBaseCount + at * LIVE_COLD_CONVERSATION_PAGE_SIZE;
         const chunkEnd = chunkStart + LIVE_COLD_CONVERSATION_PAGE_SIZE;
         if (chunkEnd <= start) continue;
         if (chunkStart >= end) break;
         const chunk = JSON.parse(entry.coldPages[at]!) as MessageRecord[];
         messages.push(...chunk.slice(Math.max(0, start - chunkStart), Math.min(chunk.length, end - chunkStart)).map(detach));
       }
-      const pendingStart = entry.coldPages.length * LIVE_COLD_CONVERSATION_PAGE_SIZE;
+      const pendingStart = entry.coldBaseCount + entry.coldPages.length * LIVE_COLD_CONVERSATION_PAGE_SIZE;
       if (pendingStart < end && pendingStart + entry.pendingCold.length > start) {
         messages.push(...entry.pendingCold.slice(Math.max(0, start - pendingStart),
           Math.min(entry.pendingCold.length, end - pendingStart)).map(detach));
@@ -243,10 +333,60 @@ export class ConversationHistory {
     return { conversationId: id, messages, total, hasOlder: start > 0 };
   }
 
+
+  /** Optional cold bytes are fetched only for the selected window. */
+  public async pageAsync(rawId: string, offset = 0, limit = 30): Promise<{
+    conversationId: string; messages: MessageRecord[]; total: number; hasOlder: boolean;
+  }> {
+    const id = this.normalizeId(rawId);
+    const entry = this.records.get(id);
+    if (!entry || entry.coldBaseCount === 0) return this.page(id, offset, limit);
+    const safeOffset = Number.isFinite(offset) ? Math.max(0, Math.floor(offset)) : 0;
+    const safeLimit = Number.isFinite(limit) ? Math.max(0, Math.min(50, Math.floor(limit))) : 30;
+    const total = entry.total;
+    const end = Math.max(0, total - safeOffset);
+    const start = Math.max(0, end - safeLimit);
+    if (start >= entry.coldBaseCount || start === end) {
+      return this.page(id, offset, limit);
+    }
+    const coldEnd = Math.min(end, entry.coldBaseCount);
+    const older = await readColdMessageRange(entry.coldReader!, id, entry.coldBaseCount,
+      start, coldEnd);
+    if (this.records.get(id) !== entry || entry.total !== total) {
+      throw new Error('Conversation changed during async page read');
+    }
+    if (entry.coldReadAll) for (const message of older) message.isRead = true;
+    const local = end > entry.coldBaseCount
+      ? this.page(id, total - end, end - entry.coldBaseCount).messages : [];
+    return { conversationId: id, messages: [...older, ...local],
+      total, hasOlder: start > 0 };
+  }
+
+  public async allMessagesAsync(rawId: string): Promise<MessageRecord[]> {
+    const id = this.normalizeId(rawId);
+    const entry = this.records.get(id);
+    if (!entry) return [];
+    const total = entry.total;
+    const older = entry.coldBaseCount
+      ? await readColdMessageRange(entry.coldReader!, id, entry.coldBaseCount, 0, entry.coldBaseCount)
+      : [];
+    if (this.records.get(id) !== entry || entry.total !== total) {
+      throw new Error('Conversation changed during async export');
+    }
+    if (entry.coldReadAll) for (const message of older) message.isRead = true;
+    return [...older, ...this.allLocalMessages(entry)];
+  }
+
+  private allLocalMessages(entry: ConversationRecords): MessageRecord[] {
+    return [...entry.coldPages.flatMap(p => (JSON.parse(p) as MessageRecord[]).map(detach)),
+      ...entry.pendingCold.map(detach), ...entry.recent.map(detach)];
+  }
+
   public allMessages(rawId: string): MessageRecord[] {
     const id = this.normalizeId(rawId);
     const entry = this.records.get(id);
     if (!entry) return [];
+    if (entry.coldBaseCount > 0) throw new Error('Cold history requires async export');
     return [...entry.coldPages.flatMap(p => (JSON.parse(p) as MessageRecord[]).map(detach)),
       ...entry.pendingCold.map(detach), ...entry.recent.map(detach)];
   }

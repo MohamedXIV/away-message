@@ -141,6 +141,29 @@ export function hydrateConversationArchive(
   return conversations;
 }
 
+/**
+ * Cold runtime reader: one immutable persisted 64-message chunk, no whole
+ * conversation materialization. A generation token prevents reads from a
+ * subsequently overwritten slot being confused with the source snapshot.
+ */
+export async function readSavedColdConversationChunk(
+  slotId: string, conversationId: string, pageIndex: number, expectedUpdatedAt: number,
+): Promise<MessageRecord[] | null> {
+  if (!Number.isSafeInteger(pageIndex) || pageIndex < 0) return null;
+  const { db } = await import('./db');
+  return db.transaction('r', db.saves, db.conversation_pages, async () => {
+    const slot = await db.saves.get(slotId);
+    const archive = slot?.meta?.conversationArchive;
+    if (!slot || slot.updatedAt !== expectedUpdatedAt
+      || !isConversationArchiveManifest(archive)) return null;
+    const count = archive.counts[conversationId];
+    if (count === undefined || pageIndex >= Math.ceil(count / CONVERSATION_ARCHIVE_PAGE_SIZE)) return null;
+    const page = await db.conversation_pages.get(conversationArchivePageKey(slotId, conversationId, pageIndex));
+    if (!verifyPage(page, slotId, conversationId, pageIndex, count)) return null;
+    return page.messages.map(m => ({ ...m, ...(m.tags ? { tags: [...m.tags] } : {}) }));
+  });
+}
+
 /** Select only the necessary cold pages for one saved conversation page. */
 export async function readSavedConversationPage(
   slotId: string, conversationId: string, offset = 0, limit = 30,

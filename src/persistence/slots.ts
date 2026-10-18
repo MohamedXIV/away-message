@@ -202,7 +202,7 @@ export async function loadSlotSnapshot(slotId: string): Promise<SimulationState 
  */
 export async function loadSlotColdBootstrap(slotId: string): Promise<{
   snapshot: SimulationState;
-  archive: { slotId: string; counts: Record<string, number>;
+  archive: { slotId: string; updatedAt: number; counts: Record<string, number>;
     indexes: Record<string, ConversationColdIndex> };
 } | null> {
   try {
@@ -230,7 +230,11 @@ export async function loadSlotColdBootstrap(slotId: string): Promise<{
         }
       }
       if (keys.length !== expected.size || keys.some(key => !expected.has(String(key)))) return null;
-      return { snapshot, archive: { slotId, counts: { ...raw.counts }, indexes: raw.indexes } };
+      return {
+        snapshot,
+        archive: { slotId, updatedAt: record.updatedAt,
+          counts: { ...raw.counts }, indexes: raw.indexes },
+      };
     });
   } catch {
     return null;
