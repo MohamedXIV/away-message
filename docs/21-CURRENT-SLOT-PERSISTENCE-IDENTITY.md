@@ -49,6 +49,13 @@ on #173 / PR #196 (and #172 / PR #195). No save-compatibility freeze.
    schema file survives. Null connection/OS represent a valid no-PC save;
    the active writer never loads historical migration blobs.
 
+7. **Retire the v5→v6 save-only hardware migration:** the obsolete
+   `migrations/v6ComputerState.ts` path is no longer a runtime dependency.
+   The old upgrade assertions are replaced with current v6 IndexedDB slot
+   round-trips for the assembled PC, display, owned inventory, OS, and
+   inserted-media identity. Tests of hardware truth continue; restoring
+   disposable, pre-freeze hardware saves is not an acceptance requirement.
+
 ## Verified contract and limits
 
 - PR branch remains stacked, Draft and unmerged. #174 stays open.

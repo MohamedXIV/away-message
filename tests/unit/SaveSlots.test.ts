@@ -13,10 +13,7 @@ import {
   restoreSlotPulse,
   saveSlot,
 } from '../../src/persistence/slots';
-import {
-  isRecoverableBrokenStarterPurchase,
-  migrateSnapshotToV6,
-} from '../../src/persistence/migrations/v6ComputerState';
+import { legacyModularToCanonical } from '../../src/engine/hardware/state';
 import { APP_VERSION } from '../../src/version';
 import { SaveSlotSchema } from '../../src/persistence/schema';
 import { setCurrentPulseSlotId } from '../../src/apps/pulse/persistence';
@@ -144,141 +141,59 @@ describe('P9 save compatibility matrix', () => {
   });
 });
 
-describe('v5 -> v6 computer state migration', () => {
-  it('preserves a working modular PC, display, dedicated installed OS, and ownership', () => {
-    const modular = createScrapYardBundle();
-    const v5 = {
-      version: 1,
-      time: { day: 4, totalMinutes: 5000 },
-      player: { cash: 20 },
-      hardware: {
-        hasComputer: true,
-        isPoweredOn: false,
-        modular,
-        cpuTier: 1,
-        cpuName: modular.cpu.name,
-        ramMB: 64,
-        hddTotalGB: 2.1,
-        hddFreeGB: 0.9,
-        connectionType: 'dialup_56k',
-        connectionSpeedKbps: 56,
-        osVersion: 'Orion_4.8',
-        soundCardInstalled: true,
-        speakersInstalled: false,
-        webcamInstalled: false,
-      },
-      os: {
-        currentOsId: 'Orion_5.0',
-        installedPatchIds: [],
-        lastInstallAtMinute: 3200,
-      },
-    } as any;
-
-    const migrated = migrateSnapshotToV6(v5, 5);
-
-    expect(migrated.computer.assembled).toBe(true);
-    expect(migrated.computer.cpu?.id).toBe(modular.cpu.id);
-    expect(migrated.computer.ramSticks[0]?.sizeMb).toBe(64);
-    expect(migrated.display.monitor?.id).toBe(modular.monitor.id);
-    // Dedicated OsEngine state wins over the obsolete hardware shadow value.
-    expect(migrated.os.currentOsId).toBe('Orion_5.0');
-    expect(migrated.inventory.items.map((item) => item.instanceId)).toContain('migrated:monitor:0');
-    expect(migrated.inventory.items.every((item) => item.location === 'installed')).toBe(true);
-    expect(migrated.hardware.hasComputer).toBe(true);
-    expect(migrated.hardware.ramMB).toBe(64);
-    expect('osVersion' in migrated.hardware).toBe(false);
-    expect('modular' in migrated.hardware).toBe(false);
-  });
-
-  it('preserves an inserted OS disc as an owned inserted media reference', () => {
-    const modular = createScrapYardBundle();
-    modular.insertedDisc = {
-      id: 'disc_orion_48_recovery',
-      title: 'Orion 4.8 Recovery CD',
-      type: 'os_installer',
-      osTarget: 'Orion_4.8',
-    };
-    const v5 = {
-      time: { day: 3 },
-      player: { cash: 12 },
-      hardware: {
-        hasComputer: true,
-        modular,
-        osVersion: 'Orion_4.8',
-      },
+describe('Current-format computer and item ownership persistence', () => {
+  it('round-trips an assembled PC, monitor, installed OS and owned inventory over actual slots', async () => {
+    const canonical = legacyModularToCanonical(createScrapYardBundle());
+    const initial = new SimulationEngine({
+      computer: canonical.computer,
+      display: canonical.display,
       os: { currentOsId: 'Orion_4.8', installedPatchIds: [] },
-    } as any;
-
-    const migrated = migrateSnapshotToV6(v5, 5);
-    const media = migrated.inventory.items.find((item) => item.kind === 'media');
-
-    expect(media).toEqual({
-      instanceId: 'migrated:media:inserted',
-      catalogItemId: 'disc_orion_48_recovery',
-      kind: 'media',
-      location: 'inserted',
+      inventory: {
+        items: [{
+          instanceId: 'owned:monitor:0',
+          catalogItemId: canonical.display.monitor!.id,
+          kind: 'display',
+          location: 'installed',
+        }],
+        purchaseCounts: {},
+      },
+    } as any);
+    await saveSlot(initial, 'canonical_pc');
+    const snapshot = (await loadSlotSnapshot('canonical_pc'))!;
+    expect(snapshot).not.toBeNull();
+    expect(snapshot.computer.assembled).toBe(true);
+    expect(snapshot.computer.cpu?.id).toBe(canonical.computer.cpu?.id);
+    expect(snapshot.display.monitor?.id).toBe(canonical.display.monitor?.id);
+    expect(snapshot.os.currentOsId).toBe('Orion_4.8');
+    expect(snapshot.inventory.items).toContainEqual({
+      instanceId: 'owned:monitor:0',
+      catalogItemId: canonical.display.monitor!.id,
+      kind: 'display',
+      location: 'installed',
     });
-    expect(migrated.computer.insertedMediaId).toBe(media?.instanceId);
+    const restored = new SimulationEngine(snapshot);
+    expect(restored.hardware.getState().hasComputer).toBe(true);
+    expect(restored.os.getCurrentOsId()).toBe('Orion_4.8');
+    expect(restored.exportSnapshot().inventory.items).toEqual(snapshot.inventory.items);
   });
 
-  it('does not turn stale v5 default hardware/Orion into a ghost computer or OS', () => {
-    const v5 = {
-      version: 1,
-      time: { day: 1, totalMinutes: 480 },
-      player: { cash: 38 },
-      hardware: {
-        hasComputer: false,
-        isPoweredOn: false,
-        cpuTier: 1,
-        cpuName: 'Single-Core Orion x86 450MHz',
-        ramMB: 512,
-        hddTotalGB: 40,
-        hddFreeGB: 7,
-        connectionType: 'dsl_256k',
-        connectionSpeedKbps: 256,
-        osVersion: 'Orion_4.8',
-        soundCardInstalled: true,
-        speakersInstalled: false,
-        webcamInstalled: false,
-      },
+  it('keeps inserted-media identity and inventory ownership in a current save', async () => {
+    const canonical = legacyModularToCanonical(createScrapYardBundle());
+    const sim = new SimulationEngine({
+      computer: { ...canonical.computer, insertedMediaId: 'owned:inserted-cd' },
+      display: canonical.display,
       os: { currentOsId: 'Orion_4.8', installedPatchIds: [] },
-    } as any;
-
-    const migrated = migrateSnapshotToV6(v5, 5);
-
-    expect(migrated.computer.assembled).toBe(false);
-    expect(migrated.display.monitor).toBeNull();
-    expect(migrated.inventory.items).toEqual([]);
-    expect(migrated.os.currentOsId).toBeNull();
-    expect(migrated.hardware.ramMB).toBe(0);
-    expect(migrated.hardware.connectionType).toBeNull();
-  });
-
-  it('adds only the narrow one-time marker for the known lost $35 starter purchase', () => {
-    const broken = {
-      time: { day: 1 },
-      player: { cash: 3 },
-      hardware: { hasComputer: false },
-      os: { currentOsId: 'Orion_4.8', installedPatchIds: [] },
-    } as any;
-
-    expect(isRecoverableBrokenStarterPurchase(broken, 5)).toBe(true);
-    const migrated = migrateSnapshotToV6(broken, 5);
-    expect(migrated.inventory.items).toEqual([]);
-    expect(migrated.inventory.legacyRecovery).toEqual({
-      starterBundlePurchaseLost: true,
-      consumed: false,
+      inventory: { items: [{
+        instanceId: 'owned:inserted-cd', catalogItemId: 'disc_orion_48_recovery',
+        kind: 'media', location: 'inserted',
+      }], purchaseCounts: {} },
+    } as any);
+    await saveSlot(sim, 'inserted_cd');
+    const snapshot = (await loadSlotSnapshot('inserted_cd'))!;
+    expect(snapshot.computer.insertedMediaId).toBe('owned:inserted-cd');
+    expect(snapshot.inventory.items).toContainEqual({
+      instanceId: 'owned:inserted-cd', catalogItemId: 'disc_orion_48_recovery',
+      kind: 'media', location: 'inserted',
     });
-  });
-
-  it.each([
-    ['cash $2', { time: { day: 1 }, player: { cash: 2 }, hardware: { hasComputer: false }, os: { currentOsId: 'Orion_4.8', installedPatchIds: [] } }],
-    ['cash $4', { time: { day: 1 }, player: { cash: 4 }, hardware: { hasComputer: false }, os: { currentOsId: 'Orion_4.8', installedPatchIds: [] } }],
-    ['day 2', { time: { day: 2 }, player: { cash: 3 }, hardware: { hasComputer: false }, os: { currentOsId: 'Orion_4.8', installedPatchIds: [] } }],
-    ['working PC', { time: { day: 1 }, player: { cash: 3 }, hardware: { hasComputer: true }, os: { currentOsId: 'Orion_4.8', installedPatchIds: [] } }],
-    ['install timestamp', { time: { day: 1 }, player: { cash: 3 }, hardware: { hasComputer: false }, os: { currentOsId: 'Orion_4.8', installedPatchIds: [], lastInstallAtMinute: 500 } }],
-    ['patch evidence', { time: { day: 1 }, player: { cash: 3 }, hardware: { hasComputer: false }, os: { currentOsId: 'Orion_4.8', installedPatchIds: ['Orion_4.8.1'] } }],
-  ])('does not grant the recovery marker for %s', (_label, snapshot) => {
-    expect(isRecoverableBrokenStarterPurchase(snapshot as any, 5)).toBe(false);
   });
 });
