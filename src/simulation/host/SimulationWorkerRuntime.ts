@@ -11,6 +11,51 @@ export function createSimulationWorkerRuntime(send: (message: SimulationWorkerRe
   let unsubscribe: (() => void) | null = null;
   let queue: Promise<void> = Promise.resolve();
   let closed = false;
+  let clockTimer: ReturnType<typeof setInterval> | null = null;
+  let lastClockSample = 0;
+  let clockSecondsPending = 0;
+  let clockTickQueued = false;
+
+  const stopClock = (): void => {
+    if (clockTimer !== null) clearInterval(clockTimer);
+    clockTimer = null;
+    clockSecondsPending = 0;
+    lastClockSample = 0;
+  };
+
+  /** One bounded clock job at a time, queued behind save/cold reads.
+   * This cannot grow an unbounded timer queue when a slow world tick or
+   * IDB export temporarily blocks the Worker event loop.
+   */
+  const tickClock = (): void => {
+    if (closed || clockTimer === null) return;
+    const now = performance.now();
+    const seconds = Math.min(2, Math.max(0, (now - lastClockSample) / 1000));
+    lastClockSample = now;
+    clockSecondsPending = Math.min(2, clockSecondsPending + seconds);
+    if (clockTickQueued || clockSecondsPending <= 0) return;
+    clockTickQueued = true;
+    queue = queue.then(() => {
+      clockTickQueued = false;
+      const elapsed = clockSecondsPending;
+      clockSecondsPending = 0;
+      if (!closed && clockTimer !== null && kernel && elapsed > 0) {
+        kernel.advanceRealTime(elapsed);
+      }
+    }).catch(cause => {
+      // A timer tick has no request ID; notify the client explicitly rather
+      // than keeping a silently corrupted game clock alive.
+      stopClock();
+      closed = true;
+      unsubscribe?.();
+      unsubscribe = null;
+      kernel = null;
+      send({ type: 'fatal', error: {
+        code: 'SIMULATION_CLOCK_FAILED',
+        message: cause instanceof Error ? cause.message : 'Worker clock failed',
+      } });
+    });
+  };
 
   const requireKernel = (): SimulationKernel => {
     if (!kernel) throw new Error('SimulationHost not initialized');
@@ -67,10 +112,24 @@ export function createSimulationWorkerRuntime(send: (message: SimulationWorkerRe
           requireKernel().advanceGameMinutes(raw.minutes, raw.reason);
           break;
         case 'realtime':
+          if (clockTimer !== null) {
+            throw new Error('Manual realtime advance unavailable while Worker clock runs');
+          }
           if (!Number.isFinite(raw.seconds) || raw.seconds < 0 || raw.seconds > 2) {
             throw new Error('Invalid bounded realtime delta');
           }
           requireKernel().advanceRealTime(raw.seconds);
+          break;
+        case 'clock':
+          requireKernel();
+          if (typeof raw.running !== 'boolean') throw new Error('Invalid clock control');
+          if (raw.running && clockTimer === null) {
+            lastClockSample = performance.now();
+            clockSecondsPending = 0;
+            clockTimer = setInterval(tickClock, 250);
+          } else if (!raw.running) {
+            stopClock();
+          }
           break;
         case 'query':
           value = await query(requireKernel(), raw.query);
@@ -101,6 +160,7 @@ export function createSimulationWorkerRuntime(send: (message: SimulationWorkerRe
       return queue;
     },
     close(): void {
+      stopClock();
       closed = true;
       unsubscribe?.();
       unsubscribe = null;

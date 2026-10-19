@@ -95,4 +95,48 @@ describe('#175 single-writer Worker runtime protocol', () => {
       .toMatchObject({ messages: [], total: 0 });
     runtime.close();
   });
+
+  it('owns a bounded clock inside the Worker without any render-loop calls', async () => {
+    const { ask, runtime } = harness();
+    await ask({ op: 'init' });
+    const before = await ask({ op: 'query', query: { kind: 'hud' } }) as ReturnType<SimulationKernel['getHudProjection']>;
+    vi.useFakeTimers();
+    try {
+      await ask({ op: 'clock', running: true });
+      await expect(ask({ op: 'realtime', seconds: 0.25 }))
+        .rejects.toThrow('while Worker clock runs');
+      await vi.advanceTimersByTimeAsync(1500);
+      const progressed = await ask({ op: 'query', query: { kind: 'hud' } }) as ReturnType<SimulationKernel['getHudProjection']>;
+      expect(progressed.time.totalMinutes).toBeGreaterThanOrEqual(before.time.totalMinutes + 1);
+      await ask({ op: 'clock', running: false });
+      const stopped = await ask({ op: 'query', query: { kind: 'hud' } }) as ReturnType<SimulationKernel['getHudProjection']>;
+      await vi.advanceTimersByTimeAsync(2000);
+      expect(await ask({ op: 'query', query: { kind: 'hud' } }))
+        .toMatchObject({ time: { totalMinutes: stopped.time.totalMinutes } });
+      await ask({ op: 'realtime', seconds: 1 });
+      const manuallyAdvanced = await ask({ op: 'query', query: { kind: 'hud' } }) as ReturnType<SimulationKernel['getHudProjection']>;
+      expect(manuallyAdvanced.time.totalMinutes).toBeGreaterThan(stopped.time.totalMinutes);
+    } finally {
+      runtime.close();
+      vi.useRealTimers();
+    }
+  });
+
+  it('treats clock engine errors as fatal instead of silently continuing a corrupt world', async () => {
+    const { ask, sent, runtime } = harness();
+    await ask({ op: 'init' });
+    const spy = vi.spyOn(SimulationKernel.prototype, 'advanceRealTime')
+      .mockImplementation(() => { throw new Error('clock-owner-failure'); });
+    vi.useFakeTimers();
+    try {
+      await ask({ op: 'clock', running: true });
+      await vi.advanceTimersByTimeAsync(500);
+      expect(sent.some(event => event.type === 'fatal'
+        && event.error.message === 'clock-owner-failure')).toBe(true);
+    } finally {
+      spy.mockRestore();
+      runtime.close();
+      vi.useRealTimers();
+    }
+  });
 });

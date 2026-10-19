@@ -79,3 +79,33 @@ owner method call sites still own a synchronous main-thread
 SimulationKernel in normal gameplay. Moving only the ticker or
 boots before those dependent consumers are migrated would leave a
 second authority alive and is expressly forbidden by #168/#175.
+
+## P2 — One Worker-owned realtime clock (pre-cutover contract)
+
+An explicit `setClockRunning(true/false)` command now enables a
+**single 250ms Worker timer**, with elapsed real seconds measured using
+the Worker's monotonic `performance.now()`. The client never sends
+RAF-frame deltas in this mode; manual `advanceRealTime` is rejected
+while the Worker timer is running to prevent two time sources.
+
+Each timer sample is bounded to two real seconds, accumulated to at
+most two pending seconds, and coalesced into a **single queued clock
+job**. The same FIFO orders clock work with explicit commands and
+asynchronous save/cold-history operations, so slow saves or world ticks
+cannot enqueue an unbounded backlog. There is no global RAF
+dependency in the canonical Worker owner.
+
+A failing clock owner sends an explicit `fatal` transport notification;
+the host rejects pending RPCs, terminates the Worker, and never boots
+a hidden local fallback. Explicit stop and disposal cancel timers.
+Headless simulations retain deterministic manual time advancement
+without an implicit timer.
+
+Unit tests use simulated timers for clock on/off, no double realtime
+advances and fatal failure handling. Chromium launches a real module
+Worker and verifies that its clock advances without caller-side RAF
+requests, and remains stopped after explicit stop.
+
+**Important:** the production React ticker is still on the main thread
+until the complete UI cutover. These Worker time capabilities are
+precutover owner contract proofs, not a shipped replacement yet.

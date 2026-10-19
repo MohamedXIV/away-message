@@ -26,6 +26,10 @@ export class WorkerSimulationHost implements SimulationHost {
     if (this.disposed || this.failure) return;
     const message = event.data;
     if (!message || typeof message !== 'object') return;
+    if (message.type === 'fatal') {
+      this.fail(new Error(message.error.message));
+      return;
+    }
     if (message.type === 'change') {
       // Worker structured clone drops Object.freeze. Re-freeze so a faulty
       // first subscriber cannot alter the change seen by the next subscriber.
@@ -103,6 +107,10 @@ export class WorkerSimulationHost implements SimulationHost {
 
   async advanceRealTime(seconds: number): Promise<void> {
     await this.request({ op: 'realtime', seconds });
+  }
+
+  async setClockRunning(running: boolean): Promise<void> {
+    await this.request({ op: 'clock', running });
   }
 
   query<Q extends SimulationQuery>(query: Q): Promise<SimulationQueryResult<Q>> {

@@ -41,6 +41,7 @@ export type SimulationWorkerRequest =
   | { id: number; op: 'dispatch'; action: SimulationAction }
   | { id: number; op: 'advance'; minutes: number; reason?: string }
   | { id: number; op: 'realtime'; seconds: number }
+  | { id: number; op: 'clock'; running: boolean }
   | { id: number; op: 'query'; query: SimulationQuery }
   | { id: number; op: 'export' }
   | { id: number; op: 'saveSlot'; slotId: string; saveName?: string; pulse: SlotPulseMetadata }
@@ -54,12 +55,14 @@ export type SimulationWorkerCommand = SimulationWorkerRequest extends infer T
 export type SimulationWorkerReply =
   | { type: 'result'; id: number; ok: true; value: unknown }
   | { type: 'result'; id: number; ok: false; error: { code: string; message: string } }
-  | { type: 'change'; change: SimulationChange };
+  | { type: 'change'; change: SimulationChange }
+  | { type: 'fatal'; error: { code: string; message: string } };
 
 export interface SimulationHost {
   dispatch(action: SimulationAction): Promise<ActionResult>;
   advanceGameMinutes(minutes: number, reason?: string): Promise<void>;
   advanceRealTime(seconds: number): Promise<void>;
+  setClockRunning(running: boolean): Promise<void>;
   query<Q extends SimulationQuery>(query: Q): Promise<SimulationQueryResult<Q>>;
   exportSnapshot(): Promise<SimulationState>;
   loadSnapshot(snapshot: SimulationState): Promise<void>;

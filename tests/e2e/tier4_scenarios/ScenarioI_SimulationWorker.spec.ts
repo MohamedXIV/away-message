@@ -99,3 +99,32 @@ test('module Worker owns a real v6 IndexedDB slot across disposal, cold boot and
   expect(result.pulseRestored).toBe(true);
   expect(result.privateMessages).toBe(0);
 });
+
+test('Dedicated Worker advances its own clock without an animation-frame tick producer', async ({ page }) => {
+  test.setTimeout(60_000);
+  await page.goto('/');
+  const result = await page.evaluate(async () => {
+    // @ts-expect-error Vite browser-only Worker client.
+    const { createBrowserSimulationHost } = await import(/* @vite-ignore */ '/src/simulation/host/WorkerSimulationHost.ts');
+    const host = await createBrowserSimulationHost();
+    try {
+      const before = (await host.query({ kind: 'hud' })).time.totalMinutes;
+      await host.setClockRunning(true);
+      let manualError = '';
+      try { await host.advanceRealTime(0.5); } catch (error) {
+        manualError = error instanceof Error ? error.message : String(error);
+      }
+      // No requestAnimationFrame callback drives this Worker. Its clock is
+      // scheduled inside the worker; 1 real second maps to ~1 game minute.
+      await new Promise(resolve => setTimeout(resolve, 1700));
+      await host.setClockRunning(false);
+      const after = (await host.query({ kind: 'hud' })).time.totalMinutes;
+      await new Promise(resolve => setTimeout(resolve, 650));
+      const stopped = (await host.query({ kind: 'hud' })).time.totalMinutes;
+      return { before, after, stopped, manualError };
+    } finally { host.dispose(); }
+  });
+  expect(result.manualError).toContain('while Worker clock runs');
+  expect(result.after).toBeGreaterThanOrEqual(result.before + 1);
+  expect(result.stopped).toBe(result.after);
+});

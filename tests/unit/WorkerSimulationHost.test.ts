@@ -69,4 +69,18 @@ describe('#175 WorkerSimulationHost transport lifecycle', () => {
     expect(worker.terminate).toHaveBeenCalledTimes(1);
     host.dispose();
   });
+
+  it('fails pending RPCs when the background Worker clock reports a fatal fault', async () => {
+    const worker = new LoopbackWorker();
+    worker.postMessage = vi.fn(); // pending request, not an ack
+    const host = new WorkerSimulationHost(worker as unknown as Worker);
+    const starting = host.initialize();
+    worker.emit('message', {
+      data: { type: 'fatal', error: { code: 'SIMULATION_CLOCK_FAILED', message: 'tick fault' } },
+    } as MessageEvent);
+    await expect(starting).rejects.toThrow('tick fault');
+    await expect(host.query({ kind: 'hud' })).rejects.toThrow('tick fault');
+    expect(worker.terminate).toHaveBeenCalledTimes(1);
+    host.dispose();
+  });
 });
