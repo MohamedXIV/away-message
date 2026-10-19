@@ -3,7 +3,7 @@ import type { InitialSimulationState } from '../../engine/kernel/PhysicalSimulat
 import type { OsInstallPlan } from '../../engine/kernel/ComputerOwnershipRuntime';
 import type { SlotPulseMetadata, SlotSummary } from '../../persistence/slots';
 import type {
-  SimulationActorRead, SimulationChange, SimulationChromeRead, SimulationDesktopRead,
+  SimulationActorRead, SimulationAppRead, SimulationChange, SimulationChromeRead, SimulationDesktopRead,
   SimulationConversationRead, SimulationDirectoryRead, SimulationFileRead,
   SimulationHudProjection, SimulationMessengerRead, SimulationPlayerStatusRead,
   SimulationPresenceRead, SimulationResidenceRead, SimulationSituationRead,
@@ -17,6 +17,7 @@ export interface SimulationQueryResults {
   playerStatus: SimulationPlayerStatusRead;
   chrome: SimulationChromeRead;
   desktop: SimulationDesktopRead;
+  apps: SimulationAppRead;
   presence: SimulationPresenceRead;
   messenger: SimulationMessengerRead;
   actor: SimulationActorRead | null;
@@ -28,7 +29,7 @@ export interface SimulationQueryResults {
   transit: SimulationTransitRead;
 }
 export type SimulationQuery =
-  | { kind: 'hud' | 'world' | 'playerStatus' | 'chrome' | 'desktop' | 'presence' | 'situation' | 'residence' | 'transit' }
+  | { kind: 'hud' | 'world' | 'playerStatus' | 'chrome' | 'desktop' | 'apps' | 'presence' | 'situation' | 'residence' | 'transit' }
   | { kind: 'messenger'; maxContacts?: number }
   | { kind: 'actor'; actorId: string }
   | { kind: 'conversation'; actorId: string; offset?: number; limit?: number }
