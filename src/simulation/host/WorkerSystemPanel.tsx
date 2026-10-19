@@ -36,9 +36,10 @@ export function WorkerSystemPanel({
     return () => { alive = false; };
   }, [revision, session]);
 
-  // A changed world may invalidate an earlier OS preflight. Never commit
-  // a plan prepared against a different canonical revision.
-  useEffect(() => { setPlan(null); }, [revision]);
+  // The Worker clock produces unrelated revisions every game minute.
+  // Do not discard an OS preflight just because time progressed while the
+  // player reads it. Owner.commitOsInstall always revalidates inserted media,
+  // hardware and the selected installation plan atomically.
 
   const hardware = async (command: SimulationHardwareCommand, label: string) => {
     setBusy(true);
