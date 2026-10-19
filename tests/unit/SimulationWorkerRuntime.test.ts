@@ -12,7 +12,7 @@ function harness() {
   const ask = async (command: SimulationWorkerCommand) => {
     const id = ++nextId;
     await runtime.receive({ ...command, id } as SimulationWorkerRequest);
-    const result = sent.findLast(message => message.type === 'result' && message.id === id);
+    const result = [...sent].reverse().find(message => message.type === 'result' && message.id === id);
     if (!result || result.type !== 'result') throw Error('Missing worker reply');
     if (!result.ok) throw Error(result.error.message);
     return result.value;
