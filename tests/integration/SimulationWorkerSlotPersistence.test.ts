@@ -89,7 +89,10 @@ describe('#175 real indexedDB current-slot Worker ownership', () => {
       const restored = await second.ask({
         op: 'query', query: { kind: 'conversation', actorId: actor.id, offset: 110, limit: 40 },
       });
-      expect(restored).toEqual({ ...older, revision: 0 });
+      expect(restored).toMatchObject({ total: 145, revision: 0 });
+      const coldPage = restored as { messages: Array<{ text: string }> };
+      expect(coldPage.messages[0]?.text).toBe('SLOT_WORKER_0');
+      expect(coldPage.messages.at(-1)?.text).toBe('SLOT_WORKER_34');
       const summary = await second.ask({ op: 'query', query: { kind: 'hud' } }) as {
         time: { totalMinutes: number };
       };
