@@ -160,12 +160,14 @@ describe('#175 single-writer Worker runtime protocol', () => {
         kind: 'insertMedia', instanceId: owned!.instanceId,
       } }) as { success: boolean };
       expect(inserted.success).toBe(true);
+      const preflightStart = await ask({ op: 'query', query: { kind: 'hud' } }) as ReturnType<SimulationKernel['getHudProjection']>;
+      expect(preflightStart.time.totalMinutes).toBeGreaterThan(before.time.totalMinutes);
       const prepared = await ask({ op: 'hardware', command: { kind: 'prepareOs' } }) as ReturnType<SimulationKernel['prepareOsInstallFromInsertedMedia']>;
       expect(prepared).toMatchObject({
         success: true, data: { targetOs: 'Orion_4.8', mode: 'fresh' },
       });
       const preflightTime = await ask({ op: 'query', query: { kind: 'hud' } }) as ReturnType<SimulationKernel['getHudProjection']>;
-      expect(preflightTime.time.totalMinutes).toBe(before.time.totalMinutes);
+      expect(preflightTime.time.totalMinutes).toBe(preflightStart.time.totalMinutes);
       const ejected = await ask({ op: 'hardware', command: { kind: 'ejectMedia' } }) as { success: boolean };
       expect(ejected.success).toBe(true);
       const stale = await ask({ op: 'hardware', command: {
@@ -177,6 +179,7 @@ describe('#175 single-writer Worker runtime protocol', () => {
         kind: 'insertMedia', instanceId: owned!.instanceId,
       } });
       const current = await ask({ op: 'hardware', command: { kind: 'prepareOs' } }) as ReturnType<SimulationKernel['prepareOsInstallFromInsertedMedia']>;
+      const commitStart = await ask({ op: 'query', query: { kind: 'hud' } }) as ReturnType<SimulationKernel['getHudProjection']>;
       const committed = await ask({ op: 'hardware', command: {
         kind: 'commitOs', plan: current.data!,
       } }) as { success: boolean };
@@ -184,7 +187,7 @@ describe('#175 single-writer Worker runtime protocol', () => {
       const installed = await ask({ op: 'query', query: { kind: 'desktop' } }) as ReturnType<SimulationKernel['getDesktopRead']>;
       expect(installed.osVersion).toBe('Orion_4.8');
       const after = await ask({ op: 'query', query: { kind: 'hud' } }) as ReturnType<SimulationKernel['getHudProjection']>;
-      expect(after.time.totalMinutes - before.time.totalMinutes)
+      expect(after.time.totalMinutes - commitStart.time.totalMinutes)
         .toBe(current.data!.durationMinutes);
     } finally { runtime.close(); }
   });
