@@ -425,3 +425,22 @@ Settings opening and taskbar minimize/restore/show-desktop, with no
 legacy synchronous engine module instantiated.
 
 This is NOT normal `/` cutover; keep #204 Draft and #175 Open.
+
+
+## P3.11 — Shared authored SystemTray Chrome
+
+The actual Orion OS `SystemTray` presentation is now `SystemTrayChrome`
+with typed `SimulationChromeRead` input. This preserves the original
+volume/mute slider, Pulse unread tray and bounded sender previews,
+network status indicators, downloader activity lights and game clock.
+The legacy `SystemTray` wrapper owns its original live engine event
+subscription for incoming-message sound (no restore/unread replay); the
+Worker browser never imports that synchronous adapter and reads its
+tray only through the allowlisted Worker-owned `chrome` query. UI-only
+blink/volume controls run on the browser thread; no simulation clock
+or NPC authority is duplicated in the tray.
+
+The Worker still maps the network icon to its existing staged computer
+setup window until full dial-up OS Host APIs are migrated. Chromium
+verifies the original volume popup, Pulse tray/popups and Worker-only
+single engine. #204 stays Draft until normal `/` and full app parity.

@@ -44,7 +44,7 @@ export const StartMenuChrome: React.FC<StartMenuChromeProps> = ({
   const [runError, setRunError] = useState<string | null>(null);
 
   const handleLaunch = (appId: string, customState?: Record<string, unknown>) => {
-    const mapped = canLaunch(appId) ? (resolveAppId?.(appId) ?? appId) : null;
+    const mapped = canLaunch(appId) ? (resolveAppId ? resolveAppId(appId) : appId) : null;
     if (!mapped) {
       soundManager.play('error');
       setRunError(`Program not available: ${appId}`);

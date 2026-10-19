@@ -154,3 +154,23 @@ test('real Orion taskbar/Start Menu route Worker apps and exclude unported apps'
   await expect(page.getByTestId('worker-window-system')).toHaveCount(0);
   expect(await page.evaluate(() => !('__simEngine' in window) && !('__simStore' in window))).toBe(true);
 });
+
+test('Worker tray reuses original volume and Pulse preview, with bounded live OS clock', async ({ page }) => {
+  test.setTimeout(60_000);
+  await page.goto('/worker.html');
+  await page.getByRole('button', { name: 'New game' }).click();
+  await expect(page.getByTestId('worker-phase')).toHaveText('game');
+  await page.getByRole('button', { name: 'desktop', exact: true }).click();
+  const tray = page.getByTestId('worker-taskbar-tray');
+  await expect(tray).toBeVisible();
+  await expect(tray.getByTitle('Master Volume')).toBeVisible();
+  await tray.getByTitle('Master Volume').click();
+  await expect(tray.getByText('Volume', { exact: true })).toBeVisible();
+  await expect(tray.getByRole('checkbox', { name: 'Mute' })).toBeVisible();
+  await tray.getByTitle('Master Volume').click();
+  await tray.getByTitle('Pulse Messenger').click();
+  await expect(tray.getByText('No unread messages. suspiciously quiet…')).toBeVisible();
+  await tray.getByRole('button', { name: 'Open Pulse' }).click();
+  await expect(page.getByTestId('worker-window-pulse')).toBeVisible();
+  expect(await page.evaluate(() => !('__simEngine' in window) && !('__simStore' in window))).toBe(true);
+});

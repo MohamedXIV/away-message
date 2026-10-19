@@ -35,6 +35,13 @@ const startMenuChromeSource = readFileSync(
   fileURLToPath(new URL('../../src/desktop/StartMenuChrome.tsx', import.meta.url)), 'utf8',
 );
 
+const systemTraySource = readFileSync(
+  fileURLToPath(new URL('../../src/desktop/SystemTray.tsx', import.meta.url)), 'utf8',
+);
+const systemTrayChromeSource = readFileSync(
+  fileURLToPath(new URL('../../src/desktop/SystemTrayChrome.tsx', import.meta.url)), 'utf8',
+);
+
 const osThemeCssSource = readFileSync(
   fileURLToPath(new URL('../../src/desktop/themes/os-themes.css', import.meta.url)),
   'utf8',
@@ -74,6 +81,17 @@ describe('central desktop OS presentation routing', () => {
       expect(source).not.toContain('OsHostProvider');
     }
     expect(startMenuChromeSource).toContain('availableApps');
+  });
+
+  it('routes bounded SystemTray Chrome reads without importing legacy simulation in Worker', () => {
+    expect(systemTraySource).toContain("engine.events.on('social:message_received'");
+    expect(systemTraySource).toContain('<SystemTrayChrome');
+    expect(systemTrayChromeSource).toContain('SimulationChromeRead');
+    expect(systemTrayChromeSource).toContain('chrome.unreadCount');
+    expect(systemTrayChromeSource).toContain('chrome.connectionSpeedKbps');
+    expect(systemTrayChromeSource).not.toContain('useSimulationStore');
+    expect(systemTrayChromeSource).not.toContain('useSimulationChrome');
+    expect(systemTrayChromeSource).not.toContain('engine.events');
   });
 
   it('routes taskbar presentation through the central OS profile', () => {

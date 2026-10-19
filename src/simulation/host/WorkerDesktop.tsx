@@ -4,6 +4,7 @@ import { getOsPresentationProfile } from '../../desktop/host/OsPresentation';
 import { WindowFrameChrome } from '../../desktop/WindowFrameChrome';
 import { TaskbarChrome } from '../../desktop/TaskbarChrome';
 import { StartMenuChrome } from '../../desktop/StartMenuChrome';
+import { SystemTrayChrome } from '../../desktop/SystemTrayChrome';
 import { useWindowStore, type WindowState } from '../../store/useWindowStore';
 import { WorkerPulsePanel } from './WorkerPulsePanel';
 import { WorkerFileExplorer, WorkerNotepad } from './WorkerDesktopVfsApps';
@@ -134,17 +135,11 @@ export function WorkerDesktop({
                 .catch(cause => setError(String(cause)));
             }} />
         )}
-        tray={<div data-testid="worker-taskbar-tray"
-          className="ml-auto flex h-full items-center gap-2 border-l border-white/30 px-2 text-xs">
-          <span title={chrome?.connectionType ?? 'offline'}>📡</span>
-          <button type="button" onClick={() => open('pulse')}
-            title="Pulse Messenger" aria-label="Open Pulse from tray">💬
-            {!!chrome?.unreadCount && <sup>{Math.min(chrome.unreadCount, 9)}{chrome.unreadCount > 9 ? '+' : ''}</sup>}
-          </button>
-          <span title={chrome?.time ? 'Day ' + chrome.time.day : 'Clock'}>
-            {chrome?.time ? String(chrome.time.hour).padStart(2, '0') + ':' +
-              String(chrome.time.minute).padStart(2, '0') : '––:––'}
-          </span>
+        tray={<div data-testid="worker-taskbar-tray" className="ml-auto h-full">
+          {chrome ? <SystemTrayChrome chrome={chrome}
+            onOpenDialUp={() => open('system')} /> : (
+            <div role="status" className="px-2 py-1 text-xs">––:––</div>
+          )}
         </div>}
       />
       {error && <p role="alert" className="absolute bottom-11 right-3 bg-red-100 p-2 text-xs">{error}</p>}
