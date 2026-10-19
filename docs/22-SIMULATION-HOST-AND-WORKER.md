@@ -109,3 +109,51 @@ requests, and remains stopped after explicit stop.
 **Important:** the production React ticker is still on the main thread
 until the complete UI cutover. These Worker time capabilities are
 precutover owner contract proofs, not a shipped replacement yet.
+
+
+## P3.1 / P3.2 — Worker-first React vertical slice (staged)
+
+The full legacy application has ~400 production TypeScript/TSX files and
+multiple synchronous owner methods. Replacing the global `SimulationEngine`
+with an async proxy without migrating those consumers would create a broken
+second state authority. Instead, `main.tsx` now has an **explicit opt-in**
+`?runtime=worker` entry that dynamically imports `WorkerGameShell`
+without ever evaluating `App`, `useSimulationStore` or its eagerly
+constructed `defaultEngine`. Normal `/` still uses the legacy app
+while the remaining UI is migrated. This is not yet the default route.
+
+`WorkerGameSession` implements browser boot orchestration for **New Game**
+and **Load Game**, one host at a time, bounded HUD/world/player-status
+projection caching, serializable dispatch, minute advancement, explicit
+slot saves, day-boundary autosave, phase/error state, restart and teardown.
+It uses a stable `useSyncExternalStore` snapshot for React 19 and collapses
+revision bursts into bounded asynchronous read sets, rejecting mixed
+revisions and stale replies from a previous Worker generation.
+
+The host now supports unsolicited fatal notifications even when no RPC is
+outstanding. The session never falls back to a main-thread simulation
+on startup or Worker crash; stale async boot results are disposed. Only
+UI-owned localStorage data crosses to the Worker on save, and the canonical
+slot/cold page reader stays inside the Worker.
+
+`WorkerGameShell` is a deliberately small **playable engineering slice**
+(time, room/world, status, pause, advance, save/load, back to menu);
+it is not an alternate finished desktop/Phaser/Pulse renderer and cannot be
+used as a reason to mark the production UI cutover complete. The existing
+`App` route stays untouched semantically, preserving current playable
+experience and test fixtures until the remaining domain APIs are converted.
+
+Evidence: `WorkerGameSession.test.ts` asserts atomic boot replacement,
+fatal handling, stale boot cancellation, bounded cache and once-per-day
+autosave. `ScenarioJ_WorkerFirstUI.spec.ts` runs the real React
+`?runtime=worker` entry, verifies no legacy `__simEngine/__simStore`,
+executes New → pause → advance → save → menu → load, and checks
+unreadable-save refusal without a shadow world.
+
+**Remaining #175 before merge:** the ordinary gameplay entry `/`,
+all legacy Zustand store conveniences, Pulse/desktop and Phaser authored
+rendering must move onto the new bounded host and command ports. Then
+switch the default route to this runtime and delete the eager local owner.
+Prove autosave, cold history, restart, failure UX and 20/100/250/500
+NPC scale using normal gameplay before review/merge. The opt-in slice is
+an executable staging surface, not a completed production cutover.

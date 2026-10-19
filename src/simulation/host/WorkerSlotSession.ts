@@ -1,5 +1,5 @@
 import { getCurrentPulseSlotId, getPulseSlotStorageKey } from '../../apps/pulse/persistence';
-import { restoreSlotPulse, type SlotSummary } from '../../persistence/slots';
+import { restoreSlotPulse, type SlotSummary } from '../../persistence/slotUi';
 import { WorkerSimulationHost } from './WorkerSimulationHost';
 
 /**

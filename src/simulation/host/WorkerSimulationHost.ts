@@ -18,6 +18,7 @@ export class WorkerSimulationHost implements SimulationHost {
     reject: (error: Error) => void;
   }>();
   private readonly listeners = new Set<(change: Readonly<SimulationChange>) => void>();
+  private readonly failureListeners = new Set<(error: Error) => void>();
   private lastChange: Readonly<SimulationChange> | null = null;
   private failure: Error | null = null;
   private disposed = false;
@@ -72,6 +73,10 @@ export class WorkerSimulationHost implements SimulationHost {
     this.pending.clear();
     this.listeners.clear();
     this.worker.terminate();
+    for (const listener of this.failureListeners) {
+      try { listener(error); } catch { /* UI failures must not hide the Worker fault */ }
+    }
+    this.failureListeners.clear();
   }
 
   private request(request: SimulationWorkerCommand): Promise<unknown> {
@@ -136,6 +141,20 @@ export class WorkerSimulationHost implements SimulationHost {
     return () => { this.listeners.delete(listener); };
   }
 
+  /** Fatal Worker failures are observable even while no RPC is outstanding. */
+  onFailure(listener: (error: Error) => void): () => void {
+    if (this.failure) {
+      listener(this.failure);
+      return () => {};
+    }
+    if (this.disposed) {
+      listener(new Error('SimulationHost disposed'));
+      return () => {};
+    }
+    this.failureListeners.add(listener);
+    return () => { this.failureListeners.delete(listener); };
+  }
+
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
@@ -143,6 +162,7 @@ export class WorkerSimulationHost implements SimulationHost {
     for (const entry of this.pending.values()) entry.reject(error);
     this.pending.clear();
     this.listeners.clear();
+    this.failureListeners.clear();
     this.worker.removeEventListener('message', this.onMessage);
     this.worker.removeEventListener('error', this.onError);
     this.worker.removeEventListener('messageerror', this.onMessageError);
