@@ -5,9 +5,13 @@ on:
   push:
     branches:
       - main
-      - feat/modular-orion-hardware-os
-      - chore/30-pr-verification-ci
-      - fix/30-exact-head-checkout
+  workflow_dispatch:
+    inputs:
+      run_benchmarks:
+        description: Run 20/100/250/500-actor opt-in benchmarks
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -66,19 +70,18 @@ jobs:
       - name: Test
         run: node scripts/verify-vitest-baseline.mjs
 
-      # #171 clean cutover: sample the exact checked-out PR head before
-      # accepting the replacement kernel. Other PRs are unaffected.
+      # Explicit opt-in for the future #176/#177 performance decision.
+      # These are heavyweight sample benches, not per-PR/browser gates.
       - name: Benchmark composed simulation (20 / 100 / 250 / 500 actors)
-        if: github.event_name == 'pull_request' && github.event.pull_request.head.ref == 'refactor/171-clean-simulation-kernel'
+        if: github.event_name == 'workflow_dispatch' && inputs.run_benchmarks
         env:
-          SIM_BENCH_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          SIM_BENCH_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: npm run bench:simulation
 
-      # #172: cheap, exact-head Node timings. Not a browser FPS benchmark.
       - name: Benchmark bounded publication (20 / 100 / 250 / 500 actors)
-        if: github.event_name == 'pull_request' && github.event.pull_request.head.ref == 'feat/172-bounded-publication'
+        if: github.event_name == 'workflow_dispatch' && inputs.run_benchmarks
         env:
-          PUBLICATION_BENCH_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PUBLICATION_BENCH_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
           PUBLICATION_BENCH_SAMPLES: 5
         run: npm run bench:publication
 
@@ -88,11 +91,10 @@ jobs:
       - name: Browser living-world smoke
         run: npx playwright test tests/e2e/tier1_features/07_RoomViewAndInteractables.spec.ts tests/e2e/tier4_scenarios/ScenarioF_LivingWorldGate.spec.ts
 
-      # #172/#173: mounted Pulse, including production cold boot and full-history export.
+      # #172/#173 are on main: never silently skip these browser
+      # regression gates merely because their implementation branches merged.
       - name: Browser Pulse bounded paging gate
-        if: github.event_name == 'pull_request' && (github.event.pull_request.head.ref == 'feat/172-bounded-publication' || github.event.pull_request.head.ref == 'feat/173-social-conversation-owner' || github.event.pull_request.head.ref == 'feat/174-deterministic-social-identities')
         run: npx playwright test tests/e2e/tier4_scenarios/ScenarioG_PulsePaging.spec.ts
 
       - name: Browser Pulse cold history gate
-        if: github.event_name == 'pull_request' && (github.event.pull_request.head.ref == 'feat/173-social-conversation-owner' || github.event.pull_request.head.ref == 'feat/174-deterministic-social-identities')
         run: npx playwright test tests/e2e/tier4_scenarios/ScenarioH_PulseColdPaging.spec.ts
