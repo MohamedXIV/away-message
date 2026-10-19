@@ -174,3 +174,31 @@ test('Worker tray reuses original volume and Pulse preview, with bounded live OS
   await expect(page.getByTestId('worker-window-pulse')).toBeVisible();
   expect(await page.evaluate(() => !('__simEngine' in window) && !('__simStore' in window))).toBe(true);
 });
+
+test('shared Worker window manager handles Alt+Tab and Alt+F4 across real app windows', async ({ page }) => {
+  test.setTimeout(60_000);
+  await page.goto('/worker.html');
+  await page.getByRole('button', { name: 'New game' }).click();
+  await expect(page.getByTestId('worker-phase')).toHaveText('game');
+  await page.getByRole('button', { name: 'desktop', exact: true }).click();
+  const desktop = page.getByTestId('worker-desktop');
+  await desktop.getByRole('button', { name: 'Open Notepad' }).click();
+  await desktop.getByRole('button', { name: 'Open Mailbox' }).click();
+  const notepad = desktop.getByTestId('worker-window-notepad');
+  const mailbox = desktop.getByTestId('worker-window-mailbox');
+  await expect(mailbox.locator('.os-themed-titlebar')).toHaveAttribute('data-inactive', 'false');
+  await page.evaluate(() => {
+    window.dispatchEvent(new KeyboardEvent('keydown', {
+      altKey: true, key: 'Tab', bubbles: true, cancelable: true,
+    }));
+  });
+  await expect(notepad.locator('.os-themed-titlebar')).toHaveAttribute('data-inactive', 'false');
+  await page.evaluate(() => {
+    window.dispatchEvent(new KeyboardEvent('keydown', {
+      altKey: true, key: 'F4', bubbles: true, cancelable: true,
+    }));
+  });
+  await expect(notepad).toHaveCount(0);
+  await expect(mailbox).toBeVisible();
+  expect(await page.evaluate(() => !('__simEngine' in window) && !('__simStore' in window))).toBe(true);
+});

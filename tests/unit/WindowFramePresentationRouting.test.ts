@@ -22,6 +22,13 @@ const taskbarSource = readFileSync(
   'utf8',
 );
 
+const windowManagerSource = readFileSync(
+  fileURLToPath(new URL('../../src/desktop/WindowManager.tsx', import.meta.url)), 'utf8',
+);
+const windowManagerChromeSource = readFileSync(
+  fileURLToPath(new URL('../../src/desktop/WindowManagerChrome.tsx', import.meta.url)), 'utf8',
+);
+
 const taskbarChromeSource = readFileSync(
   fileURLToPath(new URL('../../src/desktop/TaskbarChrome.tsx', import.meta.url)), 'utf8',
 );
@@ -92,6 +99,20 @@ describe('central desktop OS presentation routing', () => {
     expect(systemTrayChromeSource).not.toContain('useSimulationStore');
     expect(systemTrayChromeSource).not.toContain('useSimulationChrome');
     expect(systemTrayChromeSource).not.toContain('engine.events');
+  });
+
+  it('shares real window lifecycle without the synchronous app registry on the Worker entry', () => {
+    expect(windowManagerSource).toContain("import { TerminalApp }");
+    expect(windowManagerSource).toContain('<WindowManagerChrome');
+    expect(windowManagerChromeSource).toContain("e.altKey && e.key === 'F4'");
+    expect(windowManagerChromeSource).toContain("e.altKey && e.key === 'Tab'");
+    expect(windowManagerChromeSource).toContain("win.isFrameless");
+    expect(windowManagerChromeSource).toContain('renderApp(win)');
+    expect(windowManagerChromeSource).toContain('renderFrame(win, isActive, app)');
+    expect(windowManagerChromeSource).not.toContain('SimulationEngine');
+    expect(windowManagerChromeSource).not.toContain('useSimulationStore');
+    expect(windowManagerChromeSource).not.toContain('VoyagerBrowserApp');
+    expect(windowManagerChromeSource).not.toContain('DefaultAppPlaceholder');
   });
 
   it('routes taskbar presentation through the central OS profile', () => {

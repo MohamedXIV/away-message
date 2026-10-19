@@ -444,3 +444,24 @@ The Worker still maps the network icon to its existing staged computer
 setup window until full dial-up OS Host APIs are migrated. Chromium
 verifies the original volume popup, Pulse tray/popups and Worker-only
 single engine. #204 stays Draft until normal `/` and full app parity.
+
+
+## P3.12 — One authored WindowManager for legacy and Worker desktops
+
+The original `WindowManager` now delegates to presentation-only
+`WindowManagerChrome`, which retains the same `useWindowStore` window order,
+active/z-index filtering, frameless draggable header, modal layering,
+Alt+F4 close/tray lifecycle and Alt+Tab focus cycling. The old manager
+still owns its existing complete synchronous app registry and original
+`WindowFrame` adapter; the Worker desktop injects the small allowlisted
+Worker app renderer and shared `WindowFrameChrome` without importing
+legacy AppRegistry code. This deletes the separate manual Worker window
+mapping and gives the Worker the real authored keyboard/window manager
+semantics, not a parallel implementation.
+
+The renderer callback creates a stable `WorkerDesktopApp` component per
+window so unrelated canonical minute revisions do not remount Notepad,
+Mailbox compose or other local presentation state. Regression coverage
+includes exact source boundaries and real Chromium Alt+Tab/Alt+F4 with two
+separate Worker-owned windows, while the old browser normal-game smoke
+must still pass. No production `/` cutover is claimed by this step.

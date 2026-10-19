@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import type { SimulationChromeRead, SimulationDesktopRead } from '../../engine/kernel/SimulationPublication';
 import { getOsPresentationProfile } from '../../desktop/host/OsPresentation';
 import { WindowFrameChrome } from '../../desktop/WindowFrameChrome';
+import { WindowManagerChrome } from '../../desktop/WindowManagerChrome';
 import { TaskbarChrome } from '../../desktop/TaskbarChrome';
 import { StartMenuChrome } from '../../desktop/StartMenuChrome';
 import { SystemTrayChrome } from '../../desktop/SystemTrayChrome';
@@ -42,9 +43,6 @@ export function WorkerDesktop({
   const [desktop, setDesktop] = useState<SimulationDesktopRead | null>(null);
   const [chrome, setChrome] = useState<SimulationChromeRead | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const windows = useWindowStore(s => s.windows);
-  const windowOrder = useWindowStore(s => s.windowOrder);
-  const activeId = useWindowStore(s => s.activeWindowId);
   const openWindow = useWindowStore(s => s.openWindow);
 
   useEffect(() => {
@@ -63,9 +61,6 @@ export function WorkerDesktop({
   const open = (appId: string, customState?: Record<string, unknown>) =>
     openWindow(appId, customState ?? {});
   const openDocument = (path: string) => open('notepad', { filePath: path });
-  const openWindows = windowOrder.map(id => windows[id]).filter(
-    (window): window is WindowState => !!window && window.isOpen,
-  );
   const profile = chrome?.osVersion ? getOsPresentationProfile(chrome.osVersion) : null;
   const allowedApps = ['browser', 'fileexplorer', 'notepad', 'controlpanel', 'pulse'];
   const resolveAppId = (id: string): string | null => ({
@@ -97,30 +92,19 @@ export function WorkerDesktop({
         ))}
       </div>
 
-      {openWindows.filter(win => !win.isMinimized).map(win => (
-        <WindowFrameChrome
-          key={win.id} window={win} isActive={win.id === activeId}
-          osVersion={chrome?.osVersion ?? null}
-          testId={'worker-window-' + win.appId}>
-          {win.appId === 'fileexplorer' ? (
-            <WorkerFileExplorer session={session} revision={revision} openDocument={openDocument} />
-          ) : win.appId === 'notepad' ? (
-            <WorkerNotepad session={session}
-              filePath={typeof win.customState?.filePath === 'string'
-                ? win.customState.filePath : undefined} />
-          ) : win.appId === 'system' ? (
-            <WorkerSystemPanel session={session} revision={revision} />
-          ) : win.appId === 'mailbox' ? (
-            <WorkerMailboxPanel session={session} revision={revision} />
-          ) : win.appId === 'publicweb' ? (
-            <WorkerPublicSites session={session} revision={revision} />
-          ) : win.appId === 'pulse' ? (
-            <div className="h-full overflow-y-auto bg-slate-900 p-2">
-              <WorkerPulsePanel session={session} revision={revision} />
-            </div>
-          ) : null}
-        </WindowFrameChrome>
-      ))}
+      <WindowManagerChrome
+        renderFrame={(win, isActive, children) => (
+          <WindowFrameChrome window={win} isActive={isActive}
+            osVersion={chrome?.osVersion ?? null}
+            testId={'worker-window-' + win.appId}>
+            {children}
+          </WindowFrameChrome>
+        )}
+        renderApp={win => (
+          <WorkerDesktopApp window={win} session={session} revision={revision}
+            openDocument={openDocument} />
+        )}
+      />
 
       <TaskbarChrome contained testId="worker-desktop-taskbar"
         osVersion={chrome?.osVersion ?? null} pulseInstalled={chrome?.pulseInstalled ?? false}
@@ -147,3 +131,31 @@ export function WorkerDesktop({
   );
 }
 
+
+/** One stable React component identity per app/window, across Worker revisions. */
+function WorkerDesktopApp({ window: win, session, revision, openDocument }: {
+  window: WindowState;
+  session: WorkerGameSession;
+  revision: number;
+  openDocument: (path: string) => void;
+}) {
+  if (win.appId === 'fileexplorer') {
+    return <WorkerFileExplorer session={session} revision={revision} openDocument={openDocument} />;
+  }
+  if (win.appId === 'notepad') {
+    return <WorkerNotepad session={session}
+      filePath={typeof win.customState?.filePath === 'string'
+        ? win.customState.filePath : undefined} />;
+  }
+  if (win.appId === 'system') return <WorkerSystemPanel session={session} revision={revision} />;
+  if (win.appId === 'mailbox') return <WorkerMailboxPanel session={session} revision={revision} />;
+  if (win.appId === 'publicweb') return <WorkerPublicSites session={session} revision={revision} />;
+  if (win.appId === 'pulse') {
+    return <div className="h-full overflow-y-auto bg-slate-900 p-2">
+      <WorkerPulsePanel session={session} revision={revision} />
+    </div>;
+  }
+  return <p role="alert" className="p-3 text-xs text-red-800">
+    This app is not available in the Worker desktop: {win.appId}
+  </p>;
+}
