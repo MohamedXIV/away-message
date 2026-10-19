@@ -26,16 +26,14 @@ describe('#175 single-writer Worker runtime protocol', () => {
     const readState = vi.spyOn(SimulationKernel.prototype, 'getState');
     try {
       await ask({ op: 'init' });
-      const before = await ask({ op: 'query', query: { kind: 'hud' } })
-        as ReturnType<SimulationKernel['getHudProjection']>;
+      const before = await ask({ op: 'query', query: { kind: 'hud' } }) as ReturnType<SimulationKernel['getHudProjection']>;
       expect(before.revision).toBe(0);
       await expect(ask({ op: 'init' })).rejects.toThrow('already initialized');
       const changed = await ask({
         op: 'dispatch', action: { type: 'WORLD_SET_FLAG', key: 'worker_law', value: true },
       });
       expect(changed).toMatchObject({ success: true });
-      const after = await ask({ op: 'query', query: { kind: 'world' } })
-        as ReturnType<SimulationKernel['getWorldRead']>;
+      const after = await ask({ op: 'query', query: { kind: 'world' } }) as ReturnType<SimulationKernel['getWorldRead']>;
       expect(after.revision).toBeGreaterThan(0);
       const events = sent.filter(m => m.type === 'change');
       expect(events.length).toBeGreaterThan(1);
@@ -54,8 +52,7 @@ describe('#175 single-writer Worker runtime protocol', () => {
     const { ask, runtime } = harness();
     try {
       await ask({ op: 'init' });
-      const initial = await ask({ op: 'query', query: { kind: 'hud' } })
-        as ReturnType<SimulationKernel['getHudProjection']>;
+      const initial = await ask({ op: 'query', query: { kind: 'hud' } }) as ReturnType<SimulationKernel['getHudProjection']>;
       const ops = [
         ask({ op: 'advance', minutes: 3, reason: 'first' }),
         ask({ op: 'advance', minutes: 7, reason: 'second' }),
@@ -67,8 +64,7 @@ describe('#175 single-writer Worker runtime protocol', () => {
       const saved = await ask({ op: 'export' }) as ReturnType<SimulationKernel['exportSnapshot']>;
       await ask({ op: 'advance', minutes: 5 });
       await ask({ op: 'load', snapshot: saved });
-      const restored = await ask({ op: 'query', query: { kind: 'hud' } })
-        as ReturnType<SimulationKernel['getHudProjection']>;
+      const restored = await ask({ op: 'query', query: { kind: 'hud' } }) as ReturnType<SimulationKernel['getHudProjection']>;
       expect(restored.time.totalMinutes).toBe(saved.time.totalMinutes);
       expect(restored.cash).toBe(saved.player.cash);
     } finally {
