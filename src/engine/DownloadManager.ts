@@ -28,6 +28,8 @@ export interface DownloadManagerDependencies {
 
 export class DownloadManager {
   private tasks: Map<string, ProfiledDownloadTask> = new Map();
+  /** #174: cancelled tasks never release their identity for reuse. */
+  private nextDownloadOrdinal = 1;
   private eventBus: EventBus;
   private vfs: FileSystemEngine;
   private getConnectionSpeedKbps: () => number;
@@ -42,17 +44,24 @@ export class DownloadManager {
     }
   }
 
-  public getState(): Pick<DownloadManagerState, 'tasks'> {
+  public getState(): Pick<DownloadManagerState, 'tasks' | 'nextDownloadOrdinal'> {
     return {
       tasks: Array.from(this.tasks.values()).map(t => ({ ...t })),
+      nextDownloadOrdinal: this.nextDownloadOrdinal,
     };
   }
 
   public restoreState(state: DownloadManagerState): void {
     this.tasks.clear();
+    let maxSeen = 0;
     for (const task of state.tasks) {
       this.tasks.set(task.id, { ...task });
+      const match = /^dl_(\d+)$/.exec(task.id);
+      if (match) maxSeen = Math.max(maxSeen, Number(match[1]));
     }
+    const saved = state.nextDownloadOrdinal;
+    this.nextDownloadOrdinal = Math.max(maxSeen + 1,
+      Number.isSafeInteger(saved) && saved! > 0 ? saved! : 1);
     this.updateQueueSlots();
     this.recalculateBandwidth();
   }
@@ -81,7 +90,13 @@ export class DownloadManager {
       );
     }
 
-    const id = `dl_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
+    let id: string;
+    do {
+      if (!Number.isSafeInteger(this.nextDownloadOrdinal)) {
+        throw new Error('Download ID space exhausted');
+      }
+      id = `dl_${this.nextDownloadOrdinal++}`;
+    } while (this.tasks.has(id));
     const clientProfile = params.clientProfile ?? this.defaultProfileForRequest(params.manager);
     const currentMinute = params.currentMinute ?? 0;
 

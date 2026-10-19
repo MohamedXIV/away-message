@@ -229,6 +229,8 @@ export interface VirtualFileSystemState {
   totalDiskBytes: number;
   baseSystemBytes: number;
   files: Record<string, FileRecord>;
+  /** #174: owner-owned monotonic allocator; survives delete/empty-trash/reload. */
+  nextFileOrdinal?: number;
 }
 
 // ==========================================
@@ -262,6 +264,8 @@ export interface DownloadManagerState {
   tasks: DownloadTask[];
   maxConcurrentBrowser: number;
   maxConcurrentFlashFetch: number;
+  /** #174: do not reuse deleted/cancelled task identities. */
+  nextDownloadOrdinal?: number;
 }
 
 // ==========================================
@@ -757,6 +761,8 @@ export interface SimulationState {
   myplace: MyPlaceEngineState;
   vfs: VirtualFileSystemState;
   downloads: DownloadTask[];
+  /** Save-only owner allocator checkpoint, not a UI download projection. */
+  downloadNextOrdinal?: number;
   deliveries: import('../DeliveryEngine').DeliveryEngineState;
   installedSoftware: InstalledSoftwareRecord[];
   social: SocialEngineState;

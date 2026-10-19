@@ -717,7 +717,7 @@ export class SocialEngine {
     const recipientId = rawRecipientId === 'player' ? 'player' : normalizeBuddyId(rawRecipientId);
     const day = Math.floor(currentMinute / 1440) + 1;
     const msg: MessageRecord = {
-      id: `msg_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`,
+      id: this.conversations.nextMessageId(conversationId),
       conversationId,
       senderId,
       recipientId,

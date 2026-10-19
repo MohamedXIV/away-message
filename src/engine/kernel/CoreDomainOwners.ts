@@ -106,7 +106,8 @@ export function createCoreDomainOwners(initialState?: Partial<SimulationState>) 
       getConnectionSpeedKbps: () => hardware.getState().connectionSpeedKbps,
     },
     initialState?.downloads
-      ? { tasks: initialState.downloads, maxConcurrentBrowser: 1, maxConcurrentFlashFetch: 4 }
+      ? { tasks: initialState.downloads, maxConcurrentBrowser: 1, maxConcurrentFlashFetch: 4,
+        nextDownloadOrdinal: initialState.downloadNextOrdinal }
       : undefined,
   );
   const delivery = new DeliveryEngine((initialState as any)?.deliveries);

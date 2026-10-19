@@ -16,6 +16,8 @@ export class FileSystemEngine {
   // Disk usage belongs to the VFS owner. Directory projections must not sum
   // an unbounded file map just to show free space on each UI revision.
   private occupiedFileBytes = 0;
+  /** Per-world owner allocator, preserved even after permanent deletion. */
+  private nextFileOrdinal = 1;
   private eventBus: EventBus;
 
   private fileBytes(record: FileRecord | undefined): number {
@@ -91,6 +93,7 @@ export class FileSystemEngine {
       totalDiskBytes: this.totalDiskBytes,
       baseSystemBytes: this.baseSystemBytes,
       files: fileRecords,
+      nextFileOrdinal: this.nextFileOrdinal,
     };
   }
 
@@ -99,9 +102,18 @@ export class FileSystemEngine {
     this.baseSystemBytes = state.baseSystemBytes;
     this.files.clear();
     this.occupiedFileBytes = 0;
+    // Earlier development snapshots may not contain the allocator checkpoint.
+    // Reconstruct a safe lower bound from the remaining owner IDs; current
+    // saves always include the checkpoint so deletion cannot recycle an ID.
+    let maxSeen = 0;
     for (const [path, record] of Object.entries(state.files)) {
       this.putFile(this.normalizePath(path), { ...record });
+      const match = /^file_(\d+)$/.exec(record.id);
+      if (match) maxSeen = Math.max(maxSeen, Number(match[1]));
     }
+    const saved = state.nextFileOrdinal;
+    this.nextFileOrdinal = Math.max(maxSeen + 1,
+      Number.isSafeInteger(saved) && saved! > 0 ? saved! : 1);
   }
 
   private initializeCanonicalHierarchy(): void {
@@ -154,6 +166,15 @@ export class FileSystemEngine {
     return Math.max(0, this.totalDiskBytes - this.getOccupiedDiskBytes());
   }
 
+  private allocateFileId(): string {
+    if (!Number.isSafeInteger(this.nextFileOrdinal)) {
+      throw new Error('VFS file ID space exhausted');
+    }
+    // The counter already exceeds every generated/explicit file_N ID. Do not
+    // scan the entire VFS for every file creation (500 files must remain cheap).
+    return `file_${this.nextFileOrdinal++}`;
+  }
+
   public createFile(
     fileData: Omit<FileRecord, 'id' | 'createdAtMinute' | 'modifiedAtMinute'> & {
       id?: string;
@@ -180,8 +201,14 @@ export class FileSystemEngine {
       }
     }
 
+    // Explicit ID callers remain responsible for their own identities. If
+    // they insert file_N, advance this owner's allocator past it as well.
+    if (fileData.id) {
+      const match = /^file_(\d+)$/.exec(fileData.id);
+      if (match) this.nextFileOrdinal = Math.max(this.nextFileOrdinal, Number(match[1]) + 1);
+    }
     const record: FileRecord = {
-      id: fileData.id || `file_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`,
+      id: fileData.id || this.allocateFileId(),
       name: fileData.name,
       path,
       parentPath,

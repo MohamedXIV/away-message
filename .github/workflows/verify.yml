@@ -90,9 +90,9 @@ jobs:
 
       # #172/#173: mounted Pulse, including production cold boot and full-history export.
       - name: Browser Pulse bounded paging gate
-        if: github.event_name == 'pull_request' && (github.event.pull_request.head.ref == 'feat/172-bounded-publication' || github.event.pull_request.head.ref == 'feat/173-social-conversation-owner')
+        if: github.event_name == 'pull_request' && (github.event.pull_request.head.ref == 'feat/172-bounded-publication' || github.event.pull_request.head.ref == 'feat/173-social-conversation-owner' || github.event.pull_request.head.ref == 'feat/174-deterministic-social-identities')
         run: npx playwright test tests/e2e/tier4_scenarios/ScenarioG_PulsePaging.spec.ts
 
       - name: Browser Pulse cold history gate
-        if: github.event_name == 'pull_request' && github.event.pull_request.head.ref == 'feat/173-social-conversation-owner'
+        if: github.event_name == 'pull_request' && (github.event.pull_request.head.ref == 'feat/173-social-conversation-owner' || github.event.pull_request.head.ref == 'feat/174-deterministic-social-identities')
         run: npx playwright test tests/e2e/tier4_scenarios/ScenarioH_PulseColdPaging.spec.ts

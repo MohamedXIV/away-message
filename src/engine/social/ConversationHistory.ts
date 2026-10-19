@@ -120,6 +120,18 @@ export class ConversationHistory {
     }
   }
 
+  /**
+   * #174: derive the next identity from canonical *total history length*, not
+   * wall-clock time, RNG, or hot-page length. This includes the cold saved
+   * prefix and survives restore/save/round-trip without another persisted
+   * counter or a second writer. Append synchronously reserves the ordinal.
+   */
+  public nextMessageId(rawId: string): string {
+    const id = this.normalizeId(rawId);
+    const ordinal = (this.records.get(id)?.total ?? 0) + 1;
+    return `msg_${encodeURIComponent(id)}_${String(ordinal).padStart(12, '0')}`;
+  }
+
   public delete(rawId: string): void {
     const id = this.normalizeId(rawId);
     this.records.delete(id);

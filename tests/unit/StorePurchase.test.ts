@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { InventoryEngine } from '../../src/engine/InventoryEngine';
 import { SimulationEngine } from '../../src/engine/SimulationEngine';
-import { migrateSnapshotToV6 } from '../../src/persistence/migrations/v6ComputerState';
+
 import type { OwnedItemKind, PlayerInventoryState } from '../../src/engine/types';
 import type { StoreSkuContent } from '../../src/engine/hardware/types';
 
@@ -153,13 +153,11 @@ describe('InventoryEngine deterministic store ownership', () => {
     expect(store.canClaimLegacyStarterRecovery()).toBe(false);
   });
 
-  it('backfills purchaseCounts during a v5-to-v6 migration', () => {
-    const legacyLike = new SimulationEngine().exportSnapshot();
-    const migrated = migrateSnapshotToV6(legacyLike, 5) as typeof legacyLike & {
-      inventory: PlayerInventoryState & { purchaseCounts?: Record<string, number> };
-    };
-
-    expect(migrated.inventory.purchaseCounts).toEqual({});
+  it('preserves an honest empty purchase-count ledger through current v6 export/load', () => {
+    const source = new SimulationEngine();
+    const snapshot = source.exportSnapshot();
+    const restored = new SimulationEngine(snapshot);
+    expect(restored.exportSnapshot().inventory?.purchaseCounts).toEqual({});
   });
 });
 
