@@ -202,3 +202,22 @@ test('shared Worker window manager handles Alt+Tab and Alt+F4 across real app wi
   await expect(mailbox).toBeVisible();
   expect(await page.evaluate(() => !('__simEngine' in window) && !('__simStore' in window))).toBe(true);
 });
+
+test('authored FlashFetch uses the Worker OsHost boundary and refuses real-world URL traffic', async ({ page }) => {
+  test.setTimeout(60_000);
+  await page.goto('/worker.html');
+  await page.getByRole('button', { name: 'New game' }).click();
+  await expect(page.getByTestId('worker-phase')).toHaveText('game');
+  await page.getByRole('button', { name: 'desktop', exact: true }).click();
+  const desktop = page.getByTestId('worker-desktop');
+  await desktop.getByRole('button', { name: 'Open FlashFetch' }).click();
+  const flash = page.getByTestId('worker-window-flashfetch');
+  await expect(flash).toBeVisible();
+  await expect(flash.getByText('FlashFetch is ready')).toBeVisible();
+  await flash.getByPlaceholder('http://downloadhub.local/files/tool.zip')
+    .fill('https://example.com/unsafe.zip');
+  await flash.getByRole('button', { name: /Download/ }).click();
+  await expect(flash.getByTestId('worker-os-host-error')).toContainText('in-game .local');
+  await expect(flash.getByText('No active downloads in queue. FlashFetch is ready.')).toBeVisible();
+  expect(await page.evaluate(() => !('__simEngine' in window) && !('__simStore' in window))).toBe(true);
+});

@@ -465,3 +465,33 @@ Mailbox compose or other local presentation state. Regression coverage
 includes exact source boundaries and real Chromium Alt+Tab/Alt+F4 with two
 separate Worker-owned windows, while the old browser normal-game smoke
 must still pass. No production `/` cutover is claimed by this step.
+
+
+## P3.13 — OS Host API seam and first reused host-dependent app
+
+Extracted `OsHostApiContext` from the original `OsHostContext` so
+app-visible OS services (window lifecycle, VFS, network/downloads, audio,
+active OS/presentation/capabilities) no longer require importing the
+synchronous simulation store. Original `OsHostProvider` keeps all its
+legacy engine behavior through the **same** context; `useOsHost` remains
+reexported from its old import for unported consumers.
+
+The Worker adds a separate `WorkerOsHostProvider` backed solely by finite
+`apps` and `file` reads and validated typed `VFS_CREATE_FILE`,
+`VFS_DELETE_FILE`, `DOWNLOAD_START` and `DOWNLOAD_CANCEL` commands.
+No arbitrary browser fetches: network requests are canonical simulated
+HTTP `.local` URLs and are validated before dispatch. Real failures are
+surfaced to the Worker OS app, not silently asserted successful.
+
+The **original FlashFetch app** (not a clone) now reads queue/connection
+truth and invokes the Worker Host API through the shared context; its
+legacy browser rendering remains available unchanged except for the
+import path to the pure Host hook. This first host-dependent migration
+proves the seam for subsequent apps (installer, browser and OS tools)
+without ever constructing a shadow main-thread simulation. Browser
+acceptance tests original FlashFetch open, real-URL denial and unchanged
+Worker-only engine isolation; unit checks the actual typed RPC boundary.
+
+#175 is **not** production complete. Stage `/worker.html` remains
+isolated. Full app parity, native `/` bootstrap, failure recovery and
+NPC stress fixtures must still gate Ready/merge.

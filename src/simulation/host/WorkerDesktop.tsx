@@ -12,6 +12,7 @@ import { WorkerFileExplorer, WorkerNotepad } from './WorkerDesktopVfsApps';
 import { WorkerSystemPanel } from './WorkerSystemPanel';
 import { WorkerPublicSites } from './WorkerPublicSites';
 import { WorkerMailboxPanel } from './WorkerMailboxPanel';
+import { WorkerFlashFetchPanel } from './WorkerOsHostProvider';
 import type { WorkerGameSession } from './WorkerGameSession';
 
 const APPLICATIONS = [
@@ -21,6 +22,7 @@ const APPLICATIONS = [
   { id: 'system', label: 'Computer & Setup', icon: '💻' },
   { id: 'publicweb', label: 'Town Sites', icon: '🌐' },
   { id: 'mailbox', label: 'Mailbox', icon: '✉️' },
+  { id: 'flashfetch', label: 'FlashFetch', icon: '⚡' },
 ] as const;
 
 /**
@@ -149,6 +151,7 @@ function WorkerDesktopApp({ window: win, session, revision, openDocument }: {
   }
   if (win.appId === 'system') return <WorkerSystemPanel session={session} revision={revision} />;
   if (win.appId === 'mailbox') return <WorkerMailboxPanel session={session} revision={revision} />;
+  if (win.appId === 'flashfetch') return <WorkerFlashFetchPanel session={session} revision={revision} windowId={win.id} />;
   if (win.appId === 'publicweb') return <WorkerPublicSites session={session} revision={revision} />;
   if (win.appId === 'pulse') {
     return <div className="h-full overflow-y-auto bg-slate-900 p-2">

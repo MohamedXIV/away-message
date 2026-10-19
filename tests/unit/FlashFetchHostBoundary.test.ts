@@ -5,7 +5,7 @@ const source = readFileSync('src/apps/flashfetch/FlashFetchApp.tsx', 'utf8');
 
 describe('FlashFetch OS host boundary', () => {
   it('consumes transfer and network services through OsHost instead of the simulation store', () => {
-    expect(source).toContain("from '../../desktop/host/OsHostContext'");
+    expect(source).toContain("from '../../desktop/host/OsHostApiContext'");
     expect(source).toContain('useOsHost()');
     expect(source).not.toContain('useSimulationStore');
     expect(source).not.toContain("type: 'DOWNLOAD_START'");

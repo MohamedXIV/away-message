@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useOsHost } from '../../desktop/host/OsHostContext';
+import { useOsHost } from '../../desktop/host/OsHostApiContext';
 import { DownloadTask } from '../../engine/types';
 
 const FLASHFETCH_CLIENT_PROFILE = {
