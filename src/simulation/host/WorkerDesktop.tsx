@@ -7,6 +7,7 @@ import { WorkerPulsePanel } from './WorkerPulsePanel';
 import { WorkerFileExplorer, WorkerNotepad } from './WorkerDesktopVfsApps';
 import { WorkerSystemPanel } from './WorkerSystemPanel';
 import { WorkerPublicSites } from './WorkerPublicSites';
+import { WorkerMailboxPanel } from './WorkerMailboxPanel';
 import type { WorkerGameSession } from './WorkerGameSession';
 
 const APPLICATIONS = [
@@ -15,6 +16,7 @@ const APPLICATIONS = [
   { id: 'pulse', label: 'Pulse Messenger', icon: '💬' },
   { id: 'system', label: 'Computer & Setup', icon: '💻' },
   { id: 'publicweb', label: 'Town Sites', icon: '🌐' },
+  { id: 'mailbox', label: 'Mailbox', icon: '✉️' },
 ] as const;
 
 /**
@@ -102,6 +104,8 @@ export function WorkerDesktop({
                 ? win.customState.filePath : undefined} />
           ) : win.appId === 'system' ? (
             <WorkerSystemPanel session={session} revision={revision} />
+          ) : win.appId === 'mailbox' ? (
+            <WorkerMailboxPanel session={session} revision={revision} />
           ) : win.appId === 'publicweb' ? (
             <WorkerPublicSites session={session} revision={revision} />
           ) : win.appId === 'pulse' ? (

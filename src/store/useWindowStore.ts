@@ -115,6 +115,8 @@ function getDefaultIcon(appId: string): string {
       return '🌐';
     case 'system':
       return '💻';
+    case 'mailbox':
+      return '✉️';
     case 'pulse':
     case 'app.pulse':
       return '💬';
@@ -176,6 +178,8 @@ function getDefaultTitle(appId: string): string {
       return 'Town Sites';
     case 'system':
       return 'Computer & Setup';
+    case 'mailbox':
+      return 'Mailbox';
     case 'pulse':
     case 'app.pulse':
       return 'Pulse Messenger';

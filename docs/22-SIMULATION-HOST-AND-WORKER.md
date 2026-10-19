@@ -382,3 +382,26 @@ open/minimize/restore/close and normal-game browser smoke must also pass.
 This **does not** migrate the old `Taskbar`, `OsHostProvider` app API,
 `WindowManager`'s eager legacy registry, or production `/` routing.
 Do not merge until those dependencies are addressed and #177 scale proven.
+
+
+## P3.9 — Shared authored Mailbox with Worker-owned letters and deliveries
+
+The original, 399-line `MailboxApp` presentation is now extracted as
+`MailboxView`, taking the existing player-safe `SimulationMailboxRead`
+model instead of importing `useSimulationMailbox` itself. The legacy app
+keeps a thin synchronous adapter; the Worker desktop imports ONLY the
+pure view. A finite allowlisted `mailbox` Worker query forwards to
+`SimulationKernel.getMailboxRead()`, which caps recent NPC letters to
+12 and serves a source-backed courier receipt tray. This does **not**
+ship the Social graph or arbitrary private conversations to React.
+
+The original local-only compose/sent/trash interactions remain local UI
+behavior as before, not simulated canonical mail delivery. Browser
+acceptance mounts the same legacy-authored Mailbox visuals in an actual
+Worker-only OS window, exercises taskbar lifecycle and checks that no
+synchronous `__simEngine`/`__simStore` is ever instantiated. Unit
+coverage checks source-backed bounds and no world-snapshot export.
+
+The full Desktop app registry, installer/browser flows and main `/`
+entrypoint still have legacy synchronous dependencies. #175 remains a
+Draft staging cutover, not an accepted production merge.

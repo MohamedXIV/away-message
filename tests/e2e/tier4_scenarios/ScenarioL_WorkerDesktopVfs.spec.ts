@@ -102,3 +102,24 @@ test('Worker windows reuse authored WindowFrame dragging, sizing and maximize wi
   await expect(frame).not.toHaveAttribute('style', /width: 100%/);
   expect(await page.evaluate(() => !('__simEngine' in window) && !('__simStore' in window))).toBe(true);
 });
+
+test('Worker desktop mounts the original authored Mailbox using owner-backed letters and parcels', async ({ page }) => {
+  test.setTimeout(60_000);
+  await page.goto('/worker.html');
+  await page.getByRole('button', { name: 'New game' }).click();
+  await expect(page.getByTestId('worker-phase')).toHaveText('game');
+  await page.getByRole('button', { name: 'desktop', exact: true }).click();
+  const desktop = page.getByTestId('worker-desktop');
+  await desktop.getByRole('button', { name: 'Open Mailbox' }).click();
+  const mail = page.getByTestId('worker-window-mailbox');
+  await expect(mail).toBeVisible();
+  await expect(mail.getByRole('button', { name: /Inbox/ })).toBeVisible();
+  await expect(mail.getByText('Check-In Notice & Rent Schedule').first()).toBeVisible();
+  await desktop.getByRole('button', { name: 'Minimize Mailbox' }).click();
+  await expect(mail).toHaveCount(0);
+  await desktop.getByRole('button', { name: 'Taskbar Mailbox' }).click();
+  await expect(mail).toBeVisible();
+  await desktop.getByRole('button', { name: 'Close Mailbox' }).click();
+  await expect(mail).toHaveCount(0);
+  expect(await page.evaluate(() => !('__simEngine' in window) && !('__simStore' in window))).toBe(true);
+});

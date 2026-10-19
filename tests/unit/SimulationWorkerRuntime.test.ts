@@ -212,4 +212,26 @@ describe('#175 single-writer Worker runtime protocol', () => {
       runtime.close();
     }
   });
+
+  it('reads player-safe mail and courier tray from the canonical Worker owner', async () => {
+    const { ask, runtime } = harness();
+    const read = vi.spyOn(SimulationKernel.prototype, 'getMailboxRead');
+    const getState = vi.spyOn(SimulationKernel.prototype, 'getState');
+    try {
+      await ask({ op: 'init' });
+      const mailbox = await ask({ op: 'query', query: { kind: 'mailbox' } }) as
+        ReturnType<SimulationKernel['getMailboxRead']>;
+      expect(read).toHaveBeenCalledOnce();
+      expect(mailbox.npcMails.length).toBeLessThanOrEqual(12);
+      expect(mailbox.npcMails.every(mail => typeof mail.key === 'string')).toBe(true);
+      expect(Array.isArray(mailbox.orders)).toBe(true);
+      expect('social' in mailbox).toBe(false);
+      expect('conversations' in mailbox).toBe(false);
+      expect(getState).not.toHaveBeenCalled();
+    } finally {
+      read.mockRestore();
+      getState.mockRestore();
+      runtime.close();
+    }
+  });
 });
