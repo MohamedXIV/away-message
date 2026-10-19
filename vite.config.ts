@@ -7,6 +7,9 @@ export default defineConfig({
   // absolute asset URLs would 404 there. Local dev/preview unaffected.
   base: './',
   plugins: [react()],
+  // Dedicated Simulation Worker imports cold IndexedDB pages asynchronously.
+  // That requires an ES-module worker output: IIFE cannot split worker chunks.
+  worker: { format: 'es' },
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
