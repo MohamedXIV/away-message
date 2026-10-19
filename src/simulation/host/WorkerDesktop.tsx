@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import type { SimulationChromeRead, SimulationDesktopRead } from '../../engine/kernel/SimulationPublication';
 import { getOsPresentationProfile } from '../../desktop/host/OsPresentation';
 import { WindowFrameChrome } from '../../desktop/WindowFrameChrome';
+import { TaskbarChrome } from '../../desktop/TaskbarChrome';
+import { StartMenuChrome } from '../../desktop/StartMenuChrome';
 import { useWindowStore, type WindowState } from '../../store/useWindowStore';
 import { WorkerPulsePanel } from './WorkerPulsePanel';
 import { WorkerFileExplorer, WorkerNotepad } from './WorkerDesktopVfsApps';
@@ -30,10 +32,11 @@ const APPLICATIONS = [
  * do NOT import those adapters on the Worker-only HTML entry.
  */
 export function WorkerDesktop({
-  session, revision,
+  session, revision, onStepAway,
 }: {
   session: WorkerGameSession;
   revision: number;
+  onStepAway: () => void;
 }) {
   const [desktop, setDesktop] = useState<SimulationDesktopRead | null>(null);
   const [chrome, setChrome] = useState<SimulationChromeRead | null>(null);
@@ -42,8 +45,6 @@ export function WorkerDesktop({
   const windowOrder = useWindowStore(s => s.windowOrder);
   const activeId = useWindowStore(s => s.activeWindowId);
   const openWindow = useWindowStore(s => s.openWindow);
-  const restoreWindow = useWindowStore(s => s.restoreWindow);
-  const focusWindow = useWindowStore(s => s.focusWindow);
 
   useEffect(() => {
     let current = true;
@@ -65,7 +66,11 @@ export function WorkerDesktop({
     (window): window is WindowState => !!window && window.isOpen,
   );
   const profile = chrome?.osVersion ? getOsPresentationProfile(chrome.osVersion) : null;
-  const canal = profile?.shell.taskbarId === 'canal';
+  const allowedApps = ['browser', 'fileexplorer', 'notepad', 'controlpanel', 'pulse'];
+  const resolveAppId = (id: string): string | null => ({
+    browser: 'publicweb', fileexplorer: 'fileexplorer', notepad: 'notepad',
+    controlpanel: 'system', pulse: 'pulse',
+  } as Record<string, string>)[id] ?? null;
 
   return (
     <section data-testid="worker-desktop"
@@ -116,26 +121,32 @@ export function WorkerDesktop({
         </WindowFrameChrome>
       ))}
 
-      <footer data-testid="worker-desktop-taskbar"
-        className={`absolute inset-x-0 bottom-0 flex h-9 items-center gap-1 border-t px-2 ${canal
-          ? 'border-blue-300 bg-[#245edb] text-white' : 'border-white bg-[#c0c0c0] text-black'}`}>
-        <button type="button" className="mr-2 rounded border px-2 py-1 text-xs font-bold"
-          onClick={() => open('fileexplorer')}>Start</button>
-        {openWindows.map(win => (
-          <button type="button" key={win.id} onClick={() => win.isMinimized
-            ? restoreWindow(win.id) : focusWindow(win.id)}
-            aria-label={'Taskbar ' + win.title}
-            aria-pressed={!win.isMinimized && activeId === win.id}
-            className={`max-w-36 truncate rounded border px-2 py-1 text-xs ${win.isMinimized
-              ? 'opacity-60' : activeId === win.id ? 'border-amber-300 font-bold' : ''}`}>
-            {win.icon} {win.title}
+      <TaskbarChrome contained testId="worker-desktop-taskbar"
+        osVersion={chrome?.osVersion ?? null} pulseInstalled={chrome?.pulseInstalled ?? false}
+        onStepAway={onStepAway} browserAppId="publicweb"
+        renderStartMenu={(close, isOpen) => (
+          <StartMenuChrome isOpen={isOpen} onClose={close}
+            osVersion={chrome?.osVersion ?? null} pulseInstalled={chrome?.pulseInstalled ?? false}
+            availableApps={allowedApps} resolveAppId={resolveAppId}
+            launchApp={open} onOpenDialUp={() => open('system')}
+            rest={() => {
+              void session.dispatch({ type: 'PLAYER_REST_OR_SLEEP', wakeHour: 8 })
+                .catch(cause => setError(String(cause)));
+            }} />
+        )}
+        tray={<div data-testid="worker-taskbar-tray"
+          className="ml-auto flex h-full items-center gap-2 border-l border-white/30 px-2 text-xs">
+          <span title={chrome?.connectionType ?? 'offline'}>📡</span>
+          <button type="button" onClick={() => open('pulse')}
+            title="Pulse Messenger" aria-label="Open Pulse from tray">💬
+            {!!chrome?.unreadCount && <sup>{Math.min(chrome.unreadCount, 9)}{chrome.unreadCount > 9 ? '+' : ''}</sup>}
           </button>
-        ))}
-        <span className="ml-auto text-xs">
-          {chrome?.time ? String(chrome.time.hour).padStart(2, '0') + ':' +
-            String(chrome.time.minute).padStart(2, '0') : '––:––'}
-        </span>
-      </footer>
+          <span title={chrome?.time ? 'Day ' + chrome.time.day : 'Clock'}>
+            {chrome?.time ? String(chrome.time.hour).padStart(2, '0') + ':' +
+              String(chrome.time.minute).padStart(2, '0') : '––:––'}
+          </span>
+        </div>}
+      />
       {error && <p role="alert" className="absolute bottom-11 right-3 bg-red-100 p-2 text-xs">{error}</p>}
     </section>
   );

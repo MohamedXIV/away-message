@@ -123,3 +123,34 @@ test('Worker desktop mounts the original authored Mailbox using owner-backed let
   await expect(mail).toHaveCount(0);
   expect(await page.evaluate(() => !('__simEngine' in window) && !('__simStore' in window))).toBe(true);
 });
+
+test('real Orion taskbar/Start Menu route Worker apps and exclude unported apps', async ({ page }) => {
+  test.setTimeout(60_000);
+  await page.goto('/worker.html');
+  await page.getByRole('button', { name: 'New game' }).click();
+  await expect(page.getByTestId('worker-phase')).toHaveText('game');
+  await page.getByRole('button', { name: 'desktop', exact: true }).click();
+  const desktop = page.getByTestId('worker-desktop');
+  const taskbar = page.getByTestId('worker-desktop-taskbar');
+  await expect(taskbar).toHaveAttribute('data-os-taskbar', /classic|canal/);
+  await taskbar.getByRole('button', { name: /Start/ }).click();
+  const menu = desktop.locator('#orion-start-menu');
+  await expect(menu).toBeVisible();
+  await expect(menu).toHaveAttribute('data-os-start-menu', /classic|canal/);
+  await menu.getByRole('button', { name: /Documents/ }).click();
+  const explorer = page.getByTestId('worker-window-fileexplorer');
+  await expect(explorer).toBeVisible();
+  await taskbar.getByRole('button', { name: 'Taskbar My Computer' }).click();
+  await expect(explorer).toHaveCount(0);
+  await taskbar.getByRole('button', { name: 'Taskbar My Computer' }).click();
+  await expect(explorer).toBeVisible();
+  await taskbar.getByRole('button', { name: /Start/ }).click();
+  await expect(menu.getByText('Settings / Control Panel')).toBeVisible();
+  await expect(menu.getByText('Add/Remove Programs')).toHaveCount(0);
+  await menu.getByRole('button', { name: /Settings \/ Control Panel/ }).click();
+  await expect(page.getByTestId('worker-window-system')).toBeVisible();
+  await taskbar.getByRole('button', { name: 'Show Desktop' }).click();
+  await expect(explorer).toHaveCount(0);
+  await expect(page.getByTestId('worker-window-system')).toHaveCount(0);
+  expect(await page.evaluate(() => !('__simEngine' in window) && !('__simStore' in window))).toBe(true);
+});

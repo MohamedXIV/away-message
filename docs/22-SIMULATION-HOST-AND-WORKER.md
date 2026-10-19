@@ -405,3 +405,23 @@ coverage checks source-backed bounds and no world-snapshot export.
 The full Desktop app registry, installer/browser flows and main `/`
 entrypoint still have legacy synchronous dependencies. #175 remains a
 Draft staging cutover, not an accepted production merge.
+
+
+## P3.10 — Shared Orion Taskbar and Start Menu, canonical Worker actions
+
+Extracted the actual OS-profile-driven Orion `TaskbarChrome` and
+`StartMenuChrome` from their synchronous wrappers; the normal desktop
+keeps both original `Taskbar` and `StartMenu` adapters. The Worker desktop
+now mounts the SAME authored taskbar buttons/Start menus with window
+minimize/restore, show-desktop, icon quick-launch, calendar/game-time from
+bounded `ChromeRead`, and Worker-owned sleep via typed `dispatch`.
+Worker Start resolves only currently ported app IDs (Browser to public
+Town Sites, Explorer, Notepad, setup, installed Pulse); unavailable
+programs are not offered as fictitious applications. The existing full
+`SystemTray` depends on main-thread engine events, so the Worker uses a
+small explicitly staged bounded-read tray until that consumer is ported.
+Chromium tests cover Start/Documents, unsupported-program exclusion,
+Settings opening and taskbar minimize/restore/show-desktop, with no
+legacy synchronous engine module instantiated.
+
+This is NOT normal `/` cutover; keep #204 Draft and #175 Open.

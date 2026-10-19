@@ -143,7 +143,7 @@ export function WorkerGameShell() {
               <WorkerPulsePanel session={session} revision={view.hud.revision} />
             )}
             {panel === 'desktop' && (
-              <WorkerDesktop session={session} revision={view.hud.revision} />
+              <WorkerDesktop session={session} revision={view.hud.revision} onStepAway={() => setPanel('room')} />
             )}
           </>
         )}

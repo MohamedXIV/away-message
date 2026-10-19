@@ -22,9 +22,17 @@ const taskbarSource = readFileSync(
   'utf8',
 );
 
+const taskbarChromeSource = readFileSync(
+  fileURLToPath(new URL('../../src/desktop/TaskbarChrome.tsx', import.meta.url)), 'utf8',
+);
+
 const startMenuSource = readFileSync(
   fileURLToPath(new URL('../../src/desktop/StartMenu.tsx', import.meta.url)),
   'utf8',
+);
+
+const startMenuChromeSource = readFileSync(
+  fileURLToPath(new URL('../../src/desktop/StartMenuChrome.tsx', import.meta.url)), 'utf8',
 );
 
 const osThemeCssSource = readFileSync(
@@ -34,7 +42,7 @@ const osThemeCssSource = readFileSync(
 
 describe('central desktop OS presentation routing', () => {
   it('does not route Orion generations with per-component version string checks', () => {
-    for (const source of [windowFrameSource, windowChromeSource, desktopShellSource, taskbarSource, startMenuSource]) {
+    for (const source of [windowFrameSource, windowChromeSource, desktopShellSource, taskbarSource, taskbarChromeSource, startMenuSource, startMenuChromeSource]) {
       expect(source).not.toContain("version.includes('5.')");
       expect(source).not.toContain("version.includes('6.')");
       expect(source).not.toContain("version.includes('7.')");
@@ -57,17 +65,28 @@ describe('central desktop OS presentation routing', () => {
     expect(windowChromeSource).not.toContain('<OsHostProvider');
   });
 
+  it('isolates authored taskbar and Start Menu from the legacy synchronous adapters', () => {
+    expect(taskbarSource).toContain('<TaskbarChrome');
+    expect(startMenuSource).toContain('<StartMenuChrome');
+    for (const source of [taskbarChromeSource, startMenuChromeSource]) {
+      expect(source).not.toContain('useSimulationStore');
+      expect(source).not.toContain('useSimulationChrome');
+      expect(source).not.toContain('OsHostProvider');
+    }
+    expect(startMenuChromeSource).toContain('availableApps');
+  });
+
   it('routes taskbar presentation through the central OS profile', () => {
-    expect(taskbarSource).toContain('getOsPresentationProfile');
-    expect(taskbarSource).toContain('osPresentation?.shell.taskbarId');
-    expect(taskbarSource).toContain('data-os-taskbar={taskbarPresentation}');
+    expect(taskbarChromeSource).toContain('getOsPresentationProfile');
+    expect(taskbarChromeSource).toContain('osPresentation?.shell.taskbarId');
+    expect(taskbarChromeSource).toContain('data-os-taskbar={taskbarPresentation}');
   });
 
   it('routes start-menu presentation through the central OS profile', () => {
-    expect(startMenuSource).toContain('getOsPresentationProfile');
-    expect(startMenuSource).toContain('osPresentation?.shell.startMenuId');
-    expect(startMenuSource).toContain('data-os-start-menu={startMenuPresentation}');
-    expect(startMenuSource).not.toContain('Orion <b>4.8</b>');
+    expect(startMenuChromeSource).toContain('getOsPresentationProfile');
+    expect(startMenuChromeSource).toContain('osPresentation?.shell.startMenuId');
+    expect(startMenuChromeSource).toContain('data-os-start-menu={startMenuPresentation}');
+    expect(startMenuChromeSource).not.toContain('Orion <b>4.8</b>');
   });
 
   it('routes WindowFrame sounds from the resolved nullable OS presentation scheme', () => {
