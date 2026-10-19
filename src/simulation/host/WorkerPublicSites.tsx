@@ -25,7 +25,9 @@ export function WorkerPublicSites({
 
   useEffect(() => {
     let active = true;
-    setPage(null);
+    // Preserve the previous bounded page through ordinary clock revisions.
+    // Only a tab switch replaces the displayed page; otherwise rapid ticks
+    // would flash a loading skeleton between every website read.
     setError(null);
     const load = async () => {
       if (tab === 'news') {
@@ -54,7 +56,7 @@ export function WorkerPublicSites({
       </header>
       <div className="min-h-0 flex-1 overflow-y-auto p-3 text-xs">
         {error && <p role="alert" className="text-red-700">{error}</p>}
-        {!page && !error && <p role="status">Reading public records from the Worker…</p>}
+        {(!page || page.kind !== tab) && !error && <p role="status">Reading public records from the Worker…</p>}
         {page?.kind === 'news' && (
           <>
             <h2 className="border-b-2 border-slate-900 pb-2 text-xl font-bold">The City Wire</h2>
