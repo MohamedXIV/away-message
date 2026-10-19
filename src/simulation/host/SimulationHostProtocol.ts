@@ -1,5 +1,6 @@
 import type { ActionResult, SimulationAction, SimulationState } from '../../engine/types';
 import type { InitialSimulationState } from '../../engine/kernel/PhysicalSimulationRuntime';
+import type { SlotPulseMetadata, SlotSummary } from '../../persistence/slots';
 import type {
   SimulationActorRead, SimulationChange, SimulationChromeRead,
   SimulationConversationRead, SimulationDirectoryRead, SimulationFileRead,
@@ -36,11 +37,13 @@ export type SimulationQueryResult<Q extends SimulationQuery> = SimulationQueryRe
 
 export type SimulationWorkerRequest =
   | { id: number; op: 'init'; initialState?: InitialSimulationState }
+  | { id: number; op: 'initSlot'; slotId: string }
   | { id: number; op: 'dispatch'; action: SimulationAction }
   | { id: number; op: 'advance'; minutes: number; reason?: string }
   | { id: number; op: 'realtime'; seconds: number }
   | { id: number; op: 'query'; query: SimulationQuery }
   | { id: number; op: 'export' }
+  | { id: number; op: 'saveSlot'; slotId: string; saveName?: string; pulse: SlotPulseMetadata }
   | { id: number; op: 'load'; snapshot: SimulationState };
 
 // Omit<T> on a union collapses its variant members unless distributed.
@@ -60,6 +63,7 @@ export interface SimulationHost {
   query<Q extends SimulationQuery>(query: Q): Promise<SimulationQueryResult<Q>>;
   exportSnapshot(): Promise<SimulationState>;
   loadSnapshot(snapshot: SimulationState): Promise<void>;
+  saveSlot(slotId: string, pulse: SlotPulseMetadata, saveName?: string): Promise<SlotSummary>;
   subscribe(listener: (change: Readonly<SimulationChange>) => void): () => void;
   dispose(): void;
 }

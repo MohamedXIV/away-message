@@ -20,6 +20,12 @@ import {
 } from '../apps/pulse/persistence';
 import { toSummary, type SlotSummary } from './slotUi';
 
+/** UI metadata is supplied by the main thread when the writer is a Worker. */
+export interface SlotPulseMetadata {
+  pulseSlotId: string;
+  pulsePayload: unknown;
+}
+
 export type SaveCompatibility = {
   status: 'ok' | 'legacy' | 'refused';
   reason?: string;
@@ -71,6 +77,7 @@ export async function saveSlot(
     'exportSnapshotAsync' | 'rebindColdConversationReader'>>,
   slotId: string,
   saveName?: string,
+  pulse?: SlotPulseMetadata,
 ): Promise<SlotSummary> {
   const snapshot = await (engine.exportSnapshotAsync?.() ?? engine.exportSnapshot()) as SimulationState;
   const { recent, pages, manifest } = splitConversationArchive(slotId, snapshot.social.conversations);
@@ -79,7 +86,8 @@ export async function saveSlot(
   const compactSnapshot: SimulationState = {
     ...snapshot, social: { ...snapshot.social, conversations: recent },
   };
-  const pulseSlotId = getCurrentPulseSlotId();
+  const pulseSlotId = pulse?.pulseSlotId ?? getCurrentPulseSlotId();
+  const pulsePayload = pulse ? pulse.pulsePayload : readPulsePayload(pulseSlotId);
   // Generate the slot version *within* the same write transaction to avoid
   // two overlapping saves assigning the same cold-reader generation.
   const committed = await db.transaction('rw', db.saves, db.conversation_pages, async () => {
@@ -127,7 +135,7 @@ export async function saveSlot(
     narrativeFlags: { ...snapshot.world.flags },
     meta: {
       pulseSlotId,
-      pulsePayload: readPulsePayload(pulseSlotId),
+      pulsePayload,
       conversationArchive: manifest,
     },
     snapshot: compactSnapshot,

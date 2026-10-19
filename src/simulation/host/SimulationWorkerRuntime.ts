@@ -1,4 +1,5 @@
 import { SimulationKernel } from '../../engine/kernel/SimulationKernel';
+import { loadSlotEngine, saveSlot } from '../../persistence/slots';
 import type { SimulationQuery, SimulationWorkerReply, SimulationWorkerRequest } from './SimulationHostProtocol';
 
 /**
@@ -48,6 +49,14 @@ export function createSimulationWorkerRuntime(send: (message: SimulationWorkerRe
           kernel = new SimulationKernel(raw.initialState);
           unsubscribe = kernel.subscribeChanges(change => send({ type: 'change', change }));
           break;
+        case 'initSlot': {
+          if (kernel) throw new Error('SimulationHost already initialized');
+          const loaded = await loadSlotEngine(raw.slotId);
+          if (!loaded) throw new Error(`Save slot '${raw.slotId}' is missing or unreadable`);
+          kernel = loaded;
+          unsubscribe = kernel.subscribeChanges(change => send({ type: 'change', change }));
+          break;
+        }
         case 'dispatch':
           value = requireKernel().dispatchAction(raw.action);
           break;
@@ -68,6 +77,9 @@ export function createSimulationWorkerRuntime(send: (message: SimulationWorkerRe
           break;
         case 'export':
           value = await requireKernel().exportSnapshotAsync();
+          break;
+        case 'saveSlot':
+          value = await saveSlot(requireKernel(), raw.slotId, raw.saveName, raw.pulse);
           break;
         case 'load':
           requireKernel().loadSnapshot(raw.snapshot);

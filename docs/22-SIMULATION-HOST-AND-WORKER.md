@@ -46,3 +46,36 @@ alive in Zustand.
   on production cutover it should become a normal required browser gate.
 
 No Rust rewrite, multi-worker dispatch or Education content in this branch.
+
+
+## P2 — Canonical Worker slot lifecycle (in-progress, same Draft PR)
+
+The browser now has an explicit `openBrowserSimulationSlot(slotId)` path:
+a freshly created Dedicated Worker calls the existing production
+`loadSlotEngine` **inside the Worker**, including the validated cold
+conversation page manifest, indices and generation-guarded reader. It
+does not transmit the full save, construct a main-thread Kernel or
+replace an unreadable slot with a silent new game. A rejected boot
+leaves no playable worker and permits an intentional retry.
+
+The explicit `saveBrowserSimulationSlot` path sends only the
+UI-owned Pulse localStorage moment to the Worker; `saveSlot` still
+owns the **single canonical IndexedDB transaction** writing the
+v6 document and per-slot conversation archive pages. The Worker
+then rebinds the live Social cold reader to the committed slot
+generation after any overwrite. Pulse UI payload restoration stays
+on the browser main thread via `restoreSlotPulse`. No duplicated
+simulation owner has been introduced by this persistence change.
+
+Acceptance added: real IndexedDB cold boot with 145-message
+conversation, cold page reads, source-slot overwrite and rebind,
+missing-slot refusal, restart in a fresh Worker runtime, plus a
+Chromium browser Worker save/close/reopen cycle including Pulse
+UI metadata and private read denial.
+
+This is **not yet production UI cutover**. Existing
+`App.tsx`/`useSimulationStore` and the React/Phaser direct
+owner method call sites still own a synchronous main-thread
+SimulationKernel in normal gameplay. Moving only the ticker or
+boots before those dependent consumers are migrated would leave a
+second authority alive and is expressly forbidden by #168/#175.

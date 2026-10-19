@@ -1,5 +1,6 @@
 import type { ActionResult, SimulationAction, SimulationState } from '../../engine/types';
 import type { InitialSimulationState } from '../../engine/kernel/PhysicalSimulationRuntime';
+import type { SlotPulseMetadata, SlotSummary } from '../../persistence/slots';
 import type { SimulationChange } from '../../engine/kernel/SimulationPublication';
 import type {
   SimulationHost, SimulationQuery, SimulationQueryResult,
@@ -88,6 +89,10 @@ export class WorkerSimulationHost implements SimulationHost {
     await this.request({ op: 'init', initialState });
   }
 
+  async initializeSlot(slotId: string): Promise<void> {
+    await this.request({ op: 'initSlot', slotId });
+  }
+
   dispatch(action: SimulationAction): Promise<ActionResult> {
     return this.request({ op: 'dispatch', action }) as Promise<ActionResult>;
   }
@@ -102,6 +107,10 @@ export class WorkerSimulationHost implements SimulationHost {
 
   query<Q extends SimulationQuery>(query: Q): Promise<SimulationQueryResult<Q>> {
     return this.request({ op: 'query', query }) as Promise<SimulationQueryResult<Q>>;
+  }
+
+  saveSlot(slotId: string, pulse: SlotPulseMetadata, saveName?: string): Promise<SlotSummary> {
+    return this.request({ op: 'saveSlot', slotId, pulse, saveName }) as Promise<SlotSummary>;
   }
 
   exportSnapshot(): Promise<SimulationState> {
