@@ -78,6 +78,10 @@ export const StoreFixtureHarness: React.FC<StoreFixtureHarnessProps> = ({ onExit
   const [simulation] = useState(() => {
     const engine = new SimulationEngine();
     ensureVenueRoleCharacter(engine, CASHIER_SETUP);
+    // First arrival is an explicit simulation command. Subsequent React
+    // renders only project stock and cashier capabilities without mutation.
+    const firstShop = getGeneratedPhysicalShop(STORE_PLACE_ID);
+    engine.initializePhysicalShop(firstShop.storeId, STORE_WORLD_SEED, firstShop.fixtures);
     return engine;
   });
   const shop = useMemo(() => getGeneratedPhysicalShop(STORE_PLACE_ID), []);
@@ -145,8 +149,7 @@ export const StoreFixtureHarness: React.FC<StoreFixtureHarnessProps> = ({ onExit
     [simulation, projection.viewName, weather, revision],
   );
   const cashierHistory = useMemo(
-    () => simulation.social.getMessages(CASHIER_ACTOR_ID)
-      .slice(-8)
+    () => simulation.social.getConversationPage(CASHIER_ACTOR_ID, 0, 8).messages
       .map((entry) => ({
         senderId: entry.senderId,
         recipientId: entry.recipientId,
@@ -196,7 +199,7 @@ export const StoreFixtureHarness: React.FC<StoreFixtureHarnessProps> = ({ onExit
       : null,
     chatBusy,
     chatHistory: cashierHistory,
-    cash: simulation.getState().player.cash,
+    cash: simulation.getHudProjection().cash,
     focusedStock,
     actorCount: characters.length,
     innerVoiceTopic: arrivalThought?.topic ?? null,

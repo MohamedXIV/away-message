@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useSimulationStore } from '../../../store/useSimulationStore';
+import { useSimulationPresence } from '../../../store/useBoundedSimulationRead';
 import { AwayMessageEditor } from './AwayMessageEditor';
 import type { PulseLoginSession } from './PulseLoginSplash';
 
@@ -10,7 +10,7 @@ interface UserProfileHeaderProps {
 }
 
 export const UserProfileHeader: React.FC<UserProfileHeaderProps> = ({ username, session, onSignOut }) => {
-  const presence = useSimulationStore((s) => s.state.social.presence);
+  const presence = useSimulationPresence().presence;
   const playerPresence = presence['player'] || { status: session.status, awayMessage: session.awayMessage };
   const [isEditorOpen, setIsEditorOpen] = useState(false);
 

@@ -4,7 +4,10 @@
 
 import type { GlobalEvent, WorldState } from '../engine/types';
 
-export function getTriggeredForDay(world: WorldState | null | undefined, currentDay: number): GlobalEvent[] {
+/** Only the public triggered-event feed is needed by .local site policies. */
+export type PublicWorldEventFeed = Pick<WorldState, 'triggeredEvents'>;
+
+export function getTriggeredForDay(world: PublicWorldEventFeed | null | undefined, currentDay: number): GlobalEvent[] {
   if (!world?.triggeredEvents) return [];
   return world.triggeredEvents.filter((e) => e.triggerDay <= currentDay);
 }
@@ -26,7 +29,7 @@ export interface TechMartDynamicState {
   newProducts: Array<{ id: string; name: string; category: 'OS' | 'RAM'; price: number; description: string; specs: string; eventId: string }>;
 }
 
-export function getTechMartDynamicState(world: WorldState | null | undefined, currentDay: number): TechMartDynamicState {
+export function getTechMartDynamicState(world: PublicWorldEventFeed | null | undefined, currentDay: number): TechMartDynamicState {
   const triggered = getTriggeredForDay(world, currentDay);
   const banners: TechMartDynamicState['banners'] = [];
   const priceModifiers: Record<string, number> = {};
@@ -95,7 +98,7 @@ export interface DownloadHubDynamicItem {
   isNew?: boolean;
 }
 
-export function getDownloadHubDynamicItems(world: WorldState | null | undefined, currentDay: number): DownloadHubDynamicItem[] {
+export function getDownloadHubDynamicItems(world: PublicWorldEventFeed | null | undefined, currentDay: number): DownloadHubDynamicItem[] {
   const triggered = getTriggeredForDay(world, currentDay);
   const out: DownloadHubDynamicItem[] = [];
   for (const e of triggered) {
@@ -136,7 +139,7 @@ export interface NightBoardDynamicThread {
   isDynamic: true;
 }
 
-export function getNightBoardDynamicThreads(world: WorldState | null | undefined, currentDay: number): NightBoardDynamicThread[] {
+export function getNightBoardDynamicThreads(world: PublicWorldEventFeed | null | undefined, currentDay: number): NightBoardDynamicThread[] {
   const triggered = getTriggeredForDay(world, currentDay);
   // Only city_news / os_release / site_launch / culture become threads — economy/system less
   const eligible = triggered.filter((e) => ['city_news', 'os_release', 'site_launch', 'culture'].includes(e.category));
@@ -156,7 +159,7 @@ export function getNightBoardDynamicThreads(world: WorldState | null | undefined
 }
 
 // --- GoldNet: price driven by economy events ---
-export function getGoldNetPrice(world: WorldState | null | undefined, currentDay: number, basePrice = 100): { price: number; delta: number; historyLabel: string } {
+export function getGoldNetPrice(world: PublicWorldEventFeed | null | undefined, currentDay: number, basePrice = 100): { price: number; delta: number; historyLabel: string } {
   const triggered = getTriggeredForDay(world, currentDay);
   let price = basePrice;
   let lastDelta = 0;
@@ -189,7 +192,7 @@ export interface ProceduralSearchEntry {
   datePublished: string;
 }
 
-export function getProceduralSearchEntries(world: WorldState | null | undefined, currentDay: number): ProceduralSearchEntry[] {
+export function getProceduralSearchEntries(world: PublicWorldEventFeed | null | undefined, currentDay: number): ProceduralSearchEntry[] {
   const triggered = getTriggeredForDay(world, currentDay);
   return triggered.map((e) => {
     const host = (() => { try { return e.siteUrl ? new URL(e.siteUrl).hostname : 'citywire.local'; } catch { return 'citywire.local'; } })();

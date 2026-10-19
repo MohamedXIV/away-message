@@ -1,10 +1,11 @@
 import React from 'react';
 import { SiteRouteProps } from '../types';
 import { useSimulationStore } from '../../store/useSimulationStore';
+import { useSimulationApps } from '../../store/useBoundedSimulationRead';
 import { soundManager } from '../../audio/SoundManager';
 
 export const OrionSoftSite: React.FC<SiteRouteProps> = () => {
-  const currentOs = useSimulationStore((s) => s.state.os.currentOsId);
+  const currentOs = useSimulationApps().os.currentOsId;
   const dispatchAction = useSimulationStore((s) => s.dispatchAction);
 
   const handleUpgradeTo60 = () => {

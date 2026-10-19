@@ -4,7 +4,6 @@ import type { SimulationEngine } from '../../engine/SimulationEngine';
 
 interface HardwareWorkbenchModalProps {
   engine: SimulationEngine;
-  onStateChanged: () => void;
   onClose: () => void;
 }
 
@@ -25,7 +24,6 @@ function kindLabel(kind: string): string {
 
 export const HardwareWorkbenchModal: React.FC<HardwareWorkbenchModalProps> = ({
   engine,
-  onStateChanged,
   onClose,
 }) => {
   const [revision, setRevision] = useState(0);
@@ -48,9 +46,10 @@ export const HardwareWorkbenchModal: React.FC<HardwareWorkbenchModalProps> = ({
   const displayParts = workbench.data.installed.filter((part) => part.componentKind === 'monitor');
 
   const install = (instanceId: string, targetSlot: Parameters<SimulationEngine['installOwnedHardwareAtHome']>[1], name: string) => {
+    // Kernel publishes the successful owner mutation itself. A rejected
+    // install must not synthesize a world revision to redraw this modal.
     const result = engine.installOwnedHardwareAtHome(instanceId, targetSlot);
-    onStateChanged();
-    setRevision((value) => value + 1);
+    if (result.success) setRevision((value) => value + 1);
     setNotice(result.success ? `${name} installed at ${targetSlot}.` : result.error ?? `Could not install ${name}.`);
   };
 

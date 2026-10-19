@@ -1,10 +1,10 @@
 import React from 'react';
-import { BuddyCharacter } from '../../../engine/types';
+import type { SimulationPulseContact } from '../../../engine/kernel/SimulationPublication';
 
 interface ChatTabHeaderProps {
   openBuddyIds: string[];
   activeBuddyId: string;
-  buddies: Record<string, BuddyCharacter>;
+  buddies: Record<string, SimulationPulseContact>;
   unreadCounts: Record<string, number>;
   onSelectTab: (buddyId: string) => void;
   onCloseTab: (buddyId: string) => void;

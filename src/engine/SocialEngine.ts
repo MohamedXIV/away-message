@@ -27,6 +27,7 @@ import { SEED_CHARACTERS, seedCharacterDef, isSeedCharacter, resolveAffinitySeed
 import { validatePersistedBuddy, sanitizeLanguages } from './CharacterEngine';
 import { conditionFromLegacyStatus, projectLegacyBuddyStatus, validActorCondition } from './semantic/ActorCondition';
 import { parseCoreMemoryMeaning } from './semantic/CoreMemoryMeaning';
+import type { BoardBuddy } from './BoardDirector';
 
 // P3 long-term memory caps (keeps prompt injection bounded and saves small)
 export const MAX_CORE_MEMORIES = 8;
@@ -1578,13 +1579,18 @@ export class SocialEngine {
     return { ...msg };
   }
 
-  public markAsRead(rawConversationId: string): void {
+  /** Mutate the canonical conversation only if unread messages exist. */
+  public markAsRead(rawConversationId: string): boolean {
     const msgs = this.conversations.get(normalizeBuddyId(rawConversationId));
-    if (msgs) {
-      for (const m of msgs) {
+    if (!msgs) return false;
+    let changed = false;
+    for (const m of msgs) {
+      if (!m.isRead) {
         m.isRead = true;
+        changed = true;
       }
     }
+    return changed;
   }
 
   /** A derived public projection; callers cannot write to the live roster via status. */
@@ -1598,6 +1604,253 @@ export class SocialEngine {
 
   public getBuddies(): BuddyCharacter[] {
     return Array.from(this.buddies.keys()).map(id => this.getBuddy(id)!);
+  }
+
+  /**
+   * Resolve one Pulse room's live members at the Social owner. An action needs
+   * IDs, not 500 BuddyCharacter copies with private schedules, bio and status.
+   * Preserves explicit-member eligibility, dynamic role inclusion, derived
+   * gone/blocked semantics, de-duplication and sorted responder order.
+   */
+  public getPulseRoomParticipantIdsRead(room: {
+    participantIds: readonly string[];
+    participantRoles: readonly string[];
+  }): string[] {
+    const resolved = new Set<string>();
+    const eligible = (id: string): boolean => {
+      if (!this.buddies.has(id)) return false;
+      const condition = this.actorConditions.get(id) ?? conditionFromLegacyStatus();
+      const status = projectLegacyBuddyStatus(condition, this.getRelationshipStage(id));
+      return status !== 'gone' && status !== 'blocked';
+    };
+    for (const id of room.participantIds) {
+      if (eligible(id)) resolved.add(id);
+    }
+    for (const [id, buddy] of this.buddies) {
+      if (!(buddy.roles ?? []).some(role => room.participantRoles.includes(role))) continue;
+      if (eligible(id)) resolved.add(id);
+    }
+    return [...resolved].sort();
+  }
+
+  /**
+   * Explicit developer-only inspector: counts and a page of visible identities.
+   * Never make a BuddyCharacter roster or chat/memory snapshot merely to render
+   * the Lab. Full private diagnostics require a separate selected-page read.
+   */
+  public getLabRosterRead(offset = 0, limit = 16): {
+    total: number;
+    procedural: number;
+    imageOptions: Array<{ id: string; displayName: string; handle: string }>;
+    page: Array<Pick<BuddyCharacter, 'id' | 'displayName' | 'handle' | 'archetype' | 'status'>>;
+  } {
+    const start = Number.isFinite(offset) ? Math.max(0, Math.trunc(offset)) : 0;
+    const size = Number.isFinite(limit) ? Math.max(1, Math.min(16, Math.trunc(limit))) : 16;
+    let procedural = 0;
+    const imageOptions: Array<{ id: string; displayName: string; handle: string }> = [];
+    const page: Array<Pick<BuddyCharacter, 'id' | 'displayName' | 'handle' | 'archetype' | 'status'>> = [];
+    let index = 0;
+    for (const [id, buddy] of this.buddies) {
+      if (buddy.isProcedural) procedural++;
+      if (imageOptions.length < 500) imageOptions.push({
+        id, displayName: buddy.displayName, handle: buddy.handle,
+      });
+      if (index >= start && index < start + size) {
+        const condition = this.actorConditions.get(id) ?? conditionFromLegacyStatus();
+        page.push({
+          id,
+          displayName: buddy.displayName,
+          handle: buddy.handle,
+          ...(buddy.archetype ? { archetype: buddy.archetype } : {}),
+          status: projectLegacyBuddyStatus(condition, this.getRelationshipStage(id)),
+        });
+      }
+      index++;
+    }
+    return { total: this.buddies.size, procedural, imageOptions, page };
+  }
+
+  /** Intent-time authoring input only: no actor bodies, memory or relationships. */
+  public getLabActorIds(): string[] {
+    return [...this.buddies.keys()];
+  }
+
+  /**
+   * Public NightBoard authors only: finite, detached render identities from
+   * the Social owner. Public forum authorship is not a claim that the player
+   * knows a person privately; the generated threads may include strangers.
+   * Never build BuddyCharacter snapshots, conversation history or NPC memory.
+   * The 500-author window matches the largest supported simulation gate.
+   */
+  public getNightBoardAuthorsRead(maxAuthors = 500): BoardBuddy[] {
+    const limit = Number.isFinite(maxAuthors)
+      ? Math.max(0, Math.min(500, Math.trunc(maxAuthors))) : 500;
+    const authors: BoardBuddy[] = [];
+    if (limit === 0) return authors;
+    for (const [id, buddy] of this.buddies) {
+      const stage = this.getRelationshipStage(id);
+      const condition = this.actorConditions.get(id) ?? conditionFromLegacyStatus();
+      authors.push({
+        id,
+        displayName: buddy.displayName,
+        handle: buddy.handle,
+        archetype: buddy.archetype,
+        stage,
+        status: projectLegacyBuddyStatus(condition, stage),
+        roles: buddy.roles ? [...buddy.roles] : [],
+      });
+      if (authors.length >= limit) break;
+    }
+    return authors;
+  }
+
+  /**
+   * Mailbox's player-known sender identities, scoped to rendered mail fields.
+   * Keep Social's conditions, identity and relationship stages in one owner;
+   * never copy roster payloads, conversations or private NPC memories.
+   */
+  public getKnownMailboxBuddies(maxContacts = 500): BoardBuddy[] {
+    const limit = Number.isFinite(maxContacts) ? Math.max(0, Math.min(500, Math.trunc(maxContacts))) : 500;
+    const senders: BoardBuddy[] = [];
+    if (limit === 0) return senders;
+    for (const [id, buddy] of this.buddies) {
+      if (!this.isKnown(id)) continue;
+      const stage = this.getRelationshipStage(id);
+      const condition = this.actorConditions.get(id) ?? conditionFromLegacyStatus();
+      senders.push({
+        id,
+        displayName: buddy.displayName,
+        handle: buddy.handle,
+        ...(buddy.archetype ? { archetype: buddy.archetype } : {}),
+        stage,
+        status: projectLegacyBuddyStatus(condition, stage),
+        ...(buddy.roles ? { roles: [...buddy.roles] } : {}),
+      });
+      if (senders.length >= limit) break;
+    }
+    return senders;
+  }
+
+  /**
+   * Pulse's exact player-visible directory, scoped to known handles and
+   * authored public-room membership. Never copies the whole BuddyCharacter
+   * roster, its private relationships, schedules or conversation history.
+   * Storage and learned-handle authority remain in this one Social owner.
+   */
+  public getPulseDirectoryRead(rooms: ReadonlyArray<{
+    id: string;
+    participantIds: readonly string[];
+    participantRoles: readonly string[];
+  }> = []): {
+    contacts: Array<Pick<BuddyCharacter, 'id' | 'displayName' | 'handle' | 'roles' | 'archetype'>>;
+    suggestions: Array<{ handle: string; note: string; buddyName: string }>;
+    lastSeenMinutes: Record<string, number>;
+    roomParticipantCounts: Record<string, number>;
+    roomParticipantNames: Record<string, string>;
+  } {
+    const contacts: Array<Pick<BuddyCharacter, 'id' | 'displayName' | 'handle' | 'roles' | 'archetype'>> = [];
+    const suggestions: Array<{ handle: string; note: string; buddyName: string }> = [];
+    const lastSeenMinutes: Record<string, number> = {};
+    for (const [id, buddy] of this.buddies) {
+      if (this.isKnown(id)) {
+        if (contacts.length >= 500) continue;
+        contacts.push({
+          id,
+          displayName: buddy.displayName,
+          handle: buddy.handle,
+          ...(buddy.archetype ? { archetype: buddy.archetype } : {}),
+          ...(buddy.roles ? { roles: [...buddy.roles] } : {}),
+        });
+        lastSeenMinutes[id] = this.getLastActivityMinute(id);
+      } else if (suggestions.length < 500) {
+        for (const candidate of buddy.backstory?.candidates ?? []) {
+          if (suggestions.length >= 500) break;
+          suggestions.push({
+            handle: candidate.handle,
+            note: candidate.note || buddy.backstory?.label || 'From your past',
+            buddyName: buddy.displayName,
+          });
+        }
+      }
+    }
+
+    const roomParticipantCounts: Record<string, number> = {};
+    const roomParticipantNames: Record<string, string> = {};
+    const publicRooms = rooms.slice(0, 32);
+    // Status derives once per actor, not 32 times when Pulse shows 32 rooms.
+    // Preserve room-first actor ordering for the 500-name presentation cap.
+    const eligibleForRooms = new Set<string>();
+    if (publicRooms.length > 0) {
+      for (const [id] of this.buddies) {
+        const condition = this.actorConditions.get(id) ?? conditionFromLegacyStatus();
+        const status = projectLegacyBuddyStatus(condition, this.getRelationshipStage(id));
+        if (status !== 'gone' && status !== 'blocked') eligibleForRooms.add(id);
+      }
+    }
+    let namedCount = 0;
+    for (const room of publicRooms) {
+      const memberIds = new Set(room.participantIds);
+      const memberRoles = new Set(room.participantRoles);
+      let participantCount = 0;
+      for (const [id, buddy] of this.buddies) {
+        if (!eligibleForRooms.has(id)) continue;
+        if (!memberIds.has(id) && !(buddy.roles ?? []).some(role => memberRoles.has(role))) continue;
+        participantCount++;
+        if (!Object.prototype.hasOwnProperty.call(roomParticipantNames, id) && namedCount < 500) {
+          roomParticipantNames[id] = buddy.displayName;
+          namedCount++;
+        }
+      }
+      roomParticipantCounts[room.id] = participantCount;
+    }
+    return { contacts, suggestions, lastSeenMinutes, roomParticipantCounts, roomParticipantNames };
+  }
+
+  /**
+   * Job-board identity only. Select the same first eligible role-holder as
+   * getBuddyWithRole (non-distant before distant, then locale id order) in
+   * one owner-owned scan, without cloning a whole BuddyCharacter roster.
+   * Knowledge gates the chosen winner, not the selection itself: an unknown
+   * winner must not be replaced with a conveniently known lower-priority actor.
+   */
+  public getPublicJobContactName(role: string): string {
+    let best: { id: string; displayName: string; distant: number } | null = null;
+    for (const [id, buddy] of this.buddies) {
+      if (!(buddy.roles ?? []).includes(role)) continue;
+      const condition = this.actorConditions.get(id) ?? conditionFromLegacyStatus();
+      const status = projectLegacyBuddyStatus(condition, this.getRelationshipStage(id));
+      if (status === 'gone' || status === 'blocked') continue;
+      const distant = status === 'distant' ? 1 : 0;
+      if (!best || distant < best.distant
+        || (distant === best.distant && id.localeCompare(best.id) < 0)) {
+        best = { id, displayName: buddy.displayName, distant };
+      }
+    }
+    return best && this.isKnown(best.id) ? best.displayName : role;
+  }
+
+  /**
+   * Café guest candidate identities only. Public presence is decided by the
+   * NPC place owner and semantic eligibility afterward, not by this roster
+   * query. Only player-learned local identities cross into coordination.
+   */
+  public getKnownLocalCafeCandidatesRead(requestedActorId?: string): Array<{
+    id: string;
+    displayName: string;
+  }> {
+    if (requestedActorId) {
+      const id = normalizeBuddyId(requestedActorId);
+      const buddy = this.buddies.get(id);
+      return buddy?.reach === 'local' && this.isKnown(id)
+        ? [{ id, displayName: buddy.displayName }] : [];
+    }
+    const candidates: Array<{ id: string; displayName: string }> = [];
+    for (const [id, buddy] of this.buddies) {
+      if (buddy.reach !== 'local' || !this.isKnown(id)) continue;
+      candidates.push({ id, displayName: buddy.displayName });
+      if (candidates.length >= 500) break;
+    }
+    return candidates;
   }
 
   /** Resolve current actors by capability role. Seed content has no runtime privilege. */
@@ -1625,9 +1878,182 @@ export class SocialEngine {
     return rel ? { ...rel } : undefined;
   }
 
+  /**
+   * Lightweight presence only, without Social persistence state.
+   * Internal simulation code may read all actor presence; player-facing
+   * projections may expose only learned contacts and the player's own status.
+   */
+  public getPresenceSummary(playerKnownOnly = false): Record<string, BuddyPresence> {
+    const rows: Record<string, BuddyPresence> = {};
+    for (const [actorId, presence] of this.presence) {
+      if (playerKnownOnly && actorId !== 'player' && !this.isKnown(actorId)) continue;
+      rows[actorId] = { ...presence };
+    }
+    return rows;
+  }
+
+  /** Player-authored away text is canonical Social state, not a Zustand-only overlay. */
+  public setPlayerPresence(presence: BuddyPresence): void {
+    const player = { ...presence };
+    this.presence.set('player', player);
+    this.eventBus.emit('social:status_changed', { buddyId: 'player', presence: { ...player } });
+  }
+
   public getPresence(rawId: string): BuddyPresence | undefined {
     const pres = this.presence.get(normalizeBuddyId(rawId));
     return pres ? { ...pres } : undefined;
+  }
+
+  /**
+   * #172 bounded messenger read over the one canonical Social conversation.
+   * Offset is measured backward from newest; returned messages remain in
+   * chronological display order. #173 may change storage, not this contract.
+   */
+  public getConversationPage(rawConversationId: string, offset = 0, limit = 30): {
+    conversationId: string;
+    messages: MessageRecord[];
+    total: number;
+    hasOlder: boolean;
+  } {
+    const conversationId = normalizeBuddyId(rawConversationId);
+    const list = this.conversations.get(conversationId) ?? [];
+    const safeOffset = Number.isFinite(offset) ? Math.max(0, Math.floor(offset)) : 0;
+    const safeLimit = Number.isFinite(limit) ? Math.max(0, Math.min(50, Math.floor(limit))) : 30;
+    const end = Math.max(0, list.length - safeOffset);
+    const start = Math.max(0, end - safeLimit);
+    return {
+      conversationId,
+      messages: list.slice(start, end).map(m => ({
+        ...m, ...(m.tags ? { tags: [...m.tags] } : {}),
+      })),
+      total: list.length,
+      hasOlder: start > 0,
+    };
+  }
+
+  /** A bounded 500-contact unread index, independent of any message payload.
+   * The player-visible projection must not reveal unlearned actors via IDs/counts.
+   * Internal simulation callers retain the unfiltered canonical index.
+   */
+  public getConversationUnreadCounts(maxConversations = 500, playerKnownOnly = false): Record<string, number> {
+    const limit = Number.isFinite(maxConversations)
+      ? Math.max(0, Math.min(500, Math.floor(maxConversations))) : 500;
+    const counts: Record<string, number> = {};
+    let indexed = 0;
+    for (const [actorId, messages] of this.conversations) {
+      if (playerKnownOnly && !this.isKnown(actorId)) continue;
+      if (indexed >= limit) break;
+      let unread = 0;
+      for (const message of messages) {
+        if (message.senderId !== 'player' && !message.isRead) unread++;
+      }
+      if (unread > 0) counts[actorId] = unread;
+      indexed++;
+    }
+    return counts;
+  }
+
+  /** Day-presence check without copying a long conversation to React. */
+  public hasConversationMessageOnDay(rawConversationId: string, day: number): boolean {
+    const messages = this.conversations.get(normalizeBuddyId(rawConversationId));
+    if (!messages || !Number.isInteger(day)) return false;
+    for (let index = messages.length - 1; index >= 0; index--) {
+      const message = messages[index]!;
+      if (message.day === day) return true;
+      // Message inserts are not guaranteed chronological (offline delivery),
+      // so we scan through all entries rather than assume a sorted timeline.
+    }
+    return false;
+  }
+
+  /** Bounded System Tray read: totals stay exact for visible conversations.
+   * Canonical callers may retain private actor history without exposing it to UI.
+   */
+  public getUnreadTraySummary(maxPreview = 4, playerKnownOnly = false): {
+    unreadCount: number;
+    previews: Array<{ id: string; buddyId: string; buddyName: string; text: string }>;
+  } {
+    const limit = Number.isFinite(maxPreview) ? Math.max(0, Math.min(10, Math.floor(maxPreview))) : 4;
+    let unreadCount = 0;
+    const newest: Array<{ id: string; buddyId: string; buddyName: string; text: string; minute: number }> = [];
+    for (const [buddyId, conversation] of this.conversations) {
+      if (playerKnownOnly && !this.isKnown(buddyId)) continue;
+      for (const message of conversation) {
+        if (message.senderId === 'player' || message.isRead) continue;
+        unreadCount++;
+        if (limit === 0) continue;
+        const row = {
+          id: message.id,
+          buddyId,
+          buddyName: this.buddies.get(buddyId)?.displayName ?? buddyId,
+          text: message.text,
+          minute: message.timestampMinute,
+        };
+        newest.push(row);
+        newest.sort((a, b) => b.minute - a.minute || b.id.localeCompare(a.id));
+        if (newest.length > limit) newest.pop();
+      }
+    }
+    return {
+      unreadCount,
+      previews: newest.map(({ id, buddyId, buddyName, text }) => ({ id, buddyId, buddyName, text })),
+    };
+  }
+
+  /** One row per visible contact; no full SocialEngineState projection. */
+  public getMessengerSummary(maxContacts = 32): Array<{
+    actorId: string;
+    displayName: string;
+    handle: string;
+    onlineStatus: BuddyPresence['status'];
+    relationshipStage: RelationshipStage;
+    lastMessageMinute: number | null;
+    unread: number;
+  }> {
+    const limit = Number.isFinite(maxContacts) ? Math.max(0, Math.min(100, Math.floor(maxContacts))) : 32;
+    if (limit === 0) return [];
+    const rows = [];
+    for (const [id, buddy] of this.buddies) {
+      if (!this.isKnown(id)) continue;
+      const conversation = this.conversations.get(id) ?? [];
+      const latest = conversation[conversation.length - 1];
+      let unread = 0;
+      for (let i = conversation.length - 1; i >= 0 && unread < 9999; i--) {
+        if (conversation[i]?.senderId !== 'player' && !conversation[i]?.isRead) unread++;
+      }
+      rows.push({
+        actorId: id,
+        displayName: buddy.displayName,
+        handle: buddy.handle,
+        onlineStatus: this.presence.get(id)?.status ?? 'offline',
+        relationshipStage: this.getRelationshipStage(id),
+        lastMessageMinute: latest?.timestampMinute ?? null,
+        unread,
+      });
+    }
+    rows.sort((a, b) => (b.lastMessageMinute ?? -1) - (a.lastMessageMinute ?? -1)
+      || a.actorId.localeCompare(b.actorId));
+    return rows.slice(0, limit);
+  }
+
+  /**
+   * Last actual offline message from this contact, for the login anti-link
+   * cadence. Scans canonical history backwards without copying transcripts,
+   * regardless of out-of-order offline delivery timestamps.
+   *
+   * This is an internal Social owner query, not a player-visible projection.
+   */
+  public getLastOfflineMessageText(rawConversationId: string): string | null {
+    const id = normalizeBuddyId(rawConversationId);
+    const messages = this.conversations.get(id);
+    if (!messages) return null;
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const message = messages[i]!;
+      if (message.senderId === id && message.tags?.includes('offline-message')) {
+        return message.text;
+      }
+    }
+    return null;
   }
 
   public getMessages(rawConversationId: string): MessageRecord[] {

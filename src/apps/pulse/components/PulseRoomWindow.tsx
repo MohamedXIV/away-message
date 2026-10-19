@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import type { PulseRoom } from '../data/pulseRooms';
 import { EmoticonPalette } from './EmoticonPalette';
 import { useSimulationStore } from '../../../store/useSimulationStore';
+import { useSimulationChrome } from '../../../store/useBoundedSimulationRead';
 import { useWindowStore } from '../../../store/useWindowStore';
 import { renderWithLinksAndEmoticons } from '../utils/linkDetector';
 import { getFileInfoFromUrl } from '../../../engine/fileUtils';
@@ -39,7 +40,7 @@ export const PulseRoomWindow: React.FC<PulseRoomWindowProps> = ({ room, messages
   const [isEditingTopic, setIsEditingTopic] = useState(false);
   const [topicDraft, setTopicDraft] = useState(topic || room.topic);
   const transcriptRef = useRef<HTMLDivElement>(null);
-  const isOrion60 = useSimulationStore((s) => s.state.os.currentOsId === 'Orion_6.0');
+  const isOrion60 = useSimulationChrome().osVersion === 'Orion_6.0';
   const openWindow = useWindowStore((s) => s.openWindow);
   const dispatchAction = useSimulationStore((s) => s.dispatchAction);
   const handleOpenLink = (url: string) => openWindow('browser', { initialUrl: url });

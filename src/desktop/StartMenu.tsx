@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useSimulationStore } from '../store/useSimulationStore';
+import { useSimulationChrome } from '../store/useBoundedSimulationRead';
 import { useWindowStore } from '../store/useWindowStore';
 import { soundManager } from '../audio/SoundManager';
 import { getOsPresentationProfile } from './host/OsPresentation';
@@ -22,14 +23,15 @@ interface StartMenuProps {
 }
 
 export const StartMenu: React.FC<StartMenuProps> = ({ isOpen, onClose, onOpenDialUp }) => {
-  const osVersion = useSimulationStore((s) => s.state.os.currentOsId);
+  const chrome = useSimulationChrome();
+  const osVersion = chrome.osVersion;
   const osPresentation = osVersion ? getOsPresentationProfile(osVersion) : null;
   const startMenuPresentation = osPresentation?.shell.startMenuId ?? 'classic';
   const isCanalStartMenu = startMenuPresentation === 'canal';
   const dispatchAction = useSimulationStore((s) => s.dispatchAction);
   const openWindow = useWindowStore((s) => s.openWindow);
   // Pulse never ships with the OS — its menu entry appears only after install.
-  const isPulseInstalled = useSimulationStore((s) => s.state.installedSoftware.some((sw: any) => String(sw.appId).includes('pulse')));
+  const isPulseInstalled = chrome.pulseInstalled;
 
   const [activeSubmenu, setActiveSubmenu] = useState<'programs' | 'accessories' | 'internet' | 'settings' | 'documents' | null>(null);
   const [isRunDialogOpen, setIsRunDialogOpen] = useState(false);

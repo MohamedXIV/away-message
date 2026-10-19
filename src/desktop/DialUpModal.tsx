@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useSimulationStore } from '../store/useSimulationStore';
+import { useSimulationApps } from '../store/useBoundedSimulationRead';
 import { soundManager } from '../audio/SoundManager';
 import { Phone, Wifi, Check } from 'lucide-react';
 
@@ -20,7 +20,7 @@ type HandshakeStage =
   | 'error';
 
 export const DialUpModal: React.FC<DialUpModalProps> = ({ onClose }) => {
-  const hardware = useSimulationStore((s) => s.state.hardware);
+  const hardware = useSimulationApps().hardware;
 
   const [stage, setStage] = useState<HandshakeStage>('idle');
   const [statusMessage, setStatusMessage] = useState('Ready to connect.');

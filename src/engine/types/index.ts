@@ -923,6 +923,8 @@ export interface SimulationEventMap {
   'vfs:file_deleted': { path: string; sizeBytes: number };
   'software:installed': { software: InstalledSoftwareRecord };
   'software:uninstalled': { software: InstalledSoftwareRecord };
+  /** Owner-backed Pulse version or patch ledger change. */
+  'pulse:changed': { previousPulseId: string | null; currentPulseId: string | null };
   'social:status_changed': { buddyId: string; presence: BuddyPresence };
   'social:message_received': { message: MessageRecord };
   'social:relationship_updated': { buddyId: string; dimensions: RelationshipDimensions; delta: Partial<RelationshipDimensions> };

@@ -62,6 +62,12 @@ export class EconomyEngine {
     return this.state.cash;
   }
 
+  /** Finance-only UI terms: avoid assembling the legacy PlayerState + Needs. */
+  public getRentStatus(): Pick<PlayerState, 'rentAmount' | 'rentDueDay' | 'rentPaid'> {
+    const { rentAmount, rentDueDay, rentPaid } = this.state;
+    return { rentAmount, rentDueDay, rentPaid };
+  }
+
   public canAfford(amount: number): boolean {
     return this.state.cash >= amount;
   }

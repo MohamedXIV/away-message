@@ -29,21 +29,30 @@ export interface OsInstallPlan {
   preparedAtTotalMinutes: number;
 }
 
+/** Shared boot semantics for explicit snapshots and scalar live owner reads. */
+export function resolvePcBootStateFromOwnerStatus(
+  computer: { assembled: boolean; poweredOn: boolean },
+  currentOsId: OsVersion | null,
+  hasUnassembledComputerItems: () => boolean,
+): PcBootState {
+  if (!computer.assembled) {
+    return hasUnassembledComputerItems() ? 'awaiting_setup' : 'no_computer';
+  }
+  if (!computer.poweredOn) return 'powered_off';
+  if (!currentOsId) return 'no_boot_device';
+  return 'desktop';
+}
+
 export function resolvePcBootState(
   state: Pick<LiveSimulationState, 'computer' | 'inventory' | 'os'>,
 ): PcBootState {
-  if (!state.computer.assembled) {
-    const hasUnassembledComputerItems = state.inventory.items.some(
-      (item) =>
-        item.location === 'room_package' &&
-        (item.kind === 'hardware' || item.kind === 'display'),
-    );
-    return hasUnassembledComputerItems ? 'awaiting_setup' : 'no_computer';
-  }
-
-  if (!state.computer.poweredOn) return 'powered_off';
-  if (!state.os.currentOsId) return 'no_boot_device';
-  return 'desktop';
+  return resolvePcBootStateFromOwnerStatus(
+    state.computer,
+    state.os.currentOsId,
+    () => state.inventory.items.some(item =>
+      item.location === 'room_package' &&
+      (item.kind === 'hardware' || item.kind === 'display')),
+  );
 }
 
 
@@ -62,8 +71,7 @@ export class ComputerOwnershipRuntime {
   public readonly inventory: InventoryEngine;
 
   constructor(
-    private readonly owners: Pick<CoreDomainOwners, 'hardware' | 'os' | 'economy'>,
-    private readonly readState: () => Readonly<LiveSimulationState>,
+    private readonly owners: Pick<CoreDomainOwners, 'hardware' | 'os' | 'economy' | 'clock'>,
     private readonly advanceMinutes: (minutes: number, reason: string) => void,
     private readonly chargeCash: (amount: number, reason: string) => ActionResult,
     private readonly invalidate: () => void,
@@ -77,8 +85,20 @@ export class ComputerOwnershipRuntime {
     this.invalidate();
   }
 
+  /** Narrow owner projection, never an assembled simulation/world snapshot. */
+  private readOwnedContext() {
+    return {
+      location: this.owners.economy.getLocation(),
+      computer: this.owners.hardware.getComputerState(),
+      display: this.owners.hardware.getDisplayState(),
+      inventory: this.inventory.getState(),
+      os: this.owners.os.getState(),
+      time: this.owners.clock.getTime(),
+    };
+  }
+
   public getPcBootState(): PcBootState {
-    return resolvePcBootState(this.readState());
+    return resolvePcBootState(this.readOwnedContext());
   }
 
   public setComputerPower(poweredOn: boolean): ActionResult {
@@ -95,8 +115,8 @@ export class ComputerOwnershipRuntime {
     instanceId: string,
     slot: HardwareInstallSlot,
   ): ActionResult {
-    const state = this.readState();
-    if (state.player.location !== 'home') {
+    const state = this.readOwnedContext();
+    if (state.location !== 'home') {
       return { success: false, error: 'Hardware can only be installed at your current residence computer.' };
     }
     if (!state.computer.assembled) {
@@ -262,8 +282,8 @@ export class ComputerOwnershipRuntime {
   }
 
   public insertOwnedMediaAtHome(instanceId: string): ActionResult {
-    const state = this.readState();
-    if (state.player.location !== 'home') {
+    const state = this.readOwnedContext();
+    if (state.location !== 'home') {
       return { success: false, error: 'Physical media can only be inserted at your current residence computer.' };
     }
     if (!state.computer.assembled || state.computer.opticalDrives.length === 0) {
@@ -313,8 +333,8 @@ export class ComputerOwnershipRuntime {
   }
 
   public ejectOwnedMediaAtHome(): ActionResult<{ mediaInstanceId: string }> {
-    const state = this.readState();
-    if (state.player.location !== 'home') {
+    const state = this.readOwnedContext();
+    if (state.location !== 'home') {
       return { success: false, error: 'Physical media can only be ejected at your current residence computer.' };
     }
     const mediaInstanceId = state.computer.insertedMediaId;
@@ -352,8 +372,8 @@ export class ComputerOwnershipRuntime {
   }
 
   public prepareOsInstallFromInsertedMedia(): ActionResult<OsInstallPlan> {
-    const state = this.readState();
-    if (state.player.location !== 'home') {
+    const state = this.readOwnedContext();
+    if (state.location !== 'home') {
       return { success: false, error: 'OS installation is only available at your current residence computer.' };
     }
     if (!state.computer.assembled) {
@@ -472,8 +492,8 @@ export class ComputerOwnershipRuntime {
       const result = this.owners.os.beginInstall(
         plan.targetOs,
         hardwareForInstall,
-        this.readState().time.day,
-        this.readState().time.totalMinutes + plan.durationMinutes,
+        this.owners.clock.getTime().day,
+        this.owners.clock.getTotalMinutes() + plan.durationMinutes,
       );
       if (!result.success) {
         this.owners.hardware.loadState({ computer: computerBefore, display: displayBefore });
@@ -568,8 +588,8 @@ export class ComputerOwnershipRuntime {
   }
 
   public setupComputerAtHome(): ActionResult {
-    const state = this.readState();
-    if (state.player.location !== 'home') {
+    const state = this.readOwnedContext();
+    if (state.location !== 'home') {
       return { success: false, error: 'Computer setup is only available at your current residence.' };
     }
     if (state.computer.assembled) {

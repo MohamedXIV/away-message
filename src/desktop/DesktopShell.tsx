@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useSimulationStore } from '../store/useSimulationStore';
-import { resolvePcBootState } from '../engine/SimulationEngine';
+import { useSimulationDesktop } from '../store/useBoundedSimulationRead';
 import { useWindowStore } from '../store/useWindowStore';
 import { useDesktopStore } from '../store/useDesktopStore';
 import { soundManager } from '../audio/SoundManager';
@@ -64,12 +64,9 @@ function renderIconGraphic(type: DesktopIconItem['iconType'], _theme?: string) {
 }
 
 export const DesktopShell: React.FC = () => {
-  const os = useSimulationStore((s) => s.state.os);
-  const osVersion = os.currentOsId;
-  const computer = useSimulationStore((s) => s.state.computer);
-  const inventory = useSimulationStore((s) => s.state.inventory);
-  const monitor = useSimulationStore((s) => s.state.display?.monitor ?? null);
-  const vfsFiles = useSimulationStore((s) => s.state.vfs.files);
+  const desktop = useSimulationDesktop();
+  const osVersion = desktop.osVersion;
+  const monitor = desktop.monitor;
   const openWindow = useWindowStore((s) => s.openWindow);
   const wallpaper = useDesktopStore((s) => s.wallpaper);
   const setWallpaper = useDesktopStore((s) => s.setWallpaper);
@@ -83,7 +80,7 @@ export const DesktopShell: React.FC = () => {
   const switchView = useSimulationStore((s) => s.switchView);
   const setComputerPower = useSimulationStore((s) => s.setComputerPower);
   const insertOwnedMediaAtHome = useSimulationStore((s) => s.insertOwnedMediaAtHome);
-  const bootState = resolvePcBootState({ computer, inventory, os });
+  const bootState = desktop.pcBootState;
   const presentation = osVersion ? getOsPresentationProfile(osVersion) : null;
 
   useEffect(() => {
@@ -124,7 +121,7 @@ export const DesktopShell: React.FC = () => {
   }
 
   if (bootState === 'no_boot_device') {
-    const bootableMedia = getBootableOwnedOsMedia(inventory.items);
+    const bootableMedia = getBootableOwnedOsMedia(desktop.bootMediaItems);
     const startSetup = (media: (typeof bootableMedia)[number]) => {
       setBootSetupError(null);
       if (media.location !== 'inserted') {
@@ -178,7 +175,7 @@ export const DesktopShell: React.FC = () => {
     { id: 'sys_ailab', label: 'AI Lab', appId: 'ailab', iconType: 'ai', gridX: 0, gridY: 5 },
   ];
 
-  const desktopVfsIcons: DesktopIconItem[] = Object.values(vfsFiles)
+  const desktopVfsIcons: DesktopIconItem[] = desktop.desktopFiles
     .filter((f) => f.parentPath === 'C:/Desktop' && f.path !== 'C:/Desktop')
     .map((f, idx) => {
       const isShortcut = f.kind === 'shortcut';

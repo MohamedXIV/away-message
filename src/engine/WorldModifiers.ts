@@ -189,7 +189,7 @@ export function parseModifierValue(
  */
 export function projectActiveModifiers(
   specs: readonly WorldModifierSpec[],
-  triggered: readonly TriggeredEventRef[],
+  triggered: Iterable<TriggeredEventRef>,
   atMinute: number,
   filter?: WorldModifierFilter,
 ): WorldModifier[] {

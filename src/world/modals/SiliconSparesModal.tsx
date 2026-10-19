@@ -5,6 +5,7 @@ import React, { useState } from 'react';
 import { HARDWARE_STORE_INVENTORY } from '../../engine/hardware/catalog';
 import type { HardwareStoreItem } from '../../engine/hardware/types';
 import { useSimulationStore } from '../../store/useSimulationStore';
+import { useSimulationShop } from '../../store/useBoundedSimulationRead';
 import { soundManager } from '../../audio/SoundManager';
 import { X, ShoppingCart, Monitor, Cpu, HardDrive, Disc } from 'lucide-react';
 
@@ -13,14 +14,8 @@ export interface SiliconSparesModalProps {
 }
 
 export const SiliconSparesModal: React.FC<SiliconSparesModalProps> = ({ onClose }) => {
-  const cash = useSimulationStore((s) => s.state.player.cash);
-  const hardware = useSimulationStore((s) => s.state.hardware);
-  const currentOsId = useSimulationStore((s) => s.state.os.currentOsId);
-  const purchaseCounts = useSimulationStore((s) => s.state.inventory.purchaseCounts);
-  const legacyRecovery = useSimulationStore((s) => s.state.inventory.legacyRecovery);
-  const roomPackageCount = useSimulationStore(
-    (s) => s.state.inventory.items.filter((owned) => owned.location === 'room_package').length,
-  );
+  const { cash, hardware, osVersion: currentOsId, purchaseCounts, legacyRecovery, roomPackageCount } =
+    useSimulationShop();
   const purchaseStoreItem = useSimulationStore((s) => s.purchaseStoreItem);
 
   const [filter, setFilter] = useState<'all' | 'bundle' | 'ram' | 'storage' | 'monitor' | 'os_disc'>('all');

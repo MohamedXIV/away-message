@@ -16,7 +16,8 @@
     "test:all": "npm run test:unit && npm run test:integration && npm run test:e2e",
     "content:pull": "tsx tools/pull-content.ts",
     "content:check": "tsx tools/pull-content.ts --check",
-    "bench:simulation": "tsx tools/benchmark-simulation.ts"
+    "bench:simulation": "tsx tools/benchmark-simulation.ts",
+    "bench:publication": "tsx tools/benchmark-publication.ts"
   },
   "dependencies": {
     "clsx": "^2.1.1",

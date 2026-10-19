@@ -145,6 +145,8 @@ export class WorldEventsEngine {
   private buddyKnowledge: Map<string, BuddyEventKnowledge[]> = new Map(); // learned public events
   /** Sole authority for structured world facts, rumors and scoped awareness. */
   private readonly semanticKnowledge = new KnowledgeLedger();
+  /** Load-only generation: normal event writes must not invalidate AI work. */
+  private loadEpoch = 0;
 
   constructor(
     eventBus: EventBus,
@@ -162,6 +164,8 @@ export class WorldEventsEngine {
       this.loadState(initialState);
     }
   }
+
+  public getLoadEpoch(): number { return this.loadEpoch; }
 
   public getState(): WorldEventsState {
     if (this._cachedState) return this._cachedState;
@@ -185,6 +189,7 @@ export class WorldEventsEngine {
   }
 
   public loadState(state: Partial<WorldEventsState>): void {
+    this.loadEpoch++;
     this.semanticKnowledge.loadState(state.semanticKnowledge);
     this.flags.clear();
     if (state.flags) {
@@ -340,12 +345,113 @@ export class WorldEventsEngine {
     return event;
   }
 
+  /** Website HUD-visible flags only; never clone NPC knowledge or semantic ledgers. */
+  public getPublicFlags(): Record<string, boolean | number | string> {
+    return Object.fromEntries(this.flags.entries());
+  }
+
+  /**
+   * Website-only public event feed, owned by World. Keep the most recent
+   * authored events in chronological/stable insertion order with bounded
+   * allocation; do not copy pending event definitions or NPC knowledge.
+   */
+  public getPublicWebsiteFeed(maxEvents = 256): {
+    triggeredEvents: GlobalEvent[];
+    pendingEventCount: number;
+  } {
+    const limit = Number.isFinite(maxEvents)
+      ? Math.max(0, Math.min(256, Math.trunc(maxEvents))) : 256;
+    const latest: GlobalEvent[] = [];
+    if (limit > 0) {
+      for (const event of this.triggeredEvents.values()) {
+        const at = event.triggeredAtMinute ?? 0;
+        if (latest.length === limit && at < (latest[0]!.triggeredAtMinute ?? 0)) continue;
+        // Insert after equal times: identical ordering to stable getTriggeredEvents().
+        let lo = 0;
+        let hi = latest.length;
+        while (lo < hi) {
+          const mid = (lo + hi) >>> 1;
+          if ((latest[mid]!.triggeredAtMinute ?? 0) <= at) lo = mid + 1;
+          else hi = mid;
+        }
+        latest.splice(lo, 0, event);
+        if (latest.length > limit) latest.shift();
+      }
+    }
+    return {
+      triggeredEvents: latest.map(event => ({ ...event })),
+      pendingEventCount: this.pendingEvents.size,
+    };
+  }
+
+  /**
+   * Public selected-actor event lookup. At most eight detached events are
+   * returned, in the same stable time/insertion order as the legacy filtered
+   * triggered-event feed. Only requested IDs can cross the UI boundary.
+   */
+  public getTriggeredEventsForIds(ids: ReadonlySet<string>, atMostDay = Number.POSITIVE_INFINITY): GlobalEvent[] {
+    if (ids.size === 0) return [];
+    const selected: GlobalEvent[] = [];
+    for (const event of this.triggeredEvents.values()) {
+      if (!ids.has(event.id) || event.triggerDay > atMostDay) continue;
+      const minute = event.triggeredAtMinute ?? 0;
+      // Stable insertion after equal timestamps; oldest drops first.
+      let low = 0;
+      let high = selected.length;
+      while (low < high) {
+        const mid = (low + high) >>> 1;
+        if ((selected[mid]!.triggeredAtMinute ?? 0) <= minute) low = mid + 1;
+        else high = mid;
+      }
+      selected.splice(low, 0, event);
+      if (selected.length > 8) selected.shift();
+    }
+    return selected.map(event => ({ ...event }));
+  }
+
+  /**
+   * Pulse initiative decisions only need authored headlines from the current
+   * and previous game day. Keep the latest 256 such events in stable
+   * chronological/insertion order; never transport the full World event feed
+   * (or the private knowledge banks) just to choose a gossip topic.
+   */
+  public getInitiativeEventTitlesRead(day: number): Array<{ title: string; triggerDay: number }> {
+    if (!Number.isFinite(day)) return [];
+    const latest: GlobalEvent[] = [];
+    const limit = 256;
+    for (const event of this.triggeredEvents.values()) {
+      if ((event.triggerDay !== day && event.triggerDay !== day - 1) || event.title.trim().length <= 3) continue;
+      const minute = event.triggeredAtMinute ?? 0;
+      if (latest.length === limit && minute < (latest[0]!.triggeredAtMinute ?? 0)) continue;
+      // Keep insertion order for equal timestamps, as the stable legacy sort did.
+      let lo = 0;
+      let hi = latest.length;
+      while (lo < hi) {
+        const mid = (lo + hi) >>> 1;
+        if ((latest[mid]!.triggeredAtMinute ?? 0) <= minute) lo = mid + 1;
+        else hi = mid;
+      }
+      latest.splice(lo, 0, event);
+      if (latest.length > limit) latest.shift();
+    }
+    return latest.map(({ title, triggerDay }) => ({ title, triggerDay }));
+  }
+
   public getTriggeredEvents(): GlobalEvent[] {
     return Array.from(this.triggeredEvents.values()).sort((a, b) => (a.triggeredAtMinute ?? 0) - (b.triggeredAtMinute ?? 0));
   }
 
   public getPendingEvents(): Omit<GlobalEvent, 'isTriggered' | 'triggeredAtMinute'>[] {
     return Array.from(this.pendingEvents.values());
+  }
+
+  /** Inspector-only counts. Never clone queued definitions or public headlines. */
+  public getLabEventCounts(): { pending: number; triggered: number; pendingOs: number } {
+    let pendingOs = 0;
+    for (const event of this.pendingEvents.values()) {
+      if (event.category === 'os_release') pendingOs++;
+    }
+    return { pending: this.pendingEvents.size, triggered: this.triggeredEvents.size, pendingOs };
   }
 
   /**
@@ -365,17 +471,55 @@ export class WorldEventsEngine {
     if (!Number.isFinite(atMinute)) return [];
     return projectActiveModifiers(
       this.modifierSpecs,
-      this.getTriggeredEvents(),
+      this.triggeredEvents.values(),
       atMinute,
       { domain: options.domain, kind: options.kind, targetId: options.targetId },
     );
   }
 
-  /** Global knowledge context (shared) */
+  /**
+   * A rolling, day-eligible World read shared by public story/news surfaces.
+   * Retain chronological order and original insertion order at equal minutes,
+   * as Array.sort's stable legacy path did, without cloning all triggered
+   * events. The caller owns the finite display limit (never persistence).
+   */
+  private getRecentTriggeredEventsForDay(
+    currentDay: number, maxEvents: number, newestFirst = false,
+  ): GlobalEvent[] {
+    if (!Number.isFinite(currentDay) || !Number.isSafeInteger(maxEvents) || maxEvents <= 0) return [];
+    const selected: GlobalEvent[] = [];
+    for (const event of this.triggeredEvents.values()) {
+      if (event.triggerDay > currentDay) continue;
+      const minute = event.triggeredAtMinute ?? 0;
+      if (selected.length === maxEvents) {
+        const oldest = newestFirst ? selected[selected.length - 1]! : selected[0]!;
+        const cutoff = oldest.triggeredAtMinute ?? 0;
+        // Descending CityWire keeps EARLIER inserted records at tied minutes,
+        // while ascending prompt context keeps LATER inserted records at ties.
+        if (newestFirst ? minute <= cutoff : minute < cutoff) continue;
+      }
+      let lo = 0;
+      let hi = selected.length;
+      while (lo < hi) {
+        const mid = (lo + hi) >>> 1;
+        const at = selected[mid]!.triggeredAtMinute ?? 0;
+        if (newestFirst ? at >= minute : at <= minute) lo = mid + 1;
+        else hi = mid;
+      }
+      selected.splice(lo, 0, event);
+      if (selected.length > maxEvents) {
+        if (newestFirst) selected.pop();
+        else selected.shift();
+      }
+    }
+    return selected;
+  }
+
+  /** Compact global context for AI prompt generation, never a WorldState read. */
   public getKnowledgeContext(currentDay: number, maxEvents = 4): string {
-    const triggered = this.getTriggeredEvents().filter((e) => e.triggerDay <= currentDay);
-    if (triggered.length === 0) return 'No major world events yet — early days, quiet internet.';
-    const recent = triggered.slice(-maxEvents);
+    const limit = Number.isFinite(maxEvents) ? Math.max(1, Math.min(16, Math.trunc(maxEvents))) : 4;
+    const recent = this.getRecentTriggeredEventsForDay(currentDay, limit);
+    if (recent.length === 0) return 'No major world events yet — early days, quiet internet.';
     return recent.map((e) => `- [Day ${e.triggerDay}] ${e.title}: ${e.knowledgePrompt}`).join('\n');
   }
 
@@ -386,8 +530,10 @@ export class WorldEventsEngine {
     const map = new Map(knowledge.map((k) => [k.eventId, k]));
     const limit = Number.isFinite(maxEvents) ? Math.max(0, Math.min(8, Math.floor(maxEvents))) : 4;
     if (limit === 0) return 'No known major world events yet.';
-    const triggered = this.getTriggeredEvents()
-      .filter((e) => e.triggerDay <= currentDay && map.has(e.id)).slice(-limit);
+    // The public-event knowledge bank is already bounded per actor. Scan
+    // event references once and keep at most eight known, day-eligible records;
+    // never sort/clone every event just to build one chat context.
+    const triggered = this.getTriggeredEventsForIds(new Set(map.keys()), currentDay).slice(-limit);
     const eventLines = triggered.map((e) => {
       const k = map.get(e.id);
       const att = k ? ` [${k.attitude}]` : '';
@@ -462,6 +608,11 @@ export class WorldEventsEngine {
     return this.semanticKnowledge.forActor(actorId);
   }
 
+  /** One subject's facts and heard claims known to a specified viewer. */
+  public getKnownSemanticContextForSubject(viewerId: string, subjectId: string): ActorKnowledgeView {
+    return this.semanticKnowledge.forActorSubject(viewerId, subjectId);
+  }
+
   // ---- Flags / Appointments / Observations (sandbox world state) ----
 
   public setFlag(key: string, value: boolean | number | string): void {
@@ -487,6 +638,29 @@ export class WorldEventsEngine {
 
   public getAppointments(): Appointment[] {
     return this.appointments.map((a) => ({ ...a }));
+  }
+
+  /** Inspector-only, bounded appointment page plus a short today summary. */
+  public getLabAppointmentRead(day: number, offset = 0, limit = 16): {
+    total: number;
+    todayCount: number;
+    today: Appointment[];
+    page: Appointment[];
+  } {
+    const start = Number.isFinite(offset) ? Math.max(0, Math.trunc(offset)) : 0;
+    const size = Number.isFinite(limit) ? Math.max(1, Math.min(16, Math.trunc(limit))) : 16;
+    let todayCount = 0;
+    const today: Appointment[] = [];
+    const page: Appointment[] = [];
+    for (let i = 0; i < this.appointments.length; i++) {
+      const appt = this.appointments[i]!;
+      if (appt.targetDay === day) {
+        todayCount++;
+        if (today.length < 8) today.push({ ...appt });
+      }
+      if (i >= start && i < start + size) page.push({ ...appt });
+    }
+    return { total: this.appointments.length, todayCount, today, page };
   }
 
   /**
@@ -544,7 +718,12 @@ export class WorldEventsEngine {
       });
       added.push(evt.id);
     }
-    if (added.length > 0) this.bumpVersion();
+    if (added.length > 0) {
+      this.bumpVersion();
+      // Source provenance for async procedural writers. The consumer's
+      // outer boundary, not this event, decides when to publish a revision.
+      this.eventBus.emit('world:procedural_events_injected' as any, { ids: [...added] });
+    }
     return added;
   }
 
@@ -565,11 +744,9 @@ export class WorldEventsEngine {
     category: string;
     siteUrl?: string;
   }> {
-    const triggered = this.getTriggeredEvents().filter((e) => e.triggerDay <= currentDay);
-    // Most recent first, up to 12
-    return [...triggered]
-      .sort((a, b) => (b.triggeredAtMinute ?? 0) - (a.triggeredAtMinute ?? 0))
-      .slice(0, 12)
+    // Exactly the same 12 most recent eligible events as the stable legacy
+    // ascending-sort then descending-sort path, but never sort all history.
+    return this.getRecentTriggeredEventsForDay(currentDay, 12, true)
       .map((e) => ({
         id: e.id,
         headline: e.title,

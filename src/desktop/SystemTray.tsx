@@ -1,5 +1,6 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useSimulationStore } from '../store/useSimulationStore';
+import { useSimulationChrome } from '../store/useBoundedSimulationRead';
 import { useWindowStore } from '../store/useWindowStore';
 import { useAudioStore } from '../store/useAudioStore';
 import { soundManager } from '../audio/SoundManager';
@@ -9,19 +10,11 @@ interface SystemTrayProps {
   onOpenDialUp: () => void;
 }
 
-interface TrayUnread {
-  id: string;
-  buddyId: string;
-  buddyName: string;
-  text: string;
-}
-
 export const SystemTray: React.FC<SystemTrayProps> = ({ onOpenDialUp }) => {
-  const time = useSimulationStore((s) => s.state.time);
-  const hardware = useSimulationStore((s) => s.state.hardware);
-  const downloads = useSimulationStore((s) => s.state.downloads);
-  const conversations = useSimulationStore((s) => s.state.social.conversations);
+  const chrome = useSimulationChrome();
+  const time = chrome.time;
   const engine = useSimulationStore((s) => s.engine);
+  const unreadTrays = chrome.unreadPreviews;
   const openWindow = useWindowStore((s) => s.openWindow);
   const focusWindow = useWindowStore((s) => s.focusWindow);
   const windows = useWindowStore((s) => s.windows);
@@ -33,42 +26,15 @@ export const SystemTray: React.FC<SystemTrayProps> = ({ onOpenDialUp }) => {
   const [isPulsePopupOpen, setIsPulsePopupOpen] = useState(false);
   const [txBlink, setTxBlink] = useState(false);
   const [rxBlink, setRxBlink] = useState(false);
-  const seenTrayMessageIds = useRef<Set<string>>(new Set());
-  const trayPrimed = useRef(false);
-
-  // Pulse tray watcher: new buddy messages while Pulse is hidden → sound + badge.
-  // (The in-app toasts keep working when the window is open and focused.)
-  const unreadTrays: TrayUnread[] = [];
-  Object.entries(conversations).forEach(([buddyId, msgs]) => {
-    msgs.forEach((m) => {
-      if (m.senderId !== 'player' && !m.isRead) {
-        const buddy = engine.social.getBuddy(buddyId);
-        unreadTrays.push({
-          id: m.id,
-          buddyId,
-          buddyName: buddy?.displayName || buddyId,
-          text: m.text,
-        });
-      }
-    });
-  });
-  useEffect(() => {
-    if (!trayPrimed.current) {
-      Object.values(conversations).forEach((msgs) => msgs.forEach((m) => seenTrayMessageIds.current.add(m.id)));
-      trayPrimed.current = true;
-      return;
-    }
-    const pulseWin = Object.values(windows).find((w) => !!w && String(w.appId).includes('pulse'));
-    const pulseHidden = !pulseWin || !pulseWin.isOpen || pulseWin.isMinimized || pulseWin.id !== activeWindowId;
-    let fresh = 0;
-    Object.values(conversations).forEach((msgs) => msgs.forEach((m) => {
-      if (!seenTrayMessageIds.current.has(m.id)) {
-        seenTrayMessageIds.current.add(m.id);
-        if (m.senderId !== 'player' && pulseHidden) fresh++;
-      }
-    }));
-    if (fresh > 0) soundManager.play('im_recv');
-  }, [conversations, windows, activeWindowId]);
+  // React no longer scans or clones the conversation ledger for sound.
+  // Observe *new* canonical message events only: no sound on restore/mount,
+  // and a read/unread UI update cannot replay a notification.
+  useEffect(() => engine.events.on('social:message_received', ({ message }) => {
+    if (message.senderId === 'player') return;
+    const pulseWin = Object.values(windows).find(w => !!w && String(w.appId).includes('pulse'));
+    const hidden = !pulseWin || !pulseWin.isOpen || pulseWin.isMinimized || pulseWin.id !== activeWindowId;
+    if (hidden) soundManager.play('im_recv');
+  }), [engine, windows, activeWindowId]);
 
   const openPulseFromTray = (buddyId?: string) => {
     soundManager.play('click');
@@ -79,9 +45,9 @@ export const SystemTray: React.FC<SystemTrayProps> = ({ onOpenDialUp }) => {
   };
 
   // Blinking modem LEDs during active downloads
-  const activeDownloads = downloads.filter((d) => d.status === 'downloading');
+  const activeDownloadCount = chrome.activeDownloadCount;
   useEffect(() => {
-    if (activeDownloads.length === 0) {
+    if (activeDownloadCount === 0) {
       setTxBlink(false);
       setRxBlink(false);
       return;
@@ -91,7 +57,7 @@ export const SystemTray: React.FC<SystemTrayProps> = ({ onOpenDialUp }) => {
       setRxBlink(Math.random() > 0.3);
     }, 250);
     return () => clearInterval(interval);
-  }, [activeDownloads.length]);
+  }, [activeDownloadCount]);
 
   const handleVolumeChange = (newVol: number) => {
     setMasterVolume(newVol);
@@ -118,9 +84,7 @@ export const SystemTray: React.FC<SystemTrayProps> = ({ onOpenDialUp }) => {
       {/* 1. Network Activity Monitor */}
       <div
         className="flex items-center gap-1 cursor-pointer px-1 py-0.5 hover:bg-white/20 rounded"
-        title={`${hardware.connectionType ? hardware.connectionType.toUpperCase() : 'OFFLINE'} (${hardware.connectionSpeedKbps} kbps) - ${
-          activeDownloads.length
-        } active download(s)`}
+        title={`${chrome.connectionType ? chrome.connectionType.toUpperCase() : 'OFFLINE'} (${chrome.connectionSpeedKbps} kbps) - ${activeDownloadCount} active download(s)`}
         onClick={onOpenDialUp}
       >
         <div className="flex items-center gap-0.5">
@@ -185,12 +149,12 @@ export const SystemTray: React.FC<SystemTrayProps> = ({ onOpenDialUp }) => {
         <button
           className="relative flex items-center cursor-pointer p-0.5 hover:bg-white/20 rounded"
           onClick={() => setIsPulsePopupOpen((prev) => !prev)}
-          title={unreadTrays.length > 0 ? `${unreadTrays.length} unread Pulse message(s)` : 'Pulse Messenger'}
+          title={chrome.unreadCount > 0 ? `${chrome.unreadCount} unread Pulse message(s)` : 'Pulse Messenger'}
         >
           <span className="text-[13px] leading-none">💬</span>
-          {unreadTrays.length > 0 && (
+          {chrome.unreadCount > 0 && (
             <span className="absolute -top-1 -right-1 bg-red-600 text-white text-[8px] font-bold px-1 rounded-full min-w-[14px] text-center">
-              {unreadTrays.length > 9 ? '9+' : unreadTrays.length}
+              {chrome.unreadCount > 9 ? '9+' : chrome.unreadCount}
             </span>
           )}
         </button>
@@ -200,11 +164,11 @@ export const SystemTray: React.FC<SystemTrayProps> = ({ onOpenDialUp }) => {
             onClick={(e) => e.stopPropagation()}
           >
             <div className="text-[10px] font-bold mb-1">Pulse Messenger</div>
-            {unreadTrays.length === 0 ? (
+            {chrome.unreadCount === 0 ? (
               <div className="text-[10px] text-gray-700 italic">No unread messages. suspiciously quiet…</div>
             ) : (
               <div className="space-y-1 max-h-40 overflow-auto">
-                {unreadTrays.slice(-4).reverse().map((u) => (
+                {unreadTrays.map((u) => (
                   <button
                     key={u.id}
                     onClick={() => openPulseFromTray(u.buddyId)}

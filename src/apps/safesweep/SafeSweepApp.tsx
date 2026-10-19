@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useSimulationStore } from '../../store/useSimulationStore';
+import { useSimulationApps } from '../../store/useBoundedSimulationRead';
 import { soundManager } from '../../audio/SoundManager';
 
 interface DetectedThreat {
@@ -13,7 +14,7 @@ interface DetectedThreat {
 }
 
 export const SafeSweepApp: React.FC = () => {
-  const installedSoftware = useSimulationStore((s) => s.state.installedSoftware || []);
+  const installedSoftware = useSimulationApps().installedSoftware;
   const dispatchAction = useSimulationStore((s) => s.dispatchAction);
 
   const [scanState, setScanState] = useState<'idle' | 'scanning' | 'complete'>('idle');

@@ -1,11 +1,36 @@
-import { FileRecord, VirtualFileSystemState } from './types';
+import type { FileRecord, VirtualFileSystemState } from './types';
+
+/** Editor-facing data for exactly one explicitly opened file. */
+export type DisplayFileRecord = Pick<FileRecord,
+  'id' | 'name' | 'path' | 'parentPath' | 'kind' | 'sizeBytes'
+  | 'createdAtMinute' | 'modifiedAtMinute' | 'appAssociation'
+  | 'targetPath' | 'content' | 'isReadOnly'> & {
+  metadata?: { textContent?: string };
+};
 import { EventBus } from './EventBus';
 
 export class FileSystemEngine {
   private totalDiskBytes = 42_949_672_960; // 40 GB
   private baseSystemBytes = 36_293_869_568; // 33.8 GB Base OS
   private files: Map<string, FileRecord> = new Map();
+  // Disk usage belongs to the VFS owner. Directory projections must not sum
+  // an unbounded file map just to show free space on each UI revision.
+  private occupiedFileBytes = 0;
   private eventBus: EventBus;
+
+  private fileBytes(record: FileRecord | undefined): number {
+    return record && record.kind !== 'directory' ? record.sizeBytes : 0;
+  }
+
+  private putFile(path: string, record: FileRecord): void {
+    this.occupiedFileBytes += this.fileBytes(record) - this.fileBytes(this.files.get(path));
+    this.files.set(path, record);
+  }
+
+  private removeFile(path: string): void {
+    this.occupiedFileBytes -= this.fileBytes(this.files.get(path));
+    this.files.delete(path);
+  }
 
   public static readonly CANONICAL_DIRECTORIES = [
     'C:',
@@ -28,6 +53,35 @@ export class FileSystemEngine {
     }
   }
 
+  /** Directory view with no file bodies, image payloads or unrelated folders. */
+  public listDirectoryMetadata(dirPath: string, limit = Infinity, offset = 0): FileRecord[] {
+    const normalized = this.normalizePath(dirPath);
+    const max = Number.isFinite(limit) ? Math.max(0, Math.trunc(limit)) : Infinity;
+    const skip = Number.isFinite(offset) ? Math.max(0, Math.trunc(offset)) : 0;
+    const result: FileRecord[] = [];
+    if (max === 0) return result;
+    let seen = 0;
+    for (const record of this.files.values()) {
+      if (record.parentPath !== normalized || record.path === normalized) continue;
+      if (seen++ < skip) continue;
+      const { id, name, path, parentPath, kind, sizeBytes, createdAtMinute, modifiedAtMinute,
+        appAssociation, targetPath } = record;
+      result.push({
+        id, name, path, parentPath, kind, sizeBytes, createdAtMinute, modifiedAtMinute,
+        ...(appAssociation ? { appAssociation } : {}),
+        ...(targetPath ? { targetPath } : {}),
+        ...(record.metadata?.originalTrashPath
+          ? { metadata: { originalTrashPath: record.metadata.originalTrashPath } } : {}),
+      });
+      if (result.length >= max) break;
+    }
+    return result;
+  }
+
+  public getDiskCapacity(): { totalDiskBytes: number; baseSystemBytes: number } {
+    return { totalDiskBytes: this.totalDiskBytes, baseSystemBytes: this.baseSystemBytes };
+  }
+
   public getState(): VirtualFileSystemState {
     const fileRecords: Record<string, FileRecord> = {};
     for (const [path, record] of this.files.entries()) {
@@ -44,8 +98,9 @@ export class FileSystemEngine {
     this.totalDiskBytes = state.totalDiskBytes;
     this.baseSystemBytes = state.baseSystemBytes;
     this.files.clear();
+    this.occupiedFileBytes = 0;
     for (const [path, record] of Object.entries(state.files)) {
-      this.files.set(this.normalizePath(path), { ...record });
+      this.putFile(this.normalizePath(path), { ...record });
     }
   }
 
@@ -92,13 +147,7 @@ export class FileSystemEngine {
   }
 
   public getOccupiedDiskBytes(): number {
-    let total = this.baseSystemBytes;
-    for (const file of this.files.values()) {
-      if (file.kind !== 'directory') {
-        total += file.sizeBytes;
-      }
-    }
-    return total;
+    return this.baseSystemBytes + this.occupiedFileBytes;
   }
 
   public getFreeDiskBytes(): number {
@@ -147,14 +196,47 @@ export class FileSystemEngine {
       metadata: fileData.metadata ? { ...fileData.metadata } : undefined,
     };
 
-    this.files.set(path, record);
+    this.putFile(path, record);
     this.eventBus.emit('vfs:file_created', { file: { ...record } });
     return { ...record };
+  }
+
+  /**
+   * Selected-file projection for the editor. Arbitrary VFS metadata can
+   * contain owner-private extensions and non-cloneable values; only the
+   * authored text fallback travels to React or a future Worker boundary.
+   */
+  public readFileForDisplay(path: string): DisplayFileRecord | undefined {
+    const record = this.files.get(this.normalizePath(path));
+    if (!record) return undefined;
+    const {
+      id, name, path: filePath, parentPath, kind, sizeBytes, createdAtMinute,
+      modifiedAtMinute, appAssociation, targetPath, content, isReadOnly,
+    } = record;
+    const textContent = record.metadata?.textContent;
+    return {
+      id, name, path: filePath, parentPath, kind, sizeBytes, createdAtMinute,
+      modifiedAtMinute, ...(appAssociation !== undefined ? { appAssociation } : {}),
+      ...(targetPath !== undefined ? { targetPath } : {}),
+      ...(content !== undefined ? { content } : {}),
+      ...(isReadOnly !== undefined ? { isReadOnly } : {}),
+      ...(typeof textContent === 'string' ? { metadata: { textContent } } : {}),
+    };
   }
 
   public readFile(path: string): FileRecord | undefined {
     const record = this.files.get(this.normalizePath(path));
     return record ? { ...record } : undefined;
+  }
+
+  /** Resolve a host API's bare file name only on explicit open; never publish the file map. */
+  public findFileByPathOrName(pathOrName: string): FileRecord | undefined {
+    const exact = this.readFile(pathOrName);
+    if (exact) return exact;
+    for (const record of this.files.values()) {
+      if (record.name === pathOrName) return { ...record };
+    }
+    return undefined;
   }
 
   public listDirectory(dirPath: string): FileRecord[] {
@@ -174,7 +256,7 @@ export class FileSystemEngine {
     if (!record) throw new Error(`File not found: ${normalized}`);
     if (record.kind === 'directory') throw new Error('Deleting entire directories not supported directly');
 
-    this.files.delete(normalized);
+    this.removeFile(normalized);
 
     const trashPath = `C:/Trash/${record.name}`;
     const trashedRecord: FileRecord = {
@@ -188,7 +270,7 @@ export class FileSystemEngine {
       },
     };
 
-    this.files.set(trashPath, trashedRecord);
+    this.putFile(trashPath, trashedRecord);
     this.eventBus.emit('vfs:file_trashed', { file: { ...trashedRecord } });
     return { ...trashedRecord };
   }
@@ -208,7 +290,7 @@ export class FileSystemEngine {
       throw new Error(`Original parent directory no longer exists: ${originalParent}`);
     }
 
-    this.files.delete(normalized);
+    this.removeFile(normalized);
 
     const restored: FileRecord = {
       ...record,
@@ -221,19 +303,23 @@ export class FileSystemEngine {
       },
     };
 
-    this.files.set(originalPath, restored);
+    this.putFile(originalPath, restored);
     this.eventBus.emit('vfs:file_restored', { file: { ...restored } });
     return { ...restored };
   }
 
   public emptyTrash(): number {
     let bytesReclaimed = 0;
-    const trashFiles = this.listDirectory('C:/Trash');
-    for (const file of trashFiles) {
-      this.files.delete(file.path);
+    let count = 0;
+    for (const [path, file] of this.files) {
+      if (file.parentPath !== 'C:/Trash' || path === 'C:/Trash') continue;
+      this.removeFile(path);
       bytesReclaimed += file.sizeBytes;
+      count++;
     }
-    this.eventBus.emit('vfs:trash_emptied', { bytesReclaimed });
+    // Emptying an already empty directory is a read/no-op; don't emit an
+    // owner mutation that would fabricate a simulation revision.
+    if (count > 0) this.eventBus.emit('vfs:trash_emptied', { bytesReclaimed });
     return bytesReclaimed;
   }
 
@@ -242,7 +328,7 @@ export class FileSystemEngine {
     const record = this.files.get(normalized);
     if (!record) return false;
 
-    this.files.delete(normalized);
+    this.removeFile(normalized);
     this.eventBus.emit('vfs:file_deleted', { path: normalized, sizeBytes: record.sizeBytes });
     return true;
   }
@@ -264,7 +350,7 @@ export class FileSystemEngine {
       metadata: updates.metadata ? { ...record.metadata, ...updates.metadata } : record.metadata,
     };
 
-    this.files.set(normalized, updated);
+    this.putFile(normalized, updated);
     return { ...updated };
   }
 }

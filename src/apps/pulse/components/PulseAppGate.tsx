@@ -1,5 +1,5 @@
 import React from 'react';
-import { useSimulationStore } from '../../../store/useSimulationStore';
+import { useSimulationChrome } from '../../../store/useBoundedSimulationRead';
 import { useWindowStore } from '../../../store/useWindowStore';
 import { PulseMessengerApp } from '../PulseMessengerApp';
 
@@ -9,9 +9,7 @@ import { PulseMessengerApp } from '../PulseMessengerApp';
  * to the official site — instead of silently opening the app.
  */
 export const PulseAppGate: React.FC<{ onOpenSite?: (url: string) => void }> = ({ onOpenSite }) => {
-  const isInstalled = useSimulationStore((s) =>
-    s.state.installedSoftware.some((sw: any) => String(sw.appId).includes('pulse'))
-  );
+  const isInstalled = useSimulationChrome().pulseInstalled;
   const openWindow = useWindowStore((s) => s.openWindow);
 
   if (isInstalled) return <PulseMessengerApp />;

@@ -1,13 +1,13 @@
 import React, { useState } from 'react';
 import { SiteRouteProps } from '../types';
 import { useSimulationStore } from '../../store/useSimulationStore';
+import { useSimulationWebsite } from '../../store/useBoundedSimulationRead';
 import { soundManager } from '../../audio/SoundManager';
 import { getGoldNetPrice } from '../worldSiteHelpers';
 
 export const GoldNetSite: React.FC<SiteRouteProps> = () => {
-  const playerCash = useSimulationStore((s) => s.state.player?.cash ?? 150.00);
-  const world = useSimulationStore((s) => s.state.world);
-  const time = useSimulationStore((s) => s.state.time);
+  const { cash: playerCash, world, time } = useSimulationWebsite();
+  const spendCash = useSimulationStore((s) => s.spendCash);
   const accountNumber = '8904-2199-0012';
   const [transferAmount, setTransferAmount] = useState('');
   const [statusMsg, setStatusMsg] = useState('SSL 128-Bit Encryption Verified.');
@@ -22,15 +22,7 @@ export const GoldNetSite: React.FC<SiteRouteProps> = () => {
       return;
     }
 
-    useSimulationStore.setState((prev) => ({
-      state: {
-        ...prev.state,
-        player: {
-          ...prev.state.player,
-          cash: (prev.state.player?.cash ?? 150.00) - amount,
-        },
-      },
-    }));
+    spendCash(amount, 'GoldNet bank transfer');
 
     setStatusMsg(`Successfully transferred $${amount.toFixed(2)}.`);
     setTransferAmount('');

@@ -1,14 +1,14 @@
 import React, { useState } from 'react';
 import { useSimulationStore } from '../../store/useSimulationStore';
+import { useSimulationApps, useSimulationHud } from '../../store/useBoundedSimulationRead';
 import { useAudioStore } from '../../store/useAudioStore';
 import { useDesktopStore, type WallpaperPreset } from '../../store/useDesktopStore';
 import { OsVersion } from '../../engine/types';
 import { getAllReleases, getReleaseById } from '../../engine/OsCatalog';
 
 export const ControlPanelApp: React.FC = () => {
-  const hardware = useSimulationStore((s) => s.state.hardware);
-  const osState = useSimulationStore((s) => s.state.os);
-  const time = useSimulationStore((s) => s.state.time);
+  const { hardware, os: osState } = useSimulationApps();
+  const time = useSimulationHud().time;
   const dispatchAction = useSimulationStore((s) => s.dispatchAction);
   const engine = useSimulationStore((s) => s.engine);
 

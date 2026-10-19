@@ -18,38 +18,33 @@ const AFF = (a: string, b: string): number => {
   return table[key] ?? 0;
 };
 
-describe('P6.5 street sightings (pure)', () => {
-  it('spots visible buddies by time of day', () => {
-    const sight = getStreetSighting(
-      [{ id: 'actor_evening', displayName: 'Alex', presenceStatus: 'online' }],
-      'evening',
-      3
-    );
-    expect(sight).toContain('Alex');
+describe('P6.5 street sightings (witnessed, not messenger inference)', () => {
+  const observed = {
+    id: 'actor_evening', displayName: 'Alex',
+    reach: 'local' as const, knownToPlayer: true,
+    physicallyVisibleFromWindow: true,
+  };
+
+  it('captions only an actually witnessed local person', () => {
+    expect(getStreetSighting([observed], 'evening', 3)).toContain('Alex');
     expect(getStreetSighting([], 'evening', 3)).toBeNull();
-    expect(getStreetSighting(
-      [{ id: 'actor_evening', displayName: 'Alex', presenceStatus: 'offline' }],
-      'evening',
-      3
-    )).toBeNull();
+    expect(getStreetSighting([
+      { ...observed, physicallyVisibleFromWindow: false },
+    ], 'evening', 3)).toBeNull();
+    expect(getStreetSighting([{ ...observed, reach: 'remote' }], 'evening', 3)).toBeNull();
   });
 
-  it('notes the conspicuously absent across days', () => {
-    const buddies = [
-      { id: 'actor_visible', displayName: 'Alex', presenceStatus: 'online', lifecycleStatus: 'friend' },
-      { id: 'actor_absent', displayName: 'Sam', presenceStatus: 'offline', lifecycleStatus: 'distant' },
-    ];
-    let mentions = 0;
+  it('does not invent missing-person observations from a distant relationship', () => {
+    const distant = { ...observed, displayName: 'Sam',
+      lifecycleStatus: 'distant', physicallyVisibleFromWindow: false };
     for (let day = 1; day <= 100; day++) {
-      const sight = getStreetSighting(buddies, 'evening', day);
-      if (sight && sight.includes('Sam')) mentions++;
+      expect(getStreetSighting([distant], 'evening', day)).toBeNull();
     }
-    expect(mentions).toBeGreaterThan(5); // ~30% absence notes name the missing buddy
   });
 
-  it('is deterministic for the same inputs', () => {
-    const buddies = [{ id: 'actor_night', displayName: 'Jordan', presenceStatus: 'away' }];
-    expect(getStreetSighting(buddies, 'night', 5)).toBe(getStreetSighting(buddies, 'night', 5));
+  it('is deterministic for the same witnessed actor and day', () => {
+    expect(getStreetSighting([observed], 'night', 5))
+      .toBe(getStreetSighting([observed], 'night', 5));
   });
 });
 

@@ -2,7 +2,7 @@
 
 import React, { useMemo, useRef, useState } from 'react';
 import { useSimulationStore } from '../store/useSimulationStore';
-import { resolvePcBootState } from '../engine/SimulationEngine';
+import { useSimulationHud, useSimulationWorldRead, useSimulationResidence, useSimulationTransit, useSimulationPlayerStatus, useSimulationJobBoard } from '../store/useBoundedSimulationRead';
 import { soundManager } from '../audio/SoundManager';
 import { PhysicalWorldBoundary } from './phaser/PhysicalWorldBoundary';
 import { createWorldSceneProjection } from './phaser/presentationAdapter';
@@ -21,7 +21,7 @@ import { BeverageModal } from './modals/BeverageModal';
 import { DoorActionModal } from './modals/DoorActionModal';
 import { SleepTransitionModal } from './modals/SleepTransitionModal';
 import { HardwareWorkbenchModal } from './modals/HardwareWorkbenchModal';
-import { getContextualWindowThought, getStreetSighting } from './data/windowThoughts';
+import { getContextualWindowThought } from './data/windowThoughts';
 import {
   Monitor,
   CloudRain,
@@ -39,16 +39,15 @@ export const RoomScene: React.FC = () => {
 
   // Simulation Store selectors
   const engine = useSimulationStore((s) => s.engine);
-  const syncStateFromEngine = useSimulationStore((s) => s.syncStateFromEngine);
-  const time = useSimulationStore((s) => s.state.time);
-  const player = useSimulationStore((s) => s.state.player);
-  useSimulationStore((s) => s.state.needs);
-  useSimulationStore((s) => s.state.mood);
-  useSimulationStore((s) => s.state.world.triggeredEvents);
-  const computer = useSimulationStore((s) => s.state.computer);
-  const inventory = useSimulationStore((s) => s.state.inventory);
-  const os = useSimulationStore((s) => s.state.os);
-  const world = useSimulationStore((s) => s.state.world);
+  // Phaser's clock and world-environment inputs now come from bounded
+  // revisions, not the broad persisted world snapshot.
+  const hud = useSimulationHud();
+  const worldRead = useSimulationWorldRead();
+  const residenceRead = useSimulationResidence();
+  const transitRead = useSimulationTransit();
+  const playerStatus = useSimulationPlayerStatus();
+  const time = worldRead.time;
+  const player = { cash: hud.cash, location: worldRead.playerLocation };
 
   const switchView = useSimulationStore((s) => s.switchView);
   const interactRoom = useSimulationStore((s) => s.interactRoom);
@@ -57,7 +56,7 @@ export const RoomScene: React.FC = () => {
   const applyGig = useSimulationStore((s) => s.applyGig);
   const setupComputerAtHome = useSimulationStore((s) => s.setupComputerAtHome);
 
-  const pcBootState = resolvePcBootState({ computer, inventory, os });
+  const pcBootState = worldRead.pcBootState;
   const deskPresentation = getRoomDeskPresentation(pcBootState);
   const assembledComputer = deskPresentation === 'assembled_off' || deskPresentation === 'assembled_on';
 
@@ -66,11 +65,11 @@ export const RoomScene: React.FC = () => {
     'window' | 'beverage' | 'door' | 'sleep' | 'hardware' | 'housing' | null
   >(null);
 
-  const environment = engine.gameContext.environment.current();
+  const environment = worldRead.environment;
   const environmentPresentation = projectEnvironmentPresentation(environment);
   const weather: WeatherType = environmentPresentation.weather;
-  const needs = engine.gameContext.player.needs();
-  const mood = engine.gameContext.player.mood();
+  const needs = playerStatus.needs;
+  const moodBand = playerStatus.moodBand;
   const timeOfDay = time.timeOfDay;
 
   // Outing result notice (city outings report back: encounters, rumors, failures)
@@ -124,7 +123,7 @@ export const RoomScene: React.FC = () => {
     }
   };
 
-  const residencePlaceId = engine.getCurrentResidencePlaceId();
+  const residencePlaceId = worldRead.residencePlaceId;
   const preferredPhysicalViewId = physicalViewByPlace[residencePlaceId];
   const roomProjection = useMemo(
     () => createWorldSceneProjection({
@@ -189,25 +188,8 @@ export const RoomScene: React.FC = () => {
     }
   };
 
-  // P6 Job Board data (gigs + pending state, straight from the engine)
-  const jobBoardEntries = (() => {
-    try {
-      const engine = useSimulationStore.getState().engine;
-      return engine.getJobBoard().map(({ gig, pending }) => {
-        const contact = engine.social.getBuddyWithRole(gig.contactRole);
-        return {
-          gigId: gig.id,
-          title: gig.title,
-          blurb: gig.blurb,
-          pay: gig.pay,
-          durationMin: gig.durationMin,
-          minEnergy: gig.minEnergy,
-          contactName: contact?.displayName ?? gig.contactRole,
-          pending,
-        };
-      });
-    } catch { return []; }
-  })();
+  // Public offers and authorized contact labels only; no Social roster walk in React.
+  const jobBoardEntries = useSimulationJobBoard().jobs;
 
   const handleApplyGig = (gigId: string): string | null => {
     const res = applyGig(gigId) as unknown as { success: boolean; error?: string };
@@ -248,20 +230,10 @@ export const RoomScene: React.FC = () => {
   };
 
   // Get Window Observation data — sandbox uses world flags
-  const windowData = getContextualWindowThought(time.day, timeOfDay, weather, world.flags);
-  // P6.5 live street sighting: who is visible out there right now (schedules made visible)
-  const streetSighting = (() => {
-    try {
-      const engine = useSimulationStore.getState().engine;
-      const sightBuddies = engine.social.getBuddies().map((b) => ({
-        id: b.id,
-        displayName: b.displayName,
-        presenceStatus: engine.social.getPresence(b.id)?.status ?? 'offline',
-        lifecycleStatus: b.status,
-      }));
-      return getStreetSighting(sightBuddies, timeOfDay, time.day);
-    } catch { return null; }
-  })();
+  const windowData = getContextualWindowThought(time.day, timeOfDay, weather, { met_in_person: worldRead.metInPerson });
+  // A messenger's online/away status is not evidence they are outside this
+  // residence window. Until authored sightlines establish a spatial witness,
+  // render environmental observations but no invented named street sighting.
 
   const formattedTime = `${String(time.hour).padStart(2, '0')}:${String(time.minute).padStart(2, '0')}`;
 
@@ -302,6 +274,11 @@ export const RoomScene: React.FC = () => {
             <Clock className="w-3.5 h-3.5 text-amber-400" />
             <span>Day {time.day} • {formattedTime}</span>
             <span className="text-[11px] text-slate-400 capitalize">({timeOfDay.replace('_', ' ')})</span>
+            {transitRead.active?.status === 'active' && (
+              <span className="text-[10px] text-sky-300" data-testid="player-transit-status">
+                Travel · {transitRead.active.minutesRemaining} min left
+              </span>
+            )}
           </div>
           <div className="h-3 w-[1px] bg-slate-700" />
           <div className="flex items-center gap-1 text-slate-400">
@@ -479,7 +456,7 @@ export const RoomScene: React.FC = () => {
               <button onClick={() => setActiveModal(null)} className="text-slate-400 hover:text-white">✕</button>
             </div>
             <div className="space-y-2">
-              {engine.getHousingOffers().map((offer) => (
+              {residenceRead.offers.map((offer) => (
                 <div key={offer.id} className="flex items-center justify-between gap-3 rounded border border-slate-700 bg-slate-800/80 p-2">
                   <div className="min-w-0">
                     <div className="truncate text-xs font-bold text-slate-100">
@@ -495,7 +472,7 @@ export const RoomScene: React.FC = () => {
                     onClick={() => {
                       const result = engine.moveResidenceToOffer(offer.id);
                       if (result.success) {
-                        syncStateFromEngine();
+                        // Source owner publishes the tenancy revision atomically.
                         setActiveModal(null);
                         flashOutingNotice(`Moved to ${offer.placeName}. New rent: ${offer.monthlyRent.toFixed(0)}.`);
                       } else {
@@ -521,8 +498,7 @@ export const RoomScene: React.FC = () => {
           weather={weather}
           thoughtText={windowData.thought}
           entity={windowData.entity}
-          mood={mood.band}
-          sighting={streetSighting}
+          mood={moodBand}
           onClose={() => setActiveModal(null)}
         />
       )}
@@ -563,7 +539,6 @@ export const RoomScene: React.FC = () => {
       {activeModal === 'hardware' && (
         <HardwareWorkbenchModal
           engine={engine}
-          onStateChanged={syncStateFromEngine}
           onClose={() => setActiveModal(null)}
         />
       )}

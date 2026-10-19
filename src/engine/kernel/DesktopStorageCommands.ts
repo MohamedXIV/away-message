@@ -43,19 +43,22 @@ export class DesktopStorageCommands {
 
       case 'DOWNLOAD_PAUSE': {
         const ok = this.owners.downloads.pauseDownload(action.taskId);
-        this.publishState();
+        // A rejected/duplicate command did not mutate the canonical queue.
+        if (ok) this.publishState();
         return { success: ok };
       }
 
       case 'DOWNLOAD_RESUME': {
         const ok = this.owners.downloads.resumeDownload(action.taskId);
-        this.publishState();
+        // A rejected/duplicate command did not mutate the canonical queue.
+        if (ok) this.publishState();
         return { success: ok };
       }
 
       case 'DOWNLOAD_CANCEL': {
         const ok = this.owners.downloads.cancelDownload(action.taskId);
-        this.publishState();
+        // A rejected/duplicate command did not mutate the canonical queue.
+        if (ok) this.publishState();
         return { success: ok };
       }
 
@@ -71,7 +74,7 @@ export class DesktopStorageCommands {
 
       case 'VFS_DELETE_FILE': {
         const ok = this.owners.vfs.deletePermanently(action.path);
-        this.publishState();
+        if (ok) this.publishState();
         return { success: ok };
       }
 
@@ -96,6 +99,10 @@ export class DesktopStorageCommands {
       }
 
       case 'VFS_EMPTY_TRASH': {
+        // A zero-byte file still changes the filesystem when removed: use
+        // entry count, not the returned reclaimed-byte total, to detect no-op.
+        const hasEntries = this.owners.vfs.listDirectoryMetadata('C:/Trash').length > 0;
+        if (!hasEntries) return { success: true, data: { bytesReclaimed: 0 } };
         const reclaimed = this.owners.vfs.emptyTrash();
         this.publishState();
         return { success: true, data: { bytesReclaimed: reclaimed } };
@@ -103,19 +110,20 @@ export class DesktopStorageCommands {
 
       case 'SOFTWARE_INSTALL': {
         try {
-          const wizard = this.owners.software.startInstallerWizard(action.softwareId);
-          if (!wizard.compatibilityResult.isCompatible) {
+          const preview = this.owners.software.previewInstaller(action.softwareId);
+          if (!preview.compatibilityResult.isCompatible) {
             return {
               success: false,
               error: 'Software incompatible with current system specifications.',
             };
           }
-          if (action.selectedOptions) {
-            for (const [k, v] of Object.entries(action.selectedOptions)) {
-              wizard.selectedOptions.acceptedBundledOffers[k] = v;
-            }
-          }
-          const installed = this.owners.software.completeInstallation(wizard.sessionId, currentMinutes);
+          // The ephemeral session starts only once preflight succeeds.
+          // Commit options directly to the canonical registry, never to the
+          // detached wizard return value (which previously ignored opt-outs).
+          const wizard = this.owners.software.startInstallerWizard(action.softwareId);
+          const installed = this.owners.software.completeInstallation(
+            wizard.sessionId, currentMinutes, action.selectedOptions,
+          );
           this.owners.telemetry.logEvent('software', 'installed', currentMinutes, {
             softwareId: action.softwareId,
           });
@@ -128,11 +136,12 @@ export class DesktopStorageCommands {
 
       case 'SOFTWARE_UNINSTALL': {
         const ok = this.owners.software.uninstallSoftware(action.installedId);
+        if (!ok) return { success: false };
         this.owners.telemetry.logEvent('software', 'uninstalled', currentMinutes, {
           installedId: action.installedId,
         });
         this.publishState();
-        return { success: ok };
+        return { success: true };
       }
 
       default:

@@ -125,14 +125,17 @@ export function getContextualWindowThought(
 
 // ==========================================
 // P6.5 — STREET SIGHTINGS (schedules made visible)
-// Which buddies can be seen from the window right now, from live presence.
-// Distant/gone buddies are conspicuously absent. Pure + deterministic.
+// Pure captioning only. The caller must supply an actual authored spatial
+// witness; messenger login activity is NEVER physical visibility evidence.
 // ==========================================
 
 export interface SightingBuddy {
   id: string;
   displayName: string;
-  presenceStatus: string; // 'online' | 'away' | 'offline' | ...
+  reach: 'local' | 'remote';
+  knownToPlayer: boolean;
+  /** Only a verified authored window/sightline observation may set this. */
+  physicallyVisibleFromWindow: boolean;
   lifecycleStatus?: string;
 }
 
@@ -159,16 +162,10 @@ const VISIBLE_SIGHTING_LINES: Record<TimeOfDay, string[]> = {
   ],
 };
 
-const ABSENT_SIGHTING_LINES: string[] = [
-  '{name} hasn’t been seen in days. The street feels emptier.',
-  'No sign of {name} lately. Even the regulars noticed.',
-  'You catch yourself looking for {name} out there. Nothing.',
-];
-
 /**
  * One street sighting for the window, or null when the street is quiet.
- * Visible (online/away) buddies with a time-appropriate line win; absent
- * (distant/gone) buddies surface as melancholy notes ~30% of the time.
+ * Caption only an already verified, known, local, physically present actor.
+ * A messenger online state, relationship stage or NPC itinerary is insufficient.
  */
 export function getStreetSighting(
   buddies: SightingBuddy[],
@@ -180,13 +177,10 @@ export function getStreetSighting(
     for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
     return h;
   };
-  const absent = buddies.filter((b) => b.lifecycleStatus === 'distant' || b.lifecycleStatus === 'gone');
-  if (absent.length > 0 && hash(`absent:${seedDay}`) % 100 < 30) {
-    const missing = absent[hash(`who:${seedDay}`) % absent.length]!;
-    const line = ABSENT_SIGHTING_LINES[hash(`line:${seedDay}`) % ABSENT_SIGHTING_LINES.length]!;
-    return line.replaceAll('{name}', missing.displayName);
-  }
-  const visible = buddies.filter((b) => b.presenceStatus === 'online' || b.presenceStatus === 'away');
+  const visible = buddies.filter((b) =>
+    b.knownToPlayer && b.reach === 'local' && b.physicallyVisibleFromWindow
+    && b.lifecycleStatus !== 'gone' && b.lifecycleStatus !== 'blocked'
+  );
   if (visible.length === 0) return null;
 
   const buddy = visible[hash(`who:${seedDay}:${timeOfDay}`) % visible.length]!;

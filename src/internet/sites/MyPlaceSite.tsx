@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { SiteRouteProps } from '../types';
 import { useSimulationStore } from '../../store/useSimulationStore';
+import { useMyPlacePageRead } from '../../store/useBoundedSimulationRead';
 import { soundManager } from '../../audio/SoundManager';
 import { getMyPlaceReleaseById } from '../../engine/MyPlaceCatalog';
 import { buildCharacter } from '../../engine/CharacterEngine';
@@ -15,25 +16,23 @@ function slugBuddyId(value: string): string {
 export const MyPlaceSite: React.FC<SiteRouteProps> = (props) => {
   const doNavigate = props.navigate || props.onNavigate || (() => {});
   const engine = useSimulationStore((s) => s.engine);
-  const myplaceState = useSimulationStore((s) => s.state.myplace);
-  const time = useSimulationStore((s) => s.state.time);
   const dispatchAction = useSimulationStore((s) => s.dispatchAction);
   const [friendNotice, setFriendNotice] = useState<string | null>(null);
 
   const effectiveParams = { ...props.params, ...props.routeParams };
+  const requestedUsername = effectiveParams['username'] || '';
+  const { userProfile, profile: selectedProfile, guestbook, time, currentMyPlaceId, locked: isLocked } = useMyPlacePageRead(requestedUsername);
   // Default to YOUR page (wanderer06) — not Maya — and routing is strict
-  const currentUsername = effectiveParams['username'] || myplaceState.userProfile.username || 'wanderer06';
-  const isOwnProfile = currentUsername === myplaceState.userProfile.username;
+  const currentUsername = requestedUsername || userProfile.username;
+  const isOwnProfile = currentUsername === userProfile.username;
 
-  const currentRelease = getMyPlaceReleaseById(myplaceState.currentMyPlaceId) ?? getMyPlaceReleaseById('myplace_1.0')!;
+  const currentRelease = getMyPlaceReleaseById(currentMyPlaceId) ?? getMyPlaceReleaseById('myplace_1.0')!;
   const features = currentRelease.features;
   const isV1 = currentRelease.id === 'myplace_1.0';
 
   // Dynamic profiles — not hardcoded: read from MyPlaceEngine (AI-mutable), fallback generates a minimal profile for any username
   const getProfile = (username: string) => {
-    if (username === myplaceState.userProfile.username) return myplaceState.userProfile;
-    const npc = engine.myplace.getNpcProfile(username);
-    if (npc) return npc;
+    if (selectedProfile) return selectedProfile;
     // Generate a lightweight profile for unknown usernames (dynamic, not hardcoded)
     const hash = username.split('').reduce((a, c) => a + c.charCodeAt(0), 0);
     const avatars = ['🎸', '🎧', '📻', '💾', '🎮', '📚', '🎨', '🚲'];
@@ -49,41 +48,42 @@ export const MyPlaceSite: React.FC<SiteRouteProps> = (props) => {
       glitterIntensity: 0,
       visibility: 'public' as const,
       themeColor: '#6b7280',
-    } as unknown as typeof myplaceState.userProfile;
+    } as unknown as typeof userProfile;
   };
 
   const profile = getProfile(currentUsername);
 
   // Privacy: friendsOnly → only Top8 + self can view
-  const viewerHandle = myplaceState.userProfile.username;
-  const isViewerFriend = isOwnProfile || profile.top8.some((f) => f.handle === viewerHandle) || (profile as unknown as { visibility?: string }).visibility !== 'friendsOnly';
-  const isLocked = !isViewerFriend;
-  const guestbook = engine.myplace.getGuestbook(currentUsername);
+  // Locking is enforced in the canonical player-visible read, not only JSX.
+  // An inaccessible page never transfers its private bio or guestbook.
   const [commentInput, setCommentInput] = useState('');
   const [editMode, setEditMode] = useState(false);
-  const [editBio, setEditBio] = useState(myplaceState.userProfile.bio);
-  const [editInterests, setEditInterests] = useState(myplaceState.userProfile.interests.join(', '));
-  const [editSong, setEditSong] = useState(myplaceState.userProfile.songTitle);
-  const [editHeadline, setEditHeadline] = useState(myplaceState.userProfile.headline);
-  const [glitter, setGlitter] = useState(myplaceState.userProfile.glitterIntensity);
+  const [editBio, setEditBio] = useState(userProfile.bio);
+  const [editInterests, setEditInterests] = useState(userProfile.interests.join(', '));
+  const [editSong, setEditSong] = useState(userProfile.songTitle);
+  const [editHeadline, setEditHeadline] = useState(userProfile.headline);
+  const [glitter, setGlitter] = useState(userProfile.glitterIntensity);
+  const [editTiledBackground, setEditTiledBackground] = useState(userProfile.tiledBackground);
 
   const availableUpdates = engine.myplace.getAvailableReleases(time.day);
 
   const handlePostComment = (e: React.FormEvent) => {
     e.preventDefault();
     if (!commentInput.trim()) return;
-    engine.myplace.addGuestbookComment(currentUsername, 'wanderer06', commentInput.trim(), time.totalMinutes);
-    setCommentInput('');
-    soundManager.play('im_send');
+    if (engine.postMyPlaceComment(currentUsername, commentInput)) {
+      setCommentInput('');
+      soundManager.play('im_send');
+    }
   };
 
   const handleSaveProfile = () => {
-    engine.myplace.updateUserProfile({
+    engine.updateMyPlaceProfile({
       headline: editHeadline,
       bio: editBio,
       interests: editInterests.split(',').map((s) => s.trim()).filter(Boolean),
       songTitle: editSong,
       glitterIntensity: glitter,
+      tiledBackground: editTiledBackground,
     });
     setEditMode(false);
     soundManager.play('im_send');
@@ -93,19 +93,8 @@ export const MyPlaceSite: React.FC<SiteRouteProps> = (props) => {
   const handleUpdateMyPlace = () => {
     if (availableUpdates.length === 0) return;
     const target = availableUpdates[0]!;
-    const res = engine.myplace.updateTo(target.id, time.day, time.totalMinutes);
-    if (res.success) {
-      soundManager.play('im_recv');
-      engine.world.injectProceduralEvents([{
-        id: `myplace_${target.version}`.replace(/[^a-z0-9_]/g, '_'),
-        title: target.displayName,
-        description: target.changelog.join(' • '),
-        category: 'site_launch',
-        triggerDay: time.day,
-        knowledgePrompt: `${target.displayName} is live — ${target.blurb}`,
-        siteUrl: 'http://myplace.local/',
-      } as any]);
-    }
+    const res = engine.updateMyPlaceRelease(target.id);
+    if (res.success) soundManager.play('im_recv');
   };
 
   // MySpace 2005 tiled background per user choice + version
@@ -127,8 +116,8 @@ export const MyPlaceSite: React.FC<SiteRouteProps> = (props) => {
           <div className="text-4xl">🔒</div>
           <h2 className="font-bold text-sm">This profile is private</h2>
           <p className="text-xs text-gray-600">{profile.displayName} only shares their full profile with friends.</p>
-          <p className="text-[11px] text-gray-500">You are viewing as <b>{myplaceState.userProfile.username}</b> — not in Top 8.</p>
-          <button onClick={() => doNavigate(`myplace.local/${myplaceState.userProfile.username}`)} className="mt-2 px-3 py-1 bg-[#3b5998] hover:bg-[#2d4373] text-white font-bold rounded text-xs">Back to your profile</button>
+          <p className="text-[11px] text-gray-500">You are viewing as <b>{userProfile.username}</b> — not in Top 8.</p>
+          <button onClick={() => doNavigate(`myplace.local/${userProfile.username}`)} className="mt-2 px-3 py-1 bg-[#3b5998] hover:bg-[#2d4373] text-white font-bold rounded text-xs">Back to your profile</button>
         </div>
       </div>
     );
@@ -192,8 +181,8 @@ export const MyPlaceSite: React.FC<SiteRouteProps> = (props) => {
               <div className="px-2 pb-2 space-y-1">
                 <button
                   onClick={() => {
-                    const handle = profile.username === myplaceState.userProfile.username ? 'maya_x' : profile.username;
-                    engine.myplace.addGuestbookComment(handle, 'wanderer06', 'Hey! Love the new look — what do you think of my page?', time.totalMinutes);
+                    const handle = profile.username === userProfile.username ? 'maya_x' : profile.username;
+                    engine.postMyPlaceComment(handle, 'Hey! Love the new look — what do you think of my page?');
                   }}
                   className="w-full bg-[#dbeafe] hover:bg-[#bfdbfe] border border-[#93c5fd] text-[#1e3a8a] font-bold py-1 text-xs flex items-center justify-center gap-1"
                 >
@@ -291,7 +280,7 @@ export const MyPlaceSite: React.FC<SiteRouteProps> = (props) => {
             {isOwnProfile && (
               <div className="border border-blue-300 bg-blue-50 p-2">
                 {!editMode ? (
-                  <button onClick={() => { setEditMode(true); setEditHeadline(profile.headline); setEditBio(profile.bio); setEditInterests(profile.interests.join(', ')); setEditSong(profile.songTitle); setGlitter(profile.glitterIntensity); }} className="w-full bg-white hover:bg-gray-50 border border-gray-400 py-1 text-xs font-bold">Edit Profile</button>
+                  <button onClick={() => { setEditMode(true); setEditHeadline(profile.headline); setEditBio(profile.bio); setEditInterests(profile.interests.join(', ')); setEditSong(profile.songTitle); setGlitter(profile.glitterIntensity); setEditTiledBackground(profile.tiledBackground); }} className="w-full bg-white hover:bg-gray-50 border border-gray-400 py-1 text-xs font-bold">Edit Profile</button>
                 ) : (
                   <div className="space-y-2">
                     <label className="block text-[10px] font-bold uppercase">Headline<input value={editHeadline} onChange={(e) => setEditHeadline(e.target.value)} className="w-full mt-1 p-1 border border-gray-400 text-xs" /></label>
@@ -299,7 +288,7 @@ export const MyPlaceSite: React.FC<SiteRouteProps> = (props) => {
                     <label className="block text-[10px] font-bold uppercase">Interests<input value={editInterests} onChange={(e) => setEditInterests(e.target.value)} className="w-full mt-1 p-1 border border-gray-400 text-xs" /></label>
                     <label className="block text-[10px] font-bold uppercase">Song<input value={editSong} onChange={(e) => setEditSong(e.target.value)} className="w-full mt-1 p-1 border border-gray-400 text-xs" /></label>
                     {features.glitter && <label className="block text-[10px] font-bold uppercase">Glitter {glitter}<input type="range" min={0} max={5} value={glitter} onChange={(e) => setGlitter(parseInt(e.target.value, 10))} className="w-full" /></label>}
-                    {features.tiler && <label className="block text-[10px] font-bold uppercase">Tiled BG<select value={engine.myplace.getUserProfile().tiledBackground ?? ''} onChange={(e) => engine.myplace.updateUserProfile({ tiledBackground: e.target.value || undefined })} className="w-full mt-1 p-1 border border-gray-400 text-xs"><option value="">None</option><option value="stars">Stars</option><option value="hearts">Hearts</option></select></label>}
+                    {features.tiler && <label className="block text-[10px] font-bold uppercase">Tiled BG<select value={editTiledBackground ?? ''} onChange={(e) => setEditTiledBackground(e.target.value || undefined)} className="w-full mt-1 p-1 border border-gray-400 text-xs"><option value="">None</option><option value="stars">Stars</option><option value="hearts">Hearts</option></select></label>}
                     <div className="flex gap-1">
                       <button onClick={handleSaveProfile} className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-1 rounded text-xs">Save</button>
                       <button onClick={() => setEditMode(false)} className="flex-1 bg-white border border-gray-400 py-1 text-xs">Cancel</button>
@@ -326,7 +315,7 @@ export const MyPlaceSite: React.FC<SiteRouteProps> = (props) => {
               <div className="bg-[#e5eaf6] px-2 py-1 font-bold text-[#003399] text-xs">About me</div>
               <div className="p-3 text-xs leading-relaxed whitespace-pre-wrap">{profile.bio}</div>
               <div className="px-3 pb-2 text-[11px] text-gray-500">Mood: hopeful • Headline: {profile.headline}</div>
-              {features.glitter && myplaceState.userProfile.glitterIntensity > 2 && <div className="px-3 pb-2 text-[10px] text-yellow-600">✨ Glitter {myplaceState.userProfile.glitterIntensity}/5</div>}
+              {features.glitter && userProfile.glitterIntensity > 2 && <div className="px-3 pb-2 text-[10px] text-yellow-600">✨ Glitter {userProfile.glitterIntensity}/5</div>}
             </div>
 
             {/* Top 8 — hidden entirely in 1.0 Stripped */}

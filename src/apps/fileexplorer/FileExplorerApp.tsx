@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useSimulationStore } from '../../store/useSimulationStore';
+import { useSimulationDirectory } from '../../store/useBoundedSimulationRead';
 import { useWindowStore } from '../../store/useWindowStore';
 import { FileRecord, FileKind } from '../../engine/types';
 
@@ -15,11 +16,12 @@ const CANONICAL_SHORTCUTS = [
 ];
 
 export const FileExplorerApp: React.FC<{ initialPath?: string }> = ({ initialPath = 'C:' }) => {
-  const vfs = useSimulationStore((s) => s.state.vfs);
   const dispatchAction = useSimulationStore((s) => s.dispatchAction);
   const openWindow = useWindowStore((s) => s.openWindow);
 
   const [currentPath, setCurrentPath] = useState<string>(initialPath);
+  const [page, setPage] = useState(0);
+  const directory = useSimulationDirectory(currentPath, page);
   const [history, setHistory] = useState<string[]>([initialPath]);
   const [historyIdx, setHistoryIdx] = useState<number>(0);
   const [viewMode, setViewMode] = useState<'details' | 'icons'>('details');
@@ -28,6 +30,7 @@ export const FileExplorerApp: React.FC<{ initialPath?: string }> = ({ initialPat
   const navigateTo = (newPath: string) => {
     const normalized = newPath.replace(/\/+/g, '/');
     setCurrentPath(normalized);
+    setPage(0);
     setHistory((prev) => [...prev.slice(0, historyIdx + 1), normalized]);
     setHistoryIdx((prev) => prev + 1);
     setSelectedFile(null);
@@ -38,6 +41,7 @@ export const FileExplorerApp: React.FC<{ initialPath?: string }> = ({ initialPat
       const prevPath = history[historyIdx - 1]!;
       setHistoryIdx(historyIdx - 1);
       setCurrentPath(prevPath);
+      setPage(0);
       setSelectedFile(null);
     }
   };
@@ -47,6 +51,7 @@ export const FileExplorerApp: React.FC<{ initialPath?: string }> = ({ initialPat
       const nextPath = history[historyIdx + 1]!;
       setHistoryIdx(historyIdx + 1);
       setCurrentPath(nextPath);
+      setPage(0);
       setSelectedFile(null);
     }
   };
@@ -59,9 +64,7 @@ export const FileExplorerApp: React.FC<{ initialPath?: string }> = ({ initialPat
     }
   };
 
-  const currentFiles = Object.values(vfs.files).filter(
-    (f) => f.parentPath === currentPath && f.path !== currentPath
-  );
+  const currentFiles = directory.files;
 
   const [_installNotice, _setInstallNotice] = useState<string | null>(null);
 
@@ -96,6 +99,9 @@ export const FileExplorerApp: React.FC<{ initialPath?: string }> = ({ initialPat
       dispatchAction({ type: 'VFS_MOVE_TRASH', path: selectedFile.path });
     }
     setSelectedFile(null);
+    // If the final visible item on this page is deleted, return to the
+    // preceding page rather than leaving Explorer on an empty page.
+    if (currentFiles.length === 1 && page > 0) setPage(page - 1);
   };
 
   const getFileIcon = (kind: FileKind) => {
@@ -254,6 +260,25 @@ export const FileExplorerApp: React.FC<{ initialPath?: string }> = ({ initialPat
         </div>
       </div>
 
+      {/* Directory pagination — bounded by owner-side metadata page reads. */}
+      <div className="flex items-center justify-end gap-2 border-t border-gray-300 bg-[#dfdfdf] px-2 py-1">
+        <button
+          className="orion-button disabled:opacity-40"
+          disabled={page === 0}
+          onClick={() => { setPage(value => Math.max(0, value - 1)); setSelectedFile(null); }}
+        >
+          ← Previous
+        </button>
+        <span className="font-mono text-[11px]">Page {page + 1}</span>
+        <button
+          className="orion-button disabled:opacity-40"
+          disabled={!directory.hasMore}
+          onClick={() => { setPage(value => value + 1); setSelectedFile(null); }}
+        >
+          Next →
+        </button>
+      </div>
+
       {/* Install Notice (handled by wizard now) */}
       {_installNotice && (
         <div className="mx-2 mb-1 rounded border border-blue-600 bg-[#e0f2f1] px-2 py-1 text-[11px] font-bold text-blue-900">
@@ -263,9 +288,9 @@ export const FileExplorerApp: React.FC<{ initialPath?: string }> = ({ initialPat
 
       {/* Status Bar */}
       <div className="flex items-center justify-between px-2 py-0.5 bg-[#dfdfdf] border-t border-gray-400 text-[11px] text-gray-700">
-        <span>{currentFiles.length} object(s)</span>
+        <span>{currentFiles.length === 0 ? '0' : `${directory.offset + 1}–${directory.offset + currentFiles.length}`} object(s) shown{directory.hasMore ? ' · more available' : ''}</span>
         <span>
-          Free Disk: {Math.max(0, (vfs.totalDiskBytes - vfs.baseSystemBytes) / (1024 * 1024 * 1024)).toFixed(2)} GB
+          Free Disk: {Math.max(0, (directory.totalDiskBytes - directory.baseSystemBytes) / (1024 * 1024 * 1024)).toFixed(2)} GB
         </span>
       </div>
     </div>

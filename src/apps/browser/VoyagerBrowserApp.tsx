@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useSimulationStore } from '../../store/useSimulationStore';
+import { useSimulationApps, useSimulationChrome } from '../../store/useBoundedSimulationRead';
 import { InternetRouter } from '../../internet/InternetRouter';
 import { RouteMatchResult, ParsedUrl } from '../../internet/types';
 import { soundManager } from '../../audio/SoundManager';
@@ -18,8 +19,8 @@ interface VoyagerBrowserAppProps {
 }
 
 export const VoyagerBrowserApp: React.FC<VoyagerBrowserAppProps> = ({ initialUrl = 'findit.local' }) => {
-  const connectionType = useSimulationStore((s) => s.state.hardware.connectionType);
-  const installedSoftware = useSimulationStore((s) => s.state.installedSoftware || []);
+  const connectionType = useSimulationChrome().connectionType;
+  const installedSoftware = useSimulationApps().installedSoftware;
   const dispatchAction = useSimulationStore((s) => s.dispatchAction);
 
   const [currentUrl, setCurrentUrl] = useState<string>(initialUrl);

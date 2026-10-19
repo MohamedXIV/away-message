@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
 import { useSimulationStore } from '../../store/useSimulationStore';
+import { useSimulationApps } from '../../store/useBoundedSimulationRead';
 import { InstalledSoftwareRecord } from '../../engine/types';
 
 export const AddRemoveApp: React.FC = () => {
-  const installedSoftware = useSimulationStore((s) => s.state.installedSoftware);
+  const installedSoftware = useSimulationApps().installedSoftware;
   const dispatchAction = useSimulationStore((s) => s.dispatchAction);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [isUninstalling, setIsUninstalling] = useState<boolean>(false);

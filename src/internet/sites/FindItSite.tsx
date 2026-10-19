@@ -1,13 +1,12 @@
 import React, { useMemo, useState } from 'react';
 import { SiteRouteProps } from '../types';
-import { useSimulationStore } from '../../store/useSimulationStore';
+import { useSimulationWebsite } from '../../store/useBoundedSimulationRead';
 import { generateFindItCandidates, searchInternet } from '../searchIndex';
 import { loadPulseState } from '../../apps/pulse/persistence';
 
 export const FindItSite: React.FC<SiteRouteProps> = (props) => {
-  const currentDay = useSimulationStore((s) => s.state.time.day);
-  const narrativeFlags = useSimulationStore((s) => s.state.narrative.flags);
-  const world = useSimulationStore((s) => s.state.world);
+  const { time, narrativeFlags, world } = useSimulationWebsite();
+  const currentDay = time.day;
   const doNavigate = props.navigate || props.onNavigate || (() => {});
 
   const queryParams = { ...props.searchParams, ...props.queryParams };

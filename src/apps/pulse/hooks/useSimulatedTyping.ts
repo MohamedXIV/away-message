@@ -143,18 +143,19 @@ export function useSimulatedTyping(_activeConversationBuddyId: string | null) {
       }, accumulatedDelay);
 
       const t2 = setTimeout(() => {
-        engine.social.sendMessage(
-          script.buddyId,
-          script.buddyId,
-          'player',
-          msg.text,
-          engine.clock.getTotalMinutes(),
-          false,
-          msg.tags,
-          (msg as any).imageUrl,
-          (msg as any).imagePrompt,
-          (msg as any).imageCaption
-        );
+        // The delayed typing animation must not become a silent Social writer.
+        // Reuse the canonical inbound command for the message and its media.
+        engine.dispatchAction({
+          type: 'SOCIAL_RECEIVE_MESSAGE',
+          buddyId: script.buddyId,
+          text: msg.text,
+          timestampMinute: engine.clock.getTotalMinutes(),
+          deliveredAway: false,
+          tags: msg.tags,
+          imageUrl: (msg as any).imageUrl,
+          imagePrompt: (msg as any).imagePrompt,
+          imageCaption: (msg as any).imageCaption,
+        });
         // If there's an image, also save it to VFS as a small file for the era
         const imageUrl = (msg as any).imageUrl as string | undefined;
         if (imageUrl && imageUrl.startsWith('data:')) {

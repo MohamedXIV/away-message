@@ -1,10 +1,11 @@
 import React, { useMemo, useState } from 'react';
 import { useSimulationStore } from '../../../store/useSimulationStore';
+import { useSimulationPresence, usePulseContactsRead } from '../../../store/useBoundedSimulationRead';
 import { UserProfileHeader } from './UserProfileHeader';
 import { BuddyGroup } from './BuddyGroup';
 import { formatLastSeen } from './BuddyItem';
 import { soundManager } from '../../../audio/SoundManager';
-import { PULSE_GROUPS, PULSE_ROOMS, resolvePulseRoomParticipantIds } from '../data/pulseRooms';
+import { PULSE_GROUPS, PULSE_ROOMS } from '../data/pulseRooms';
 import type { PulseLoginSession } from './PulseLoginSplash';
 import type { PulseActivityEntry } from '../types';
 import type { PulseSkin } from '../persistence';
@@ -43,6 +44,17 @@ interface BuddyListWindowProps {
   onChangeSkin?: (skin: PulseSkin) => void;
 }
 
+/** Pulse feed is player-facing, unlike the canonical offline/private actor log.
+ * Public room posts remain discoverable; one-to-one activity requires a
+ * learned contact handle. Never destroy stored history before discovery.
+ */
+export function filterPlayerVisiblePulseActivity(
+  activityFeed: readonly PulseActivityEntry[],
+  isKnown: (actorId: string) => boolean,
+): PulseActivityEntry[] {
+  return activityFeed.filter(entry => entry.kind === 'room' || isKnown(entry.buddyId));
+}
+
 const presenceRank: Record<string, number> = { online: 0, away: 1, busy: 2, offline: 3 };
 
 export const BuddyListWindow: React.FC<BuddyListWindowProps> = ({
@@ -77,7 +89,8 @@ export const BuddyListWindow: React.FC<BuddyListWindowProps> = ({
   onChangeSkin,
 }) => {
   const engine = useSimulationStore((s) => s.engine);
-  const presenceMap = useSimulationStore((s) => s.state.social.presence);
+  const { presence: presenceMap } = useSimulationPresence();
+  const { contacts: buddies, suggestions: candidateSuggestions, lastSeenMinutes, roomParticipantCounts } = usePulseContactsRead();
   const [searchFilter, setSearchFilter] = useState('');
   const [contextMenu, setContextMenu] = useState<{ buddyId: string; x: number; y: number } | null>(null);
   const [showInviteSubmenu, setShowInviteSubmenu] = useState(false);
@@ -88,24 +101,11 @@ export const BuddyListWindow: React.FC<BuddyListWindowProps> = ({
   const [addSuccess, setAddSuccess] = useState<string | null>(null);
   const [showRecall, setShowRecall] = useState(false);
 
-  const buddies = useMemo(() => {
-    return engine.social.getBuddies().filter((b) => engine.social.isKnown(b.id));
-  }, [engine, presenceMap]);
-
-  const candidateSuggestions = useMemo(() => {
-    const list: Array<{ handle: string; note: string; buddyName: string }> = [];
-    for (const b of engine.social.getBuddies()) {
-      if (engine.social.isKnown(b.id)) continue;
-      for (const cand of b.backstory?.candidates ?? []) {
-        list.push({
-          handle: cand.handle,
-          note: cand.note || b.backstory?.label || 'From your past',
-          buddyName: b.displayName,
-        });
-      }
-    }
-    return list;
-  }, [engine, presenceMap]);
+  const knownContactIds = useMemo(() => new Set(buddies.map(buddy => buddy.id)), [buddies]);
+  const visibleActivityFeed = useMemo(
+    () => filterPlayerVisiblePulseActivity(activityFeed, id => knownContactIds.has(id)),
+    [activityFeed, knownContactIds],
+  );
 
   const buddiesWithPresence = useMemo(() => buddies
     .filter((buddy) => buddy.displayName.toLowerCase().includes(searchFilter.toLowerCase()) || buddy.handle.toLowerCase().includes(searchFilter.toLowerCase()))
@@ -115,13 +115,13 @@ export const BuddyListWindow: React.FC<BuddyListWindowProps> = ({
       let lastSeen: string | undefined;
       try {
         if (presence.status === 'offline') {
-          const label = formatLastSeen(engine.social.getLastActivityMinute(buddy.id));
+          const label = formatLastSeen(lastSeenMinutes[buddy.id] ?? 0);
           if (label) lastSeen = label;
         }
       } catch { /* last-seen is best-effort */ }
       return { buddy, presence, lastSeen };
     })
-    .sort((a, b) => (presenceRank[a.presence.status] ?? 9) - (presenceRank[b.presence.status] ?? 9)), [buddies, presenceMap, searchFilter, engine]);
+    .sort((a, b) => (presenceRank[a.presence.status] ?? 9) - (presenceRank[b.presence.status] ?? 9)), [buddies, presenceMap, searchFilter, lastSeenMinutes]);
   const visibleBuddies = useMemo(() => buddiesWithPresence.filter(({ buddy }) => !blockedBuddyIds.includes(buddy.id)), [buddiesWithPresence, blockedBuddyIds]);
   const blockedBuddies = useMemo(() => buddiesWithPresence.filter(({ buddy }) => blockedBuddyIds.includes(buddy.id)), [buddiesWithPresence, blockedBuddyIds]);
 
@@ -299,10 +299,10 @@ export const BuddyListWindow: React.FC<BuddyListWindowProps> = ({
               + Add
             </button>
           </div>
-          {activityFeed.length > 0 && <div className="mx-1 mt-1 border border-[#b8c3ce] bg-[#f3f6f8] px-2 py-1">
-            <div className="mb-1 flex items-center justify-between text-[9px] font-bold uppercase tracking-wide text-[#456990]"><span>Pulse activity</span><span className="font-normal text-gray-500">last {Math.min(activityFeed.length, 5)} • {activityFeed.filter((entry) => !entry.isRead).length} new</span></div>
+          {visibleActivityFeed.length > 0 && <div className="mx-1 mt-1 border border-[#b8c3ce] bg-[#f3f6f8] px-2 py-1">
+            <div className="mb-1 flex items-center justify-between text-[9px] font-bold uppercase tracking-wide text-[#456990]"><span>Pulse activity</span><span className="font-normal text-gray-500">last {Math.min(visibleActivityFeed.length, 5)} • {visibleActivityFeed.filter((entry) => !entry.isRead).length} new</span></div>
             <div className="space-y-0.5">
-              {activityFeed.slice(-5).reverse().map((entry) => {
+              {visibleActivityFeed.slice(-5).reverse().map((entry) => {
                 const isMessage = entry.kind === 'message';
                 const isUnread = !entry.isRead;
                 return <button key={entry.id} onClick={() => onOpenChat(entry.buddyId)} className={`block w-full truncate text-left text-[10px] hover:text-blue-800 hover:underline ${isUnread ? 'font-bold text-[#1d3d64]' : 'text-gray-700'} ${isMessage ? 'italic' : ''}`} title={`${entry.text} — Day ${Math.floor(entry.minute / 1440) + 1}`}>{isUnread ? '● ' : ''}{entry.text}</button>;
@@ -369,7 +369,7 @@ export const BuddyListWindow: React.FC<BuddyListWindowProps> = ({
                   <span className="h-3 w-3 rounded-full border border-black/20" style={{ backgroundColor: room.color }} />
                   <span className="font-bold text-[#1c4167]">{room.name}</span>
                   {(roomUnreadCounts[room.id] ?? 0) > 0 && <span className="rounded-full bg-[#d96c3b] px-1.5 py-0.5 text-[9px] font-bold text-white">{roomUnreadCounts[room.id] ?? 0}</span>}
-                  <span className="ml-auto text-[10px] text-gray-500">{resolvePulseRoomParticipantIds(room, engine.social.getBuddies()).length + 1}</span>
+                  <span className="ml-auto text-[10px] text-gray-500">{(roomParticipantCounts[room.id] ?? 0) + 1}</span>
                 </div>
                 <div className="mt-1 flex items-center justify-between gap-2"><span className="truncate text-[10px] text-gray-600">{room.topic}</span><span className="text-[9px] font-bold uppercase text-gray-400">{joinedRoomIds.includes(room.id) ? 'joined' : 'join'}</span></div>
               </button>

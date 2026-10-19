@@ -3,6 +3,7 @@ import { useSimulationStore } from '../../store/useSimulationStore';
 import { useWindowStore } from '../../store/useWindowStore';
 import type { WindowState } from '../../store/useWindowStore';
 import { soundManager } from '../../audio/SoundManager';
+import type { InstallerPreview } from '../../engine/SoftwareRegistry';
 
 interface InstallerWizardProps {
   window: WindowState;
@@ -31,19 +32,18 @@ export const InstallerWizard: React.FC<InstallerWizardProps> = ({ window }) => {
   };
 
   const softwareId = FILE_TO_SOFTWARE[fileName] || fileName.replace('.exe', '');
-  const [sessionId, setSessionId] = useState<string | null>(null);
   const [stage, setStage] = useState<1 | 2 | 3 | 4 | 5 | 6>(1);
-  const [session, setSession] = useState<any>(null);
+  const [session, setSession] = useState<InstallerPreview | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [progress, setProgress] = useState(0);
   const [createDesktopShortcut, setCreateDesktopShortcut] = useState(true);
   const [acceptedOffers, setAcceptedOffers] = useState<Record<string, boolean>>({});
 
-  // Initialize installer session
+  // Preview only: mounting/closing a window never creates a hidden
+  // SoftwareRegistry session or writes to the simulation owner.
   useEffect(() => {
     try {
-      const s = (engine as any).software.startInstallerWizard(softwareId);
-      setSessionId(s.sessionId);
+      const s = engine.software.previewInstaller(softwareId);
       setSession(s);
       setStage(1);
       const offers: Record<string, boolean> = {};
@@ -57,10 +57,8 @@ export const InstallerWizard: React.FC<InstallerWizardProps> = ({ window }) => {
     }
   }, [engine, softwareId]);
 
-  // (refreshSession removed — session is updated via advanceInstallerStage)
-
   const handleNext = () => {
-    if (!sessionId || !session) return;
+    if (!session) return;
     soundManager.play('click');
     const next = Math.min(6, stage + 1) as 1 | 2 | 3 | 4 | 5 | 6;
     // Compatibility check must pass before advancing past stage 2
@@ -69,17 +67,8 @@ export const InstallerWizard: React.FC<InstallerWizardProps> = ({ window }) => {
       return;
     }
     try {
-      const updated = (engine as any).software.advanceInstallerStage(sessionId, next);
-      // Apply options when moving from stage 4
-      if (stage === 4) {
-        // Persist options into session
-        const sess = (engine as any).software.activeInstallers.get(sessionId);
-        if (sess) {
-          sess.selectedOptions.createDesktopShortcut = createDesktopShortcut;
-          sess.selectedOptions.acceptedBundledOffers = { ...acceptedOffers };
-        }
-      }
-      setSession({ ...updated });
+      // Wizard pages and checkboxes are local UI state. Only the final
+      // SOFTWARE_INSTALL action commits the selected options to the owner.
       setStage(next);
       setError(null);
       if (next === 5) {
@@ -93,7 +82,11 @@ export const InstallerWizard: React.FC<InstallerWizardProps> = ({ window }) => {
             // Complete installation
             setTimeout(() => {
               try {
-                const res = engine.dispatchAction({ type: 'SOFTWARE_INSTALL', softwareId, selectedOptions: { ...acceptedOffers, createDesktopShortcut: createDesktopShortcut ? true : false } } as any);
+                const res = engine.dispatchAction({
+                  type: 'SOFTWARE_INSTALL',
+                  softwareId,
+                  selectedOptions: { ...acceptedOffers, createDesktopShortcut },
+                });
                 if (res.success) {
                   setProgress(100);
                   setStage(6);
@@ -238,7 +231,7 @@ export const InstallerWizard: React.FC<InstallerWizardProps> = ({ window }) => {
                 <input type="checkbox" checked={createDesktopShortcut} onChange={(e) => setCreateDesktopShortcut(e.target.checked)} />
                 <span>Create a desktop shortcut</span>
               </label>
-              {def.bundledOffers?.map((offer: any) => (
+              {def.bundledOffers?.map((offer) => (
                 <label key={offer.id} className="flex items-center gap-2 border border-gray-300 p-2 bg-white hover:bg-gray-50 cursor-pointer">
                   <input type="checkbox" checked={!!acceptedOffers[offer.id]} onChange={(e) => setAcceptedOffers({ ...acceptedOffers, [offer.id]: e.target.checked })} />
                   <span className={offer.defaultChecked ? 'font-semibold' : ''}>{offer.name} — <span className="text-gray-600">{offer.description}</span></span>

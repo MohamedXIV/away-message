@@ -125,6 +125,7 @@ export interface DirectorGenerateOptions {
   preferCategories?: ProceduralControls['allowedCategories'];
   tone?: ProceduralControls['tone'];
   useAI?: boolean; // default true, fallback to templates when false or no key
+  inject?: boolean; // false stages a batch for atomic Kernel commitment
 }
 
 export class ProceduralDirector {
@@ -134,7 +135,7 @@ export class ProceduralDirector {
     currentDay: number,
     currentTotalMinutes: number,
     options: DirectorGenerateOptions = {},
-  ): Promise<{ events: GlobalEvent[]; meta: { source: 'ai' | 'template' | 'mixed'; latencyMs: number; error?: string } }> {
+  ): Promise<{ events: GlobalEvent[]; injectedIds: string[]; meta: { source: 'ai' | 'template' | 'mixed'; latencyMs: number; error?: string } }> {
     const startedAt = performance.now();
     const maxEvents = Math.max(1, Math.min(3, options.maxEvents ?? 2));
     const allowedCategories = options.allowedCategories ?? ['city_news', 'site_launch', 'economy', 'culture', 'system', 'os_release', 'pulse_update'];
@@ -173,8 +174,8 @@ export class ProceduralDirector {
     if (!useAI || !hasKey) {
       const templ = pickTemplateEvents(seed, currentDay, allowedCategories as string[], maxEvents);
       const normalized = templ.map((e) => normalizeEvent(e as any, currentDay, new Set(existingIds)));
-      this.injectIntoWorld(normalized, currentTotalMinutes);
-      return { events: normalized, meta: { source: 'template', latencyMs: Math.round(performance.now() - startedAt) } };
+      const injectedIds = options.inject === false ? [] : this.injectIntoWorld(normalized, currentTotalMinutes);
+      return { events: normalized, injectedIds, meta: { source: 'template', latencyMs: Math.round(performance.now() - startedAt) } };
     }
 
     // AI path with governance
@@ -214,20 +215,20 @@ export class ProceduralDirector {
       const normalized = limited.map((e) => normalizeEvent(e as ProceduralWorldEvent, currentDay, new Set(existingIds)));
 
       // Inject
-      this.injectIntoWorld(normalized, currentTotalMinutes);
-      return { events: normalized, meta: { source: 'ai', latencyMs: Math.round(performance.now() - startedAt) } };
+      const injectedIds = options.inject === false ? [] : this.injectIntoWorld(normalized, currentTotalMinutes);
+      return { events: normalized, injectedIds, meta: { source: 'ai', latencyMs: Math.round(performance.now() - startedAt) } };
     } catch (error) {
       // Fallback to templates on any AI failure, but keep error for UI
       const msg = error instanceof Error ? error.message : String(error);
       const templ = pickTemplateEvents(seed + ':fallback', currentDay, allowedCategories as string[], maxEvents);
       const normalized = templ.map((e) => normalizeEvent(e as any, currentDay, new Set(existingIds)));
-      this.injectIntoWorld(normalized, currentTotalMinutes);
-      return { events: normalized, meta: { source: 'template', latencyMs: Math.round(performance.now() - startedAt), error: msg.slice(0, 300) } };
+      const injectedIds = options.inject === false ? [] : this.injectIntoWorld(normalized, currentTotalMinutes);
+      return { events: normalized, injectedIds, meta: { source: 'template', latencyMs: Math.round(performance.now() - startedAt), error: msg.slice(0, 300) } };
     }
   }
 
-  private injectIntoWorld(events: GlobalEvent[], _currentTotalMinutes: number): void {
-    this.world.injectProceduralEvents(
+  private injectIntoWorld(events: GlobalEvent[], _currentTotalMinutes: number): string[] {
+    return this.world.injectProceduralEvents(
       events.map((e) => ({
         id: e.id,
         title: e.title,

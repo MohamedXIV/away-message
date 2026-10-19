@@ -1,4 +1,5 @@
 import type { CoreDomainOwners } from './CoreDomainOwners';
+import type { BuddyMetVia } from '../types';
 import { generateNewcomer, shouldAutoDiscover, NEWCOMER_METVIA_ROTATION } from '../CharacterDirector';
 
 type NewcomerDefinition = Awaited<ReturnType<typeof generateNewcomer>>['definition'];
@@ -10,11 +11,15 @@ type NewcomerDefinition = Awaited<ReturnType<typeof generateNewcomer>>['definiti
 export class ProceduralWorldCycle {
   private pending = false;
   private lastGeneratedDay = 0;
+  private pendingNewcomer = false;
 
   constructor(
     private readonly owners: Pick<CoreDomainOwners, 'world' | 'social' | 'clock'>,
-    private readonly registerNewcomer: (buddy: NewcomerDefinition, introText: string) => boolean,
+    private readonly registerNewcomer: (
+      buddy: NewcomerDefinition, introText: string, metVia: BuddyMetVia, day: number,
+    ) => boolean,
     private readonly notifySubscribers: () => void,
+    private readonly createNewcomer: typeof generateNewcomer = generateNewcomer,
   ) {}
 
   public processNewDay(day: number): void {
@@ -30,17 +35,24 @@ export class ProceduralWorldCycle {
     this.pending = true;
     this.lastGeneratedDay = currentDay;
     const totalMinutes = this.owners.clock.getTotalMinutes();
+    const loadEpoch = this.owners.world.getLoadEpoch();
     // Fire-and-forget, never blocks simulation
     import('../ProceduralDirector')
       .then(({ ProceduralDirector }) => {
         const dir = new ProceduralDirector(this.owners.world);
-        return dir.generateNextBatch(currentDay, totalMinutes, { maxEvents: 2, useAI: true });
+        // Stage, never let a late AI result directly mutate a reloaded world.
+        return dir.generateNextBatch(currentDay, totalMinutes, { maxEvents: 2, useAI: true, inject: false });
+      })
+      .then(({ events }) => {
+        if (loadEpoch !== this.owners.world.getLoadEpoch()) return;
+        const accepted = this.owners.world.injectProceduralEvents(events);
+        // Source event observes the world domain; only actual accepted events
+        // advance the UI publication revision.
+        if (accepted.length > 0) this.notifySubscribers();
       })
       .catch(() => {})
       .finally(() => {
         this.pending = false;
-        // Notify so UI (CityWire) updates pending count
-        try { this.notifySubscribers(); } catch {}
       });
   }
 
@@ -51,6 +63,7 @@ export class ProceduralWorldCycle {
    * Fire-and-forget — never blocks the simulation tick.
    */
   private maybeAutoDiscoverNewcomer(day: number): void {
+    if (this.pendingNewcomer) return;
     try {
       const lastRaw = this.owners.world.getFlag('newcomer_last_day');
       const lastDay = typeof lastRaw === 'number' ? lastRaw : 0;
@@ -58,29 +71,17 @@ export class ProceduralWorldCycle {
       const proceduralCount = this.owners.social.getBuddies().filter((b) => b.isProcedural).length;
       const metVia = NEWCOMER_METVIA_ROTATION[proceduralCount % NEWCOMER_METVIA_ROTATION.length]!;
       const existingIds = this.owners.social.getBuddies().map((b) => b.id);
-      void generateNewcomer({ metVia, day, seed: `auto-day-${day}`, useAI: true }, { existingIds })
+      const loadEpoch = this.owners.world.getLoadEpoch();
+      // Only one AI request at a time, and never import a late response from
+      // a previous save into the freshly loaded authoritative owner graph.
+      this.pendingNewcomer = true;
+      void this.createNewcomer({ metVia, day, seed: `auto-day-${day}`, useAI: true }, { existingIds })
         .then((res) => {
-          const added = { success: this.registerNewcomer(res.definition, res.introText) };
-          if (!added.success) return;
-          // NightBoard meetings leave a public trace → auto thread via existing machinery
-          if (metVia === 'nightboard') {
-            try {
-              this.owners.world.injectProceduralEvents([{
-                id: `met_${res.definition.id}`.replace(/[^a-z0-9_]/g, '_').slice(0, 40),
-                title: `New voice on NightBoard: ${res.definition.displayName}`,
-                description: `${res.definition.displayName} (${res.definition.handle}) showed up asking about the canal hum thread.`,
-                category: 'city_news',
-                triggerDay: day,
-                triggerHour: 22,
-                knowledgePrompt: `A newcomer (${res.definition.displayName}) appeared on NightBoard and added you on Pulse.`,
-                siteUrl: 'http://nightboard.local/',
-              }]);
-            } catch { /* trace is best-effort */ }
-          }
-          this.owners.world.setFlag('newcomer_last_day', day);
-          this.notifySubscribers();
+          if (loadEpoch !== this.owners.world.getLoadEpoch()) return;
+          this.registerNewcomer(res.definition, res.introText, metVia, day);
         })
-        .catch(() => {});
+        .catch(() => {})
+        .finally(() => { this.pendingNewcomer = false; });
     } catch { /* auto-discovery never breaks the tick */ }
   }
 

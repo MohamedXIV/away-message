@@ -670,10 +670,11 @@ describe('Adversarial M1 Stress & Gating Suite', () => {
 
     it('does NOT inject adware if player opts out of bundled offers', () => {
       const wizard = registry.startInstallerWizard('sw_weatherbuddy_14');
-      wizard.selectedOptions.acceptedBundledOffers['searchmate_toolbar'] = false;
-      wizard.selectedOptions.acceptedBundledOffers['autorun_startup'] = false;
+      // Opt-outs belong to the canonical install commit, not a mutable wizard return.
 
-      const installed = registry.completeInstallation(wizard.sessionId, 100);
+      const installed = registry.completeInstallation(wizard.sessionId, 100, {
+        searchmate_toolbar: false, autorun_startup: false,
+      });
       expect(installed.adwarePayload?.toolbarInjected).toBe(false);
       expect(installed.adwarePayload?.homepageHijacked).toBeUndefined();
       expect(installed.adwarePayload?.startupAutorun).toBe(false);

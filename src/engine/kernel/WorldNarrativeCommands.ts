@@ -15,6 +15,7 @@ export class WorldNarrativeCommands {
   public dispatch(action: SimulationAction, currentMinutes: number): ActionResult | null {
     switch (action.type) {
       case 'WORLD_SET_FLAG': {
+        if (this.owners.world.getFlag(action.key) === action.value) return { success: true };
         this.owners.world.setFlag(action.key, action.value);
         this.owners.events.emit('world:flag_changed', { key: action.key, value: action.value });
         this.publishState();
@@ -50,6 +51,7 @@ export class WorldNarrativeCommands {
       }
 
       case 'NARRATIVE_SET_FLAG': {
+        if (this.owners.world.getFlag(action.key) === action.value) return { success: true };
         this.owners.world.setFlag(action.key, action.value);
         this.owners.events.emit('world:flag_changed', { key: action.key, value: action.value });
         this.publishState();

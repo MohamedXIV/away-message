@@ -5,6 +5,7 @@
 
 import React, { useState } from 'react';
 import { useSimulationStore } from '../../store/useSimulationStore';
+import { useSimulationHud, useSimulationWorldRead, useSimulationTransit, useSimulationPlayerStatus } from '../../store/useBoundedSimulationRead';
 import { soundManager } from '../../audio/SoundManager';
 import { CITY_NODES, type CityNodeId } from '../../engine/CityMap';
 import { DOOR_OPTIONS } from '../data/roomInteractables';
@@ -26,11 +27,13 @@ function formatDuration(totalMin: number): string {
 }
 
 export const CityPlaceView: React.FC<CityPlaceViewProps> = ({ location, onOpenMap }) => {
-  const engine = useSimulationStore((s) => s.engine);
-  const time = useSimulationStore((s) => s.state.time);
-  const player = useSimulationStore((s) => s.state.player);
-  useSimulationStore((s) => s.state.needs);
-  useSimulationStore((s) => s.state.world.triggeredEvents);
+  // Owner-backed city clock, world, needs and rent; no broad PlayerState view.
+  const hud = useSimulationHud();
+  const worldRead = useSimulationWorldRead();
+  const transit = useSimulationTransit();
+  const status = useSimulationPlayerStatus();
+  const time = hud.time;
+  const player = { cash: hud.cash, ...status.rent };
   const workShift = useSimulationStore((s) => s.workShift);
   const cityOuting = useSimulationStore((s) => s.cityOuting);
   const payRent = useSimulationStore((s) => s.payRent);
@@ -39,8 +42,8 @@ export const CityPlaceView: React.FC<CityPlaceViewProps> = ({ location, onOpenMa
   const [showShopModal, setShowShopModal] = useState(false);
 
   const node = CITY_NODES[location];
-  const environment = engine.gameContext.environment.current();
-  const needs = engine.gameContext.player.needs();
+  const environment = worldRead.environment;
+  const needs = status.needs;
   const weatherMeta = ({
     rain: ['🌧️', 'Canal Rain'],
     drizzle: ['🌦️', 'Light Drizzle'],
@@ -93,6 +96,11 @@ export const CityPlaceView: React.FC<CityPlaceViewProps> = ({ location, onOpenMa
           <span className="font-bold text-amber-300">{node.name}</span>
           <span className="font-mono text-slate-400">Day {time.day} • {formattedTime}</span>
           <span className="text-slate-400">{weatherMeta[0]} {weatherMeta[1]}</span>
+          {transit.active?.status === 'active' && (
+            <span className="font-mono text-sky-300" data-testid="city-transit-status">
+              En route · {transit.active.minutesRemaining}m
+            </span>
+          )}
         </div>
         <div className="flex items-center gap-3 font-mono">
           <span className="font-bold text-green-400">${player.cash.toFixed(2)}</span>
