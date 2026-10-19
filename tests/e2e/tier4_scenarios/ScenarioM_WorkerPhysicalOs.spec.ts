@@ -31,7 +31,9 @@ test('Worker-only desktop buys owned PC, assembles, inserts media and installs r
   await page.getByRole('button', { name: 'Return to menu' }).click();
   await page.getByRole('button', { name: 'Load game' }).click();
   await expect(page.getByTestId('worker-phase')).toHaveText('game');
+  // UI-only window ownership must end at the prior Worker session boundary.
   await page.getByRole('button', { name: 'desktop', exact: true }).click();
+  await expect(page.getByTestId('worker-window-system')).toHaveCount(0);
   await page.getByRole('button', { name: 'Open Computer & Setup' }).click();
   await expect(page.getByTestId('worker-boot-state')).toContainText('desktop');
   expect(await page.evaluate(() => !('__simEngine' in window) && !('__simStore' in window))).toBe(true);
