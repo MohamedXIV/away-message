@@ -139,4 +139,64 @@ describe('#175 single-writer Worker runtime protocol', () => {
       vi.useRealTimers();
     }
   });
+
+  it('installs Orion through the original owned-media preflight/commit on the one Worker', async () => {
+    const { ask, runtime } = harness();
+    try {
+      await ask({ op: 'init' });
+      const failed = await ask({ op: 'hardware', command: { kind: 'prepareOs' } })
+        as { success: boolean };
+      expect(failed.success).toBe(false);
+      const before = await ask({ op: 'query', query: { kind: 'hud' } })
+        as ReturnType<SimulationKernel['getHudProjection']>;
+      const purchased = await ask({ op: 'dispatch', action: {
+        type: 'STORE_PURCHASE_ITEM', storeId: 'silicon_spares', skuId: 'bundle_scrapyard',
+      } }) as { success: boolean };
+      expect(purchased.success).toBe(true);
+      const setup = await ask({ op: 'hardware', command: { kind: 'setup' } })
+        as { success: boolean };
+      expect(setup.success).toBe(true);
+      const desktop = await ask({ op: 'query', query: { kind: 'desktop' } })
+        as ReturnType<SimulationKernel['getDesktopRead']>;
+      const owned = desktop.bootMediaItems.find(item => item.catalogItemId === 'media_orion_48_setup');
+      expect(owned?.location).toBe('room_package');
+      const inserted = await ask({ op: 'hardware', command: {
+        kind: 'insertMedia', instanceId: owned!.instanceId,
+      } }) as { success: boolean };
+      expect(inserted.success).toBe(true);
+      const prepared = await ask({ op: 'hardware', command: { kind: 'prepareOs' } })
+        as ReturnType<SimulationKernel['prepareOsInstallFromInsertedMedia']>;
+      expect(prepared).toMatchObject({
+        success: true, data: { targetOs: 'Orion_4.8', mode: 'fresh' },
+      });
+      const preflightTime = await ask({ op: 'query', query: { kind: 'hud' } })
+        as ReturnType<SimulationKernel['getHudProjection']>;
+      expect(preflightTime.time.totalMinutes).toBe(before.time.totalMinutes);
+      const ejected = await ask({ op: 'hardware', command: { kind: 'ejectMedia' } })
+        as { success: boolean };
+      expect(ejected.success).toBe(true);
+      const stale = await ask({ op: 'hardware', command: {
+        kind: 'commitOs', plan: prepared.data!,
+      } }) as { success: boolean };
+      expect(stale.success).toBe(false);
+      expect((await ask({ op: 'query', query: { kind: 'desktop' } })
+        as ReturnType<SimulationKernel['getDesktopRead']>).osVersion).toBeNull();
+      await ask({ op: 'hardware', command: {
+        kind: 'insertMedia', instanceId: owned!.instanceId,
+      } });
+      const current = await ask({ op: 'hardware', command: { kind: 'prepareOs' } })
+        as ReturnType<SimulationKernel['prepareOsInstallFromInsertedMedia']>;
+      const committed = await ask({ op: 'hardware', command: {
+        kind: 'commitOs', plan: current.data!,
+      } }) as { success: boolean };
+      expect(committed.success).toBe(true);
+      const installed = await ask({ op: 'query', query: { kind: 'desktop' } })
+        as ReturnType<SimulationKernel['getDesktopRead']>;
+      expect(installed.osVersion).toBe('Orion_4.8');
+      const after = await ask({ op: 'query', query: { kind: 'hud' } })
+        as ReturnType<SimulationKernel['getHudProjection']>;
+      expect(after.time.totalMinutes - before.time.totalMinutes)
+        .toBe(current.data!.durationMinutes);
+    } finally { runtime.close(); }
+  });
 });

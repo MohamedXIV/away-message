@@ -244,3 +244,49 @@ and many legacy app imports still need worker-backed ports. The
 normal-game `/` route deliberately remains on its known-good
 synchronous owner until all gameplay is migrated and acceptance
 benchmarks run. Do not merge an incomplete parallel/duplicate world.
+
+
+## P3.4 — Physical computer, owned media, OS install and DownloadManager
+
+The Worker-only desktop now opens a **Computer & Setup** panel,
+using the existing `getAppRead()` hardware/download/software
+projection and `getDesktopRead()` owned media + boot status.
+The allowlisted Worker RPC `hardware` offers a finite set of
+commands only: setup owned room package, power on/off, insert/eject
+specific owned media, read authoritative OS installation preflight,
+and commit its returned immutable plan. These forward **directly
+into `SimulationKernel`'s existing published transactions**, not
+a simulated setup wizard or an arbitrary reflective method name.
+
+The Worker preflight requires an assembled machine, physical storage
+and optical drive, and a genuinely owned inserted OS setup disc.
+The preflight is read-only. Commit invokes the canonical transaction,
+which repeats preflight and rejects stale/incompatible plans;
+UI-only presentation progress does not install anything.
+The UI exposes the existing `bundle_scrapyard` purchase from the
+authored hardware catalog through `STORE_PURCHASE_ITEM`, enabling
+a complete New Game → Purchase → Assemble → Insert owned Orion 4.8
+CD → Preflight → Commit → Power On sequence **entirely in the Worker**.
+The boot status and OS identity always come back from owner queries.
+
+The same `getAppRead` supplies installed-software records and up to
+256 canonical DownloadManager tasks. Existing
+`SOFTWARE_UNINSTALL`, `DOWNLOAD_START`, `DOWNLOAD_PAUSE`,
+`DOWNLOAD_RESUME` and `DOWNLOAD_CANCEL` actions operate on
+the Worker owner. Manual URL entry is strictly an explicitly
+labeled **in-game .local simulated download**, never external
+browser networking. No second client-side download progress model
+or invented installer state is introduced.
+
+Unit acceptance extends `SimulationWorkerRuntime.test.ts` with
+actual canonical owned starter purchase and OS install, non-mutating
+preflight, rejection of an ejected/stale plan and accepted fresh
+commit/time. Chromium `ScenarioM_WorkerPhysicalOs.spec.ts`
+executes the full in-game PC setup/OS installation and save/reload,
+plus a denial of missing owned media and external download URLs.
+No local `__simEngine/__simStore` is constructed in these flows.
+
+**Cutover still in progress:** `worker.html` remains an isolated
+staging entry. The full legacy installer/OS wizard and default Desktop
+continue using synchronous owners on `/` until all remaining
+consumers and acceptance gates migrate. No false readiness claim.

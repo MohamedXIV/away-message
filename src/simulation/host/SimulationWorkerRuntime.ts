@@ -106,6 +106,34 @@ export function createSimulationWorkerRuntime(send: (message: SimulationWorkerRe
         case 'dispatch':
           value = requireKernel().dispatchAction(raw.action);
           break;
+        case 'hardware': {
+          const owner = requireKernel();
+          switch (raw.command?.kind) {
+            case 'setup': value = owner.setupComputerAtHome(); break;
+            case 'power':
+              if (typeof raw.command.poweredOn !== 'boolean') {
+                throw new Error('Invalid computer power value');
+              }
+              value = owner.setComputerPower(raw.command.poweredOn);
+              break;
+            case 'insertMedia':
+              if (typeof raw.command.instanceId !== 'string' || !raw.command.instanceId) {
+                throw new Error('Invalid owned media identity');
+              }
+              value = owner.insertOwnedMediaAtHome(raw.command.instanceId);
+              break;
+            case 'ejectMedia': value = owner.ejectOwnedMediaAtHome(); break;
+            case 'prepareOs': value = owner.prepareOsInstallFromInsertedMedia(); break;
+            case 'commitOs':
+              if (!raw.command.plan || typeof raw.command.plan !== 'object') {
+                throw new Error('OS installation needs an authoritative preflight plan');
+              }
+              value = owner.commitOsInstall(raw.command.plan);
+              break;
+            default: throw new Error('Unsupported hardware operation');
+          }
+          break;
+        }
         case 'advance':
           if (!Number.isSafeInteger(raw.minutes) || raw.minutes < 0) {
             throw new Error('Invalid world-minute advance');

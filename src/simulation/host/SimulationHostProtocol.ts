@@ -1,5 +1,6 @@
 import type { ActionResult, SimulationAction, SimulationState } from '../../engine/types';
 import type { InitialSimulationState } from '../../engine/kernel/PhysicalSimulationRuntime';
+import type { OsInstallPlan } from '../../engine/kernel/ComputerOwnershipRuntime';
 import type { SlotPulseMetadata, SlotSummary } from '../../persistence/slots';
 import type {
   SimulationActorRead, SimulationChange, SimulationChromeRead, SimulationDesktopRead,
@@ -36,10 +37,20 @@ export type SimulationQuery =
 
 export type SimulationQueryResult<Q extends SimulationQuery> = SimulationQueryResults[Q['kind']];
 
+export type SimulationHardwareCommand =
+  | { kind: 'setup' }
+  | { kind: 'power'; poweredOn: boolean }
+  | { kind: 'insertMedia'; instanceId: string }
+  | { kind: 'ejectMedia' }
+  | { kind: 'prepareOs' }
+  | { kind: 'commitOs'; plan: OsInstallPlan };
+
+
 export type SimulationWorkerRequest =
   | { id: number; op: 'init'; initialState?: InitialSimulationState }
   | { id: number; op: 'initSlot'; slotId: string }
   | { id: number; op: 'dispatch'; action: SimulationAction }
+  | { id: number; op: 'hardware'; command: SimulationHardwareCommand }
   | { id: number; op: 'advance'; minutes: number; reason?: string }
   | { id: number; op: 'realtime'; seconds: number }
   | { id: number; op: 'clock'; running: boolean }
@@ -61,6 +72,7 @@ export type SimulationWorkerReply =
 
 export interface SimulationHost {
   dispatch(action: SimulationAction): Promise<ActionResult>;
+  hardware(command: SimulationHardwareCommand): Promise<ActionResult<OsInstallPlan>>;
   advanceGameMinutes(minutes: number, reason?: string): Promise<void>;
   advanceRealTime(seconds: number): Promise<void>;
   setClockRunning(running: boolean): Promise<void>;

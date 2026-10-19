@@ -1,9 +1,10 @@
 import type { ActionResult, SimulationAction, SimulationState } from '../../engine/types';
 import type { InitialSimulationState } from '../../engine/kernel/PhysicalSimulationRuntime';
+import type { OsInstallPlan } from '../../engine/kernel/ComputerOwnershipRuntime';
 import type { SlotPulseMetadata, SlotSummary } from '../../persistence/slots';
 import type { SimulationChange } from '../../engine/kernel/SimulationPublication';
 import type {
-  SimulationHost, SimulationQuery, SimulationQueryResult,
+  SimulationHardwareCommand, SimulationHost, SimulationQuery, SimulationQueryResult,
   SimulationWorkerCommand, SimulationWorkerReply,
 } from './SimulationHostProtocol';
 
@@ -104,6 +105,10 @@ export class WorkerSimulationHost implements SimulationHost {
 
   dispatch(action: SimulationAction): Promise<ActionResult> {
     return this.request({ op: 'dispatch', action }) as Promise<ActionResult>;
+  }
+
+  hardware(command: SimulationHardwareCommand): Promise<ActionResult<OsInstallPlan>> {
+    return this.request({ op: 'hardware', command }) as Promise<ActionResult<OsInstallPlan>>;
   }
 
   async advanceGameMinutes(minutes: number, reason?: string): Promise<void> {

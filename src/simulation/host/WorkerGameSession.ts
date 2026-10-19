@@ -1,5 +1,6 @@
 import type { SimulationAction, ActionResult } from '../../engine/types';
-import type { SimulationQuery, SimulationQueryResult } from './SimulationHostProtocol';
+import type { SimulationHardwareCommand, SimulationQuery, SimulationQueryResult } from './SimulationHostProtocol';
+import type { OsInstallPlan } from '../../engine/kernel/ComputerOwnershipRuntime';
 import type {
   SimulationHudProjection, SimulationWorldRead, SimulationPlayerStatusRead,
 } from '../../engine/kernel/SimulationPublication';
@@ -181,6 +182,10 @@ export class WorkerGameSession {
   /** Only player-safe bounded reads are authorized for UI consumers. */
   read<Q extends SimulationQuery>(query: Q): Promise<SimulationQueryResult<Q>> {
     return this.active().query(query);
+  }
+
+  hardware(command: SimulationHardwareCommand): Promise<ActionResult<OsInstallPlan>> {
+    return this.active().hardware(command);
   }
 
   async dispatch(action: SimulationAction): Promise<ActionResult> {

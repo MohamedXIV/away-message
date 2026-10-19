@@ -4,12 +4,14 @@ import { getOsPresentationProfile } from '../../desktop/host/OsPresentation';
 import { useWindowStore, type WindowState } from '../../store/useWindowStore';
 import { WorkerPulsePanel } from './WorkerPulsePanel';
 import { WorkerFileExplorer, WorkerNotepad } from './WorkerDesktopVfsApps';
+import { WorkerSystemPanel } from './WorkerSystemPanel';
 import type { WorkerGameSession } from './WorkerGameSession';
 
 const APPLICATIONS = [
   { id: 'fileexplorer', label: 'My Computer', icon: '📁' },
   { id: 'notepad', label: 'Notepad', icon: '📝' },
   { id: 'pulse', label: 'Pulse Messenger', icon: '💬' },
+  { id: 'system', label: 'Computer & Setup', icon: '💻' },
 ] as const;
 
 /**
@@ -99,6 +101,8 @@ export function WorkerDesktop({
             <WorkerNotepad session={session}
               filePath={typeof win.customState?.filePath === 'string'
                 ? win.customState.filePath : undefined} />
+          ) : win.appId === 'system' ? (
+            <WorkerSystemPanel session={session} revision={revision} />
           ) : win.appId === 'pulse' ? (
             <div className="h-full overflow-y-auto bg-slate-900 p-2">
               <WorkerPulsePanel session={session} revision={revision} />
