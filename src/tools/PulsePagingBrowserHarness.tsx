@@ -1,6 +1,8 @@
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 import { ChatWindow } from '../apps/pulse/components/ChatWindow';
+import { SimulationEngine } from '../engine/SimulationEngine';
+import { saveSlot, loadSlotEngine } from '../persistence/slots';
 import { useSimulationStore } from '../store/useSimulationStore';
 
 /**
@@ -46,4 +48,48 @@ export function mountPulsePagingBrowserHarness(): { actorId: string; total: numb
     onSelectChoice: () => {},
   }));
   return { actorId: actor.id, total: engine.getConversationRead(actor.id, 0, 50).total, paused: engine.clock.isPaused() };
+}
+
+/** Real persisted cold conversation + production loader + real React ChatWindow.
+ * Browser-only proof; no shadow or mocked Social history. */
+export async function mountPulseColdPagingBrowserHarness(): Promise<{
+  actorId: string; total: number; slotId: string;
+}> {
+  const slotId = 'pulse_cold_browser_gate';
+  const source = new SimulationEngine();
+  const actor = source.social.getBuddies()[0]!;
+  source.social.learnHandle(actor.id, actor.handle);
+  const minute = source.clock.getTotalMinutes();
+  for (let i = 0; i < 200; i++) {
+    source.social.sendMessage(actor.id, actor.id, 'player',
+      `COLD_BROWSER_${String(i).padStart(3, '0')}`, minute + i);
+  }
+  await saveSlot(source, slotId);
+  const game = await loadSlotEngine(slotId);
+  if (!game || !game.social.hasColdConversations()) {
+    throw new Error('Cold browser fixture did not take the production cold boot path');
+  }
+  const store = useSimulationStore.getState();
+  store.setEngine(game);
+  useSimulationStore.getState().setPaused(true);
+  const host = document.createElement('div');
+  host.id = 'pulse-cold-browser-harness';
+  Object.assign(host.style, {
+    position: 'fixed', top: '12px', left: '12px',
+    height: '640px', width: '760px', zIndex: '2147483646',
+    background: 'white', display: 'flex', overflow: 'hidden',
+  });
+  document.body.appendChild(host);
+  const root = createRoot(host);
+  root.render(React.createElement(ChatWindow, {
+    openBuddyIds: [actor.id],
+    activeBuddyId: actor.id,
+    buddies: { [actor.id]: actor },
+    unreadCounts: {},
+    onSelectTab: () => {},
+    onCloseTab: () => {},
+    onSendMessage: () => {},
+    onSelectChoice: () => {},
+  }));
+  return { actorId: actor.id, total: (await game.getConversationReadAsync(actor.id, 0, 50)).total, slotId };
 }

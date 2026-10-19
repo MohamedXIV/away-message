@@ -1,4 +1,4 @@
-import type { SimulationState as TransportSimulationState, SimulationAction, ActionResult, HardwareState } from '../types';
+import type { SimulationState as TransportSimulationState, SimulationAction, ActionResult, HardwareState, MessageRecord } from '../types';
 import type { Fulfillment } from '../DeliveryEngine';
 import type { MyPlaceProfile } from '../MyPlaceEngine';
 import type { BuddyPresence, BuddyMetVia } from '../types';
@@ -937,6 +937,32 @@ export class SimulationKernel {
     return { revision: this.revision, ...this.social.getConversationPage(actorId, offset, limit) };
   }
 
+  /** Async cold pages pass through the SAME player-known contact gate. */
+  public async getConversationReadAsync(actorId: string, offset = 0, limit = 30): Promise<SimulationConversationRead> {
+    if (!this.social.isKnown(actorId)) {
+      return { revision: this.revision, conversationId: actorId, messages: [], total: 0, hasOlder: false };
+    }
+    const revision = this.revision;
+    const page = await this.social.getConversationPageAsync(actorId, offset, limit);
+    // Never publish a stale after-await view if contact access or world changes.
+    if (revision !== this.revision || !this.social.isKnown(actorId)) {
+      throw new Error('Conversation changed during cold read');
+    }
+    return { revision, ...page };
+  }
+
+  /** Explicit user-initiated complete Save Log export; never let a guessed
+   * contact ID bypass the player-known gate or an await race disclose it. */
+  public async getConversationLogAsync(actorId: string): Promise<MessageRecord[]> {
+    if (!this.social.isKnown(actorId)) return [];
+    const revision = this.revision;
+    const messages = await this.social.getMessagesAsync(actorId);
+    if (revision !== this.revision || !this.social.isKnown(actorId)) {
+      throw new Error('Conversation changed during log export');
+    }
+    return messages;
+  }
+
   /**
    * Atomically commit an auto-discovered newcomer, its MyPlace stub and
    * public world trace. Rejected duplicates must not synthesize revisions.
@@ -976,8 +1002,12 @@ export class SimulationKernel {
   }
 
   public getState(): Readonly<LiveSimulationState> {
+    return this.assembleState(this.core.getState());
+  }
+
+  private assembleState(coreState: Readonly<TransportSimulationState>): Readonly<LiveSimulationState> {
     return {
-      ...this.core.getState(),
+      ...coreState,
       hardware: this.hardware.getState(),
       computer: this.hardware.getComputerState(),
       display: this.hardware.getDisplayState(),
@@ -1002,6 +1032,27 @@ export class SimulationKernel {
   public exportSnapshot(): LiveSimulationState {
     this.invalidateStateCache();
     return JSON.parse(JSON.stringify(this.getState())) as LiveSimulationState;
+  }
+
+  /** Full history is read explicitly, never on a revision/UI publication.
+   * A mutation or load across an await invalidates the complete export.
+   */
+  public async exportSnapshotAsync(): Promise<LiveSimulationState> {
+    const revision = this.revision;
+    const epoch = this.snapshotEpoch;
+    const conversations = await this.social.exportConversationsAsync();
+    if (revision !== this.revision || epoch !== this.snapshotEpoch) {
+      throw new Error('Simulation changed during async snapshot export; retry the save');
+    }
+    const coreState = this.core.getStateForConversationExport(conversations);
+    return JSON.parse(JSON.stringify(this.assembleState(coreState))) as LiveSimulationState;
+  }
+
+  /** Only rebind a cold prefix when its *originating* slot was overwritten. */
+  public rebindColdConversationReader(
+    slotId: string, reader: (id: string, pageIndex: number) => Promise<import('../types').MessageRecord[] | null>,
+  ): void {
+    this.social.rebindColdConversations(slotId, reader);
   }
 
   public loadSnapshot(snapshot: TransportSimulationState): void {

@@ -412,9 +412,12 @@ export async function listSlots(): Promise<SlotSummary[]> {
 }
 
 export async function deleteSlot(slotId: string): Promise<void> {
-  try {
+  // #173: never strand another slot's history or delete a save without its
+  // archive in the same transaction.
+  await db.transaction('rw', db.saves, db.conversation_pages, async () => {
+    await db.conversation_pages.where('slotId').equals(slotId).delete();
     await db.saves.delete(slotId);
-  } catch { /* best-effort */ }
+  });
 }
 
 export async function hasAnySave(): Promise<boolean> {

@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import type { MessageRecord } from '../../../engine/types';
 import type { SimulationPulseContact } from '../../../engine/kernel/SimulationPublication';
 import { formatSimulationMinutes } from '../utils/timeFormat';
@@ -27,6 +27,8 @@ export const MessageHistoryView: React.FC<MessageHistoryViewProps> = ({ messages
   const openWindow = useWindowStore((s) => s.openWindow);
   const dispatchAction = useSimulationStore((s) => s.dispatchAction);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const [savingLog, setSavingLog] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   const handleOpenLink = (url: string) => {
     openWindow('browser', { initialUrl: url });
@@ -51,10 +53,15 @@ export const MessageHistoryView: React.FC<MessageHistoryViewProps> = ({ messages
     soundManager.play('im_send');
   };
 
-  const handleSaveLog = () => {
-    // Save is an explicit export operation, not the hot visual projection.
-    // A paged history must never silently truncate the player's saved log.
-    const completeLog = useSimulationStore.getState().engine.social.getMessages(buddy.id);
+  const handleSaveLog = async () => {
+    if (savingLog) return;
+    setSavingLog(true);
+    setSaveError(null);
+    try {
+    // Explicit full-history export must support cold saved pages as well.
+    const engine = useSimulationStore.getState().engine;
+    const completeLog = await engine.getConversationLogAsync(buddy.id);
+    if (useSimulationStore.getState().engine !== engine) throw new Error('Save changed');
     if (completeLog.length === 0) return;
     const day = Math.floor((completeLog[0]?.timestampMinute || 0) / 1440) + 1;
     const fileName = `Pulse_${buddy.handle}_Day${day}.txt`;
@@ -77,6 +84,11 @@ export const MessageHistoryView: React.FC<MessageHistoryViewProps> = ({ messages
       },
     });
     soundManager.play('im_send');
+    } catch {
+      setSaveError('Could not load the complete log. Please try again.');
+    } finally {
+      setSavingLog(false);
+    }
   };
 
   useEffect(() => {
@@ -89,7 +101,8 @@ export const MessageHistoryView: React.FC<MessageHistoryViewProps> = ({ messages
     <div className="flex flex-col flex-1 overflow-hidden">
       <div className="flex items-center justify-between border-b border-gray-300 bg-[#ece9d8] px-2 py-1">
         <span className="text-[11px] font-bold text-gray-600">{messages.length === totalMessages ? `${messages.length} messages` : `${messages.length} / ${totalMessages} messages`} • {buddy.displayName}</span>
-        <button onClick={handleSaveLog} disabled={totalMessages === 0} className="rounded border border-gray-400 bg-white px-2 py-0.5 text-[11px] hover:bg-blue-50 disabled:opacity-40">💾 Save log</button>
+        <button onClick={handleSaveLog} disabled={totalMessages === 0 || savingLog} className="rounded border border-gray-400 bg-white px-2 py-0.5 text-[11px] hover:bg-blue-50 disabled:opacity-40">{savingLog ? 'Saving…' : '💾 Save log'}</button>
+        {saveError && <span role="alert" className="ml-2 text-[10px] text-red-700">{saveError}</span>}
       </div>
     <div
       ref={scrollRef}

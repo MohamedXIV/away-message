@@ -296,6 +296,14 @@ export class CoreSimulationRuntime {
     return newState;
   }
 
+  /** Explicit async-save projection: callers have already exported the one
+   * canonical conversation owner; never pass a partial cold transcript here. */
+  public getStateForConversationExport(
+    conversations: SimulationState['social']['conversations'],
+  ): Readonly<SimulationState> {
+    return projectCoreState(this.coreOwners, this.activeView, conversations);
+  }
+
   /** Authoritative time coordination is delegated to one TimeAdvancement owner. */
   public advanceRealTime(deltaRealSeconds: number): void {
     this.timeAdvancement.advanceRealTime(deltaRealSeconds);

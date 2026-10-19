@@ -26,7 +26,7 @@ import { useSimulationChrome, useSimulationHud } from './store/useBoundedSimulat
 import { useAudioStore } from './store/useAudioStore';
 import { SimulationEngine } from './engine/SimulationEngine';
 import { MainMenu } from './menu/MainMenu';
-import { consumeBootRequest, loadSlotSnapshot, restoreSlotPulse, saveSlot, AUTOSAVE_ID } from './persistence/slots';
+import { consumeBootRequest, loadSlotEngine, restoreSlotPulse, saveSlot, AUTOSAVE_ID } from './persistence/slots';
 
 // Dev-only content studio (TinyBase Inspector): lazy + query-gated so the
 // editor never enters the production bundle. Open with ?studio in dev.
@@ -137,10 +137,10 @@ export const App: React.FC = () => {
     (async () => {
       try {
         if (request.kind === 'slot') {
-          const snapshot = await loadSlotSnapshot(request.slotId);
-          if (!snapshot) throw new Error(`Save slot '${request.slotId}' is empty or unreadable.`);
+          const engine = await loadSlotEngine(request.slotId);
+          if (!engine) throw new Error(`Save slot '${request.slotId}' is empty or unreadable.`);
           await restoreSlotPulse(request.slotId);
-          useSimulationStore.getState().setEngine(new SimulationEngine(snapshot as any));
+          useSimulationStore.getState().setEngine(engine);
         } else if (request.kind === 'new') {
           useSimulationStore.getState().setEngine(new SimulationEngine({
             starterHousingOfferId: request.housingOfferId,
