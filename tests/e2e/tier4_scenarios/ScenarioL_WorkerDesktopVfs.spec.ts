@@ -216,7 +216,7 @@ test('authored FlashFetch uses the Worker OsHost boundary and refuses real-world
   await expect(flash.getByText('FlashFetch is ready')).toBeVisible();
   await flash.getByPlaceholder('http://downloadhub.local/files/tool.zip')
     .fill('https://example.com/unsafe.zip');
-  await flash.getByRole('button', { name: /Download/ }).click();
+  await flash.locator('form').getByRole('button', { name: /Download/ }).click();
   await expect(flash.getByTestId('worker-os-host-error')).toContainText('in-game .local');
   await expect(flash.getByText('No active downloads in queue. FlashFetch is ready.')).toBeVisible();
   expect(await page.evaluate(() => !('__simEngine' in window) && !('__simStore' in window))).toBe(true);
