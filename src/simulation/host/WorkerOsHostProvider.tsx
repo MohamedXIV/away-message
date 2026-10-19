@@ -9,7 +9,7 @@ import { FlashFetchApp } from '../../apps/flashfetch/FlashFetchApp';
 import type { WorkerGameSession } from './WorkerGameSession';
 
 /** Exact same OS app contract on either owner. Never import OsHostContext,
- * useSimulationStore, or a browser-side WorldState/engine here.
+ * or a browser-side WorldState/engine here.
  */
 export function WorkerOsHostProvider({ session, windowId, appRead, onError, children }: {
   session: WorkerGameSession;
