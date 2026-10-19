@@ -2,7 +2,7 @@ import type { ActionResult, SimulationAction, SimulationState } from '../../engi
 import type { InitialSimulationState } from '../../engine/kernel/PhysicalSimulationRuntime';
 import type { SlotPulseMetadata, SlotSummary } from '../../persistence/slots';
 import type {
-  SimulationActorRead, SimulationChange, SimulationChromeRead,
+  SimulationActorRead, SimulationChange, SimulationChromeRead, SimulationDesktopRead,
   SimulationConversationRead, SimulationDirectoryRead, SimulationFileRead,
   SimulationHudProjection, SimulationMessengerRead, SimulationPlayerStatusRead,
   SimulationPresenceRead, SimulationResidenceRead, SimulationSituationRead,
@@ -15,6 +15,7 @@ export interface SimulationQueryResults {
   world: SimulationWorldRead;
   playerStatus: SimulationPlayerStatusRead;
   chrome: SimulationChromeRead;
+  desktop: SimulationDesktopRead;
   presence: SimulationPresenceRead;
   messenger: SimulationMessengerRead;
   actor: SimulationActorRead | null;
@@ -26,7 +27,7 @@ export interface SimulationQueryResults {
   transit: SimulationTransitRead;
 }
 export type SimulationQuery =
-  | { kind: 'hud' | 'world' | 'playerStatus' | 'chrome' | 'presence' | 'situation' | 'residence' | 'transit' }
+  | { kind: 'hud' | 'world' | 'playerStatus' | 'chrome' | 'desktop' | 'presence' | 'situation' | 'residence' | 'transit' }
   | { kind: 'messenger'; maxContacts?: number }
   | { kind: 'actor'; actorId: string }
   | { kind: 'conversation'; actorId: string; offset?: number; limit?: number }

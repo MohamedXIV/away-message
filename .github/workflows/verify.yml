@@ -115,3 +115,9 @@ jobs:
       - name: Browser Worker authored room and Pulse gates
         if: github.event_name == 'pull_request' && github.event.pull_request.head.ref == 'feat/175-single-worker-simulation-host'
         run: npx playwright test tests/e2e/tier4_scenarios/ScenarioK_WorkerAuthoredConsumers.spec.ts
+
+      # #175: same UI-only window store, Worker-only bounded OS/VFS facts,
+      # real Notepad -> File Explorer round trip, and minimize/restore/close.
+      - name: Browser Worker desktop and VFS gates
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.ref == 'feat/175-single-worker-simulation-host'
+        run: npx playwright test tests/e2e/tier4_scenarios/ScenarioL_WorkerDesktopVfs.spec.ts

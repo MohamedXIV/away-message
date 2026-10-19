@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import { WorkerGameSession } from './WorkerGameSession';
 import { WorkerPhysicalRoom } from './WorkerPhysicalRoom';
 import { WorkerPulsePanel } from './WorkerPulsePanel';
+import { WorkerDesktop } from './WorkerDesktop';
 
 /**
  * Opt-in Worker-first gameplay vertical slice. Never imports App, Zustand,
@@ -14,7 +15,7 @@ export function WorkerGameShell() {
   const [busy, setBusy] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
   const [slot, setSlot] = useState('slot_1');
-  const [panel, setPanel] = useState<'summary' | 'room' | 'pulse'>('summary');
+  const [panel, setPanel] = useState<'summary' | 'room' | 'pulse' | 'desktop'>('summary');
 
   useEffect(() => () => session.dispose(), [session]);
 
@@ -100,7 +101,7 @@ export function WorkerGameShell() {
             </div>
             {view.saved && <p role="status" className="text-sm text-emerald-300">{view.saved}</p>}
             <nav aria-label="Worker gameplay panels" className="flex gap-2 border-b border-slate-700 pb-2">
-              {(['summary', 'room', 'pulse'] as const).map(tab => (
+              {(['summary', 'room', 'pulse', 'desktop'] as const).map(tab => (
                 <button key={tab} type="button" onClick={() => setPanel(tab)}
                   aria-pressed={panel === tab}
                   className={`rounded border px-3 py-1 text-sm capitalize ${
@@ -116,6 +117,9 @@ export function WorkerGameShell() {
             )}
             {panel === 'pulse' && (
               <WorkerPulsePanel session={session} revision={view.hud.revision} />
+            )}
+            {panel === 'desktop' && (
+              <WorkerDesktop session={session} revision={view.hud.revision} />
             )}
           </>
         )}

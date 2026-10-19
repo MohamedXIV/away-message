@@ -203,3 +203,44 @@ navigating away; it is never loaded alongside the Worker session.
 modal economy and transit, full live actor placement/rigging and normal
 entrypoint still require migration. These partial authored consumers
 cannot justify merging #175 or dropping the currently playable UI.
+
+
+## P3.3 — OS window management and canonical VFS consumers (staged)
+
+The Worker-only `worker.html` route now includes a **Desktop** pane.
+It reuses the original `useWindowStore` for presentation-only
+open/focus/minimize/restore/maximize/close semantics and the existing
+`getOsPresentationProfile` for the owned OS theme; **neither module
+imports or creates SimulationKernel**.
+
+The canonical `SimulationKernel.getDesktopRead()` was added to the
+typed, allowlisted Worker query protocol. `WorkerDesktop` reads
+`desktop` and `chrome` projections at coherent revisions. When the
+canonical OS is absent, it explicitly describes its windows as a
+**technical migration surface**, not an in-world OS unlock. The full
+legacy `DesktopShell`, `WindowFrame`, `Taskbar` and `OsHostProvider`
+are NOT imported in the Worker-only entry because they still directly
+depend on `useSimulationStore` and would construct a second owner.
+
+Two concrete application workflows now run over the sole Worker owner:
+`WorkerFileExplorer` displays bounded, paginated source-owned
+`getDirectoryRead('C:/Documents')` metadata without full VFS cloning;
+`WorkerNotepad` retrieves a single `getFileRead(path)` body and
+issues `VFS_CREATE_FILE` to the canonical Kernel, matching the legacy
+Notepad's save contract. Pulse contacts and bounded conversations
+already migrated in P3.2 can now be opened, minimized, restored and
+closed inside the OS window manager; window state stays purely in
+the browser UI, not in the Worker domain authority.
+
+Acceptance `ScenarioL_WorkerDesktopVfs.spec.ts` checks real
+Notepad → canonical VFS file creation → minimize/restore/close →
+File Explorer read → reopened Notepad read, plus Pulse window
+minimize/restore/close. The browser asserts no legacy `__simEngine`
+or `__simStore` is constructed on this Worker-only route.
+
+**Still not accepted as full #175 cutover:** the complete native
+Desktop windows, installation, downloads, transit/physical placement
+and many legacy app imports still need worker-backed ports. The
+normal-game `/` route deliberately remains on its known-good
+synchronous owner until all gameplay is migrated and acceptance
+benchmarks run. Do not merge an incomplete parallel/duplicate world.
