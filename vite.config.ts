@@ -10,6 +10,16 @@ export default defineConfig({
   // Dedicated Simulation Worker imports cold IndexedDB pages asynchronously.
   // That requires an ES-module worker output: IIFE cannot split worker chunks.
   worker: { format: 'es' },
+  // Separate HTML entry keeps normal gameplay's synchronous boot contract,
+  // while the Worker-first page cannot import the eager legacy defaultEngine.
+  build: {
+    rollupOptions: {
+      input: {
+        game: path.resolve(__dirname, 'index.html'),
+        worker: path.resolve(__dirname, 'worker.html'),
+      },
+    },
+  },
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),

@@ -146,7 +146,7 @@ experience and test fixtures until the remaining domain APIs are converted.
 Evidence: `WorkerGameSession.test.ts` asserts atomic boot replacement,
 fatal handling, stale boot cancellation, bounded cache and once-per-day
 autosave. `ScenarioJ_WorkerFirstUI.spec.ts` runs the real React
-`?runtime=worker` entry, verifies no legacy `__simEngine/__simStore`,
+`/worker.html` entry, verifies no legacy `__simEngine/__simStore`,
 executes New → pause → advance → save → menu → load, and checks
 unreadable-save refusal without a shadow world.
 
@@ -157,3 +157,10 @@ switch the default route to this runtime and delete the eager local owner.
 Prove autosave, cold history, restart, failure UX and 20/100/250/500
 NPC scale using normal gameplay before review/merge. The opt-in slice is
 an executable staging surface, not a completed production cutover.
+
+**Build compatibility note:** Initial query-flag routing in `main.tsx`
+delayed legacy debug-store initialization, causing six existing Chromium
+living-world regressions. We reverted that routing and restored the
+original eager main bootstrap. The isolated `worker.html` entry and
+Vite multi-page build preserve both the old UI timing and a genuinely
+Worker-only code graph; both paths have browser acceptance gates.

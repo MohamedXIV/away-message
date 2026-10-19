@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test';
 
 test('Worker-only boot route never imports Zustand engine and persists a playable session', async ({ page }) => {
   test.setTimeout(90_000);
-  await page.goto('/?runtime=worker');
+  await page.goto('/worker.html');
   const shell = page.getByTestId('worker-first-shell');
   await expect(shell).toBeVisible();
   expect(await page.evaluate(() => !('__simEngine' in window) && !('__simStore' in window))).toBe(true);
@@ -31,7 +31,7 @@ test('Worker-only boot route never imports Zustand engine and persists a playabl
 
 test('Worker-only entry rejects unreadable slots and never starts an anonymous fallback world', async ({ page }) => {
   test.setTimeout(60_000);
-  await page.goto('/?runtime=worker');
+  await page.goto('/worker.html');
   await expect(page.getByTestId('worker-first-shell')).toBeVisible();
   await page.getByRole('button', { name: 'Load game' }).click();
   await expect(page.getByTestId('worker-phase')).toHaveText('error');
