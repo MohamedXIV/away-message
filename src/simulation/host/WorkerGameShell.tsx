@@ -3,6 +3,7 @@ import { WorkerGameSession } from './WorkerGameSession';
 import { WorkerPhysicalRoom } from './WorkerPhysicalRoom';
 import { WorkerPulsePanel } from './WorkerPulsePanel';
 import { WorkerDesktop } from './WorkerDesktop';
+import { useWindowStore } from '../../store/useWindowStore';
 
 /**
  * Opt-in Worker-first gameplay vertical slice. Never imports App, Zustand,
@@ -18,6 +19,18 @@ export function WorkerGameShell() {
   const [panel, setPanel] = useState<'summary' | 'room' | 'pulse' | 'desktop'>('summary');
 
   useEffect(() => () => session.dispose(), [session]);
+
+  // Windows are presentation-only and belong to a *single* Worker session.
+  // A menu/reload/failure must never leak the previous run's window stack
+  // into a new canonical world. Do not touch the simulation owner here.
+  useEffect(() => {
+    if (view.phase !== 'game') {
+      useWindowStore.setState({
+        windows: {}, windowOrder: [], activeWindowId: null,
+        highestZIndex: 10, cascadeCounter: 0,
+      });
+    }
+  }, [view.phase]);
 
   const act = async (operation: () => Promise<unknown>) => {
     setBusy(true);
