@@ -7,24 +7,34 @@ import { WorkerSimulationHost } from './WorkerSimulationHost';
  * owns the one canonical simulation plus IndexedDB save and cold-page reader.
  * Only this small UI payload crosses the wire during an explicit save.
  */
-function capturePulseMoment(): { pulseSlotId: string; pulsePayload: unknown } {
-  const pulseSlotId = getCurrentPulseSlotId();
+function capturePulseMoment(targetSlotId: string): { pulseSlotId: string; pulsePayload: unknown } {
+  // Save As and autosave copy the CURRENT UI moment into the target slot.
+  // Reading the destination's previous localStorage would silently restore
+  // an unrelated Pulse history the next time that destination is loaded.
+  const sourceSlotId = getCurrentPulseSlotId();
   let pulsePayload: unknown = null;
   try {
-    const raw = window.localStorage.getItem(getPulseSlotStorageKey(pulseSlotId))
+    const raw = window.localStorage.getItem(getPulseSlotStorageKey(sourceSlotId))
       ?? window.localStorage.getItem('away_message_pulse_state_v1');
     if (raw) pulsePayload = JSON.parse(raw);
   } catch {
     // A broken UI-only cache cannot corrupt the authoritative world save.
   }
-  return { pulseSlotId, pulsePayload };
+  return { pulseSlotId: targetSlotId, pulsePayload };
 }
 
 /** Explicit save: one worker transaction writes document + archived pages. */
 export async function saveBrowserSimulationSlot(
   host: WorkerSimulationHost, slotId: string, saveName?: string,
 ): Promise<SlotSummary> {
-  return host.saveSlot(slotId, capturePulseMoment(), saveName);
+  const moment = capturePulseMoment(slotId);
+  const result = await host.saveSlot(slotId, moment, saveName);
+  // Mirror only after the canonical IDB transaction commits. In particular,
+  // autosave must never change the active Pulse identity to 'autosave'.
+  try {
+    window.localStorage.setItem(getPulseSlotStorageKey(slotId), JSON.stringify(moment.pulsePayload ?? {}));
+  } catch { /* UI-only cache is best effort; the committed slot owns its copy */ }
+  return result;
 }
 
 /**

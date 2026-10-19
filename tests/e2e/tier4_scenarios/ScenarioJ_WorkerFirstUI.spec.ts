@@ -41,3 +41,33 @@ test('Worker-only entry rejects unreadable slots and never starts an anonymous f
   await page.getByRole('button', { name: 'New game' }).click();
   await expect(page.getByTestId('worker-phase')).toHaveText('game');
 });
+
+test('Worker Save As copies the current Pulse moment into its own slot and restores without cross-slot leaks', async ({ page }) => {
+  test.setTimeout(90_000);
+  await page.goto('/worker.html');
+  await page.getByRole('button', { name: 'New game' }).click();
+  await expect(page.getByTestId('worker-phase')).toHaveText('game');
+  await page.getByRole('button', { name: 'Pause clock' }).click();
+  await page.evaluate(() => {
+    localStorage.setItem('away_message_pulse_state_v1:slot_1',
+      JSON.stringify({ version: 1, marker: 'from-current-world' }));
+  });
+  await page.getByRole('combobox', { name: 'Save slot' }).selectOption('slot_2');
+  await page.getByRole('button', { name: 'Save game' }).click();
+  await expect(page.getByText('Saved to slot_2')).toBeVisible();
+  expect(await page.evaluate(() => localStorage.getItem('pulse_current_slot'))).toBe('slot_2');
+  expect(await page.evaluate(() => localStorage.getItem('away_message_pulse_state_v1:slot_2')))
+    .toContain('from-current-world');
+
+  await page.getByRole('button', { name: 'Return to menu' }).click();
+  await page.evaluate(() => {
+    localStorage.removeItem('away_message_pulse_state_v1:slot_2');
+    localStorage.setItem('pulse_current_slot', 'slot_1');
+  });
+  await page.getByRole('button', { name: 'Load game' }).click();
+  await expect(page.getByTestId('worker-phase')).toHaveText('game');
+  expect(await page.evaluate(() => localStorage.getItem('pulse_current_slot'))).toBe('slot_2');
+  expect(await page.evaluate(() => localStorage.getItem('away_message_pulse_state_v1:slot_2')))
+    .toContain('from-current-world');
+  expect(await page.evaluate(() => !('__simEngine' in window) && !('__simStore' in window))).toBe(true);
+});

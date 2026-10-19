@@ -144,4 +144,64 @@ describe('#175 Worker-first session lifecycle', () => {
     expect(session.getSnapshot().phase).toBe('menu');
     session.dispose();
   });
+
+  it('does not switch slots or report success when an explicit Worker save fails', async () => {
+    const worker = new FakeWorker();
+    const session = new WorkerGameSession({
+      newGame: async () => worker as unknown as WorkerSimulationHost,
+      loadGame: async () => { throw new Error('not used'); },
+      saveGame: async () => { throw new Error('IDB quota exceeded'); },
+    });
+    await session.newGame();
+    await expect(session.save('slot_2')).rejects.toThrow('IDB quota exceeded');
+    expect(session.getSnapshot()).toMatchObject({
+      phase: 'game', slotId: 'slot_1', saved: null,
+    });
+    session.dispose();
+  });
+
+  it('retries a failed daily autosave after the next canonical revision', async () => {
+    const worker = new FakeWorker();
+    let attempts = 0;
+    const session = new WorkerGameSession({
+      newGame: async () => worker as unknown as WorkerSimulationHost,
+      loadGame: async () => { throw new Error('not used'); },
+      saveGame: async () => {
+        attempts++;
+        if (attempts === 1) throw new Error('temporary IDB error');
+      },
+    });
+    await session.newGame();
+    await session.advanceMinutes(1440);
+    await vi.waitFor(() => expect(session.getSnapshot().saved).toContain('Autosave failed'));
+    expect(attempts).toBe(1);
+    await session.advanceMinutes(1);
+    await vi.waitFor(() => expect(session.getSnapshot().saved).toBe('Autosaved'));
+    expect(attempts).toBe(2);
+    session.dispose();
+  });
+
+  it('serializes daily autosaves even if another day passes during a slow save', async () => {
+    const worker = new FakeWorker();
+    const saves: string[] = [];
+    let releaseFirst!: () => void;
+    const first = new Promise<void>(resolve => { releaseFirst = resolve; });
+    const session = new WorkerGameSession({
+      newGame: async () => worker as unknown as WorkerSimulationHost,
+      loadGame: async () => { throw new Error('not used'); },
+      saveGame: async (_host, slotId) => {
+        saves.push(slotId);
+        if (saves.length === 1) await first;
+      },
+    });
+    await session.newGame();
+    await session.advanceMinutes(1440);
+    await vi.waitFor(() => expect(saves).toHaveLength(1));
+    await session.advanceMinutes(1440);
+    await vi.waitFor(() => expect(session.getSnapshot().hud?.time.day).toBe(3));
+    expect(saves).toEqual(['autosave']);
+    releaseFirst();
+    await vi.waitFor(() => expect(saves).toEqual(['autosave', 'autosave']));
+    session.dispose();
+  });
 });

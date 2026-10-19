@@ -53,6 +53,7 @@ export class WorkerGameSession {
   private refreshing = false;
   private lastDay: number | null = null;
   private lastAutosavedDay: number | null = null;
+  private autosaveDayInFlight: number | null = null;
 
   constructor(private readonly factories: WorkerSessionFactories = browserFactories) {}
 
@@ -79,6 +80,7 @@ export class WorkerGameSession {
     this.refreshPending = false;
     this.lastDay = null;
     this.lastAutosavedDay = null;
+    this.autosaveDayInFlight = null;
   }
 
   private fail(cause: unknown, generation: number): void {
@@ -157,13 +159,26 @@ export class WorkerGameSession {
         const previousDay = this.lastDay;
         this.lastDay = hud.time.day;
         this.patch({ hud, world, player });
-        if (previousDay !== null && hud.time.day > previousDay
-          && this.lastAutosavedDay !== hud.time.day) {
-          this.lastAutosavedDay = hud.time.day;
+        if (previousDay !== null && hud.time.day > (this.lastAutosavedDay ?? previousDay)
+          && this.autosaveDayInFlight === null) {
+          const saveDay = hud.time.day;
+          this.autosaveDayInFlight = saveDay;
           void this.factories.saveGame(host, 'autosave').then(() => {
-            if (generation === this.epoch) this.patch({ saved: 'Autosaved' });
+            if (generation !== this.epoch) return;
+            // An attempted save is NOT a completed save. Retry after a later
+            // canonical revision if IDB rejected this transaction.
+            this.lastAutosavedDay = saveDay;
+            this.patch({ saved: 'Autosaved' });
           }).catch(error => {
             if (generation === this.epoch) this.patch({ saved: 'Autosave failed: ' + String(error) });
+          }).finally(() => {
+            if (generation !== this.epoch || this.host !== host) return;
+            this.autosaveDayInFlight = null;
+            // The player may have crossed another day while the IDB save was
+            // pending. Schedule its latest day without overlapping writes.
+            if (this.view.hud && this.view.hud.time.day > saveDay) {
+              void this.refresh(generation, host);
+            }
           });
         }
       }
@@ -201,9 +216,13 @@ export class WorkerGameSession {
   async save(slotId = this.view.slotId): Promise<void> {
     const host = this.active();
     const generation = this.epoch;
-    setCurrentPulseSlotId(slotId);
     await this.factories.saveGame(host, slotId);
-    if (generation === this.epoch) this.patch({ slotId, saved: 'Saved to ' + slotId });
+    if (generation === this.epoch) {
+      // Save As switches the active UI slot ONLY after the Worker confirms
+      // the canonical save. Failed writes must not redirect Pulse state.
+      setCurrentPulseSlotId(slotId);
+      this.patch({ slotId, saved: 'Saved to ' + slotId });
+    }
   }
 
   backToMenu(): void {
