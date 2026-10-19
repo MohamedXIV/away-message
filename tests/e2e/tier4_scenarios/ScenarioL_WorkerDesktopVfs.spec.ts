@@ -56,3 +56,23 @@ test('Worker desktop Pulse window can minimize, restore and query same authorize
   await expect(page.getByTestId('worker-window-pulse')).toHaveCount(0);
   expect(await page.evaluate(() => !('__simEngine' in window) && !('__simStore' in window))).toBe(true);
 });
+
+test('Worker desktop public network reads canonical CityWire and job-board projections', async ({ page }) => {
+  test.setTimeout(60_000);
+  await page.goto('/worker.html');
+  await page.getByRole('button', { name: 'New game' }).click();
+  await expect(page.getByTestId('worker-phase')).toHaveText('game');
+  await page.getByRole('button', { name: 'desktop', exact: true }).click();
+  const desktop = page.getByTestId('worker-desktop');
+  await desktop.getByRole('button', { name: 'Open Town Sites' }).click();
+  const publicWeb = page.getByTestId('worker-public-sites');
+  await expect(publicWeb.getByRole('heading', { name: 'The City Wire' })).toBeVisible();
+  await publicWeb.getByRole('button', { name: 'Jobs.local' }).click();
+  await expect(publicWeb.getByRole('heading', { name: 'Oakhaven Job Board' })).toBeVisible();
+  await expect(publicWeb.getByText('Canonical available gigs, up to 32 listings')).toBeVisible();
+  await desktop.getByRole('button', { name: 'Minimize Town Sites' }).click();
+  await expect(publicWeb).toHaveCount(0);
+  await desktop.getByRole('button', { name: 'Taskbar Town Sites' }).click();
+  await expect(publicWeb).toBeVisible();
+  expect(await page.evaluate(() => !('__simEngine' in window) && !('__simStore' in window))).toBe(true);
+});

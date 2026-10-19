@@ -337,3 +337,25 @@ This fixes persistence/lifecycle hazards, **not** the remaining normal-game
 entrypoint cutover. PR #204 stays Draft and #175 stays Open until the
 remaining app registry/OS UI consumers and production-root Worker authority
 are migrated, then final browser and 20/100/250/500 NPC acceptance runs.
+
+
+## P3.7 — Two public desktop websites (staging consumer)
+
+A **Town Sites** window now reads the existing public `getWebsiteRead()`
+and `getJobBoardRead()` owner projections over explicitly allowlisted
+Worker `website` and `jobBoard` queries. The former contains no more
+than 256 public triggered events, the latter no more than 32 public gig
+summaries. Neither transfers the Social graph, private NPC records, a
+full WorldState or a general RPC/method selector.
+
+This is a deliberately narrow Worker-facing **public read surface**, not
+an assertion that the original Voyager/CityWire/Jobs browser UI and
+application workflows have all been migrated. Those legacy components
+still import the main-thread synchronous simulation store and must not
+be mounted on `worker.html`. A mounted public-site window uses the
+existing UI-only window store for taskbar minimize/restore/close.
+
+Unit coverage checks source-backed bounds/no `getState()`; real Chromium
+coverage checks both pages and window lifecycle without constructing a
+legacy `__simEngine` or `__simStore`. Further app command ports and the
+production entrypoint remain outstanding before #175 acceptance.

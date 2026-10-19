@@ -191,4 +191,25 @@ describe('#175 single-writer Worker runtime protocol', () => {
         .toBe(current.data!.durationMinutes);
     } finally { runtime.close(); }
   });
+
+  it('serves only bounded public news and job-board projections to Worker-facing apps', async () => {
+    const { ask, runtime } = harness();
+    const getState = vi.spyOn(SimulationKernel.prototype, 'getState');
+    try {
+      await ask({ op: 'init' });
+      const site = await ask({ op: 'query', query: { kind: 'website' } }) as
+        ReturnType<SimulationKernel['getWebsiteRead']>;
+      const jobs = await ask({ op: 'query', query: { kind: 'jobBoard' } }) as
+        ReturnType<SimulationKernel['getJobBoardRead']>;
+      expect(site.world.triggeredEvents.length).toBeLessThanOrEqual(256);
+      expect(jobs.jobs.length).toBeLessThanOrEqual(32);
+      expect(site.revision).toBe(jobs.revision);
+      expect('social' in site).toBe(false);
+      expect('actors' in jobs).toBe(false);
+      expect(getState).not.toHaveBeenCalled();
+    } finally {
+      getState.mockRestore();
+      runtime.close();
+    }
+  });
 });

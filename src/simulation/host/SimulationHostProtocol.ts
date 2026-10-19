@@ -5,9 +5,9 @@ import type { SlotPulseMetadata, SlotSummary } from '../../persistence/slots';
 import type {
   SimulationActorRead, SimulationAppRead, SimulationChange, SimulationChromeRead, SimulationDesktopRead,
   SimulationConversationRead, SimulationDirectoryRead, SimulationFileRead,
-  SimulationHudProjection, SimulationMessengerRead, SimulationPlayerStatusRead,
+  SimulationHudProjection, SimulationJobBoardRead, SimulationMessengerRead, SimulationPlayerStatusRead,
   SimulationPresenceRead, SimulationResidenceRead, SimulationSituationRead,
-  SimulationTransitRead, SimulationWorldRead,
+  SimulationTransitRead, SimulationWebsiteRead, SimulationWorldRead,
 } from '../../engine/kernel/SimulationPublication';
 
 /** #175: Only whitelisted, bounded semantic/read models cross postMessage. */
@@ -18,6 +18,8 @@ export interface SimulationQueryResults {
   chrome: SimulationChromeRead;
   desktop: SimulationDesktopRead;
   apps: SimulationAppRead;
+  website: SimulationWebsiteRead;
+  jobBoard: SimulationJobBoardRead;
   presence: SimulationPresenceRead;
   messenger: SimulationMessengerRead;
   actor: SimulationActorRead | null;
@@ -29,7 +31,7 @@ export interface SimulationQueryResults {
   transit: SimulationTransitRead;
 }
 export type SimulationQuery =
-  | { kind: 'hud' | 'world' | 'playerStatus' | 'chrome' | 'desktop' | 'apps' | 'presence' | 'situation' | 'residence' | 'transit' }
+  | { kind: 'hud' | 'world' | 'playerStatus' | 'chrome' | 'desktop' | 'apps' | 'presence' | 'situation' | 'residence' | 'transit' | 'website' | 'jobBoard' }
   | { kind: 'messenger'; maxContacts?: number }
   | { kind: 'actor'; actorId: string }
   | { kind: 'conversation'; actorId: string; offset?: number; limit?: number }

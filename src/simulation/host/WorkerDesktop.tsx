@@ -5,6 +5,7 @@ import { useWindowStore, type WindowState } from '../../store/useWindowStore';
 import { WorkerPulsePanel } from './WorkerPulsePanel';
 import { WorkerFileExplorer, WorkerNotepad } from './WorkerDesktopVfsApps';
 import { WorkerSystemPanel } from './WorkerSystemPanel';
+import { WorkerPublicSites } from './WorkerPublicSites';
 import type { WorkerGameSession } from './WorkerGameSession';
 
 const APPLICATIONS = [
@@ -12,6 +13,7 @@ const APPLICATIONS = [
   { id: 'notepad', label: 'Notepad', icon: '📝' },
   { id: 'pulse', label: 'Pulse Messenger', icon: '💬' },
   { id: 'system', label: 'Computer & Setup', icon: '💻' },
+  { id: 'publicweb', label: 'Town Sites', icon: '🌐' },
 ] as const;
 
 /**
@@ -103,6 +105,8 @@ export function WorkerDesktop({
                 ? win.customState.filePath : undefined} />
           ) : win.appId === 'system' ? (
             <WorkerSystemPanel session={session} revision={revision} />
+          ) : win.appId === 'publicweb' ? (
+            <WorkerPublicSites session={session} revision={revision} />
           ) : win.appId === 'pulse' ? (
             <div className="h-full overflow-y-auto bg-slate-900 p-2">
               <WorkerPulsePanel session={session} revision={revision} />
