@@ -307,3 +307,33 @@ Chromium `ScenarioN_WorkerCityTravel.spec.ts` verifies travel from
 home to the café, saving and reopening the updated location, returning
 home, and the bus-unavailable walking route. This is an incremental
 consumer cutover, not the final default-entry switch.
+
+
+## P3.6 — Save-slot isolation and Worker lifecycle hardening (staged)
+
+An explicit Worker Save As now captures the **current** UI-owned Pulse moment
+and commits that payload under the **destination slot** in the same canonical
+v6 Worker save operation. Only a successful commit mirrors the payload to
+the destination localStorage key. Loading a save restores Pulse under the
+slot being opened, regardless of its earlier source slot identifier. A
+failed save never switches the live Pulse identity; daily autosave copies
+the moment to `autosave` without redirecting the active UI slot.
+
+Day-boundary autosave is coalesced to one in-flight Worker transaction. A
+failed IDB save remains eligible for retry at the next canonical revision,
+not falsely marked complete. If another day passes while the transaction is
+pending, the latest day is queued after completion, not as an overlapping
+write. No UI-owned world or persistence fallback was added.
+
+A delayed query from an **older, disposed Worker generation** can no longer
+block the new generation's coherent HUD/world/player refresh or reset its
+read lock. Unit tests cover retry, multi-day coalescing, failed manual
+Save As, copied Pulse metadata, and old-generation read isolation. An
+additional actual Chromium Worker-first flow saves Pulse metadata to
+another slot, destroys its local copy, and verifies it reloads from the
+Worker-owned canonical slot without starting the legacy world.
+
+This fixes persistence/lifecycle hazards, **not** the remaining normal-game
+entrypoint cutover. PR #204 stays Draft and #175 stays Open until the
+remaining app registry/OS UI consumers and production-root Worker authority
+are migrated, then final browser and 20/100/250/500 NPC acceptance runs.

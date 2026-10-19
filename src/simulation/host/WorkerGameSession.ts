@@ -50,7 +50,8 @@ export class WorkerGameSession {
   private epoch = 0;
   private disposed = false;
   private refreshPending = false;
-  private refreshing = false;
+  /** Generation-bound refresh token: an old Worker read must not stall a new run. */
+  private refreshOwner: { generation: number; host: WorkerSimulationHost } | null = null;
   private lastDay: number | null = null;
   private lastAutosavedDay: number | null = null;
   private autosaveDayInFlight: number | null = null;
@@ -78,6 +79,7 @@ export class WorkerGameSession {
     this.host?.dispose();
     this.host = null;
     this.refreshPending = false;
+    this.refreshOwner = null;
     this.lastDay = null;
     this.lastAutosavedDay = null;
     this.autosaveDayInFlight = null;
@@ -139,8 +141,9 @@ export class WorkerGameSession {
   private async refresh(generation: number, host: WorkerSimulationHost): Promise<void> {
     if (this.disposed || generation !== this.epoch || this.view.phase !== 'game') return;
     this.refreshPending = true;
-    if (this.refreshing) return;
-    this.refreshing = true;
+    if (this.refreshOwner?.generation === generation && this.refreshOwner.host === host) return;
+    const owner = { generation, host };
+    this.refreshOwner = owner;
     try {
       while (this.refreshPending && generation === this.epoch && this.host === host) {
         this.refreshPending = false;
@@ -185,7 +188,9 @@ export class WorkerGameSession {
     } catch (error) {
       this.fail(error, generation);
     } finally {
-      this.refreshing = false;
+      // A stale, delayed query may finish after release() and a new boot.
+      // It must never clear the new generation's refresh lock.
+      if (this.refreshOwner === owner) this.refreshOwner = null;
     }
   }
 

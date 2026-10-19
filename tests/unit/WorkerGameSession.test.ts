@@ -204,4 +204,38 @@ describe('#175 Worker-first session lifecycle', () => {
     await vi.waitFor(() => expect(saves).toEqual(['autosave', 'autosave']));
     session.dispose();
   });
+
+  it('does not let a suspended old Worker refresh block a newly loaded session', async () => {
+    const oldWorker = new FakeWorker();
+    const newWorker = new FakeWorker();
+    const originalQuery = oldWorker.query;
+    let stall = false;
+    let started = false;
+    let resume!: () => void;
+    const pendingRead = new Promise<void>(resolve => { resume = resolve; });
+    oldWorker.query = async (query) => {
+      if (stall && query.kind === 'hud') {
+        started = true;
+        await pendingRead;
+      }
+      return originalQuery(query);
+    };
+    const session = createSession([oldWorker, newWorker]);
+    try {
+      await session.newGame();
+      stall = true;
+      oldWorker.notify();
+      await vi.waitFor(() => expect(started).toBe(true));
+      await session.loadGame('slot_2');
+      expect(oldWorker.disposed).toBe(true);
+      await newWorker.advanceGameMinutes(11);
+      // The new generation must publish immediately, without requiring the
+      // prior Worker query to resolve first.
+      await vi.waitFor(() => expect(session.getSnapshot().hud?.time.totalMinutes).toBe(491));
+      expect(session.getSnapshot().slotId).toBe('slot_2');
+    } finally {
+      resume();
+      session.dispose();
+    }
+  });
 });
