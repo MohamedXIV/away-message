@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { SimulationChromeRead, SimulationDesktopRead } from '../../engine/kernel/SimulationPublication';
 import { getOsPresentationProfile } from '../../desktop/host/OsPresentation';
+import { WindowFrameChrome } from '../../desktop/WindowFrameChrome';
 import { useWindowStore, type WindowState } from '../../store/useWindowStore';
 import { WorkerPulsePanel } from './WorkerPulsePanel';
 import { WorkerFileExplorer, WorkerNotepad } from './WorkerDesktopVfsApps';
@@ -21,9 +22,10 @@ const APPLICATIONS = [
  * OsPresentation profiles. All game state, file bodies and messages are
  * read/modified through the ONE WorkerGameSession.
  *
- * This is not yet the fully migrated DesktopShell/WindowFrame/Taskbar:
- * the old components import an eager SimulationEngine at module load and
- * must not be loaded on the Worker-only HTML entry.
+ * Shared authored WindowFrameChrome handles actual OS window presentation,
+ * resizing, dragging, animations and taskbar lifecycle. The legacy wrapper
+ * WindowFrame and its OsHostProvider still import the main-thread engine;
+ * do NOT import those adapters on the Worker-only HTML entry.
  */
 export function WorkerDesktop({
   session, revision,
@@ -38,11 +40,8 @@ export function WorkerDesktop({
   const windowOrder = useWindowStore(s => s.windowOrder);
   const activeId = useWindowStore(s => s.activeWindowId);
   const openWindow = useWindowStore(s => s.openWindow);
-  const closeWindow = useWindowStore(s => s.closeWindow);
-  const minimizeWindow = useWindowStore(s => s.minimizeWindow);
   const restoreWindow = useWindowStore(s => s.restoreWindow);
   const focusWindow = useWindowStore(s => s.focusWindow);
-  const toggleMaximize = useWindowStore(s => s.toggleMaximize);
 
   useEffect(() => {
     let current = true;
@@ -91,12 +90,10 @@ export function WorkerDesktop({
       </div>
 
       {openWindows.filter(win => !win.isMinimized).map(win => (
-        <WorkerDesktopWindow
-          key={win.id} window={win} active={win.id === activeId}
-          chrome={chrome} onFocus={() => focusWindow(win.id)}
-          onClose={() => closeWindow(win.id)}
-          onMinimize={() => minimizeWindow(win.id)}
-          onMaximize={() => toggleMaximize(win.id)}>
+        <WindowFrameChrome
+          key={win.id} window={win} isActive={win.id === activeId}
+          osVersion={chrome?.osVersion ?? null}
+          testId={'worker-window-' + win.appId}>
           {win.appId === 'fileexplorer' ? (
             <WorkerFileExplorer session={session} revision={revision} openDocument={openDocument} />
           ) : win.appId === 'notepad' ? (
@@ -112,7 +109,7 @@ export function WorkerDesktop({
               <WorkerPulsePanel session={session} revision={revision} />
             </div>
           ) : null}
-        </WorkerDesktopWindow>
+        </WindowFrameChrome>
       ))}
 
       <footer data-testid="worker-desktop-taskbar"
@@ -140,41 +137,3 @@ export function WorkerDesktop({
   );
 }
 
-function WorkerDesktopWindow({
-  window: win, active, chrome, onFocus, onClose, onMinimize, onMaximize, children,
-}: {
-  window: WindowState;
-  active: boolean;
-  chrome: SimulationChromeRead | null;
-  onFocus: () => void;
-  onClose: () => void;
-  onMinimize: () => void;
-  onMaximize: () => void;
-  children: React.ReactNode;
-}) {
-  const profile = chrome?.osVersion ? getOsPresentationProfile(chrome.osVersion) : null;
-  return (
-    <section data-testid={'worker-window-' + win.appId} onPointerDown={onFocus}
-      className={`absolute flex flex-col overflow-hidden border-2 bg-[#c0c0c0] shadow-xl ${active
-        ? 'border-white' : 'border-gray-600'}`}
-      style={win.isMaximized
-        ? { left: 0, top: 0, right: 0, bottom: 36, zIndex: win.zIndex }
-        : {
-          left: win.position.x, top: win.position.y,
-          width: Math.min(win.size.width, 640), height: Math.min(win.size.height, 440),
-          zIndex: win.zIndex,
-        }}>
-      <header className="flex h-7 shrink-0 items-center gap-2 bg-[#000080] px-2 text-xs text-white"
-        style={{ fontFamily: profile?.titlebar.fontStack }}>
-        <span className="min-w-0 flex-1 truncate">{win.icon} {win.title}</span>
-        <button type="button" aria-label={'Minimize ' + win.title}
-          onClick={onMinimize} className="rounded bg-[#c0c0c0] px-2 text-black">_</button>
-        <button type="button" aria-label={'Maximize ' + win.title}
-          onClick={onMaximize} className="rounded bg-[#c0c0c0] px-2 text-black">□</button>
-        <button type="button" aria-label={'Close ' + win.title}
-          onClick={onClose} className="rounded bg-[#c0c0c0] px-2 text-black">×</button>
-      </header>
-      <div className="min-h-0 flex-1 overflow-hidden">{children}</div>
-    </section>
-  );
-}

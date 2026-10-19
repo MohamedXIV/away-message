@@ -359,3 +359,26 @@ Unit coverage checks source-backed bounds/no `getState()`; real Chromium
 coverage checks both pages and window lifecycle without constructing a
 legacy `__simEngine` or `__simStore`. Further app command ports and the
 production entrypoint remain outstanding before #175 acceptance.
+
+
+## P3.8 — One shared authored OS window frame (staged)
+
+The original `WindowFrame` has been split along its existing seam: the
+legacy adapter retains `useSimulationChrome` and `OsHostProvider`, while
+`WindowFrameChrome` receives the OS identity directly and contains **the
+same authored titlebar, pointer dragging/resizing, maximize/restore, close,
+minimize, sound and distro motion/visual styles**. The Worker desktop now
+mounts this presentation-only component with its bounded `ChromeRead`
+without ever importing the old main-thread store or an OsHostProvider.
+The temporary duplicate WorkerDesktopWindow implementation is deleted.
+Existing legacy window callers still import `WindowFrame` unchanged.
+The local `useWindowStore` remains UI-only, while all game/domain actions
+still travel through the canonical Dedicated Worker.
+
+Chromium acceptance extends the Worker Desktop/VFS scenario with actual
+shared WindowFrame titlebar dragging, maximize/restore and a check that
+no legacy `__simEngine`/`__simStore` was constructed; existing window
+open/minimize/restore/close and normal-game browser smoke must also pass.
+This **does not** migrate the old `Taskbar`, `OsHostProvider` app API,
+`WindowManager`'s eager legacy registry, or production `/` routing.
+Do not merge until those dependencies are addressed and #177 scale proven.

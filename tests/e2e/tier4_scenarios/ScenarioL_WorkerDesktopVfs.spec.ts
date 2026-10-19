@@ -76,3 +76,29 @@ test('Worker desktop public network reads canonical CityWire and job-board proje
   await expect(publicWeb).toBeVisible();
   expect(await page.evaluate(() => !('__simEngine' in window) && !('__simStore' in window))).toBe(true);
 });
+
+test('Worker windows reuse authored WindowFrame dragging, sizing and maximize without a shadow engine', async ({ page }) => {
+  test.setTimeout(60_000);
+  await page.goto('/worker.html');
+  await page.getByRole('button', { name: 'New game' }).click();
+  await expect(page.getByTestId('worker-phase')).toHaveText('game');
+  await page.getByRole('button', { name: 'desktop', exact: true }).click();
+  const desktop = page.getByTestId('worker-desktop');
+  await desktop.getByRole('button', { name: 'Open Notepad' }).click();
+  const frame = page.getByTestId('worker-window-notepad');
+  await expect(frame).toHaveClass(/os-themed-window/);
+  const before = await frame.boundingBox();
+  const titlebar = await frame.locator('.os-themed-titlebar').boundingBox();
+  expect(before).not.toBeNull();
+  expect(titlebar).not.toBeNull();
+  await page.mouse.move(titlebar!.x + 85, titlebar!.y + 12);
+  await page.mouse.down();
+  await page.mouse.move(titlebar!.x + 123, titlebar!.y + 32, { steps: 5 });
+  await page.mouse.up();
+  await expect.poll(async () => (await frame.boundingBox())?.x ?? 0).toBeGreaterThan(before!.x + 18);
+  await desktop.getByRole('button', { name: 'Maximize Notepad' }).click();
+  await expect(frame).toHaveAttribute('style', /width: 100%/);
+  await desktop.getByRole('button', { name: 'Restore Notepad' }).click();
+  await expect(frame).not.toHaveAttribute('style', /width: 100%/);
+  expect(await page.evaluate(() => !('__simEngine' in window) && !('__simStore' in window))).toBe(true);
+});

@@ -113,6 +113,8 @@ function getDefaultIcon(appId: string): string {
     case 'app.browser':
     case 'publicweb':
       return '🌐';
+    case 'system':
+      return '💻';
     case 'pulse':
     case 'app.pulse':
       return '💬';
@@ -172,6 +174,8 @@ function getDefaultTitle(appId: string): string {
       return 'Voyager Browser';
     case 'publicweb':
       return 'Town Sites';
+    case 'system':
+      return 'Computer & Setup';
     case 'pulse':
     case 'app.pulse':
       return 'Pulse Messenger';
