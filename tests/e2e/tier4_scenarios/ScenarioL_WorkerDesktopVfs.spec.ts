@@ -14,7 +14,7 @@ test('Worker-owned desktop reuses window store; Explorer and Notepad persist rea
   await desktop.getByRole('button', { name: 'Open Notepad' }).click();
   const notepad = page.getByTestId('worker-window-notepad');
   await expect(notepad).toBeVisible();
-  await notepad.getByLabel('worker-document-name').fill('OwnerBoundaryNote.txt');
+  await notepad.getByLabel('Name').fill('OwnerBoundaryNote.txt');
   await notepad.getByRole('textbox', { name: 'Notepad document' })
     .fill('Written into the one canonical Worker world');
   await notepad.getByRole('button', { name: 'Save', exact: true }).click();
