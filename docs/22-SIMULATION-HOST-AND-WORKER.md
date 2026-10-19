@@ -290,3 +290,20 @@ No local `__simEngine/__simStore` is constructed in these flows.
 staging entry. The full legacy installer/OS wizard and default Desktop
 continue using synchronous owners on `/` until all remaining
 consumers and acceptance gates migrate. No false readiness claim.
+
+
+## P3.5 — Worker-backed Oakhaven city routes
+
+The staging game shell now offers the original Oakhaven city map, with
+public static topology and owner-backed `WorldRead` for the player's
+current location and weather. Route quotes are previews only.
+Authoritative `TRAVEL_TO` commands execute inside the existing
+Dedicated Worker, including time, fees, closures, energy and encounters.
+The room door opens the city map; while away the room tab no longer
+renders a misleading bedroom scene. A usable PC hotspot opens the
+Worker desktop.
+
+Chromium `ScenarioN_WorkerCityTravel.spec.ts` verifies travel from
+home to the café, saving and reopening the updated location, returning
+home, and the bus-unavailable walking route. This is an incremental
+consumer cutover, not the final default-entry switch.

@@ -9,10 +9,12 @@ import type { WorldInteractionIntent } from '../../world/phaser/types';
  * worker-owned bounded WorldRead. Phaser renders, but never owns gameplay.
  */
 export function WorkerPhysicalRoom({
-  world, dispatch,
+  world, dispatch, onOpenCity, onOpenDesktop,
 }: {
   world: SimulationWorldRead;
   dispatch: (action: SimulationAction) => Promise<ActionResult>;
+  onOpenCity: () => void;
+  onOpenDesktop: () => void;
 }) {
   const [preferredView, setPreferredView] = useState<string | undefined>();
   const [notice, setNotice] = useState<string | null>(null);
@@ -52,11 +54,11 @@ export function WorkerPhysicalRoom({
         act({ type: 'PLAYER_REST_OR_SLEEP' }, 'Rested until morning');
         break;
       case 'use_computer':
-        // The complete desktop installation workflow is NOT migrated yet.
-        setNotice('PC desktop and hardware workflows still require migration.');
+        if (world.pcBootState === 'desktop') onOpenDesktop();
+        else setNotice('Computer not bootable. Open Desktop → Computer & Setup.');
         break;
       case 'leave_room':
-        setNotice('Select a destination in the upcoming Worker transit UI.');
+        onOpenCity();
         break;
       default:
         if (intent.capability?.startsWith('inspect_') || intent.capability?.startsWith('open_')) {
@@ -89,6 +91,8 @@ export function WorkerPhysicalRoom({
         />
       </div>
       <div className="flex flex-wrap gap-2">
+        <button className="rounded border border-slate-600 px-3 py-1 text-sm hover:bg-slate-800"
+          onClick={onOpenCity}>Leave room / City map</button>
         <button className="rounded border border-slate-600 px-3 py-1 text-sm hover:bg-slate-800"
           onClick={() => onIntent({ type: 'INTERACTION', capability: 'shower' })}>
           Shower

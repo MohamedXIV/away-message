@@ -127,3 +127,7 @@ jobs:
       - name: Browser Worker physical OS ownership gates
         if: github.event_name == 'pull_request' && github.event.pull_request.head.ref == 'feat/175-single-worker-simulation-host'
         run: npx playwright test tests/e2e/tier4_scenarios/ScenarioM_WorkerPhysicalOs.spec.ts
+
+      - name: Browser Worker city travel and persistence gates
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.ref == 'feat/175-single-worker-simulation-host'
+        run: npx playwright test tests/e2e/tier4_scenarios/ScenarioN_WorkerCityTravel.spec.ts

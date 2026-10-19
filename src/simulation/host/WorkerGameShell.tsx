@@ -3,6 +3,7 @@ import { WorkerGameSession } from './WorkerGameSession';
 import { WorkerPhysicalRoom } from './WorkerPhysicalRoom';
 import { WorkerPulsePanel } from './WorkerPulsePanel';
 import { WorkerDesktop } from './WorkerDesktop';
+import { WorkerCityTravel } from './WorkerCityTravel';
 import { useWindowStore } from '../../store/useWindowStore';
 
 /**
@@ -16,7 +17,7 @@ export function WorkerGameShell() {
   const [busy, setBusy] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
   const [slot, setSlot] = useState('slot_1');
-  const [panel, setPanel] = useState<'summary' | 'room' | 'pulse' | 'desktop'>('summary');
+  const [panel, setPanel] = useState<'summary' | 'room' | 'city' | 'pulse' | 'desktop'>('summary');
 
   useEffect(() => () => session.dispose(), [session]);
 
@@ -114,7 +115,7 @@ export function WorkerGameShell() {
             </div>
             {view.saved && <p role="status" className="text-sm text-emerald-300">{view.saved}</p>}
             <nav aria-label="Worker gameplay panels" className="flex gap-2 border-b border-slate-700 pb-2">
-              {(['summary', 'room', 'pulse', 'desktop'] as const).map(tab => (
+              {(['summary', 'room', 'city', 'pulse', 'desktop'] as const).map(tab => (
                 <button key={tab} type="button" onClick={() => setPanel(tab)}
                   aria-pressed={panel === tab}
                   className={`rounded border px-3 py-1 text-sm capitalize ${
@@ -124,9 +125,19 @@ export function WorkerGameShell() {
                 </button>
               ))}
             </nav>
-            {panel === 'room' && (
+            {panel === 'room' && view.world.playerLocation === 'home' && (
               <WorkerPhysicalRoom world={view.world}
-                dispatch={action => session.dispatch(action)} />
+                dispatch={action => session.dispatch(action)}
+                onOpenCity={() => setPanel('city')}
+                onOpenDesktop={() => setPanel('desktop')} />
+            )}
+            {panel === 'room' && view.world.playerLocation !== 'home' && (
+              <WorkerCityTravel world={view.world} session={session}
+                onReturnToRoom={() => setPanel('room')} />
+            )}
+            {panel === 'city' && (
+              <WorkerCityTravel world={view.world} session={session}
+                onReturnToRoom={() => setPanel('room')} />
             )}
             {panel === 'pulse' && (
               <WorkerPulsePanel session={session} revision={view.hud.revision} />
