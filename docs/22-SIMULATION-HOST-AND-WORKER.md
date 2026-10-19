@@ -164,3 +164,42 @@ living-world regressions. We reverted that routing and restored the
 original eager main bootstrap. The isolated `worker.html` entry and
 Vite multi-page build preserve both the old UI timing and a genuinely
 Worker-only code graph; both paths have browser acceptance gates.
+
+
+## P3.2 — Real authored consumers on the Worker-first route
+
+This iteration migrates **two tangible player surfaces**, not just a
+test-only HUD: the production `PhysicalWorldBoundary`/Phaser scene is
+fed a `createWorldSceneProjection` derived from the Worker-owned
+`SimulationWorldRead`, and its existing interaction intents route to
+typed `SimulationAction` commands (tea/shower/window/sleep). View
+transitions only change the local renderer view. Unsupported computer
+setup/travel intents show an explicit not-yet-migrated notice rather than
+mutating a shadow kernel.
+
+The actual `BuddyItem` component from Pulse is reused in
+`WorkerPulsePanel`, with identities exclusively from bounded,
+player-known `getMessengerRead` data, presence from a separate
+authorized `getPresenceRead`, and conversation pages from the
+generation-/revision-guarded `getConversationReadAsync` Worker query.
+Sending messages uses `SOCIAL_SEND_MESSAGE` against the SAME kernel.
+No `SocialEngine.getBuddies()`, arbitrary chat map, Zustand store,
+or sync engine methods are imported by either new consumer.
+
+`WorkerGameSession.read()` is deliberately constrained to the
+allowlisted `SimulationQuery` contract, with no generic method RPC.
+Only the active Room or Pulse pane mounts the expensive renderer/reads;
+the original normal-game route stays unchanged.
+
+New Chromium acceptance (`ScenarioK_WorkerAuthoredConsumers`):
+real Phaser canvas + shower gameplay time mutation with absent
+`__simEngine/__simStore`; and **current-format v6 legacy-created
+slot → Worker-only boot**, existing authorized conversation read,
+BuddyItem rendering, new message send and source-backed redraw.
+The legacy fixture is used only to prepare a saved world before
+navigating away; it is never loaded alongside the Worker session.
+
+**Not complete:** broad Desktop/Pulse windows, installation/download UI,
+modal economy and transit, full live actor placement/rigging and normal
+entrypoint still require migration. These partial authored consumers
+cannot justify merging #175 or dropping the currently playable UI.

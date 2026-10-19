@@ -1,4 +1,5 @@
 import type { SimulationAction, ActionResult } from '../../engine/types';
+import type { SimulationQuery, SimulationQueryResult } from './SimulationHostProtocol';
 import type {
   SimulationHudProjection, SimulationWorldRead, SimulationPlayerStatusRead,
 } from '../../engine/kernel/SimulationPublication';
@@ -175,6 +176,11 @@ export class WorkerGameSession {
   private active(): WorkerSimulationHost {
     if (!this.host || this.view.phase !== 'game') throw new Error('Worker game not ready');
     return this.host;
+  }
+
+  /** Only player-safe bounded reads are authorized for UI consumers. */
+  read<Q extends SimulationQuery>(query: Q): Promise<SimulationQueryResult<Q>> {
+    return this.active().query(query);
   }
 
   async dispatch(action: SimulationAction): Promise<ActionResult> {
