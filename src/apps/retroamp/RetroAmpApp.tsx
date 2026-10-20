@@ -191,6 +191,7 @@ export const RetroAmpApp: React.FC<{
               onClick={handlePrevTrack}
               className="px-2 py-1 bg-gray-700 hover:bg-gray-600 text-white rounded text-xs font-bold"
               title="Previous"
+              aria-label="Previous"
             >
               ⏮
             </button>
@@ -199,6 +200,7 @@ export const RetroAmpApp: React.FC<{
                 onClick={handlePause}
                 className="px-2.5 py-1 bg-yellow-600 hover:bg-yellow-500 text-black rounded text-xs font-bold"
                 title="Pause"
+              aria-label="Pause"
               >
                 ⏸
               </button>
@@ -207,6 +209,7 @@ export const RetroAmpApp: React.FC<{
                 onClick={handlePlay}
                 className="px-2.5 py-1 bg-green-600 hover:bg-green-500 text-black rounded text-xs font-bold"
                 title="Play"
+              aria-label="Play"
               >
                 ▶
               </button>
@@ -215,6 +218,7 @@ export const RetroAmpApp: React.FC<{
               onClick={handleStop}
               className="px-2 py-1 bg-gray-700 hover:bg-gray-600 text-white rounded text-xs font-bold"
               title="Stop"
+              aria-label="Stop"
             >
               ⏹
             </button>
@@ -222,6 +226,7 @@ export const RetroAmpApp: React.FC<{
               onClick={handleNextTrack}
               className="px-2 py-1 bg-gray-700 hover:bg-gray-600 text-white rounded text-xs font-bold"
               title="Next"
+              aria-label="Next"
             >
               ⏭
             </button>

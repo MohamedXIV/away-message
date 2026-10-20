@@ -745,3 +745,17 @@ tracks preserve their React identity; only actual Music file changes replace
 the playlist. Browser acceptance tags the playing audio element, advances
 15 game minutes, and proves that element survives the revalidation. This
 work is still on isolated `/worker.html`, without a production cutover.
+
+
+### Chromium ScenarioO selector/accessibility correction
+
+The post-geometry Chromium run reached the genuinely imported WAV (the
+marquee and playlist both showed `Motel Night Loop`), but a broad
+`getByText(/Motel Night Loop/)` locator had two correct matches and
+Playwright failed in strict mode. The acceptance now asserts the explicit
+one-track playlist heading and the exact named playlist entry rather
+than selecting arbitrary duplicate display text. The original symbolic
+transport controls now have accessible Play/Pause/Stop/Previous/Next
+labels, benefiting keyboard/screen-reader testing without changing
+the retro visual controls. Full audio playback proof still depends on
+the latest exact-head Chromium result.

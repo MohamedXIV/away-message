@@ -70,7 +70,8 @@ test('installed RetroAmp plays genuine PCM WAV created in Worker-owned Music fol
   await expect(retro).toBeVisible();
   await expect(retro.getByText('PLAYLIST (0 TRACKS)')).toBeVisible();
   await retro.getByRole('button', { name: '+ ADD WAV' }).click();
-  await expect(retro.getByText(/Motel Night Loop/)).toBeVisible();
+  await expect(retro.getByText('PLAYLIST (1 TRACKS)')).toBeVisible();
+  await expect(retro.getByText('1. Local Music - Motel Night Loop', { exact: true })).toBeVisible();
   await retro.getByRole('button', { name: 'Play' }).click();
   const wav = retro.getByTestId('retroamp-real-audio');
   await expect(wav).toHaveAttribute('src', /^data:audio\/wav;base64,/);
@@ -88,7 +89,8 @@ test('installed RetroAmp plays genuine PCM WAV created in Worker-owned Music fol
   await retro.getByRole('button', { name: 'CLEAR' }).click();
   await expect(retro.getByText('PLAYLIST (0 TRACKS)')).toBeVisible();
   await retro.getByRole('button', { name: '+ ADD WAV' }).click();
-  await expect(retro.getByText(/Motel Night Loop/)).toBeVisible();
+  await expect(retro.getByText('PLAYLIST (1 TRACKS)')).toBeVisible();
+  await expect(retro.getByText('1. Local Music - Motel Night Loop', { exact: true })).toBeVisible();
 
   expect(await page.evaluate(() => !('__simEngine' in window) && !('__simStore' in window)))
     .toBe(true);
