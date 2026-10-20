@@ -399,6 +399,40 @@ describe('#175 single-writer Worker runtime protocol', () => {
     } finally{full.mockRestore();runtime.close();}
   });
 
+  it('exports an authored real SVG image to canonical Pictures and rejects duplicate, unsafe filters', async () => {
+    const { ask, runtime } = harness();
+    const full = vi.spyOn(SimulationKernel.prototype, 'getState');
+    const f = { brightness: 110, contrast: 105, saturation: 120, sepia: 20, invert: 0, blur: 1 };
+    try {
+      await ask({ op: 'init' });
+      const done = await ask({ op: 'dispatch', action: { type: 'PHOTOBOX_EXPORT_ARTWORK',
+        scene: 'motel', filters: f } }) as { success: boolean; data?: { path: string } };
+      expect(done.success).toBe(true);
+      expect(done.data?.path).toBe('C:/Pictures/edited_motel.svg');
+      const file = await ask({ op: 'query', query: { kind: 'file',
+        path: 'C:/Pictures/edited_motel.svg' } }) as ReturnType<SimulationKernel['getFileRead']>;
+      expect(file.file?.kind).toBe('image');
+      expect(file.file?.content).toContain('<svg xmlns="http://www.w3.org/2000/svg"');
+      expect(file.file?.content).toContain('brightness(110%)');
+      expect(file.file?.content).toContain('STARLITE');
+      expect(file.file?.sizeBytes).toBe(new TextEncoder().encode(file.file!.content!).length);
+      const duplicate = await ask({ op: 'dispatch', action: {
+        type: 'PHOTOBOX_EXPORT_ARTWORK', scene: 'motel', filters: f } }) as { success: boolean };
+      expect(duplicate.success).toBe(false);
+      const invalid = await ask({ op: 'dispatch', action: {
+        type: 'PHOTOBOX_EXPORT_ARTWORK', scene: 'canal', filters: { ...f, brightness: NaN } },
+      }) as { success: boolean };
+      expect(invalid.success).toBe(false);
+      const missing = await ask({ op: 'query', query: { kind: 'file',
+        path: 'C:/Pictures/edited_canal.svg' } }) as ReturnType<SimulationKernel['getFileRead']>;
+      expect(missing.file).toBeNull();
+      expect(full).not.toHaveBeenCalled();
+    } finally {
+      full.mockRestore();
+      runtime.close();
+    }
+  });
+
   it('reads player-safe mail and courier tray from the canonical Worker owner', async () => {
     const { ask, runtime } = harness();
     const read = vi.spyOn(SimulationKernel.prototype, 'getMailboxRead');

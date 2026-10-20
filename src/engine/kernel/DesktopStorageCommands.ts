@@ -1,5 +1,6 @@
 import type { ActionResult, SimulationAction } from '../types';
 import { createTextArchive, extractTextArchive } from './ZipArchiveCommands';
+import { exportPhotoBoxArtwork } from './PhotoBoxExportCommands';
 import type { CoreDomainOwners } from './CoreDomainOwners';
 
 /**
@@ -74,6 +75,15 @@ export class DesktopStorageCommands {
           const data=extractTextArchive(this.owners.vfs,action.archivePath,currentMinutes);
           this.publishState(); return{success:true,data};
         } catch(cause){return{success:false,error:cause instanceof Error?cause.message:'Extraction failed'}}
+      }
+      case 'PHOTOBOX_EXPORT_ARTWORK': {
+        try {
+          const result = exportPhotoBoxArtwork(this.owners.vfs, action.scene, action.filters, currentMinutes);
+          this.publishState();
+          return { success: true, data: result };
+        } catch (cause) {
+          return { success: false, error: cause instanceof Error ? cause.message : 'Image export failed' };
+        }
       }
       case 'VFS_CREATE_FILE': {
         // Only the download owner can mint successful-transfer provenance.
