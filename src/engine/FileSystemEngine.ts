@@ -245,7 +245,8 @@ export class FileSystemEngine {
       id, name, path: filePath, parentPath, kind, sizeBytes, createdAtMinute,
       modifiedAtMinute, ...(appAssociation !== undefined ? { appAssociation } : {}),
       ...(targetPath !== undefined ? { targetPath } : {}),
-      ...(content !== undefined ? { content } : {}),
+      // Never publish ZIP binary/base64 through the generic selected-file query.
+      ...(kind !== 'archive' && content !== undefined ? { content } : {}),
       ...(isReadOnly !== undefined ? { isReadOnly } : {}),
       ...(typeof textContent === 'string' ? { metadata: { textContent } } : {}),
     };

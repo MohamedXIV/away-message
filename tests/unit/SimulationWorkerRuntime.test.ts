@@ -376,6 +376,11 @@ describe('#175 single-writer Worker runtime protocol', () => {
       expect(preview.entries).toEqual([{name:'Readme.txt',sizeBytes:expect.any(Number),
         crc32:expect.stringMatching(/^[0-9A-F]{8}$/)}]);
       expect(preview).not.toHaveProperty('content');
+      const display=await ask({op:'query',query:{kind:'file',
+        path:'C:/Documents/notes.zip'}}) as ReturnType<SimulationKernel['getFileRead']>;
+      expect(display.file?.kind).toBe('archive');
+      expect(display.file?.content).toBeUndefined();
+      expect(display.file?.metadata).toBeUndefined();
       const result=await ask({op:'dispatch',action:{type:'VFS_ARCHIVE_EXTRACT',
         archivePath:'C:/Documents/notes.zip'}}) as {success:boolean};
       expect(result.success).toBe(true);

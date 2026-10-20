@@ -651,3 +651,10 @@ archives without real stored binary payload explicitly report unreadable
 rather than pretending to extract their previously nonexistent files.
 Other compressed/encrypted/ZIP64 ZIP formats are unsupported for now.
 No production `/` cutover or merge.
+
+### Archive body privacy
+The generic selected-file display projection now deliberately omits
+binary ZIP payloads from `kind: archive` files. A verified ZIP's
+member names, sizes and CRCs are published only through the bounded
+`archive` read. The Worker unit test asserts even an explicit
+`file` read of a ZIP cannot expose the owner-private base64 body.
