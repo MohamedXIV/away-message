@@ -1,5 +1,6 @@
 import type { SimulationState as TransportSimulationState, SimulationAction, ActionResult, HardwareState, MessageRecord } from '../types';
 import type { Fulfillment } from '../DeliveryEngine';
+import { INSTALLER_SOFTWARE_IDS } from '../InstallerFileCatalog';
 import type { MyPlaceProfile } from '../MyPlaceEngine';
 import type { BuddyPresence, BuddyMetVia } from '../types';
 import type { CharacterDefinition } from '../CharacterEngine';
@@ -23,6 +24,7 @@ import type {
   ObservedSimulationDomain,
   SimulationActorRead,
   SimulationAppRead,
+  SimulationInstallerRead,
   SimulationShopRead,
   SimulationWebsiteRead,
   SimulationMyPlacePageRead,
@@ -220,6 +222,20 @@ export class SimulationKernel {
   public dispatchAction(action: SimulationAction): ActionResult {
     if (action.type === 'STORE_PURCHASE_ITEM') {
       return this.purchaseStoreItem(action.storeId, action.skuId);
+    }
+    if (action.type === 'SOFTWARE_INSTALL_FROM_DOWNLOAD') {
+      const read = this.getInstallerRead(action.filePath);
+      if (!read.ready || !read.preview || !read.softwareId) {
+        return { success: false, error: read.reason || 'Installer unavailable.' };
+      }
+      if (!read.preview.compatibilityResult.isCompatible) {
+        return { success: false, error: 'Software incompatible with current system specifications.' };
+      }
+      const before = this.clock.getTotalMinutes();
+      return this.withinBoundary(() => this.core.dispatchAction({
+        type: 'SOFTWARE_INSTALL', softwareId: read.softwareId!,
+        selectedOptions: action.selectedOptions,
+      }), before);
     }
     if (action.type === 'HARDWARE_UPGRADE_OS') {
       return { success: false, error: 'Legacy OS upgrades are retired. Buy, insert, and boot from owned setup media instead.' };
@@ -534,6 +550,38 @@ export class SimulationKernel {
   }
 
   /** The desktop app ecosystem reads only Hardware, OS and Software owners. */
+  /** One immutable preflight against canonical VFS and completed download provenance. */
+  public getInstallerRead(filePath: string): SimulationInstallerRead {
+    const reply = (reason: string | null, softwareId: string | null = null,
+      preview: SimulationInstallerRead['preview'] = null): SimulationInstallerRead => ({
+      revision: this.revision, filePath, softwareId, ready: reason === null, reason, preview,
+    });
+    if (typeof filePath !== 'string' ||
+      !/^C:\/Downloads\/[a-z0-9._-]{1,80}\.exe$/i.test(filePath)) {
+      return reply('Installer must be an executable in C:/Downloads.');
+    }
+    const name = filePath.slice('C:/Downloads/'.length);
+    const softwareId = INSTALLER_SOFTWARE_IDS[name.toLowerCase()];
+    if (!softwareId) return reply('This is not an authored software installer.');
+    const file = this.vfs.readFile(filePath);
+    if (!file || file.kind !== 'installer') {
+      return reply('Completed installer file is not present in Downloads.', softwareId);
+    }
+    const transfer = this.downloads.getRecentTasks(256).find(task =>
+      task.status === 'complete' && task.targetDirectory === 'C:/Downloads' &&
+      task.fileKind === 'installer' && task.fileName === name &&
+      task.sourceUrl === 'http://downloadhub.local/files/' + name &&
+      task.totalBytes === file.sizeBytes && file.metadata?.author === task.sourceId);
+    if (!transfer) {
+      return reply('No matching completed DownloadHub transfer owns this file.', softwareId);
+    }
+    try {
+      return reply(null, softwareId, this.software.previewInstaller(softwareId));
+    } catch (cause) {
+      return reply(cause instanceof Error ? cause.message : 'Installer preview unavailable.', softwareId);
+    }
+  }
+
   public getAppRead(): SimulationAppRead {
     return {
       revision: this.revision,
