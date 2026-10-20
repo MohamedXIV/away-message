@@ -323,7 +323,7 @@ describe('#175 single-writer Worker runtime protocol', () => {
       expect(ready.preview?.softwareDef.id).toBe('sw_pulse_52');
       const display = await ask({ op: 'query', query: { kind: 'file', path: filePath } }) as
         ReturnType<SimulationKernel['getFileRead']>;
-      expect(display.file?.metadata?.downloadTaskId).toBeUndefined();
+      expect(display.file?.metadata).toBeUndefined();
       const installed = await ask({ op: 'dispatch', action: {
         type: 'SOFTWARE_INSTALL_FROM_DOWNLOAD', filePath,
         selectedOptions: { createDesktopShortcut: false },
