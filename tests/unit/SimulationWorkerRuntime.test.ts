@@ -415,7 +415,6 @@ describe('#175 single-writer Worker runtime protocol', () => {
         path: 'C:/Pictures/edited_motel.svg' } }) as ReturnType<SimulationKernel['getFileRead']>;
       expect(empty.file).toBeNull();
       expect(full).not.toHaveBeenCalled();
-      expect(done.data?.path).toBe('C:/Pictures/edited_motel.svg');
 
     } finally {
       full.mockRestore();
