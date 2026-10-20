@@ -6,12 +6,13 @@ const DOCUMENTS = 'C:/Documents';
 
 /** Canonical directory pages and file bodies only. No VFS state cache on the UI. */
 export function WorkerFileExplorer({
-  session, revision, openDocument, openInstaller,
+  session, revision, openDocument, openInstaller, openArchive,
 }: {
   session: WorkerGameSession;
   revision: number;
   openDocument: (path: string) => void;
   openInstaller: (path: string) => void;
+  openArchive: (path: string) => void;
 }) {
   const [page, setPage] = useState<SimulationDirectoryRead | null>(null);
   const [offset, setOffset] = useState(0);
@@ -45,7 +46,7 @@ export function WorkerFileExplorer({
       </nav>
       <div className="min-h-0 flex-1 overflow-y-auto p-2 text-xs">
         {(page?.files ?? []).map(file => (
-          <button type="button" key={file.id} onClick={() => file.kind === 'installer' ? openInstaller(file.path) : file.kind === 'text' ? openDocument(file.path) : setError('Unsupported file type.')}
+          <button type="button" key={file.id} onClick={() => file.kind === 'archive' ? openArchive(file.path) : file.kind === 'installer' ? openInstaller(file.path) : file.kind === 'text' ? openDocument(file.path) : setError('Unsupported file type.')}
             className="block w-full rounded px-2 py-1 text-left hover:bg-blue-100"
             aria-label={'Open file: ' + file.name}>
             {file.kind === 'text' ? '📄' : '📦'} {file.name}

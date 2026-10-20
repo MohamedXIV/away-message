@@ -628,3 +628,26 @@ actual current condition. The Weather domain has no humidity reading,
 so the UI does not invent one. SafeSweep recognizes all SearchMate
 toolbar, homepage hijack and autorun payload flags from installed
 software rather than falsely clearing non-toolbar adware.
+
+
+## P3.18 — True stored ZIP archives and ZipMate UI
+
+The original authored ZipMate table and controls are shared by
+`ZipMateView`, both the normal legacy adapter and staged
+`WorkerZipMatePanel`. Hardcoded nonexistent demo archives and
+cosmetic extraction timers are gone. Create ZIP takes 1–16 existing
+Documents text files and writes a genuine uncompressed PKZIP STORE
+container (local and central headers, CRC32) into the canonical VFS.
+Because the codec currently supports STORE only, its savings display
+is 0%, never an invented compression claim. ZIP binary is encoded
+to VFS string storage but never serialized in the Worker archive
+preview. The bounded `archive` query returns filename, byte
+count and CRC32 only. Owner-only `VFS_ARCHIVE_EXTRACT` validates
+headers, checksum, UTF-8, path names and all destination collisions
+and free disk before writing actual prefixed text files into Documents.
+Explorer opens real archive files via ZipMate, and installation-backed
+shortcuts/Start Menu require a real ZipMate installation. Downloaded
+archives without real stored binary payload explicitly report unreadable
+rather than pretending to extract their previously nonexistent files.
+Other compressed/encrypted/ZIP64 ZIP formats are unsupported for now.
+No production `/` cutover or merge.

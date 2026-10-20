@@ -6,10 +6,10 @@ const WORKER_PORTED_APPS: Readonly<Record<string, { id: string; icon: string }>>
   'app.flashfetch': { id: 'flashfetch', icon: '⚡' },
   'app.weatherbuddy': { id: 'weatherbuddy', icon: '🐸' },
   'app.safesweep': { id: 'safesweep', icon: '🛡️' },
+  'app.zipmate': { id: 'zipmate', icon: '📦' },
 };
 const OTHER_ICONS: Readonly<Record<string, string>> = {
   'app.retroamp': '🎵',
-  'app.zipmate': '📦',
   'app.photobox': '🖼️',
 };
 

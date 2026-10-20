@@ -17,6 +17,7 @@ import { WorkerVoyagerPanel } from './WorkerVoyagerPanel';
 import { WorkerInstallerPanel } from './WorkerInstallerPanel';
 import { WorkerWeatherBuddyPanel } from './WorkerWeatherBuddyPanel';
 import { WorkerSafeSweepPanel } from './WorkerSafeSweepPanel';
+import { WorkerZipMatePanel } from './WorkerZipMatePanel';
 import { getWorkerInstalledPrograms, getWorkerInstalledShortcuts } from './WorkerInstalledAppLinks';
 import type { WorkerGameSession } from './WorkerGameSession';
 
@@ -70,6 +71,7 @@ export function WorkerDesktop({
     openWindow(appId, customState ?? {});
   const openDocument = (path: string) => open('notepad', { filePath: path });
   const openInstaller = (path: string) => open('installer', { filePath: path });
+  const openArchive = (path: string) => open('zipmate', { archivePath: path });
   const profile = chrome?.osVersion ? getOsPresentationProfile(chrome.osVersion) : null;
   const installedShortcuts = desktop ? getWorkerInstalledShortcuts(desktop) : [];
   const installedPrograms = desktop ? getWorkerInstalledPrograms(desktop) : [];
@@ -130,7 +132,7 @@ export function WorkerDesktop({
         )}
         renderApp={win => (
           <WorkerDesktopApp window={win} session={session} revision={revision}
-            openDocument={openDocument} openInstaller={openInstaller} />
+            openDocument={openDocument} openInstaller={openInstaller} openArchive={openArchive} />
         )}
       />
 
@@ -162,15 +164,17 @@ export function WorkerDesktop({
 
 
 /** One stable React component identity per app/window, across Worker revisions. */
-function WorkerDesktopApp({ window: win, session, revision, openDocument, openInstaller }: {
+function WorkerDesktopApp({ window: win, session, revision, openDocument, openInstaller, openArchive }: {
   window: WindowState;
   session: WorkerGameSession;
   revision: number;
   openDocument: (path: string) => void;
   openInstaller: (path: string) => void;
+  openArchive: (path: string) => void;
 }) {
   if (win.appId === 'fileexplorer') {
-    return <WorkerFileExplorer session={session} revision={revision} openDocument={openDocument} openInstaller={openInstaller} />;
+    return <WorkerFileExplorer session={session} revision={revision}
+      openDocument={openDocument} openInstaller={openInstaller} openArchive={openArchive} />;
   }
   if (win.appId === 'notepad') {
     return <WorkerNotepad session={session}
@@ -180,6 +184,8 @@ function WorkerDesktopApp({ window: win, session, revision, openDocument, openIn
   if (win.appId === 'installer') return <WorkerInstallerPanel session={session} revision={revision} windowId={win.id} filePath={typeof win.customState?.filePath === 'string' ? win.customState.filePath : undefined} />;
   if (win.appId === 'weatherbuddy') return <WorkerWeatherBuddyPanel session={session} revision={revision} />;
   if (win.appId === 'safesweep') return <WorkerSafeSweepPanel session={session} revision={revision} />;
+  if (win.appId === 'zipmate') return <WorkerZipMatePanel session={session} revision={revision}
+    initialPath={typeof win.customState?.archivePath==='string'?win.customState.archivePath:undefined} />;
   if (win.appId === 'system') return <WorkerSystemPanel session={session} revision={revision} />;
   if (win.appId === 'mailbox') return <WorkerMailboxPanel session={session} revision={revision} />;
   if (win.appId === 'flashfetch') return <WorkerFlashFetchPanel session={session} revision={revision} windowId={win.id} />;

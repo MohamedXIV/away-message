@@ -37,6 +37,17 @@ describe('Worker-installed software shortcuts', () => {
       { id: 'flashfetch', label: 'FlashFetch', available: true },
     ]);
   });
+  it('enables ZipMate only with a canonical installed record and actual VFS shortcut', () => {
+    const app={appId:'app.zipmate',name:'ZipMate',version:'4.0'};
+    expect(getWorkerInstalledPrograms(make([app]))).toEqual([
+      {id:'zipmate',label:'ZipMate',available:true},
+    ]);
+    expect(getWorkerInstalledShortcuts(make([app],
+      [shortcut('z','app.zipmate','ZipMate.lnk')]))[0]).toMatchObject({launchId:'zipmate'});
+    expect(getWorkerInstalledShortcuts(make([],
+      [shortcut('z','app.zipmate','ZipMate.lnk')]))).toEqual([]);
+  });
+
   it('enables SafeSweep only when it exists in the canonical installed list', () => {
     const app = { appId: 'app.safesweep', name: 'SafeSweep', version: '2.0' };
     expect(getWorkerInstalledPrograms(make([app]))).toEqual([
