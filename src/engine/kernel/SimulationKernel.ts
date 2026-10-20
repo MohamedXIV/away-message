@@ -1,6 +1,7 @@
 import type { SimulationState as TransportSimulationState, SimulationAction, ActionResult, HardwareState, MessageRecord } from '../types';
 import type { Fulfillment } from '../DeliveryEngine';
 import { INSTALLER_SOFTWARE_IDS } from '../InstallerFileCatalog';
+import { DOWNLOAD_CATALOG } from '../../internet/sites/DownloadHubCatalog';
 import type { MyPlaceProfile } from '../MyPlaceEngine';
 import type { BuddyPresence, BuddyMetVia } from '../types';
 import type { CharacterDefinition } from '../CharacterEngine';
@@ -576,6 +577,13 @@ export class SimulationKernel {
       transfer.fileName !== name || transfer.sourceUrl !== 'http://downloadhub.local/files/' + name ||
       transfer.totalBytes !== file.sizeBytes || file.metadata?.author !== transfer.sourceId) {
       return reply('No matching completed DownloadHub transfer owns this file.', softwareId);
+    }
+    const published = DOWNLOAD_CATALOG.find(item =>
+      item.id === transfer.sourceId &&
+      item.downloadUrl === transfer.sourceUrl &&
+      item.fileSizeBytes === transfer.totalBytes);
+    if (!published) {
+      return reply('Download does not match the published authored software package.', softwareId);
     }
     try {
       return reply(null, softwareId, this.software.previewInstaller(softwareId));

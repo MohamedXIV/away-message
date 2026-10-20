@@ -290,17 +290,32 @@ describe('#175 single-writer Worker runtime protocol', () => {
       } }) as { success: boolean };
       expect(modem.success).toBe(true);
       const filePath = 'C:/Downloads/pulse52_setup.exe';
+      // Cheap forged-size transfer cannot unlock the authored 6 MiB package.
+      const cheap = await ask({ op: 'dispatch', action: {
+        type: 'DOWNLOAD_START', sourceId: 'pulse_52',
+        url: 'http://downloadhub.local/files/pulse52_setup.exe',
+        fileName: 'pulse52_setup.exe', totalBytes: 1024,
+        sourceMaxKbps: 256, fileKind: 'installer',
+      } }) as { success: boolean };
+      expect(cheap.success).toBe(true);
+      await ask({ op: 'advance', minutes: 1 });
+      const wrongSize = await ask({ op: 'query', query: { kind: 'installer', filePath } }) as
+        ReturnType<SimulationKernel['getInstallerRead']>;
+      expect(wrongSize.ready).toBe(false);
+      expect(wrongSize.reason).toMatch(/published authored software package/i);
+      const removed = await ask({ op: 'dispatch', action: { type: 'VFS_DELETE_FILE', path: filePath } }) as { success: boolean };
+      expect(removed.success).toBe(true);
       const download = await ask({ op: 'dispatch', action: {
         type: 'DOWNLOAD_START',
         sourceId: 'pulse_52', url: 'http://downloadhub.local/files/pulse52_setup.exe',
-        fileName: 'pulse52_setup.exe', totalBytes: 1024, sourceMaxKbps: 256,
+        fileName: 'pulse52_setup.exe', totalBytes: 6 * 1024 * 1024, sourceMaxKbps: 256,
         fileKind: 'installer',
       } }) as { success: boolean };
       expect(download.success).toBe(true);
       const pending = await ask({ op: 'query', query: { kind: 'installer', filePath } }) as
         ReturnType<SimulationKernel['getInstallerRead']>;
       expect(pending.ready).toBe(false);
-      await ask({ op: 'advance', minutes: 1 });
+      await ask({ op: 'advance', minutes: 4 });
       const ready = await ask({ op: 'query', query: { kind: 'installer', filePath } }) as
         ReturnType<SimulationKernel['getInstallerRead']>;
       expect(ready.ready).toBe(true);
@@ -308,7 +323,7 @@ describe('#175 single-writer Worker runtime protocol', () => {
       expect(ready.preview?.softwareDef.id).toBe('sw_pulse_52');
       const display = await ask({ op: 'query', query: { kind: 'file', path: filePath } }) as
         ReturnType<SimulationKernel['getFileRead']>;
-      expect(display.file?.metadata).not.toHaveProperty('downloadTaskId');
+      expect(display.file?.metadata?.downloadTaskId).toBeUndefined();
       const installed = await ask({ op: 'dispatch', action: {
         type: 'SOFTWARE_INSTALL_FROM_DOWNLOAD', filePath,
         selectedOptions: { createDesktopShortcut: false },

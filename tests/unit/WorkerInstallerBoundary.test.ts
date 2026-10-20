@@ -14,8 +14,10 @@ describe('Worker Installer owner isolation', () => {
   });
   it('opens downloaded files and rechecks canonical provenance at commit', () => {
     expect(explorer).toContain("file.kind === 'installer' ? openInstaller(file.path)");
-    expect(kernel).toContain("task.status === 'complete'");
-    expect(kernel).toContain('file.metadata?.author === task.sourceId');
+    expect(kernel).toContain("transfer.status !== 'complete'");
+    expect(kernel).toContain('file.metadata?.author !== transfer.sourceId');
+    expect(kernel).toContain('DOWNLOAD_CATALOG.find');
+    expect(kernel).toContain('file.metadata?.downloadTaskId');
     expect(kernel).toContain('read.preview.compatibilityResult.isCompatible');
     expect(wizard).not.toContain('useSimulationStore');
   });

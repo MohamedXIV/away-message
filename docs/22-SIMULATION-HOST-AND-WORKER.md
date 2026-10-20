@@ -549,3 +549,19 @@ The exact original six-step Wizard presentation, including OS/RAM/disk
 checks and offered opt-out boxes, is now `InstallerWizardView` with
 an unchanged legacy adapter and a Worker adapter to follow. No shadow
 SoftwareRegistry or fake completion is created on the browser thread.
+
+
+## P3.15d — Authoritative download receipts and published software metadata
+
+Installer installation now validates an exact `downloadTaskId` receipt minted
+by `DownloadManager` **only after successful VFS file creation**, not by
+searching the 256-task UI page. Owner-side `VFS_CREATE_FILE` rejects attempts
+to inject that receipt. Disk-full/path collisions mark downloads failed, emit
+`download:failed`, and preserve the prior VFS file without false completion.
+The original authored DownloadHub catalog has moved unchanged to a pure
+TypeScript module (no React or eager engine imports). Installer preflight
+checks its published ID, URL, and byte size against the completed transfer:
+arbitrary 1 KiB downloads cannot masquerade as the 6 MiB Pulse package. The
+Worker tests exercise forged-size rejection, later real receipt acceptance,
+and the install/shortcut opt-out path. Normal `/` legacy behavior is not
+cut over; PR #204 stays Draft, #175 Open.
