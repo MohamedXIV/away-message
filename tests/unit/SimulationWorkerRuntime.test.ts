@@ -213,6 +213,50 @@ describe('#175 single-writer Worker runtime protocol', () => {
     }
   });
 
+  it('rejects missing, forged and path-traversal installers without touching installed software', async () => {
+    const { ask, runtime } = harness();
+    const getState = vi.spyOn(SimulationKernel.prototype, 'getState');
+    try {
+      await ask({ op: 'init' });
+      const path = 'C:/Downloads/pulse52_setup.exe';
+      const missing = await ask({ op: 'query', query: { kind: 'installer', filePath: path } }) as
+        ReturnType<SimulationKernel['getInstallerRead']>;
+      expect(missing).toMatchObject({
+        ready: false, softwareId: 'sw_pulse_52', preview: null,
+      });
+      expect(missing.reason).toMatch(/not present/i);
+      const denied = await ask({ op: 'dispatch', action: {
+        type: 'SOFTWARE_INSTALL_FROM_DOWNLOAD', filePath: path,
+      } }) as { success: boolean };
+      expect(denied.success).toBe(false);
+      const traversal = await ask({ op: 'query', query: {
+        kind: 'installer', filePath: 'C:/Downloads/../Windows/evil.exe',
+      } }) as ReturnType<SimulationKernel['getInstallerRead']>;
+      expect(traversal.ready).toBe(false);
+      expect(traversal.softwareId).toBeNull();
+      const forged = await ask({ op: 'dispatch', action: { type: 'VFS_CREATE_FILE',
+        file: {
+          name: 'pulse52_setup.exe', path, parentPath: 'C:/Downloads',
+          kind: 'installer', sizeBytes: 100,
+          metadata: { author: 'pulse_52' },
+        },
+      } }) as { success: boolean };
+      expect(forged.success).toBe(true);
+      const withoutTransfer = await ask({ op: 'query', query: {
+        kind: 'installer', filePath: path,
+      } }) as ReturnType<SimulationKernel['getInstallerRead']>;
+      expect(withoutTransfer.ready).toBe(false);
+      expect(withoutTransfer.reason).toMatch(/matching completed DownloadHub transfer/);
+      const apps = await ask({ op: 'query', query: { kind: 'apps' } }) as
+        ReturnType<SimulationKernel['getAppRead']>;
+      expect(apps.installedSoftware).toHaveLength(0);
+      expect(getState).not.toHaveBeenCalled();
+    } finally {
+      getState.mockRestore();
+      runtime.close();
+    }
+  });
+
   it('reads player-safe mail and courier tray from the canonical Worker owner', async () => {
     const { ask, runtime } = harness();
     const read = vi.spyOn(SimulationKernel.prototype, 'getMailboxRead');
