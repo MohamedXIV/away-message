@@ -4,8 +4,8 @@ import type { SimulationAppRead } from '../../engine/kernel/SimulationPublicatio
 import type { WorkerGameSession } from './WorkerGameSession';
 
 /** Only selected audio-file bodies cross the typed Worker boundary, never VFS state. */
-export function WorkerRetroAmpPanel({ session, revision }: {
-  session: WorkerGameSession; revision: number;
+export function WorkerRetroAmpPanel({ session, revision, initialPath }: {
+  session: WorkerGameSession; revision: number; initialPath?: string;
 }) {
   const [apps, setApps] = useState<SimulationAppRead | null>(null);
   const [tracks, setTracks] = useState<TrackItem[]>([]);
@@ -22,7 +22,9 @@ export function WorkerRetroAmpPanel({ session, revision }: {
       setApps(a);
       if (!a.installedSoftware.some(item => item.appId === 'app.retroamp')) return;
       const candidate = directory.files.filter(file =>
-        file.kind === 'audio' && /^C:\/Music\/[^/]{1,80}\.wav$/i.test(file.path)).slice(0, 8);
+        file.kind === 'audio' && /^C:\/Music\/[^/]{1,80}\.wav$/i.test(file.path))
+        .sort((a, b) => Number(b.path === initialPath) - Number(a.path === initialPath))
+        .slice(0, 8);
       const selected = await Promise.all(candidate.map(file =>
         session.read({ kind: 'file', path: file.path })));
       if (!live || selected.some(file => file.revision !== revision)) return;
@@ -38,7 +40,7 @@ export function WorkerRetroAmpPanel({ session, revision }: {
       setError(null);
     }).catch(cause => { if (live) setError(String(cause)); });
     return () => { live = false; };
-  }, [session, revision]);
+  }, [session, revision, initialPath]);
 
   const installed = apps?.revision === revision &&
     apps.installedSoftware.some(item => item.appId === 'app.retroamp');

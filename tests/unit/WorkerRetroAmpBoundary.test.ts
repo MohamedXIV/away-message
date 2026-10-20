@@ -9,6 +9,7 @@ describe('RetroAmp authentic playback stays on the Worker boundary', () => {
     expect(owner).toContain("isInstalled('app.retroamp')");
     expect(owner).toContain('getComputerBootStatus().poweredOn');
     expect(owner).toContain('vfs.readFile(RETROAMP_SAMPLE_PATH)');
+    expect(owner).toContain('existing.content === wave.content');
     expect(owner).toContain("kind: 'audio'");
     const vfs = source('src/engine/FileSystemEngine.ts');
     expect(vfs).toContain("kind !== 'audio'");
@@ -24,6 +25,7 @@ describe('RetroAmp authentic playback stays on the Worker boundary', () => {
     const view = source('src/apps/retroamp/RetroAmpApp.tsx');
     expect(view).toContain('createMediaElementSource');
     expect(view).toContain('<audio ref={audioRef}');
+    expect(view).toContain('setHiddenPaths([])');
     expect(view).not.toContain('DEFAULT_PLAYLIST');
     expect(view).not.toContain('new_track.mp3');
   });

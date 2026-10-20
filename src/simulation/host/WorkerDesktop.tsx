@@ -75,7 +75,7 @@ export function WorkerDesktop({
   const openInstaller = (path: string) => open('installer', { filePath: path });
   const openArchive = (path: string) => open('zipmate', { archivePath: path });
   const openArtwork = (path: string) => open('photobox', { artworkPath: path });
-  const openAudio = (_path: string) => open('retroamp');
+  const openAudio = (path: string) => open('retroamp', { audioPath: path });
   const profile = chrome?.osVersion ? getOsPresentationProfile(chrome.osVersion) : null;
   const installedShortcuts = desktop ? getWorkerInstalledShortcuts(desktop) : [];
   const installedPrograms = desktop ? getWorkerInstalledPrograms(desktop) : [];
@@ -192,7 +192,8 @@ function WorkerDesktopApp({ window: win, session, revision, openDocument, openIn
   if (win.appId === 'installer') return <WorkerInstallerPanel session={session} revision={revision} windowId={win.id} filePath={typeof win.customState?.filePath === 'string' ? win.customState.filePath : undefined} />;
   if (win.appId === 'weatherbuddy') return <WorkerWeatherBuddyPanel session={session} revision={revision} />;
   if (win.appId === 'safesweep') return <WorkerSafeSweepPanel session={session} revision={revision} />;
-  if (win.appId === 'retroamp') return <WorkerRetroAmpPanel session={session} revision={revision} />;
+  if (win.appId === 'retroamp') return <WorkerRetroAmpPanel session={session} revision={revision}
+    initialPath={typeof win.customState?.audioPath === 'string' ? win.customState.audioPath : undefined} />;
   if (win.appId === 'photobox') return <WorkerPhotoBoxPanel session={session} revision={revision}
     initialPath={typeof win.customState?.artworkPath === 'string' ? win.customState.artworkPath : undefined} />;
   if (win.appId === 'zipmate') return <WorkerZipMatePanel session={session} revision={revision}

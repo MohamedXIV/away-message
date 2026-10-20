@@ -343,7 +343,7 @@ export const RetroAmpApp: React.FC<{
           {/* Playlist Footer */}
           <div className="flex justify-between items-center pt-1.5 text-[10px]">
             <button
-              onClick={onAddFile}
+              onClick={() => { setHiddenPaths([]); setCurrentTrackIndex(0); onAddFile?.(); }}
               disabled={!onAddFile}
               className="px-2 py-0.5 bg-gray-700 hover:bg-gray-600 text-white rounded"
             >

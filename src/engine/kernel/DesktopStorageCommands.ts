@@ -101,13 +101,14 @@ export class DesktopStorageCommands {
           !this.owners.hardware.getComputerBootStatus().poweredOn) {
           return { success: false, error: 'Boot the installed OS before importing music.' };
         }
+        const wave = createRetroAmpSample();
         const existing = this.owners.vfs.readFile(RETROAMP_SAMPLE_PATH);
         if (existing) return existing.kind === 'audio' &&
-          existing.content?.startsWith('data:audio/wav;base64,')
+          existing.sizeBytes === wave.sizeBytes && existing.content === wave.content &&
+          existing.appAssociation === 'app.retroamp'
             ? { success: true, data: { path: RETROAMP_SAMPLE_PATH, alreadyPresent: true } }
             : { success: false, error: 'A different file already occupies the sample path.' };
         try {
-          const wave = createRetroAmpSample();
           this.owners.vfs.createFile({
             name: 'Motel Night Loop.wav', path: RETROAMP_SAMPLE_PATH,
             parentPath: 'C:/Music', kind: 'audio',
