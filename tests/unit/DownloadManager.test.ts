@@ -30,6 +30,30 @@ describe('DownloadManager (Bandwidth Allocation, Progress & Time Jumps)', () => 
     expect(downloadManagerSource).not.toContain("manager === 'flashfetch'");
   });
 
+  it('binds successful downloads to an owner receipt and fails conflicting file paths', () => {
+    let completed = 0;
+    let failed = 0;
+    eventBus.on('download:completed', () => { completed++; });
+    eventBus.on('download:failed', () => { failed++; });
+    const args = {
+      sourceId: 'pulse_52', sourceUrl: 'http://downloadhub.local/files/pulse52_setup.exe',
+      fileName: 'pulse52_setup.exe', totalBytes: 1024, sourceMaxKbps: 256,
+      fileKind: 'installer' as const,
+    };
+    const first = downloadManager.startDownload(args);
+    downloadManager.advanceTime(1, 1);
+    expect(downloadManager.getTask(first.id)?.status).toBe('complete');
+    expect(vfs.readFile('C:/Downloads/pulse52_setup.exe')?.metadata?.downloadTaskId).toBe(first.id);
+    expect(completed).toBe(1);
+    const duplicate = downloadManager.startDownload(args);
+    downloadManager.advanceTime(1, 2);
+    expect(downloadManager.getTask(duplicate.id)?.status).toBe('failed');
+    expect(downloadManager.getTask(duplicate.id)?.errorMessage).toMatch(/already exists/i);
+    expect(vfs.readFile('C:/Downloads/pulse52_setup.exe')?.metadata?.downloadTaskId).toBe(first.id);
+    expect(completed).toBe(1);
+    expect(failed).toBe(1);
+  });
+
   it('starts a download and allocates available bandwidth', () => {
     // 8 MB file (8,388,608 bytes)
     const task = downloadManager.startDownload({

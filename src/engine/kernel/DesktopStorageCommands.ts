@@ -63,6 +63,10 @@ export class DesktopStorageCommands {
       }
 
       case 'VFS_CREATE_FILE': {
+        // Only the download owner can mint successful-transfer provenance.
+        if (action.file.metadata && 'downloadTaskId' in action.file.metadata) {
+          return { success: false, error: 'Download receipts are owner-only metadata.' };
+        }
         try {
           const file = this.owners.vfs.createFile(action.file, currentMinutes);
           this.publishState();

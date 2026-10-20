@@ -567,12 +567,14 @@ export class SimulationKernel {
     if (!file || file.kind !== 'installer') {
       return reply('Completed installer file is not present in Downloads.', softwareId);
     }
-    const transfer = this.downloads.getRecentTasks(256).find(task =>
-      task.status === 'complete' && task.targetDirectory === 'C:/Downloads' &&
-      task.fileKind === 'installer' && task.fileName === name &&
-      task.sourceUrl === 'http://downloadhub.local/files/' + name &&
-      task.totalBytes === file.sizeBytes && file.metadata?.author === task.sourceId);
-    if (!transfer) {
+    // Proof is a specific owner-created transfer, not a matching filename
+    // in the bounded recent-download UI page (which may have rolled off).
+    const receipt = file.metadata?.downloadTaskId;
+    const transfer = typeof receipt === 'string' ? this.downloads.getTask(receipt) : undefined;
+    if (!transfer || transfer.status !== 'complete' ||
+      transfer.targetDirectory !== 'C:/Downloads' || transfer.fileKind !== 'installer' ||
+      transfer.fileName !== name || transfer.sourceUrl !== 'http://downloadhub.local/files/' + name ||
+      transfer.totalBytes !== file.sizeBytes || file.metadata?.author !== transfer.sourceId) {
       return reply('No matching completed DownloadHub transfer owns this file.', softwareId);
     }
     try {

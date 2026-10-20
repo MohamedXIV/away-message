@@ -242,6 +242,14 @@ describe('#175 single-writer Worker runtime protocol', () => {
         },
       } }) as { success: boolean };
       expect(forged.success).toBe(true);
+      const forgedReceipt = await ask({ op: 'dispatch', action: {
+        type: 'VFS_CREATE_FILE',
+        file: { name: 'forged.exe', path: 'C:/Downloads/forged.exe',
+          parentPath: 'C:/Downloads', kind: 'installer', sizeBytes: 5,
+          metadata: { downloadTaskId: 'dl_1' } },
+      } }) as { success: boolean; error?: string };
+      expect(forgedReceipt.success).toBe(false);
+      expect(forgedReceipt.error).toMatch(/owner-only/i);
       const withoutTransfer = await ask({ op: 'query', query: {
         kind: 'installer', filePath: path,
       } }) as ReturnType<SimulationKernel['getInstallerRead']>;
@@ -298,6 +306,9 @@ describe('#175 single-writer Worker runtime protocol', () => {
       expect(ready.ready).toBe(true);
       expect(ready.preview?.compatibilityResult.isCompatible).toBe(true);
       expect(ready.preview?.softwareDef.id).toBe('sw_pulse_52');
+      const display = await ask({ op: 'query', query: { kind: 'file', path: filePath } }) as
+        ReturnType<SimulationKernel['getFileRead']>;
+      expect(display.file?.metadata).not.toHaveProperty('downloadTaskId');
       const installed = await ask({ op: 'dispatch', action: {
         type: 'SOFTWARE_INSTALL_FROM_DOWNLOAD', filePath,
         selectedOptions: { createDesktopShortcut: false },
