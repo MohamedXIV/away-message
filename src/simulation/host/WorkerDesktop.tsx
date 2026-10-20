@@ -14,6 +14,7 @@ import { WorkerPublicSites } from './WorkerPublicSites';
 import { WorkerMailboxPanel } from './WorkerMailboxPanel';
 import { WorkerFlashFetchPanel } from './WorkerOsHostProvider';
 import { WorkerVoyagerPanel } from './WorkerVoyagerPanel';
+import { WorkerInstallerPanel } from './WorkerInstallerPanel';
 import type { WorkerGameSession } from './WorkerGameSession';
 
 const APPLICATIONS = [
@@ -65,6 +66,7 @@ export function WorkerDesktop({
   const open = (appId: string, customState?: Record<string, unknown>) =>
     openWindow(appId, customState ?? {});
   const openDocument = (path: string) => open('notepad', { filePath: path });
+  const openInstaller = (path: string) => open('installer', { filePath: path });
   const profile = chrome?.osVersion ? getOsPresentationProfile(chrome.osVersion) : null;
   const allowedApps = ['browser', 'fileexplorer', 'notepad', 'controlpanel', 'pulse'];
   const resolveAppId = (id: string): string | null => ({
@@ -106,7 +108,7 @@ export function WorkerDesktop({
         )}
         renderApp={win => (
           <WorkerDesktopApp window={win} session={session} revision={revision}
-            openDocument={openDocument} />
+            openDocument={openDocument} openInstaller={openInstaller} />
         )}
       />
 
@@ -137,20 +139,22 @@ export function WorkerDesktop({
 
 
 /** One stable React component identity per app/window, across Worker revisions. */
-function WorkerDesktopApp({ window: win, session, revision, openDocument }: {
+function WorkerDesktopApp({ window: win, session, revision, openDocument, openInstaller }: {
   window: WindowState;
   session: WorkerGameSession;
   revision: number;
   openDocument: (path: string) => void;
+  openInstaller: (path: string) => void;
 }) {
   if (win.appId === 'fileexplorer') {
-    return <WorkerFileExplorer session={session} revision={revision} openDocument={openDocument} />;
+    return <WorkerFileExplorer session={session} revision={revision} openDocument={openDocument} openInstaller={openInstaller} />;
   }
   if (win.appId === 'notepad') {
     return <WorkerNotepad session={session}
       filePath={typeof win.customState?.filePath === 'string'
         ? win.customState.filePath : undefined} />;
   }
+  if (win.appId === 'installer') return <WorkerInstallerPanel session={session} revision={revision} windowId={win.id} filePath={typeof win.customState?.filePath === 'string' ? win.customState.filePath : undefined} />;
   if (win.appId === 'system') return <WorkerSystemPanel session={session} revision={revision} />;
   if (win.appId === 'mailbox') return <WorkerMailboxPanel session={session} revision={revision} />;
   if (win.appId === 'flashfetch') return <WorkerFlashFetchPanel session={session} revision={revision} windowId={win.id} />;
