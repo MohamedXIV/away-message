@@ -15,6 +15,7 @@ import { WorkerMailboxPanel } from './WorkerMailboxPanel';
 import { WorkerFlashFetchPanel } from './WorkerOsHostProvider';
 import { WorkerVoyagerPanel } from './WorkerVoyagerPanel';
 import { WorkerInstallerPanel } from './WorkerInstallerPanel';
+import { getWorkerInstalledPrograms, getWorkerInstalledShortcuts } from './WorkerInstalledAppLinks';
 import type { WorkerGameSession } from './WorkerGameSession';
 
 const APPLICATIONS = [
@@ -68,10 +69,13 @@ export function WorkerDesktop({
   const openDocument = (path: string) => open('notepad', { filePath: path });
   const openInstaller = (path: string) => open('installer', { filePath: path });
   const profile = chrome?.osVersion ? getOsPresentationProfile(chrome.osVersion) : null;
-  const allowedApps = ['browser', 'fileexplorer', 'notepad', 'controlpanel', 'pulse'];
+  const installedShortcuts = desktop ? getWorkerInstalledShortcuts(desktop) : [];
+  const installedPrograms = desktop ? getWorkerInstalledPrograms(desktop) : [];
+  const allowedApps = ['browser', 'fileexplorer', 'notepad', 'controlpanel', 'pulse',
+    ...installedPrograms.filter(program => program.available).map(program => program.id)];
   const resolveAppId = (id: string): string | null => ({
     browser: 'browser', fileexplorer: 'fileexplorer', notepad: 'notepad',
-    controlpanel: 'system', pulse: 'pulse',
+    controlpanel: 'system', pulse: 'pulse', flashfetch: 'flashfetch',
   } as Record<string, string>)[id] ?? null;
 
   return (
@@ -97,6 +101,22 @@ export function WorkerDesktop({
           </button>
         ))}
       </div>
+      {installedShortcuts.length > 0 && (
+        <div data-testid="worker-installed-shortcuts"
+          className="absolute left-36 top-24 flex max-h-[390px] w-32 flex-col gap-3 overflow-y-auto">
+          {installedShortcuts.map(shortcut => (
+            <button type="button" key={shortcut.id}
+              disabled={!shortcut.launchId}
+              title={shortcut.launchId ? 'Open installed ' + shortcut.label :
+                shortcut.label + ': installed, Worker UI not migrated yet'}
+              onClick={() => { if (shortcut.launchId) open(shortcut.launchId); }}
+              aria-label={'Installed shortcut: ' + shortcut.label}
+              className="flex flex-col items-center gap-1 rounded px-1 py-1 text-xs text-white hover:bg-white/20 disabled:cursor-not-allowed disabled:opacity-55">
+              <span className="text-3xl">{shortcut.icon}</span>{shortcut.label}
+            </button>
+          ))}
+        </div>
+      )}
 
       <WindowManagerChrome
         renderFrame={(win, isActive, children) => (
@@ -118,7 +138,8 @@ export function WorkerDesktop({
         renderStartMenu={(close, isOpen) => (
           <StartMenuChrome isOpen={isOpen} onClose={close}
             osVersion={chrome?.osVersion ?? null} pulseInstalled={chrome?.pulseInstalled ?? false}
-            availableApps={allowedApps} resolveAppId={resolveAppId}
+            availableApps={allowedApps} installedPrograms={installedPrograms}
+            resolveAppId={resolveAppId}
             launchApp={open} onOpenDialUp={() => open('system')}
             rest={() => {
               void session.dispatch({ type: 'PLAYER_REST_OR_SLEEP', wakeHour: 8 })

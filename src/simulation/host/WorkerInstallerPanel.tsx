@@ -14,6 +14,7 @@ export function WorkerInstallerPanel({ session, revision, windowId, filePath }: 
   const [stage, setStage] = useState<1 | 2 | 3 | 4 | 5 | 6>(1);
   const [progress, setProgress] = useState(0);
   const [busy, setBusy] = useState(false);
+  const [installed, setInstalled] = useState(false);
   const [shortcut, setShortcut] = useState(true);
   const [offers, setOffers] = useState<Record<string, boolean>>({});
   const name = filePath?.split('/').pop() ?? '';
@@ -44,6 +45,7 @@ export function WorkerInstallerPanel({ session, revision, windowId, filePath }: 
       selectedOptions: { ...offers, createDesktopShortcut: shortcut },
     }).then(result => {
       setProgress(result.success ? 100 : 0);
+      setInstalled(result.success);
       setError(result.success ? null : result.error || 'Canonical installation refused.');
       setStage(6);
     }).catch(cause => {
@@ -53,7 +55,7 @@ export function WorkerInstallerPanel({ session, revision, windowId, filePath }: 
   };
   const finish = () => {
     closeWindow(windowId);
-    if (error) return;
+    if (!installed || error) return;
     const appId = read?.preview?.softwareDef.appId;
     if (appId === 'app.pulse') openWindow('pulse');
     else if (appId === 'app.flashfetch') openWindow('flashfetch');

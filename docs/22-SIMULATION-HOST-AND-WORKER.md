@@ -565,3 +565,21 @@ arbitrary 1 KiB downloads cannot masquerade as the 6 MiB Pulse package. The
 Worker tests exercise forged-size rejection, later real receipt acceptance,
 and the install/shortcut opt-out path. Normal `/` legacy behavior is not
 cut over; PR #204 stays Draft, #175 Open.
+
+
+## P3.16 — Canonical installed-program Desktop and Start Menu projection
+
+The bounded `desktop` read now includes only up to 64 installed-program
+identity/version summaries, alongside the original VFS desktop shortcuts.
+`WorkerInstalledAppLinks` joins **both owner-derived sources**: no installed
+record or no actual shortcut means no desktop icon. This retains the installer
+shortcut opt-out behavior. Pulse/FlashFetch shortcuts open their actual
+Worker-backed windows; installed programs without a migrated UI remain
+visible but disabled, not fake launchable placeholders. The unchanged
+original `StartMenuChrome` accepts an optional installed-program roster,
+with the same transparent unavailable state. Existing legacy route keeps
+its previous behavior because that optional slot is absent. The Worker
+Wizard only auto-launches Pulse/FlashFetch on a successful canonical
+installation response, not on a failed or merely rendered completion
+screen. These projected summaries are not a second software registry and
+never create a main-thread simulation engine.

@@ -143,6 +143,9 @@ export interface SimulationDesktopRead {
   bootMediaItems: import('../types').OwnedItem[];
   desktopFiles: Array<Pick<import('../types').FileRecord,
     'id' | 'name' | 'path' | 'parentPath' | 'kind' | 'appAssociation'>>;
+  /** Small authorized installed-program roster, not all software internals. */
+  installedApps: Array<Pick<import('../types').InstalledSoftwareRecord,
+    'appId' | 'name' | 'version'>>;
 }
 
 /** UI-readable presence projection. Omits relationships, memories and chat history. */

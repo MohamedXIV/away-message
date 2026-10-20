@@ -809,6 +809,9 @@ export class SimulationKernel {
       monitor: this.hardware.getDisplayState().monitor,
       bootMediaItems: this.inventory.getBootMediaItems(256),
       desktopFiles,
+      installedApps: this.software.getInstalledSoftware().slice(0, 64).map(
+        ({ appId, name, version }) => ({ appId, name, version }),
+      ),
     };
   }
 

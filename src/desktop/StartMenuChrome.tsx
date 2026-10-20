@@ -24,11 +24,13 @@ export interface StartMenuChromeProps {
   rest: () => void;
   availableApps?: readonly string[];
   resolveAppId?: (appId: string) => string | null;
+  /** Optional bounded installed-app roster for Worker-owned desktop. */
+  installedPrograms?: ReadonlyArray<{ id: string; label: string; available: boolean }>;
 }
 
 export const StartMenuChrome: React.FC<StartMenuChromeProps> = ({
   isOpen, onClose, onOpenDialUp, osVersion, pulseInstalled,
-  launchApp, rest, availableApps, resolveAppId,
+  launchApp, rest, availableApps, resolveAppId, installedPrograms,
 }) => {
   const osPresentation = osVersion ? getOsPresentationProfile(osVersion) : null;
   const startMenuPresentation = osPresentation?.shell.startMenuId ?? 'classic';
@@ -185,6 +187,16 @@ export const StartMenuChrome: React.FC<StartMenuChromeProps> = ({
                     <span>Terminal CLI</span>
                   </button>
 )}
+                  {installedPrograms?.map(program => (
+                    <button key={program.id} type="button"
+                      disabled={!program.available}
+                      title={program.available ? 'Open installed program' : 'Installed program — Worker UI not yet available'}
+                      onClick={() => handleLaunch(program.id)}
+                      className="flex items-center gap-2 px-3 py-1.5 text-left hover:bg-orion-highlight hover:text-white disabled:opacity-50 disabled:cursor-not-allowed">
+                      <PlaySquare className="h-4 w-4 text-indigo-600" />
+                      <span>{program.label}</span>
+                    </button>
+                  ))}
                   <div className="h-[1px] bg-[#808080] my-0.5 border-b border-white" />
                   {canLaunch('addremove') && (
 <button
