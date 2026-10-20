@@ -23,7 +23,12 @@ test('fatal Worker crash removes live world; explicit saved-slot recovery boots 
   await page.getByRole('button', { name: 'New game' }).click();
   await expect(page.getByTestId('worker-phase')).toHaveText('game');
   await page.getByRole('button', { name: 'Pause clock' }).click();
+  const initial = Number(await page.getByTestId('worker-minute').innerText());
   await page.getByRole('button', { name: 'Advance 15 minutes' }).click();
+  // Confirm this FIRST clock increment is published before setting the
+  // saved baseline; otherwise the second poll can match the first tick.
+  await expect.poll(async () => Number(await page.getByTestId('worker-minute').innerText()))
+    .toBeGreaterThanOrEqual(initial + 15);
   const beforeSave = Number(await page.getByTestId('worker-minute').innerText());
   await page.getByRole('button', { name: 'Save game' }).click();
   await expect(page.getByText('Saved to slot_1')).toBeVisible();

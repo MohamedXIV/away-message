@@ -801,3 +801,17 @@ polls until the **published** minute reaches the required unsaved value
 before injecting a native Worker error. It then compares recovered time
 with that verified higher value. No product command, saved-state contract
 or recoverability expectation is weakened.
+
+
+### P3.21 two-step clock publication barrier
+
+The second Browser ScenarioP run showed the earlier **first** 15-minute
+command was also reading before its HUD projection arrived. Therefore
+the captured save baseline could be the prior minute, and the second
+advance check could accidentally pass on the *first* change. The
+browser test now records the initial minute and waits for its first
++15-minute published HUD before saving. It then explicitly awaits
+a second +15 published HUD, crashes the native Worker, and verifies
+the recovered slot is at least the saved baseline but strictly
+earlier than the second change. The test continues to use actual
+serializable commands and real IDB save/load; no owner is mocked.
