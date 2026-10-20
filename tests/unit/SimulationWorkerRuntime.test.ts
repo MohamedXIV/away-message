@@ -404,9 +404,53 @@ describe('#175 single-writer Worker runtime protocol', () => {
     const full = vi.spyOn(SimulationKernel.prototype, 'getState');
     const f = { brightness: 110, contrast: 105, saturation: 120, sepia: 20, invert: 0, blur: 1 };
     try {
+      // A fresh Worker has neither installed PhotoBox nor an eligible PC.
       await ask({ op: 'init' });
-      const done = await ask({ op: 'dispatch', action: { type: 'PHOTOBOX_EXPORT_ARTWORK',
-        scene: 'motel', filters: f } }) as { success: boolean; data?: { path: string } };
+      const refused = await ask({ op: 'dispatch', action: {
+        type: 'PHOTOBOX_EXPORT_ARTWORK', scene: 'motel', filters: f,
+      } }) as { success: boolean; error?: string };
+      expect(refused.success).toBe(false);
+      expect(refused.error).toMatch(/install photobox/i);
+      const empty = await ask({ op: 'query', query: { kind: 'file',
+        path: 'C:/Pictures/edited_motel.svg' } }) as ReturnType<SimulationKernel['getFileRead']>;
+      expect(empty.file).toBeNull();
+      expect(full).not.toHaveBeenCalled();
+      expect(done.data?.path).toBe('C:/Pictures/edited_motel.svg');
+
+    } finally {
+      full.mockRestore();
+      runtime.close();
+    }
+  });
+
+  it('exports real PhotoBox artwork only with installed app, Orion 6.0 and 768+ MB RAM', async () => {
+    const { ask, runtime } = harness();
+    const full = vi.spyOn(SimulationKernel.prototype, 'getState');
+    const hardware = await import('../../src/engine/hardware/state');
+    const prepared = hardware.legacyFlatHardwareToCanonical({
+      hasComputer: true, isPoweredOn: true, ramMB: 1024, cpuTier: 2,
+    });
+    const filters = { brightness: 110, contrast: 105, saturation: 120,
+      sepia: 20, invert: 0, blur: 1 };
+    try {
+      await ask({ op: 'init', initialState: {
+        computer: prepared.computer,
+        display: prepared.display,
+        os: { currentOsId: 'Orion_6.0', installedPatchIds: [] },
+        installedSoftware: [{
+          id: 'install_photobox', appId: 'app.photobox', name: 'PhotoBox Studio',
+          version: '3.0', installedBytes: 67108864, installPath: 'C:/Program Files/PhotoBox',
+          installedAtMinute: 0, isPortable: false, isAdware: false, shortcuts: [],
+        }],
+      } });
+      const apps = await ask({ op: 'query', query: { kind: 'apps' } }) as
+        ReturnType<SimulationKernel['getAppRead']>;
+      expect(apps.hardware.ramMB).toBeGreaterThanOrEqual(768);
+      expect(apps.os.currentOsId).toBe('Orion_6.0');
+      expect(apps.installedSoftware.some(x => x.appId === 'app.photobox')).toBe(true);
+      const done = await ask({ op: 'dispatch', action: {
+        type: 'PHOTOBOX_EXPORT_ARTWORK', scene: 'motel', filters,
+      } }) as { success: boolean; data?: { path: string } };
       expect(done.success).toBe(true);
       expect(done.data?.path).toBe('C:/Pictures/edited_motel.svg');
       const file = await ask({ op: 'query', query: { kind: 'file',
@@ -417,11 +461,13 @@ describe('#175 single-writer Worker runtime protocol', () => {
       expect(file.file?.content).toContain('STARLITE');
       expect(file.file?.sizeBytes).toBe(new TextEncoder().encode(file.file!.content!).length);
       const duplicate = await ask({ op: 'dispatch', action: {
-        type: 'PHOTOBOX_EXPORT_ARTWORK', scene: 'motel', filters: f } }) as { success: boolean };
+        type: 'PHOTOBOX_EXPORT_ARTWORK', scene: 'motel', filters,
+      } }) as { success: boolean };
       expect(duplicate.success).toBe(false);
       const invalid = await ask({ op: 'dispatch', action: {
-        type: 'PHOTOBOX_EXPORT_ARTWORK', scene: 'canal', filters: { ...f, brightness: NaN } },
-      }) as { success: boolean };
+        type: 'PHOTOBOX_EXPORT_ARTWORK', scene: 'canal',
+        filters: { ...filters, brightness: NaN },
+      } }) as { success: boolean };
       expect(invalid.success).toBe(false);
       const missing = await ask({ op: 'query', query: { kind: 'file',
         path: 'C:/Pictures/edited_canal.svg' } }) as ReturnType<SimulationKernel['getFileRead']>;

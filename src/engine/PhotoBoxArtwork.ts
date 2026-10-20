@@ -81,3 +81,24 @@ export function makePhotoBoxSvg(scene: PhotoBoxScene, filters: PhotoBoxFilters):
     <g style="filter: ${css}">${SCENES[scene]}</g>
     </svg>`;
 }
+
+/** Reject any SVG not byte-identical to our authored scene/filter generator.
+ * This is used before creating an image data URI from VFS file content:
+ * arbitrary player-saved SVG with lookalike headers must never render here.
+ */
+export function verifiedPhotoBoxSvg(input: unknown): string | null {
+  if (typeof input !== 'string' || input.length > 16384) return null;
+  const scene = /aria-label="PhotoBox (motel|diner|canal) illustration"/.exec(input)?.[1];
+  const match = /filter: brightness\\((\\d+(?:\\.\\d+)?)%\\) contrast\\((\\d+(?:\\.\\d+)?)%\\) saturate\\((\\d+(?:\\.\\d+)?)%\\) sepia\\((\\d+(?:\\.\\d+)?)%\\) invert\\((\\d+(?:\\.\\d+)?)%\\) blur\\((\\d+(?:\\.\\d+)?)px\\)/.exec(input);
+  if (!validPhotoBoxScene(scene) || !match) return null;
+  const values = match.slice(1).map(Number);
+  try {
+    const filters = validatePhotoBoxFilters({
+      brightness: values[0], contrast: values[1], saturation: values[2],
+      sepia: values[3], invert: values[4], blur: values[5],
+    });
+    return input === makePhotoBoxSvg(scene, filters) ? input : null;
+  } catch {
+    return null;
+  }
+}

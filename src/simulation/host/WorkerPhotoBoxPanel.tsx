@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { PhotoBoxView } from '../../apps/photobox/PhotoBoxView';
+import { verifiedPhotoBoxSvg } from '../../engine/PhotoBoxArtwork';
 import type { SimulationAppRead, SimulationFileRead } from '../../engine/kernel/SimulationPublication';
 import type { WorkerGameSession } from './WorkerGameSession';
 
@@ -28,10 +29,8 @@ export function WorkerPhotoBoxPanel({ session, revision, initialPath }: {
   const installed = apps?.revision === revision &&
     apps.installedSoftware.some(app => app.appId === 'app.photobox');
   const stored = file?.revision === revision ? file.file : null;
-  const savedSvg = stored?.kind === 'image' && typeof stored.content === 'string' &&
-    stored.content.length < 16384 &&
-    stored.content.startsWith('<svg xmlns="http://www.w3.org/2000/svg"') &&
-    stored.content.includes('aria-label="PhotoBox ') ? stored.content : null;
+  const savedSvg = initialPath?.startsWith('C:/Pictures/edited_') && stored?.kind === 'image'
+    ? verifiedPhotoBoxSvg(stored.content) : null;
   return <section data-testid="worker-photobox" className="h-full">
     {error && <p role="alert" className="bg-red-100 p-1 text-xs text-red-800">{error}</p>}
     {apps?.revision === revision && !installed ? (

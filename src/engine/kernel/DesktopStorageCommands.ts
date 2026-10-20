@@ -13,7 +13,7 @@ import type { CoreDomainOwners } from './CoreDomainOwners';
  */
 export class DesktopStorageCommands {
   constructor(
-    private readonly owners: Pick<CoreDomainOwners, 'world' | 'downloads' | 'vfs' | 'software' | 'telemetry'>,
+    private readonly owners: Pick<CoreDomainOwners, 'world' | 'downloads' | 'vfs' | 'software' | 'telemetry' | 'os' | 'hardware'>,
     private readonly publishState: () => void,
   ) {}
 
@@ -77,6 +77,13 @@ export class DesktopStorageCommands {
         } catch(cause){return{success:false,error:cause instanceof Error?cause.message:'Extraction failed'}}
       }
       case 'PHOTOBOX_EXPORT_ARTWORK': {
+        if (!this.owners.software.isInstalled('app.photobox')) {
+          return { success: false, error: 'Install PhotoBox before exporting artwork.' };
+        }
+        if (this.owners.os.getCurrentOsId() !== 'Orion_6.0' ||
+            this.owners.hardware.getState().ramMB < 768) {
+          return { success: false, error: 'PhotoBox requires Orion 6.0 and at least 768 MB RAM.' };
+        }
         try {
           const result = exportPhotoBoxArtwork(this.owners.vfs, action.scene, action.filters, currentMinutes);
           this.publishState();

@@ -677,3 +677,15 @@ appear as an available Worker app only after canonical installation.
 The original Orion 6.0/768 MB eligibility gate is unchanged. This
 does not claim photographic image capture, bitmap import/PNG editing
 or full raster asset parity. No production root flip yet.
+
+### PhotoBox owner-authorization and SVG provenance gate
+The owner refuses `PHOTOBOX_EXPORT_ARTWORK` unless PhotoBox is
+**installed** and the workstation has **Orion 6.0 + >=768 MB** at
+dispatch time. A client call cannot bypass the original UI requirement.
+Only byte-identical SVGs produced by the pure authored scene/filter
+generator may render as stored photos; lookalike user-saved SVGs or
+injected scripts are rejected by `verifiedPhotoBoxSvg`. The generic
+selected-file projection additionally withholds image bodies larger
+than 16 KiB. Worker integration tests cover the uninstalled refusal,
+positive eligible installed-PC export, invalid filter, duplicate export,
+and the absence of invented files following refusal.

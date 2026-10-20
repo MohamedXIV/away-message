@@ -20,6 +20,7 @@ describe('PhotoBox owner-backed authored SVG presentation',()=>{
     const explorer=source('src/simulation/host/WorkerDesktopVfsApps.tsx');
     expect(worker).toContain("session.read({ kind: 'apps' })");
     expect(worker).toContain("session.read({ kind: 'file', path: initialPath })");
+    expect(worker).toContain('verifiedPhotoBoxSvg(stored.content)');
     expect(worker).toContain("type: 'PHOTOBOX_EXPORT_ARTWORK'");
     expect(worker).toContain("app.appId === 'app.photobox'");
     expect(worker).not.toContain('useSimulationStore');
