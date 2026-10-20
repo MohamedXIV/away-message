@@ -5,7 +5,7 @@ import type { SlotPulseMetadata, SlotSummary } from '../../persistence/slots';
 import type {
   SimulationActorRead, SimulationAppRead, SimulationChange, SimulationChromeRead, SimulationDesktopRead,
   SimulationConversationRead, SimulationDirectoryRead, SimulationFileRead,
-  SimulationHudProjection, SimulationJobBoardRead, SimulationMailboxRead,
+  SimulationHudProjection, SimulationInstallerRead, SimulationJobBoardRead, SimulationMailboxRead,
   SimulationMessengerRead, SimulationPlayerStatusRead,
   SimulationPresenceRead, SimulationResidenceRead, SimulationSituationRead,
   SimulationTransitRead, SimulationWebsiteRead, SimulationWorldRead,
@@ -22,6 +22,7 @@ export interface SimulationQueryResults {
   website: SimulationWebsiteRead;
   jobBoard: SimulationJobBoardRead;
   mailbox: SimulationMailboxRead;
+  installer: SimulationInstallerRead;
   presence: SimulationPresenceRead;
   messenger: SimulationMessengerRead;
   actor: SimulationActorRead | null;
@@ -38,7 +39,8 @@ export type SimulationQuery =
   | { kind: 'actor'; actorId: string }
   | { kind: 'conversation'; actorId: string; offset?: number; limit?: number }
   | { kind: 'directory'; path: string; offset?: number; limit?: number }
-  | { kind: 'file'; path: string };
+  | { kind: 'file'; path: string }
+  | { kind: 'installer'; filePath: string };
 
 export type SimulationQueryResult<Q extends SimulationQuery> = SimulationQueryResults[Q['kind']];
 

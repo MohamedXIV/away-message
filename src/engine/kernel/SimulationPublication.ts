@@ -161,6 +161,16 @@ export interface SimulationMailboxRead {
     'id' | 'items' | 'fulfillment' | 'readyMinute' | 'status'>>;
 }
 
+/** One selected installer, never the complete VFS or download ledger. */
+export interface SimulationInstallerRead {
+  revision: number;
+  filePath: string;
+  softwareId: string | null;
+  ready: boolean;
+  reason: string | null;
+  preview: import('../SoftwareRegistry').InstallerPreview | null;
+}
+
 /** Legacy desktop app dependencies, projected only from the relevant owners. */
 export interface SimulationAppRead {
   revision: number;
