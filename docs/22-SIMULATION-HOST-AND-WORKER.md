@@ -506,3 +506,15 @@ original Host API actions and dynamically published world/Pulse reads as its
 adapter. The pure view has no main-thread simulation, site router or Host
 hook dependencies, and can be mounted with finite Worker-owned read models.
 This step does not falsely claim the Worker browser/installer are shipped.
+
+
+## P3.14b — Extracted original Voyager browser chrome
+
+The legacy Voyager now renders through `VoyagerBrowserChrome`, retaining
+its original 2006 OS title/menu/address bar, back/forward/refresh,
+bookmarks, SearchMate toolbar slot, loading progress and file Save Page
+controls. The original `VoyagerBrowserApp` remains the old owner adapter
+for `InternetRouter`, generated AI sites, saved pages and history; the
+pure visual chrome has no static imports from the site's engine-backed
+route registry. This prepares the Worker adapter without instantiating a
+second engine in the browser. No claim of full browser parity yet.
