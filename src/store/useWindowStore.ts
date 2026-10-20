@@ -106,6 +106,8 @@ function getDefaultIcon(appId: string): string {
     case 'notepad':
     case 'app.notepad':
       return '📝';
+    case 'installer':
+      return '📦';
     case 'trash':
     case 'app.trash':
       return '🗑️';
@@ -168,6 +170,8 @@ function getDefaultTitle(appId: string): string {
     case 'notepad':
     case 'app.notepad':
       return 'Notepad';
+    case 'installer':
+      return 'Setup Wizard';
     case 'trash':
     case 'app.trash':
       return 'Recycle Bin';
