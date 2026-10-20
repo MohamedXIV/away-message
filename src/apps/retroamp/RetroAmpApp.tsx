@@ -28,6 +28,7 @@ export const RetroAmpApp: React.FC<{
   const [currentTrackIndex, setCurrentTrackIndex] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [playbackSeconds, setPlaybackSeconds] = useState(0);
+  const [loadedDuration, setLoadedDuration] = useState(0);
   const [volume, setVolume] = useState(80);
   const [balance, setBalance] = useState(0);
   const [isShuffle, setIsShuffle] = useState(false);
@@ -39,6 +40,7 @@ export const RetroAmpApp: React.FC<{
   const [visHeights, setVisHeights] = useState<number[]>(new Array(19).fill(2));
 
   const currentTrack = playlist[currentTrackIndex] ?? null;
+  useEffect(() => { setLoadedDuration(0); }, [currentTrack?.id]);
 
   const setupAudioGraph = () => {
     const audio = audioRef.current;
@@ -139,8 +141,9 @@ export const RetroAmpApp: React.FC<{
   };
 
   const formatTime = (secs: number) => {
-    const mins = Math.floor(secs / 60);
-    const remainder = Math.floor(secs % 60);
+    const safe = Number.isFinite(secs) && secs >= 0 ? secs : 0;
+    const mins = Math.floor(safe / 60);
+    const remainder = Math.floor(safe % 60);
     return `${mins < 10 ? '0' : ''}${mins}:${remainder < 10 ? '0' : ''}${remainder}`;
   };
 
@@ -149,7 +152,7 @@ export const RetroAmpApp: React.FC<{
       <audio ref={audioRef} preload="metadata" src={currentTrack?.src}
         data-testid="retroamp-real-audio"
         onTimeUpdate={e => setPlaybackSeconds(e.currentTarget.currentTime)}
-        onLoadedMetadata={e => setPlaybackSeconds(e.currentTarget.currentTime)}
+        onLoadedMetadata={e => { setPlaybackSeconds(e.currentTarget.currentTime); setLoadedDuration(e.currentTarget.duration); }}
         onEnded={() => { if (playlist.length > 1) handleNextTrack(); else setIsPlaying(false); }}
         onError={() => { if (currentTrack) setPlayError('Unsupported or corrupt WAV audio.'); setIsPlaying(false); }} />
       {playError && <p role="alert" className="text-yellow-300">{playError}</p>}
@@ -166,7 +169,7 @@ export const RetroAmpApp: React.FC<{
             </div>
           </div>
           <span className="text-green-300 font-bold text-xs ml-2 shrink-0">
-            {formatTime(playbackSeconds)} / {formatTime(audioRef.current?.duration || currentTrack?.durationSeconds || 0)}
+            {formatTime(playbackSeconds)} / {formatTime(loadedDuration || currentTrack?.durationSeconds || 0)}
           </span>
         </div>
 

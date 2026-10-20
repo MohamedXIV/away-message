@@ -59,6 +59,7 @@ export function WorkerInstallerPanel({ session, revision, windowId, filePath }: 
     const appId = read?.preview?.softwareDef.appId;
     if (appId === 'app.pulse') openWindow('pulse');
     else if (appId === 'app.flashfetch') openWindow('flashfetch');
+    else if (appId === 'app.retroamp') openWindow('retroamp');
   };
   return <section data-testid="worker-installer" className="h-full">
     <InstallerWizardView fileName={name} stage={stage}

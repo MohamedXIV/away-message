@@ -29,7 +29,7 @@ export const DOWNLOAD_CATALOG: DownloadItem[] = [
     version: '2.95',
     fileSizeBytes: 1024 * 1024 * 4,
     downloadUrl: 'http://downloadhub.local/files/retroamp_setup.exe',
-    description: 'High-fidelity MP3/WAV player with 10-band equalizer and spectrum visualizer.',
+    description: 'Retro-style PCM WAV player with real local files, 10-band EQ and live spectrum. MP3 decoding is not yet supported.',
   },
   {
     id: 'flashfetch_setup',
