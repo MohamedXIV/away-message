@@ -37,4 +37,14 @@ describe('Worker-installed software shortcuts', () => {
       { id: 'flashfetch', label: 'FlashFetch', available: true },
     ]);
   });
+  it('enables WeatherBuddy only when the Worker-owned install record exists', () => {
+    const weather = { appId: 'app.weatherbuddy', name: 'WeatherBuddy', version: '1.4' };
+    expect(getWorkerInstalledPrograms(make([]))).toEqual([]);
+    expect(getWorkerInstalledPrograms(make([weather]))).toEqual([
+      { id: 'weatherbuddy', label: 'WeatherBuddy', available: true },
+    ]);
+    expect(getWorkerInstalledShortcuts(make([weather], [
+      shortcut('wb', 'app.weatherbuddy', 'WeatherBuddy.lnk'),
+    ]))[0]).toMatchObject({ label: 'WeatherBuddy', launchId: 'weatherbuddy' });
+  });
 });

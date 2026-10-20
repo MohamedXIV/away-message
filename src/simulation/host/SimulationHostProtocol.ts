@@ -6,7 +6,7 @@ import type {
   SimulationActorRead, SimulationAppRead, SimulationChange, SimulationChromeRead, SimulationDesktopRead,
   SimulationConversationRead, SimulationDirectoryRead, SimulationFileRead,
   SimulationHudProjection, SimulationInstallerRead, SimulationJobBoardRead, SimulationMailboxRead,
-  SimulationMessengerRead, SimulationPlayerStatusRead,
+  SimulationMessengerRead, SimulationPlayerStatusRead, SimulationWeatherBuddyRead,
   SimulationPresenceRead, SimulationResidenceRead, SimulationSituationRead,
   SimulationTransitRead, SimulationWebsiteRead, SimulationWorldRead,
 } from '../../engine/kernel/SimulationPublication';
@@ -20,6 +20,7 @@ export interface SimulationQueryResults {
   desktop: SimulationDesktopRead;
   apps: SimulationAppRead;
   website: SimulationWebsiteRead;
+  weatherBuddy: SimulationWeatherBuddyRead;
   jobBoard: SimulationJobBoardRead;
   mailbox: SimulationMailboxRead;
   installer: SimulationInstallerRead;
@@ -34,7 +35,7 @@ export interface SimulationQueryResults {
   transit: SimulationTransitRead;
 }
 export type SimulationQuery =
-  | { kind: 'hud' | 'world' | 'playerStatus' | 'chrome' | 'desktop' | 'apps' | 'presence' | 'situation' | 'residence' | 'transit' | 'website' | 'jobBoard' | 'mailbox' }
+  | { kind: 'hud' | 'world' | 'playerStatus' | 'chrome' | 'desktop' | 'apps' | 'presence' | 'situation' | 'residence' | 'transit' | 'website' | 'jobBoard' | 'mailbox' | 'weatherBuddy' }
   | { kind: 'messenger'; maxContacts?: number }
   | { kind: 'actor'; actorId: string }
   | { kind: 'conversation'; actorId: string; offset?: number; limit?: number }

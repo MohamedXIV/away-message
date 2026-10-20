@@ -71,6 +71,7 @@ export function createSimulationWorkerRuntime(send: (message: SimulationWorkerRe
       case 'desktop': return engine.getDesktopRead();
       case 'apps': return engine.getAppRead();
       case 'website': return engine.getWebsiteRead();
+      case 'weatherBuddy': return engine.getWeatherBuddyRead();
       case 'jobBoard': return engine.getJobBoardRead();
       case 'mailbox': return engine.getMailboxRead();
       case 'presence': return engine.getPresenceRead();

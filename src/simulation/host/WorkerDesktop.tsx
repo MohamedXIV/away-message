@@ -15,6 +15,7 @@ import { WorkerMailboxPanel } from './WorkerMailboxPanel';
 import { WorkerFlashFetchPanel } from './WorkerOsHostProvider';
 import { WorkerVoyagerPanel } from './WorkerVoyagerPanel';
 import { WorkerInstallerPanel } from './WorkerInstallerPanel';
+import { WorkerWeatherBuddyPanel } from './WorkerWeatherBuddyPanel';
 import { getWorkerInstalledPrograms, getWorkerInstalledShortcuts } from './WorkerInstalledAppLinks';
 import type { WorkerGameSession } from './WorkerGameSession';
 
@@ -176,6 +177,7 @@ function WorkerDesktopApp({ window: win, session, revision, openDocument, openIn
         ? win.customState.filePath : undefined} />;
   }
   if (win.appId === 'installer') return <WorkerInstallerPanel session={session} revision={revision} windowId={win.id} filePath={typeof win.customState?.filePath === 'string' ? win.customState.filePath : undefined} />;
+  if (win.appId === 'weatherbuddy') return <WorkerWeatherBuddyPanel session={session} revision={revision} />;
   if (win.appId === 'system') return <WorkerSystemPanel session={session} revision={revision} />;
   if (win.appId === 'mailbox') return <WorkerMailboxPanel session={session} revision={revision} />;
   if (win.appId === 'flashfetch') return <WorkerFlashFetchPanel session={session} revision={revision} windowId={win.id} />;

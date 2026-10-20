@@ -583,3 +583,22 @@ Wizard only auto-launches Pulse/FlashFetch on a successful canonical
 installation response, not on a failed or merely rendered completion
 screen. These projected summaries are not a second software registry and
 never create a main-thread simulation engine.
+
+
+## P3.17a — Original WeatherBuddy on canonical Worker five-day forecast
+
+The existing authored frog/weather/adware presentation is extracted unchanged
+to `WeatherBuddyView`, shared with the original `WeatherBuddyApp`
+legacy adapter. It has no engine, store, router or game clock dependencies.
+The Worker protocol now exposes the already implemented
+`SimulationKernel.getWeatherBuddyRead()` as an explicit bounded
+`weatherBuddy` query (current conditions and exactly five forecast days).
+`WorkerWeatherBuddyPanel` joins that read with the bounded `apps`
+projection at **the same revision**, preserving the in-game SearchMate
+banner, temperature conversion and original city/weather art. An
+uninstalled WeatherBuddy remains unavailable; installation-backed desktop
+shortcuts and Start Menu entries now enable its real Worker window.
+The older `/` route keeps the existing bounded-read adapter. RetroAmp's
+hardcoded "Add File" playback is deliberately deferred until actual VFS
+file-open behavior is implemented, rather than claim false library parity.
+This is staged parity, not the normal production root flip.

@@ -338,6 +338,30 @@ describe('#175 single-writer Worker runtime protocol', () => {
     } finally { runtime.close(); }
   });
 
+  it('publishes five canonical weather outlook days without cloning WorldState', async () => {
+    const { ask, runtime } = harness();
+    const source = vi.spyOn(SimulationKernel.prototype, 'getWeatherBuddyRead');
+    const full = vi.spyOn(SimulationKernel.prototype, 'getState');
+    try {
+      await ask({ op: 'init' });
+      const weather = await ask({ op: 'query', query: { kind: 'weatherBuddy' } }) as
+        ReturnType<SimulationKernel['getWeatherBuddyRead']>;
+      const apps = await ask({ op: 'query', query: { kind: 'apps' } }) as
+        ReturnType<SimulationKernel['getAppRead']>;
+      expect(source).toHaveBeenCalledOnce();
+      expect(weather.forecast).toHaveLength(5);
+      expect(weather.current.weather.highF).toEqual(expect.any(Number));
+      expect(weather.revision).toBe(apps.revision);
+      expect(weather).not.toHaveProperty('world');
+      expect(weather).not.toHaveProperty('roster');
+      expect(full).not.toHaveBeenCalled();
+    } finally {
+      source.mockRestore();
+      full.mockRestore();
+      runtime.close();
+    }
+  });
+
   it('reads player-safe mail and courier tray from the canonical Worker owner', async () => {
     const { ask, runtime } = harness();
     const read = vi.spyOn(SimulationKernel.prototype, 'getMailboxRead');

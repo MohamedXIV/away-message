@@ -4,12 +4,12 @@ import type { SimulationDesktopRead } from '../../engine/kernel/SimulationPublic
 const WORKER_PORTED_APPS: Readonly<Record<string, { id: string; icon: string }>> = {
   'app.pulse': { id: 'pulse', icon: '💬' },
   'app.flashfetch': { id: 'flashfetch', icon: '⚡' },
+  'app.weatherbuddy': { id: 'weatherbuddy', icon: '🐸' },
 };
 const OTHER_ICONS: Readonly<Record<string, string>> = {
   'app.retroamp': '🎵',
   'app.zipmate': '📦',
   'app.photobox': '🖼️',
-  'app.weatherbuddy': '🐸',
   'app.safesweep': '🛡️',
 };
 
