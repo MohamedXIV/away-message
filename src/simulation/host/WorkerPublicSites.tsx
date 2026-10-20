@@ -14,12 +14,13 @@ type Page =
  * content consumer, NOT a replacement for the full legacy Voyager browser.
  */
 export function WorkerPublicSites({
-  session, revision,
+  session, revision, initialTab = 'news',
 }: {
   session: WorkerGameSession;
   revision: number;
+  initialTab?: 'news' | 'jobs';
 }) {
-  const [tab, setTab] = useState<'news' | 'jobs'>('news');
+  const [tab, setTab] = useState<'news' | 'jobs'>(initialTab);
   const [page, setPage] = useState<Page | null>(null);
   const [error, setError] = useState<string | null>(null);
 

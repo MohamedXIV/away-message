@@ -221,3 +221,28 @@ test('authored FlashFetch uses the Worker OsHost boundary and refuses real-world
   await expect(flash.getByText('No active downloads in queue. FlashFetch is ready.')).toBeVisible();
   expect(await page.evaluate(() => !('__simEngine' in window) && !('__simStore' in window))).toBe(true);
 });
+
+test('shared Voyager and DownloadHub use Worker reads and canonical VFS Save Page', async ({ page }) => {
+  test.setTimeout(60_000);
+  await page.goto('/worker.html');
+  await page.getByRole('button', { name: 'New game' }).click();
+  await expect(page.getByTestId('worker-phase')).toHaveText('game');
+  await page.getByRole('button', { name: 'desktop', exact: true }).click();
+  const desktop = page.getByTestId('worker-desktop');
+  await desktop.getByRole('button', { name: 'Open Voyager Browser' }).click();
+  const browser = page.getByTestId('worker-window-browser');
+  await expect(browser.getByText('DownloadHub.local — Software Archive')).toBeVisible();
+  await expect(browser.getByText('Pulse Messenger 5.2 Classic')).toBeVisible();
+  await browser.getByPlaceholder('http://findit.local').fill('https://example.com');
+  await browser.getByRole('button', { name: 'Go', exact: true }).click();
+  await expect(browser.getByText('Blocked: only in-game HTTP .local pages are supported')).toBeVisible();
+  await browser.getByRole('button', { name: /Home/ }).click();
+  await expect(browser.getByText('DownloadHub.local — Software Archive')).toBeVisible();
+  await browser.getByRole('button', { name: /Save Page/ }).last().click();
+  await expect(browser.getByText('Saved downloadhub_page.txt to C:/Documents')).toBeVisible();
+  await desktop.getByRole('button', { name: 'Open My Computer' }).click();
+  await expect(page.getByTestId('worker-window-fileexplorer').getByRole('button', {
+    name: 'Open file: downloadhub_page.txt',
+  })).toBeVisible();
+  expect(await page.evaluate(() => !('__simEngine' in window) && !('__simStore' in window))).toBe(true);
+});

@@ -13,6 +13,7 @@ import { WorkerSystemPanel } from './WorkerSystemPanel';
 import { WorkerPublicSites } from './WorkerPublicSites';
 import { WorkerMailboxPanel } from './WorkerMailboxPanel';
 import { WorkerFlashFetchPanel } from './WorkerOsHostProvider';
+import { WorkerVoyagerPanel } from './WorkerVoyagerPanel';
 import type { WorkerGameSession } from './WorkerGameSession';
 
 const APPLICATIONS = [
@@ -21,6 +22,7 @@ const APPLICATIONS = [
   { id: 'pulse', label: 'Pulse Messenger', icon: '💬' },
   { id: 'system', label: 'Computer & Setup', icon: '💻' },
   { id: 'publicweb', label: 'Town Sites', icon: '🌐' },
+  { id: 'browser', label: 'Voyager Browser', icon: '🌐' },
   { id: 'mailbox', label: 'Mailbox', icon: '✉️' },
   { id: 'flashfetch', label: 'FlashFetch', icon: '⚡' },
 ] as const;
@@ -66,7 +68,7 @@ export function WorkerDesktop({
   const profile = chrome?.osVersion ? getOsPresentationProfile(chrome.osVersion) : null;
   const allowedApps = ['browser', 'fileexplorer', 'notepad', 'controlpanel', 'pulse'];
   const resolveAppId = (id: string): string | null => ({
-    browser: 'publicweb', fileexplorer: 'fileexplorer', notepad: 'notepad',
+    browser: 'browser', fileexplorer: 'fileexplorer', notepad: 'notepad',
     controlpanel: 'system', pulse: 'pulse',
   } as Record<string, string>)[id] ?? null;
 
@@ -110,7 +112,7 @@ export function WorkerDesktop({
 
       <TaskbarChrome contained testId="worker-desktop-taskbar"
         osVersion={chrome?.osVersion ?? null} pulseInstalled={chrome?.pulseInstalled ?? false}
-        onStepAway={onStepAway} browserAppId="publicweb"
+        onStepAway={onStepAway} browserAppId="browser"
         renderStartMenu={(close, isOpen) => (
           <StartMenuChrome isOpen={isOpen} onClose={close}
             osVersion={chrome?.osVersion ?? null} pulseInstalled={chrome?.pulseInstalled ?? false}
@@ -152,6 +154,8 @@ function WorkerDesktopApp({ window: win, session, revision, openDocument }: {
   if (win.appId === 'system') return <WorkerSystemPanel session={session} revision={revision} />;
   if (win.appId === 'mailbox') return <WorkerMailboxPanel session={session} revision={revision} />;
   if (win.appId === 'flashfetch') return <WorkerFlashFetchPanel session={session} revision={revision} windowId={win.id} />;
+  if (win.appId === 'browser') return <WorkerVoyagerPanel session={session} revision={revision} windowId={win.id}
+    initialUrl={typeof win.customState?.initialUrl === 'string' ? win.customState.initialUrl : undefined} />;
   if (win.appId === 'publicweb') return <WorkerPublicSites session={session} revision={revision} />;
   if (win.appId === 'pulse') {
     return <div className="h-full overflow-y-auto bg-slate-900 p-2">

@@ -518,3 +518,19 @@ for `InternetRouter`, generated AI sites, saved pages and history; the
 pure visual chrome has no static imports from the site's engine-backed
 route registry. This prepares the Worker adapter without instantiating a
 second engine in the browser. No claim of full browser parity yet.
+
+
+## P3.14c — Worker Voyager browser and DownloadHub canonical integration
+
+Mounted the real authored `VoyagerBrowserChrome` and `DownloadHubView`
+on the single Writer's browser desktop. DownloadHub reads owner-published
+website event mirrors and app download queue; valid in-game `.local` file
+links issue typed `DOWNLOAD_START` through the Worker Host, not fetch.
+Offline downloads report a disconnected computer instead of claiming
+success. Voyager Save Page commits real VFS text files through the Worker,
+and browser history, address bar, bookmarks and tab/window chrome remain
+UI-only. CityWire and Jobs use the bounded live public views.
+Unported sites and external URLs explicitly report unavailability; the
+legacy `InternetRouter` must never be imported in `worker.html` because
+its static site map includes synchronous engine clients. Full site parity,
+installer preview/commit, production root switch and stress remain gates.
