@@ -29,8 +29,11 @@ test('fatal Worker crash removes live world; explicit saved-slot recovery boots 
   await expect(page.getByText('Saved to slot_1')).toBeVisible();
 
   await page.getByRole('button', { name: 'Advance 15 minutes' }).click();
+  // The command's RPC ack may precede the next bounded HUD publication.
+  // Await published canonical truth instead of sampling React too early.
+  await expect.poll(async () => Number(await page.getByTestId('worker-minute').innerText()))
+    .toBeGreaterThanOrEqual(beforeSave + 15);
   const unsaved = Number(await page.getByTestId('worker-minute').innerText());
-  expect(unsaved).toBeGreaterThanOrEqual(beforeSave + 15);
   await page.getByRole('button', { name: 'desktop', exact: true }).click();
   await page.getByTestId('worker-desktop').getByRole('button', { name: 'Open My Computer' }).click();
   await expect(page.getByTestId('worker-window-fileexplorer')).toBeVisible();
@@ -54,7 +57,6 @@ test('fatal Worker crash removes live world; explicit saved-slot recovery boots 
   expect(await page.evaluate(() =>
     (window as typeof window & { __testWorkerProbes: Worker[] }).__testWorkerProbes.length
   )).toBe(2);
-  await page.getByRole('button', { name: 'Pause clock' }).click();
   expect(await page.evaluate(() => !('__simEngine' in window) && !('__simStore' in window))).toBe(true);
 });
 

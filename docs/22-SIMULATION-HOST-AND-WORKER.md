@@ -788,3 +788,16 @@ recovery starts another Worker and restores only saved (not later
 unsaved) progress. A second route reloads the entire browser page
 and cold-loads the IndexedDB slot. These tests are staged on the
 existing \`/worker.html\` route, with no production \`/\` cutover.
+
+
+### P3.21 staged browser publication synchronization
+
+First Chromium recovery run succeeded for the full-page cold-reload scenario;
+the native-error scenario initially sampled the Worker HUD synchronously
+after an \`advance\` RPC acknowledgement. The bounded React projection is
+asynchronous, so the test occasionally read the preceding saved minute
+and incorrectly concluded that no unsaved progress existed. The test now
+polls until the **published** minute reaches the required unsaved value
+before injecting a native Worker error. It then compares recovered time
+with that verified higher value. No product command, saved-state contract
+or recoverability expectation is weakened.
