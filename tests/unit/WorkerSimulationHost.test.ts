@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { WorkerSimulationHost } from '../../src/simulation/host/WorkerSimulationHost';
+import { WorkerSimulationHost, WORKER_BOOT_TIMEOUT_MS, WORKER_COLD_BOOT_TIMEOUT_MS } from '../../src/simulation/host/WorkerSimulationHost';
 import { createSimulationWorkerRuntime } from '../../src/simulation/host/SimulationWorkerRuntime';
 import type { SimulationWorkerReply, SimulationWorkerRequest } from '../../src/simulation/host/SimulationHostProtocol';
 
@@ -83,4 +83,52 @@ describe('#175 WorkerSimulationHost transport lifecycle', () => {
     expect(worker.terminate).toHaveBeenCalledTimes(1);
     host.dispose();
   });
+  it('fails closed when a Worker accepts init postMessage but never replies', async () => {
+    vi.useFakeTimers();
+    const worker = new LoopbackWorker();
+    worker.postMessage = vi.fn(); // simulate hung startup
+    const host = new WorkerSimulationHost(worker as unknown as Worker);
+    const faults: string[] = [];
+    host.onFailure(error => faults.push(error.message));
+    try {
+      const pending = host.initialize();
+      const rejected = expect(pending).rejects.toThrow('startup timed out');
+      await vi.advanceTimersByTimeAsync(WORKER_BOOT_TIMEOUT_MS);
+      await rejected;
+      expect(faults).toHaveLength(1);
+      expect(worker.terminate).toHaveBeenCalledTimes(1);
+      await expect(host.query({ kind: 'hud' })).rejects.toThrow('startup timed out');
+    } finally {
+      host.dispose();
+      vi.useRealTimers();
+    }
+  });
+
+  it('allows an acknowledged cold boot while rejecting an unacknowledged saved-slot boot', async () => {
+    vi.useFakeTimers();
+    const responsive = new LoopbackWorker();
+    const valid = new WorkerSimulationHost(responsive as unknown as Worker);
+    try {
+      await valid.initialize();
+      await vi.advanceTimersByTimeAsync(WORKER_BOOT_TIMEOUT_MS + 10);
+      expect(responsive.terminate).not.toHaveBeenCalled();
+    } finally { valid.dispose(); }
+
+    const stalled = new LoopbackWorker();
+    stalled.postMessage = vi.fn();
+    const loading = new WorkerSimulationHost(stalled as unknown as Worker);
+    try {
+      const pending = loading.initializeSlot('slot_1');
+      const rejected = expect(pending).rejects.toThrow('startup timed out');
+      await vi.advanceTimersByTimeAsync(WORKER_COLD_BOOT_TIMEOUT_MS - 1);
+      expect(stalled.terminate).not.toHaveBeenCalled();
+      await vi.advanceTimersByTimeAsync(1);
+      await rejected;
+      expect(stalled.terminate).toHaveBeenCalledTimes(1);
+    } finally {
+      loading.dispose();
+      vi.useRealTimers();
+    }
+  });
+
 });

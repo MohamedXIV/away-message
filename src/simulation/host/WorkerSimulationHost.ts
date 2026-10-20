@@ -9,6 +9,14 @@ import type {
 } from './SimulationHostProtocol';
 
 /**
+ * Boot watchdog protects against workers that never answer the very first
+ * handshake (for example an invalid module, blocked script or startup hang).
+ * The saved-world cold load gets a longer window for IndexedDB.
+ */
+export const WORKER_BOOT_TIMEOUT_MS = 30_000;
+export const WORKER_COLD_BOOT_TIMEOUT_MS = 60_000;
+
+/**
  * Main-thread RPC client. Owns no SimulationKernel or mutable domain graph.
  * If a worker crashes, reject pending commands; NEVER install a local fallback.
  */
@@ -17,6 +25,7 @@ export class WorkerSimulationHost implements SimulationHost {
   private readonly pending = new Map<number, {
     resolve: (value: unknown) => void;
     reject: (error: Error) => void;
+    timeout: ReturnType<typeof setTimeout> | null;
   }>();
   private readonly listeners = new Set<(change: Readonly<SimulationChange>) => void>();
   private readonly failureListeners = new Set<(error: Error) => void>();
@@ -49,6 +58,7 @@ export class WorkerSimulationHost implements SimulationHost {
     const entry = this.pending.get(message.id);
     if (!entry) return; // discarded or stale response
     this.pending.delete(message.id);
+    if (entry.timeout !== null) clearTimeout(entry.timeout);
     if (message.ok) entry.resolve(message.value);
     else entry.reject(new Error(message.error.message));
   };
@@ -70,7 +80,10 @@ export class WorkerSimulationHost implements SimulationHost {
   private fail(error: Error): void {
     if (this.failure || this.disposed) return;
     this.failure = error;
-    for (const pending of this.pending.values()) pending.reject(error);
+    for (const pending of this.pending.values()) {
+      if (pending.timeout !== null) clearTimeout(pending.timeout);
+      pending.reject(error);
+    }
     this.pending.clear();
     this.listeners.clear();
     this.worker.terminate();
@@ -80,27 +93,31 @@ export class WorkerSimulationHost implements SimulationHost {
     this.failureListeners.clear();
   }
 
-  private request(request: SimulationWorkerCommand): Promise<unknown> {
+  private request(request: SimulationWorkerCommand, bootTimeoutMs?: number): Promise<unknown> {
     if (this.disposed) return Promise.reject(new Error('SimulationHost disposed'));
     if (this.failure) return Promise.reject(this.failure);
     const id = this.nextId++;
     return new Promise((resolve, reject) => {
-      this.pending.set(id, { resolve, reject });
+      const timeout = bootTimeoutMs === undefined ? null : setTimeout(() => {
+        this.fail(new Error('Dedicated Simulation Worker startup timed out; no fallback world was created'));
+      }, bootTimeoutMs);
+      this.pending.set(id, { resolve, reject, timeout });
       try {
         this.worker.postMessage({ ...request, id });
       } catch (cause) {
         this.pending.delete(id);
+        if (timeout !== null) clearTimeout(timeout);
         reject(cause instanceof Error ? cause : new Error(String(cause)));
       }
     });
   }
 
   async initialize(initialState?: InitialSimulationState): Promise<void> {
-    await this.request({ op: 'init', initialState });
+    await this.request({ op: 'init', initialState }, WORKER_BOOT_TIMEOUT_MS);
   }
 
   async initializeSlot(slotId: string): Promise<void> {
-    await this.request({ op: 'initSlot', slotId });
+    await this.request({ op: 'initSlot', slotId }, WORKER_COLD_BOOT_TIMEOUT_MS);
   }
 
   dispatch(action: SimulationAction): Promise<ActionResult> {
@@ -164,7 +181,10 @@ export class WorkerSimulationHost implements SimulationHost {
     if (this.disposed) return;
     this.disposed = true;
     const error = new Error('SimulationHost disposed');
-    for (const entry of this.pending.values()) entry.reject(error);
+    for (const entry of this.pending.values()) {
+      if (entry.timeout !== null) clearTimeout(entry.timeout);
+      entry.reject(error);
+    }
     this.pending.clear();
     this.listeners.clear();
     this.failureListeners.clear();

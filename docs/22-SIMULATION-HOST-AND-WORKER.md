@@ -759,3 +759,32 @@ transport controls now have accessible Play/Pause/Stop/Previous/Next
 labels, benefiting keyboard/screen-reader testing without changing
 the retro visual controls. Full audio playback proof still depends on
 the latest exact-head Chromium result.
+
+
+## P3.21 — Explicit Worker failure recovery and bounded boot watchdog
+
+A Worker which never acknowledges a fresh initialization now fails after
+30 seconds, or 60 seconds for a cold IndexedDB saved-slot boot. The
+main-thread RPC transport clears these timers on every success, failure,
+or disposal, rejects outstanding initialization, disposes its Worker,
+and emits the same fail-closed signal as a native Worker error. There is
+**no** main-thread SimulationKernel fallback or cached domain snapshot.
+
+The Worker game shell's error state now explicitly warns that unsaved
+progress is unrecoverable. The player may choose to recover the selected
+saved slot, separately recover \`autosave\`, or intentionally start a
+new game. Each path creates a **fresh** Dedicated Worker through the
+same ordered initialization contract and retains the previous session
+generation/old-window-stack teardown. No automatic overwrite, save on
+fatal fault, or guessed successful recovery occurs.
+
+\`WorkerSimulationHost.test.ts\` guards stalled fresh/cold boot,
+successful acknowledgment and watchdog cleanup with fake time.
+\`ScenarioP_WorkerFaultRecovery.spec.ts\` uses browser-only capture of
+the **native Worker handle** to generate a real Worker \`error\` event;
+it verifies that the HUD and app windows disappear on failure, that
+no simulation exists on the main thread, and that explicit slot
+recovery starts another Worker and restores only saved (not later
+unsaved) progress. A second route reloads the entire browser page
+and cold-loads the IndexedDB slot. These tests are staged on the
+existing \`/worker.html\` route, with no production \`/\` cutover.

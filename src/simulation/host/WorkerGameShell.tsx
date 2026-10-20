@@ -68,9 +68,25 @@ export function WorkerGameShell() {
         </div>
 
         {(view.phase === 'menu' || view.phase === 'error') && (
-          <section className="flex flex-wrap gap-3">
-            <button className={control} disabled={busy} onClick={() => void act(() => session.newGame())}>New game</button>
-            <button className={control} disabled={busy} onClick={() => void act(() => session.loadGame(slot))}>Load game</button>
+          <section className="flex flex-col gap-3" data-testid="worker-recovery-controls">
+            {view.phase === 'error' && (
+              <p className="text-sm text-amber-200" role="status">
+                The canonical Worker stopped. Unsaved progress cannot be restored.
+                Choose a saved slot to start a fresh Worker, or deliberately start a new game.
+                No replacement simulation is running on this page.
+              </p>
+            )}
+            <div className="flex flex-wrap gap-3">
+              <button className={control} disabled={busy} onClick={() => void act(() => session.newGame())}>New game</button>
+              <button className={control} disabled={busy} onClick={() => void act(() => session.loadGame(slot))}>
+                {view.phase === 'error' ? 'Recover saved slot' : 'Load game'}
+              </button>
+              {view.phase === 'error' && slot !== 'autosave' && (
+                <button className={control} disabled={busy} onClick={() => void act(() => session.loadGame('autosave'))}>
+                  Recover autosave
+                </button>
+              )}
+            </div>
           </section>
         )}
         {view.phase === 'loading' && <p role="status">Starting canonical Worker world…</p>}
