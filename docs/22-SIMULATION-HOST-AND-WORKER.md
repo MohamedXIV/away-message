@@ -689,3 +689,39 @@ selected-file projection additionally withholds image bodies larger
 than 16 KiB. Worker integration tests cover the uninstalled refusal,
 positive eligible installed-PC export, invalid filter, duplicate export,
 and the absence of invented files following refusal.
+
+
+## P3.20 — RetroAmp real PCM WAV and browser installation gate
+
+The original retro music player no longer invents four nonexistent MP3s,
+moves an imaginary timer, or appends a fake C:/Music track from Add File.
+Its retro window and EQ/playlist controls remain original presentation;
+a real HTML media element decodes explicitly selected VFS-backed RIFF
+WAV audio. Web Audio filters, panning, and analyser follow playback
+rather than random equalizer bars. No arbitrary MP3 codec or internet
+music stream is claimed. The DownloadHub listing explicitly says that
+MP3 decoding is not supported yet.
+
+\`RETROAMP_IMPORT_SAMPLE\` is a typed single-writer Worker command:
+only an installed RetroAmp on a booted OS can mint the authored
+8-second PCM sample at \`C:/Music/Motel Night Loop.wav\`. The VFS
+enforces normal disk/collision behavior. An existing file counts as
+already imported only when its bytes, size, kind, and app association
+match the authored WAV exactly. Generic file reads bound audio bodies
+to 96,000 characters; the UI enumerates at most 16 Music entries and
+opens at most 8 selected WAV files. Explorer may open one chosen
+Music file in RetroAmp; installed shortcuts and the Start Menu link
+are only enabled after a canonical installed program exists. The
+original download/installer wizard can launch the just-installed
+app. RetroAmp's authored minimum RAM is now 64 MB, appropriate for
+the starter Orion 4.8 machine, without weakening higher-end apps'
+hardware requirements.
+
+\`RetroAmpSample.test.ts\` checks true RIFF/PCM bytes, owner
+installation/boot gates, idempotence, and spoofed-file collisions.
+\`ScenarioO_WorkerRetroAmpRealAudio.spec.ts\` exercises the real
+mouse-driven journey through PC setup, local DownloadHub, canonical
+world-minute transfer, installer, playback, and Clear/Add, without
+a local engine or fabricated network/audio. This is a staging
+acceptance route only; production \`/\` remains legacy until #175's
+single-Worker cutover and #177's scale gate are satisfied.

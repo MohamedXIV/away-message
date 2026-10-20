@@ -144,6 +144,22 @@ describe('SoftwareRegistry (6-Stage Wizard, Requirements Gating & Adware)', () =
     expect(installed.adwarePayload?.homepageHijacked).toBe('http://searchmate.local');
   });
 
+  it('allows period-correct RetroAmp on the actual 64MB Orion 4.8 starter PC', () => {
+    ramMb = 64;
+    const supported = registry.startInstallerWizard('sw_retroamp_23');
+    expect(supported.compatibilityResult.isCompatible).toBe(true);
+    expect(supported.compatibilityResult.ramCheck.passed).toBe(true);
+
+    const installed = registry.completeInstallation(supported.sessionId, 40);
+    expect(installed.appId).toBe('app.retroamp');
+    expect(vfs.readFile('C:/Desktop/RetroAmp Audio Player.lnk')?.kind).toBe('shortcut');
+
+    // Low-memory setups still fail the owner compatibility check.
+    ramMb = 32;
+    const unsupported = registry.startInstallerWizard('sw_retroamp_23');
+    expect(unsupported.compatibilityResult.ramCheck.passed).toBe(false);
+  });
+
   it('uninstalls software and cleans up shortcuts from VFS', () => {
     const wizard = registry.startInstallerWizard('sw_retroamp_23');
     const installed = registry.completeInstallation(wizard.sessionId, 30);
