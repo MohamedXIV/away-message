@@ -257,6 +257,61 @@ describe('#175 single-writer Worker runtime protocol', () => {
     }
   });
 
+  it('installs an actually completed DownloadHub file after authored OS and network setup', async () => {
+    const { ask, runtime } = harness();
+    try {
+      await ask({ op: 'init' });
+      const purchase = await ask({ op: 'dispatch', action: {
+        type: 'STORE_PURCHASE_ITEM', storeId: 'silicon_spares', skuId: 'bundle_scrapyard',
+      } }) as { success: boolean };
+      expect(purchase.success).toBe(true);
+      const setup = await ask({ op: 'hardware', command: { kind: 'setup' } }) as { success: boolean };
+      expect(setup.success).toBe(true);
+      const desk = await ask({ op: 'query', query: { kind: 'desktop' } }) as ReturnType<SimulationKernel['getDesktopRead']>;
+      const media = desk.bootMediaItems.find(item => item.catalogItemId === 'media_orion_48_setup');
+      expect(media).toBeDefined();
+      await ask({ op: 'hardware', command: { kind: 'insertMedia', instanceId: media!.instanceId } });
+      const preflight = await ask({ op: 'hardware', command: { kind: 'prepareOs' } }) as
+        ReturnType<SimulationKernel['prepareOsInstallFromInsertedMedia']>;
+      expect(preflight.success).toBe(true);
+      const os = await ask({ op: 'hardware', command: { kind: 'commitOs', plan: preflight.data! } }) as { success: boolean };
+      expect(os.success).toBe(true);
+      await ask({ op: 'hardware', command: { kind: 'power', poweredOn: true } });
+      const modem = await ask({ op: 'dispatch', action: {
+        type: 'HARDWARE_UPGRADE_CONNECTION', connectionType: 'dsl_256k', cost: 0,
+      } }) as { success: boolean };
+      expect(modem.success).toBe(true);
+      const filePath = 'C:/Downloads/pulse52_setup.exe';
+      const download = await ask({ op: 'dispatch', action: {
+        type: 'DOWNLOAD_START',
+        sourceId: 'pulse_52', url: 'http://downloadhub.local/files/pulse52_setup.exe',
+        fileName: 'pulse52_setup.exe', totalBytes: 1024, sourceMaxKbps: 256,
+        fileKind: 'installer',
+      } }) as { success: boolean };
+      expect(download.success).toBe(true);
+      const pending = await ask({ op: 'query', query: { kind: 'installer', filePath } }) as
+        ReturnType<SimulationKernel['getInstallerRead']>;
+      expect(pending.ready).toBe(false);
+      await ask({ op: 'advance', minutes: 1 });
+      const ready = await ask({ op: 'query', query: { kind: 'installer', filePath } }) as
+        ReturnType<SimulationKernel['getInstallerRead']>;
+      expect(ready.ready).toBe(true);
+      expect(ready.preview?.compatibilityResult.isCompatible).toBe(true);
+      expect(ready.preview?.softwareDef.id).toBe('sw_pulse_52');
+      const installed = await ask({ op: 'dispatch', action: {
+        type: 'SOFTWARE_INSTALL_FROM_DOWNLOAD', filePath,
+        selectedOptions: { createDesktopShortcut: false },
+      } }) as { success: boolean };
+      expect(installed.success).toBe(true);
+      const apps = await ask({ op: 'query', query: { kind: 'apps' } }) as
+        ReturnType<SimulationKernel['getAppRead']>;
+      expect(apps.installedSoftware.some(item => item.appId === 'app.pulse')).toBe(true);
+      const desktop = await ask({ op: 'query', query: { kind: 'desktop' } }) as
+        ReturnType<SimulationKernel['getDesktopRead']>;
+      expect(desktop.desktopFiles.some(item => item.name.includes('Pulse Messenger'))).toBe(false);
+    } finally { runtime.close(); }
+  });
+
   it('reads player-safe mail and courier tray from the canonical Worker owner', async () => {
     const { ask, runtime } = harness();
     const read = vi.spyOn(SimulationKernel.prototype, 'getMailboxRead');
