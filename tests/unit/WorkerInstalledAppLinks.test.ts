@@ -29,11 +29,11 @@ describe('Worker-installed software shortcuts', () => {
       { ...shortcut('y', 'app.pulse', 'Outside.lnk'), parentPath: 'C:/Downloads' },
     ]));
     expect(icons.map(icon => ({ label: icon.label, launchId: icon.launchId }))).toEqual([
-      { label: 'RetroAmp', launchId: null },
+      { label: 'RetroAmp', launchId: 'retroamp' },
       { label: 'FlashFetch', launchId: 'flashfetch' },
     ]);
     expect(getWorkerInstalledPrograms(make(apps))).toEqual([
-      { id: 'app.retroamp', label: 'RetroAmp', available: false },
+      { id: 'retroamp', label: 'RetroAmp', available: true },
       { id: 'flashfetch', label: 'FlashFetch', available: true },
     ]);
   });

@@ -859,6 +859,7 @@ export type SimulationAction =
   | { type: 'VFS_CREATE_FILE'; file: Omit<FileRecord, 'id' | 'createdAtMinute' | 'modifiedAtMinute'> & { id?: string } }
   | { type: 'VFS_ARCHIVE_CREATE'; archiveName: string; filePaths: string[] }
   | { type: 'VFS_ARCHIVE_EXTRACT'; archivePath: string }
+  | { type: 'RETROAMP_IMPORT_SAMPLE' }
   | { type: 'PHOTOBOX_EXPORT_ARTWORK'; scene: import('../PhotoBoxArtwork').PhotoBoxScene; filters: import('../PhotoBoxArtwork').PhotoBoxFilters }
   | { type: 'VFS_DELETE_FILE'; path: string }
   | { type: 'VFS_MOVE_TRASH'; path: string }

@@ -1,6 +1,7 @@
 import type { ActionResult, SimulationAction } from '../types';
 import { createTextArchive, extractTextArchive } from './ZipArchiveCommands';
 import { exportPhotoBoxArtwork } from './PhotoBoxExportCommands';
+import { createRetroAmpSample, RETROAMP_SAMPLE_PATH } from './RetroAmpSample';
 import type { CoreDomainOwners } from './CoreDomainOwners';
 
 /**
@@ -90,6 +91,33 @@ export class DesktopStorageCommands {
           return { success: true, data: result };
         } catch (cause) {
           return { success: false, error: cause instanceof Error ? cause.message : 'Image export failed' };
+        }
+      }
+      case 'RETROAMP_IMPORT_SAMPLE': {
+        if (!this.owners.software.isInstalled('app.retroamp')) {
+          return { success: false, error: 'RetroAmp must be installed to import music.' };
+        }
+        if (!this.owners.os.getCurrentOsId() ||
+          !this.owners.hardware.getComputerBootStatus().poweredOn) {
+          return { success: false, error: 'Boot the installed OS before importing music.' };
+        }
+        const existing = this.owners.vfs.readFile(RETROAMP_SAMPLE_PATH);
+        if (existing) return existing.kind === 'audio' &&
+          existing.content?.startsWith('data:audio/wav;base64,')
+            ? { success: true, data: { path: RETROAMP_SAMPLE_PATH, alreadyPresent: true } }
+            : { success: false, error: 'A different file already occupies the sample path.' };
+        try {
+          const wave = createRetroAmpSample();
+          this.owners.vfs.createFile({
+            name: 'Motel Night Loop.wav', path: RETROAMP_SAMPLE_PATH,
+            parentPath: 'C:/Music', kind: 'audio',
+            sizeBytes: wave.sizeBytes, content: wave.content,
+            appAssociation: 'app.retroamp',
+          }, currentMinutes);
+          this.publishState();
+          return { success: true, data: { path: RETROAMP_SAMPLE_PATH } };
+        } catch (cause) {
+          return { success: false, error: cause instanceof Error ? cause.message : 'WAV import failed' };
         }
       }
       case 'VFS_CREATE_FILE': {

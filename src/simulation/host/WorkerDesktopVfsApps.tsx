@@ -6,7 +6,7 @@ const DOCUMENTS = 'C:/Documents';
 
 /** Canonical directory pages and file bodies only. No VFS state cache on the UI. */
 export function WorkerFileExplorer({
-  session, revision, openDocument, openInstaller, openArchive, openArtwork,
+  session, revision, openDocument, openInstaller, openArchive, openArtwork, openAudio,
 }: {
   session: WorkerGameSession;
   revision: number;
@@ -14,10 +14,11 @@ export function WorkerFileExplorer({
   openInstaller: (path: string) => void;
   openArchive: (path: string) => void;
   openArtwork: (path: string) => void;
+  openAudio: (path: string) => void;
 }) {
   const [page, setPage] = useState<SimulationDirectoryRead | null>(null);
   const [offset, setOffset] = useState(0);
-  const [folder, setFolder] = useState<'C:/Documents' | 'C:/Downloads' | 'C:/Pictures'>(DOCUMENTS);
+  const [folder, setFolder] = useState<'C:/Documents' | 'C:/Downloads' | 'C:/Pictures' | 'C:/Music'>(DOCUMENTS);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -39,7 +40,7 @@ export function WorkerFileExplorer({
         Address: {folder} · {(page?.files.length ?? 0)} visible files
       </div>
       <nav aria-label="Explorer folders" className="flex gap-2 border-b bg-[#eee] p-1 text-xs">
-        {([DOCUMENTS, 'C:/Downloads', 'C:/Pictures'] as const).map(path => (
+        {([DOCUMENTS, 'C:/Downloads', 'C:/Pictures', 'C:/Music'] as const).map(path => (
           <button type="button" key={path} aria-pressed={folder === path}
             onClick={() => { setFolder(path); setPage(null); setOffset(0); }}
             className="rounded border px-2 py-1">{path.split('/').pop()}</button>
@@ -47,7 +48,7 @@ export function WorkerFileExplorer({
       </nav>
       <div className="min-h-0 flex-1 overflow-y-auto p-2 text-xs">
         {(page?.files ?? []).map(file => (
-          <button type="button" key={file.id} onClick={() => file.kind === 'image' ? openArtwork(file.path) : file.kind === 'archive' ? openArchive(file.path) : file.kind === 'installer' ? openInstaller(file.path) : file.kind === 'text' ? openDocument(file.path) : setError('Unsupported file type.')}
+          <button type="button" key={file.id} onClick={() => file.kind === 'audio' ? openAudio(file.path) : file.kind === 'image' ? openArtwork(file.path) : file.kind === 'archive' ? openArchive(file.path) : file.kind === 'installer' ? openInstaller(file.path) : file.kind === 'text' ? openDocument(file.path) : setError('Unsupported file type.')}
             className="block w-full rounded px-2 py-1 text-left hover:bg-blue-100"
             aria-label={'Open file: ' + file.name}>
             {file.kind === 'text' ? '📄' : '📦'} {file.name}

@@ -1,54 +1,30 @@
-import React, { useState, useEffect } from 'react';
-import { soundManager } from '../../audio/SoundManager';
+import React, { useState, useEffect, useRef } from 'react';
 
-interface TrackItem {
+export interface TrackItem {
   id: string;
   title: string;
   artist: string;
   durationSeconds: number;
   bitrateKbps: number;
   filePath: string;
+  /** Genuine, bounded WAV from a specifically opened VFS file. */
+  src: string;
 }
-
-const DEFAULT_PLAYLIST: TrackItem[] = [
-  {
-    id: 'tr_1',
-    title: 'Rain Over Motel (Lo-Fi Cut)',
-    artist: 'wanderer06',
-    durationSeconds: 184,
-    bitrateKbps: 192,
-    filePath: 'C:/Music/rain_over_motel.mp3',
-  },
-  {
-    id: 'tr_2',
-    title: 'Late Night Dialup Drone',
-    artist: 'nocturne_labs',
-    durationSeconds: 245,
-    bitrateKbps: 128,
-    filePath: 'C:/Music/dialup_drone.mp3',
-  },
-  {
-    id: 'tr_3',
-    title: 'Neon Blinds & Puddle Glare',
-    artist: 'maya_x',
-    durationSeconds: 160,
-    bitrateKbps: 256,
-    filePath: 'C:/Music/neon_blinds.mp3',
-  },
-  {
-    id: 'tr_4',
-    title: '4th Street Diner Echoes',
-    artist: 'tacocart_ryan',
-    durationSeconds: 210,
-    bitrateKbps: 320,
-    filePath: 'C:/Music/diner_echoes.mp3',
-  },
-];
 
 const EQ_FREQUENCIES = ['60Hz', '170Hz', '310Hz', '600Hz', '1kHz', '3kHz', '6kHz', '12kHz', '14kHz', '16kHz'];
 
-export const RetroAmpApp: React.FC = () => {
-  const [playlist, setPlaylist] = useState<TrackItem[]>(DEFAULT_PLAYLIST);
+export const RetroAmpApp: React.FC<{
+  tracks?: TrackItem[];
+  onAddFile?: () => void;
+}> = ({ tracks = [], onAddFile }) => {
+  const [hiddenPaths, setHiddenPaths] = useState<string[]>([]);
+  const playlist = tracks.filter(track => !hiddenPaths.includes(track.filePath));
+  const audioRef = useRef<HTMLAudioElement>(null);
+  const contextRef = useRef<AudioContext | null>(null);
+  const analyserRef = useRef<AnalyserNode | null>(null);
+  const eqRef = useRef<BiquadFilterNode[]>([]);
+  const panRef = useRef<StereoPannerNode | null>(null);
+  const [playError, setPlayError] = useState<string | null>(null);
   const [currentTrackIndex, setCurrentTrackIndex] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [playbackSeconds, setPlaybackSeconds] = useState(0);
@@ -62,60 +38,103 @@ export const RetroAmpApp: React.FC = () => {
   // Visualizer animated bars (19 bars)
   const [visHeights, setVisHeights] = useState<number[]>(new Array(19).fill(2));
 
-  const currentTrack = playlist[currentTrackIndex] || playlist[0] || DEFAULT_PLAYLIST[0]!;
+  const currentTrack = playlist[currentTrackIndex] ?? null;
 
-  // Playback timer & visualizer loop
-  useEffect(() => {
-    let interval: NodeJS.Timeout | null = null;
-    if (isPlaying) {
-      interval = setInterval(() => {
-        setPlaybackSeconds((prev) => {
-          if (prev >= currentTrack.durationSeconds) {
-            handleNextTrack();
-            return 0;
-          }
-          return prev + 1;
+  const setupAudioGraph = () => {
+    const audio = audioRef.current;
+    if (!audio || contextRef.current || typeof AudioContext === 'undefined') return;
+    try {
+      const context = new AudioContext();
+      const input = context.createMediaElementSource(audio);
+      const filters = [60, 170, 310, 600, 1000, 3000, 6000, 12000, 14000, 16000]
+        .map((hz, index) => {
+          const filter = context.createBiquadFilter();
+          filter.type = index === 0 ? 'lowshelf' : index === 9 ? 'highshelf' : 'peaking';
+          filter.frequency.value = hz;
+          filter.Q.value = 1;
+          filter.gain.value = eqGains[index] ?? 0;
+          return filter;
         });
-
-        // Animate visualizer spectrum
-        setVisHeights((_) =>
-          Array.from({ length: 19 }, () => Math.floor(Math.random() * 18) + 2)
-        );
-      }, 1000);
-    } else {
-      setVisHeights(new Array(19).fill(1));
+      const pan = context.createStereoPanner();
+      const analyser = context.createAnalyser();
+      analyser.fftSize = 256;
+      let node: AudioNode = input;
+      for (const filter of filters) { node.connect(filter); node = filter; }
+      node.connect(pan);
+      pan.connect(analyser);
+      analyser.connect(context.destination);
+      contextRef.current = context;
+      analyserRef.current = analyser;
+      eqRef.current = filters;
+      panRef.current = pan;
+      pan.pan.value = balance / 10;
+    } catch {
+      // Browser media playback still works if optional WebAudio DSP is unavailable.
     }
-    return () => {
-      if (interval) clearInterval(interval);
-    };
-  }, [isPlaying, currentTrack]);
+  };
+
+  useEffect(() => {
+    if (audioRef.current) audioRef.current.volume = volume / 100;
+  }, [volume]);
+  useEffect(() => { if (panRef.current) panRef.current.pan.value = balance / 10; }, [balance]);
+  useEffect(() => {
+    eqRef.current.forEach((filter, i) => { filter.gain.value = eqGains[i] ?? 0; });
+  }, [eqGains]);
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    if (isPlaying && currentTrack) {
+      void audio.play().catch(() => {
+        setIsPlaying(false);
+        setPlayError('Playback was blocked or the WAV could not be decoded.');
+      });
+    } else audio.pause();
+  }, [isPlaying, currentTrack?.id, currentTrack?.src]);
+
+  useEffect(() => {
+    let frame = 0;
+    if (isPlaying && analyserRef.current) {
+      const analyzer = analyserRef.current;
+      const samples = new Uint8Array(analyzer.frequencyBinCount);
+      const draw = () => {
+        analyzer.getByteFrequencyData(samples);
+        setVisHeights(Array.from({ length: 19 }, (_, i) =>
+          Math.max(1, Math.round((samples[Math.min(samples.length - 1,
+            Math.floor(i * samples.length / 19))] ?? 0) / 255 * 20))));
+        frame = requestAnimationFrame(draw);
+      };
+      frame = requestAnimationFrame(draw);
+    } else setVisHeights(new Array(19).fill(1));
+    return () => cancelAnimationFrame(frame);
+  }, [isPlaying]);
+  useEffect(() => () => {
+    audioRef.current?.pause();
+    void contextRef.current?.close();
+  }, []);
 
   const handlePlay = () => {
+    if (!currentTrack) { setPlayError('Import a real WAV into C:/Music first.'); return; }
+    setupAudioGraph();
+    void contextRef.current?.resume();
+    setPlayError(null);
     setIsPlaying(true);
-    soundManager.play('im_recv');
   };
-
-  const handlePause = () => {
-    setIsPlaying(false);
-  };
-
+  const handlePause = () => { audioRef.current?.pause(); setIsPlaying(false); };
   const handleStop = () => {
-    setIsPlaying(false);
-    setPlaybackSeconds(0);
+    audioRef.current?.pause();
+    if (audioRef.current) audioRef.current.currentTime = 0;
+    setIsPlaying(false); setPlaybackSeconds(0);
   };
-
   const handlePrevTrack = () => {
-    setCurrentTrackIndex((prev) => (prev > 0 ? prev - 1 : playlist.length - 1));
+    if (!playlist.length) return;
+    setCurrentTrackIndex(i => (i > 0 ? i - 1 : playlist.length - 1));
     setPlaybackSeconds(0);
   };
-
   const handleNextTrack = () => {
-    if (isShuffle) {
-      const nextIdx = Math.floor(Math.random() * playlist.length);
-      setCurrentTrackIndex(nextIdx);
-    } else {
-      setCurrentTrackIndex((prev) => (prev < playlist.length - 1 ? prev + 1 : 0));
-    }
+    if (!playlist.length) return;
+    setCurrentTrackIndex(i => isShuffle
+      ? (i + 1 + Math.floor(Math.random() * Math.max(1, playlist.length - 1))) % playlist.length
+      : (i + 1) % playlist.length);
     setPlaybackSeconds(0);
   };
 
@@ -127,20 +146,27 @@ export const RetroAmpApp: React.FC = () => {
 
   return (
     <div className="w-full h-full bg-[#1e2022] text-[#00ff00] font-mono text-xs select-none flex flex-col p-2 gap-2 border-2 border-gray-600 shadow-2xl overflow-y-auto">
+      <audio ref={audioRef} preload="metadata" src={currentTrack?.src}
+        data-testid="retroamp-real-audio"
+        onTimeUpdate={e => setPlaybackSeconds(e.currentTarget.currentTime)}
+        onLoadedMetadata={e => setPlaybackSeconds(e.currentTarget.currentTime)}
+        onEnded={() => { if (playlist.length > 1) handleNextTrack(); else setIsPlaying(false); }}
+        onError={() => { if (currentTrack) setPlayError('Unsupported or corrupt WAV audio.'); setIsPlaying(false); }} />
+      {playError && <p role="alert" className="text-yellow-300">{playError}</p>}
       {/* Main Player Module */}
       <div className="bg-[#2a2d32] border-2 border-gray-500 rounded p-2.5 shadow-inner">
         {/* Title Bar / Marquee */}
         <div className="bg-black border border-gray-700 p-1.5 rounded flex items-center justify-between mb-2">
           <div className="flex items-center gap-2 overflow-hidden flex-1">
             <span className="bg-green-900 text-green-300 font-bold px-1 text-[10px] rounded">
-              {currentTrack.bitrateKbps} kbps
+              {currentTrack?.bitrateKbps ? currentTrack.bitrateKbps + ' kbps' : 'WAV'}
             </span>
             <div className="truncate text-green-400 font-bold text-xs">
-              {isPlaying ? '▶' : '⏸'} {currentTrackIndex + 1}. {currentTrack.artist} - {currentTrack.title}
+              {isPlaying ? '▶' : '⏸'} {currentTrack ? `${currentTrackIndex + 1}. ${currentTrack.artist} - ${currentTrack.title}` : 'No actual audio loaded'}
             </div>
           </div>
           <span className="text-green-300 font-bold text-xs ml-2 shrink-0">
-            {formatTime(playbackSeconds)} / {formatTime(currentTrack.durationSeconds)}
+            {formatTime(playbackSeconds)} / {formatTime(audioRef.current?.duration || currentTrack?.durationSeconds || 0)}
           </span>
         </div>
 
@@ -296,6 +322,7 @@ export const RetroAmpApp: React.FC = () => {
                 key={track.id}
                 onDoubleClick={() => {
                   setCurrentTrackIndex(idx);
+                  setupAudioGraph();
                   setIsPlaying(true);
                 }}
                 className={`flex justify-between items-center p-1 rounded text-xs cursor-pointer ${
@@ -312,28 +339,18 @@ export const RetroAmpApp: React.FC = () => {
             ))}
           </div>
 
+          <p className="text-[10px] text-gray-300">Actual VFS-backed WAV only. Import makes one authored motel track; no pretend MP3 downloads.</p>
           {/* Playlist Footer */}
           <div className="flex justify-between items-center pt-1.5 text-[10px]">
             <button
-              onClick={() => {
-                setPlaylist((prev) => [
-                  ...prev,
-                  {
-                    id: `tr_${Date.now()}`,
-                    title: 'New Track from C:/Music',
-                    artist: 'Unknown',
-                    durationSeconds: 195,
-                    bitrateKbps: 192,
-                    filePath: 'C:/Music/new_track.mp3',
-                  },
-                ]);
-              }}
+              onClick={onAddFile}
+              disabled={!onAddFile}
               className="px-2 py-0.5 bg-gray-700 hover:bg-gray-600 text-white rounded"
             >
-              + ADD FILE
+              + ADD WAV
             </button>
             <button
-              onClick={() => setPlaylist([])}
+              onClick={() => { setHiddenPaths(playlist.map(track => track.filePath)); handleStop(); setCurrentTrackIndex(0); }}
               className="px-2 py-0.5 bg-gray-700 hover:bg-gray-600 text-white rounded"
             >
               CLEAR
