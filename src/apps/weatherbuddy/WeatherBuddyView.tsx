@@ -72,7 +72,7 @@ export const WeatherBuddyView: React.FC<{
         {/* Frog Mascot */}
         <div className="flex flex-col items-center">
           <div className="text-5xl animate-bounce duration-1000">🐸</div>
-          <span className="text-[10px] font-bold text-emerald-900 mt-1">"Ribbit! Rain ahead!"</span>
+          <span className="text-[10px] font-bold text-emerald-900 mt-1">"Ribbit! {currentMeta.label} today!"</span>
         </div>
 
         {/* Current Weather Stats */}
@@ -82,7 +82,7 @@ export const WeatherBuddyView: React.FC<{
           </div>
           <div className="text-xs font-bold text-slate-700">{currentMeta.label}</div>
           <div className="text-[10px] text-slate-500">
-            Low: {toDisplayTemp(currentCondition.weather.lowF)} | Humidity: 88%
+            Low: {toDisplayTemp(currentCondition.weather.lowF)} | Wind index: {Math.round(currentCondition.weather.wind * 100)}/100
           </div>
         </div>
       </div>

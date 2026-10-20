@@ -12,6 +12,8 @@ describe('WeatherBuddy original UI on canonical Worker weather source', () => {
     expect(view).toContain('5-Day Forecast:');
     expect(view).toContain('SearchMate Deal');
     expect(view).toContain('setIsCelsius');
+    expect(view).toContain('currentCondition.weather.wind');
+    expect(view).not.toContain('Humidity: 88%');
     expect(view).not.toContain('useBoundedSimulationRead');
     expect(view).not.toContain('useSimulationStore');
   });

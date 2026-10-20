@@ -618,3 +618,13 @@ whereas `WorkerSafeSweepPanel` uses only `apps` queries and typed
 `session.dispatch`. Only an installed SafeSweep can be opened through
 the Worker Start Menu/shortcut, and uninstalled software is never
 silently fabricated on the main thread.
+
+
+### P3.17 display authenticity
+The original WeatherBuddy hard-coded `Humidity: 88%` readout has
+been replaced by the normalized wind index already provided by its
+canonical `EnvironmentWeatherSnapshot`; the frog's line now reflects the
+actual current condition. The Weather domain has no humidity reading,
+so the UI does not invent one. SafeSweep recognizes all SearchMate
+toolbar, homepage hijack and autorun payload flags from installed
+software rather than falsely clearing non-toolbar adware.

@@ -52,7 +52,9 @@ export const SafeSweepView: React.FC<{
         // Detect if searchmate or adware is present
         const detected: DetectedThreat[] = [];
         installedSoftware.forEach(sw => {
-          if (sw.appId === 'searchmate' || sw.isAdware || sw.adwarePayload?.toolbarInjected) {
+          if (sw.appId === 'searchmate' || sw.isAdware ||
+            sw.adwarePayload?.toolbarInjected || sw.adwarePayload?.homepageHijacked ||
+            sw.adwarePayload?.startupAutorun) {
             detected.push({
               id: sw.id || sw.appId,
               name: 'Adware.Win32.SearchMateToolbar',
