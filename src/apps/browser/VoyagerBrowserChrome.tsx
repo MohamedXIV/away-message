@@ -87,7 +87,7 @@ export const VoyagerBrowserChrome: React.FC<VoyagerBrowserChromeProps> = ({
         </button>
 
         {/* URL Address Input Bar */}
-        <form onSubmit={onNavigateSubmit} className="flex-1 flex items-center gap-1 ml-2">
+        <form onSubmit={onNavigateSubmit} title={currentUrl} className="flex-1 flex items-center gap-1 ml-2">
           <span className="font-semibold text-gray-600">Address:</span>
           <input
             type="text"
