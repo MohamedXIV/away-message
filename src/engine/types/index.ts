@@ -857,6 +857,8 @@ export type SimulationAction =
   | { type: 'DOWNLOAD_RESUME'; taskId: string }
   | { type: 'DOWNLOAD_CANCEL'; taskId: string }
   | { type: 'VFS_CREATE_FILE'; file: Omit<FileRecord, 'id' | 'createdAtMinute' | 'modifiedAtMinute'> & { id?: string } }
+  | { type: 'VFS_ARCHIVE_CREATE'; archiveName: string; filePaths: string[] }
+  | { type: 'VFS_ARCHIVE_EXTRACT'; archivePath: string }
   | { type: 'VFS_DELETE_FILE'; path: string }
   | { type: 'VFS_MOVE_TRASH'; path: string }
   | { type: 'VFS_RESTORE_TRASH'; trashPath: string }

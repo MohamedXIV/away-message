@@ -1,4 +1,5 @@
 import type { ActionResult, SimulationAction } from '../types';
+import { createTextArchive, extractTextArchive } from './ZipArchiveCommands';
 import type { CoreDomainOwners } from './CoreDomainOwners';
 
 /**
@@ -62,6 +63,18 @@ export class DesktopStorageCommands {
         return { success: ok };
       }
 
+      case 'VFS_ARCHIVE_CREATE': {
+        try {
+          const data=createTextArchive(this.owners.vfs,action.archiveName,action.filePaths,currentMinutes);
+          this.publishState(); return{success:true,data};
+        } catch(cause){return{success:false,error:cause instanceof Error?cause.message:'Archive creation failed'}}
+      }
+      case 'VFS_ARCHIVE_EXTRACT': {
+        try {
+          const data=extractTextArchive(this.owners.vfs,action.archivePath,currentMinutes);
+          this.publishState(); return{success:true,data};
+        } catch(cause){return{success:false,error:cause instanceof Error?cause.message:'Extraction failed'}}
+      }
       case 'VFS_CREATE_FILE': {
         // Only the download owner can mint successful-transfer provenance.
         if (action.file.metadata && 'downloadTaskId' in action.file.metadata) {

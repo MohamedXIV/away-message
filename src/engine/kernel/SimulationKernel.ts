@@ -1,6 +1,7 @@
 import type { SimulationState as TransportSimulationState, SimulationAction, ActionResult, HardwareState, MessageRecord } from '../types';
 import type { Fulfillment } from '../DeliveryEngine';
 import { INSTALLER_SOFTWARE_IDS } from '../InstallerFileCatalog';
+import { inspectTextArchive } from './ZipArchiveCommands';
 import { DOWNLOAD_CATALOG } from '../../internet/sites/DownloadHubCatalog';
 import type { MyPlaceProfile } from '../MyPlaceEngine';
 import type { BuddyPresence, BuddyMetVia } from '../types';
@@ -26,6 +27,7 @@ import type {
   SimulationActorRead,
   SimulationAppRead,
   SimulationInstallerRead,
+  SimulationArchiveRead,
   SimulationShopRead,
   SimulationWebsiteRead,
   SimulationMyPlacePageRead,
@@ -544,6 +546,12 @@ export class SimulationKernel {
       ...capacity,
       freeDiskBytes: this.vfs.getFreeDiskBytes(),
     };
+  }
+
+  public getArchiveRead(path: string): SimulationArchiveRead {
+    const result = inspectTextArchive(this.vfs, path);
+    return { revision: this.revision, archivePath: path, ready: result.ready,
+      reason: result.reason, entries: result.entries.map(({name,sizeBytes,crc32})=>({name,sizeBytes,crc32})) };
   }
 
   public getFileRead(path: string): SimulationFileRead {

@@ -86,6 +86,7 @@ export function createSimulationWorkerRuntime(send: (message: SimulationWorkerRe
       case 'directory': return engine.getDirectoryRead(request.path, request.offset, request.limit);
       case 'file': return engine.getFileRead(request.path);
       case 'installer': return engine.getInstallerRead(request.filePath);
+      case 'archive': return engine.getArchiveRead(request.archivePath);
       default: throw new Error('Unsupported bounded simulation query');
     }
   };

@@ -184,6 +184,15 @@ export interface SimulationAppRead {
   installedSoftware: import('../types').InstalledSoftwareRecord[];
 }
 
+/** Verified one-archive metadata only; raw ZIP bytes never cross to the browser. */
+export interface SimulationArchiveRead {
+  revision: number;
+  archivePath: string;
+  ready: boolean;
+  reason: string | null;
+  entries: Array<{ name: string; sizeBytes: number; crc32: string }>;
+}
+
 /** Per-directory visible metadata; file contents are requested separately. */
 export interface SimulationDirectoryRead {
   revision: number;

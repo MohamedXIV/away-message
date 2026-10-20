@@ -362,6 +362,38 @@ describe('#175 single-writer Worker runtime protocol', () => {
     }
   });
 
+  it('makes a real STORED ZIP, verifies CRC, extracts actual VFS documents and refuses collisions', async () => {
+    const {ask,runtime}=harness();
+    const full=vi.spyOn(SimulationKernel.prototype,'getState');
+    try{
+      await ask({op:'init'});
+      const created=await ask({op:'dispatch',action:{type:'VFS_ARCHIVE_CREATE',
+        archiveName:'notes.zip',filePaths:['C:/Documents/Readme.txt']}}) as {success:boolean};
+      expect(created.success).toBe(true);
+      const preview=await ask({op:'query',query:{kind:'archive',
+        archivePath:'C:/Documents/notes.zip'}}) as ReturnType<SimulationKernel['getArchiveRead']>;
+      expect(preview.ready).toBe(true);
+      expect(preview.entries).toEqual([{name:'Readme.txt',sizeBytes:expect.any(Number),
+        crc32:expect.stringMatching(/^[0-9A-F]{8}$/)}]);
+      expect(preview).not.toHaveProperty('content');
+      const result=await ask({op:'dispatch',action:{type:'VFS_ARCHIVE_EXTRACT',
+        archivePath:'C:/Documents/notes.zip'}}) as {success:boolean};
+      expect(result.success).toBe(true);
+      const original=await ask({op:'query',query:{kind:'file',
+        path:'C:/Documents/Readme.txt'}}) as ReturnType<SimulationKernel['getFileRead']>;
+      const extracted=await ask({op:'query',query:{kind:'file',
+        path:'C:/Documents/notes_Readme.txt'}}) as ReturnType<SimulationKernel['getFileRead']>;
+      expect(extracted.file?.content).toBe(original.file?.content);
+      const again=await ask({op:'dispatch',action:{type:'VFS_ARCHIVE_EXTRACT',
+        archivePath:'C:/Documents/notes.zip'}}) as {success:boolean};
+      expect(again.success).toBe(false);
+      const traversal=await ask({op:'query',query:{kind:'archive',
+        archivePath:'C:/Documents/../Windows/evil.zip'}}) as ReturnType<SimulationKernel['getArchiveRead']>;
+      expect(traversal.ready).toBe(false);
+      expect(full).not.toHaveBeenCalled();
+    } finally{full.mockRestore();runtime.close();}
+  });
+
   it('reads player-safe mail and courier tray from the canonical Worker owner', async () => {
     const { ask, runtime } = harness();
     const read = vi.spyOn(SimulationKernel.prototype, 'getMailboxRead');
