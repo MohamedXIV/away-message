@@ -89,7 +89,7 @@ export function makePhotoBoxSvg(scene: PhotoBoxScene, filters: PhotoBoxFilters):
 export function verifiedPhotoBoxSvg(input: unknown): string | null {
   if (typeof input !== 'string' || input.length > 16384) return null;
   const scene = /aria-label="PhotoBox (motel|diner|canal) illustration"/.exec(input)?.[1];
-  const match = /filter: brightness\\((\\d+(?:\\.\\d+)?)%\\) contrast\\((\\d+(?:\\.\\d+)?)%\\) saturate\\((\\d+(?:\\.\\d+)?)%\\) sepia\\((\\d+(?:\\.\\d+)?)%\\) invert\\((\\d+(?:\\.\\d+)?)%\\) blur\\((\\d+(?:\\.\\d+)?)px\\)/.exec(input);
+  const match = /filter: brightness\((\d+(?:\.\d+)?)%\) contrast\((\d+(?:\.\d+)?)%\) saturate\((\d+(?:\.\d+)?)%\) sepia\((\d+(?:\.\d+)?)%\) invert\((\d+(?:\.\d+)?)%\) blur\((\d+(?:\.\d+)?)px\)/.exec(input);
   if (!validPhotoBoxScene(scene) || !match) return null;
   const values = match.slice(1).map(Number);
   try {
