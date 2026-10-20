@@ -495,3 +495,14 @@ Worker-only engine isolation; unit checks the actual typed RPC boundary.
 #175 is **not** production complete. Stage `/worker.html` remains
 isolated. Full app parity, native `/` bootstrap, failure recovery and
 NPC stress fixtures must still gate Ready/merge.
+
+
+## P3.14a — Extracted authored DownloadHub presentation/catalog
+
+The existing authored DownloadHub software catalog, dynamic event banner,
+category tabs, status/progress buttons and exact 2006 visual layout now live
+in `DownloadHubView`, with the legacy `DownloadHubSite` retaining the
+original Host API actions and dynamically published world/Pulse reads as its
+adapter. The pure view has no main-thread simulation, site router or Host
+hook dependencies, and can be mounted with finite Worker-owned read models.
+This step does not falsely claim the Worker browser/installer are shipped.
