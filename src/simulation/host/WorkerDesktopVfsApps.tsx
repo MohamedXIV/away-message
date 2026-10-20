@@ -6,19 +6,21 @@ const DOCUMENTS = 'C:/Documents';
 
 /** Canonical directory pages and file bodies only. No VFS state cache on the UI. */
 export function WorkerFileExplorer({
-  session, revision, openDocument,
+  session, revision, openDocument, openInstaller,
 }: {
   session: WorkerGameSession;
   revision: number;
   openDocument: (path: string) => void;
+  openInstaller: (path: string) => void;
 }) {
   const [page, setPage] = useState<SimulationDirectoryRead | null>(null);
   const [offset, setOffset] = useState(0);
+  const [folder, setFolder] = useState<'C:/Documents' | 'C:/Downloads'>(DOCUMENTS);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
-    void session.read({ kind: 'directory', path: DOCUMENTS, offset, limit: 32 })
+    void session.read({ kind: 'directory', path: folder, offset, limit: 32 })
       .then(result => {
         if (active && result.revision === revision) {
           setPage(result);
@@ -27,16 +29,23 @@ export function WorkerFileExplorer({
       })
       .catch(cause => { if (active) setError(String(cause)); });
     return () => { active = false; };
-  }, [session, revision, offset]);
+  }, [session, revision, offset, folder]);
 
   return (
     <section data-testid="worker-explorer" className="flex h-full flex-col bg-[#fff] text-black">
       <div className="border-b border-gray-400 bg-[#ddd] px-2 py-1 text-xs">
-        Address: {DOCUMENTS} · {(page?.files.length ?? 0)} visible files
+        Address: {folder} · {(page?.files.length ?? 0)} visible files
       </div>
+      <nav aria-label="Explorer folders" className="flex gap-2 border-b bg-[#eee] p-1 text-xs">
+        {([DOCUMENTS, 'C:/Downloads'] as const).map(path => (
+          <button type="button" key={path} aria-pressed={folder === path}
+            onClick={() => { setFolder(path); setPage(null); setOffset(0); }}
+            className="rounded border px-2 py-1">{path.split('/').pop()}</button>
+        ))}
+      </nav>
       <div className="min-h-0 flex-1 overflow-y-auto p-2 text-xs">
         {(page?.files ?? []).map(file => (
-          <button type="button" key={file.id} onClick={() => openDocument(file.path)}
+          <button type="button" key={file.id} onClick={() => file.kind === 'installer' ? openInstaller(file.path) : file.kind === 'text' ? openDocument(file.path) : setError('Unsupported file type.')}
             className="block w-full rounded px-2 py-1 text-left hover:bg-blue-100"
             aria-label={'Open file: ' + file.name}>
             {file.kind === 'text' ? '📄' : '📦'} {file.name}
