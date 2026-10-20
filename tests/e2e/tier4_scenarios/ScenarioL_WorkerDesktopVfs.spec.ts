@@ -240,6 +240,9 @@ test('shared Voyager and DownloadHub use Worker reads and canonical VFS Save Pag
   await expect(browser.getByText('DownloadHub.local — Software Archive')).toBeVisible();
   await browser.getByRole('button', { name: /Save Page/ }).last().click();
   await expect(browser.getByText('Saved downloadhub_page.txt to C:/Documents')).toBeVisible();
+  // The desktop shortcut is occluded by the browser window; minimize it first.
+  await desktop.getByRole('button', { name: 'Minimize Voyager Browser' }).click();
+  await expect(browser).toHaveCount(0);
   await desktop.getByRole('button', { name: 'Open My Computer' }).click();
   await expect(page.getByTestId('worker-window-fileexplorer').getByRole('button', {
     name: 'Open file: downloadhub_page.txt',
