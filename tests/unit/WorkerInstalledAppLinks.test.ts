@@ -37,6 +37,19 @@ describe('Worker-installed software shortcuts', () => {
       { id: 'flashfetch', label: 'FlashFetch', available: true },
     ]);
   });
+  it('enables SafeSweep only when it exists in the canonical installed list', () => {
+    const app = { appId: 'app.safesweep', name: 'SafeSweep', version: '2.0' };
+    expect(getWorkerInstalledPrograms(make([app]))).toEqual([
+      { id: 'safesweep', label: 'SafeSweep', available: true },
+    ]);
+    expect(getWorkerInstalledShortcuts(make([app], [
+      shortcut('s', 'app.safesweep', 'SafeSweep.lnk'),
+    ]))[0]).toMatchObject({ launchId: 'safesweep' });
+    expect(getWorkerInstalledShortcuts(make([], [
+      shortcut('s', 'app.safesweep', 'SafeSweep.lnk'),
+    ]))).toEqual([]);
+  });
+
   it('enables WeatherBuddy only when the Worker-owned install record exists', () => {
     const weather = { appId: 'app.weatherbuddy', name: 'WeatherBuddy', version: '1.4' };
     expect(getWorkerInstalledPrograms(make([]))).toEqual([]);

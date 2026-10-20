@@ -602,3 +602,19 @@ The older `/` route keeps the existing bounded-read adapter. RetroAmp's
 hardcoded "Add File" playback is deliberately deferred until actual VFS
 file-open behavior is implemented, rather than claim false library parity.
 This is staged parity, not the normal production root flip.
+
+
+## P3.17b — Original SafeSweep UI on canonical uninstall decisions
+
+`SafeSweepView` reuses the original authored 2006 scanner/results table,
+but reads only a bounded installed-software list and awaits the actual
+`SOFTWARE_UNINSTALL` reply before claiming a removal. Individual failed
+commands stay visible with their owner errors. The earlier synthetic
+tracking cookie is removed because no canonical file, registry entry or
+download actually backed it; the scanner now explicitly describes its
+limited installed-program checks rather than claiming a full file scan.
+The legacy adapter still uses the original synchronous dispatcher,
+whereas `WorkerSafeSweepPanel` uses only `apps` queries and typed
+`session.dispatch`. Only an installed SafeSweep can be opened through
+the Worker Start Menu/shortcut, and uninstalled software is never
+silently fabricated on the main thread.
