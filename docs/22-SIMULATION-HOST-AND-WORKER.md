@@ -534,3 +534,18 @@ Unported sites and external URLs explicitly report unavailability; the
 legacy `InternetRouter` must never be imported in `worker.html` because
 its static site map includes synchronous engine clients. Full site parity,
 installer preview/commit, production root switch and stress remain gates.
+
+
+## P3.15 — Installer proof and shared original Orion Wizard
+
+The game now has a dedicated typed `installer` query that checks one
+installer file, one matching canonical complete DownloadHub download,
+its size/source provenance and a fixed authored software mapping.
+The `SOFTWARE_INSTALL_FROM_DOWNLOAD` action repeats the same preflight
+in the single Kernel before calling the existing `SOFTWARE_INSTALL`
+owner transaction; compatibility is re-checked inside that commit.
+A missing, forged, unsupported or incomplete file cannot install.
+The exact original six-step Wizard presentation, including OS/RAM/disk
+checks and offered opt-out boxes, is now `InstallerWizardView` with
+an unchanged legacy adapter and a Worker adapter to follow. No shadow
+SoftwareRegistry or fake completion is created on the browser thread.
