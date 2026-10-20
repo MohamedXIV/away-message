@@ -49,7 +49,7 @@ export const InstallerWizardView: React.FC<InstallerWizardViewProps> = ({
   const compat = session.compatibilityResult;
 
   return (
-    <div className="w-full h-full flex flex-col bg-[#c0c0c0] font-sans text-xs select-none">
+    <div className="w-full h-full min-h-0 flex flex-col bg-[#c0c0c0] font-sans text-xs select-none">
       {/* Header */}
       <div className="bg-[#000080] text-white px-3 py-2 flex items-center gap-2">
         <span className="text-lg">📦</span>
@@ -60,7 +60,7 @@ export const InstallerWizardView: React.FC<InstallerWizardViewProps> = ({
       </div>
 
       {/* Content */}
-      <div className="flex-1 flex overflow-hidden">
+      <div className="min-h-0 flex-1 flex overflow-hidden">
         {/* Left banner */}
         <div className="w-36 bg-[#000080] text-white p-3 flex flex-col justify-between hidden md:flex">
           <div className="space-y-2">
@@ -71,7 +71,7 @@ export const InstallerWizardView: React.FC<InstallerWizardViewProps> = ({
         </div>
 
         {/* Main */}
-        <div className="flex-1 bg-white p-4 overflow-y-auto">
+        <div className="min-h-0 min-w-0 flex-1 bg-white p-4 overflow-y-auto">
           {stage === 1 && (
             <div className="space-y-3">
               <h2 className="font-bold text-sm">Welcome to {def.name} Setup</h2>
@@ -159,7 +159,7 @@ export const InstallerWizardView: React.FC<InstallerWizardViewProps> = ({
       </div>
 
       {/* Footer */}
-      <div className="flex items-center justify-between p-2 bg-[#dfdfdf] border-t border-gray-400">
+      <div className="shrink-0 flex items-center justify-between p-2 bg-[#dfdfdf] border-t border-gray-400">
         <div className="text-[11px] text-gray-600">File: {fileName}</div>
         <div className="flex gap-2">
           <button onClick={handleCancel} className="orion-button px-4 py-1">Cancel</button>

@@ -145,6 +145,11 @@ export const WindowFrameChrome: React.FC<WindowFrameChromeProps> = memo(({ windo
   );
 
   const taskbarHeightPx = osPresentation?.shell.taskbarHeightPx ?? 28;
+  // Desktop is sometimes a contained, 570px-high Worker surface rather than
+  // the whole browser. A cascaded window must not leave its footer UNDER the
+  // taskbar: keeping a scrollable viewport is preferable to clipping controls.
+  // All geometry is presentation-only; persisted window positions remain intact.
+  const safeTop = `clamp(0px, ${winState.position.y}px, calc(100% - ${taskbarHeightPx + 160}px))`;
   const frameStyle: React.CSSProperties = winState.isMaximized
     ? {
         position: 'absolute',
@@ -159,9 +164,10 @@ export const WindowFrameChrome: React.FC<WindowFrameChromeProps> = memo(({ windo
     : {
         position: 'absolute',
         left: `${winState.position.x}px`,
-        top: `${winState.position.y}px`,
+        top: safeTop,
         width: `${winState.size.width}px`,
         height: `${winState.size.height}px`,
+        maxHeight: `calc(100% - ${taskbarHeightPx}px - ${safeTop})`,
         zIndex: winState.zIndex,
         fontFamily: osPresentation?.uiFontStack,
         fontSize: osPresentation ? `${osPresentation.baseFontSizePx}px` : undefined,
@@ -271,7 +277,7 @@ export const WindowFrameChrome: React.FC<WindowFrameChromeProps> = memo(({ windo
         </div>
       </div>
 
-      <div className="flex-1 overflow-auto relative bg-white m-0.5 shadow-inner">
+      <div className="flex-1 min-h-0 overflow-auto relative bg-white m-0.5 shadow-inner">
         {children}
       </div>
 

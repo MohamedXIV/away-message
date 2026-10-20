@@ -725,3 +725,23 @@ world-minute transfer, installer, playback, and Clear/Add, without
 a local engine or fabricated network/audio. This is a staging
 acceptance route only; production \`/\` remains legacy until #175's
 single-Worker cutover and #177's scale gate are satisfied.
+
+
+### P3.20 corrective acceptance — Window/footer geometry and continuous playback
+
+A real Chromium full install-to-play clickthrough exposed a contained-desktop
+window geometry fault: the default cascaded Setup Wizard footer landed below
+the OS taskbar, so pointer events were swallowed. Shared
+`WindowFrameChrome` now clamps normal windows to the available desktop
+work area above the taskbar (without rewriting the UI-only stored window
+position). The shared installer wizard flex shell now allows its main contents
+to scroll while the footer remains reachable, including in short Worker
+desktops. Browser acceptance asserts the real Next buttons' boxes are above
+the taskbar *before* clicking them; it does not force-click obstructed buttons.
+
+The RetroAmp Worker adapter also retains the real media element across world
+minute/other canonical revision notifications. Unchanged source-backed VFS
+tracks preserve their React identity; only actual Music file changes replace
+the playlist. Browser acceptance tags the playing audio element, advances
+15 game minutes, and proves that element survives the revalidation. This
+work is still on isolated `/worker.html`, without a production cutover.

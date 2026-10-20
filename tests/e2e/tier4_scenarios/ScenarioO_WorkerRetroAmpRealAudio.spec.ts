@@ -50,8 +50,18 @@ test('installed RetroAmp plays genuine PCM WAV created in Worker-owned Music fol
 
   const installer = page.getByTestId('worker-window-installer');
   await expect(installer).toBeVisible();
+  const taskbar = page.getByTestId('worker-desktop-taskbar');
   for (let i = 0; i < 4; i++) {
-    await installer.getByRole('button', { name: /Next/ }).click();
+    const next = installer.getByRole('button', { name: /Next/ });
+    await expect(next).toBeEnabled();
+    // Regressions must fail fast with a geometric explanation, not hang
+    // for minutes while a taskbar steals the installer footer's clicks.
+    const buttonRect = await next.boundingBox();
+    const barRect = await taskbar.boundingBox();
+    expect(buttonRect, 'Installer Next button must be laid out').not.toBeNull();
+    expect(barRect, 'Taskbar must exist').not.toBeNull();
+    expect(buttonRect!.y + buttonRect!.height, 'Installer controls must be above taskbar').toBeLessThanOrEqual(barRect!.y);
+    await next.click({ timeout: 6000 });
   }
   await expect(installer.getByText('Completing Setup')).toBeVisible();
   await installer.getByRole('button', { name: 'Finish' }).click();
@@ -68,6 +78,11 @@ test('installed RetroAmp plays genuine PCM WAV created in Worker-owned Music fol
     .toBeGreaterThan(7);
   await expect.poll(() => wav.evaluate((element: HTMLAudioElement) => element.currentTime))
     .toBeGreaterThan(0);
+  // The canonical world advances independently. A revision refresh must not
+  // remount the HTMLMediaElement and restart the sound.
+  await wav.evaluate(element => { element.dataset.workerPlaybackMarker = 'retained'; });
+  await page.getByRole('button', { name: 'Advance 15 minutes' }).click();
+  await expect(wav).toHaveAttribute('data-worker-playback-marker', 'retained');
 
   await retro.getByRole('button', { name: 'Pause' }).click();
   await retro.getByRole('button', { name: 'CLEAR' }).click();
