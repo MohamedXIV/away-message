@@ -658,3 +658,22 @@ binary ZIP payloads from `kind: archive` files. A verified ZIP's
 member names, sizes and CRCs are published only through the bounded
 `archive` read. The Worker unit test asserts even an explicit
 `file` read of a ZIP cannot expose the owner-private base64 body.
+
+
+## P3.19 — Actual PhotoBox illustrations and VFS exports
+
+PhotoBox's original preset and filter controls are now shared by a pure
+`PhotoBoxView` on the legacy main-thread adapter and Worker desktop.
+The former placeholder emoji/gradient canvas is replaced by three
+self-contained authored SVG **illustrations**. The owner-only typed
+`PHOTOBOX_EXPORT_ARTWORK` command validates scene, filter bounds and
+disk capacity, renders real SVG with the chosen visual adjustments and
+writes `C:/Pictures/edited_{motel,diner,canal}.svg` only on actual
+successful file creation. Duplicate saves fail honestly instead of
+reporting a fictional PNG. A bounded VFS file read opens previously
+saved PhotoBox artwork in a small picture preview; Explorer exposes
+the canonical Pictures folder. Its Start Menu and desktop shortcut
+appear as an available Worker app only after canonical installation.
+The original Orion 6.0/768 MB eligibility gate is unchanged. This
+does not claim photographic image capture, bitmap import/PNG editing
+or full raster asset parity. No production root flip yet.

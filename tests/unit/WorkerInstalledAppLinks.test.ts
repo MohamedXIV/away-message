@@ -37,6 +37,17 @@ describe('Worker-installed software shortcuts', () => {
       { id: 'flashfetch', label: 'FlashFetch', available: true },
     ]);
   });
+  it('enables PhotoBox only with a canonical installed record and actual VFS shortcut', () => {
+    const app={appId:'app.photobox',name:'PhotoBox Studio',version:'2.0'};
+    expect(getWorkerInstalledPrograms(make([app]))).toEqual([
+      {id:'photobox',label:'PhotoBox Studio',available:true},
+    ]);
+    expect(getWorkerInstalledShortcuts(make([app],
+      [shortcut('p','app.photobox','PhotoBox Studio.lnk')]))[0]).toMatchObject({launchId:'photobox'});
+    expect(getWorkerInstalledShortcuts(make([],
+      [shortcut('p','app.photobox','PhotoBox Studio.lnk')]))).toEqual([]);
+  });
+
   it('enables ZipMate only with a canonical installed record and actual VFS shortcut', () => {
     const app={appId:'app.zipmate',name:'ZipMate',version:'4.0'};
     expect(getWorkerInstalledPrograms(make([app]))).toEqual([

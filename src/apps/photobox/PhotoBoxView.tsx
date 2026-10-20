@@ -199,7 +199,7 @@ export const PhotoBoxView: React.FC<{
         <div className="w-48 bg-[#25282c] border-r border-gray-700 p-2 flex flex-col gap-3 overflow-y-auto">
           <div>
             <span className="font-bold text-[10px] text-gray-400 uppercase tracking-wide block mb-1">
-              Sample Photos:
+              Illustration Samples:
             </span>
             <div className="space-y-1">
               <button

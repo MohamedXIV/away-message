@@ -7,10 +7,10 @@ const WORKER_PORTED_APPS: Readonly<Record<string, { id: string; icon: string }>>
   'app.weatherbuddy': { id: 'weatherbuddy', icon: '🐸' },
   'app.safesweep': { id: 'safesweep', icon: '🛡️' },
   'app.zipmate': { id: 'zipmate', icon: '📦' },
+  'app.photobox': { id: 'photobox', icon: '🖼️' },
 };
 const OTHER_ICONS: Readonly<Record<string, string>> = {
   'app.retroamp': '🎵',
-  'app.photobox': '🖼️',
 };
 
 export interface WorkerInstalledShortcut {
