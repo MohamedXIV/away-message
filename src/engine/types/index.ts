@@ -390,6 +390,30 @@ export interface ActorCondition {
 }
 export type BuddyMetVia = 'nightboard' | 'myplace' | 'pulse-room' | 'work' | 'intro' | 'seed';
 
+/** Online surfaces may promote a profile/handle only through the governed Social command. */
+export type OnlineSurfaceSource = Extract<BuddyMetVia, 'nightboard' | 'myplace' | 'pulse-room'>;
+
+/**
+ * Caller-supplied surface facts only. Canonical bindings are derived by domain
+ * owners from authored profile provenance and handles the player has learned;
+ * request fields can never authorize an identity association.
+ */
+export interface SurfaceIdentityPromotion {
+  source: OnlineSurfaceSource;
+  username: string;
+  handle?: string;
+  displayName?: string;
+  archetype?: CharacterArchetype;
+  createdDay?: number;
+}
+
+/** Knowledge-safe promotion result: no canonical definition fields cross the boundary. */
+export interface SurfacePromotionResult {
+  actorId: string;
+  created: boolean;
+  alreadyKnown: boolean;
+}
+
 export type HairColor = 'black' | 'dark_brown' | 'brown' | 'light_brown' | 'blonde' | 'auburn' | 'red' | 'grey' | 'dyed_blue' | 'dyed_pink' | 'dyed_green';
 export type EyeColor = 'brown' | 'dark_brown' | 'hazel' | 'blue' | 'green' | 'grey' | 'amber';
 
@@ -874,6 +898,8 @@ export type SimulationAction =
   // Free roster (v5): the player browses NightBoard for someone new (rules throttle it).
   | { type: 'NIGHTBOARD_MEET' }
   | { type: 'SOCIAL_ADD_BUDDY'; buddy: BuddyCharacter; introText?: string; silent?: boolean }
+  // Surface identity promotion is idempotent and derives reach from its source.
+  | { type: 'SOCIAL_PROMOTE_SURFACE_IDENTITY'; identity: SurfaceIdentityPromotion; silent?: boolean }
   | { type: 'SOCIAL_REMOVE_BUDDY'; buddyId: string }
   | { type: 'WORLD_SET_FLAG'; key: string; value: boolean | number | string }
   | { type: 'WORLD_TRIGGER_EVENT'; eventId: string }
@@ -935,6 +961,11 @@ export interface SimulationEventMap {
   'social:message_received': { message: MessageRecord };
   'social:relationship_updated': { buddyId: string; dimensions: RelationshipDimensions; delta: Partial<RelationshipDimensions> };
   'social:buddy_registered': { buddy: BuddyCharacter };
+  'social:buddy_reach_changed': {
+    buddyId: string;
+    previousReach: 'local' | 'remote';
+    reach: 'local' | 'remote';
+  };
   'social:buddy_removed': { buddyId: string };
   'social:buddy_status_changed': { buddyId: string; status: BuddyLifecycleStatus };
   'social:promise_resolved': { buddyId: string; promiseId: string; kept: boolean };

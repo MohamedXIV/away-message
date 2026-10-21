@@ -2,6 +2,7 @@ import type { BuddyCharacter, BuddyLifecycleStatus, RelationshipDimensions, Soci
 import { validateCharacterId, isValidSchedule, traitsForBuddy, clampTraits, resolveArchetype } from '../characterTemplates';
 import { sanitizeLanguages, validatePersistedBuddy } from '../CharacterEngine';
 import { SEED_CHARACTERS, seedCharacterDef, isSeedCharacter } from '../seedCharacters';
+import { resolveReachForMetVia } from './ReachPolicy';
 
 /** #173: single actor identity/definition owner. Stage, contact, relations,
  * presence, memories and transcripts are never stored alongside the roster.
@@ -9,6 +10,7 @@ import { SEED_CHARACTERS, seedCharacterDef, isSeedCharacter } from '../seedChara
  */
 export class SocialRoster implements Iterable<[string, BuddyCharacter]> {
   private readonly records = new Map<string, BuddyCharacter>();
+
 
   constructor(
     private readonly normalize: (id: string) => string,
@@ -46,6 +48,7 @@ export class SocialRoster implements Iterable<[string, BuddyCharacter]> {
     if (typeof def.typingSpeedWpm !== 'number' || def.typingSpeedWpm < 20 || def.typingSpeedWpm > 140) {
       throw new Error(`Buddy '${id}' has an invalid typingSpeedWpm.`);
     }
+    const explicitReach = (def as Partial<BuddyCharacter>).reach;
     const stored: BuddyCharacter = {
       ...def,
       id,
@@ -58,7 +61,11 @@ export class SocialRoster implements Iterable<[string, BuddyCharacter]> {
         ...((def as Partial<BuddyCharacter>).traits ?? {}),
       }),
       // Free roster identity backfills (older defs predate these fields).
-      reach: (def as Partial<BuddyCharacter>).reach === 'remote' ? 'remote' : 'local',
+      // Missing reach follows the actor's recorded source; online surfaces
+      // must never become local merely because the field was absent.
+      reach: explicitReach === 'local' || explicitReach === 'remote'
+        ? explicitReach
+        : resolveReachForMetVia(def.metVia),
       appearance: {
         hair: String((def as Partial<BuddyCharacter>).appearance?.hair || 'brown').trim().slice(0, 24) || 'brown',
         eyes: String((def as Partial<BuddyCharacter>).appearance?.eyes || 'brown').trim().slice(0, 24) || 'brown',
@@ -76,6 +83,19 @@ export class SocialRoster implements Iterable<[string, BuddyCharacter]> {
     delete stored.status;
     this.records.set(id, stored);
     return { id, initialRelationships: { ...stored.initialRelationships }, status };
+  }
+
+  /** Change physical scope without replacing identity or social history. */
+  public setReach(
+    rawId: string,
+    reach: 'local' | 'remote',
+  ): { id: string; previousReach: 'local' | 'remote'; reach: 'local' | 'remote' } | null {
+    const id = this.normalize(rawId);
+    const existing = this.records.get(id);
+    if (!existing) return null;
+    const previousReach = existing.reach === 'remote' ? 'remote' : 'local';
+    if (previousReach !== reach) this.records.set(id, { ...existing, reach });
+    return { id, previousReach, reach };
   }
 
   /** All other owner cleanup and events remain SocialEngine's responsibility. */

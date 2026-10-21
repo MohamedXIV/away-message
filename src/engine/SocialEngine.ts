@@ -225,6 +225,24 @@ export class SocialEngine {
   }
 
   /**
+   * Physical scope changed without touching identity, relationships,
+   * memories or conversations. Physical-state eviction is coordinated by the
+   * kernel owner that also owns mobility/spatial state.
+   */
+  public setBuddyReach(rawId: string, reach: 'local' | 'remote'): BuddyCharacter | null {
+    const changed = this.roster.setReach(rawId, reach);
+    if (!changed) return null;
+    if (changed.previousReach !== changed.reach) {
+      this.eventBus.emit('social:buddy_reach_changed', {
+        buddyId: changed.id,
+        previousReach: changed.previousReach,
+        reach: changed.reach,
+      });
+    }
+    return this.getBuddy(changed.id) ?? null;
+  }
+
+  /**
    * Remove a buddy (lifecycle: gone/blocked cleanup). No one is sacred —
    * anyone can leave; the sharp-event governor (one active sharp at a time)
    * is what keeps departures rare, not identity.
@@ -676,6 +694,23 @@ export class SocialEngine {
   /** Earned handles are not inferred from friend stage or public room visibility. */
   public getKnownHandles(rawId: string): string[] { return this.directory.getKnownHandles(rawId); }
   public isKnown(rawId: string): boolean { return this.directory.isKnown(rawId); }
+
+  /**
+   * Resolve a surface handle only through player-learned contact knowledge.
+   * Roster existence, actor ids and caller-supplied aliases are not evidence.
+   */
+  public findKnownActorByHandle(rawHandle: string): BuddyCharacter | undefined {
+    const handle = String(rawHandle ?? '').trim().toLowerCase().slice(0, 40);
+    if (!handle) return undefined;
+    for (const [id] of this.roster) {
+      if (!this.isKnown(id)) continue;
+      if (this.directory.getKnownHandles(id).some(known => known.toLowerCase() === handle)) {
+        return this.getBuddy(id);
+      }
+    }
+    return undefined;
+  }
+
   public learnHandle(rawId: string, rawHandle: string): boolean {
     const result = this.directory.learn(rawId, rawHandle);
     if (result.newlyLearned) {
