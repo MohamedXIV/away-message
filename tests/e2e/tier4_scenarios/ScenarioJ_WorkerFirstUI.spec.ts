@@ -155,9 +155,14 @@ test('classic save -> Worker root -> classic root shares one persisted world wit
   await expect.poll(async () => page.evaluate(() => Boolean((window as any).__simStore)))
     .toBe(true);
   await page.getByRole('button', { name: '▶ Continue' }).click();
-  await expect.poll(async () => page.evaluate(() =>
-    (window as any).__simStore.getState().engine.getState().time.totalMinutes as number,
-  )).toBeGreaterThanOrEqual(fromWorker);
+  // Classic Continue requests a full-page reload; the new document's lazy
+  // module bootstrap must finish before probing the game engine. A missing
+  // store is a pending boot, not an assertion-time JavaScript exception.
+  await expect(page.getByTestId('open-worker-preview')).toHaveCount(0);
+  await expect.poll(async () => page.evaluate(() => {
+    const store = (window as any).__simStore;
+    return store?.getState().engine.getState().time.totalMinutes ?? -1;
+  }), { timeout: 15_000 }).toBeGreaterThanOrEqual(fromWorker);
 });
 
 test('returning from a Worker menu never carries a pending canonical owner or unsaved live world', async ({ page }) => {
