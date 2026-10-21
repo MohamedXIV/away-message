@@ -824,6 +824,25 @@ export class SimulationKernel {
     };
   }
 
+  /** The installed-program picker is a separate, capped owner projection.
+   * Never send hardware, downloads or the software registry graph to the UI.
+   */
+  public getInstalledProgramsRead(): SimulationInstalledProgramsRead {
+    return {
+      revision: this.revision,
+      programs: this.software.getInstalledSoftware().slice(0, 64).map(program => ({
+        id: program.id,
+        appId: program.appId,
+        name: program.name,
+        version: program.version,
+        installedBytes: program.installedBytes,
+        isPortable: program.isPortable,
+        isAdware: program.isAdware,
+        installPath: program.installPath,
+      })),
+    };
+  }
+
   /** Desktop chrome and Pulse tray use only domain-scoped, serializable reads. */
   public getChromeRead(): SimulationChromeRead {
     const network = this.hardware.getNetworkSummary();
