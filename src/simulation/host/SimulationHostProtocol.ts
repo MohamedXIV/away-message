@@ -7,7 +7,7 @@ import type { SlotPulseMetadata, SlotSummary } from '../../persistence/slots';
 import type {
   SimulationActorRead, SimulationAppRead, SimulationChange, SimulationChromeRead, SimulationDesktopRead,
   SimulationConversationRead, SimulationDirectoryRead, SimulationFileRead,
-  SimulationHudProjection, SimulationInstallerRead, SimulationArchiveRead, SimulationJobBoardRead, SimulationMailboxRead,
+  SimulationHudProjection, SimulationGameViewRead, SimulationInstallerRead, SimulationArchiveRead, SimulationJobBoardRead, SimulationMailboxRead,
   SimulationMessengerRead, SimulationPlayerStatusRead, SimulationWeatherBuddyRead,
   SimulationPresenceRead, SimulationResidenceRead, SimulationSituationRead,
   SimulationTransitRead, SimulationWebsiteRead, SimulationWorldRead, SimulationInstalledProgramsRead,
@@ -16,6 +16,7 @@ import type {
 
 /** #175: Only whitelisted, bounded semantic/read models cross postMessage. */
 export interface SimulationQueryResults {
+  gameView: SimulationGameViewRead;
   hud: SimulationHudProjection;
   world: SimulationWorldRead;
   playerStatus: SimulationPlayerStatusRead;
@@ -41,7 +42,7 @@ export interface SimulationQueryResults {
   transit: SimulationTransitRead;
 }
 export type SimulationQuery =
-  | { kind: 'hud' | 'world' | 'playerStatus' | 'chrome' | 'desktop' | 'apps' | 'installedPrograms' | 'presence' | 'situation' | 'residence' | 'transit' | 'website' | 'jobBoard' | 'mailbox' | 'weatherBuddy' }
+  | { kind: 'gameView' | 'hud' | 'world' | 'playerStatus' | 'chrome' | 'desktop' | 'apps' | 'installedPrograms' | 'presence' | 'situation' | 'residence' | 'transit' | 'website' | 'jobBoard' | 'mailbox' | 'weatherBuddy' }
   | { kind: 'messenger'; maxContacts?: number }
   | { kind: 'labPage'; actorPage?: number; meetingPage?: number }
   | { kind: 'actor'; actorId: string }

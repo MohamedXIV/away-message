@@ -64,6 +64,17 @@ export function createSimulationWorkerRuntime(send: (message: SimulationWorkerRe
 
   const query = async (engine: SimulationKernel, request: SimulationQuery): Promise<unknown> => {
     switch (request.kind) {
+      case 'gameView': {
+        // One FIFO message: a live clock tick cannot land between these reads.
+        // Only three allowlisted bounded projections, never the domain graph.
+        const hud = engine.getHudProjection();
+        const world = engine.getWorldRead();
+        const player = engine.getPlayerStatusRead();
+        if (hud.revision !== world.revision || hud.revision !== player.revision) {
+          throw new Error('Worker game view has inconsistent revisions');
+        }
+        return { revision: hud.revision, hud, world, player };
+      }
       case 'hud': return engine.getHudProjection();
       case 'world': return engine.getWorldRead();
       case 'playerStatus': return engine.getPlayerStatusRead();

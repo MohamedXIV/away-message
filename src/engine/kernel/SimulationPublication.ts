@@ -78,6 +78,14 @@ export interface SimulationWorldRead {
   metInPerson: boolean;
 }
 
+/** One FIFO Worker read of the three small play-screen projections. Never a full-state snapshot. */
+export interface SimulationGameViewRead {
+  revision: number;
+  hud: SimulationHudProjection;
+  world: SimulationWorldRead;
+  player: SimulationPlayerStatusRead;
+}
+
 /** A five-day weather window, not a live GameContext or owner handle. */
 export interface SimulationWeatherBuddyRead {
   revision: number;

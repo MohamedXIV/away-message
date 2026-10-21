@@ -9,10 +9,12 @@ class FakeWorker {
   minute = 480;
   revision = 0;
   paused = false;
+  queryKinds: string[] = [];
   private changes = new Set<(change: any) => void>();
   private failures = new Set<(error: Error) => void>();
 
   query = async (query: { kind: string }) => {
+    this.queryKinds.push(query.kind);
     const time = {
       day: Math.floor(this.minute / 1440) + 1,
       totalMinutes: this.minute,
@@ -21,15 +23,19 @@ class FakeWorker {
       timeOfDay: 'morning',
     };
     const common = { revision: this.revision };
-    if (query.kind === 'hud') return {
+    const hud = {
       ...common, time, paused: this.paused, cash: 450, socialBattery: 100, activeView: 'room',
     };
-    if (query.kind === 'world') return {
+    const world = {
       ...common, time, activeView: 'room', residencePlaceId: 'starter', playerLocation: 'home',
     };
-    if (query.kind === 'playerStatus') return {
+    const player = {
       ...common, moodBand: 'neutral', rent: { rentDueDay: 7, rentAmount: 140, rentPaid: false },
     };
+    if (query.kind === 'gameView') return { ...common, hud, world, player };
+    if (query.kind === 'hud') return hud;
+    if (query.kind === 'world') return world;
+    if (query.kind === 'playerStatus') return player;
     throw Error('unexpected query ' + query.kind);
   };
 
@@ -85,8 +91,10 @@ describe('#175 Worker-first session lifecycle', () => {
     expect(session.getSnapshot().phase).toBe('game');
     expect(one.running).toBe(true);
     expect(session.getSnapshot().hud?.time.totalMinutes).toBe(480);
+    expect(one.queryKinds).toEqual(['gameView']);
     await session.advanceMinutes(15);
     await vi.waitFor(() => expect(session.getSnapshot().hud?.time.totalMinutes).toBe(495));
+    expect(one.queryKinds.every(kind => kind === 'gameView')).toBe(true);
     await session.save('slot_2');
     expect(session.getSnapshot().saved).toBe('Saved to slot_2');
     await session.loadGame('slot_2');
@@ -112,6 +120,26 @@ describe('#175 Worker-first session lifecycle', () => {
     await expect(session.advanceMinutes(5)).rejects.toThrow('not ready');
     await session.loadGame('slot_1');
     expect(session.getSnapshot().phase).toBe('game');
+    session.dispose();
+  });
+
+  it('fails closed on a malformed mixed-revision game bundle', async () => {
+    const worker = new FakeWorker();
+    const originalQuery = worker.query;
+    worker.query = async query => {
+      const result = await originalQuery(query);
+      if (query.kind === 'gameView') return {
+        ...result, world: { ...(result as any).world, revision: 999 },
+      };
+      return result;
+    };
+    const session = createSession([worker]);
+    await session.newGame();
+    expect(worker.disposed).toBe(true);
+    expect(session.getSnapshot()).toMatchObject({
+      phase: 'error', hud: null, world: null, player: null,
+      error: 'Worker game view revision mismatch',
+    });
     session.dispose();
   });
 
@@ -214,7 +242,7 @@ describe('#175 Worker-first session lifecycle', () => {
     let resume!: () => void;
     const pendingRead = new Promise<void>(resolve => { resume = resolve; });
     oldWorker.query = async (query) => {
-      if (stall && query.kind === 'hud') {
+      if (stall && query.kind === 'gameView') {
         started = true;
         await pendingRead;
       }

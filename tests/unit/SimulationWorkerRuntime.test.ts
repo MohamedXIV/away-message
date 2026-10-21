@@ -48,6 +48,33 @@ describe('#175 single-writer Worker runtime protocol', () => {
     }
   });
 
+  it('publishes HUD, physical place and player status atomically in one bounded FIFO reply', async () => {
+    const { ask, runtime } = harness();
+    const readState = vi.spyOn(SimulationKernel.prototype, 'getState');
+    try {
+      await ask({ op: 'init' });
+      const before = await ask({ op: 'query', query: { kind: 'gameView' } }) as
+        { revision: number; hud: ReturnType<SimulationKernel['getHudProjection']>;
+          world: ReturnType<SimulationKernel['getWorldRead']>;
+          player: ReturnType<SimulationKernel['getPlayerStatusRead']> };
+      expect(before.revision).toBe(before.hud.revision);
+      expect(before.revision).toBe(before.world.revision);
+      expect(before.revision).toBe(before.player.revision);
+      await ask({ op: 'advance', minutes: 13 });
+      const after = await ask({ op: 'query', query: { kind: 'gameView' } }) as typeof before;
+      expect(after.hud.time.totalMinutes).toBe(before.hud.time.totalMinutes + 13);
+      expect(after.hud.time.totalMinutes).toBe(after.world.time.totalMinutes);
+      expect(after.revision).toBe(after.player.revision);
+      expect(after.world.playerLocation).toBe('home');
+      expect(Object.keys(after).sort()).toEqual(['hud', 'player', 'revision', 'world']);
+      expect(readState).not.toHaveBeenCalled();
+      expect(JSON.stringify(after)).not.toContain('conversations');
+    } finally {
+      readState.mockRestore();
+      runtime.close();
+    }
+  });
+
   it('serializes queued writes and restores saved truth without replaying operations', async () => {
     const { ask, runtime } = harness();
     try {

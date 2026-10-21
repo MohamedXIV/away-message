@@ -1083,3 +1083,20 @@ unsupported save versions, nor final default cutover to Worker gameplay.
 Keep plain `/` on classic until the Worker presentation reaches authored
 game parity, and #177 combined deterministic 20/100/250/500 benchmarks
 are run on the same final head. No automatic fallback between live engines.
+
+## P3.33 — Atomic play-screen projection (pending exact-head verification)
+
+The live Worker UI now requests a single `gameView` query at boot and on
+revision publication, rather than three separate `hud`, `world` and
+`playerStatus` RPCs. The Worker FIFO computes only those three already
+allowlisted projections in one turn and stamps the shared revision; it does
+not export the full world. This eliminates clock-tick interleaving between
+the three reads and reduces play-screen read-message overhead.
+
+Unit acceptance covers source revision equality, absence of `getState()`
+snapshot reads, headless time progression, one query per session refresh,
+stale generation disposal and fail-closed malformed bundle rejection.
+
+This is an intermediate performance/consistency milestone, not the plain
+`/` default-Worker cutover or the #177 combined 20/100/250/500 stress gate.
+Do not close #175 on this change alone.

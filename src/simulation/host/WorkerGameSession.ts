@@ -94,6 +94,17 @@ export class WorkerGameSession {
     });
   }
 
+  /** Atomic, bounded gameplay read. Defensive validation fails closed on bad IPC. */
+  private async readGameView(host: WorkerSimulationHost) {
+    const read = await host.query({ kind: 'gameView' });
+    if (read.revision !== read.hud.revision ||
+      read.revision !== read.world.revision ||
+      read.revision !== read.player.revision) {
+      throw new Error('Worker game view revision mismatch');
+    }
+    return read;
+  }
+
   /** No dual-world fallback if Worker initialization or cold boot fails. */
   private async boot(factory: () => Promise<WorkerSimulationHost>, slotId: string): Promise<void> {
     if (this.disposed) throw new Error('Worker session disposed');
@@ -109,11 +120,7 @@ export class WorkerGameSession {
       }
       this.host = host;
       this.offFailure = host.onFailure(error => this.fail(error, generation));
-      const [hud, world, player] = await Promise.all([
-        host.query({ kind: 'hud' }),
-        host.query({ kind: 'world' }),
-        host.query({ kind: 'playerStatus' }),
-      ]);
+      const { hud, world, player } = await this.readGameView(host);
       if (this.disposed || generation !== this.epoch) return;
       this.lastDay = hud.time.day;
       this.lastAutosavedDay = hud.time.day;
@@ -137,7 +144,7 @@ export class WorkerGameSession {
     await this.boot(() => this.factories.loadGame(slotId), slotId);
   }
 
-  /** Collapse bursty changes into at most one in-flight set of three owner reads. */
+  /** Collapse bursty changes into one in-flight bounded, atomic owner read. */
   private async refresh(generation: number, host: WorkerSimulationHost): Promise<void> {
     if (this.disposed || generation !== this.epoch || this.view.phase !== 'game') return;
     this.refreshPending = true;
@@ -147,18 +154,8 @@ export class WorkerGameSession {
     try {
       while (this.refreshPending && generation === this.epoch && this.host === host) {
         this.refreshPending = false;
-        const [hud, world, player] = await Promise.all([
-          host.query({ kind: 'hud' }),
-          host.query({ kind: 'world' }),
-          host.query({ kind: 'playerStatus' }),
-        ]);
+        const { hud, world, player } = await this.readGameView(host);
         if (generation !== this.epoch || this.host !== host) return;
-        // Do not publish a mixed-revision read, including after an
-        // asynchronous time tick interleaved between the three queries.
-        if (hud.revision !== world.revision || hud.revision !== player.revision) {
-          this.refreshPending = true;
-          continue;
-        }
         const previousDay = this.lastDay;
         this.lastDay = hud.time.day;
         this.patch({ hud, world, player });
