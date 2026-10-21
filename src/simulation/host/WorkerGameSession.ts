@@ -1,5 +1,5 @@
 import type { SimulationAction, ActionResult } from '../../engine/types';
-import type { SimulationHardwareCommand, SimulationQuery, SimulationQueryResult } from './SimulationHostProtocol';
+import type { LabProceduralCommand, LabProceduralResult, SimulationHardwareCommand, SimulationQuery, SimulationQueryResult } from './SimulationHostProtocol';
 import type { OsInstallPlan } from '../../engine/kernel/ComputerOwnershipRuntime';
 import type {
   SimulationHudProjection, SimulationWorldRead, SimulationPlayerStatusRead,
@@ -206,6 +206,17 @@ export class WorkerGameSession {
 
   hardware(command: SimulationHardwareCommand): Promise<ActionResult<OsInstallPlan>> {
     return this.active().hardware(command);
+  }
+
+  /** Developer Lab may request bounded Worker generation, never raw world state. */
+  async labProcedural(command: LabProceduralCommand): Promise<LabProceduralResult> {
+    const host = this.active();
+    const generation = this.epoch;
+    const result = await host.labProcedural(command);
+    if (generation !== this.epoch || this.host !== host || this.disposed) {
+      throw new Error('Lab request belongs to an expired Worker session');
+    }
+    return result;
   }
 
   async dispatch(action: SimulationAction): Promise<ActionResult> {

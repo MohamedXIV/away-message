@@ -1,4 +1,4 @@
-import type { ActionResult, SimulationAction, SimulationState } from '../../engine/types';
+import type { ActionResult, GlobalEvent, SimulationAction, SimulationState } from '../../engine/types';
 import type { InitialSimulationState } from '../../engine/kernel/PhysicalSimulationRuntime';
 import type { OsInstallPlan } from '../../engine/kernel/ComputerOwnershipRuntime';
 import type { SlotPulseMetadata, SlotSummary } from '../../persistence/slots';
@@ -51,6 +51,23 @@ export type SimulationQuery =
 
 export type SimulationQueryResult<Q extends SimulationQuery> = SimulationQueryResults[Q['kind']];
 
+/** Developer-only offline procedural generator. No provider keys or world graph cross IPC. */
+export type LabProceduralCategory = 'mixed' | 'city_news' | 'site_launch' | 'economy' | 'culture' | 'system' | 'os_release';
+export interface LabProceduralCommand {
+  mode: 'preview' | 'inject';
+  seed: string;
+  count: number;
+  category: LabProceduralCategory;
+  /** Mandatory on injection: reject worlds changed since the approved preview. */
+  expectedRevision?: number;
+}
+export interface LabProceduralResult {
+  revision: number;
+  mode: LabProceduralCommand['mode'];
+  events: Array<Pick<GlobalEvent, 'id' | 'title' | 'description' | 'category' | 'triggerDay' | 'triggerHour' | 'knowledgePrompt'>>;
+  injectedIds: string[];
+}
+
 export type SimulationHardwareCommand =
   | { kind: 'setup' }
   | { kind: 'power'; poweredOn: boolean }
@@ -65,6 +82,7 @@ export type SimulationWorkerRequest =
   | { id: number; op: 'initSlot'; slotId: string }
   | { id: number; op: 'dispatch'; action: SimulationAction }
   | { id: number; op: 'hardware'; command: SimulationHardwareCommand }
+  | { id: number; op: 'labProcedural'; command: LabProceduralCommand }
   | { id: number; op: 'advance'; minutes: number; reason?: string }
   | { id: number; op: 'realtime'; seconds: number }
   | { id: number; op: 'clock'; running: boolean }
@@ -87,6 +105,7 @@ export type SimulationWorkerReply =
 export interface SimulationHost {
   dispatch(action: SimulationAction): Promise<ActionResult>;
   hardware(command: SimulationHardwareCommand): Promise<ActionResult<OsInstallPlan>>;
+  labProcedural(command: LabProceduralCommand): Promise<LabProceduralResult>;
   advanceGameMinutes(minutes: number, reason?: string): Promise<void>;
   advanceRealTime(seconds: number): Promise<void>;
   setClockRunning(running: boolean): Promise<void>;

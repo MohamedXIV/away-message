@@ -34,3 +34,87 @@ describe('#175 AI Lab diagnostic Worker projection', () => {
     } finally { runtime.close(); }
   });
 });
+
+describe('#175 Worker-owned offline procedural event generation', () => {
+  const command = (mode: 'preview' | 'inject', expectedRevision?: number) => ({
+    mode, seed: 'worker-lab-test', count: 2, category: 'city_news' as const,
+    ...(expectedRevision === undefined ? {} : { expectedRevision }),
+  });
+
+  it('previews without mutation, refuses stale writes, commits matching events and survives reload', async () => {
+    const replies: SimulationWorkerReply[] = [];
+    const worker = createSimulationWorkerRuntime(reply => { replies.push(reply); });
+    const value = (id: number): any => {
+      const message = replies.find(r => r.type === 'result' && r.id === id);
+      if (!message || message.type !== 'result' || !message.ok) {
+        throw new Error('Expected successful Worker response #' + id);
+      }
+      return message.value;
+    };
+    try {
+      await worker.receive({ id: 1, op: 'init' });
+      await worker.receive({ id: 2, op: 'query', query: { kind: 'labPage' } });
+      const initial = value(2);
+      await worker.receive({ id: 3, op: 'labProcedural', command: command('preview') });
+      const preview = value(3);
+      expect(preview.mode).toBe('preview');
+      expect(preview.events).toHaveLength(2);
+      expect(preview.injectedIds).toEqual([]);
+      expect(preview.revision).toBe(initial.revision);
+      expect(JSON.stringify(preview).length).toBeLessThan(3000);
+      expect(preview).not.toHaveProperty('world');
+      expect(preview.events[0]).not.toHaveProperty('isTriggered');
+
+      await worker.receive({ id: 4, op: 'query', query: { kind: 'labPage' } });
+      expect(value(4).eventCounts).toEqual(initial.eventCounts);
+      expect(value(4).revision).toBe(initial.revision);
+
+      await worker.receive({ id: 5, op: 'advance', minutes: 1, reason: 'stale preview guard' });
+      await worker.receive({ id: 6, op: 'labProcedural', command: command('inject', preview.revision) });
+      const stale = replies.find(r => r.type === 'result' && r.id === 6);
+      expect(stale).toMatchObject({ type: 'result', ok: false });
+      if (stale?.type === 'result' && !stale.ok) expect(stale.error.message).toContain('stale');
+
+      await worker.receive({ id: 7, op: 'labProcedural', command: command('preview') });
+      const currentPreview = value(7);
+      await worker.receive({ id: 8, op: 'labProcedural', command: command('inject', currentPreview.revision) });
+      const committed = value(8);
+      expect(committed.mode).toBe('inject');
+      expect(committed.injectedIds).toEqual(currentPreview.events.map((e: { id: string }) => e.id));
+      expect(committed.events).toEqual(currentPreview.events);
+      expect(committed.revision).toBeGreaterThan(currentPreview.revision);
+      await worker.receive({ id: 9, op: 'query', query: { kind: 'labPage' } });
+      expect(value(9).eventCounts.pending).toBe(initial.eventCounts.pending + 2);
+
+      await worker.receive({ id: 10, op: 'export' });
+      await worker.receive({ id: 11, op: 'load', snapshot: value(10) });
+      await worker.receive({ id: 12, op: 'query', query: { kind: 'labPage' } });
+      expect(value(12).eventCounts.pending).toBe(initial.eventCounts.pending + 2);
+    } finally { worker.close(); }
+  });
+
+  it('rejects malformed, oversized and injection-without-preview controls', async () => {
+    const replies: SimulationWorkerReply[] = [];
+    const worker = createSimulationWorkerRuntime(reply => { replies.push(reply); });
+    try {
+      await worker.receive({ id: 1, op: 'init' });
+      const invalid = [
+        { ...command('preview'), count: 4 },
+        { ...command('preview'), count: 0 },
+        { ...command('preview'), seed: 'X'.repeat(10000) },
+        { ...command('preview'), category: 'private_world_dump' },
+        { ...command('preview'), seed: '!' },
+        command('inject'),
+        command('inject', -1),
+      ];
+      for (let i = 0; i < invalid.length; i++) {
+        await worker.receive({ id: i + 2, op: 'labProcedural', command: invalid[i] as never });
+        expect(replies.find(r => r.type === 'result' && r.id === i + 2))
+          .toMatchObject({ type: 'result', ok: false });
+      }
+      await worker.receive({ id: 20, op: 'query', query: { kind: 'labPage' } });
+      const page = replies.find(r => r.type === 'result' && r.id === 20);
+      expect(page).toMatchObject({ type: 'result', ok: true });
+    } finally { worker.close(); }
+  });
+});

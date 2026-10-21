@@ -924,3 +924,33 @@ canonical Life reads. An empty-edge 72-actor probe asserts zero all-roster
 and zero per-pair access. This does NOT settle coarse-time-jump semantics or
 prove 500-NPC performance: rerun the independent #177 benchmark fixtures
 against the combined head before the final production cutover.
+
+## P3.26 — Worker-owned offline Lab procedural events
+
+The developer AI Lab now supports the actual procedural world-event pipeline,
+rather than a read-only inspector. The first migrated generator is deliberately
+offline/deterministic: no AI settings, keys, or provider requests cross the
+Dedicated Worker boundary.
+
+- Typed allowlisted labProcedural commands preview or inject 1–3 events with
+  a bounded seed and one of six supported categories / mixed category.
+  The Worker validates all controls, including a mandatory expectedRevision
+  on injection; invalid, oversized and stale requests fail explicitly.
+- Both operations run the existing ProceduralDirector against the canonical
+  Worker World owner using useAI:false and inject:false. Preview is side-effect
+  free. Injection uses SimulationKernel.generateProceduralEvents to publish
+  a single attributable, idempotent canonical world update.
+- The desktop Lab panel displays the upcoming event title, description,
+  day, category and NPC knowledge prompt. Preview confirmation is disabled
+  when the session revision changes. No private world graph or AI key is
+  sent to React.
+- Unit tests verify pure preview, stale rejection, exact preview/commit
+  parity, bounded response shape, invalid controls and persistence.
+  The existing Chromium AI Lab gate also drives preview, injection,
+  save and cold reopen using the real Worker and browser IndexedDB.
+
+This is a scoped executable implementation, not full AI Lab migration.
+Character/OS generators, optional provider-backed generation and benchmarks
+are still intentionally unavailable. The default / entry still uses the
+old synchronous runtime; PR #204 must remain Draft until final production
+cutover, complete feature parity and combined #177 population verification.

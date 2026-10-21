@@ -677,6 +677,16 @@ export class SimulationKernel {
   }
 
   /** Read only the page currently displayed by the real MyPlace site. */
+  /** Offline preview from the canonical Worker world. No world mutation,
+   * AI/network access, or main-thread snapshot is needed. */
+  public previewLabProceduralEvents(options: DirectorGenerateOptions):
+    ReturnType<ProceduralDirector['generateNextBatch']> {
+    return new ProceduralDirector(this.world).generateNextBatch(
+      this.clock.getTime().day, this.clock.getTotalMinutes(),
+      { ...options, useAI: false, inject: false },
+    );
+  }
+
   /**
    * AI Lab stages its asynchronous world batch before writing the owner.
    * Generation never leaks a stale response across a loaded save, and

@@ -1,6 +1,6 @@
 import { SimulationKernel } from '../../engine/kernel/SimulationKernel';
 import { loadSlotEngine, saveSlot } from '../../persistence/slots';
-import type { SimulationQuery, SimulationWorkerReply, SimulationWorkerRequest } from './SimulationHostProtocol';
+import type { LabProceduralCategory, SimulationQuery, SimulationWorkerReply, SimulationWorkerRequest } from './SimulationHostProtocol';
 
 /**
  * One canonical kernel, one ordered message queue. No second world store,
@@ -182,6 +182,48 @@ export function createSimulationWorkerRuntime(send: (message: SimulationWorkerRe
               break;
             default: throw new Error('Unsupported hardware operation');
           }
+          break;
+        }
+        case 'labProcedural': {
+          const command = raw.command;
+          const categories: readonly LabProceduralCategory[] = [
+            'mixed', 'city_news', 'site_launch', 'economy', 'culture', 'system', 'os_release',
+          ];
+          if (!command || (command.mode !== 'preview' && command.mode !== 'inject')
+            || typeof command.seed !== 'string' || !/^[a-zA-Z0-9 _:-]{1,64}$/.test(command.seed.trim())
+            || !Number.isSafeInteger(command.count) || command.count < 1 || command.count > 3
+            || !categories.includes(command.category)) {
+            throw new Error('Invalid bounded offline Lab generation controls');
+          }
+          const owner = requireKernel();
+          const revision = owner.getRevision();
+          if (command.mode === 'inject' &&
+            (!Number.isSafeInteger(command.expectedRevision) || command.expectedRevision !== revision)) {
+            throw new Error('Lab preview is stale; preview again before injecting');
+          }
+          const allowedCategories: Array<Exclude<LabProceduralCategory, 'mixed'>> =
+            command.category === 'mixed'
+              ? ['city_news', 'site_launch', 'economy', 'culture', 'system', 'os_release']
+              : [command.category];
+          const options = {
+            worldSeed: command.seed.trim(), maxEvents: command.count,
+            allowedCategories, useAI: false, inject: false,
+          };
+          // The same canonical-world generator handles both modes. The Worker
+          // FIFO and revision precondition prevent stale preview writeback.
+          const generated = command.mode === 'preview'
+            ? await owner.previewLabProceduralEvents(options)
+            : await owner.generateProceduralEvents(options);
+          value = {
+            mode: command.mode,
+            revision: owner.getRevision(),
+            events: generated.events.slice(0, 3).map(event => ({
+              id: event.id, title: event.title, description: event.description,
+              category: event.category, triggerDay: event.triggerDay,
+              triggerHour: event.triggerHour, knowledgePrompt: event.knowledgePrompt,
+            })),
+            injectedIds: generated.injectedIds.slice(0, 3),
+          };
           break;
         }
         case 'advance':
