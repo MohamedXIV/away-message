@@ -1,13 +1,16 @@
-import type { ActionResult, BuddyCharacter, SimulationAction } from '../types';
+import type {
+  ActionResult,
+  BuddyCharacter,
+  SimulationAction,
+  SurfaceIdentityPromotion,
+  SurfacePromotionResult,
+} from '../types';
 import type { CoreDomainOwners } from './CoreDomainOwners';
 import type { PlayerContactCoordination } from './PlayerContactCoordination';
 import type { RelationshipContinuity } from './RelationshipContinuity';
 import { validatePersistedBuddy } from '../CharacterEngine';
 import { pickMediationThanks } from '../characterTemplates';
-import {
-  buildPromotedSurfaceCharacter,
-  findBoundSocialActor,
-} from '../social/IdentityPromotion';
+import { buildPromotedSurfaceCharacter } from '../social/IdentityPromotion';
 import { isOnlineOriginSource } from '../social/ReachPolicy';
 
 /**
@@ -17,7 +20,7 @@ import { isOnlineOriginSource } from '../social/ReachPolicy';
  */
 export class SocialInteractionCommands {
   constructor(
-    private readonly owners: Pick<CoreDomainOwners, 'social' | 'clock' | 'telemetry'>,
+    private readonly owners: Pick<CoreDomainOwners, 'social' | 'myplace' | 'clock' | 'telemetry'>,
     private readonly playerContacts: PlayerContactCoordination,
     private readonly relationshipContinuity: RelationshipContinuity,
     private readonly publishState: () => void,
@@ -170,29 +173,39 @@ export class SocialInteractionCommands {
           if (!identity || !isOnlineOriginSource(identity.source)) {
             return { success: false, error: 'Only online surface identities can be promoted here.' };
           }
-          const normalized = {
-            ...identity,
+          const handle = String(identity.handle ?? '').trim().slice(0, 40) || username;
+          const normalized: SurfaceIdentityPromotion = {
+            source: identity.source,
             username,
-            handle: String(identity.handle ?? '').trim().slice(0, 40) || username,
+            handle,
+            ...(typeof identity.displayName === 'string' ? { displayName: identity.displayName } : {}),
+            ...(identity.archetype ? { archetype: identity.archetype } : {}),
+            ...(typeof identity.createdDay === 'number' ? { createdDay: identity.createdDay } : {}),
           };
 
-          // An explicit authored binding must resolve, never silently fork.
-          const canonicalBinding = String(identity.canonicalActorId ?? '').trim();
-          const explicitlyBound = canonicalBinding
-            ? this.owners.social.getBuddy(canonicalBinding)
-            : undefined;
-          if (canonicalBinding && !explicitlyBound) {
-            return {
-              success: false,
-              error: `Canonical actor binding not found: ${canonicalBinding}`,
-            };
+          // Binding evidence comes only from canonical owners:
+          // 1) a MyPlace page's generated/authored actor provenance;
+          // 2) a handle the player has actually learned.
+          // Request fields such as ids or aliases are never identity proof.
+          let existing: BuddyCharacter | undefined;
+          if (normalized.source === 'myplace') {
+            const boundActorId = this.owners.myplace.getBoundActorIdForProfile(username);
+            if (boundActorId) {
+              existing = this.owners.social.getBuddy(boundActorId);
+              if (!existing) {
+                return {
+                  success: false,
+                  error: 'This MyPlace profile is no longer linked to a contact.',
+                };
+              }
+            }
           }
-
-          // Bind to an existing canonical actor before attempting registration.
-          // This prevents repeat clicks, alternate handles and authored MyPlace
-          // aliases from creating a second identity for the same person.
-          const existing = explicitlyBound
-            ?? findBoundSocialActor(this.owners.social.getBuddies(), normalized);
+          if (!existing) {
+            existing = this.owners.social.findKnownActorByHandle(handle)
+              ?? (username !== handle
+                ? this.owners.social.findKnownActorByHandle(username)
+                : undefined);
+          }
           if (existing) {
             const wasKnown = this.owners.social.isKnown(existing.id);
             this.owners.social.learnHandle(existing.id, existing.handle);
@@ -203,24 +216,26 @@ export class SocialInteractionCommands {
               });
               this.publishState();
             }
-            return {
-              success: true,
-              data: {
-                buddy: existing,
-                created: false,
-                alreadyKnown: this.owners.social.isKnown(existing.id),
-              },
+            const result: SurfacePromotionResult = {
+              actorId: existing.id,
+              created: false,
+              alreadyKnown: this.owners.social.isKnown(existing.id),
             };
+            return { success: true, data: result };
           }
 
           const built = buildPromotedSurfaceCharacter(
             normalized,
             this.owners.clock.getTime().day,
           );
-          if (this.owners.social.getBuddy(built.definition.id)) {
+          const conflictingId = this.owners.social.getBuddy(built.definition.id);
+          const conflictingHandle = conflictingId
+            ?? this.owners.social.getBuddies().find(buddy =>
+              buddy.handle.toLowerCase() === built.definition.handle.toLowerCase());
+          if (conflictingHandle) {
             return {
               success: false,
-              error: `Surface identity '${username}' conflicts with an existing actor.`,
+              error: 'This surface identity conflicts with an existing contact.',
             };
           }
           const registered = this.admitBuddy(built.definition, undefined, true, currentMinutes);
@@ -230,10 +245,12 @@ export class SocialInteractionCommands {
             reach: registered.reach ?? 'local',
           });
           this.publishState();
-          return {
-            success: true,
-            data: { buddy: registered, created: true, alreadyKnown: true },
+          const result: SurfacePromotionResult = {
+            actorId: registered.id,
+            created: true,
+            alreadyKnown: true,
           };
+          return { success: true, data: result };
         } catch (err: unknown) {
           return { success: false, error: (err as Error).message };
         }

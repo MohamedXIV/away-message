@@ -393,18 +393,25 @@ export type BuddyMetVia = 'nightboard' | 'myplace' | 'pulse-room' | 'work' | 'in
 /** Online surfaces may promote a profile/handle only through the governed Social command. */
 export type OnlineSurfaceSource = Extract<BuddyMetVia, 'nightboard' | 'myplace' | 'pulse-room'>;
 
-/** Explicit request to bind an internet surface identity to a canonical actor. */
+/**
+ * Caller-supplied surface facts only. Canonical bindings are derived by domain
+ * owners from authored profile provenance and handles the player has learned;
+ * request fields can never authorize an identity association.
+ */
 export interface SurfaceIdentityPromotion {
   source: OnlineSurfaceSource;
   username: string;
   handle?: string;
   displayName?: string;
-  /** Known canonical actor binding, when content/authored data already knows it. */
-  canonicalActorId?: string;
-  /** Alternate handles that may already map to the same person. */
-  knownAliases?: string[];
   archetype?: CharacterArchetype;
   createdDay?: number;
+}
+
+/** Knowledge-safe promotion result: no canonical definition fields cross the boundary. */
+export interface SurfacePromotionResult {
+  actorId: string;
+  created: boolean;
+  alreadyKnown: boolean;
 }
 
 export type HairColor = 'black' | 'dark_brown' | 'brown' | 'light_brown' | 'blonde' | 'auburn' | 'red' | 'grey' | 'dyed_blue' | 'dyed_pink' | 'dyed_green';

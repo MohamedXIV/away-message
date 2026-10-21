@@ -27,6 +27,8 @@ export interface MyPlaceProfile {
   tiledBackground?: string; // e.g. 'stars', 'hearts', null
   archetype?: CharacterArchetype;
   visibility?: 'public' | 'friendsOnly';
+  /** Owner-only provenance: canonical actor this page was generated from. */
+  actorId?: string;
 }
 
 export interface MyPlaceEngineState {
@@ -46,6 +48,11 @@ export interface MyPlaceEngineState {
  */
 export const SEED_PROFILE_ALIASES: Record<string, string> = Object.fromEntries(
   SEED_CHARACTERS.flatMap((b) => (b.myplace ? [[b.id, b.myplace], [b.handle, b.myplace]] : []))
+);
+
+/** Authored profile username → canonical seed actor id (never caller-supplied). */
+export const SEED_PROFILE_ACTOR_IDS: Record<string, string> = Object.fromEntries(
+  SEED_CHARACTERS.filter((b) => b.myplace).map((b) => [b.myplace, b.id])
 );
 
 const DEFAULT_PROFILE: MyPlaceProfile = {
@@ -73,6 +80,7 @@ export function buildRosterProfile(input: {
   displayName: string;
   archetype?: CharacterArchetype;
   reach?: 'local' | 'remote';
+  actorId?: string;
   backstory?: { label?: string; bioSeed?: string };
 }): MyPlaceProfile {
   const archetype: CharacterArchetype = input.archetype && CHARACTER_ARCHETYPES[input.archetype] ? input.archetype : 'regular';
@@ -90,6 +98,7 @@ export function buildRosterProfile(input: {
     glitterIntensity: 0,
     visibility: 'public',
     archetype,
+    ...(input.actorId ? { actorId: input.actorId } : {}),
   };
 }
 
@@ -100,6 +109,13 @@ function copyProfile(profile: MyPlaceProfile): MyPlaceProfile {
     interests: [...profile.interests],
     top8: profile.top8.map(entry => ({ ...entry })),
   };
+}
+
+/** Player-facing profile copies never expose the owner-only actor binding. */
+function copyPublicProfile(profile: MyPlaceProfile): MyPlaceProfile {
+  const copy = copyProfile(profile);
+  delete copy.actorId;
+  return copy;
 }
 
 export class MyPlaceEngine {
@@ -130,6 +146,7 @@ export class MyPlaceEngine {
           displayName: b.displayName,
           archetype: b.archetype,
           reach: b.reach,
+          actorId: b.id,
           backstory: b.backstory ?? undefined,
         }));
       }
@@ -260,7 +277,20 @@ export class MyPlaceEngine {
 
   public getNpcProfile(username: string): MyPlaceProfile | undefined {
     const p = this.npcProfiles.get(username);
-    return p ? copyProfile(p) : undefined;
+    return p ? copyPublicProfile(p) : undefined;
+  }
+
+  /**
+   * Owner-only provenance lookup used by identity promotion. Callers cannot
+   * supply this binding; it comes from the generated profile or authored seed
+   * content. Returns null when the page is genuinely surface-only.
+   */
+  public getBoundActorIdForProfile(username: string): string | null {
+    const key = String(username ?? '').trim();
+    if (!key) return null;
+    const profile = this.npcProfiles.get(key);
+    if (profile?.actorId) return profile.actorId;
+    return SEED_PROFILE_ACTOR_IDS[key] ?? null;
   }
 
   public static readonly ARCHETYPE_AVATARS: Record<CharacterArchetype, string> = {
@@ -277,24 +307,35 @@ export class MyPlaceEngine {
    * Stub is derived from the archetype template + backstory flavor (not
    * hardcoded per-id), so any buddy gets a sensible page on first sight.
    */
-  public ensureNpcProfile(input: { username: string; displayName: string; archetype?: CharacterArchetype; reach?: 'local' | 'remote'; backstory?: { label?: string; bioSeed?: string } }): MyPlaceProfile {
+  public ensureNpcProfile(input: { username: string; displayName: string; archetype?: CharacterArchetype; reach?: 'local' | 'remote'; actorId?: string; backstory?: { label?: string; bioSeed?: string } }): MyPlaceProfile {
     const existing = this.npcProfiles.get(input.username);
-    if (existing) return copyProfile(existing);
+    if (existing) {
+      // Backfill owner provenance for older saves; never let a second actor
+      // overwrite an existing profile binding.
+      if (input.actorId && !existing.actorId) {
+        const bound = copyProfile({ ...existing, actorId: input.actorId });
+        this.npcProfiles.set(input.username, bound);
+        return copyPublicProfile(bound);
+      }
+      return copyPublicProfile(existing);
+    }
     const stub = buildRosterProfile(input);
     this.npcProfiles.set(input.username, stub);
-    return copyProfile(stub);
+    return copyPublicProfile(stub);
   }
 
   public getAllNpcProfiles(): Record<string, MyPlaceProfile> {
     const out: Record<string, MyPlaceProfile> = {};
-    for (const [k, v] of this.npcProfiles.entries()) out[k] = copyProfile(v);
+    for (const [k, v] of this.npcProfiles.entries()) out[k] = copyPublicProfile(v);
     return out;
   }
 
   public updateNpcProfile(username: string, patch: Partial<MyPlaceProfile>): void {
     const existing = this.npcProfiles.get(username);
     if (!existing) return;
-    const updated = copyProfile({ ...existing, ...patch });
+    // Identity provenance is owner-only; ordinary profile edits cannot rebind.
+    const { actorId: _ignoredBinding, ...safePatch } = patch;
+    const updated = copyProfile({ ...existing, ...safePatch });
     this.npcProfiles.set(username, updated);
     this.log(`NPC ${username} updated profile: ${patch.headline ?? patch.bio?.slice(0, 30) ?? 'change'}`);
     this.eventBus.emit('myplace:profile_updated' as any, { username, profile: { ...updated } });

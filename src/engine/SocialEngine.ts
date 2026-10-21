@@ -694,6 +694,23 @@ export class SocialEngine {
   /** Earned handles are not inferred from friend stage or public room visibility. */
   public getKnownHandles(rawId: string): string[] { return this.directory.getKnownHandles(rawId); }
   public isKnown(rawId: string): boolean { return this.directory.isKnown(rawId); }
+
+  /**
+   * Resolve a surface handle only through player-learned contact knowledge.
+   * Roster existence, actor ids and caller-supplied aliases are not evidence.
+   */
+  public findKnownActorByHandle(rawHandle: string): BuddyCharacter | undefined {
+    const handle = String(rawHandle ?? '').trim().toLowerCase().slice(0, 40);
+    if (!handle) return undefined;
+    for (const [id] of this.roster) {
+      if (!this.isKnown(id)) continue;
+      if (this.directory.getKnownHandles(id).some(known => known.toLowerCase() === handle)) {
+        return this.getBuddy(id);
+      }
+    }
+    return undefined;
+  }
+
   public learnHandle(rawId: string, rawHandle: string): boolean {
     const result = this.directory.learn(rawId, rawHandle);
     if (result.newlyLearned) {

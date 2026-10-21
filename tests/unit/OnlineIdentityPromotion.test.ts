@@ -4,13 +4,18 @@ import { generateNewcomer } from '../../src/engine/CharacterDirector';
 import { buildCharacter, validatePersistedBuddy } from '../../src/engine/CharacterEngine';
 import { SocialEngine } from '../../src/engine/SocialEngine';
 import { EventBus } from '../../src/engine/EventBus';
+import type { MyPlaceProfile } from '../../src/engine/MyPlaceEngine';
 import { SEED_CHARACTERS } from '../../src/engine/seedCharacters';
 import { resolveReachForMetVia } from '../../src/engine/social/ReachPolicy';
 import { resolveCharacterPresenceFromSimulation } from '../../src/engine/life';
 import { commitTravelPlan } from '../../src/engine/transit/ActiveTravel';
 import type { NpcTripRecord } from '../../src/engine/transit/NpcTrips';
 import type { TravelPlan } from '../../src/engine/transit/types';
-import type { BuddyCharacter, SurfaceIdentityPromotion } from '../../src/engine/types';
+import type {
+  BuddyCharacter,
+  SurfaceIdentityPromotion,
+  SurfacePromotionResult,
+} from '../../src/engine/types';
 
 const aiPayload = vi.hoisted(() => ({
   id: 'ai_surface_friend',
@@ -40,14 +45,14 @@ vi.mock('../../src/ai/providers', () => ({
 function promote(
   game: SimulationEngine,
   identity: SurfaceIdentityPromotion,
-): { created: boolean; buddy: BuddyCharacter } {
+): SurfacePromotionResult {
   const result = game.dispatchAction({
     type: 'SOCIAL_PROMOTE_SURFACE_IDENTITY',
     identity,
     silent: true,
   });
   if (!result.success) throw new Error(result.error ?? 'promotion failed');
-  return result.data as { created: boolean; buddy: BuddyCharacter };
+  return result.data as SurfacePromotionResult;
 }
 
 function activeTripRecord(actorId: string, startMinute: number): NpcTripRecord {
@@ -174,15 +179,19 @@ describe('#181 governed surface promotion', () => {
       displayName: 'Diner Ghost',
       archetype: 'nightowl',
     });
+    const actor = game.social.getBuddy(first.actorId);
     expect(first.created).toBe(true);
-    expect(first.buddy.id).toBe('diner_ghost');
-    expect(first.buddy.reach).toBe('remote');
-    expect(first.buddy.metVia).toBe('myplace');
+    expect(actor?.id).toBe('diner_ghost');
+    expect(actor?.reach).toBe('remote');
+    expect(actor?.metVia).toBe('myplace');
     expect(game.social.getBuddies().length).toBe(before + 1);
     expect(game.social.isKnown('diner_ghost')).toBe(true);
     expect(game.social.getKnownHandles('diner_ghost')).toEqual(['diner_ghost']);
-    expect(game.getMyPlacePageRead('diner_ghost').profile?.displayName).toBe('Diner Ghost');
-    expect(game.getMyPlacePageRead('diner_ghost').profile?.headline).toContain('Online friend');
+    const page = game.getMyPlacePageRead('diner_ghost').profile;
+    expect(page?.displayName).toBe('Diner Ghost');
+    expect(page?.headline).toContain('Online friend');
+    expect(page).not.toHaveProperty('actorId');
+    expect(game.myplace.getNpcProfile('diner_ghost')).not.toHaveProperty('actorId');
 
     const second = promote(game, {
       source: 'myplace',
@@ -190,7 +199,8 @@ describe('#181 governed surface promotion', () => {
       displayName: 'Diner Ghost',
     });
     expect(second.created).toBe(false);
-    expect(second.buddy.id).toBe('diner_ghost');
+    expect(second.actorId).toBe('diner_ghost');
+    expect(second.alreadyKnown).toBe(true);
     expect(game.social.getBuddies().length).toBe(before + 1);
   });
 
@@ -209,87 +219,113 @@ describe('#181 governed surface promotion', () => {
     });
 
     expect(result.created).toBe(false);
-    expect(result.buddy.id).toBe(authored.id);
+    expect(result.actorId).toBe(authored.id);
+    expect(Object.keys(result).sort()).toEqual(['actorId', 'alreadyKnown', 'created']);
+    expect(JSON.stringify(result)).not.toContain(authored.handle);
     expect(game.social.getBuddy(authored.myplace)).toBeUndefined();
     expect(game.social.getBuddies().length).toBe(before);
     expect(game.social.isKnown(authored.id)).toBe(true);
     expect(game.social.getKnownHandles(authored.id)).toContain(authored.handle);
   });
 
-  it('binds alternate handles to the existing canonical identity', () => {
+  it('binds a legitimately learned alternate handle without forking identity', () => {
     const game = new SimulationEngine();
     const actor = promote(game, {
       source: 'pulse-room',
       username: 'room_handle',
       displayName: 'Room Handle',
-    }).buddy;
+    });
+    expect(game.social.learnHandle(actor.actorId, 'old_room_handle')).toBe(true);
     const before = game.social.getBuddies().length;
 
     const bound = promote(game, {
       source: 'nightboard',
-      username: 'thread_alias',
-      knownAliases: [actor.handle.toUpperCase()],
+      username: 'old_room_handle',
     });
 
     expect(bound.created).toBe(false);
-    expect(bound.buddy.id).toBe(actor.id);
+    expect(bound.actorId).toBe(actor.actorId);
     expect(game.social.getBuddies().length).toBe(before);
-
-    const explicit = promote(game, {
-      source: 'myplace',
-      username: 'profile_page_three',
-      canonicalActorId: actor.id,
-    });
-    expect(explicit.created).toBe(false);
-    expect(explicit.buddy.id).toBe(actor.id);
-    expect(game.social.getBuddies().length).toBe(before);
+    expect(game.social.getKnownHandles(actor.actorId)).toContain('old_room_handle');
   });
 
-  it('resolves authored backstory candidate handles without forking identity', () => {
+  it('ignores a forged canonicalActorId and does not reveal the hidden actor', () => {
     const game = new SimulationEngine();
-    const definition = buildCharacter({
-      id: 'renamed_pulse_actor',
-      displayName: 'Renamed Pulse Actor',
-      handle: 'current_screen_name',
-      metVia: 'work',
-    }).definition;
-    definition.backstory = {
-      relationship: 'stranger',
-      label: 'An old handle you once saved.',
-      lapseDays: 30,
-      knowsAccounts: false,
-      candidates: [{ handle: 'old_screen_name', status: 'changed' }],
-      bioSeed: 'Used to post under a different name.',
-    };
-    game.social.registerBuddy(definition);
+    const hidden = game.social.getBuddies().find(buddy => !game.social.isKnown(buddy.id));
+    if (!hidden) throw new Error('Expected an undiscovered actor fixture.');
     const before = game.social.getBuddies().length;
+    expect(game.social.isKnown(hidden.id)).toBe(false);
 
-    const bound = promote(game, {
-      source: 'myplace',
-      username: 'old_screen_name',
-    });
-
-    expect(bound.created).toBe(false);
-    expect(bound.buddy.id).toBe('renamed_pulse_actor');
-    expect(game.social.getBuddies().length).toBe(before);
-    expect(game.social.isKnown('renamed_pulse_actor')).toBe(true);
-  });
-
-  it('rejects a missing explicit canonical binding instead of forking identity', () => {
-    const game = new SimulationEngine();
-    const before = game.social.getBuddies().length;
     const result = game.dispatchAction({
       type: 'SOCIAL_PROMOTE_SURFACE_IDENTITY',
       identity: {
         source: 'myplace',
-        username: 'orphaned_profile',
-        canonicalActorId: 'missing_canonical_actor',
-      },
+        username: 'totally_unrelated_page',
+        displayName: 'Unrelated Page',
+        canonicalActorId: hidden.id,
+      } as unknown as SurfaceIdentityPromotion,
+      silent: true,
     });
 
-    expect(result.success).toBe(false);
-    expect(result.error).toContain('missing_canonical_actor');
-    expect(game.social.getBuddies().length).toBe(before);
+    expect(result.success).toBe(true);
+    const data = result.data as SurfacePromotionResult;
+    expect(data.actorId).not.toBe(hidden.id);
+    expect(data.created).toBe(true);
+    expect(Object.keys(data).sort()).toEqual(['actorId', 'alreadyKnown', 'created']);
+    expect(game.social.isKnown(hidden.id)).toBe(false);
+    expect(game.social.getKnownHandles(hidden.id)).toEqual([]);
+    expect(game.social.findKnownActorByHandle(hidden.handle)).toBeUndefined();
+    expect(game.social.getBuddy(data.actorId)?.reach).toBe('remote');
+    expect(JSON.stringify(data)).not.toContain(hidden.handle);
+    expect(JSON.stringify(data)).not.toContain(hidden.displayName);
+    expect(game.social.getBuddies().length).toBe(before + 1);
+  });
+
+  it('ignores forged knownAliases and does not reveal the hidden actor', () => {
+    const game = new SimulationEngine();
+    const hidden = game.social.getBuddies().find(buddy => !game.social.isKnown(buddy.id));
+    if (!hidden) throw new Error('Expected an undiscovered actor fixture.');
+    const before = game.social.getBuddies().length;
+
+    const result = game.dispatchAction({
+      type: 'SOCIAL_PROMOTE_SURFACE_IDENTITY',
+      identity: {
+        source: 'nightboard',
+        username: 'another_unrelated_page',
+        displayName: 'Another Unrelated Page',
+        knownAliases: [hidden.handle.toUpperCase()],
+      } as unknown as SurfaceIdentityPromotion,
+      silent: true,
+    });
+
+    expect(result.success).toBe(true);
+    const data = result.data as SurfacePromotionResult;
+    expect(data.actorId).not.toBe(hidden.id);
+    expect(Object.keys(data).sort()).toEqual(['actorId', 'alreadyKnown', 'created']);
+    expect(game.social.isKnown(hidden.id)).toBe(false);
+    expect(game.social.findKnownActorByHandle(hidden.handle)).toBeUndefined();
+    expect(game.social.getBuddy(data.actorId)?.reach).toBe('remote');
+    expect(JSON.stringify(data)).not.toContain(hidden.handle);
+    expect(JSON.stringify(data)).not.toContain(hidden.displayName);
+    expect(game.social.getBuddies().length).toBe(before + 1);
+  });
+
+  it('does not let ordinary profile edits rebind owner provenance', () => {
+    const game = new SimulationEngine();
+    const hidden = game.social.getBuddies().find(buddy => !game.social.isKnown(buddy.id));
+    if (!hidden) throw new Error('Expected an undiscovered actor fixture.');
+    const promoted = promote(game, {
+      source: 'myplace',
+      username: 'editable_page',
+      displayName: 'Editable Page',
+    });
+
+    game.myplace.updateNpcProfile('editable_page', {
+      actorId: hidden.id,
+    } as unknown as Partial<MyPlaceProfile>);
+
+    expect(game.myplace.getBoundActorIdForProfile('editable_page')).toBe(promoted.actorId);
+    expect(game.social.isKnown(hidden.id)).toBe(false);
   });
 
   it('leaves unpromoted surface content outside the canonical roster', () => {
@@ -340,139 +376,140 @@ describe('#181 Pulse and NightBoard discovery', () => {
 describe('#181 remote physical exclusion and reach continuity', () => {
   it('remote actors cannot acquire local spatial, transit or in-person state', () => {
     const game = new SimulationEngine();
-    const actor = promote(game, {
+    const actorId = promote(game, {
       source: 'myplace',
       username: 'far_away_friend',
       displayName: 'Far Away Friend',
-    }).buddy;
+    }).actorId;
 
-    expect(game.getNpcPlaceState(actor.id)).toEqual({ status: 'unknown' });
-    expect(game.getActorSpatialProjection(actor.id)).toBeNull();
-    expect(() => game.relocateActorSpatially(actor.id, { x: 80, y: 40, z: 0 }))
+    expect(game.getNpcPlaceState(actorId)).toEqual({ status: 'unknown' });
+    expect(game.getActorSpatialProjection(actorId)).toBeNull();
+    expect(() => game.relocateActorSpatially(actorId, { x: 80, y: 40, z: 0 }))
       .toThrow(/Remote\/departed actors cannot acquire local spatial authority/);
 
-    const semantic = game.getPlayerActorRead(actor.id);
+    const semantic = game.getPlayerActorRead(actorId);
     expect(semantic?.actor.reach).toBe('remote');
     expect(semantic?.actor.canMeetInPerson.allowed).toBe(false);
-    expect(game.getCafeGuestRead('place_b1', actor.id).guest).toBeNull();
+    expect(game.getCafeGuestRead('place_b1', actorId).guest).toBeNull();
   });
 
   it('remote → local → remote preserves identity, relationships, memories, handles and messages', () => {
     const game = new SimulationEngine();
-    const actor = promote(game, {
+    const actorId = promote(game, {
       source: 'pulse-room',
       username: 'travelling_friend',
       displayName: 'Travelling Friend',
-    }).buddy;
-    game.social.addCoreMemory(actor.id, {
+    }).actorId;
+    game.social.addCoreMemory(actorId, {
       text: 'Told the player about the canal hum.',
       kind: 'shared_moment',
       day: 2,
     });
     const sent = game.dispatchAction({
       type: 'SOCIAL_SEND_MESSAGE',
-      buddyId: actor.id,
+      buddyId: actorId,
       text: 'still around?',
     });
     expect(sent.success).toBe(true);
 
-    const relationships = game.social.getRelationships(actor.id);
-    const memories = game.social.getCoreMemories(actor.id);
-    const messages = game.social.getMessages(actor.id);
-    const handles = game.social.getKnownHandles(actor.id);
+    const relationships = game.social.getRelationships(actorId);
+    const memories = game.social.getCoreMemories(actorId);
+    const messages = game.social.getMessages(actorId);
+    const handles = game.social.getKnownHandles(actorId);
 
-    const local = game.setActorReach(actor.id, 'local');
+    const local = game.setActorReach(actorId, 'local');
     expect(local.success).toBe(true);
-    expect(local.data?.id).toBe(actor.id);
-    expect(game.social.getBuddy(actor.id)?.reach).toBe('local');
-    expect(game.relocateActorSpatially(actor.id, { x: 80, y: 40, z: 0 }).membership.placeId)
+    expect(local.data?.id).toBe(actorId);
+    expect(game.social.getBuddy(actorId)?.reach).toBe('local');
+    expect(game.relocateActorSpatially(actorId, { x: 80, y: 40, z: 0 }).membership.placeId)
       .toBe('place_b1');
-    expect(game.getNpcPlaceState(actor.id)).toEqual({ status: 'at_place', placeId: 'place_b1' });
-    expect(resolveCharacterPresenceFromSimulation(game, actor.id, { playerPlaceId: 'place_b1' }))
+    expect(game.getNpcPlaceState(actorId)).toEqual({ status: 'at_place', placeId: 'place_b1' });
+    expect(resolveCharacterPresenceFromSimulation(game, actorId, { playerPlaceId: 'place_b1' }))
       .toMatchObject({
         physical: { kind: 'at_place', placeId: 'place_b1' },
         availability: { canInteractInPerson: true },
       });
 
-    const remote = game.setActorReach(actor.id, 'remote');
+    const remote = game.setActorReach(actorId, 'remote');
     expect(remote.success).toBe(true);
-    expect(game.social.getBuddy(actor.id)?.id).toBe(actor.id);
-    expect(game.getNpcPlaceState(actor.id)).toEqual({ status: 'unknown' });
-    expect(game.getNpcTrip(actor.id)).toBeNull();
-    expect(game.getActorSpatialProjection(actor.id)).toBeNull();
-    expect(resolveCharacterPresenceFromSimulation(game, actor.id, { playerPlaceId: 'place_b1' }))
+    expect(game.social.getBuddy(actorId)?.id).toBe(actorId);
+    expect(game.getNpcPlaceState(actorId)).toEqual({ status: 'unknown' });
+    expect(game.getNpcTrip(actorId)).toBeNull();
+    expect(game.getActorSpatialProjection(actorId)).toBeNull();
+    expect(resolveCharacterPresenceFromSimulation(game, actorId, { playerPlaceId: 'place_b1' }))
       .toMatchObject({
         physical: { kind: 'remote' },
         availability: { canInteractInPerson: false },
       });
 
-    expect(game.social.getRelationships(actor.id)).toEqual(relationships);
-    expect(game.social.getCoreMemories(actor.id)).toEqual(memories);
-    expect(game.social.getMessages(actor.id)).toEqual(messages);
-    expect(game.social.getKnownHandles(actor.id)).toEqual(handles);
+    expect(game.social.getRelationships(actorId)).toEqual(relationships);
+    expect(game.social.getCoreMemories(actorId)).toEqual(memories);
+    expect(game.social.getMessages(actorId)).toEqual(messages);
+    expect(game.social.getKnownHandles(actorId)).toEqual(handles);
   });
 
   it('evicts an active local trip when reach becomes remote', () => {
     const game = new SimulationEngine();
-    const actor = promote(game, {
+    const actorId = promote(game, {
       source: 'myplace',
       username: 'trip_friend',
       displayName: 'Trip Friend',
-    }).buddy;
-    expect(game.setActorReach(actor.id, 'local').success).toBe(true);
-    game.relocateActorSpatially(actor.id, { x: 80, y: 40, z: 0 });
+    }).actorId;
+    expect(game.setActorReach(actorId, 'local').success).toBe(true);
+    game.relocateActorSpatially(actorId, { x: 80, y: 40, z: 0 });
 
     const snapshot = game.exportSnapshot();
     snapshot.npcMobility = {
-      trips: { [actor.id]: activeTripRecord(actor.id, game.clock.getTotalMinutes()) },
-      places: { [actor.id]: 'place_a1' },
+      trips: { [actorId]: activeTripRecord(actorId, game.clock.getTotalMinutes()) },
+      places: { [actorId]: 'place_a1' },
     };
     const travelling = new SimulationEngine(snapshot);
-    expect(travelling.getNpcTrip(actor.id)?.status).toBe('active');
-    expect(travelling.getNpcPlaceState(actor.id).status).toBe('in_transit');
+    expect(travelling.getNpcTrip(actorId)?.status).toBe('active');
+    expect(travelling.getNpcPlaceState(actorId).status).toBe('in_transit');
 
-    expect(travelling.setActorReach(actor.id, 'remote').success).toBe(true);
-    expect(travelling.getNpcTrip(actor.id)).toBeNull();
-    expect(travelling.getNpcPlaceState(actor.id)).toEqual({ status: 'unknown' });
-    expect(travelling.getActorSpatialProjection(actor.id)).toBeNull();
-    expect(travelling.getState().npcMobility?.places[actor.id]).toBeUndefined();
+    expect(travelling.setActorReach(actorId, 'remote').success).toBe(true);
+    expect(travelling.getNpcTrip(actorId)).toBeNull();
+    expect(travelling.getNpcPlaceState(actorId)).toEqual({ status: 'unknown' });
+    expect(travelling.getActorSpatialProjection(actorId)).toBeNull();
+    expect(travelling.getState().npcMobility?.places[actorId]).toBeUndefined();
   });
 
   it('round-trips reach and social history through save/load', () => {
     const game = new SimulationEngine();
-    const actor = promote(game, {
+    const actorId = promote(game, {
       source: 'myplace',
       username: 'persisted_friend',
       displayName: 'Persisted Friend',
-    }).buddy;
-    game.social.addCoreMemory(actor.id, {
+    }).actorId;
+    const handle = game.social.getBuddy(actorId)!.handle;
+    game.social.addCoreMemory(actorId, {
       text: 'Saved a mixtape for the player.',
       kind: 'shared_moment',
       day: 3,
     });
     game.dispatchAction({
       type: 'SOCIAL_SEND_MESSAGE',
-      buddyId: actor.id,
+      buddyId: actorId,
       text: 'mailing you a tape',
     });
-    expect(game.setActorReach(actor.id, 'local').success).toBe(true);
-    expect(game.setActorReach(actor.id, 'remote').success).toBe(true);
+    expect(game.setActorReach(actorId, 'local').success).toBe(true);
+    expect(game.setActorReach(actorId, 'remote').success).toBe(true);
 
-    const relationships = game.social.getRelationships(actor.id);
-    const memories = game.social.getCoreMemories(actor.id);
-    const messages = game.social.getMessages(actor.id);
+    const relationships = game.social.getRelationships(actorId);
+    const memories = game.social.getCoreMemories(actorId);
+    const messages = game.social.getMessages(actorId);
     const restored = new SimulationEngine(game.exportSnapshot());
 
-    expect(restored.social.getBuddy(actor.id)?.reach).toBe('remote');
-    expect(restored.social.getBuddy(actor.id)?.handle).toBe(actor.handle);
-    expect(restored.social.getRelationships(actor.id)).toEqual(relationships);
-    expect(restored.social.getCoreMemories(actor.id)).toEqual(memories);
-    expect(restored.social.getMessages(actor.id)).toEqual(messages);
-    expect(restored.getActorSpatialProjection(actor.id)).toBeNull();
-    expect(restored.getNpcPlaceState(actor.id)).toEqual({ status: 'unknown' });
+    expect(restored.social.getBuddy(actorId)?.reach).toBe('remote');
+    expect(restored.social.getBuddy(actorId)?.handle).toBe(handle);
+    expect(restored.social.getRelationships(actorId)).toEqual(relationships);
+    expect(restored.social.getCoreMemories(actorId)).toEqual(memories);
+    expect(restored.social.getMessages(actorId)).toEqual(messages);
+    expect(restored.getActorSpatialProjection(actorId)).toBeNull();
+    expect(restored.getNpcPlaceState(actorId)).toEqual({ status: 'unknown' });
 
-    expect(restored.setActorReach(actor.id, 'local').success).toBe(true);
-    expect(restored.social.getBuddy(actor.id)?.id).toBe(actor.id);
-    expect(restored.social.getMessages(actor.id)).toEqual(messages);
+    expect(restored.setActorReach(actorId, 'local').success).toBe(true);
+    expect(restored.social.getBuddy(actorId)?.id).toBe(actorId);
+    expect(restored.social.getMessages(actorId)).toEqual(messages);
   });
 });

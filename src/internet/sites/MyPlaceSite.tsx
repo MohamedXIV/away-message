@@ -4,7 +4,7 @@ import { useSimulationStore } from '../../store/useSimulationStore';
 import { useMyPlacePageRead } from '../../store/useBoundedSimulationRead';
 import { soundManager } from '../../audio/SoundManager';
 import { getMyPlaceReleaseById } from '../../engine/MyPlaceCatalog';
-import { findBoundSocialActor } from '../../engine/social/IdentityPromotion';
+import type { SurfacePromotionResult } from '../../engine/types';
 
 // MySpace 2005 heavily inspired — table layout, tiled bg, contact box, customizable per character, AI-mutable.
 
@@ -185,10 +185,10 @@ export const MyPlaceSite: React.FC<SiteRouteProps> = (props) => {
                 </button>
                 {(() => {
                   if (isOwnProfile) return null;
-                  const existingActor = findBoundSocialActor(engine.social.getBuddies(), {
-                    username: currentUsername,
-                    handle: currentUsername,
-                  });
+                  const boundActorId = engine.myplace.getBoundActorIdForProfile(currentUsername);
+                  const existingActor = boundActorId
+                    ? engine.social.getBuddy(boundActorId)
+                    : engine.social.findKnownActorByHandle(currentUsername);
                   if (existingActor && engine.social.isKnown(existingActor.id)) {
                     return (
                       <div className="w-full bg-green-50 border border-green-300 text-green-800 text-xs py-1 text-center font-bold">
@@ -215,14 +215,13 @@ export const MyPlaceSite: React.FC<SiteRouteProps> = (props) => {
                               silent: true,
                             });
                             if (res.success) {
-                              const data = res.data as {
-                                buddy?: { displayName?: string };
-                                created?: boolean;
-                              } | undefined;
-                              const name = data?.buddy?.displayName ?? profile.displayName;
-                              setFriendNotice(data?.created === false
-                                ? `${name} is already in your Pulse contacts.`
-                                : `${name} added! Say hi on Pulse.`);
+                              const data = res.data as SurfacePromotionResult | undefined;
+                              const name = profile.displayName;
+                              setFriendNotice(data?.created === true
+                                ? `${name} added! Say hi on Pulse.`
+                                : data?.alreadyKnown
+                                  ? `${name} is already in your Pulse contacts.`
+                                  : `${name} could not be added to Pulse.`);
                               soundManager.play('invite');
                             } else {
                               setFriendNotice(res.error ?? 'Could not add friend.');

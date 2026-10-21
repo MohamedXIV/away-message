@@ -1183,7 +1183,11 @@ export class SimulationKernel {
       const updated = this.publishOwnerMutation(['social', 'transit'], () => {
         const next = this.social.setBuddyReach(actorId, reach);
         if (!next) throw new Error(`Buddy not found: ${actorId}`);
-        if (reach === 'remote') this.npc.movement.clearActorLocalPresence(next.id);
+        if (reach === 'remote') {
+          this.npc.movement.clearActorLocalPresence(next.id);
+          // Venue role records stay venue-owned; service checks already see an
+          // unknown local place, so they are inert until normal venue cleanup.
+        }
         return next;
       });
       return { success: true, data: updated };

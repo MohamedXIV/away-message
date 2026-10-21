@@ -212,6 +212,7 @@ export class MyPlaceSocialCycle {
         displayName: buddy.displayName,
         archetype: buddy.archetype,
         reach: buddy.reach ?? SEED_BY_ID[buddy.id]?.reach,
+        actorId: buddy.id,
         backstory: buddy.backstory ?? SEED_BY_ID[buddy.id]?.backstory ?? undefined,
       });
       // Also index by raw id so MyPlace routing works with either key
@@ -221,6 +222,7 @@ export class MyPlaceSocialCycle {
           displayName: buddy.displayName,
           archetype: buddy.archetype,
           reach: buddy.reach ?? SEED_BY_ID[buddy.id]?.reach,
+          actorId: buddy.id,
           backstory: buddy.backstory ?? SEED_BY_ID[buddy.id]?.backstory ?? undefined,
         });
       }
