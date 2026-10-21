@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react';
 import type { SimulationLabPageRead } from '../../engine/kernel/SimulationPublication';
 import type { WorkerGameSession } from './WorkerGameSession';
 import type {
-  LabOsCommand, LabOsResult, LabProceduralCategory, LabProceduralResult,
+  LabCharacterCommand, LabCharacterResult, LabOsCommand, LabOsResult,
+  LabProceduralCategory, LabProceduralResult,
 } from './SimulationHostProtocol';
 
 const control = 'rounded border border-[#808080] bg-[#ece9d8] px-2 py-1 disabled:opacity-40';
@@ -29,6 +30,37 @@ export function WorkerLabInspectorPanel({ session, revision }: {
   const [osBusy, setOsBusy] = useState(false);
   const [osNotice, setOsNotice] = useState<string | null>(null);
   const osPreviewCurrent = osPreview !== null && osPreview.revision === revision;
+  const [charSeed, setCharSeed] = useState('oakhaven-newcomer');
+  const [charSource, setCharSource] = useState<LabCharacterCommand['metVia']>('myplace');
+  const [charArchetype, setCharArchetype] = useState<LabCharacterCommand['archetype']>('random');
+  const [charPreview, setCharPreview] = useState<LabCharacterResult | null>(null);
+  const [charBusy, setCharBusy] = useState(false);
+  const [charNotice, setCharNotice] = useState<string | null>(null);
+  const charPreviewCurrent = charPreview !== null && charPreview.revision === revision;
+
+  const generateCharacter = async (mode: LabCharacterCommand['mode']): Promise<void> => {
+    if (charBusy || (mode === 'inject' && !charPreviewCurrent)) return;
+    setCharBusy(true);
+    setCharNotice(null);
+    try {
+      const next = await session.labCharacter({
+        mode, seed: charSeed, metVia: charSource, archetype: charArchetype,
+        ...(mode === 'inject' ? { expectedRevision: charPreview!.revision } : {}),
+      });
+      if (mode === 'preview') {
+        setCharPreview(next);
+        setCharNotice('Offline character preview ready. No actor registered yet.');
+      } else {
+        setCharPreview(null);
+        setCharNotice('Added ' + next.actor.displayName + ' to canonical Social as ' + next.actor.reach + '.');
+      }
+    } catch (cause) {
+      setCharNotice(cause instanceof Error ? cause.message : String(cause));
+      if (mode === 'inject') setCharPreview(null);
+    } finally {
+      setCharBusy(false);
+    }
+  };
 
   const generateOs = async (mode: LabOsCommand['mode']): Promise<void> => {
     if (osBusy || (mode === 'inject' && !osPreviewCurrent)) return;
@@ -96,8 +128,8 @@ export function WorkerLabInspectorPanel({ session, revision }: {
     <header className="shrink-0 border-b border-gray-500 bg-[#dfdfdf] p-3">
       <h2 className="font-bold text-sm">AI Lab · Worker Diagnostic Inspector</h2>
       <p className="mt-1 text-[11px] text-gray-700">
-        Owner diagnostics, offline events, and OS release generation. AI-provider
-        generation, character creation, and provider benchmarks remain unmigrated.
+        Owner diagnostics, offline world/OS events, and governed newcomer creation.
+        AI-provider generation and provider benchmarks remain unmigrated.
       </p>
     </header>
     <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-3">
@@ -174,6 +206,45 @@ export function WorkerLabInspectorPanel({ session, revision }: {
             </ul>
           </article>}
           {osNotice && <p role="status" data-testid="worker-lab-os-result">{osNotice}</p>}
+        </section>
+        <section data-testid="worker-lab-character" className="rounded border border-gray-400 bg-white p-2">
+          <h3 className="font-bold">Character Lab · Offline newcomer</h3>
+          <p className="mt-1 text-gray-600">Generate one canonical Social newcomer; online
+            introductions remain remote, work introductions are local.
+            Preview never creates an actor or a Pulse message.</p>
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <label>Seed <input aria-label="Character seed" className="rounded border px-1 py-1"
+              maxLength={64} value={charSeed}
+              onChange={e => { setCharSeed(e.target.value); setCharPreview(null); }} /></label>
+            <label>Met via <select aria-label="Character meeting source" className={control}
+              value={charSource}
+              onChange={e => { setCharSource(e.target.value as LabCharacterCommand['metVia']); setCharPreview(null); }}>
+              <option value="myplace">MyPlace (remote)</option>
+              <option value="nightboard">NightBoard (remote)</option>
+              <option value="pulse-room">Pulse room (remote)</option>
+              <option value="work">Work (local)</option>
+            </select></label>
+            <label>Archetype <select aria-label="Character archetype" className={control}
+              value={charArchetype}
+              onChange={e => { setCharArchetype(e.target.value as LabCharacterCommand['archetype']); setCharPreview(null); }}>
+              {(['random', 'coworker', 'nightowl', 'student', 'trader', 'artist', 'regular'] as const)
+                .map(a => <option key={a} value={a}>{a}</option>)}
+            </select></label>
+          </div>
+          <div className="mt-2 flex gap-2">
+            <button className={control} disabled={charBusy || !charSeed.trim()}
+              onClick={() => { void generateCharacter('preview'); }}>Preview newcomer</button>
+            <button className={control} disabled={charBusy || !charPreviewCurrent}
+              onClick={() => { void generateCharacter('inject'); }}>Add newcomer</button>
+          </div>
+          {charPreview && <article data-testid="worker-lab-character-preview" className="mt-2 space-y-1">
+            {!charPreviewCurrent && <p role="status">World changed — preview newcomer again.</p>}
+            <strong>{charPreview.actor.displayName}</strong> @{charPreview.actor.handle}
+            <p>{charPreview.actor.archetype} · {charPreview.actor.metVia} ·
+              {charPreview.actor.reach}</p>
+            <p className="text-gray-600">{charPreview.actor.introText}</p>
+          </article>}
+          {charNotice && <p role="status" data-testid="worker-lab-character-result">{charNotice}</p>}
         </section>
         <section data-testid="worker-lab-summary" className="rounded border border-gray-400 bg-white p-2">
           Day {read.day} · OS {read.currentOsId ?? 'none'} ·

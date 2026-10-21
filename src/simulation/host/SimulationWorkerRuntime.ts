@@ -262,6 +262,53 @@ export function createSimulationWorkerRuntime(send: (message: SimulationWorkerRe
           };
           break;
         }
+        case 'labCharacter': {
+          const command = raw.command;
+          const sources = ['nightboard', 'myplace', 'pulse-room', 'work'];
+          const archetypes = ['random', 'coworker', 'nightowl', 'student', 'trader', 'artist', 'regular'];
+          if (!command || (command.mode !== 'preview' && command.mode !== 'inject')
+            || typeof command.seed !== 'string'
+            || !/^[a-zA-Z0-9 _:-]{1,64}$/.test(command.seed.trim())
+            || !sources.includes(command.metVia)
+            || !archetypes.includes(command.archetype)) {
+            throw new Error('Invalid bounded offline Character Lab controls');
+          }
+          const owner = requireKernel();
+          const revision = owner.getRevision();
+          if (command.mode === 'inject'
+            && (!Number.isSafeInteger(command.expectedRevision) ||
+              command.expectedRevision !== revision)) {
+            throw new Error('Character Lab preview is stale; preview again before injecting');
+          }
+          // Generate from current canonical Social roster every time. No actor
+          // definition is accepted from browser input or returned over IPC.
+          const generated = await owner.previewOfflineLabNewcomer(
+            command.seed.trim(),
+            command.metVia,
+            command.archetype === 'random' ? undefined : command.archetype,
+          );
+          if (command.mode === 'inject') {
+            const admitted = owner.dispatchAction({
+              type: 'SOCIAL_ADD_BUDDY', buddy: generated.definition,
+              introText: generated.introText,
+            });
+            if (!admitted.success) throw new Error(admitted.error || 'Character registration failed');
+          }
+          value = {
+            revision: owner.getRevision(), mode: command.mode,
+            registered: command.mode === 'inject',
+            actor: {
+              id: generated.definition.id,
+              displayName: generated.definition.displayName,
+              handle: generated.definition.handle,
+              archetype: generated.definition.archetype,
+              metVia: command.metVia,
+              reach: generated.definition.reach,
+              introText: generated.introText.slice(0, 320),
+            },
+          };
+          break;
+        }
         case 'advance':
           if (!Number.isSafeInteger(raw.minutes) || raw.minutes < 0) {
             throw new Error('Invalid world-minute advance');

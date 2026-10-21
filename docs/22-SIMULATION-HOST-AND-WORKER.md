@@ -998,3 +998,38 @@ This is offline OS authoring only. AI-provider-backed OS generation, character
 authoring, provider benchmarks and the default route cutover remain pending.
 Single Worker ownership, explicit save/load and the independent #177
 population gate are still prerequisites before PR #204 can leave Draft.
+
+## P3.28 — Governed newcomer creation in the canonical Worker
+
+The Developer Character Lab now runs the existing deterministic
+`CharacterDirector.generateNewcomer` template path against the sole
+Worker-owned Social roster. This is executable Gameplay integration rather
+than another independent React simulation:
+
+- Typed `labCharacter` Preview/Inject controls allow a bounded seed,
+  four genuine meeting sources (MyPlace, NightBoard, Pulse room, work), and
+  a known archetype or random. The Worker rejects caller-provided actor
+  state and invalid, stale or out-of-scope requests. The browser only gets
+  an 8-field bounded identity/introduction preview; no actor schedule,
+  private memory, relationship graph, traits or domain state leaks.
+- Preview reads the canonical roster/handles and does not create an actor,
+  relationship or Pulse message. Injection regenerates the same approved
+  definition in the Worker and routes through the canonical
+  `SOCIAL_ADD_BUDDY` action. The existing Social owner registers identity,
+  first-meeting memory and introductory Pulse message in one trusted path.
+  No direct mutation is performed from React.
+- Online-source newcomers retain their remote identity and do not inherit
+  a local town place; work newcomers remain local. This reuses the existing
+  CharacterDirector source rule and will share the canonical ReachPolicy
+  once separate #181 lands, without modifying #181's branch here.
+- `expectedRevision` invalidates old previews after any world change,
+  and save/restore retains generated identities. Headless Worker tests cover
+  repeatable no-mutation preview, exact registration, remote/local
+  semantics, bounded response, stale rejection, forged controls and cold
+  restore. Chromium verifies preview, confirmed registration and cold
+  slot load with zero main-thread engine.
+
+Still deferred: AI/provider-backed generation and provider benchmarking;
+moving the ordinary `/` production route from legacy to the Worker,
+combined #177 population fixture and final full-route acceptance. PR #204
+remains Draft and #175 OPEN until the requested end-to-end cutover.

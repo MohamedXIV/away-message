@@ -228,3 +228,119 @@ describe('#175 Worker-owned offline Orion OS release generator', () => {
     } finally { worker.close(); }
   });
 });
+
+describe('#175 Worker-owned offline Character Lab', () => {
+  const command = (mode: 'preview' | 'inject', metVia: 'myplace' | 'work' = 'myplace',
+    expectedRevision?: number) => ({
+    mode, seed: 'worker-char-lab', metVia, archetype: 'artist' as const,
+    ...(expectedRevision === undefined ? {} : { expectedRevision }),
+  });
+
+  it('previews without roster mutation, registers one remote actor with intro, saves and cold-restores', async () => {
+    const replies: SimulationWorkerReply[] = [];
+    const worker = createSimulationWorkerRuntime(reply => replies.push(reply));
+    const value = (id: number): any => {
+      const msg = replies.find(reply => reply.type === 'result' && reply.id === id);
+      if (!msg || msg.type !== 'result' || !msg.ok) throw new Error('Expected successful Worker reply #' + id);
+      return msg.value;
+    };
+    try {
+      await worker.receive({ id: 1, op: 'init' });
+      await worker.receive({ id: 2, op: 'query', query: { kind: 'labPage' } });
+      const before = value(2);
+      await worker.receive({ id: 3, op: 'labCharacter', command: command('preview') });
+      await worker.receive({ id: 4, op: 'labCharacter', command: command('preview') });
+      const preview = value(3);
+      expect(value(4)).toEqual(preview);
+      expect(preview.registered).toBe(false);
+      expect(preview.actor.reach).toBe('remote');
+      expect(preview.actor.metVia).toBe('myplace');
+      expect(preview.actor.archetype).toBe('artist');
+      expect(preview.actor.introText).toContain('http://myplace.local/');
+      expect(JSON.stringify(preview).length).toBeLessThan(1500);
+      expect(preview.actor).not.toHaveProperty('schedule');
+      expect(preview.actor).not.toHaveProperty('initialRelationships');
+      expect(preview.actor).not.toHaveProperty('traits');
+      await worker.receive({ id: 5, op: 'query', query: { kind: 'labPage' } });
+      expect(value(5).roster).toEqual(before.roster);
+      expect(value(5).revision).toBe(before.revision);
+
+      await worker.receive({ id: 6, op: 'labCharacter', command: command('inject', 'myplace', preview.revision) });
+      const committed = value(6);
+      expect(committed.registered).toBe(true);
+      expect(committed.actor).toEqual(preview.actor);
+      expect(committed.revision).toBeGreaterThan(preview.revision);
+      await worker.receive({ id: 7, op: 'query', query: { kind: 'labPage' } });
+      expect(value(7).roster.total).toBe(before.roster.total + 1);
+      await worker.receive({ id: 8, op: 'labCharacter', command: command('inject', 'myplace', preview.revision) });
+      expect(replies.find(r => r.type === 'result' && r.id === 8))
+        .toMatchObject({ type: 'result', ok: false });
+
+      await worker.receive({ id: 9, op: 'export' });
+      const saved = value(9);
+      const actor = saved.social.buddies.find((b: { id: string }) => b.id === preview.actor.id);
+      expect(actor?.reach).toBe('remote');
+      expect(actor?.metVia).toBe('myplace');
+      const coldReplies: SimulationWorkerReply[] = [];
+      const cold = createSimulationWorkerRuntime(reply => coldReplies.push(reply));
+      try {
+        await cold.receive({ id: 1, op: 'init', initialState: saved });
+        await cold.receive({ id: 2, op: 'query', query: { kind: 'labPage' } });
+        const read = coldReplies.find(r => r.type === 'result' && r.id === 2);
+        expect(read).toMatchObject({ type: 'result', ok: true });
+        if (read?.type === 'result' && read.ok) {
+          expect((read.value as { roster: { total: number } }).roster.total)
+            .toBe(before.roster.total + 1);
+        }
+        await cold.receive({ id: 3, op: 'export' });
+        const snapshot = coldReplies.find(r => r.type === 'result' && r.id === 3);
+        expect(snapshot).toMatchObject({ type: 'result', ok: true });
+        if (snapshot?.type === 'result' && snapshot.ok) {
+          const loaded = snapshot.value as typeof saved;
+          expect(loaded.social.buddies.find((b: { id: string }) => b.id === preview.actor.id)?.reach)
+            .toBe('remote');
+        }
+      } finally { cold.close(); }
+    } finally { worker.close(); }
+  });
+
+  it('keeps work newcomers local and rejects stale or malformed registration requests', async () => {
+    const replies: SimulationWorkerReply[] = [];
+    const worker = createSimulationWorkerRuntime(reply => replies.push(reply));
+    const value = (id: number): any => {
+      const msg = replies.find(r => r.type === 'result' && r.id === id);
+      if (!msg || msg.type !== 'result' || !msg.ok) throw Error('Worker reply #' + id + ' failed');
+      return msg.value;
+    };
+    try {
+      await worker.receive({ id: 1, op: 'init' });
+      await worker.receive({ id: 2, op: 'labCharacter', command: command('preview', 'work') });
+      const preview = value(2);
+      expect(preview.actor.reach).toBe('local');
+      await worker.receive({ id: 3, op: 'advance', minutes: 1, reason: 'invalidate preview' });
+      await worker.receive({ id: 4, op: 'labCharacter', command: command('inject', 'work', preview.revision) });
+      expect(replies.find(r => r.type === 'result' && r.id === 4))
+        .toMatchObject({ type: 'result', ok: false });
+
+      const bad = [
+        { ...command('preview'), metVia: 'seed' },
+        { ...command('preview'), metVia: 'intro' },
+        { ...command('preview'), archetype: 'alien' },
+        { ...command('preview'), seed: '!' },
+        { ...command('preview'), seed: 'a'.repeat(1000) },
+        command('inject', 'work'),
+        command('inject', 'work', -1),
+      ];
+      for (let i = 0; i < bad.length; i++) {
+        await worker.receive({ id: i + 5, op: 'labCharacter', command: bad[i] as never });
+        expect(replies.find(r => r.type === 'result' && r.id === i + 5))
+          .toMatchObject({ type: 'result', ok: false });
+      }
+      await worker.receive({ id: 20, op: 'labCharacter', command: command('preview', 'work') });
+      const next = value(20);
+      await worker.receive({ id: 21, op: 'labCharacter', command: command('inject', 'work', next.revision) });
+      expect(value(21).actor.reach).toBe('local');
+      expect(value(21).registered).toBe(true);
+    } finally { worker.close(); }
+  });
+});

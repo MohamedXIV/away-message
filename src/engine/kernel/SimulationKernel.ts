@@ -8,6 +8,8 @@ import type { BuddyPresence, BuddyMetVia } from '../types';
 import type { CharacterDefinition } from '../CharacterEngine';
 import type { OsRelease, OsFamily } from '../OsCatalog';
 import { pickOsTemplate, templateToRelease } from '../../ai/osReleaseTemplates';
+import { generateNewcomer, type NewcomerResult } from '../CharacterDirector';
+import type { CharacterArchetype } from '../types';
 import { ProceduralDirector, type DirectorGenerateOptions } from '../ProceduralDirector';
 import { buildRecentNpcMail, buildRentMailHistory, buildWeeklyNpcThreads, buildWeeklyWeatherThread, npcThreadWeek } from '../BoardDirector';
 import { getWeatherForDay, gameDayName } from '../WeatherEngine';
@@ -737,6 +739,25 @@ export class SimulationKernel {
     release.id = `${release.id}_lab_${hash.toString(36)}` as OsRelease['id'];
     release.isProcedural = true;
     return release;
+  }
+
+  /**
+   * Derive an offline newcomer entirely from Worker-owned social truth.
+   * Preview never registers an actor or sends a message. A later inject must
+   * recompute after its revision precondition; no client-supplied actor bodies.
+   */
+  public async previewOfflineLabNewcomer(
+    seed: string,
+    metVia: Extract<BuddyMetVia, 'nightboard' | 'myplace' | 'pulse-room' | 'work'>,
+    archetype?: CharacterArchetype,
+  ): Promise<NewcomerResult> {
+    const buddies = this.social.getBuddies();
+    return generateNewcomer({
+      seed, metVia, archetype, day: this.clock.getTime().day, useAI: false,
+    }, {
+      existingIds: buddies.map(actor => actor.id),
+      existingHandles: buddies.map(actor => actor.handle),
+    });
   }
 
   /** Lab registration and the matching world announcement are one commit. */
