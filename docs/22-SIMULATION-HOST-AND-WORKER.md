@@ -840,3 +840,16 @@ Worker cold-load on the same file, plus traversal and unsupported-command
 behavior; a unit-level parser/action boundary suite tests limits and dispatch.
 This extends the isolated Worker-first shell only: production '/' remains
 on the legacy UI and #175/#177 stay OPEN until full parity and scale proof.
+
+
+### P3.22 browser acceptance: real OS occlusion
+
+First exact-head Chromium ScenarioQ proved HELP, CD, DIR, TYPE, SAVE and
+unsupported-command responses, but the integration test tried to click
+the desktop My Computer icon **through the open Command Prompt**. The
+OS window correctly intercepted the click, so that test timed out,
+while the independent traversal/false-network test passed. The
+acceptance now minimizes Command Prompt with its actual titlebar
+control before opening the desktop icon, checks that the window really
+vanished, and uses a short actionable click timeout. This is a
+test journey correction, not a bypass of normal window occlusion.

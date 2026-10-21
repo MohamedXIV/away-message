@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 
 test('Worker Command Prompt reads and writes real VFS data shared with Explorer and cold saves', async ({ page }) => {
-  test.setTimeout(90_000);
+  test.setTimeout(60_000);
   await page.goto('/worker.html');
   await page.getByRole('button', { name: 'New game' }).click();
   await expect(page.getByTestId('worker-phase')).toHaveText('game');
@@ -31,7 +31,11 @@ test('Worker Command Prompt reads and writes real VFS data shared with Explorer 
   await expect(output).toContainText('Same owner same file');
   await run('PING localhost');
   await expect(output).toContainText('Unsupported command: ping');
-  await desktop.getByRole('button', { name: 'Open My Computer' }).click();
+  // Like a real OS, an active window occludes desktop icons. Minimize it
+  // using the visible titlebar instead of force-clicking through the window.
+  await desktop.getByRole('button', { name: 'Minimize Command Prompt' }).click();
+  await expect(terminal).toHaveCount(0);
+  await desktop.getByRole('button', { name: 'Open My Computer' }).click({ timeout: 6_000 });
   const explorer = page.getByTestId('worker-window-fileexplorer');
   await expect(explorer.getByRole('button', { name: 'Open file: WorkerCommandNote.txt' })).toBeVisible();
   await explorer.getByRole('button', { name: 'Open file: WorkerCommandNote.txt' }).click();
@@ -43,7 +47,7 @@ test('Worker Command Prompt reads and writes real VFS data shared with Explorer 
   await page.getByRole('button', { name: 'Load game' }).click();
   await expect(page.getByTestId('worker-phase')).toHaveText('game');
   await page.getByRole('button', { name: 'desktop', exact: true }).click();
-  await page.getByTestId('worker-desktop').getByRole('button', { name: 'Open Command Prompt' }).click();
+  await page.getByTestId('worker-desktop').getByRole('button', { name: 'Open Command Prompt' }).click({ timeout: 6_000 });
   const recovered = page.getByTestId('worker-terminal');
   await recovered.getByRole('textbox', { name: 'Command line' }).fill('TYPE C:/Documents/WorkerCommandNote.txt');
   await recovered.getByRole('textbox', { name: 'Command line' }).press('Enter');
