@@ -17,7 +17,8 @@
     "content:pull": "tsx tools/pull-content.ts",
     "content:check": "tsx tools/pull-content.ts --check",
     "bench:simulation": "tsx tools/benchmark-simulation.ts",
-    "bench:publication": "tsx tools/benchmark-publication.ts"
+    "bench:publication": "tsx tools/benchmark-publication.ts",
+    "bench:population": "tsx tools/benchmark-population-scale.ts"
   },
   "dependencies": {
     "clsx": "^2.1.1",

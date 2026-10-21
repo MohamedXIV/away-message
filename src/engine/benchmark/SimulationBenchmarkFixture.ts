@@ -8,9 +8,18 @@ import {
 } from '../transit/NpcTrips';
 import { planTravel } from '../transit/TravelPlanner';
 import type { TransitNetwork } from '../transit/TransitNetwork';
-import type { BuddyCharacter, CharacterArchetype } from '../types';
+import type { BuddyCharacter, BuddyMetVia, CharacterArchetype } from '../types';
 
 export const BENCHMARK_POPULATIONS = [20, 100, 250, 500] as const;
+
+export interface SimulationBenchmarkFixtureOptions {
+  /**
+   * Deterministic actor-property seed. When omitted, the original index-based
+   * policy is preserved. A seed changes archetype, reach and relationship
+   * variation; it never changes the requested population count.
+   */
+  seed?: string;
+}
 
 export interface SimulationBenchmarkFixture {
   engine: SimulationEngine;
@@ -124,6 +133,50 @@ function benchmarkCharacter(index: number): BuddyCharacter {
   }).definition;
 }
 
+const BENCHMARK_MET_VIA: readonly BuddyMetVia[] = [
+  'intro',
+  'work',
+  'nightboard',
+  'myplace',
+  'pulse-room',
+];
+
+/** Stable per-actor 32-bit roll; prefix-stable when the roster grows. */
+function seededCharacterRoll(seed: string, suffix: string, salt: string): number {
+  const value = `${seed}:${suffix}:${salt}`;
+  let hash = 2166136261;
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return hash >>> 0;
+}
+
+function benchmarkCharacterWithSeed(index: number, seed: string): BuddyCharacter {
+  const suffix = String(index).padStart(4, '0');
+  const roll = (salt: string) => seededCharacterRoll(seed, suffix, salt);
+  const archetype = ARCHETYPES[roll('archetype') % ARCHETYPES.length] ?? 'regular';
+  const remote = roll('reach') % 4 === 0;
+  const metVia = BENCHMARK_MET_VIA[roll('metvia') % BENCHMARK_MET_VIA.length] ?? 'intro';
+  return buildCharacter({
+    id: `bench_${suffix}`,
+    displayName: `Benchmark Actor ${suffix}`,
+    handle: `bench${suffix}`,
+    archetype,
+    reach: remote ? 'remote' : 'local',
+    metVia,
+    status: 'acquaintance',
+    createdDay: 1,
+    initialRelationships: {
+      familiarity: 5 + (roll('familiarity') % 26),
+      trust: 10 + (roll('trust') % 21),
+      comfort: 10 + (roll('comfort') % 26),
+      respect: 15 + (roll('respect') % 21),
+    },
+    roles: [...new Set([archetype, 'benchmark_actor'])],
+  }).definition;
+}
+
 /**
  * Stable, offline-only scale fixture.
  *
@@ -136,11 +189,13 @@ function benchmarkCharacter(index: number): BuddyCharacter {
  */
 export function createSimulationBenchmarkFixture(
   targetPopulation: number,
+  options: SimulationBenchmarkFixtureOptions = {},
 ): SimulationBenchmarkFixture {
   if (!Number.isInteger(targetPopulation) || targetPopulation <= 0) {
     throw new Error('targetPopulation must be a positive integer.');
   }
 
+  const seed = options.seed;
   const engine = new SimulationEngine();
   const seedActorCount = engine.social.getBuddies().length;
   if (targetPopulation < seedActorCount) {
@@ -151,7 +206,9 @@ export function createSimulationBenchmarkFixture(
 
   let generatedIndex = 1;
   while (engine.social.getBuddies().length < targetPopulation) {
-    const definition = benchmarkCharacter(generatedIndex);
+    const definition = seed
+      ? benchmarkCharacterWithSeed(generatedIndex, seed)
+      : benchmarkCharacter(generatedIndex);
     generatedIndex += 1;
     if (engine.social.getBuddy(definition.id)) continue;
     engine.social.registerBuddy(definition);
