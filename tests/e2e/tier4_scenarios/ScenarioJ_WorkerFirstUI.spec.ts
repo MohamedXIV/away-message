@@ -177,3 +177,25 @@ test('returning from a Worker menu never carries a pending canonical owner or un
   await expect.poll(async () => page.evaluate(() => Boolean((window as any).__simStore)))
     .toBe(true);
 });
+
+test('Worker new-game residence choice uses authored offers and survives a cold save', async ({ page }) => {
+  test.setTimeout(90_000);
+  await page.goto('/?runtime=worker');
+  await expect(page.getByTestId('worker-first-shell')).toBeVisible();
+  await page.getByRole('button', { name: 'Choose starting residence' }).click();
+  // Choose an authored non-default room by its actual content ID, not by list order.
+  const selected = page.locator('[data-testid="worker-starter-offer"][data-place-id="room_208"]');
+  await expect(selected).toBeVisible();
+  await selected.click();
+  await expect(page.getByTestId('worker-phase')).toHaveText('game');
+  await expect(page.getByTestId('worker-physical-room')).toBeVisible();
+  await expect(page.getByTestId('worker-residence-place')).toHaveAttribute('data-place-id', 'room_208');
+  await page.getByRole('button', { name: 'Pause clock' }).click();
+  await page.getByRole('button', { name: 'Save game' }).click();
+  await expect(page.getByText('Saved to slot_1')).toBeVisible();
+  await page.reload();
+  await page.getByRole('button', { name: 'Continue last save' }).click();
+  await expect(page.getByTestId('worker-phase')).toHaveText('game');
+  await expect(page.getByTestId('worker-residence-place')).toHaveAttribute('data-place-id', 'room_208');
+  expect(await page.evaluate(() => !('__simEngine' in window) && !('__simStore' in window))).toBe(true);
+});

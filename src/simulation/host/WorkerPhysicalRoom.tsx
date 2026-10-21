@@ -70,7 +70,7 @@ export function WorkerPhysicalRoom({
   return (
     <section className="flex min-h-[460px] flex-col gap-2" data-testid="worker-physical-room">
       <header className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-300">
-        <span>Authored Phaser residence: {projection.placeName} · {projection.viewName}</span>
+        <span>{projection.placeName} · {projection.viewName}</span>
         <div className="flex flex-wrap gap-2">
           {projection.availableViews.map(view => (
             <button key={view.id} type="button"

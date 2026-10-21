@@ -59,7 +59,7 @@ export function WorkerCityTravel({
           You are at {CITY_NODES[location].name}
         </p>
         <p className="text-xs text-slate-400">
-          Routes and destinations are static map facts. Actual travel is executed by the Worker.
+          Choose a place to visit. Longer journeys cost time and energy.
         </p>
       </header>
 
@@ -120,7 +120,7 @@ export function WorkerCityTravel({
       {location !== 'home' && (
         <button disabled={busy} onClick={() => void travel('home')}
           className="rounded border border-slate-600 px-3 py-2 text-sm disabled:opacity-40">
-          Return to Room 104
+          Return home
         </button>
       )}
       {notice && <p role="status" data-testid="worker-city-receipt" className="text-sm text-amber-200">
