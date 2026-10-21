@@ -35,20 +35,20 @@ test('Travel mode previews a walk when no bus route exists', async ({ page }) =>
 });
 
 
-test('Worker-owned diner outing commits canonical money and time and persists location', async ({ page }) => {
+test('Worker-owned laundromat visit commits canonical money and time and persists location', async ({ page }) => {
   test.setTimeout(90000);
   await page.goto('/worker.html');
   await page.getByRole('button', { name: 'New game' }).click();
   await expect(page.getByTestId('worker-phase')).toHaveText('game');
   await page.getByRole('button', { name: 'city', exact: true }).click();
-  await page.getByRole('button', { name: 'Choose 4th St Diner' }).click();
-  await page.getByRole('button', { name: 'Travel to 4th St Diner' }).click();
-  await expect(page.getByTestId('worker-city-place-location')).toHaveText('4th St Diner');
+  await page.getByRole('button', { name: 'Choose Suds & Spin' }).click();
+  await page.getByRole('button', { name: 'Travel to Suds & Spin' }).click();
+  await expect(page.getByTestId('worker-city-place-location')).toHaveText('Suds & Spin');
 
   const beforeCash = await page.getByTestId('worker-hud').getByTitle('Cash on hand').textContent();
   const beforeMinute = Number(await page.getByTestId('worker-minute').textContent());
-  await page.getByRole('button', { name: 'Go: Diner: Tomato Soup & Toast' }).click();
-  await expect(page.getByTestId('worker-city-place-receipt')).toContainText('diner');
+  await page.getByRole('button', { name: 'Go: Laundromat Run' }).click();
+  await expect(page.getByTestId('worker-city-place-receipt')).toContainText('Laundromat');
   await expect.poll(async () => Number(await page.getByTestId('worker-minute').textContent()))
     .toBeGreaterThan(beforeMinute);
   await expect(page.getByTestId('worker-hud').getByTitle('Cash on hand')).not.toHaveText(beforeCash || '');
@@ -56,6 +56,6 @@ test('Worker-owned diner outing commits canonical money and time and persists lo
   await expect(page.getByText('Saved to slot_1')).toBeVisible();
   await page.getByRole('button', { name: 'Return to menu' }).click();
   await page.getByRole('button', { name: 'Load game' }).click();
-  await expect(page.getByTestId('worker-city-place-location')).toHaveText('4th St Diner');
+  await expect(page.getByTestId('worker-city-place-location')).toHaveText('Suds & Spin');
   expect(await page.evaluate(() => Boolean((window as any).__simEngine || (window as any).__simStore))).toBe(false);
 });
