@@ -32,6 +32,9 @@ interface CafeTurn {
   text: string;
 }
 
+// Authored opening line is mirrored in src/narrative/ink/flows/cafe-meeting.ink.
+// The Ink flow is exercised end-to-end by NarrativeCoordinator; wiring this view
+// to the flow is the #185 integration gate.
 const CAFE_OPENER =
   "Hey! You made it! It's... honestly so strange seeing you outside of that little chat box. But in a really good way. I grabbed the booth by the radiator — sit, sit.";
 

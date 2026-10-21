@@ -1,6 +1,6 @@
-// NOTE: ink sources + inkjs are gone (chore/remove-dead-ink). Dialogue lives in
-// TS StoryKnots (data/allKnots) executed through this engine + InkAdapter
-// (the adapter name is legacy — it never touches ink, only knots and tags).
+// LEGACY migration input only: unmounted in production and slated for deletion
+// under the bounded retirement plan in docs/16 §17.2. Real authored flows use
+// compiled Ink through NarrativeHost + NarrativeCoordinator.
 import { SimulationState } from '../engine/types';
 import {
   StoryKnot,

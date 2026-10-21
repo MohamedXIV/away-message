@@ -88,6 +88,7 @@ export const NARRATIVE_CONTEXT_QUERIES = [
   'actor_reach',
   'actor_lifecycle',
   'actor_connection',
+  'actor_known',
   'actor_relationship_stage',
   'actor_trusted',
   'actor_conflicted',
@@ -142,6 +143,8 @@ export function queryNarrativeContext(
       return projection.actor?.lifecycle ?? null;
     case 'actor_connection':
       return projection.actor?.connection ?? null;
+    case 'actor_known':
+      return projection.actor?.connection === 'known';
     case 'actor_relationship_stage':
       return projection.actor?.relationshipStage ?? null;
     case 'actor_trusted':
