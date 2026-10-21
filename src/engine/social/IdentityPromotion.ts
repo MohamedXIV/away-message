@@ -35,7 +35,8 @@ export function findBoundSocialActor(
   if (tokens.size === 0) return undefined;
   for (const actor of actors) {
     const profileBinding = SEED_PROFILE_ALIASES[actor.id] ?? SEED_PROFILE_ALIASES[actor.handle];
-    const aliases = [actor.id, actor.handle, profileBinding];
+    const aliasCandidates = (actor.backstory?.candidates ?? []).map(candidate => candidate.handle);
+    const aliases = [actor.id, actor.handle, profileBinding, ...aliasCandidates];
     if (aliases.some(alias => !!alias && tokens.has(alias.toLowerCase()))) return actor;
   }
   return undefined;

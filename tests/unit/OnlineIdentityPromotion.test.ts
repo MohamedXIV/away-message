@@ -245,6 +245,36 @@ describe('#181 governed surface promotion', () => {
     expect(game.social.getBuddies().length).toBe(before);
   });
 
+  it('resolves authored backstory candidate handles without forking identity', () => {
+    const game = new SimulationEngine();
+    const definition = buildCharacter({
+      id: 'renamed_pulse_actor',
+      displayName: 'Renamed Pulse Actor',
+      handle: 'current_screen_name',
+      metVia: 'work',
+    }).definition;
+    definition.backstory = {
+      relationship: 'stranger',
+      label: 'An old handle you once saved.',
+      lapseDays: 30,
+      knowsAccounts: false,
+      candidates: [{ handle: 'old_screen_name', status: 'changed' }],
+      bioSeed: 'Used to post under a different name.',
+    };
+    game.social.registerBuddy(definition);
+    const before = game.social.getBuddies().length;
+
+    const bound = promote(game, {
+      source: 'myplace',
+      username: 'old_screen_name',
+    });
+
+    expect(bound.created).toBe(false);
+    expect(bound.buddy.id).toBe('renamed_pulse_actor');
+    expect(game.social.getBuddies().length).toBe(before);
+    expect(game.social.isKnown('renamed_pulse_actor')).toBe(true);
+  });
+
   it('rejects a missing explicit canonical binding instead of forking identity', () => {
     const game = new SimulationEngine();
     const before = game.social.getBuddies().length;
