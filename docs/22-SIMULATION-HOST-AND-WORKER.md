@@ -1062,3 +1062,24 @@ with `Continue last save`, and checks invalid selectors fail closed.
 This is **an opt-in release rehearsal, not the final default production
 cutover**: plain `/` deliberately stays legacy until the authored shell
 replaces the developer vertical slice and integration/#177 gates are green.
+
+## P3.30 — Cross-runtime saved-world migration and intentional UI handoff
+
+The classic MainMenu offers **Try Dedicated Worker Preview** as an explicit,
+full-document navigation to `/?runtime=worker`. The Worker menu offers
+**Return to classic interface** only when there is no active game session.
+Both directions reload the document, so the old live engine or Dedicated
+Worker cannot stay running alongside the new mode. Neither path implicitly
+saves unsaved world changes; the UI reminds players to save first.
+
+The browser gate now proves the **same canonical v6 slot** travels from
+the old main-thread game to the Worker, advances there, is saved from its
+Worker owner, then cold-loads in the legacy UI. The test verifies minute
+continuity and the Worker route has no legacy engine globals; it separately
+checks a Worker session is explicitly torn down before returning to the
+classic menu. This is not a promise of backward compatibility for older
+unsupported save versions, nor final default cutover to Worker gameplay.
+
+Keep plain `/` on classic until the Worker presentation reaches authored
+game parity, and #177 combined deterministic 20/100/250/500 benchmarks
+are run on the same final head. No automatic fallback between live engines.

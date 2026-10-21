@@ -52,6 +52,15 @@ export function WorkerGameShell() {
     }
   }, [view.phase]);
 
+  const openClassicMenu = (): void => {
+    // Available only outside a live game. A full navigation terminates the
+    // Dedicated Worker; the legacy renderer is never co-mounted with it.
+    const url = new URL('./', window.location.href);
+    url.search = '';
+    url.searchParams.set('runtime', 'legacy');
+    window.location.assign(url.toString());
+  };
+
   const act = async (operation: () => Promise<unknown>) => {
     setBusy(true);
     setLocalError(null);
@@ -106,6 +115,9 @@ export function WorkerGameShell() {
                 Continue last save
               </button>}
               <button className={control} disabled={busy} onClick={() => void act(() => session.newGame())}>New game</button>
+              <button className={control} disabled={busy} onClick={openClassicMenu}>
+                Return to classic interface
+              </button>
               <button className={control} disabled={busy} onClick={() => void act(() => session.loadGame(slot))}>
                 {view.phase === 'error' ? 'Recover saved slot' : 'Load game'}
               </button>
