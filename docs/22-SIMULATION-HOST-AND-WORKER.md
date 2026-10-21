@@ -815,3 +815,28 @@ a second +15 published HUD, crashes the native Worker, and verifies
 the recovered slot is at least the saved baseline but strictly
 earlier than the second change. The test continues to use actual
 serializable commands and real IDB save/load; no owner is mocked.
+
+
+## P3.22 — Worker-owned Orion Command Prompt
+
+The missing Command Prompt is now a Worker-only desktop window, using the
+same authored Orion WindowFrame / Start Menu / taskbar shell as other apps.
+Presentation and bounded parsing/history live in React; **no** synchronous
+SimulationEngine, VFS graph or fabricated network behavior is imported.
+
+HELP, VER, CLS, EXIT, CD, DIR, TYPE, SAVE, DEL and UNZIP are implemented.
+Directory listings request at most 32 entries from the Worker, explicitly
+selected text files only are read (display capped at 8192 characters),
+and SAVE mints at most 2048-character new .txt files under C:/Documents
+using the canonical VFS_CREATE_FILE command. DEL delegates to the owner's
+VFS_MOVE_TRASH; UNZIP delegates to VFS_ARCHIVE_EXTRACT with owner validation.
+All commands report owner refusals and directory existence rather than
+simulated success; PING/network commands explicitly return unsupported
+instead of invented IPs or latency. Paths are confined to canonical C:
+with traversal guards. UI history is bounded to 40 and output to 120 lines.
+
+ScenarioQ proves Command Prompt -> Explorer -> Notepad -> Worker save ->
+Worker cold-load on the same file, plus traversal and unsupported-command
+behavior; a unit-level parser/action boundary suite tests limits and dispatch.
+This extends the isolated Worker-first shell only: production '/' remains
+on the legacy UI and #175/#177 stay OPEN until full parity and scale proof.

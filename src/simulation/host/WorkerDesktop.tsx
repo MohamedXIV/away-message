@@ -20,10 +20,12 @@ import { WorkerSafeSweepPanel } from './WorkerSafeSweepPanel';
 import { WorkerZipMatePanel } from './WorkerZipMatePanel';
 import { WorkerRetroAmpPanel } from './WorkerRetroAmpPanel';
 import { WorkerPhotoBoxPanel } from './WorkerPhotoBoxPanel';
+import { WorkerTerminalPanel } from './WorkerTerminalPanel';
 import { getWorkerInstalledPrograms, getWorkerInstalledShortcuts } from './WorkerInstalledAppLinks';
 import type { WorkerGameSession } from './WorkerGameSession';
 
 const APPLICATIONS = [
+  { id: 'terminal', label: 'Command Prompt', icon: '💻' },
   { id: 'fileexplorer', label: 'My Computer', icon: '📁' },
   { id: 'notepad', label: 'Notepad', icon: '📝' },
   { id: 'pulse', label: 'Pulse Messenger', icon: '💬' },
@@ -79,10 +81,10 @@ export function WorkerDesktop({
   const profile = chrome?.osVersion ? getOsPresentationProfile(chrome.osVersion) : null;
   const installedShortcuts = desktop ? getWorkerInstalledShortcuts(desktop) : [];
   const installedPrograms = desktop ? getWorkerInstalledPrograms(desktop) : [];
-  const allowedApps = ['browser', 'fileexplorer', 'notepad', 'controlpanel', 'pulse',
+  const allowedApps = ['terminal', 'browser', 'fileexplorer', 'notepad', 'controlpanel', 'pulse',
     ...installedPrograms.filter(program => program.available).map(program => program.id)];
   const resolveAppId = (id: string): string | null => ({
-    browser: 'browser', fileexplorer: 'fileexplorer', notepad: 'notepad',
+    terminal: 'terminal', browser: 'browser', fileexplorer: 'fileexplorer', notepad: 'notepad',
     controlpanel: 'system', pulse: 'pulse', flashfetch: 'flashfetch',
   } as Record<string, string>)[id] ?? null;
 
@@ -100,7 +102,7 @@ export function WorkerDesktop({
           migration surface, not an unlocked in-world computer.
         </p>
       )}
-      <div className="absolute left-3 top-24 flex w-28 flex-col gap-3">
+      <div className="absolute left-3 top-24 bottom-11 flex w-28 flex-col gap-3 overflow-y-auto">
         {APPLICATIONS.map(app => (
           <button type="button" key={app.id} onClick={() => open(app.id)}
             className="flex flex-col items-center gap-1 rounded px-1 py-1 text-xs text-white hover:bg-white/20"
@@ -136,6 +138,7 @@ export function WorkerDesktop({
         )}
         renderApp={win => (
           <WorkerDesktopApp window={win} session={session} revision={revision}
+            osVersion={chrome?.osVersion ?? null}
             openDocument={openDocument} openInstaller={openInstaller} openArchive={openArchive}
             openArtwork={openArtwork} openAudio={openAudio} />
         )}
@@ -169,16 +172,19 @@ export function WorkerDesktop({
 
 
 /** One stable React component identity per app/window, across Worker revisions. */
-function WorkerDesktopApp({ window: win, session, revision, openDocument, openInstaller, openArchive, openArtwork, openAudio }: {
+function WorkerDesktopApp({ window: win, session, revision, osVersion, openDocument, openInstaller, openArchive, openArtwork, openAudio }: {
   window: WindowState;
   session: WorkerGameSession;
   revision: number;
+  osVersion: SimulationChromeRead['osVersion'];
   openDocument: (path: string) => void;
   openInstaller: (path: string) => void;
   openArchive: (path: string) => void;
   openArtwork: (path: string) => void;
   openAudio: (path: string) => void;
 }) {
+  if (win.appId === 'terminal') return <WorkerTerminalPanel session={session} windowId={win.id}
+    osVersion={osVersion} />;
   if (win.appId === 'fileexplorer') {
     return <WorkerFileExplorer session={session} revision={revision}
       openDocument={openDocument} openInstaller={openInstaller} openArchive={openArchive}
