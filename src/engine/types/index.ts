@@ -693,6 +693,8 @@ export interface WorldState {
   appointments: Appointment[];
   windowObservationHistory: string[];
   triggeredEvents: GlobalEvent[];
+  /** Canonical queued non-catalog events. Authored catalog pending entries derive from content. */
+  pendingProceduralEvents?: Array<Omit<GlobalEvent, 'isTriggered' | 'triggeredAtMinute'>>;
   // Per-buddy attitude bank — each buddy sees same event through different eyes
   buddyKnowledge: Record<string, BuddyEventKnowledge[]>; // key: buddyId
   /** #187: one World-owned truth/claim/actor-awareness ledger. Never a UI projection. */

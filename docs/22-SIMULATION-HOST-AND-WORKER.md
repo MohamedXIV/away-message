@@ -954,3 +954,17 @@ Character/OS generators, optional provider-backed generation and benchmarks
 are still intentionally unavailable. The default / entry still uses the
 old synchronous runtime; PR #204 must remain Draft until final production
 cutover, complete feature parity and combined #177 population verification.
+
+### P3.26 cold-restore defect found and corrected
+
+Chromium exposed an existing WorldState omission: triggered events survived
+serialization but dynamically injected *future/pending* events were never
+exported and could not survive a cold Worker. Moreover, hot load left queued
+events from the previous world in memory. World now persists only
+pendingProceduralEvents that are not derived from the authored catalog.
+Cold/hot restoration clears the old queue, reconstructs catalog entries,
+restores validated dynamic pending entries, and excludes triggered IDs.
+The save schema stays free of duplicate authored catalog entries; when
+no procedural queue exists the original snapshot shape is preserved.
+The Worker test exercises a distinct cold runtime and also hot-load queue
+eviction, rather than mistakenly reloading into the same populated owner.

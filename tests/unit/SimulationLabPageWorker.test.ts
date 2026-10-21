@@ -87,9 +87,28 @@ describe('#175 Worker-owned offline procedural event generation', () => {
       expect(value(9).eventCounts.pending).toBe(initial.eventCounts.pending + 2);
 
       await worker.receive({ id: 10, op: 'export' });
-      await worker.receive({ id: 11, op: 'load', snapshot: value(10) });
+      const saved = value(10);
+      expect(saved.world.pendingProceduralEvents.map((e: { id: string }) => e.id))
+        .toEqual(currentPreview.events.map((e: { id: string }) => e.id));
+      const coldReplies: SimulationWorkerReply[] = [];
+      const coldWorker = createSimulationWorkerRuntime(reply => { coldReplies.push(reply); });
+      try {
+        await coldWorker.receive({ id: 1, op: 'init', initialState: saved });
+        await coldWorker.receive({ id: 2, op: 'query', query: { kind: 'labPage' } });
+        const coldRead = coldReplies.find(r => r.type === 'result' && r.id === 2);
+        expect(coldRead).toMatchObject({ type: 'result', ok: true });
+        if (coldRead?.type === 'result' && coldRead.ok) {
+          expect((coldRead.value as { eventCounts: { pending: number } }).eventCounts.pending)
+            .toBe(initial.eventCounts.pending + 2);
+        }
+      } finally { coldWorker.close(); }
+      // Reloading the unchanged pre-injection world into the *same* instance
+      // must evict events from the former run; no stale pending queue leakage.
+      const clean = { ...saved, world: { ...saved.world, pendingProceduralEvents: [] },
+        narrative: { ...saved.narrative, pendingProceduralEvents: [] } };
+      await worker.receive({ id: 11, op: 'load', snapshot: clean });
       await worker.receive({ id: 12, op: 'query', query: { kind: 'labPage' } });
-      expect(value(12).eventCounts.pending).toBe(initial.eventCounts.pending + 2);
+      expect(value(12).eventCounts.pending).toBe(initial.eventCounts.pending);
     } finally { worker.close(); }
   });
 
