@@ -853,3 +853,32 @@ acceptance now minimizes Command Prompt with its actual titlebar
 control before opening the desktop icon, checks that the window really
 vanished, and uses a short actionable click timeout. This is a
 test journey correction, not a bypass of normal window occlusion.
+
+
+## P3.23 — Worker desktop System Utilities migration
+
+The Worker-first desktop now mounts Recycle Bin, Add/Remove Programs and
+Save / Load Game in the existing Orion window manager/taskbar/Start Menu.
+These reuse canonical VFS/software/save ownership; no main-thread
+SimulationEngine or legacy application wrappers are imported.
+
+- Recycle Bin fetches only 32 trash-file metadata rows at a time. Restore
+  and Empty are explicit \`VFS_RESTORE_TRASH\`/\`VFS_EMPTY_TRASH\` commands.
+  Permanent empty requires an in-panel second confirmation.
+- Add/Remove uses a new capped \`installedPrograms\` semantic query (64
+  non-portable/portable records maximum, excluding hardware, download ledgers,
+  VFS bodies and unrelated domain graph). A selected real installed ID is
+  passed only to canonical \`SOFTWARE_UNINSTALL\`, with explicit confirmation.
+- Save/Load uses the existing UI-only slot listing helper to enumerate
+  three manual slots and autosave; the sole full simulation save/load remains
+  in the Worker through \`WorkerGameSession.save/loadGame\`. A load releases
+  the previous Worker, clears all old UI window state immediately, and
+  cold-loads a fresh Dedicated Worker. The current slot cannot be deleted
+  while its cold-conversation reader may reference its saved pages.
+- New Chromium ScenarioR proves terminal-created/deleted VFS file restore,
+  in-OS Save As + unsaved minute loss after cold load, and Add/Remove
+  availability. All operations remain on the staging \`worker.html\` entry.
+
+The main '/' entry still uses the synchronous UI. This does NOT complete
+issue #175 or gate #177; production cutover remains blocked on remaining
+legacy UI parity and independent performance evidence.

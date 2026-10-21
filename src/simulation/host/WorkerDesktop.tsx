@@ -21,11 +21,15 @@ import { WorkerZipMatePanel } from './WorkerZipMatePanel';
 import { WorkerRetroAmpPanel } from './WorkerRetroAmpPanel';
 import { WorkerPhotoBoxPanel } from './WorkerPhotoBoxPanel';
 import { WorkerTerminalPanel } from './WorkerTerminalPanel';
+import { WorkerRecycleBinPanel, WorkerAddRemovePanel, WorkerSaveLoadPanel } from './WorkerSystemUtilities';
 import { getWorkerInstalledPrograms, getWorkerInstalledShortcuts } from './WorkerInstalledAppLinks';
 import type { WorkerGameSession } from './WorkerGameSession';
 
 const APPLICATIONS = [
   { id: 'terminal', label: 'Command Prompt', icon: '💻' },
+  { id: 'trash', label: 'Recycle Bin', icon: '🗑️' },
+  { id: 'addremove', label: 'Add/Remove Programs', icon: '📦' },
+  { id: 'savegame', label: 'Save / Load Game', icon: '💾' },
   { id: 'fileexplorer', label: 'My Computer', icon: '📁' },
   { id: 'notepad', label: 'Notepad', icon: '📝' },
   { id: 'pulse', label: 'Pulse Messenger', icon: '💬' },
@@ -81,10 +85,11 @@ export function WorkerDesktop({
   const profile = chrome?.osVersion ? getOsPresentationProfile(chrome.osVersion) : null;
   const installedShortcuts = desktop ? getWorkerInstalledShortcuts(desktop) : [];
   const installedPrograms = desktop ? getWorkerInstalledPrograms(desktop) : [];
-  const allowedApps = ['terminal', 'browser', 'fileexplorer', 'notepad', 'controlpanel', 'pulse',
+  const allowedApps = ['terminal', 'browser', 'fileexplorer', 'notepad', 'controlpanel', 'pulse', 'trash', 'addremove', 'savegame',
     ...installedPrograms.filter(program => program.available).map(program => program.id)];
   const resolveAppId = (id: string): string | null => ({
     terminal: 'terminal', browser: 'browser', fileexplorer: 'fileexplorer', notepad: 'notepad',
+    trash: 'trash', addremove: 'addremove', savegame: 'savegame',
     controlpanel: 'system', pulse: 'pulse', flashfetch: 'flashfetch',
   } as Record<string, string>)[id] ?? null;
 
@@ -183,6 +188,9 @@ function WorkerDesktopApp({ window: win, session, revision, osVersion, openDocum
   openArtwork: (path: string) => void;
   openAudio: (path: string) => void;
 }) {
+  if (win.appId === 'trash') return <WorkerRecycleBinPanel session={session} revision={revision} />;
+  if (win.appId === 'addremove') return <WorkerAddRemovePanel session={session} revision={revision} />;
+  if (win.appId === 'savegame') return <WorkerSaveLoadPanel session={session} />;
   if (win.appId === 'terminal') return <WorkerTerminalPanel session={session} windowId={win.id}
     osVersion={osVersion} />;
   if (win.appId === 'fileexplorer') {

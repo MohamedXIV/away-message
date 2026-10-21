@@ -35,6 +35,7 @@ import type {
   SimulationPulseProfileRead,
   SimulationChromeRead,
   SimulationDesktopRead,
+  SimulationInstalledProgramsRead,
   SimulationDirectoryRead,
   SimulationFileRead,
   SimulationChange,

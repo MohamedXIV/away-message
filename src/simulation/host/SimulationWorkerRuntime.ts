@@ -69,6 +69,7 @@ export function createSimulationWorkerRuntime(send: (message: SimulationWorkerRe
       case 'playerStatus': return engine.getPlayerStatusRead();
       case 'chrome': return engine.getChromeRead();
       case 'desktop': return engine.getDesktopRead();
+      case 'installedPrograms': return engine.getInstalledProgramsRead();
       case 'apps': return engine.getAppRead();
       case 'website': return engine.getWebsiteRead();
       case 'weatherBuddy': return engine.getWeatherBuddyRead();

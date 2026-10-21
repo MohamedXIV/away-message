@@ -8,7 +8,7 @@ import type {
   SimulationHudProjection, SimulationInstallerRead, SimulationArchiveRead, SimulationJobBoardRead, SimulationMailboxRead,
   SimulationMessengerRead, SimulationPlayerStatusRead, SimulationWeatherBuddyRead,
   SimulationPresenceRead, SimulationResidenceRead, SimulationSituationRead,
-  SimulationTransitRead, SimulationWebsiteRead, SimulationWorldRead,
+  SimulationTransitRead, SimulationWebsiteRead, SimulationWorldRead, SimulationInstalledProgramsRead,
 } from '../../engine/kernel/SimulationPublication';
 
 /** #175: Only whitelisted, bounded semantic/read models cross postMessage. */
@@ -18,6 +18,7 @@ export interface SimulationQueryResults {
   playerStatus: SimulationPlayerStatusRead;
   chrome: SimulationChromeRead;
   desktop: SimulationDesktopRead;
+  installedPrograms: SimulationInstalledProgramsRead;
   apps: SimulationAppRead;
   website: SimulationWebsiteRead;
   weatherBuddy: SimulationWeatherBuddyRead;
@@ -36,7 +37,7 @@ export interface SimulationQueryResults {
   transit: SimulationTransitRead;
 }
 export type SimulationQuery =
-  | { kind: 'hud' | 'world' | 'playerStatus' | 'chrome' | 'desktop' | 'apps' | 'presence' | 'situation' | 'residence' | 'transit' | 'website' | 'jobBoard' | 'mailbox' | 'weatherBuddy' }
+  | { kind: 'hud' | 'world' | 'playerStatus' | 'chrome' | 'desktop' | 'apps' | 'installedPrograms' | 'presence' | 'situation' | 'residence' | 'transit' | 'website' | 'jobBoard' | 'mailbox' | 'weatherBuddy' }
   | { kind: 'messenger'; maxContacts?: number }
   | { kind: 'actor'; actorId: string }
   | { kind: 'conversation'; actorId: string; offset?: number; limit?: number }

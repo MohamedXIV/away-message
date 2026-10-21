@@ -148,6 +148,14 @@ export interface SimulationDesktopRead {
     'appId' | 'name' | 'version'>>;
 }
 
+/** Dedicated, capped Add/Remove roster: no hardware, downloads or VFS bodies. */
+export interface SimulationInstalledProgramsRead {
+  revision: number;
+  programs: Array<Pick<import('../types').InstalledSoftwareRecord,
+    'id' | 'appId' | 'name' | 'version' | 'installedBytes' |
+    'isPortable' | 'isAdware' | 'installPath'>>;
+}
+
 /** UI-readable presence projection. Omits relationships, memories and chat history. */
 export interface SimulationPresenceRead {
   revision: number;
