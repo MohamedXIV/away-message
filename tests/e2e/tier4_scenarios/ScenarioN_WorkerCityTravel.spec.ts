@@ -18,7 +18,7 @@ test('Worker city travel and saved location', async ({ page }) => {
   await expect(page.getByTestId('worker-phase')).toHaveText('game');
   await page.getByRole('button', { name: 'city', exact: true }).click();
   await expect(page.getByTestId('worker-city-location')).toContainText('Starlight Café');
-  await page.getByRole('button', { name: 'Return to Room 104' }).click();
+  await page.getByRole('button', { name: 'Return home' }).click();
   await expect(page.getByTestId('worker-physical-room')).toBeVisible();
 });
 
