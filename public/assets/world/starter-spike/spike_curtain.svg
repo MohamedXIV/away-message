@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="72" height="380" viewBox="0 0 72 380">
+<defs><linearGradient id="c" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#7c4a52"/><stop offset=".35" stop-color="#5c333b"/><stop offset=".65" stop-color="#84525a"/><stop stop-color="#552f37"/></linearGradient></defs>
+<!-- vertical pleated fabric strip used as the Phaser Rope texture; the top edge stays pinned -->
+<rect width="72" height="380" fill="url(#c)"/>
+<g stroke="#3c2128" stroke-width="3" opacity=".65"><line x1="12" y1="0" x2="12" y2="380"/><line x1="30" y1="0" x2="30" y2="380"/><line x1="48" y1="0" x2="48" y2="380"/><line x1="62" y1="0" x2="62" y2="380"/></g>
+<rect width="72" height="10" fill="#42232b"/>
+</svg>

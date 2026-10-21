@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="120" height="220" viewBox="0 0 120 220">
+<!-- floor lamp: base, pole, tapered shade (fixture only; the practical glow is a separate emissive layer) -->
+<ellipse cx="60" cy="206" rx="42" ry="10" fill="#2b2f36"/>
+<rect x="55" y="96" width="10" height="110" fill="#3a3f47"/>
+<path d="M30 96 L90 96 L76 34 L44 34 Z" fill="#c9a86a"/>
+<path d="M30 96 L90 96 L84 78 L36 78 Z" fill="#b08e52"/>
+<rect x="44" y="24" width="32" height="12" rx="4" fill="#4a3c26"/>
+</svg>

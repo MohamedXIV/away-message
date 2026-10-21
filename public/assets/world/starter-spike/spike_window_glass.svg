@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="432" height="376" viewBox="0 0 432 376">
+<defs>
+  <linearGradient id="glass" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#a8dfe4" stop-opacity=".14"/><stop offset=".5" stop-color="#3f6a78" stop-opacity=".20"/><stop offset="1" stop-color="#132b34" stop-opacity=".28"/></linearGradient>
+</defs>
+<!-- window glass overlay: tints/reflects the exterior layers behind it without hiding them -->
+<rect width="432" height="376" fill="url(#glass)"/>
+<g stroke="#e7ffff" stroke-opacity=".10" stroke-width="6"><path d="M18 10 L150 366"/><path d="M62 6 L196 360"/></g>
+<rect width="432" height="376" fill="none" stroke="#0f1420" stroke-opacity=".35" stroke-width="3"/>
+</svg>

@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900">
+<defs>
+  <linearGradient id="wall" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#57406a"/><stop offset="1" stop-color="#3c2b4c"/></linearGradient>
+  <linearGradient id="floor" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#4b3a2c"/><stop offset="1" stop-color="#2b2018"/></linearGradient>
+  <mask id="openings">
+    <rect width="1600" height="900" fill="#fff"/>
+    <!-- punch the window opening (284,154 → 716,530) -->
+    <rect x="284" y="154" width="432" height="376" fill="#000"/>
+    <!-- punch the gallery-door opening (1438,98 → 1584,540) -->
+    <rect x="1438" y="98" width="146" height="442" fill="#000"/>
+  </mask>
+</defs>
+<!-- Cheap second-floor starter motel room, fixed architecture layer only.
+     Walls / ceiling trim / floor / baseboard / FIXED window + gallery-door frames.
+     Everything stateful or swappable (bed, desk, rug, lamp, curtain, foliage,
+     exterior backplate, parcels) is a separate authored layer. -->
+<g mask="url(#openings)">
+  <rect width="1600" height="900" fill="#141019"/>
+  <polygon points="0,0 1600,0 1600,640 0,700" fill="url(#wall)"/>
+  <polygon points="0,700 1600,640 1600,900 0,900" fill="url(#floor)"/>
+  <!-- faded period wallpaper stripes + water stain -->
+  <g opacity=".16" fill="#c9a76f"><rect y="120" width="1600" height="26"/><rect y="560" width="1600" height="18"/></g>
+  <ellipse cx="1210" cy="92" rx="150" ry="44" fill="#6b5a3c" opacity=".45"/>
+  <polygon points="0,688 1600,628 1600,648 0,708" fill="#241a2e"/>
+  <g stroke="#33241a" stroke-width="3" opacity=".55"><line x1="0" y1="760" x2="1600" y2="716"/><line x1="0" y1="836" x2="1600" y2="806"/></g>
+</g>
+<!-- FIXED window frame around the punched opening -->
+<g fill="#2a1f36" stroke="#120c18" stroke-width="6">
+  <rect x="244" y="114" width="512" height="40"/>
+  <rect x="244" y="530" width="512" height="44"/>
+  <rect x="244" y="114" width="40" height="460"/>
+  <rect x="716" y="114" width="40" height="460"/>
+</g>
+<!-- FIXED gallery-door frame -->
+<g fill="#2a1f36" stroke="#120c18" stroke-width="6">
+  <rect x="1404" y="64" width="180" height="34"/>
+  <rect x="1404" y="64" width="34" height="478"/>
+  <rect x="1580" y="64" width="20" height="478"/>
+</g>
+<rect x="1404" y="536" width="196" height="10" fill="#20172b"/>
+</svg>

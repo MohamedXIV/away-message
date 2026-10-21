@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="300" height="220" viewBox="0 0 300 220">
+<!-- wobbly laminate desk with cheap drawer unit -->
+<rect x="6" y="52" width="288" height="18" rx="4" fill="#6f5636"/>
+<rect x="6" y="70" width="288" height="6" fill="#4c3a22"/>
+<rect x="18" y="76" width="16" height="126" fill="#3b2d1b"/>
+<rect x="266" y="76" width="16" height="126" fill="#3b2d1b"/>
+<g><rect x="196" y="82" width="92" height="118" rx="6" fill="#57432a"/><rect x="204" y="94" width="76" height="30" rx="3" fill="#6f5636"/><rect x="204" y="132" width="76" height="30" rx="3" fill="#6f5636"/><circle cx="242" cy="109" r="4" fill="#2c2114"/><circle cx="242" cy="147" r="4" fill="#2c2114"/></g>
+<rect x="30" y="34" width="120" height="18" rx="3" fill="#22262b"/>
+<rect x="76" y="18" width="28" height="16" rx="3" fill="#31363c"/>
+<rect x="20" y="52" width="140" height="6" fill="#181b1f"/>
+</svg>

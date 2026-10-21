@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="220" height="150" viewBox="0 0 220 150">
+<!-- window-through wall AC / heater unit under the sill; fan grille is the ambient-motion target -->
+<rect x="6" y="12" width="208" height="120" rx="8" fill="#7d7f78"/>
+<rect x="6" y="12" width="208" height="14" rx="6" fill="#93968e"/>
+<g fill="#2f322f"><rect x="22" y="46" width="106" height="72" rx="4"/></g>
+<g stroke="#5c605b" stroke-width="4"><line x1="26" y1="58" x2="124" y2="58"/><line x1="26" y1="72" x2="124" y2="72"/><line x1="26" y1="86" x2="124" y2="86"/><line x1="26" y1="100" x2="124" y2="100"/></g>
+<g fill="#c8ccc4"><circle cx="160" cy="70" r="24" fill="#3a3d3a"/><path d="M160 50 A 20 20 0 0 1 178 66 L 160 70 Z"/><path d="M180 84 A 20 20 0 0 1 160 90 L 160 70 Z" opacity=".7"/></g>
+<g stroke="#23262a" stroke-width="4"><rect x="144" y="102" width="60" height="18" rx="3" fill="#5f625c"/></g>
+<rect x="6" y="128" width="208" height="10" rx="3" fill="#5a5c56"/>
+</svg>

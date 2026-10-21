@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="340" height="220" viewBox="0 0 340 220">
+<!-- cheap motel bed variant A: thin mattress, dated floral blanket -->
+<rect x="10" y="120" width="320" height="70" rx="8" fill="#4a3b2e"/>
+<rect x="18" y="72" width="304" height="66" rx="10" fill="#d8d2c4"/>
+<rect x="18" y="96" width="304" height="44" rx="8" fill="#8d5f68"/>
+<g fill="#a97680" opacity=".8"><circle cx="60" cy="118" r="8"/><circle cx="120" cy="112" r="7"/><circle cx="190" cy="120" r="8"/><circle cx="256" cy="112" r="7"/><circle cx="300" cy="118" r="6"/></g>
+<rect x="24" y="52" width="120" height="40" rx="12" fill="#e6e0d2"/>
+<rect x="10" y="184" width="320" height="16" rx="4" fill="#332619"/>
+</svg>

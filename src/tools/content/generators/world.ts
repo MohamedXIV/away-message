@@ -108,6 +108,8 @@ export function generateWorldRegistrySource(tables: ContentTables): string {
   lines.push('  name: string;');
   lines.push('  transitAccess: GeneratedPlaceTransitAccess[];');
   lines.push('  legacyIds?: string[];');
+  lines.push('  /** QA-only technical slice: excluded from player-facing world surfaces. */');
+  lines.push('  qaFixture?: boolean;');
   lines.push('  spatialBounds?: GeneratedSpatialBounds;');
   lines.push('  entryPosition?: GeneratedSpatialPosition;');
   lines.push('}');
@@ -169,6 +171,7 @@ export function generateWorldRegistrySource(tables: ContentTables): string {
     lines.push(`    name: ${tsString(String(r['name'] ?? ''))},`);
     lines.push(`    transitAccess: [${access.map((a) => `{ stopId: ${tsString(a.stopId)}, walkMinutes: ${a.walkMinutes} }`).join(', ')}],`);
     lines.push(`    legacyIds: [${legacyIds.map((t) => tsString(t)).join(', ')}],`);
+    if (r['qaFixture'] === true) lines.push('    qaFixture: true,');
     const spatialBounds = spatialBoundsLiteral(r['spatialBounds']);
     const entryPosition = spatialPositionLiteral(r['entryPosition']);
     if (spatialBounds) lines.push(`    spatialBounds: ${spatialBounds},`);

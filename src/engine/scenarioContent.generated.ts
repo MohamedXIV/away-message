@@ -1,8 +1,8 @@
 // GENERATED — do not edit by hand.
-// Source: content/store.json (content v1690250f). Regenerate: npm run content:pull.
+// Source: content/store.json (content v4d320275). Regenerate: npm run content:pull.
 import type { ScenarioDefinition } from './scenario/types';
 
-export const SCENARIO_CONTENT_VERSION = "1690250f";
+export const SCENARIO_CONTENT_VERSION = "4d320275";
 
 export const GENERATED_SCENARIOS = [
   {

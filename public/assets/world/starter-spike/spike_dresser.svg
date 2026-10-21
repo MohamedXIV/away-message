@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="240" height="240" viewBox="0 0 240 240">
+<!-- dresser / storage with two drawers -->
+<rect x="8" y="24" width="224" height="192" rx="6" fill="#5a4127"/>
+<rect x="8" y="24" width="224" height="10" fill="#6d5231"/>
+<rect x="22" y="48" width="196" height="60" rx="4" fill="#6f5330"/>
+<rect x="22" y="118" width="196" height="60" rx="4" fill="#6f5330"/>
+<g fill="#241a0f"><circle cx="120" cy="78" r="6"/><circle cx="120" cy="148" r="6"/></g>
+<g stroke="#3a2a16" stroke-width="3"><line x1="30" y1="102" x2="210" y2="102"/><line x1="30" y1="172" x2="210" y2="172"/></g>
+<rect x="14" y="216" width="212" height="14" rx="3" fill="#332414"/>
+</svg>

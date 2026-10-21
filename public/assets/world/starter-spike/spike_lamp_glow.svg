@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="260" height="300" viewBox="0 0 260 300">
+<defs><radialGradient id="glow" cx=".5" cy=".32" r=".55"><stop offset="0" stop-color="#ffdf9e" stop-opacity=".85"/><stop offset=".55" stop-color="#ffcf72" stop-opacity=".30"/><stop stop-color="#ffb74d" stop-opacity="0"/></radialGradient></defs>
+<!-- additive emissive layer: warm practical light spilling from the lamp shade -->
+<ellipse cx="130" cy="100" rx="128" ry="120" fill="url(#glow)"/>
+<ellipse cx="130" cy="86" rx="52" ry="30" fill="#fff0c4" opacity=".55"/>
+</svg>

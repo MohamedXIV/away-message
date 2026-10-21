@@ -273,6 +273,17 @@ export const CONTENT_ROW_SCHEMAS = {
     motionType: stringCell(),
     motionSpeed: numberCell(0),
     motionAmplitude: numberCell(0),
+    // Presentation-only layering flags (#167): backdrop props render below the
+    // view image, masked props clip their layer to the authored window rect,
+    // variant props share a swap group, emissive props use additive blending.
+    renderLayer: stringCell('auto'),
+    maskZone: booleanCell(false),
+    swapGroup: stringCell(),
+    variant: stringCell(),
+    blendMode: stringCell('normal'),
+    // Authored practical/ambience profiles attached to a rendered prop.
+    lightProfileIds: z.array(z.string()).default([]),
+    audioProfileIds: z.array(z.string()).default([]),
     tags: z.array(z.string()).default([]),
   }),
   districts: z.object({
@@ -287,6 +298,10 @@ export const CONTENT_ROW_SCHEMAS = {
     name: stringCell(),
     transitAccess: z.array(z.object({ stopId: z.string(), walkMinutes: z.number() })).default([]),
     legacyIds: z.array(z.string()).default([]),
+    // Technical vertical slices (e.g. the #167 room spike) live in the same
+    // canonical catalog but are QA fixtures, not player-facing world content.
+    // Validators enforce the isolation invariants; see validators/world.ts.
+    qaFixture: booleanCell(false),
     spatialBounds: spatialBoundsSchema.optional(),
     entryPosition: spatialPositionSchema.optional(),
   }),

@@ -18,6 +18,26 @@ export interface AmbientMotionDef {
   periodSeconds?: number; // Period for cyclic events like light sweeps
 }
 
+/**
+ * A hanging soft surface (issue #167 curtain experiment). It is carried
+ * beside — not inside — the rigid ambient-motion list because it deforms
+ * vertices through Phaser's Rope instead of applying a transform, and it
+ * must never be driven by Matter.js cloth.
+ */
+export interface SoftSurfaceMotionDef {
+  id: string;
+  targetName: string;
+  type: 'soft_sway';
+  /** Oscillation frequency in Hz. */
+  speed?: number;
+  /** Free-edge sway amplitude as a fraction of the strip length (0..1). */
+  amplitude?: number;
+  /** Rope segment count down the strip. */
+  segments?: number;
+  windFactor?: number;
+  phaseOffset?: number;
+}
+
 export interface AmbientMotionResult {
   xOffset: number;
   yOffset: number;
