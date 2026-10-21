@@ -70,6 +70,48 @@ export function createSimulationWorkerRuntime(send: (message: SimulationWorkerRe
       case 'chrome': return engine.getChromeRead();
       case 'desktop': return engine.getDesktopRead();
       case 'installedPrograms': return engine.getInstalledProgramsRead();
+      case 'labPage': {
+        const actorPage = request.actorPage ?? 0;
+        const meetingPage = request.meetingPage ?? 0;
+        if (![actorPage, meetingPage].every(n => Number.isSafeInteger(n) && n >= 0 && n <= 4096)) {
+          throw new Error('Lab indices must be bounded nonnegative integers');
+        }
+        // This is an explicitly opened developer diagnostic, not a player read.
+        // The canonical owner computes one page; strip every large history and
+        // the 500-name image picker before crossing the Worker boundary.
+        const read = engine.getLabInspectorRead(actorPage, meetingPage);
+        return {
+          revision: read.revision,
+          day: read.day,
+          currentOsId: read.currentOsId,
+          eventCounts: read.eventCounts,
+          roster: { total: read.roster.total, procedural: read.roster.procedural },
+          actors: read.actors.slice(0, 16).map(actor => ({
+            id: actor.id,
+            displayName: actor.displayName.slice(0, 80),
+            handle: actor.handle.slice(0, 80),
+            relationship: actor.relationship,
+            stage: actor.stage,
+            dailyMood: actor.dailyMood,
+            status: actor.status,
+            memoryCount: actor.memories.length,
+            promiseCount: actor.promises.length,
+            recentMemories: actor.memories.slice(-3).map(m => ({
+              id: m.id, kind: m.kind, day: m.day, text: m.text.slice(0, 160),
+            })),
+          })),
+          appointments: {
+            total: read.appointments.total,
+            todayCount: read.appointments.todayCount,
+            page: read.appointments.page.slice(0, 16).map(appt => ({
+              id: appt.id, characterId: appt.characterId,
+              locationId: appt.locationId, targetDay: appt.targetDay,
+              status: appt.status, rsvp: appt.rsvp,
+            })),
+          },
+          body: read.body,
+        };
+      }
       case 'apps': return engine.getAppRead();
       case 'website': return engine.getWebsiteRead();
       case 'weatherBuddy': return engine.getWeatherBuddyRead();

@@ -344,6 +344,28 @@ export interface SimulationLabInspectorRead {
   };
 }
 
+/** Dedicated read-only developer AI Lab page. Never use as a player-facing query. */
+export interface SimulationLabPageRead {
+  revision: number;
+  day: number;
+  currentOsId: string | null;
+  eventCounts: SimulationLabInspectorRead['eventCounts'];
+  roster: Pick<SimulationLabInspectorRead['roster'], 'total' | 'procedural'>;
+  actors: Array<Pick<SimulationLabInspectorRead['actors'][number],
+    'id' | 'displayName' | 'handle' | 'relationship' | 'stage' | 'dailyMood' | 'status'> & {
+    memoryCount: number;
+    promiseCount: number;
+    recentMemories: Array<Pick<import('../types').CoreMemory, 'id' | 'kind' | 'day' | 'text'>>;
+  }>;
+  appointments: {
+    total: number;
+    todayCount: number;
+    page: Array<Pick<SimulationLabInspectorRead['appointments']['page'][number],
+      'id' | 'characterId' | 'locationId' | 'targetDay' | 'status' | 'rsvp'>>;
+  };
+  body: SimulationLabInspectorRead['body'];
+}
+
 /** Player's active journey only: no NPC trips, all-actor positions or transit network. */
 export interface SimulationTransitRead {
   revision: number;

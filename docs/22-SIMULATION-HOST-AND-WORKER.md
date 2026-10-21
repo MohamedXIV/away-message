@@ -882,3 +882,25 @@ SimulationEngine or legacy application wrappers are imported.
 The main '/' entry still uses the synchronous UI. This does NOT complete
 issue #175 or gate #177; production cutover remains blocked on remaining
 legacy UI parity and independent performance evidence.
+
+
+## P3.24 — AI Lab diagnostic inspector on canonical Worker (partial parity)
+
+The original AI Lab imports the synchronous SimulationEngine and mixes
+private developer diagnostics, BYOK provider benchmarking, procedural events,
+OS releases, newcomer generation and character image generation. It must not
+be imported into the Worker desktop unchanged.
+
+The staging Worker desktop now has a read-only AI Lab Inspector backed by
+the new labPage query. Its indices must be nonnegative safe integers capped
+to 4096. The canonical Worker projects at most 16 actors, 16 appointments
+and three truncated 160-character memories per actor, plus source-backed
+body/rent and event totals. The 500-item image option list and complete
+memories/promises NEVER cross postMessage. This diagnostic must not be
+reused as a player-facing actor or relationship API.
+
+The authored desktop handles minimize/restore and cold-session teardown.
+The AI Lab's original generator, BYOK/provider settings, benchmarks, image,
+OS release and newcomer injection remain unavailable and visibly labeled.
+This partial milestone is not full app parity; root / is still the legacy
+runtime. Keep #175 open and PR #204 Draft pending other cutover gates.
