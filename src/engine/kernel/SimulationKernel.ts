@@ -1,7 +1,7 @@
 import type { SimulationState as TransportSimulationState, SimulationAction, ActionResult, HardwareState, MessageRecord } from '../types';
 import type { Fulfillment } from '../DeliveryEngine';
 import type { MyPlaceProfile } from '../MyPlaceEngine';
-import type { BuddyPresence, BuddyMetVia } from '../types';
+import type { BuddyCharacter, BuddyPresence, BuddyMetVia } from '../types';
 import type { CharacterDefinition } from '../CharacterEngine';
 import type { OsRelease } from '../OsCatalog';
 import { ProceduralDirector, type DirectorGenerateOptions } from '../ProceduralDirector';
@@ -1167,6 +1167,29 @@ export class SimulationKernel {
     return this.publishOwnerMutation(['transit'],
       () => this.npc.relocateActorSpatially(...args),
       (after) => JSON.stringify(before) !== JSON.stringify(after));
+  }
+
+  /**
+   * Change physical scope only. Identity, relationships, memories, handles and
+   * conversations stay untouched; becoming remote also evicts every local
+   * trip, settled place and XYZ position from the movement owner.
+   */
+  public setActorReach(actorId: string, reach: 'local' | 'remote'): ActionResult<BuddyCharacter> {
+    const current = this.social.getBuddy(actorId);
+    if (!current) return { success: false, error: `Buddy not found: ${actorId}` };
+    const currentReach = current.reach === 'remote' ? 'remote' : 'local';
+    if (currentReach === reach) return { success: true, data: current };
+    try {
+      const updated = this.publishOwnerMutation(['social', 'transit'], () => {
+        const next = this.social.setBuddyReach(actorId, reach);
+        if (!next) throw new Error(`Buddy not found: ${actorId}`);
+        if (reach === 'remote') this.npc.movement.clearActorLocalPresence(next.id);
+        return next;
+      });
+      return { success: true, data: updated };
+    } catch (err: unknown) {
+      return { success: false, error: (err as Error).message };
+    }
   }
 
   public clearActorSpatialForTravel(...args: Parameters<NpcComputerSimulationRuntime['clearActorSpatialForTravel']>): ReturnType<NpcComputerSimulationRuntime['clearActorSpatialForTravel']> {

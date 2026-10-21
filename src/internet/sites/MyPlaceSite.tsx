@@ -4,12 +4,7 @@ import { useSimulationStore } from '../../store/useSimulationStore';
 import { useMyPlacePageRead } from '../../store/useBoundedSimulationRead';
 import { soundManager } from '../../audio/SoundManager';
 import { getMyPlaceReleaseById } from '../../engine/MyPlaceCatalog';
-import { buildCharacter } from '../../engine/CharacterEngine';
-
-function slugBuddyId(value: string): string {
-  const slug = value.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 32);
-  return /^[a-z]/.test(slug) ? slug : `pal_${slug}`;
-}
+import { findBoundSocialActor } from '../../engine/social/IdentityPromotion';
 
 // MySpace 2005 heavily inspired — table layout, tiled bg, contact box, customizable per character, AI-mutable.
 
@@ -39,7 +34,7 @@ export const MyPlaceSite: React.FC<SiteRouteProps> = (props) => {
     return {
       username,
       displayName: username.replace(/[_-]/g, ' '),
-      headline: `Oakhaven local • myplace.local/${username}`,
+      headline: `MyPlace member • myplace.local/${username}`,
       bio: `Hi, I'm ${username}. Found via MyPlace directory.`,
       interests: ['MyPlace', 'Oakhaven', 'Music'],
       songTitle: '— none —',
@@ -190,10 +185,11 @@ export const MyPlaceSite: React.FC<SiteRouteProps> = (props) => {
                 </button>
                 {(() => {
                   if (isOwnProfile) return null;
-                  const already =
-                    engine.social.getBuddy(currentUsername) ??
-                    engine.social.getBuddies().find((b) => b.handle === currentUsername);
-                  if (already) {
+                  const existingActor = findBoundSocialActor(engine.social.getBuddies(), {
+                    username: currentUsername,
+                    handle: currentUsername,
+                  });
+                  if (existingActor && engine.social.isKnown(existingActor.id)) {
                     return (
                       <div className="w-full bg-green-50 border border-green-300 text-green-800 text-xs py-1 text-center font-bold">
                         ✓ In your Pulse list — say hi!
@@ -206,18 +202,27 @@ export const MyPlaceSite: React.FC<SiteRouteProps> = (props) => {
                         onClick={() => {
                           try {
                             const npc = engine.myplace.getNpcProfile(currentUsername);
-                            const { definition } = buildCharacter({
-                              id: slugBuddyId(currentUsername),
-                              displayName: profile.displayName.slice(0, 40),
-                              handle: currentUsername.slice(0, 40),
-                              archetype: npc?.archetype ?? 'regular',
-                              metVia: 'myplace',
-                              createdDay: time.day,
-                              status: 'acquaintance',
+                            const res = dispatchAction({
+                              type: 'SOCIAL_PROMOTE_SURFACE_IDENTITY',
+                              identity: {
+                                source: 'myplace',
+                                username: currentUsername,
+                                handle: currentUsername,
+                                displayName: profile.displayName,
+                                archetype: npc?.archetype,
+                                createdDay: time.day,
+                              },
+                              silent: true,
                             });
-                            const res = dispatchAction({ type: 'SOCIAL_ADD_BUDDY', buddy: definition, silent: true });
                             if (res.success) {
-                              setFriendNotice(`${profile.displayName} added! Say hi on Pulse.`);
+                              const data = res.data as {
+                                buddy?: { displayName?: string };
+                                created?: boolean;
+                              } | undefined;
+                              const name = data?.buddy?.displayName ?? profile.displayName;
+                              setFriendNotice(data?.created === false
+                                ? `${name} is already in your Pulse contacts.`
+                                : `${name} added! Say hi on Pulse.`);
                               soundManager.play('invite');
                             } else {
                               setFriendNotice(res.error ?? 'Could not add friend.');

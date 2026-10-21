@@ -203,7 +203,7 @@ export class MyPlaceSocialCycle {
   }
 
   /** P5.4 stub MyPlace pages for a buddy (myplace username when known, else handle/id). */
-  public ensureMyPlaceStub(buddy: { handle?: string; id: string; displayName: string; archetype?: any; backstory?: { label?: string; bioSeed?: string } }): void {
+  public ensureMyPlaceStub(buddy: { handle?: string; id: string; displayName: string; archetype?: any; reach?: 'local' | 'remote'; backstory?: { label?: string; bioSeed?: string } }): void {
     try {
       // One page per buddy: prefer the registry myplace username so links stay canonical.
       const username = SEED_BY_ID[buddy.id]?.myplace || buddy.handle || buddy.id;
@@ -211,6 +211,7 @@ export class MyPlaceSocialCycle {
         username,
         displayName: buddy.displayName,
         archetype: buddy.archetype,
+        reach: buddy.reach ?? SEED_BY_ID[buddy.id]?.reach,
         backstory: buddy.backstory ?? SEED_BY_ID[buddy.id]?.backstory ?? undefined,
       });
       // Also index by raw id so MyPlace routing works with either key
@@ -219,6 +220,7 @@ export class MyPlaceSocialCycle {
           username: buddy.id,
           displayName: buddy.displayName,
           archetype: buddy.archetype,
+          reach: buddy.reach ?? SEED_BY_ID[buddy.id]?.reach,
           backstory: buddy.backstory ?? SEED_BY_ID[buddy.id]?.backstory ?? undefined,
         });
       }

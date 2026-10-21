@@ -24,6 +24,7 @@ import {
   traitsForBuddy,
   validateCharacterId,
 } from './characterTemplates';
+import { resolveReachForMetVia } from './social/ReachPolicy';
 
 export interface CharacterMetadata {
   archetype: CharacterArchetype;
@@ -45,7 +46,7 @@ export interface BuildCharacterOptions {
   initialRelationships?: Partial<RelationshipDimensions>;
   /** Fixed temperament override (manual/AI-lab). Defaults to archetype + stable jitter. */
   traits?: Partial<CharacterTraits>;
-  /** Physical vs far-away (online-source newcomers arrive remote). */
+  /** Explicit canonical reach. Omit only to let metVia/source decide. */
   reach?: 'local' | 'remote';
   appearance?: { hair?: string; eyes?: string };
   languages?: Array<{ lang: string; level: number }>;
@@ -135,8 +136,9 @@ export function buildCharacter(options: BuildCharacterOptions): BuiltCharacter {
     metVia: options.metVia ?? 'intro',
     isProcedural: true,
     createdDay: options.createdDay ?? 1,
-    // Free roster identity (validated, capped; remote for online-source newcomers).
-    reach: options.reach === 'remote' ? 'remote' : 'local',
+    // Free roster identity (validated, capped). An online-source actor can
+    // never silently default to local; authored local sources stay local.
+    reach: options.reach ?? resolveReachForMetVia(options.metVia),
     appearance: {
       hair: String(options.appearance?.hair || 'brown').trim().slice(0, 24) || 'brown',
       eyes: String(options.appearance?.eyes || 'brown').trim().slice(0, 24) || 'brown',
@@ -210,7 +212,11 @@ export function validatePersistedBuddy(def: unknown): { ok: boolean; error?: str
       isProcedural: d.isProcedural !== false,
       createdDay: typeof d.createdDay === 'number' ? d.createdDay : 1,
       // Free roster identity backfills (older docs predate these fields).
-      reach: d.reach === 'remote' ? 'remote' : 'local',
+      // Derive missing reach from the recorded source so legacy online-only
+      // profiles cannot return as accidental local actors.
+      reach: d.reach === 'local' || d.reach === 'remote'
+        ? d.reach
+        : resolveReachForMetVia(d.metVia as BuddyMetVia | undefined),
       appearance: {
         hair: String((d.appearance as { hair?: unknown } | undefined)?.hair || 'brown').trim().slice(0, 24) || 'brown',
         eyes: String((d.appearance as { eyes?: unknown } | undefined)?.eyes || 'brown').trim().slice(0, 24) || 'brown',

@@ -45,10 +45,16 @@ export function ensureVenueRoleCharacter(
   source: VenueCharacterSimulationSource,
   options: EnsureVenueRoleCharacterOptions,
 ): BuddyCharacter {
+  if (options.character.reach === 'remote') {
+    throw new Error('Remote actors cannot hold a local venue role.');
+  }
   const actorId = options.character.id;
   let buddy = source.social.getBuddy(actorId);
   if (!buddy) {
     buddy = source.social.registerBuddy(buildCharacter(options.character).definition);
+  }
+  if (buddy.reach === 'remote') {
+    throw new Error('Remote actors cannot hold a local venue role.');
   }
 
   const place = source.getNpcPlaceState(actorId);

@@ -225,6 +225,24 @@ export class SocialEngine {
   }
 
   /**
+   * Physical scope changed without touching identity, relationships,
+   * memories or conversations. Physical-state eviction is coordinated by the
+   * kernel owner that also owns mobility/spatial state.
+   */
+  public setBuddyReach(rawId: string, reach: 'local' | 'remote'): BuddyCharacter | null {
+    const changed = this.roster.setReach(rawId, reach);
+    if (!changed) return null;
+    if (changed.previousReach !== changed.reach) {
+      this.eventBus.emit('social:buddy_reach_changed', {
+        buddyId: changed.id,
+        previousReach: changed.previousReach,
+        reach: changed.reach,
+      });
+    }
+    return this.getBuddy(changed.id) ?? null;
+  }
+
+  /**
    * Remove a buddy (lifecycle: gone/blocked cleanup). No one is sacred —
    * anyone can leave; the sharp-event governor (one active sharp at a time)
    * is what keeps departures rare, not identity.

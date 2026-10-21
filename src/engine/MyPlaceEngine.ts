@@ -72,6 +72,7 @@ export function buildRosterProfile(input: {
   username: string;
   displayName: string;
   archetype?: CharacterArchetype;
+  reach?: 'local' | 'remote';
   backstory?: { label?: string; bioSeed?: string };
 }): MyPlaceProfile {
   const archetype: CharacterArchetype = input.archetype && CHARACTER_ARCHETYPES[input.archetype] ? input.archetype : 'regular';
@@ -80,7 +81,7 @@ export function buildRosterProfile(input: {
   return {
     username: input.username,
     displayName: input.displayName,
-    headline: `${input.displayName} • Oakhaven local`,
+    headline: `${input.displayName} • ${input.reach === 'remote' ? 'Online friend' : 'Oakhaven local'}`,
     bio: bioSeed || template.personaHint,
     interests: [...template.defaultInterests],
     songTitle: template.defaultSong,
@@ -128,6 +129,7 @@ export class MyPlaceEngine {
           username: b.myplace,
           displayName: b.displayName,
           archetype: b.archetype,
+          reach: b.reach,
           backstory: b.backstory ?? undefined,
         }));
       }
@@ -275,7 +277,7 @@ export class MyPlaceEngine {
    * Stub is derived from the archetype template + backstory flavor (not
    * hardcoded per-id), so any buddy gets a sensible page on first sight.
    */
-  public ensureNpcProfile(input: { username: string; displayName: string; archetype?: CharacterArchetype; backstory?: { label?: string; bioSeed?: string } }): MyPlaceProfile {
+  public ensureNpcProfile(input: { username: string; displayName: string; archetype?: CharacterArchetype; reach?: 'local' | 'remote'; backstory?: { label?: string; bioSeed?: string } }): MyPlaceProfile {
     const existing = this.npcProfiles.get(input.username);
     if (existing) return copyProfile(existing);
     const stub = buildRosterProfile(input);

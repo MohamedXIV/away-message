@@ -1,9 +1,14 @@
-import type { ActionResult, SimulationAction } from '../types';
+import type { ActionResult, BuddyCharacter, SimulationAction } from '../types';
 import type { CoreDomainOwners } from './CoreDomainOwners';
 import type { PlayerContactCoordination } from './PlayerContactCoordination';
 import type { RelationshipContinuity } from './RelationshipContinuity';
 import { validatePersistedBuddy } from '../CharacterEngine';
 import { pickMediationThanks } from '../characterTemplates';
+import {
+  buildPromotedSurfaceCharacter,
+  findBoundSocialActor,
+} from '../social/IdentityPromotion';
+import { isOnlineOriginSource } from '../social/ReachPolicy';
 
 /**
  * All Social commands (inbound/outbound messages, contacts, relationship
@@ -17,6 +22,34 @@ export class SocialInteractionCommands {
     private readonly relationshipContinuity: RelationshipContinuity,
     private readonly publishState: () => void,
   ) {}
+
+  /**
+   * Register one canonical actor plus the social consequences of meeting.
+   * Identity registration, origin memory and handle discovery stay together
+   * whether the actor came from a generated newcomer or a surface promotion.
+   */
+  private admitBuddy(
+    definition: BuddyCharacter,
+    introText: string | undefined,
+    silent: boolean,
+    currentMinutes: number,
+  ): BuddyCharacter {
+    const registered = this.owners.social.registerBuddy(definition);
+    // P3 origin memory: every buddy remembers how you met (immortal, shown in prompts)
+    const meetDay = this.owners.clock.getTime().day;
+    this.owners.social.addCoreMemory(registered.id, {
+      text: `First met on Day ${meetDay} via ${registered.metVia ?? 'intro'}.`,
+      kind: 'first_meeting',
+      day: meetDay,
+    });
+    // Free roster: meeting someone IS learning their handle (contacts are earned).
+    this.owners.social.learnHandle(registered.id, registered.handle);
+    if (!silent) {
+      const text = (introText?.trim() || `hey, i'm ${registered.displayName} — nice meeting you!`).slice(0, 500);
+      this.owners.social.sendMessage(registered.id, registered.id, 'player', text, currentMinutes, true, ['intro', 'newcomer']);
+    }
+    return registered;
+  }
 
   public dispatch(action: SimulationAction, currentMinutes: number): ActionResult | null {
     switch (action.type) {
@@ -110,21 +143,13 @@ export class SocialInteractionCommands {
         try {
           const checked = validatePersistedBuddy(action.buddy);
           if (!checked.ok || !checked.definition) return { success: false, error: checked.error ?? 'Invalid buddy definition.' };
-          const registered = this.owners.social.registerBuddy(checked.definition);
-          // P3 origin memory: every buddy remembers how you met (immortal, shown in prompts)
-          const meetDay = this.owners.clock.getTime().day;
-          this.owners.social.addCoreMemory(registered.id, {
-            text: `First met on Day ${meetDay} via ${registered.metVia ?? 'intro'}.`,
-            kind: 'first_meeting',
-            day: meetDay,
-          });
-          // Free roster: meeting someone IS learning their handle (contacts are earned).
-          this.owners.social.learnHandle(registered.id, registered.handle);
+          const registered = this.admitBuddy(
+            checked.definition,
+            action.introText,
+            !!action.silent,
+            currentMinutes,
+          );
           // 'social:buddy_registered' fans out to attitudes + MyPlace stub (see registerInternalEventHandlers)
-          if (!action.silent) {
-            const text = (action.introText?.trim() || `hey, i'm ${registered.displayName} — nice meeting you!`).slice(0, 500);
-            this.owners.social.sendMessage(registered.id, registered.id, 'player', text, currentMinutes, true, ['intro', 'newcomer']);
-          }
           this.owners.telemetry.logEvent('social', 'buddy_added', currentMinutes, {
             buddyId: registered.id,
             metVia: registered.metVia ?? 'intro',
@@ -132,6 +157,83 @@ export class SocialInteractionCommands {
           });
           this.publishState();
           return { success: true, data: registered };
+        } catch (err: unknown) {
+          return { success: false, error: (err as Error).message };
+        }
+      }
+
+      case 'SOCIAL_PROMOTE_SURFACE_IDENTITY': {
+        try {
+          const identity = action.identity;
+          const username = String(identity?.username ?? '').trim().slice(0, 40);
+          if (!username) return { success: false, error: 'A surface identity needs a username.' };
+          if (!identity || !isOnlineOriginSource(identity.source)) {
+            return { success: false, error: 'Only online surface identities can be promoted here.' };
+          }
+          const normalized = {
+            ...identity,
+            username,
+            handle: String(identity.handle ?? '').trim().slice(0, 40) || username,
+          };
+
+          // An explicit authored binding must resolve, never silently fork.
+          const canonicalBinding = String(identity.canonicalActorId ?? '').trim();
+          const explicitlyBound = canonicalBinding
+            ? this.owners.social.getBuddy(canonicalBinding)
+            : undefined;
+          if (canonicalBinding && !explicitlyBound) {
+            return {
+              success: false,
+              error: `Canonical actor binding not found: ${canonicalBinding}`,
+            };
+          }
+
+          // Bind to an existing canonical actor before attempting registration.
+          // This prevents repeat clicks, alternate handles and authored MyPlace
+          // aliases from creating a second identity for the same person.
+          const existing = explicitlyBound
+            ?? findBoundSocialActor(this.owners.social.getBuddies(), normalized);
+          if (existing) {
+            const wasKnown = this.owners.social.isKnown(existing.id);
+            this.owners.social.learnHandle(existing.id, existing.handle);
+            if (!wasKnown && this.owners.social.isKnown(existing.id)) {
+              this.owners.telemetry.logEvent('social', 'surface_identity_bound', currentMinutes, {
+                buddyId: existing.id,
+                source: normalized.source,
+              });
+              this.publishState();
+            }
+            return {
+              success: true,
+              data: {
+                buddy: existing,
+                created: false,
+                alreadyKnown: this.owners.social.isKnown(existing.id),
+              },
+            };
+          }
+
+          const built = buildPromotedSurfaceCharacter(
+            normalized,
+            this.owners.clock.getTime().day,
+          );
+          if (this.owners.social.getBuddy(built.definition.id)) {
+            return {
+              success: false,
+              error: `Surface identity '${username}' conflicts with an existing actor.`,
+            };
+          }
+          const registered = this.admitBuddy(built.definition, undefined, true, currentMinutes);
+          this.owners.telemetry.logEvent('social', 'surface_identity_promoted', currentMinutes, {
+            buddyId: registered.id,
+            source: normalized.source,
+            reach: registered.reach ?? 'local',
+          });
+          this.publishState();
+          return {
+            success: true,
+            data: { buddy: registered, created: true, alreadyKnown: true },
+          };
         } catch (err: unknown) {
           return { success: false, error: (err as Error).message };
         }
