@@ -202,6 +202,25 @@ export class NpcMovementRuntime {
   }
 
   /**
+   * Remote actors have no local physical scope. Evict settled XYZ, the transit
+   * planning cache and any planned/active commitment in one owner write.
+   */
+  public clearActorLocalPresence(actorId: string): void {
+    const canonicalId = this.owners.social.getBuddy(actorId)?.id ?? actorId;
+    const hadTrip = this.mobility.trips[canonicalId] !== undefined;
+    const hadPlace = this.mobility.places[canonicalId] !== undefined;
+    const hadSpatial = this.positions[canonicalId] !== undefined;
+    if (!hadTrip && !hadPlace && !hadSpatial) return;
+    this.clearActorSpatialForTravel(canonicalId);
+    const trips = { ...this.mobility.trips };
+    const places = { ...this.mobility.places };
+    delete trips[canonicalId];
+    delete places[canonicalId];
+    this.mobility = { trips, places };
+    this.invalidate();
+  }
+
+  /**
    * Transit arrival handoff: resolve an authored destination entry point
    * exactly once, without calculating or changing trip timing/fare.
    */
@@ -230,6 +249,13 @@ export class NpcMovementRuntime {
    * Un-authored actors fall back to the #37 place cache during migration.
    */
   public getNpcPlaceState(actorId: string, atMinute?: number): NpcPlaceQuery {
+    // Reach is Social truth. Even a malformed/imported mobility slice must
+    // never project a remote or departed actor into a local place.
+    const buddy = this.owners.social.getBuddy(actorId);
+    if (buddy?.reach === 'remote'
+      || this.owners.social.getActorCondition(actorId)?.lifecycle === 'departed') {
+      return { status: 'unknown' };
+    }
     const mobility = getNpcPlaceState(
       this.mobility,
       actorId,

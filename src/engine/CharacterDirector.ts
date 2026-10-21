@@ -12,6 +12,7 @@ import {
   pickTemplateName,
 } from './characterTemplates';
 import { parseNewcomer, type NewcomerAi } from '../ai/characterSchemas';
+import { resolveReachForMetVia } from './social/ReachPolicy';
 
 export interface NewcomerRequest {
   metVia: BuddyMetVia;
@@ -98,10 +99,14 @@ function buildIntroText(displayName: string, archetype: CharacterArchetype, seed
   return `${line} http://myplace.local/${myplaceId}`;
 }
 
-function templateProfilePatch(displayName: string, archetype: CharacterArchetype): NewcomerProfilePatch {
+function templateProfilePatch(
+  displayName: string,
+  archetype: CharacterArchetype,
+  reach: 'local' | 'remote',
+): NewcomerProfilePatch {
   const template = CHARACTER_ARCHETYPES[archetype] ?? CHARACTER_ARCHETYPES['regular'];
   return {
-    headline: `${displayName} • Oakhaven local`,
+    headline: `${displayName} • ${reach === 'remote' ? 'Online friend' : 'Oakhaven local'}`,
     bio: template.personaHint,
     interests: [...template.defaultInterests],
     songTitle: template.defaultSong,
@@ -135,6 +140,7 @@ export async function generateNewcomer(
     handle = picked.handle;
   }
 
+  const reach = resolveReachForMetVia(req.metVia);
   const useAI = req.useAI !== false;
   if (useAI) {
     try {
@@ -172,7 +178,9 @@ export async function generateNewcomer(
           const hint = CHARACTER_ARCHETYPES[archetype]?.personaHint ?? '';
           const user =
             `Archetype: ${archetype} (${hint}) | ` +
-            `Met via: ${METVIA_FLAVOR[req.metVia]} | Current day: ${req.day} | ` +
+            `Met via: ${METVIA_FLAVOR[req.metVia]} | ` +
+            `Physical scope: ${reach === 'remote' ? 'online-only; never imply they live in Oakhaven or can meet in person' : 'local Oakhaven resident'} | ` +
+            `Current day: ${req.day} | ` +
             `Taken ids/handles (avoid all): ${existing}. ` +
             `introText: their first Pulse message to the player (10-300 chars, era voice, no URL — link appended automatically).`;
           const schema = {
@@ -216,7 +224,7 @@ export async function generateNewcomer(
             createdDay: req.day,
             status: 'stranger',
             // Online sources birth remote buddies (no art, no in-person life).
-            reach: req.metVia === 'work' || req.metVia === 'intro' || req.metVia === 'seed' ? 'local' : 'remote',
+            reach,
             appearance: { hair: parsed.hair, eyes: parsed.eyes },
             languages: parsed.languages.map((l) => ({ lang: l.lang, level: l.level })),
             roles: pickArchetypeRoles(parsed.archetype, `${seed}:${aiId}`),
@@ -261,7 +269,7 @@ function templateResult(
     createdDay: req.day,
     status: 'stranger',
     // Online sources birth remote buddies (no art, no in-person life).
-    reach: req.metVia === 'work' || req.metVia === 'intro' || req.metVia === 'seed' ? 'local' : 'remote',
+    reach: resolveReachForMetVia(req.metVia),
     roles: pickArchetypeRoles(archetype, `${seed}:${id}`),
     ...(() => {
       const look = pickTemplateAppearance(`${seed}:${id}`);
@@ -271,7 +279,7 @@ function templateResult(
   return {
     definition: built.definition,
     personaHint: built.personaHint,
-    profilePatch: templateProfilePatch(displayName, archetype),
+    profilePatch: templateProfilePatch(displayName, archetype, resolveReachForMetVia(req.metVia)),
     introText: buildIntroText(displayName, archetype, seed, id),
     source: 'template',
     error,

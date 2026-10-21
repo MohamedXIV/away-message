@@ -1,6 +1,6 @@
 import type { ActionResult, SimulationAction } from '../types';
 import type { CoreDomainOwners } from './CoreDomainOwners';
-import { generateNewcomer, NEWCOMER_METVIA_ROTATION } from '../CharacterDirector';
+import { generateNewcomer } from '../CharacterDirector';
 import {
   pickContactLine,
   pickContactBounce,
@@ -103,7 +103,9 @@ export class PlayerContactCoordination {
     }
     this.owners.needs.spendSocialBattery(6);
     this.owners.world.setFlag(`nbmeet_${day}`, true);
-    const metVia = NEWCOMER_METVIA_ROTATION[this.owners.social.getBuddies().filter((b) => b.isProcedural).length % NEWCOMER_METVIA_ROTATION.length]!;
+    // Browsing NightBoard is an online-surface meeting, never evidence of a
+    // local physical encounter; the source resolver therefore births remote.
+    const metVia = 'nightboard' as const;
     const existingIds = this.owners.social.getBuddies().map((b) => b.id);
     const loadEpoch = this.owners.world.getLoadEpoch();
     void this.createNewcomer({ metVia, day, seed: `nbmeet-day-${day}`, useAI: true }, { existingIds })
