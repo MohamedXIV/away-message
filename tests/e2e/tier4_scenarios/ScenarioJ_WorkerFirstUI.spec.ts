@@ -71,3 +71,46 @@ test('Worker Save As copies the current Pulse moment into its own slot and resto
     .toContain('from-current-world');
   expect(await page.evaluate(() => !('__simEngine' in window) && !('__simStore' in window))).toBe(true);
 });
+
+test('root runtime=worker boots without requesting or evaluating the legacy engine and cold loads a slot', async ({ page }) => {
+  test.setTimeout(90_000);
+  const scripts: string[] = [];
+  page.on('request', request => {
+    if (request.resourceType() === 'script') scripts.push(new URL(request.url()).pathname);
+  });
+  await page.goto('/?runtime=worker');
+  await expect(page.getByTestId('worker-first-shell')).toBeVisible();
+  expect(await page.locator('#root').getAttribute('data-runtime')).toBe('worker');
+  expect(await page.evaluate(() => !('__simEngine' in window) && !('__simStore' in window)))
+    .toBe(true);
+  expect(scripts.some(path => /\/src\/(?:App|store\/useSimulationStore)(?:\.tsx?|\?)/.test(path)))
+    .toBe(false);
+
+  await page.getByRole('button', { name: 'New game' }).click();
+  await expect(page.getByTestId('worker-phase')).toHaveText('game');
+  await page.getByRole('button', { name: 'Pause clock' }).click();
+  await page.getByRole('button', { name: 'Advance 15 minutes' }).click();
+  await expect.poll(async () => Number(await page.getByTestId('worker-minute').innerText()))
+    .toBeGreaterThan(15);
+  const savedMinute = Number(await page.getByTestId('worker-minute').innerText());
+  await page.getByRole('button', { name: 'Save game' }).click();
+  await expect(page.getByText('Saved to slot_1')).toBeVisible();
+
+  await page.reload();
+  await expect(page.getByTestId('worker-phase')).toHaveText('menu');
+  await expect(page.getByTestId('worker-continue-summary')).toContainText('Day');
+  await page.getByRole('button', { name: 'Continue last save' }).click();
+  await expect(page.getByTestId('worker-phase')).toHaveText('game');
+  expect(Number(await page.getByTestId('worker-minute').innerText()))
+    .toBeGreaterThanOrEqual(savedMinute);
+  expect(await page.evaluate(() => !('__simEngine' in window) && !('__simStore' in window)))
+    .toBe(true);
+});
+
+test('root runtime selector rejects invalid runtimes without loading a legacy world', async ({ page }) => {
+  await page.goto('/?runtime=invalid');
+  await expect(page.getByTestId('runtime-boot-error')).toContainText('Unknown simulation runtime');
+  await expect(page.getByTestId('worker-first-shell')).toHaveCount(0);
+  expect(await page.evaluate(() => !('__simEngine' in window) && !('__simStore' in window)))
+    .toBe(true);
+});

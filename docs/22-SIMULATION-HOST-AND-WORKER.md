@@ -1033,3 +1033,32 @@ Still deferred: AI/provider-backed generation and provider benchmarking;
 moving the ordinary `/` production route from legacy to the Worker,
 combined #177 population fixture and final full-route acceptance. PR #204
 remains Draft and #175 OPEN until the requested end-to-end cutover.
+
+## P3.29 — Opt-in Worker boot from the actual game root
+
+The standard `index.html` no longer statically imports the legacy
+`App`, synchronous `useSimulationStore` or its eager default
+`SimulationEngine`. It uses an explicitly selected, mutually-exclusive
+dynamic import in `src/main.tsx`:
+
+- `/?runtime=worker`: boot the *same* canonical WorkerGameShell previously
+  available only on `/worker.html`; no legacy engine/store is requested
+  or instantiated on this page. Browser controls, Phaser, Orion OS, canonical
+  save/restore, crash handling and bounded reads use the normal Worker path.
+- `/?runtime=legacy` or plain `/`: use the pre-existing legacy UI and
+  behavior while visual/content parity and the #177 scale gate are completed.
+  The legacy debug globals are installed **only** in this branch.
+- Any other runtime value is refused explicitly without starting either
+  engine. A Worker startup failure cannot fall back to synchronous
+  `SimulationEngine`.
+- The Worker entry menu now offers an actual **Continue last save**, sourced
+  exclusively from small IndexedDB slot summaries, never by constructing a
+  main-thread engine or reading a full world snapshot. Explicit Load game,
+  Save As, and fail-closed recovery still remain available.
+
+The Worker browser gate now exercises the real **root URL**, proves no
+legacy module request or test global in Worker mode, saves and reloads
+with `Continue last save`, and checks invalid selectors fail closed.
+This is **an opt-in release rehearsal, not the final default production
+cutover**: plain `/` deliberately stays legacy until the authored shell
+replaces the developer vertical slice and integration/#177 gates are green.

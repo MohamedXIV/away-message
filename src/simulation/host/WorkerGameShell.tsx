@@ -5,6 +5,7 @@ import { WorkerPulsePanel } from './WorkerPulsePanel';
 import { WorkerDesktop } from './WorkerDesktop';
 import { WorkerCityTravel } from './WorkerCityTravel';
 import { useWindowStore } from '../../store/useWindowStore';
+import { listSlots, type SlotSummary } from '../../persistence/slotUi';
 
 /**
  * Opt-in Worker-first gameplay vertical slice. Never imports App, Zustand,
@@ -17,9 +18,27 @@ export function WorkerGameShell() {
   const [busy, setBusy] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
   const [slot, setSlot] = useState('slot_1');
+  const [saveSummaries, setSaveSummaries] = useState<SlotSummary[]>([]);
+  const [slotListError, setSlotListError] = useState<string | null>(null);
+  const mostRecent = saveSummaries.find(saved => saved.hasSnapshot) ?? null;
   const [panel, setPanel] = useState<'summary' | 'room' | 'city' | 'pulse' | 'desktop'>('summary');
 
   useEffect(() => () => session.dispose(), [session]);
+
+  // UI-owned slot metadata only; no full save snapshot, canonical reader or
+  // local simulation is created to display the last played world.
+  useEffect(() => {
+    if (view.phase !== 'menu' && view.phase !== 'error') return;
+    let alive = true;
+    void listSlots().then(summaries => {
+      if (!alive) return;
+      setSaveSummaries(summaries);
+      setSlotListError(null);
+    }).catch(error => {
+      if (alive) setSlotListError(String(error));
+    });
+    return () => { alive = false; };
+  }, [view.phase]);
 
   // Windows are presentation-only and belong to a *single* Worker session.
   // A menu/reload/failure must never leak the previous run's window stack
@@ -76,7 +95,16 @@ export function WorkerGameShell() {
                 No replacement simulation is running on this page.
               </p>
             )}
+            {mostRecent && <p data-testid="worker-continue-summary" className="text-sm text-slate-300">
+              Last save: {mostRecent.name} · Day {mostRecent.day} ·
+              {new Date(mostRecent.updatedAt).toLocaleString()}
+            </p>}
+            {slotListError && <p role="alert" className="text-sm text-red-300">{slotListError}</p>}
             <div className="flex flex-wrap gap-3">
+              {mostRecent && <button className={control} disabled={busy}
+                onClick={() => void act(() => session.loadGame(mostRecent.id))}>
+                Continue last save
+              </button>}
               <button className={control} disabled={busy} onClick={() => void act(() => session.newGame())}>New game</button>
               <button className={control} disabled={busy} onClick={() => void act(() => session.loadGame(slot))}>
                 {view.phase === 'error' ? 'Recover saved slot' : 'Load game'}
