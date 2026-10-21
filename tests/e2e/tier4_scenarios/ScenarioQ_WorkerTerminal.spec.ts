@@ -33,7 +33,7 @@ test('Worker Command Prompt reads and writes real VFS data shared with Explorer 
   await expect(output).toContainText('Unsupported command: ping');
   // Like a real OS, an active window occludes desktop icons. Minimize it
   // using the visible titlebar instead of force-clicking through the window.
-  await desktop.getByRole('button', { name: 'Minimize Command Prompt' }).click();
+  await desktop.getByRole('button', { name: 'Minimize Terminal CLI' }).click();
   await expect(terminal).toHaveCount(0);
   await desktop.getByRole('button', { name: 'Open My Computer' }).click({ timeout: 6_000 });
   const explorer = page.getByTestId('worker-window-fileexplorer');
