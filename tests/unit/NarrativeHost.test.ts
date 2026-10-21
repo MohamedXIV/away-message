@@ -1,12 +1,23 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { Compiler } from 'inkjs/compiler/Compiler';
+import { SimpleJson } from 'inkjs/engine/SimpleJson';
 import { NarrativeHostImpl } from '../../src/narrative/NarrativeHost';
 import { NarrativeContextProjectionSchema } from '../../src/narrative/contracts';
+import type { NarrativeHostState } from '../../src/narrative/contracts';
 import { InkRuntime } from '../../src/narrative/ink/InkRuntime';
 
 const compiledPath = join(__dirname, '../../src/narrative/ink/fixtures/hello.ink.json');
 const compiledJson = JSON.parse(readFileSync(compiledPath, 'utf8'));
+
+function compileInline(source: string): unknown {
+  const compiler = new Compiler(source);
+  const story = compiler.Compile();
+  const writer = new SimpleJson.Writer();
+  (story as unknown as { ToJson(w: unknown): void }).ToJson(writer);
+  return JSON.parse(writer.toString());
+}
 
 const baseContext = NarrativeContextProjectionSchema.parse({
   currentDay: 1,
@@ -192,18 +203,29 @@ describe('NarrativeHost', () => {
 ~ request_effect("does_not_exist", "null")
 -> END
 `;
-    const { Compiler } = require('inkjs/compiler/Compiler');
-    const { SimpleJson } = require('inkjs/engine/SimpleJson');
-    const compiler = new Compiler(ink);
-    const story = compiler.Compile();
-    const writer = new SimpleJson.Writer();
-    story.ToJson(writer);
-    const compiled = JSON.parse(writer.toString());
+    const compiled = compileInline(ink);
 
     const host = new NarrativeHostImpl({
       loadCompiledStory: () => compiled,
       context: baseContext,
       approvedEffectIds: ['social_act'],
+    });
+    host.start('x');
+    host.continue();
+    expect(host.getPendingEffects()).toEqual([]);
+  });
+
+  it('rejects approved effect ids with invalid payloads through the host', () => {
+    const compiled = compileInline(`EXTERNAL request_effect(first, second)
+-> start
+=== start ===
+~ request_effect("study_together", "nonsense")
+-> END
+`);
+    const host = new NarrativeHostImpl({
+      loadCompiledStory: () => compiled,
+      context: baseContext,
+      approvedEffectIds: ['study_together'],
     });
     host.start('x');
     host.continue();
@@ -237,6 +259,59 @@ describe('NarrativeHost', () => {
     const againFirst = again[0];
     expect(againFirst).toBeDefined();
     expect((againFirst as any).effectId).not.toBe('tampered');
+  });
+
+  it('continue frames return defensive copies of pending effects', () => {
+    const host = new NarrativeHostImpl({
+      loadCompiledStory: () => compiledJson,
+      context: baseContext,
+    });
+    host.start('hello');
+    host.continue();
+    host.continue();
+    host.choose(0);
+    const frame = host.continue();
+    expect(frame.pendingEffects).toHaveLength(1);
+    const exposed = frame.pendingEffects[0]!;
+    (exposed as unknown as { effectId: string }).effectId = 'tampered';
+    if (exposed.type === 'request_effect') (exposed as unknown as { payload: Record<string, unknown> }).payload.arg = 'tampered';
+    const pending = host.getPendingEffects();
+    expect(pending[0]?.type).toBe('request_effect');
+    if (pending[0]?.type === 'request_effect') {
+      expect(pending[0].effectId).toBe('social_act');
+      expect(pending[0].payload).toEqual({ arg: 'empathy' });
+    }
+  });
+
+  it('rejects tampered pending effects on restore', () => {
+    const host = new NarrativeHostImpl({
+      loadCompiledStory: () => compiledJson,
+      context: baseContext,
+    });
+    host.start('hello');
+    host.continue();
+    host.continue();
+    host.choose(0);
+    host.continue();
+    const saved = host.save();
+    expect(saved.pendingEffects).toHaveLength(1);
+
+    const unknown = JSON.parse(JSON.stringify(saved)) as NarrativeHostState;
+    unknown.pendingEffects = [{ type: 'request_effect', effectId: 'does_not_exist', payload: {} }] as never;
+    expect(() => new NarrativeHostImpl({ loadCompiledStory: () => compiledJson, context: baseContext }).load(unknown))
+      .toThrow(/Invalid pending narrative effect/);
+
+    const badPayload = JSON.parse(JSON.stringify(saved)) as NarrativeHostState;
+    badPayload.pendingEffects = [{
+      type: 'request_effect', effectId: 'study_together', payload: { nonsense: 123 },
+    }] as never;
+    expect(() => new NarrativeHostImpl({ loadCompiledStory: () => compiledJson, context: baseContext }).load(badPayload))
+      .toThrow(/Invalid pending narrative effect/);
+
+    const nonArray = JSON.parse(JSON.stringify(saved)) as unknown as { pendingEffects: unknown };
+    nonArray.pendingEffects = { bad: true };
+    expect(() => new NarrativeHostImpl({ loadCompiledStory: () => compiledJson, context: baseContext }).load(nonArray as never))
+      .toThrow(/Invalid pending narrative effects/);
   });
 
   it('updates context immutably', () => {

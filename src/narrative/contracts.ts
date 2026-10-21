@@ -210,6 +210,24 @@ export type ApprovedSemanticEffectId = (typeof APPROVED_SEMANTIC_EFFECT_IDS)[num
 
 export const ApprovedSemanticEffectIdSchema = z.enum(APPROVED_SEMANTIC_EFFECT_IDS);
 
+// Typed payload contract for every approved generic effect. An effect id alone is
+// not authorization: the payload shape must match its owner-facing contract.
+// Domain owners still validate preconditions and commit the final outcome.
+const GenericEffectArgPayloadSchema = z.strictObject({
+  arg: z.string().min(1).max(128),
+});
+
+export const SEMANTIC_EFFECT_PAYLOAD_SCHEMAS = {
+  social_act: z.strictObject({ arg: SocialActionTypeSchema }),
+  pay_meal: GenericEffectArgPayloadSchema,
+  study_together: z.strictObject({ courseId: z.string().min(1).max(64) }),
+  schedule_meetup: GenericEffectArgPayloadSchema,
+  confide: GenericEffectArgPayloadSchema,
+  apologize: GenericEffectArgPayloadSchema,
+  knowledge_reveal: GenericEffectArgPayloadSchema,
+  travel_request: GenericEffectArgPayloadSchema,
+} satisfies Record<ApprovedSemanticEffectId, z.ZodTypeAny>;
+
 // Effect request lifecycle (Ink side only; canonical commits stay with domain owners).
 export const EFFECT_LIFECYCLE_STATUSES = ['queued', 'accepted', 'committed', 'rejected'] as const;
 export type EffectLifecycleStatus = (typeof EFFECT_LIFECYCLE_STATUSES)[number];
@@ -249,6 +267,7 @@ function payloadWithinBounds(value: unknown, depth = 0): boolean {
 }
 
 export interface EffectValidationOptions {
+  /** May only narrow the canonical registry; ids without a payload contract stay rejected. */
   approvedEffectIds?: readonly string[];
 }
 
@@ -266,9 +285,18 @@ export function validateNarrativeEffectRequest(
       return { ok: false, error: 'request_effect payload exceeds size/depth bounds' };
     }
     const allowed = options?.approvedEffectIds ?? APPROVED_SEMANTIC_EFFECT_IDS;
-    if (!allowed.includes(req.effectId)) {
+    const payloadSchema = (SEMANTIC_EFFECT_PAYLOAD_SCHEMAS as Record<string, z.ZodTypeAny | undefined>)[req.effectId];
+    if (!allowed.includes(req.effectId) || !payloadSchema) {
       return { ok: false, error: `unknown or unapproved semantic effect: ${req.effectId}` };
     }
+    const payload = payloadSchema.safeParse(req.payload);
+    if (!payload.success) {
+      return {
+        ok: false,
+        error: `invalid payload for semantic effect '${req.effectId}': ${payload.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ')}`,
+      };
+    }
+    return { ok: true, request: { ...req, payload: payload.data as Record<string, unknown> } };
   }
   // Bound string sizes for flag keys/values sanity
   if (req.type === 'world_set_flag' && req.key.length > 128) {

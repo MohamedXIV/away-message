@@ -79,8 +79,34 @@ describe('Narrative contracts', () => {
     const r = validateNarrativeEffectRequest({ type: 'request_effect', effectId: 'does_not_exist', payload: {} });
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.error).toContain('unknown or unapproved');
-    const r2 = validateNarrativeEffectRequest({ type: 'request_effect', effectId: 'social_act', payload: {} });
+    const r2 = validateNarrativeEffectRequest({ type: 'request_effect', effectId: 'social_act', payload: { arg: 'empathy' } });
     expect(r2.ok).toBe(true);
+  });
+
+  it('validateNarrativeEffectRequest rejects approved ids with invalid payload shapes', () => {
+    const nonsense = validateNarrativeEffectRequest({
+      type: 'request_effect', effectId: 'study_together', payload: { nonsense: 123 },
+    });
+    expect(nonsense.ok).toBe(false);
+    if (!nonsense.ok) expect(nonsense.error).toContain('invalid payload');
+    expect(validateNarrativeEffectRequest({
+      type: 'request_effect', effectId: 'study_together', payload: { courseId: 'c1' },
+    }).ok).toBe(true);
+    expect(validateNarrativeEffectRequest({
+      type: 'request_effect', effectId: 'social_act', payload: {},
+    }).ok).toBe(false);
+    expect(validateNarrativeEffectRequest({
+      type: 'request_effect', effectId: 'social_act', payload: { arg: 'not_a_real_action' },
+    }).ok).toBe(false);
+  });
+
+  it('a custom allowlist cannot authorize an id without a payload contract', () => {
+    const r = validateNarrativeEffectRequest(
+      { type: 'request_effect', effectId: 'invented_effect', payload: { arg: 'x' } },
+      { approvedEffectIds: ['invented_effect'] },
+    );
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toContain('unknown or unapproved');
   });
 
   it('validateNarrativeEffectRequest rejects unknown/malformed', () => {

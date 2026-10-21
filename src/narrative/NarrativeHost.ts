@@ -19,7 +19,7 @@ export interface NarrativeHostOptions {
   loadCompiledStory: (flowKey: string) => unknown | null;
   /** Initial bounded context projection. */
   context: NarrativeContextProjection;
-  /** Optional approved semantic-effect id allowlist (defaults to canonical registry). */
+  /** Optional allowlist that may only narrow the canonical typed-effect registry. */
   approvedEffectIds?: readonly string[];
   /** Optional domain owner callback. If provided, validated requests are forwarded; otherwise queued. */
   onEffectRequest?: (request: NarrativeEffectRequest) => { accepted: boolean; committed?: boolean; result?: unknown; error?: string };
@@ -89,7 +89,7 @@ export class NarrativeHostImpl implements NarrativeHost {
       tags: cont.tags,
       choices,
       canContinue: cont.canContinue,
-      pendingEffects: [...this.pendingEffects],
+      pendingEffects: this.getPendingEffects(),
     };
   }
 
@@ -111,13 +111,24 @@ export class NarrativeHostImpl implements NarrativeHost {
     if (state.version !== 1) throw new Error(`Unsupported NarrativeHostState version: ${state.version}`);
     const compiled = this.loadCompiledStory(state.compiledStoryKey);
     if (!compiled) throw new Error(`Compiled Ink story not found for key: ${state.compiledStoryKey}`);
-    this.ink = new InkRuntime(compiled as any);
+    const restored: NarrativeEffectRequest[] = [];
+    if (state.pendingEffects !== undefined && !Array.isArray(state.pendingEffects)) {
+      throw new Error('Invalid pending narrative effects in saved state.');
+    }
+    const candidates = state.pendingEffects ?? [];
+    for (const candidate of candidates) {
+      const validated = validateNarrativeEffectRequest(candidate, { approvedEffectIds: this.approvedEffectIds });
+      if (!validated.ok) {
+        throw new Error(`Invalid pending narrative effect in saved state: ${validated.error}`);
+      }
+      restored.push(clone(validated.request));
+    }
+    const ink = new InkRuntime(compiled as any);
+    ink.loadState(state.inkState);
+    this.ink = ink;
     this.flowId = state.flowId;
     this.compiledStoryKey = state.compiledStoryKey;
-    this.pendingEffects = Array.isArray(state.pendingEffects)
-      ? state.pendingEffects.map((e) => clone(e) as NarrativeEffectRequest)
-      : [];
-    this.ink.loadState(state.inkState);
+    this.pendingEffects = restored;
     this.bindExternalFunctions();
   }
 
