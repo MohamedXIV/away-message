@@ -904,3 +904,23 @@ The AI Lab's original generator, BYOK/provider settings, benchmarks, image,
 OS release and newcomer injection remain unavailable and visibly labeled.
 This partial milestone is not full app parity; root / is still the legacy
 runtime. Keep #175 open and PR #204 Draft pending other cutover gates.
+
+
+## P3.25 — Sparse Life bond projection
+
+PR #205 identified superlinear CPU cost in whole-minute NPC ticks. The
+Life Matrix previously enumerated every NPC for every actor and read an
+explicitly neutral bond for every unrelated pair. The source-owned sparse
+NPC relationship graph now maintains a derived lookup index containing only
+directed edge keys, not copied relationship truth. Life projections return
+immediately when an actor has no stored bonds and scan the canonical roster
+only when a source actually has directed edges. All non-neutral semantics,
+romance-only edges, output order and save format remain unchanged.
+
+Tests compare the former exhaustive reference algorithm with the new
+projection after reversed insertions, explicitly neutral bonds, directional
+writes, romance, save/restore, actor removal, defensive copy mutation and
+canonical Life reads. An empty-edge 72-actor probe asserts zero all-roster
+and zero per-pair access. This does NOT settle coarse-time-jump semantics or
+prove 500-NPC performance: rerun the independent #177 benchmark fixtures
+against the combined head before the final production cutover.

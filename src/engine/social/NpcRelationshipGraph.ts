@@ -32,6 +32,28 @@ export class NpcRelationshipGraph {
   private readonly affinities = new Map<string, number>();
   private readonly affinityCaps = new Map<string, number>();
   private readonly bonds = new Map<string, NpcBondState>();
+  /**
+   * Derived lookup keys only. The bonds Map alone owns relationship truth.
+   * A source without directed edges can now skip full roster enumeration.
+   */
+  private readonly bondTargets = new Map<string, Set<string>>();
+
+  private indexBond(from: string, to: string): void {
+    let targets = this.bondTargets.get(from);
+    if (!targets) {
+      targets = new Set<string>();
+      this.bondTargets.set(from, targets);
+    }
+    targets.add(to);
+  }
+
+  private rebuildBondIndex(): void {
+    this.bondTargets.clear();
+    for (const key of this.bonds.keys()) {
+      const parts = key.split('__');
+      if (parts.length === 2) this.indexBond(parts[0]!, parts[1]!);
+    }
+  }
 
   constructor(private readonly policy: NpcGraphPolicy) {}
 
@@ -40,6 +62,7 @@ export class NpcRelationshipGraph {
     for (const key of [...this.bonds.keys()]) {
       if (key.split('__').includes(id)) this.bonds.delete(key);
     }
+    this.rebuildBondIndex();
     for (const key of [...this.affinities.keys()]) {
       if (key.split('__').includes(id)) this.affinities.delete(key);
     }
@@ -107,6 +130,7 @@ export class NpcRelationshipGraph {
         });
       }
     }
+    this.rebuildBondIndex();
   }
 
   /** Authored seeds fill gaps; existing save-time affinities always win. */
@@ -179,6 +203,27 @@ export class NpcRelationshipGraph {
       `${e.name}: ${e.label} (${e.value >= 0 ? '+' : ''}${e.value})`).join(' • ')}`;
   }
 
+  /**
+   * Source-owned Life Matrix projection. Only stored directed edges can
+   * be non-neutral. Iterate actual actors to retain historic roster order,
+   * even when writes arrive in a different order. Return detached dims.
+   */
+  public getNotableBondDimensions(rawFrom: string): Array<{ targetId: string } & NpcBondDims> {
+    const from = this.policy.normalize(rawFrom);
+    const targets = this.bondTargets.get(from);
+    if (!targets?.size || !this.policy.actorExists(from)) return [];
+
+    const result: Array<{ targetId: string } & NpcBondDims> = [];
+    for (const actor of this.policy.actors()) {
+      if (actor.id === from || !targets.has(actor.id)) continue;
+      const bond = this.bonds.get(this.policy.bondKey(from, actor.id));
+      if (!bond) continue;
+      if (bond.romance === 'none' && !Object.values(bond.dims).some(value => value !== 0)) continue;
+      result.push({ targetId: actor.id, ...bond.dims });
+    }
+    return result;
+  }
+
   public getBond(rawFrom: string, rawTo: string): NpcBondState {
     const key = this.policy.bondKey(rawFrom, rawTo);
     const stored = key ? this.bonds.get(key) : undefined;
@@ -207,6 +252,7 @@ export class NpcRelationshipGraph {
       romanceSinceDay: current.romanceSinceDay, updatedDay: safeDay,
     };
     this.bonds.set(this.policy.bondKey(from, to), next);
+    this.indexBond(from, to);
     this.policy.emit('social:npc_bond_updated', {
       fromId: from, toId: to, bond: { ...next, dims: { ...dims } },
     });
@@ -233,6 +279,7 @@ export class NpcRelationshipGraph {
       updatedDay: safeDay,
     };
     this.bonds.set(this.policy.bondKey(from, to), next);
+    this.indexBond(from, to);
     this.policy.emit('social:npc_romance_changed', {
       fromId: from, toId: to, stage, day: safeDay,
     });

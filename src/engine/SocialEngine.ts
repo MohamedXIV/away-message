@@ -545,6 +545,11 @@ export class SocialEngine {
     });
   }
 
+  /** Sparse, roster-ordered, detached Life Matrix relationship read. */
+  public getNotableNpcBondsRead(rawFrom: string): Array<{ targetId: string } & NpcBondDims> {
+    return this.graph.getNotableBondDimensions(rawFrom);
+  }
+
   public getNpcBond(rawFrom: string, rawTo: string): NpcBondState {
     return this.graph.getBond(rawFrom, rawTo);
   }
