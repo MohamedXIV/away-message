@@ -278,7 +278,7 @@ describe('#175 Worker-owned offline Character Lab', () => {
 
       await worker.receive({ id: 9, op: 'export' });
       const saved = value(9);
-      const actor = saved.social.buddies.find((b: { id: string }) => b.id === preview.actor.id);
+      const actor = saved.social.buddies[preview.actor.id];
       expect(actor?.reach).toBe('remote');
       expect(actor?.metVia).toBe('myplace');
       const coldReplies: SimulationWorkerReply[] = [];
@@ -297,7 +297,7 @@ describe('#175 Worker-owned offline Character Lab', () => {
         expect(snapshot).toMatchObject({ type: 'result', ok: true });
         if (snapshot?.type === 'result' && snapshot.ok) {
           const loaded = snapshot.value as typeof saved;
-          expect(loaded.social.buddies.find((b: { id: string }) => b.id === preview.actor.id)?.reach)
+          expect(loaded.social.buddies[preview.actor.id]?.reach)
             .toBe('remote');
         }
       } finally { cold.close(); }
