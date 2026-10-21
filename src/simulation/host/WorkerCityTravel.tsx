@@ -5,6 +5,7 @@ import {
 } from '../../engine/CityMap';
 import type { SimulationWorldRead } from '../../engine/kernel/SimulationPublication';
 import type { WorkerGameSession } from './WorkerGameSession';
+import { GENERATED_PLACES } from '../../engine/worldContent.generated';
 
 /**
  * The CityMap is a public, immutable topology only. The Worker owns money,
@@ -12,17 +13,20 @@ import type { WorkerGameSession } from './WorkerGameSession';
  * Quotes are previews; the canonical TRAVEL_TO action adjudicates the trip.
  */
 export function WorkerCityTravel({
-  world, session, onReturnToRoom,
+  world, session, onReturnToRoom, onArrived,
 }: {
   world: SimulationWorldRead;
   session: WorkerGameSession;
   onReturnToRoom: () => void;
+  onArrived?: (location: CityNodeId, receipt: string) => void;
 }) {
   const [selected, setSelected] = useState<CityNodeId>('cafe');
   const [mode, setMode] = useState<TravelMode>('walk');
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const location = world.playerLocation;
+  const homeName = GENERATED_PLACES.find(place => place.id === world.residencePlaceId)?.name ?? 'Your residence';
+  const locationName = (id: CityNodeId) => id === 'home' ? homeName : CITY_NODES[id].name;
   const wet = world.environment.weather.tags.includes('wet');
   const estimate = useMemo(
     () => quoteTravel(location, selected, mode, wet),
@@ -41,8 +45,10 @@ export function WorkerCityTravel({
         return;
       }
       const data = result.data as { summary?: string; encounter?: string } | undefined;
-      setNotice([data?.summary, data?.encounter].filter(Boolean).join(' — ') || 'Travel completed');
+      const receipt = [data?.summary, data?.encounter].filter(Boolean).join(' — ') || 'Travel completed';
+      setNotice(receipt);
       if (destination === 'home') onReturnToRoom();
+      else onArrived?.(destination, receipt);
     } catch (cause) {
       setNotice(cause instanceof Error ? cause.message : String(cause));
     } finally {
@@ -56,7 +62,7 @@ export function WorkerCityTravel({
       <header>
         <h2 className="text-lg font-semibold">Oakhaven · City Map</h2>
         <p data-testid="worker-city-location" className="text-sm text-emerald-300">
-          You are at {CITY_NODES[location].name}
+          You are at {locationName(location)}
         </p>
         <p className="text-xs text-slate-400">
           Choose a place to visit. Longer journeys cost time and energy.
@@ -77,7 +83,7 @@ export function WorkerCityTravel({
               <circle cx={node.x} cy={node.y} r={id === location ? 3.2 : 2.3}
                 fill={id === location ? '#34d399' : id === selected ? '#fbbf24' : '#e2e8f0'} />
               <text x={node.x + 2.8} y={node.y - 2.5} fontSize="3.3" fill="#f8fafc">
-                {node.name}
+                {locationName(id)}
               </text>
             </g>
           );
@@ -87,10 +93,10 @@ export function WorkerCityTravel({
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
         {CITY_NODE_IDS.map(id => (
           <button key={id} type="button" onClick={() => setSelected(id)}
-            aria-pressed={selected === id} aria-label={'Choose ' + CITY_NODES[id].name}
+            aria-pressed={selected === id} aria-label={'Choose ' + locationName(id)}
             className={`rounded border px-2 py-2 text-left text-xs ${selected === id
               ? 'border-amber-300 bg-slate-700' : 'border-slate-600 hover:bg-slate-800'}`}>
-            <span className="block font-semibold">{CITY_NODES[id].name}</span>
+            <span className="block font-semibold">{locationName(id)}</span>
             <span className="text-slate-300">
               {isNodeOpen(CITY_NODES[id], world.time.hour) ? 'Usual hours: open' : 'Usual hours: closed'}
             </span>
@@ -114,7 +120,7 @@ export function WorkerCityTravel({
         <button disabled={busy || selected === location}
           onClick={() => void travel(selected)}
           className="rounded border border-emerald-500 px-3 py-1 disabled:opacity-40">
-          Travel to {CITY_NODES[selected].name}
+          Travel to {locationName(selected)}
         </button>
       </div>
       {location !== 'home' && (

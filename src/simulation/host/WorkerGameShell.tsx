@@ -4,6 +4,7 @@ import { WorkerPhysicalRoom } from './WorkerPhysicalRoom';
 import { WorkerPulsePanel } from './WorkerPulsePanel';
 import { WorkerDesktop } from './WorkerDesktop';
 import { WorkerCityTravel } from './WorkerCityTravel';
+import { WorkerCityPlaceView } from './WorkerCityPlaceView';
 import { useWindowStore } from '../../store/useWindowStore';
 import { listSlots, type SlotSummary } from '../../persistence/slotUi';
 import { GENERATED_PLACES } from '../../engine/worldContent.generated';
@@ -28,6 +29,7 @@ export function WorkerGameShell() {
   const mostRecent = saveSummaries.find(saved => saved.hasSnapshot) ?? null;
   const [panel, setPanel] = useState<'summary' | 'room' | 'city' | 'pulse' | 'desktop'>('room');
   const [chooseResidence, setChooseResidence] = useState(false);
+  const [arrival, setArrival] = useState<{ location: string; receipt: string } | null>(null);
 
   useEffect(() => () => session.dispose(), [session]);
 
@@ -64,6 +66,7 @@ export function WorkerGameShell() {
     if (view.phase === 'game') {
       setPanel('room');
       setChooseResidence(false);
+      setArrival(null);
     }
   }, [view.phase]);
 
@@ -223,12 +226,19 @@ export function WorkerGameShell() {
                 onOpenDesktop={() => setPanel('desktop')} />
             )}
             {panel === 'room' && view.world.playerLocation !== 'home' && (
-              <WorkerCityTravel world={view.world} session={session}
-                onReturnToRoom={() => setPanel('room')} />
+              <WorkerCityPlaceView key={view.world.playerLocation}
+                world={view.world} hud={view.hud} player={view.player} session={session}
+                onOpenMap={() => setPanel('city')}
+                onReturnHome={() => { setArrival(null); setPanel('room'); }}
+                arrivalNotice={arrival?.location === view.world.playerLocation ? arrival.receipt : null} />
             )}
             {panel === 'city' && (
               <WorkerCityTravel world={view.world} session={session}
-                onReturnToRoom={() => setPanel('room')} />
+                onReturnToRoom={() => { setArrival(null); setPanel('room'); }}
+                onArrived={(location, receipt) => {
+                  setArrival({ location, receipt });
+                  setPanel('room');
+                }} />
             )}
             {panel === 'pulse' && (
               <WorkerPulsePanel session={session} revision={view.hud.revision} />
