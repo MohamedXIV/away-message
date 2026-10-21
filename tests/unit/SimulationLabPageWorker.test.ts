@@ -137,3 +137,94 @@ describe('#175 Worker-owned offline procedural event generation', () => {
     } finally { worker.close(); }
   });
 });
+
+describe('#175 Worker-owned offline Orion OS release generator', () => {
+  const command = (mode: 'preview' | 'inject', expectedRevision?: number, seed = 'worker-os-lab') => ({
+    mode, seed, family: '7.x' as const,
+    ...(expectedRevision === undefined ? {} : { expectedRevision }),
+  });
+
+  it('previews reproducibly, registers once with World announcement, and survives fresh Worker restore', async () => {
+    const replies: SimulationWorkerReply[] = [];
+    const worker = createSimulationWorkerRuntime(reply => replies.push(reply));
+    const value = (id: number): any => {
+      const msg = replies.find(reply => reply.type === 'result' && reply.id === id);
+      if (!msg || msg.type !== 'result' || !msg.ok) {
+        throw new Error('Expected successful Worker reply #' + id);
+      }
+      return msg.value;
+    };
+    try {
+      await worker.receive({ id: 1, op: 'init' });
+      await worker.receive({ id: 2, op: 'query', query: { kind: 'labPage' } });
+      const initial = value(2);
+      await worker.receive({ id: 3, op: 'labOs', command: command('preview') });
+      await worker.receive({ id: 4, op: 'labOs', command: command('preview') });
+      const first = value(3);
+      expect(value(4)).toEqual(first);
+      expect(first.mode).toBe('preview');
+      expect(first.registered).toBe(false);
+      expect(first.revision).toBe(initial.revision);
+      expect(first.release.id).toContain('_lab_');
+      expect(first.release.releaseDay).toBe(initial.day + 2);
+      expect(JSON.stringify(first).length).toBeLessThan(3000);
+      expect(first.release).not.toHaveProperty('isProcedural');
+      expect(first.release).not.toHaveProperty('sourceEventId');
+      await worker.receive({ id: 5, op: 'query', query: { kind: 'labPage' } });
+      expect(value(5).eventCounts).toEqual(initial.eventCounts);
+
+      await worker.receive({ id: 6, op: 'labOs', command: command('inject', first.revision) });
+      const added = value(6);
+      expect(added.registered).toBe(true);
+      expect(added.release).toEqual(first.release);
+      expect(added.revision).toBeGreaterThan(first.revision);
+      await worker.receive({ id: 7, op: 'query', query: { kind: 'labPage' } });
+      expect(value(7).eventCounts.pendingOs).toBe(initial.eventCounts.pendingOs + 1);
+      expect(value(7).eventCounts.pending).toBe(initial.eventCounts.pending + 1);
+      await worker.receive({ id: 8, op: 'labOs', command: command('inject', first.revision) });
+      expect(replies.find(r => r.type === 'result' && r.id === 8))
+        .toMatchObject({ type: 'result', ok: false });
+
+      await worker.receive({ id: 9, op: 'export' });
+      const saved = value(9);
+      expect(saved.os.proceduralCatalog.some((release: { id: string }) => release.id === first.release.id))
+        .toBe(true);
+      expect(saved.world.pendingProceduralEvents.some((event: { id: string }) =>
+        event.id === ('os_' + first.release.id).replace(/[^a-z0-9_]/g, '_'))).toBe(true);
+
+      const coldReplies: SimulationWorkerReply[] = [];
+      const cold = createSimulationWorkerRuntime(reply => coldReplies.push(reply));
+      try {
+        await cold.receive({ id: 1, op: 'init', initialState: saved });
+        await cold.receive({ id: 2, op: 'export' });
+        const snapshot = coldReplies.find(reply => reply.type === 'result' && reply.id === 2);
+        expect(snapshot).toMatchObject({ type: 'result', ok: true });
+        if (snapshot?.type === 'result' && snapshot.ok) {
+          const loaded = snapshot.value as typeof saved;
+          expect(loaded.os.proceduralCatalog).toEqual(saved.os.proceduralCatalog);
+          expect(loaded.world.pendingProceduralEvents).toEqual(saved.world.pendingProceduralEvents);
+        }
+      } finally { cold.close(); }
+    } finally { worker.close(); }
+  });
+
+  it('rejects malformed family, illegal seed, and mutation without matching preview revision', async () => {
+    const replies: SimulationWorkerReply[] = [];
+    const worker = createSimulationWorkerRuntime(reply => replies.push(reply));
+    try {
+      await worker.receive({ id: 1, op: 'init' });
+      const invalid = [
+        { ...command('preview'), family: '4.x' },
+        { ...command('preview'), family: 'bogus' },
+        { ...command('preview'), seed: '!' },
+        { ...command('preview'), seed: 'Z'.repeat(1000) },
+        command('inject'), command('inject', -1),
+      ];
+      for (let i = 0; i < invalid.length; i++) {
+        await worker.receive({ id: i + 2, op: 'labOs', command: invalid[i] as never });
+        expect(replies.find(r => r.type === 'result' && r.id === i + 2))
+          .toMatchObject({ type: 'result', ok: false });
+      }
+    } finally { worker.close(); }
+  });
+});

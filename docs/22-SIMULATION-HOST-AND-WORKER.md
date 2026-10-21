@@ -968,3 +968,33 @@ The save schema stays free of duplicate authored catalog entries; when
 no procedural queue exists the original snapshot shape is preserved.
 The Worker test exercises a distinct cold runtime and also hot-load queue
 eviction, rather than mistakenly reloading into the same populated owner.
+
+## P3.27 — Worker-owned offline Orion OS release authoring
+
+AI Lab can now preview and register a genuine future installable OS variant
+inside the Dedicated Worker, without creating a main-thread SimulationKernel:
+
+- A separate typed `labOs` command supports `preview` and `inject` for
+  deterministic offline release templates in Orion families 5.x/6.x/7.x.
+  Controls and payloads are bounded and validated; no API credentials,
+  provider calls, OS catalog dumps or broad snapshots cross normal IPC.
+- `SimulationKernel.previewOfflineLabOsRelease` derives the same build and
+  candidate from the canonical world day and user-selected seed. A stable
+  namespaced variant ID avoids clashes with authored core OS releases (which
+  otherwise share template version IDs); `Math.random` is never used.
+- Preview does not modify the world or OS catalog. Injection requires the
+  current Worker revision and calls the existing canonical
+  `registerLabOsRelease` transaction to register the installable release
+  and its corresponding future `os_release` world announcement together.
+- The AI Lab desktop panel exposes seed/family controls, a bounded preview
+  (display name, build, hardware requirements and changelog), and explicit
+  injection. Stale previews are disabled when the Worker revision changes.
+- A unit Worker contract test proves repeatable previews, non-mutating reads,
+  atomic world+catalog update, stale-revision rejection, malformed controls
+  and OS/world snapshot survival in a new cold Worker. The real Chromium
+  gate exercises the same preview/commit/save/cold-load user workflow.
+
+This is offline OS authoring only. AI-provider-backed OS generation, character
+authoring, provider benchmarks and the default route cutover remain pending.
+Single Worker ownership, explicit save/load and the independent #177
+population gate are still prerequisites before PR #204 can leave Draft.

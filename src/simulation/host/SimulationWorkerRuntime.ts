@@ -226,6 +226,42 @@ export function createSimulationWorkerRuntime(send: (message: SimulationWorkerRe
           };
           break;
         }
+        case 'labOs': {
+          const command = raw.command;
+          if (!command || (command.mode !== 'preview' && command.mode !== 'inject')
+            || typeof command.seed !== 'string' || !/^[a-zA-Z0-9 _:-]{1,64}$/.test(command.seed.trim())
+            || !(['5.x', '6.x', '7.x'] as string[]).includes(command.family)) {
+            throw new Error('Invalid bounded offline OS Lab controls');
+          }
+          const owner = requireKernel();
+          if (command.mode === 'inject' &&
+            (!Number.isSafeInteger(command.expectedRevision)
+              || command.expectedRevision !== owner.getRevision())) {
+            throw new Error('OS Lab preview is stale; preview again before injecting');
+          }
+          const release = owner.previewOfflineLabOsRelease(command.seed.trim(), command.family);
+          if (command.mode === 'inject') owner.registerLabOsRelease(release);
+          const bounded = {
+            id: release.id, version: release.version, build: release.build,
+            displayName: release.displayName, family: release.family,
+            kind: release.kind, channel: release.channel, releaseDay: release.releaseDay,
+            changelog: release.changelog.slice(0, 6).map(line => line.slice(0, 160)),
+            requirements: {
+              minRamMB: release.requirements.minRamMB,
+              minCpuTier: release.requirements.minCpuTier,
+              minDiskGB: release.requirements.minDiskGB,
+            },
+            installSizeGB: release.installSizeGB,
+            ramOverheadMB: release.ramOverheadMB,
+            bootTimeSeconds: release.bootTimeSeconds,
+            theme: release.theme, price: release.price, blurb: release.blurb,
+          };
+          value = {
+            revision: owner.getRevision(), mode: command.mode,
+            release: bounded, registered: command.mode === 'inject',
+          };
+          break;
+        }
         case 'advance':
           if (!Number.isSafeInteger(raw.minutes) || raw.minutes < 0) {
             throw new Error('Invalid world-minute advance');

@@ -1,6 +1,7 @@
 import type { ActionResult, GlobalEvent, SimulationAction, SimulationState } from '../../engine/types';
 import type { InitialSimulationState } from '../../engine/kernel/PhysicalSimulationRuntime';
 import type { OsInstallPlan } from '../../engine/kernel/ComputerOwnershipRuntime';
+import type { OsRelease, OsFamily } from '../../engine/OsCatalog';
 import type { SlotPulseMetadata, SlotSummary } from '../../persistence/slots';
 import type {
   SimulationActorRead, SimulationAppRead, SimulationChange, SimulationChromeRead, SimulationDesktopRead,
@@ -68,6 +69,22 @@ export interface LabProceduralResult {
   injectedIds: string[];
 }
 
+/** Worker-owned, deterministic OS generator; only a bounded release card crosses IPC. */
+export interface LabOsCommand {
+  mode: 'preview' | 'inject';
+  seed: string;
+  family: Extract<OsFamily, '5.x' | '6.x' | '7.x'>;
+  expectedRevision?: number;
+}
+export interface LabOsResult {
+  revision: number;
+  mode: LabOsCommand['mode'];
+  release: Pick<OsRelease, 'id' | 'version' | 'build' | 'displayName' | 'family' | 'kind' |
+    'channel' | 'releaseDay' | 'changelog' | 'requirements' | 'installSizeGB' |
+    'ramOverheadMB' | 'bootTimeSeconds' | 'theme' | 'price' | 'blurb'>;
+  registered: boolean;
+}
+
 export type SimulationHardwareCommand =
   | { kind: 'setup' }
   | { kind: 'power'; poweredOn: boolean }
@@ -83,6 +100,7 @@ export type SimulationWorkerRequest =
   | { id: number; op: 'dispatch'; action: SimulationAction }
   | { id: number; op: 'hardware'; command: SimulationHardwareCommand }
   | { id: number; op: 'labProcedural'; command: LabProceduralCommand }
+  | { id: number; op: 'labOs'; command: LabOsCommand }
   | { id: number; op: 'advance'; minutes: number; reason?: string }
   | { id: number; op: 'realtime'; seconds: number }
   | { id: number; op: 'clock'; running: boolean }
@@ -106,6 +124,7 @@ export interface SimulationHost {
   dispatch(action: SimulationAction): Promise<ActionResult>;
   hardware(command: SimulationHardwareCommand): Promise<ActionResult<OsInstallPlan>>;
   labProcedural(command: LabProceduralCommand): Promise<LabProceduralResult>;
+  labOs(command: LabOsCommand): Promise<LabOsResult>;
   advanceGameMinutes(minutes: number, reason?: string): Promise<void>;
   advanceRealTime(seconds: number): Promise<void>;
   setClockRunning(running: boolean): Promise<void>;

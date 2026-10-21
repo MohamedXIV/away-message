@@ -6,7 +6,8 @@ import { DOWNLOAD_CATALOG } from '../../internet/sites/DownloadHubCatalog';
 import type { MyPlaceProfile } from '../MyPlaceEngine';
 import type { BuddyPresence, BuddyMetVia } from '../types';
 import type { CharacterDefinition } from '../CharacterEngine';
-import type { OsRelease } from '../OsCatalog';
+import type { OsRelease, OsFamily } from '../OsCatalog';
+import { pickOsTemplate, templateToRelease } from '../../ai/osReleaseTemplates';
 import { ProceduralDirector, type DirectorGenerateOptions } from '../ProceduralDirector';
 import { buildRecentNpcMail, buildRentMailHistory, buildWeeklyNpcThreads, buildWeeklyWeatherThread, npcThreadWeek } from '../BoardDirector';
 import { getWeatherForDay, gameDayName } from '../WeatherEngine';
@@ -716,6 +717,26 @@ export class SimulationKernel {
   ): string[] {
     return this.publishOwnerMutation(['world'],
       () => this.world.injectProceduralEvents(events), ids => ids.length > 0);
+  }
+
+  /**
+   * Offline OS Lab preview is a pure, deterministic view over the canonical
+   * world day. Never choose an OS build with RNG or register at preview time.
+   * Lab IDs are namespaced by seed/day/family so old authored release IDs
+   * (for example Orion_6.1) cannot be overwritten by a generated variant.
+   */
+  public previewOfflineLabOsRelease(seed: string, family: OsFamily): OsRelease {
+    const day = this.clock.getTime().day;
+    const template = pickOsTemplate(seed, family, day);
+    const release = templateToRelease(template, day + 2);
+    const input = `${seed}:${family}:${day}:${template.version}`;
+    let hash = 2166136261;
+    for (let i = 0; i < input.length; i++) {
+      hash = Math.imul(hash ^ input.charCodeAt(i), 16777619) >>> 0;
+    }
+    release.id = `${release.id}_lab_${hash.toString(36)}` as OsRelease['id'];
+    release.isProcedural = true;
+    return release;
   }
 
   /** Lab registration and the matching world announcement are one commit. */

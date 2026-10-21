@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
 import type { SimulationLabPageRead } from '../../engine/kernel/SimulationPublication';
 import type { WorkerGameSession } from './WorkerGameSession';
-import type { LabProceduralCategory, LabProceduralResult } from './SimulationHostProtocol';
+import type {
+  LabOsCommand, LabOsResult, LabProceduralCategory, LabProceduralResult,
+} from './SimulationHostProtocol';
 
 const control = 'rounded border border-[#808080] bg-[#ece9d8] px-2 py-1 disabled:opacity-40';
 
@@ -21,6 +23,37 @@ export function WorkerLabInspectorPanel({ session, revision }: {
   const [labBusy, setLabBusy] = useState(false);
   const [labNotice, setLabNotice] = useState<string | null>(null);
   const previewCurrent = preview !== null && preview.revision === revision;
+  const [osSeed, setOsSeed] = useState('orion-lab');
+  const [osFamily, setOsFamily] = useState<LabOsCommand['family']>('7.x');
+  const [osPreview, setOsPreview] = useState<LabOsResult | null>(null);
+  const [osBusy, setOsBusy] = useState(false);
+  const [osNotice, setOsNotice] = useState<string | null>(null);
+  const osPreviewCurrent = osPreview !== null && osPreview.revision === revision;
+
+  const generateOs = async (mode: LabOsCommand['mode']): Promise<void> => {
+    if (osBusy || (mode === 'inject' && !osPreviewCurrent)) return;
+    setOsBusy(true);
+    setOsNotice(null);
+    try {
+      const next = await session.labOs({
+        mode, seed: osSeed, family: osFamily,
+        ...(mode === 'inject' ? { expectedRevision: osPreview!.revision } : {}),
+      });
+      if (mode === 'preview') {
+        setOsPreview(next);
+        setOsNotice('Review this offline OS release before registering it.');
+      } else {
+        setOsPreview(null);
+        setOsNotice('Registered ' + next.release.displayName + ' for Day ' +
+          next.release.releaseDay + ' in the canonical OS catalog and world.');
+      }
+    } catch (cause) {
+      setOsNotice(cause instanceof Error ? cause.message : String(cause));
+      if (mode === 'inject') setOsPreview(null);
+    } finally {
+      setOsBusy(false);
+    }
+  };
 
   const generate = async (mode: 'preview' | 'inject'): Promise<void> => {
     if (labBusy || (mode === 'inject' && !previewCurrent)) return;
@@ -63,8 +96,8 @@ export function WorkerLabInspectorPanel({ session, revision }: {
     <header className="shrink-0 border-b border-gray-500 bg-[#dfdfdf] p-3">
       <h2 className="font-bold text-sm">AI Lab · Worker Diagnostic Inspector</h2>
       <p className="mt-1 text-[11px] text-gray-700">
-        Owner diagnostics and offline template event generation. AI-provider generation,
-        OS/character generation and provider benchmarks are not yet migrated.
+        Owner diagnostics, offline events, and OS release generation. AI-provider
+        generation, character creation, and provider benchmarks remain unmigrated.
       </p>
     </header>
     <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-3">
@@ -106,6 +139,41 @@ export function WorkerLabInspectorPanel({ session, revision }: {
             </div>
           </>}
           {labNotice && <p data-testid="worker-lab-generation-result" role="status" className="mt-2">{labNotice}</p>}
+        </section>
+        <section data-testid="worker-lab-os" className="rounded border border-gray-400 bg-white p-2">
+          <h3 className="font-bold">Orion OS Release Lab · Offline templates</h3>
+          <p className="mt-1 text-gray-600">One deterministic release; catalog registration
+            and its future world announcement are committed together in the Worker.</p>
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <label>Seed <input aria-label="OS release seed" className="rounded border px-1 py-1"
+              maxLength={64} value={osSeed}
+              onChange={e => { setOsSeed(e.target.value); setOsPreview(null); }} /></label>
+            <label>Family <select aria-label="OS release family" className={control}
+              value={osFamily}
+              onChange={e => { setOsFamily(e.target.value as LabOsCommand['family']); setOsPreview(null); }}>
+              <option value="5.x">5.x</option><option value="6.x">6.x</option><option value="7.x">7.x</option>
+            </select></label>
+          </div>
+          <div className="mt-2 flex gap-2">
+            <button className={control} disabled={osBusy || !osSeed.trim()}
+              onClick={() => { void generateOs('preview'); }}>Preview OS release</button>
+            <button className={control} disabled={osBusy || !osPreviewCurrent}
+              onClick={() => { void generateOs('inject'); }}>Register OS release</button>
+          </div>
+          {osPreview && <article data-testid="worker-lab-os-preview" className="mt-2 space-y-1">
+            {!osPreviewCurrent && <p role="status">World changed — preview OS again.</p>}
+            <strong>{osPreview.release.displayName}</strong> · {osPreview.release.kind} ·
+            Day {osPreview.release.releaseDay}
+            <p>{osPreview.release.blurb}</p>
+            <p className="text-gray-600">Build {osPreview.release.build} ·
+              RAM {osPreview.release.requirements.minRamMB}MB ·
+              Install {osPreview.release.installSizeGB}GB ·
+              Theme {osPreview.release.theme}</p>
+            <ul className="list-disc pl-4">
+              {osPreview.release.changelog.map((line, index) => <li key={index}>{line}</li>)}
+            </ul>
+          </article>}
+          {osNotice && <p role="status" data-testid="worker-lab-os-result">{osNotice}</p>}
         </section>
         <section data-testid="worker-lab-summary" className="rounded border border-gray-400 bg-white p-2">
           Day {read.day} · OS {read.currentOsId ?? 'none'} ·
