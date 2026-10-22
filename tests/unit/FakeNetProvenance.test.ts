@@ -122,12 +122,23 @@ describe('#184 surface provenance and identity validation', () => {
   });
 
   it('does not infer a canonical identity from a surface handle', () => {
-    const errors = errorsFor([
+    const surface = statement({
+      author: { kind: 'surface_only', handle: 'maya_x', displayName: 'maya x' },
+    });
+    expect(errorsFor([surface])).toEqual([]);
+    expect(surface.author.actorId).toBeUndefined();
+  });
+
+  it('rejects surface impersonation of a known actor unless the handle is bound', () => {
+    const impostor = errorsFor([
+      statement({ author: { kind: 'surface_only', handle: 'nightowl87', displayName: 'Maya' } }),
+    ]);
+    expect(impostor.join(' ')).toContain('display name matches a player-known actor');
+
+    const boundHandle = errorsFor([
       statement({ author: { kind: 'surface_only', handle: 'maya_x', displayName: 'Maya' } }),
     ]);
-    expect(errors).toEqual([]);
-    expect(statement({ author: { kind: 'surface_only', handle: 'maya_x', displayName: 'Maya' } }).author.actorId)
-      .toBeUndefined();
+    expect(boundHandle).toEqual([]);
   });
 
   it('rejects empty/oversized narratives and throws through the assert helper', () => {

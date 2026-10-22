@@ -59,6 +59,35 @@ describe('#184 fake-internet narratives and provenance', () => {
     expect(after.threads).toEqual(before.threads);
   });
 
+  it('keeps a promoted surface author bound to one remote identity without implicit canonical authorship', async () => {
+    const engine = new SimulationEngine();
+    const before = await buildNightBoardNarrative(createFakeNetRuntime(engine));
+    expect(before.statements[0]?.author).toMatchObject({
+      kind: 'surface_only', handle: 'northbank_owl', displayName: 'North Bank Owl',
+    });
+
+    const promoted = engine.dispatchAction({
+      type: 'SOCIAL_PROMOTE_SURFACE_IDENTITY',
+      identity: {
+        source: 'nightboard',
+        username: 'northbank_owl',
+        handle: 'northbank_owl',
+        displayName: 'North Bank Owl',
+      },
+      silent: true,
+    });
+    expect(promoted.success).toBe(true);
+    expect(engine.social.getBuddy('northbank_owl')?.reach).toBe('remote');
+
+    const after = await buildNightBoardNarrative(createFakeNetRuntime(engine));
+    expect(after.statements[0]?.author.kind).toBe('surface_only');
+    expect(after.statements[0]?.author.actorId).toBeUndefined();
+    expect(after.statements.map((statement) => statement.text))
+      .toEqual(before.statements.map((statement) => statement.text));
+    expect(engine.social.getBuddies().filter((buddy) => buddy.handle.toLowerCase() === 'northbank_owl'))
+      .toHaveLength(1);
+  });
+
   it('builds the generated-site flow with sections, clue and guestbook provenance', async () => {
     const engine = new SimulationEngine();
     const before = snapshot(engine);

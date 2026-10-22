@@ -82,6 +82,7 @@ export function validateSurfaceNarrative(input: SurfaceNarrativeValidationInput)
 
   const factsByKey = new Map(input.canonicalFacts.map((fact) => [fact.key, fact]));
   const actorsById = new Map(input.knownActors.map((actor) => [actor.id, actor]));
+  const actorsByName = new Map(input.knownActors.map((actor) => [normalize(actor.displayName), actor]));
 
   narrative.statements.forEach((statement, index) => {
     const at = `statement[${index}]`;
@@ -93,6 +94,12 @@ export function validateSurfaceNarrative(input: SurfaceNarrativeValidationInput)
     if (statement.author.kind === 'surface_only') {
       if (statement.author.actorId) {
         errors.push(`${at} surface-only author must not carry a canonical actor id`);
+      }
+      const nameMatch = actorsByName.get(normalize(statement.author.displayName));
+      if (nameMatch && !nameMatch.handles.some(
+        (handle) => normalize(handle) === normalize(statement.author.handle),
+      )) {
+        errors.push(`${at} surface author display name matches a player-known actor without an explicit binding`);
       }
     } else {
       const actor = statement.author.actorId ? actorsById.get(statement.author.actorId) : undefined;

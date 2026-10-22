@@ -733,7 +733,11 @@ A future reveal may bind a previously surface-only handle to an existing actor w
 only possible through an explicit `actor:` tag that resolves to a player-known
 actor and that actor's owned handle. Generated handles never create roster
 entries; turning a surface author into a persistent contact uses #181's
-governed promotion command (including its collision/conflict handling).
+governed promotion command (including its collision/conflict handling). A
+surface display name that matches a player-known actor is rejected unless the
+surface handle is one of that actor's owned/promoted handles, preventing
+name-only impersonation while allowing a legitimately promoted identity to
+continue posting.
 
 ---
 
