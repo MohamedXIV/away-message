@@ -87,7 +87,7 @@ function findRoutePairs(nowMinute: number): PopulationScaleRoute[] {
   return routes;
 }
 
-function canonicalMessageCount(engine: SimulationEngine, actorIds: readonly string[]): number {
+export function canonicalMessageCount(engine: SimulationEngine, actorIds: readonly string[]): number {
   let count = 0;
   for (const actorId of actorIds) {
     count += engine.social.getConversationPage(actorId, 0, 1).total;

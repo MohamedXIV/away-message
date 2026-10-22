@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import type { SimulationEngine, LiveSimulationState } from '../SimulationEngine';
-import { createPopulationScaleFixture, type PopulationScaleFixture } from './PopulationScaleFixture';
+import { canonicalMessageCount, type PopulationScaleFixture } from './PopulationScaleFixture';
 export {
   POPULATION_SCALE_SEED, POPULATION_SCALE_TIERS, createPopulationScaleFixture,
   type PopulationScaleFixture, type PopulationScaleFixtureOptions, type PopulationScaleRoute,
