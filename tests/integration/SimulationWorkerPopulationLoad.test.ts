@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest';
-import { SimulationKernel } from '../../src/engine/kernel/SimulationKernel';
 import {
   BENCHMARK_POPULATIONS,
   createSimulationBenchmarkFixture,
