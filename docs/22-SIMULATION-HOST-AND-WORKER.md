@@ -1306,3 +1306,41 @@ diagnostic only**, not a sampled performance or optimization gate.
 Cross-run determinism remains proven in P3.39; #177's known
 coarse-jump divergence and per-NPC Life/intent scaling are still
 investigations requiring separate owner-policy decisions.
+
+## P3.41 — exact-head multi-sample rich performance and intent-profile evidence
+
+The canonical PR Verify now has a **dedicated Node 24 benchmark job**,
+separate from the regular Typecheck/Vitest/17 browser acceptance steps. It
+does **not** gate on raw elapsed time; it *does* fail if direct vs Worker
+simulation truth diverges, a zero-minute frame mutates the world, or
+bounded projections exceed their contract.
+
+The first workload is the original #177 **A–E** population runner at
+20/100/250/500 NPC, with three samples per tier, one warmup,
+three steady one-minute ticks, and three extended 1,440-minute
+advances. It writes machine-readable `population-direct.json`.
+
+The companion `bench:worker-rich` workload starts from the exact same
+authored #177 fixture state (remote/local fidelity, social contact history,
+agendas, routes and appointments), tests the canonical
+`SimulationWorkerRuntime` FIFO against a distinct direct owner,
+compares full-state SHA-256 canonical digests, and times the direct
+one-minute tick, Worker FIFO round trip, bounded `gameView`, isolated
+all-local character intent pass, isolated all-local Life snapshot pass,
+startup and explicit full export. It collects **three** samples per
+population plus one warmup, reports nearest-rank p50/p95, and writes
+`worker-rich.json` and GitHub Job Summary Markdown. Renderer and browser
+FPS are **not** timed in this in-process companion runner.
+
+The two JSON files are published through a SHA-named, 30-day
+GitHub Actions artifact, with exact PR head and Node/CPU provenance.
+Historical #177 direct-run measurements must not be relabeled as new
+combined measurements; this new run is independent. The existing
+17-gate Chromium acceptance, including the rich 500-NPC cold
+save/load proof, remains active in the separate Verify job.
+
+Coarse 30-minute vs 30 individual minutes is **diagnostic only**, not
+assumed equivalent. The next owner-side performance change must compare
+baseline/post-change evidence and preserve the deterministic world
+digests, save ownership and Life read purity. No speculative cache or
+duplicate Social/Life ledger is authorized by this gate.

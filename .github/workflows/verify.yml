@@ -178,3 +178,63 @@ jobs:
       - name: Browser Worker AI Lab inspector gate
         if: github.event_name == 'pull_request' && github.event.pull_request.head.ref == 'feat/175-single-worker-simulation-host'
         run: npx playwright test tests/e2e/tier4_scenarios/ScenarioS_WorkerAiLabInspector.spec.ts
+
+  # #175 P3.41: separate runner so the 17 browser gates retain their normal
+  # lifecycle. Real measurements are multi-sampled and saved as immutable
+  # exact-head artifacts; no wall-clock number decides pass/fail.
+  population_evidence:
+    name: Exact-head rich population performance evidence
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.ref == 'feat/175-single-worker-simulation-host'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout the actual PR head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+
+      - name: Verify exact head identity
+        shell: bash
+        env:
+          EXPECTED_SHA: ${{ github.event.pull_request.head.sha }}
+        run: test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+
+      - name: Install Node 24 (match original #177 scaling runner)
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Prepare evidence folder
+        run: mkdir -p benchmark-artifacts
+
+      - name: Canonical #177 A-E stress - multi-sample, all four populations
+        env:
+          SIM_BENCH_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          POP_SCALE_SAMPLES: '3'
+          POP_SCALE_WARMUPS: '1'
+          POP_SCALE_TICKS: '3'
+          POP_SCALE_DAYS: '3'
+          POP_SCALE_OUTPUT: benchmark-artifacts/population-direct.json
+        run: npm run bench:population
+
+      - name: Combined Worker FIFO / direct owner - rich sampled proof
+        env:
+          WORKER_RICH_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          WORKER_RICH_SAMPLES: '3'
+          WORKER_RICH_WARMUPS: '1'
+          WORKER_RICH_OUTPUT: benchmark-artifacts/worker-rich.json
+        run: npm run bench:worker-rich
+
+      - name: Upload exact-head performance evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rich-population-${{ github.event.pull_request.head.sha }}-${{ github.run_attempt }}
+          path: benchmark-artifacts/*.json
+          if-no-files-found: warn
+          retention-days: 30
