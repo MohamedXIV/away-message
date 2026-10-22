@@ -1208,3 +1208,34 @@ selector tests remain fail-closed. This is the root-cutover acceptance
 candidate, **not yet the final #175 closeout**: broad authored gameplay
 parity and #177's combined 20/100/250/500 performance gate still need
 independent evidence.
+
+## P3.38 — 20/100/250/500 Worker population integration proof (verification pending)
+
+The Worker branch now has its own scale gate, **without merging or changing
+the independently owned #177 / Draft PR #205**. The headless integration
+test uses the *existing* deterministic benchmark actor factory at all four
+population tiers. It starts the real `SimulationWorkerRuntime` request
+queue from a single seeded snapshot, runs zero-minute and one-minute
+advances, checks atomic three-projection `gameView` revisions, scoped
+contacts/conversation reads, full explicit export, owner change
+notifications, and cross-owner replay without telemetry nondeterminism.
+Read/tick timings are **exploratory Node evidence**, not browser FPS or
+performance targets.
+
+The additional Chromium gate (on the normal root `/`) seeds real
+20/100/250/500-actor save slots only through an explicit DEV Classic
+fixture page, then makes a full-page transition. The **same Worker owned by
+the actual UI** loads each tier, answers measured bounded semantic reads,
+advances one game minute, exports a snapshot with exactly that roster,
+saves canonical changes and moves to a new Worker for the next tier. The
+500-actor slot is also cold-restored after a full page reload. The test
+instruments the already-created browser Worker and creates no second
+parallel simulation owner. These numbers include Worker message latency;
+the console logs single-run observations, not stable timing percentiles.
+
+This verifies **Worker transport and persistence under population load**.
+It does not replace #177's richer seeded agenda/appointments/route,
+multi-day deterministic workload, fidelity/class/exam semantic proof,
+coarse-vs-single-minute policy decision, or independently sampled
+performance evidence. Those remain external gates for final #175/#177
+closeout; never count older direct-engine benchmarks as combined results.

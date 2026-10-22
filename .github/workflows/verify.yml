@@ -138,6 +138,14 @@ jobs:
         if: github.event_name == 'pull_request' && github.event.pull_request.head.ref == 'feat/175-single-worker-simulation-host'
         run: npx playwright test tests/e2e/tier4_scenarios/ScenarioN_WorkerCityTravel.spec.ts
 
+      # #175 P3.38: genuinely populated 20/100/250/500 NPC worlds boot,
+      # advance, save and reload through the same production-route Worker.
+      # Fixture seeding in Classic is an explicit DEV-only setup page and
+      # ceases to exist before any measured Worker work.
+      - name: Browser Worker population transport and 500-actor cold persistence
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.ref == 'feat/175-single-worker-simulation-host'
+        run: npx playwright test tests/e2e/tier4_scenarios/ScenarioU_WorkerPopulationScale.spec.ts
+
       # #175 P3.20: real installed-app path and PCM WAV playback, not mocked UI.
       - name: Browser Worker RetroAmp real audio gate
         if: github.event_name == 'pull_request' && github.event.pull_request.head.ref == 'feat/175-single-worker-simulation-host'
