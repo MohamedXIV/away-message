@@ -78,15 +78,38 @@ describe('Worker authored café narrative', () => {
     first.run({ kind: 'startCafe' });
     const checkpoint = first.checkpoint();
     expect(checkpoint).not.toBeNull();
+    expect(checkpoint?.version).toBe(2);
+    expect(checkpoint?.display.text).toContain('Hey! You made it!');
     const second = createWorkerCafeNarrative(source);
     const before = source.social.getRelationships('maya');
     expect(second.restore(checkpoint)).toBe(true);
     const current = second.run({ kind: 'current' });
     expect(current.frame?.choices[0]?.text).toBe("Ask how they've been");
+    // Regression: the Ink cursor recovers choice IDs but not the preceding
+    // display text. The saved bounded frame must restore both.
+    expect(current.frame?.text).toContain('Hey! You made it!');
     expect(source.social.getRelationships('maya')).toEqual(before);
     expect(second.run({ kind: 'choose', choiceIndex: 0 }).frame?.text)
       .toContain('week comes out sideways');
     expect(source.social.getRelationships('maya')?.trust).toBeGreaterThan(before?.trust ?? 0);
   });
 
+  it('rejects a tampered display choice rather than trusting sidecar IDs or replaying effects', () => {
+    const source = presentAtCafe();
+    const first = createWorkerCafeNarrative(source);
+    first.run({ kind: 'startCafe' });
+    const saved = first.checkpoint()!;
+    const before = source.social.getRelationships('maya');
+    const second = createWorkerCafeNarrative(source);
+    const tampered = { ...saved, display: {
+      ...saved.display,
+      choices: saved.display.choices.map((choice, index) => index === 0
+        ? { ...choice, text: 'Unauthorized choice' } : choice),
+    } };
+    expect(second.restore(tampered)).toBe(false);
+    expect(second.run({ kind: 'current' }))
+      .toEqual({ active: false, actor: null, frame: null });
+    expect(source.social.getRelationships('maya')).toEqual(before);
+    expect(second.restore({ ...saved, display: { ...saved.display, text: '' } })).toBe(false);
+  });
 });

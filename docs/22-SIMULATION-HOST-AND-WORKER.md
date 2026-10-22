@@ -1166,3 +1166,19 @@ post-choice checkpoint continuation; corrupt cursor handling; missing guest
 refusal; browser save/reload of live authored choice, alongside the existing
 single-owner tests. Latest upstream FakeNet Ink provenance work is integrated
 separately from Worker-authored café changes.
+
+### P3.36 browser regression correction — resume the visible Ink frame
+
+Exact-head CI on `bd178707` confirmed all 347 Vitest files / 1,986
+tests passing but exposed a real Chromium bug: restoring an Ink cursor
+at a choice point reconstituted the choices **without the text that was
+already rendered before the choice**. The Worker now checkpoints the
+bounded visible text, tags and choice labels alongside the authoritative
+Ink cursor (sidecar v2). On cold restore it replays **no effects**, restores
+only the displayed frame and checks its choice IDs/labels exactly match
+the authoritative choices recovered from Ink. Malformed or mismatched
+display metadata rejects the optional scene, not the playable world.
+The regression suite now checks the original café greeting after cold
+reload and rejects a tampered choice label. This is distinct from a
+replayable narrative event log; canonical choices and effects continue
+to be owned by Ink and the simulation domain, never by the saved UI text.

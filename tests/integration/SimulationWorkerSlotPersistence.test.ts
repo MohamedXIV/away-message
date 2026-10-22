@@ -141,9 +141,10 @@ describe('#175 real indexedDB current-slot Worker ownership', () => {
       });
       const saved = (await db.saves.get('ink_copy'))!;
       expect(saved.meta?.cafeNarrative).toMatchObject({
-        version: 1,
+        version: 2,
         actorId: 'maya',
         coordinator: { version: 1, session: { flowId: 'cafe_meeting' } },
+        display: { text: expect.stringContaining('Hey! You made it!') },
       });
       expect(saved.meta?.pulsePayload).toEqual({ view: 'cafe' });
       expect(JSON.stringify(saved.meta?.cafeNarrative)).not.toContain('conversations');
@@ -157,6 +158,7 @@ describe('#175 real indexedDB current-slot Worker ownership', () => {
         active: boolean; frame: { choices: Array<{ text: string }> };
       };
       expect(resumed.active).toBe(true);
+      expect((resumed.frame as { text?: string }).text).toContain('Hey! You made it!');
       expect(resumed.frame.choices[0]?.text).toBe("Ask how they've been");
       const answer = await fromCopy.ask({
         op: 'cafeNarrative', command: { kind: 'choose', choiceIndex: 0 },

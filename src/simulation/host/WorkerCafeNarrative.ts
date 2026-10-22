@@ -6,6 +6,23 @@ import type { NarrativeFrame } from '../../narrative/contracts';
 import type { NarrativeCoordinatorState } from '../../narrative/NarrativeCoordinator';
 import type { SimulationCafeNarrativeCommand, SimulationCafeNarrativeResult } from './SimulationHostProtocol';
 
+/** Only the visible authored frame—not another domain graph or pending effects.
+ * Ink's serialized cursor alone does not preserve the already-rendered text
+ * when a cold load resumes at an existing choice point.
+ */
+interface CafeDisplayCheckpoint {
+  text: string;
+  tags: string[];
+  choices: Array<{ id: string; text: string }>;
+}
+interface CafeNarrativeCheckpoint {
+  version: 2;
+  actorId: string;
+  coordinator: NarrativeCoordinatorState;
+  display: CafeDisplayCheckpoint;
+}
+
+
 const cafeVenue = (() => {
   const venue = GENERATED_VENUE_SERVICES.find(service => service.tags.includes('cafe'));
   if (!venue) throw new Error('Authored café venue is unavailable');
@@ -56,14 +73,21 @@ export function createWorkerCafeNarrative(engine: SimulationKernel) {
   }
 
   /** Optional slot sidecar; never include an NPC roster or owner graph. */
-  function checkpoint(): { version: 1; actorId: string; coordinator: NarrativeCoordinatorState } | null {
+  function checkpoint(): CafeNarrativeCheckpoint | null {
     if (!actor || !lastFrame?.choices.length) return null;
     try { requirePresent(actor.actorId); }
     catch { reset(); return null; }
-    const snapshot = {
-      version: 1 as const,
+    const snapshot: CafeNarrativeCheckpoint = {
+      version: 2,
       actorId: actor.actorId,
       coordinator: coordinator.save(),
+      display: {
+        text: lastFrame.text.slice(0, 4000),
+        tags: lastFrame.tags.slice(0, 16).map(tag => tag.slice(0, 80)),
+        choices: lastFrame.choices.slice(0, 8).map(choice => ({
+          id: choice.id.slice(0, 80), text: choice.text.slice(0, 180),
+        })),
+      },
     };
     // Bounded sidecar rather than unbounded, user-facing text/history export.
     return JSON.stringify(snapshot).length <= 65536 ? snapshot : null;
@@ -75,11 +99,19 @@ export function createWorkerCafeNarrative(engine: SimulationKernel) {
     try {
       if (!input || typeof input !== 'object' ||
           JSON.stringify(input).length > 65536) return false;
-      const saved = input as {
-        version?: unknown; actorId?: unknown; coordinator?: NarrativeCoordinatorState;
-      };
-      if (saved.version !== 1 || typeof saved.actorId !== 'string' ||
+      const saved = input as Partial<CafeNarrativeCheckpoint>;
+      if (saved.version !== 2 || typeof saved.actorId !== 'string' ||
           saved.actorId.length < 1 || saved.actorId.length > 128) return false;
+      const display = saved.display;
+      if (!display || typeof display.text !== 'string' ||
+          !display.text.trim() || display.text.length > 4000 ||
+          !Array.isArray(display.tags) || display.tags.length > 16 ||
+          !display.tags.every(tag => typeof tag === 'string' && tag.length <= 80) ||
+          !Array.isArray(display.choices) || display.choices.length < 1 ||
+          display.choices.length > 8 ||
+          !display.choices.every(choice => choice && typeof choice.id === 'string' &&
+            choice.id.length > 0 && choice.id.length <= 80 &&
+            typeof choice.text === 'string' && choice.text.length <= 180)) return false;
       const state = saved.coordinator;
       if (!state || state.version !== 1 ||
           state.session?.flowId !== 'cafe_meeting' ||
@@ -88,10 +120,20 @@ export function createWorkerCafeNarrative(engine: SimulationKernel) {
           state.host?.flowId !== 'cafe_meeting') return false;
       const guest = requirePresent(saved.actorId);
       coordinator.load(state);
+      // Ink reconstructs the authoritative choice IDs from the serialized
+      // cursor. The saved *display* is accepted only for the exact same
+      // current choices; never use a saved choice to select an effect.
       const frame = coordinator.advanceToChoices();
-      if (!frame.choices.length) { reset(); return false; }
+      const actualChoices = frame.choices.slice(0, 8).map(choice => ({
+        id: choice.id.slice(0, 80), text: choice.text.slice(0, 180),
+      }));
+      if (!actualChoices.length ||
+          JSON.stringify(actualChoices) !== JSON.stringify(display.choices)) {
+        reset();
+        return false;
+      }
       actor = { actorId: guest.actorId, displayName: guest.displayName };
-      lastFrame = frame;
+      lastFrame = { ...frame, text: display.text, tags: [...display.tags] };
       return true;
     } catch {
       reset();
