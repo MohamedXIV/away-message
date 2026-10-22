@@ -1,5 +1,6 @@
 import type { ActionResult, SimulationAction, SimulationState } from '../../engine/types';
 import type { InitialSimulationState } from '../../engine/kernel/PhysicalSimulationRuntime';
+import type { MinuteAdvanceGranularity } from '../../engine/kernel/TimeAdvancement';
 import type { OsInstallPlan } from '../../engine/kernel/ComputerOwnershipRuntime';
 import type { SlotPulseMetadata, SlotSummary } from '../../persistence/slots';
 import type { SimulationChange } from '../../engine/kernel/SimulationPublication';
@@ -144,8 +145,12 @@ export class WorkerSimulationHost implements SimulationHost {
     return this.request({ op: 'labProcedural', command }) as Promise<LabProceduralResult>;
   }
 
-  async advanceGameMinutes(minutes: number, reason?: string): Promise<void> {
-    await this.request({ op: 'advance', minutes, reason });
+  async advanceGameMinutes(
+    minutes: number,
+    reason?: string,
+    granularity?: MinuteAdvanceGranularity,
+  ): Promise<void> {
+    await this.request({ op: 'advance', minutes, reason, granularity });
   }
 
   async advanceRealTime(seconds: number): Promise<void> {

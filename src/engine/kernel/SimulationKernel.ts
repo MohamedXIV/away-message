@@ -16,6 +16,7 @@ import { getWeatherForDay, gameDayName } from '../WeatherEngine';
 import { locationLabel } from '../AppointmentDirector';
 import { createEmptyComputerSetup, createEmptyDisplaySetup } from '../hardware/state';
 import { CoreSimulationRuntime } from './CoreSimulationRuntime';
+import { MAX_MINUTE_ACCURATE_ADVANCE, type MinuteAdvanceGranularity } from './TimeAdvancement';
 import { resolvePcBootStateFromOwnerStatus } from './ComputerOwnershipRuntime';
 import { NpcComputerSimulationRuntime } from './NpcComputerSimulationRuntime';
 import { PhysicalSimulationRuntime, type LiveSimulationState, type InitialSimulationState } from './PhysicalSimulationRuntime';
@@ -220,7 +221,33 @@ export class SimulationKernel {
     this.withinBoundary(() => this.core.advanceRealTime(deltaRealSeconds), before);
   }
 
-  public advanceGameMinutes(minutes: number, reason?: string): void {
+  /**
+   * Coarse is the existing constant-boundary world-time contract for long
+   * activities. Minute fidelity is explicit and reproduces N normal
+   * one-minute calls exactly, including intermediate domain events.
+   * It is deliberately limited: never turn a multi-day time skip into
+   * 1,440 expensive NPC passes by accident.
+   */
+  public advanceGameMinutes(
+    minutes: number,
+    reason?: string,
+    granularity: MinuteAdvanceGranularity = 'coarse',
+  ): void {
+    if (granularity !== 'coarse' && granularity !== 'minute') {
+      throw new Error('Invalid time advance granularity');
+    }
+    if (granularity === 'minute') {
+      if (!Number.isSafeInteger(minutes) || minutes < 0 ||
+          minutes > MAX_MINUTE_ACCURATE_ADVANCE) {
+        throw new RangeError('Minute-accurate advance must be an integer from 0 to 60');
+      }
+      for (let step = 0; step < minutes; step += 1) {
+        // Keep real per-minute publications and event ordering identical to
+        // individually submitted one-minute commands. No shadow timer/cache.
+        this.advanceGameMinutes(1, reason, 'coarse');
+      }
+      return;
+    }
     const before = this.clock.getTotalMinutes();
     if (minutes > 0) this.npc.primeNpcMobility();
     this.withinBoundary(() => this.core.advanceGameMinutes(minutes, reason), before);

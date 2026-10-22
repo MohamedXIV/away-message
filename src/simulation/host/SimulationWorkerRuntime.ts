@@ -1,4 +1,5 @@
 import { SimulationKernel } from '../../engine/kernel/SimulationKernel';
+import { MAX_MINUTE_ACCURATE_ADVANCE } from '../../engine/kernel/TimeAdvancement';
 import { createWorkerCafeNarrative } from './WorkerCafeNarrative';
 import { GENERATED_VENUE_SERVICES } from '../../engine/worldContent.generated';
 import { loadSlotEngineWithNarrative, saveSlot } from '../../persistence/slots';
@@ -343,7 +344,14 @@ export function createSimulationWorkerRuntime(send: (message: SimulationWorkerRe
           if (!Number.isSafeInteger(raw.minutes) || raw.minutes < 0) {
             throw new Error('Invalid world-minute advance');
           }
-          requireKernel().advanceGameMinutes(raw.minutes, raw.reason);
+          if (raw.granularity !== undefined &&
+              raw.granularity !== 'coarse' && raw.granularity !== 'minute') {
+            throw new Error('Invalid time advance granularity');
+          }
+          if (raw.granularity === 'minute' && raw.minutes > MAX_MINUTE_ACCURATE_ADVANCE) {
+            throw new Error('Minute-accurate advance exceeds 60-minute bound');
+          }
+          requireKernel().advanceGameMinutes(raw.minutes, raw.reason, raw.granularity);
           break;
         case 'realtime':
           if (clockTimer !== null) {

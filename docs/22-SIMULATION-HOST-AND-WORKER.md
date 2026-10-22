@@ -1366,3 +1366,43 @@ The benchmark workflow repeats the exact fixture and sampled workload
 on the optimized head so performance deltas can be evaluated with
 machine/runner limitations disclosed. Do not claim a speedup until
 this new exact-head run succeeds and its numbers are compared.
+
+## P3.42 — Explicit bounded time advance fidelity (acceptance pending)
+
+**Decision:** a world-time *jump* is intentionally an **aggregate coarse
+transition**, not a hidden loop of per-minute Life, delivery, time, mood and
+NPC travel effects. This remains the unchanged/default behavior for long
+work, sleep, travel and multi-day activities: it evaluates the complete
+elapsed duration at the destination clock time, with one publication
+boundary. In particular, `advanceGameMinutes(30)` is not promised to
+equal 30 calls to `advanceGameMinutes(1)`. Historical #177 test evidence
+showed player/needs/Life and `cumulativeWorkMinutes` differences; these
+are **expected consequences of different simulation policies**, not
+nondeterminism when using the same policy.
+
+For a short event where the exact intermediate minute transitions matter
+(e.g., an education obligation with potentially overlapping appointments),
+call `advanceGameMinutes(minutes, reason, 'minute')`, or the equivalent
+typed `SimulationHost.advanceGameMinutes(..., 'minute')` / Worker
+`op:'advance', granularity:'minute'`. This explicitly executes the
+**normal canonical one-minute boundary** N times, including all domain
+events and publication ordering, and therefore must reproduce N
+individual one-minute calls **byte-for-byte** in the canonical full-state
+digest (excluding only telemetry). There is no duplicate simulation
+writer, replay cache or minute interpolation.
+
+**Cost/safety contract:** minute-accurate requests accept only safe integer
+durations in **0..60**; invalid input is rejected before any world
+mutation. The canonical Worker validates the same bound before calling
+the Kernel. No multi-day 500-NPC minute loop can be accidentally
+triggered by an RPC, and zero-minute renders still do no full-roster work.
+The ordinary `advanceGameMinutes(minutes)` API stays coarse and backward
+compatible. Choosing precise fidelity is a content/command decision,
+**not** a claim of free equivalence between distinct policies.
+
+Automated acceptance checks must cover identical rich-world canonical
+digests for precise N-minute vs N individual ticks; stable coarse
+behavior, rejected invalid modes and durations, and the actual Worker
+FIFO command path. The work intentionally does **not** change existing
+sleep/work/travel semantics or declare #177 Education-ready until
+specific class/exam/work fixtures select an explicit fidelity policy.

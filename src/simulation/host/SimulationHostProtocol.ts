@@ -1,5 +1,6 @@
 import type { ActionResult, GlobalEvent, SimulationAction, SimulationState } from '../../engine/types';
 import type { InitialSimulationState } from '../../engine/kernel/PhysicalSimulationRuntime';
+import type { MinuteAdvanceGranularity } from '../../engine/kernel/TimeAdvancement';
 import type { OsInstallPlan } from '../../engine/kernel/ComputerOwnershipRuntime';
 import type { OsRelease, OsFamily } from '../../engine/OsCatalog';
 import type { BuddyMetVia, CharacterArchetype } from '../../engine/types';
@@ -142,7 +143,7 @@ export type SimulationWorkerRequest =
   | { id: number; op: 'labProcedural'; command: LabProceduralCommand }
   | { id: number; op: 'labOs'; command: LabOsCommand }
   | { id: number; op: 'labCharacter'; command: LabCharacterCommand }
-  | { id: number; op: 'advance'; minutes: number; reason?: string }
+  | { id: number; op: 'advance'; minutes: number; reason?: string; granularity?: MinuteAdvanceGranularity }
   | { id: number; op: 'realtime'; seconds: number }
   | { id: number; op: 'clock'; running: boolean }
   | { id: number; op: 'query'; query: SimulationQuery }
@@ -168,7 +169,7 @@ export interface SimulationHost {
   labProcedural(command: LabProceduralCommand): Promise<LabProceduralResult>;
   labOs(command: LabOsCommand): Promise<LabOsResult>;
   labCharacter(command: LabCharacterCommand): Promise<LabCharacterResult>;
-  advanceGameMinutes(minutes: number, reason?: string): Promise<void>;
+  advanceGameMinutes(minutes: number, reason?: string, granularity?: MinuteAdvanceGranularity): Promise<void>;
   advanceRealTime(seconds: number): Promise<void>;
   setClockRunning(running: boolean): Promise<void>;
   query<Q extends SimulationQuery>(query: Q): Promise<SimulationQueryResult<Q>>;
