@@ -4,6 +4,7 @@ import { soundManager } from '../../audio/SoundManager';
 import { useNightBoardThreads, useSimulationWebsite } from '../../store/useBoundedSimulationRead';
 import { getNightBoardDynamicThreads } from '../worldSiteHelpers';
 import type { NpcThread } from '../../engine/BoardDirector';
+import { NightBoardInkThread } from './NightBoardInkThread';
 
 interface PostRecord {
   id: number;
@@ -174,6 +175,7 @@ export const NightBoardSite: React.FC<SiteRouteProps> = (props) => {
 
   const [replyInput, setReplyInput] = useState('');
   const [authorInput, setAuthorInput] = useState('');
+  const [inkOpen, setInkOpen] = useState(false);
 
   const handleSelectThread = (thread: ThreadRecord) => {
     setActiveThread(thread);
@@ -233,6 +235,24 @@ export const NightBoardSite: React.FC<SiteRouteProps> = (props) => {
           <span>⬢ Live Wire:</span>
           <span className="font-normal">{dynamicThreads.length} new threads mirrored from CityWire</span>
           <span className="ml-auto text-[10px] font-mono opacity-60">Day {time.day} • procedural</span>
+        </div>
+      )}
+
+      {/* Authored Ink thread entry — existing static/NPC/dynamic threads are unchanged. */}
+      <div className="max-w-4xl w-full mb-3 flex items-center justify-between gap-3 border border-emerald-800 bg-[#0b1220] px-3 py-1.5 text-[11px]">
+        <span className="text-emerald-300">
+          Ink-authored thread: <span className="font-bold">canal pumps &amp; the low hum</span>
+        </span>
+        <button
+          onClick={() => setInkOpen((open) => !open)}
+          className="border border-emerald-700 bg-emerald-950 px-2 py-0.5 text-[10px] text-emerald-300 hover:bg-emerald-900"
+        >
+          {inkOpen ? 'hide thread' : 'open thread'}
+        </button>
+      </div>
+      {inkOpen && (
+        <div className="max-w-4xl w-full mb-4">
+          <NightBoardInkThread navigate={props.navigate} onClose={() => setInkOpen(false)} />
         </div>
       )}
 

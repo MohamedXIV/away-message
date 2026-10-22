@@ -629,6 +629,43 @@ Ink may provide:
 
 AI may generate visual/text flavor within schema and provenance constraints.
 
+### Implemented fake-net slice (#184)
+
+`src/narrative/fakeNet/` adds a provenance-bound narrative layer over the
+existing internet surfaces without replacing them:
+
+- `nightboard-canal-thread.ink` is opened from the NightBoard UI's authored
+  "canal pumps" thread entry. It keeps the existing static, deterministic
+  NPC-authored and world-event-derived threads untouched.
+- `generated-site-canal-watch.ink` powers `canalwatch.local`, a discoverable
+  authored fake-internet personal page registered in FindIt and reached from
+  the NightBoard clue. The existing AI-generated-site path for unknown hosts is
+  unchanged.
+- Every line carries `role:`, `author:`/`actor:`, `provenance:`, optional
+  `factref:` and `clue:` tags. `SurfaceStatement` exposes canonical fact, rumor,
+  claim, opinion, lie and unknown as explicit player-visible labels.
+- NightBoard opening/reply phases include disagreement, a correction, an
+  authored lie, an unknown, and an optional clue. The generated site groups
+  authored sections plus a guestbook entry.
+- Fake-net flow runtimes bind **no effect owner**, so an authored mistake
+  cannot commit a canonical consequence. The builder also rejects pending
+  effects and any linear-flow violation.
+- `canonical_fact` statements must copy an owner-provided bounded fact
+  (currently `current_day` from the clock) and contain its value. Claims,
+  opinions, lies and unknowns may not carry canonical fact fields.
+- L3 surface wording uses #183's optional AI realizer; no AI is required. AI
+  wording cannot change the provenance label, and noncanonical plans forbid
+  authority phrases ("confirmed by", "officially confirmed", etc.). Timeouts,
+  errors and rejected wording fall back to the authored text.
+- Generated mentions never create actors. Surface handles remain surface-only;
+  an explicit canonical `actor:` tag must match a player-known actor and owned
+  handle. Adding a surface author to Pulse uses #181's governed
+  `SOCIAL_PROMOTE_SURFACE_IDENTITY` action (the NightBoard UI exposes it for
+  surface authors). A handle collision with a canonical actor is rejected by
+  that command rather than silently forking identity.
+- No new public-internet dependency is introduced; both flows are local
+  compiled Ink and read bounded SimulationKernel projections.
+
 ---
 
 ## 15. Claims, facts and provenance
@@ -661,6 +698,14 @@ AI is allowed to invent plausible **claims** in L3 contexts when the surface pol
 
 It is not allowed to invent canonical **facts**.
 
+#184 implements this as a small validated model in
+`src/narrative/fakeNet/contracts.ts`. `canonical_fact` requires an
+owner-provided fact reference whose value appears in the text; every other
+provenance is forbidden from carrying fact fields. Validation is pure and
+read-only. The NightBoard rumor/lie and the CanalWatch claim/guestbook remain
+labels on a surface, never entries in WorldEvents, Transit, Scenario or
+Knowledge state.
+
 ---
 
 ## 16. Character identity and internet claims
@@ -683,6 +728,12 @@ Reach must come from canonical character creation/promotion/world state.
 Do not infer real name from a surface handle unless player knowledge allows it.
 
 A future reveal may bind a previously surface-only handle to an existing actor without creating a duplicate actor.
+
+#184's fake-net flows keep surface authors surface-only. A canonical author is
+only possible through an explicit `actor:` tag that resolves to a player-known
+actor and that actor's owned handle. Generated handles never create roster
+entries; turning a surface author into a persistent contact uses #181's
+governed promotion command (including its collision/conflict handling).
 
 ---
 

@@ -9,6 +9,7 @@ export type InternetHost =
   | 'myplace.local'
   | 'mailbox.local'
   | 'nightboard.local'
+  | 'canalwatch.local'
   | 'citywire.local'
   | 'jobs.local'
   | 'goldnet.local'

@@ -31,4 +31,9 @@ describe('SearchEngine & SearchIndex Test Suite', () => {
     const emptyResults = searchInternet('   ', 1, {});
     expect(emptyResults).toEqual([]);
   });
+
+  it('finds the authored CanalWatch fake-internet page', () => {
+    const results = searchInternet('canalwatch intake tunnels', 1, {});
+    expect(results.some((result) => result.url.includes('canalwatch.local'))).toBe(true);
+  });
 });
