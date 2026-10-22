@@ -1270,3 +1270,39 @@ does not pretend to include the richer #177 appointments.
 
 This is a combined deterministic/correctness gate, **not** a sampled
 post-optimization performance signoff or game-design parity acceptance.
+
+## P3.40 — Full #177 500-NPC rich authored world in the real Chromium Worker
+
+P3.39 verified deterministic transport of the real #177
+agenda/appointment/route fixtures, but its headless runtime harness does
+not prove that the browser's **actual sole UI Worker** can open the same
+large authored world. P3.40 closes this evidence gap, not the remaining
+general playtest gate.
+
+The fixture builder is extracted **without algorithm or fixture-field
+changes** into browser-safe `PopulationScaleFixture.ts`. All existing
+Node-only SHA-256 digests, metrics and runner behavior remain in
+`PopulationScaleGate.ts`, which re-exports the exact existing public
+interfaces. This prevents Vite from bundling Node's `node:crypto` into
+the game's browser/test setup while retaining #177's original seeded
+canonical actor schedule, transit, social and appointment provenance.
+
+An additional Chromium gate seeds the **real 500-NPC #177 fixture**
+(377 local, 123 remote, 377 same-day agendas, 38 route-backed
+appointments, 192 messages at the recorded default seed) through a
+DEV-only classic setup page, then fully navigates to the normal `/`.
+It uses the already-existing **one** Worker owned by the React UI to
+read roster/appointments, capped lab and contact pages, advance exactly
+one world minute, verify canonical NPC trip planning, confirm a remote
+actor has no local XYZ/trip, and save through the production UI. A full
+document reload creates a fresh Worker, cold loads the exact same slot
+and verifies world minute, route-backed trip records, appointment and
+agenda persistence, contact history and no main-thread engine/debug
+globals. The test never creates a parallel simulation owner or exposes
+an unrestricted player-facing query.
+
+The one-minute Worker-browser elapsed time is printed as **single-run
+diagnostic only**, not a sampled performance or optimization gate.
+Cross-run determinism remains proven in P3.39; #177's known
+coarse-jump divergence and per-NPC Life/intent scaling are still
+investigations requiring separate owner-policy decisions.
