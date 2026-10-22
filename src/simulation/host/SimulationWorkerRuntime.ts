@@ -1,4 +1,5 @@
 import { SimulationKernel } from '../../engine/kernel/SimulationKernel';
+import { GENERATED_VENUE_SERVICES } from '../../engine/worldContent.generated';
 import { loadSlotEngine, saveSlot } from '../../persistence/slots';
 import type { LabProceduralCategory, SimulationQuery, SimulationWorkerReply, SimulationWorkerRequest } from './SimulationHostProtocol';
 
@@ -129,6 +130,12 @@ export function createSimulationWorkerRuntime(send: (message: SimulationWorkerRe
       case 'jobBoard': return engine.getJobBoardRead();
       case 'mailbox': return engine.getMailboxRead();
       case 'presence': return engine.getPresenceRead();
+      case 'cafeGuest': {
+        // The Worker chooses authored venue identity, not the caller.
+        const venue = GENERATED_VENUE_SERVICES.find(service => service.tags.includes('cafe'));
+        if (!venue) throw new Error('Authored café venue is unavailable');
+        return engine.getCafeGuestRead(venue.placeId);
+      }
       case 'situation': return engine.getSituationRead();
       case 'residence': return engine.getResidenceRead();
       case 'transit': return engine.getTransitRead();

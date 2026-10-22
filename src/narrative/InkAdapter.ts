@@ -11,46 +11,16 @@ import { parseNarrativeTag } from './tagParser';
 export class InkAdapter {
   public readonly engine: SimulationEngine;
   public readonly narrative: NarrativeEngine;
-  private unsubscribeEvents: Array<() => void> = [];
   private triggeredKnots: Set<string> = new Set();
   private isProcessingKnot = false;
 
   constructor(engine: SimulationEngine, narrative: NarrativeEngine) {
     this.engine = engine;
     this.narrative = narrative;
-    this.setupListeners();
+    // Legacy migration input only. Tick/day/status auto-trigger polling was
+    // removed: authored flows are started explicitly or from semantic events
+    // through NarrativeCoordinator (docs/16 §17.1–17.2).
     this.syncSnapshot();
-  }
-
-  public destroy(): void {
-    for (const unsub of this.unsubscribeEvents) {
-      unsub();
-    }
-    this.unsubscribeEvents = [];
-  }
-
-  private setupListeners(): void {
-    const unsubTick = this.engine.events.on('time:tick', () => {
-      this.syncSnapshot();
-      this.evaluateAutomaticTriggers();
-    });
-
-    const unsubJump = this.engine.events.on('time:jump', () => {
-      this.syncSnapshot();
-      this.evaluateAutomaticTriggers();
-    });
-
-    const unsubDay = this.engine.events.on('time:day_changed', () => {
-      this.syncSnapshot();
-      this.evaluateAutomaticTriggers();
-    });
-
-    const unsubStatus = this.engine.events.on('social:status_changed', () => {
-      this.syncSnapshot();
-      this.evaluateAutomaticTriggers();
-    });
-
-    this.unsubscribeEvents.push(unsubTick, unsubJump, unsubDay, unsubStatus);
   }
 
   public syncSnapshot() {

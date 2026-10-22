@@ -48,6 +48,31 @@ describe('#175 single-writer Worker runtime protocol', () => {
     }
   });
 
+  it('publishes a bounded, factual player-known café guest without full world reads', async () => {
+    const { ask, runtime } = harness();
+    const guestQuery = vi.spyOn(SimulationKernel.prototype, 'getCafeGuestRead');
+    const stateRead = vi.spyOn(SimulationKernel.prototype, 'getState');
+    try {
+      await ask({ op: 'init' });
+      const response = await ask({ op: 'query', query: { kind: 'cafeGuest' } }) as
+        ReturnType<SimulationKernel['getCafeGuestRead']>;
+      expect(guestQuery).toHaveBeenCalledWith('place_a1');
+      expect(response.placeId).toBe('place_a1');
+      expect(typeof response.revision).toBe('number');
+      expect(Object.keys(response).sort()).toEqual(['guest', 'placeId', 'revision']);
+      if (response.guest) {
+        expect(typeof response.guest.actorId).toBe('string');
+        expect(typeof response.guest.displayName).toBe('string');
+      }
+      expect(JSON.stringify(response)).not.toContain('conversations');
+      expect(stateRead).not.toHaveBeenCalled();
+    } finally {
+      stateRead.mockRestore();
+      guestQuery.mockRestore();
+      runtime.close();
+    }
+  });
+
   it('publishes HUD, physical place and player status atomically in one bounded FIFO reply', async () => {
     const { ask, runtime } = harness();
     const readState = vi.spyOn(SimulationKernel.prototype, 'getState');

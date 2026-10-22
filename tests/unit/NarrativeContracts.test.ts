@@ -36,6 +36,7 @@ describe('Narrative contracts', () => {
     expect(queryNarrativeContext(projection, 'current_day')).toBe(2);
     expect(queryNarrativeContext(projection, 'player_cash')).toBe(38);
     expect(queryNarrativeContext(projection, 'actor_trusted')).toBe(true);
+    expect(queryNarrativeContext(projection, 'actor_known')).toBe(true);
     expect(queryNarrativeContext(projection, 'location_co_located')).toBe(true);
     expect(queryNarrativeContext(projection, 'has_obligation')).toBe(true);
     expect(queryNarrativeContext(projection, 'flag', 'visited')).toBe(true);

@@ -5,12 +5,14 @@ import { CITY_NODES, type CityNodeId, type TravelMode } from '../../engine/CityM
 import { DOOR_OPTIONS, isOptionOpen } from '../../world/data/roomInteractables';
 import type { RoomActivityOption } from '../../world/types';
 import type { WorkerGameSession } from './WorkerGameSession';
+import { WorkerCafePresencePanel } from './WorkerCafePresencePanel';
 
 /** Authored P7 place actions, with canonical effects requested via the sole Worker. */
 export function actionsForCityLocation(location: CityNodeId): RoomActivityOption[] {
   switch (location) {
     case 'cart': return DOOR_OPTIONS.filter(option => option.actionType === 'work');
     case 'diner': return DOOR_OPTIONS.filter(option => option.id.startsWith('diner_'));
+    case 'cafe': return DOOR_OPTIONS.filter(option => option.id === 'visit_cafe');
     case 'canal': return DOOR_OPTIONS.filter(option => option.id === 'canal_walk');
     case 'laundry': return DOOR_OPTIONS.filter(option => option.id === 'laundromat');
     default: return [];
@@ -101,6 +103,9 @@ export function WorkerCityPlaceView({
           className="rounded border border-emerald-900/60 bg-emerald-950/30 p-3 text-xs text-emerald-200">
           {arrivalNotice}
         </p>}
+        {location === 'cafe' && (
+          <WorkerCafePresencePanel session={session} world={world} revision={hud.revision} />
+        )}
         {location === 'lobby' && (
           <div className="rounded border border-slate-700 bg-slate-900 p-4" data-testid="worker-place-rent">
             <h3 className="font-semibold text-amber-200">Front desk · Rent</h3>

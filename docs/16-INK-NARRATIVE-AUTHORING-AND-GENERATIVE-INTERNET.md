@@ -32,14 +32,16 @@ Ink is not a replacement for the SimulationKernel, Life Matrix, Social authority
 
 This direction is based on the current repository, not on the older removed-Ink architecture.
 
-### Ink is currently absent
+### Ink runtime is restored (#180–#182)
 
-- `inkjs` is not in `package.json`;
-- `src/narrative/NarrativeEngine.ts` explicitly states that Ink sources and inkjs were removed;
-- current authored narrative uses TypeScript `StoryKnot` data;
-- `src/narrative/InkAdapter.ts` is a legacy name and does not run Ink.
+- `inkjs` is a real dependency and `npm run ink:compile` compiles authored `.ink` sources into committed JSON fixtures/flows;
+- `src/narrative/ink/InkRuntime.ts` wraps compiled stories; `NarrativeHost` validates bounded context queries and typed semantic effect requests;
+- `src/narrative/NarrativeCoordinator.ts` starts/resumes compiled flows from explicit interaction requests or meaningful semantic events;
+- `src/narrative/realization/` enforces L0–L3 plans with complete authored offline text and guarded optional AI wording (#183);
+- `SimulationNarrativeAdapter` maps the coordinator onto bounded SimulationKernel reads and canonical owner commands without a full `getState()` snapshot;
+- the legacy `NarrativeEngine` / `InkAdapter` / StoryKnot path is migration-only, unmounted in production, and has a bounded deletion plan in §17.2.
 
-Restoring Ink therefore means adding a real runtime/compiler path, not merely renaming the existing adapter.
+Restoring Ink therefore means a real runtime/compiler path, not merely renaming the existing adapter.
 
 ### Character identity already has local/remote reach
 
@@ -508,6 +510,34 @@ Wider freedom for surfaces where generation/unreliability is itself the fiction:
 
 Even L3 cannot silently mutate world truth.
 
+### Implemented realization contract (#183)
+
+`src/narrative/realization/` implements the tier policy and utterance plan:
+
+- `UtterancePlan` carries tier, speaker, speech act, the complete authored
+  `offlineText`, required-fact anchors, tone, allowed uncertainty, forbidden
+  claims and a length cap. It deliberately contains no choices, effect payloads
+  or canonical state.
+- Authored Ink tags feed the plan: `# tier:l0..l3`, `# speech:reassure`,
+  `# fact:the week`, `# tone:warm`, `# uncertainty:...`,
+  `# forbid:the exact reason`, `# maxchars:320`.
+- Canonical local/remote actors are capped at L2 even if a flow requests L3.
+  System/unknown bindings stay L0. L3 requires an explicitly surface-only
+  speaker.
+- `NarrativeCoordinator.getUtterancePlan()` produces the plan for the current
+  authored frame; plans should be derived per utterance, not from a combined
+  multi-line scene.
+- `realizeUtterance(plan, { ai })` always has the complete offline wording.
+  AI is optional, injected, timeout-bounded (default 2.5s) and rejected on
+  omitted required-fact anchors, forbidden claims, multi-line/overlong output,
+  or missing anchors for L1/L2. Every rejection returns the authored text.
+- The guard is deliberately lexical and bounded; it cannot prove semantics.
+  Authors provide stable fact anchors, and canonical owners remain the only
+  authority for outcomes and knowledge.
+- Realization returns text only. Choices, validated effect payloads and pending
+  effects never enter the plan or the AI boundary, so AI wording cannot change
+  them.
+
 ---
 
 ## 13. Offline parity
@@ -541,6 +571,12 @@ same gameplay meaning
 The current generic free-form fallback such as "connection's being weird" is not sufficient for long-term school/relationship content.
 
 Generated L3 internet surfaces may use deterministic/template fallback rather than authored line-by-line equivalents.
+
+#183 implements this for the narrative seam: compiled Ink always supplies the
+complete authored utterance, AI is an optional surface rewrite behind the
+meaning guard described in §12, and realization failures/timeouts return the
+authored text without touching choices or canonical effects. Scenario flows
+with unknown bindings remain exact L0 and therefore playable with no AI.
 
 ---
 
@@ -674,6 +710,86 @@ Once the Ink gate passes:
 - new authored conversational flow should prefer Ink;
 - TypeScript remains for systems/policies/contracts;
 - no new StoryKnot-specific architecture should be added.
+
+### 17.1 NarrativeCoordinator (#182)
+
+`NarrativeCoordinator` is the application-facing authored-flow seam over the
+#180 foundation:
+
+```text
+explicit interaction / semantic event / Scenario hook
+                    ↓
+          NarrativeCoordinator
+      (trigger policy + active flow)
+                    ↓
+     NarrativeHost + compiled InkRuntime
+       bounded queries / validated effects
+                    ↓
+   NarrativeEffectOwner (canonical owner)
+```
+
+Rules:
+- triggers are explicit interactions or meaningful semantic events
+  (`conversation_started`, `actor_encountered`, `knowledge_fact_learned`,
+  `object_inspected`, `scenario_hook_available`); ordinary time ticks are not
+  triggers and the coordinator has no tick subscription;
+- context comes from `NarrativeContextSource`, implemented by bounded owner
+  reads (HUD/time/cash, needs, selected actor read, NPC place, Scenario
+  projection). Ink never receives a full `engine.getState()` snapshot;
+- effect requests still pass the #180 typed validation, then an
+  `NarrativeEffectOwner` turns them into ordinary `SimulationAction`s. Owners
+  validate preconditions and commit; Ink never mutates canonical state;
+- active-flow state (Ink continuation, session refs, last bounded context) is
+  serializable through `save()`/`load()`. Wiring that state into the main save
+  slot belongs to the #185 integration gate; #182 deliberately does not change
+  kernel persistence contracts;
+- Scenario hooks are consumed through the existing Scenario runtime. The
+  coordinator stores only an instance/hook reference for the active flow; it
+  does not copy Scenario facts, bindings or consumed-hook lists.
+
+Representative migrated flows:
+- `src/narrative/ink/flows/cafe-meeting.ink` — the existing authored Starlight
+  Café in-person opener, now branchable Ink with validated social effects;
+- `src/narrative/ink/flows/scenario-old-debt.ink` — launched by the existing
+  `old_debt` Scenario hook (`debt_search` / `debtor_nearby`), read-only over
+  bounded Scenario context.
+
+A representative StoryKnot migration is no longer possible from production
+content because the named campaign knots were removed by the open-ended
+sandbox decision (#127) and `ALL_STORY_KNOTS` is empty. The café interaction is
+the representative authored interaction being migrated; future authored
+content must be Ink-first.
+
+### 17.2 Bounded StoryKnot / InkAdapter retirement plan
+
+Current legacy inventory (all unmounted in production):
+- `src/narrative/InkAdapter.ts` — tick listeners + full `getState()` snapshot;
+- `src/narrative/NarrativeEngine.ts`, `types.ts`, `tagParser.ts` — TS StoryKnot
+  evaluation and semantic-tag parsing;
+- `src/narrative/data/allKnots.ts` — intentionally empty catalog (no named
+  campaign);
+- `src/apps/pulse/data/dialogueTrees.ts` and the Pulse `DIALOGUE_SCRIPTS`
+  consumers — empty bridge from knots to scripted NPC messages;
+- legacy tests: `tests/unit/NarrativeEngine.test.ts`,
+  `tests/unit/CafeMeetingScene.test.ts`, tag-parser coverage.
+
+Deletion gate: #185, after the integration/offline gate proves authored
+conversation coverage through `NarrativeCoordinator`.
+
+Ordered steps:
+1. Route every remaining authored interaction through compiled Ink +
+   `NarrativeCoordinator` (no new StoryKnot registration).
+2. Move any remaining narrative flags/beats to canonical World owners; the
+   deprecated aliases already route there.
+3. Remove `DIALOGUE_SCRIPTS` consumption from Pulse (AI/template dialogue
+   remains the non-authored path).
+4. Delete the legacy files and their tests in one focused PR; run
+   typecheck/build/full suite and confirm no production import remains.
+5. Pre-freeze development snapshots containing `narrative` fields may be
+   refused/reset cleanly; do not add a parallel narrative save authority.
+
+No production path may instantiate `InkAdapter`; it must not regain tick
+polling or full-state access during the transition.
 
 ---
 

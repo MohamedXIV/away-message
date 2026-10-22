@@ -1100,3 +1100,22 @@ stale generation disposal and fail-closed malformed bundle rejection.
 This is an intermediate performance/consistency milestone, not the plain
 `/` default-Worker cutover or the #177 combined 20/100/250/500 stress gate.
 Do not close #175 on this change alone.
+
+## P3.34 — Factual Worker café guest and authored venue
+
+A Worker-serializable `cafeGuest` read resolves the authored café venue
+inside the Worker and asks the canonical Kernel for a player-known actor
+who is physically present at that venue. Only a bounded
+`{ revision, placeId, guest: null | { actorId, displayName } }` crosses IPC.
+The UI clears stale guests on revision changes instead of confusing online
+status with physical presence.
+
+The Worker city café now renders the same authored Phaser place projection
+as Classic and can perform its ordinary coffee outing via the existing
+canonical `PLAYER_CITY_OUTING` receipt (time and money stay Worker-owned).
+This intentionally does not pretend that full in-person chat or the new
+Ink/Narrative flow is already migrated. Those remain parity requirements,
+as do the ordinary root cutover and final combined population gate.
+
+The same integration commit incorporates main's upstream NarrativeCoordinator
+and Ink authoring work without touching the separate narrative agent branch.

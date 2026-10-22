@@ -11,12 +11,13 @@ import type {
   SimulationMessengerRead, SimulationPlayerStatusRead, SimulationWeatherBuddyRead,
   SimulationPresenceRead, SimulationResidenceRead, SimulationSituationRead,
   SimulationTransitRead, SimulationWebsiteRead, SimulationWorldRead, SimulationInstalledProgramsRead,
-  SimulationLabPageRead,
+  SimulationLabPageRead, SimulationCafeGuestRead,
 } from '../../engine/kernel/SimulationPublication';
 
 /** #175: Only whitelisted, bounded semantic/read models cross postMessage. */
 export interface SimulationQueryResults {
   gameView: SimulationGameViewRead;
+  cafeGuest: SimulationCafeGuestRead;
   hud: SimulationHudProjection;
   world: SimulationWorldRead;
   playerStatus: SimulationPlayerStatusRead;
@@ -43,6 +44,7 @@ export interface SimulationQueryResults {
 }
 export type SimulationQuery =
   | { kind: 'gameView' | 'hud' | 'world' | 'playerStatus' | 'chrome' | 'desktop' | 'apps' | 'installedPrograms' | 'presence' | 'situation' | 'residence' | 'transit' | 'website' | 'jobBoard' | 'mailbox' | 'weatherBuddy' }
+  | { kind: 'cafeGuest' }
   | { kind: 'messenger'; maxContacts?: number }
   | { kind: 'labPage'; actorPage?: number; meetingPage?: number }
   | { kind: 'actor'; actorId: string }

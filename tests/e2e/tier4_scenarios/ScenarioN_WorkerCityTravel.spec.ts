@@ -59,3 +59,33 @@ test('Worker-owned laundromat visit commits canonical money and time and persist
   await expect(page.getByTestId('worker-city-place-location')).toHaveText('Suds & Spin');
   expect(await page.evaluate(() => Boolean((window as any).__simEngine || (window as any).__simStore))).toBe(false);
 });
+
+test('Worker cafe uses authored Phaser place and canonical presence, outing and cold save', async ({ page }) => {
+  test.setTimeout(90_000);
+  await page.goto('/?runtime=worker');
+  await page.getByRole('button', { name: 'New game' }).click();
+  await expect(page.getByTestId('worker-phase')).toHaveText('game');
+  await page.getByRole('button', { name: 'city', exact: true }).click();
+  await page.getByRole('button', { name: 'Choose Starlight Café' }).click();
+  await page.getByRole('button', { name: 'Travel to Starlight Café' }).click();
+  await expect(page.getByTestId('worker-city-place-location')).toHaveText('Starlight Café');
+  await expect(page.getByTestId('worker-cafe-scene')).toBeVisible();
+  await expect(page.getByTestId('worker-cafe-presence')).toContainText(
+    /No one you know is here right now|is here at the café/,
+  );
+  expect(await page.evaluate(() => !('__simEngine' in window) && !('__simStore' in window)))
+    .toBe(true);
+  const before = Number(await page.getByTestId('worker-minute').textContent());
+  await page.getByRole('button', { name: 'Go: Travel to Starlight Café' }).click();
+  await expect(page.getByTestId('worker-city-place-receipt')).toBeVisible();
+  await expect.poll(async () => Number(await page.getByTestId('worker-minute').textContent()))
+    .toBeGreaterThan(before);
+  await page.getByRole('button', { name: 'Save game' }).click();
+  await expect(page.getByText('Saved to slot_1')).toBeVisible();
+  await page.reload();
+  await page.getByRole('button', { name: 'Continue last save' }).click();
+  await expect(page.getByTestId('worker-cafe-scene')).toBeVisible();
+  await expect(page.getByTestId('worker-cafe-presence')).toContainText(
+    /No one you know is here right now|is here at the café/,
+  );
+});
