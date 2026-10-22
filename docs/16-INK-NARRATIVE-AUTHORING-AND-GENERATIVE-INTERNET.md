@@ -828,8 +828,9 @@ Current legacy inventory (all unmounted in production):
 - legacy tests: `tests/unit/NarrativeEngine.test.ts`,
   `tests/unit/CafeMeetingScene.test.ts`, tag-parser coverage.
 
-Deletion gate: #185, after the integration/offline gate proves authored
-conversation coverage through `NarrativeCoordinator`.
+Deletion gate: #185 verified that the legacy path has no
+production-authoring role. The mechanical file removal is a follow-up cleanup;
+no production path may instantiate `InkAdapter` in the meantime.
 
 Ordered steps:
 1. Route every remaining authored interaction through compiled Ink +
