@@ -896,3 +896,10 @@ Ink restoration is complete when:
 - fake-net L3 content has explicit provenance/claim safety;
 - representative offline play remains complete with external AI disabled;
 - no narrative layer duplicates simulation truth.
+
+#185's executable evidence and playable-surface map are recorded in
+`docs/22-INK-ACCEPTANCE-GATE.md`. The café in-person scene now runs the authored
+Ink opening/choices under canonical presence, NightBoard/CanalWatch are
+playable offline with provenance labels, and the legacy StoryKnot path remains
+unmounted with no production-authoring role (mechanical deletion plan in
+§17.2).

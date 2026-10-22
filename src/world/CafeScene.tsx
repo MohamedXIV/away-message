@@ -25,6 +25,8 @@ import { buildConversationSummary } from '../apps/pulse/utils/conversationMemory
 import { useReplySuggestions } from '../apps/pulse/hooks/useReplySuggestions';
 import { ReplyChips } from '../apps/pulse/components/ReplyChips';
 import { toneSuggestion } from '../engine/PlayerActs';
+import { startCafeMeetingNarrative } from '../narrative/cafeMeeting';
+import type { NarrativeCoordinator } from '../narrative/NarrativeCoordinator';
 
 interface CafeTurn {
   id: number;
@@ -32,11 +34,15 @@ interface CafeTurn {
   text: string;
 }
 
-// Authored opening line is mirrored in src/narrative/ink/flows/cafe-meeting.ink.
-// The Ink flow is exercised end-to-end by NarrativeCoordinator; wiring this view
-// to the flow is the #185 integration gate.
-const CAFE_OPENER =
-  "Hey! You made it! It's... honestly so strange seeing you outside of that little chat box. But in a really good way. I grabbed the booth by the radiator — sit, sit.";
+interface AuthoredChoice {
+  id: string;
+  text: string;
+}
+
+// The authored café opener and choices now come from compiled Ink
+// (src/narrative/ink/flows/cafe-meeting.ink) through NarrativeCoordinator.
+// This fallback only covers an unavailable flow/guest.
+const CAFE_FALLBACK_OPENER = 'The booth by the radiator is free. Steam curls off an untouched mug.';
 
 export function toneToExpression(tone: string | undefined, fallback: CafeExpression): CafeExpression {
   const normalized = (tone || '').toLowerCase();
@@ -71,16 +77,42 @@ export const CafeScene: React.FC<{ buddyId?: string }> = ({ buddyId: propBuddyId
 
   // Dialogue State
   const [turns, setTurns] = useState<CafeTurn[]>([
-    { id: 0, speaker: 'buddy', text: CAFE_OPENER },
+    { id: 0, speaker: 'buddy', text: CAFE_FALLBACK_OPENER },
   ]);
   const [input, setInput] = useState('');
   const [injectedSuggestion, setInjectedSuggestion] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [currentExpression, setCurrentExpression] = useState<CafeExpression>('smile');
-  const [displayedText, setDisplayedText] = useState<string>(CAFE_OPENER);
+  const [displayedText, setDisplayedText] = useState<string>(CAFE_FALLBACK_OPENER);
   const [isTyping, setIsTyping] = useState<boolean>(false);
+  const [authoredChoices, setAuthoredChoices] = useState<AuthoredChoice[]>([]);
+  const narrativeRef = useRef<NarrativeCoordinator | null>(null);
 
   const { suggestions, loading: suggestionsLoading, refresh: refreshSuggestions } = useReplySuggestions();
+
+  // Authored café opening/choices are Ink-driven; presence is canonical.
+  useEffect(() => {
+    narrativeRef.current?.end();
+    narrativeRef.current = null;
+    setAuthoredChoices([]);
+    if (!buddyId) {
+      setTurns([{ id: 0, speaker: 'buddy', text: CAFE_FALLBACK_OPENER }]);
+      return;
+    }
+    const started = startCafeMeetingNarrative(engine, buddyId, cafeService.placeId);
+    if (!started) {
+      setTurns([{ id: 0, speaker: 'buddy', text: CAFE_FALLBACK_OPENER }]);
+      return;
+    }
+    narrativeRef.current = started.coordinator;
+    const opening = started.frame.text.trim() || CAFE_FALLBACK_OPENER;
+    setTurns([{ id: 0, speaker: 'buddy', text: opening }]);
+    setAuthoredChoices(started.frame.choices.map((choice) => ({ id: choice.id, text: choice.text })));
+    return () => {
+      narrativeRef.current?.end();
+      narrativeRef.current = null;
+    };
+  }, [buddyId, engine]);
 
   const cafeEnvironment = worldRead.environment;
   const cafeProjection = useMemo(
@@ -149,6 +181,7 @@ export const CafeScene: React.FC<{ buddyId?: string }> = ({ buddyId: propBuddyId
   const latestBuddyId = [...turns].reverse().find((turn) => turn.speaker === 'buddy')?.id;
   useEffect(() => {
     if (!buddyId || latestBuddyId === undefined || busy) return;
+    if (authoredChoices.length > 0 || narrativeRef.current) return;
     const key = `${buddyId}:cafe:${latestBuddyId}`;
     void refreshSuggestions(key, async () => {
       const slices = readMemorySlices();
@@ -169,7 +202,7 @@ export const CafeScene: React.FC<{ buddyId?: string }> = ({ buddyId: propBuddyId
       }, loadAISettings());
       return result.data.replies.map((text) => ({ text, ...toneSuggestion(text) }));
     });
-  }, [latestBuddyId, busy, buddyId, engine, refreshSuggestions]);
+  }, [latestBuddyId, busy, buddyId, engine, refreshSuggestions, authoredChoices.length]);
 
   useEffect(() => {
     if (injectedSuggestion) setInput(injectedSuggestion);
@@ -248,6 +281,37 @@ export const CafeScene: React.FC<{ buddyId?: string }> = ({ buddyId: propBuddyId
       pushTurn('buddy', 'sorry, lost my train of thought for a sec... what were you saying?');
     } finally {
       setBusy(false);
+    }
+  };
+
+  const handleAuthoredChoice = (index: number, choiceText: string) => {
+    const coordinator = narrativeRef.current;
+    if (!coordinator || !buddyId) return;
+    const send = engine.dispatchAction({
+      type: 'SOCIAL_SEND_MESSAGE', buddyId, text: choiceText, tags: ['cafe', 'ink'],
+    });
+    if (!send.success) {
+      pushTurn('player', `(${send.error ?? '...not now.'})`);
+      return;
+    }
+    soundManager.play('click');
+    try {
+      const frame = coordinator.choose(index);
+      const reply = frame.text.trim();
+      pushTurn('player', choiceText);
+      if (reply) {
+        engine.dispatchAction({
+          type: 'SOCIAL_RECEIVE_MESSAGE', buddyId, text: reply, tags: ['cafe', 'ink'],
+        });
+        pushTurn('buddy', reply);
+      }
+      setCurrentExpression(toneToExpression(frame.tags.join(' '), 'smile'));
+      setAuthoredChoices([]);
+    } catch {
+      setAuthoredChoices([]);
+    } finally {
+      coordinator.end();
+      narrativeRef.current = null;
     }
   };
 
@@ -350,34 +414,49 @@ export const CafeScene: React.FC<{ buddyId?: string }> = ({ buddyId: propBuddyId
           {isTyping && <span className="inline-block w-2 h-4 bg-amber-400 ml-1 animate-pulse" />}
         </div>
 
-        {/* Suggested replies */}
-        <ReplyChips
-          suggestions={suggestions}
-          loading={suggestionsLoading}
-          disabled={busy}
-          onPick={(text) => setInjectedSuggestion(text)}
-          onRefresh={() => {
-            const id = [...turns].reverse().find((turn) => turn.speaker === 'buddy')?.id;
-            if (id === undefined) return;
-            void refreshSuggestions(`${buddyId}:cafe:${id}:manual`, async () => {
-              const slices = readMemorySlices();
-              const recent = engine.getConversationRead(buddyId, 0, 6).messages.map((message) => ({
-                sender: message.senderId === 'player' ? 'player' : 'buddy',
-                text: message.text,
-              }));
-              const relationship = engine.social.getRelationships(buddyId);
-              const result = await aiService.suggestReplies({
-                buddyId,
-                displayName: buddy?.displayName || buddyId,
-                buddyPersona: buddyPersonaLine(buddyId, buddy),
-                relationshipSummary: relationship ? JSON.stringify(relationship) : 'new friendship',
-                recentMessages: recent,
-                memoryHint: (slices.buddyFacts[buddyId] || []).slice(-1)[0] || '',
-              }, loadAISettings());
-              return result.data.replies.map((text) => ({ text, ...toneSuggestion(text) }));
-            });
-          }}
-        />
+        {/* Authored Ink choices take precedence over AI suggestions. */}
+        {authoredChoices.length > 0 ? (
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {authoredChoices.map((choice, index) => (
+              <button
+                key={choice.id}
+                onClick={() => handleAuthoredChoice(index, choice.text)}
+                disabled={busy}
+                className="rounded border border-amber-500/50 bg-slate-800 px-2.5 py-1 text-left text-[11px] text-amber-100 hover:bg-slate-700 disabled:opacity-60"
+              >
+                {choice.text}
+              </button>
+            ))}
+          </div>
+        ) : (
+          <ReplyChips
+            suggestions={suggestions}
+            loading={suggestionsLoading}
+            disabled={busy}
+            onPick={(text) => setInjectedSuggestion(text)}
+            onRefresh={() => {
+              const id = [...turns].reverse().find((turn) => turn.speaker === 'buddy')?.id;
+              if (id === undefined) return;
+              void refreshSuggestions(`${buddyId}:cafe:${id}:manual`, async () => {
+                const slices = readMemorySlices();
+                const recent = engine.getConversationRead(buddyId, 0, 6).messages.map((message) => ({
+                  sender: message.senderId === 'player' ? 'player' : 'buddy',
+                  text: message.text,
+                }));
+                const relationship = engine.social.getRelationships(buddyId);
+                const result = await aiService.suggestReplies({
+                  buddyId,
+                  displayName: buddy?.displayName || buddyId,
+                  buddyPersona: buddyPersonaLine(buddyId, buddy),
+                  relationshipSummary: relationship ? JSON.stringify(relationship) : 'new friendship',
+                  recentMessages: recent,
+                  memoryHint: (slices.buddyFacts[buddyId] || []).slice(-1)[0] || '',
+                }, loadAISettings());
+                return result.data.replies.map((text) => ({ text, ...toneSuggestion(text) }));
+              });
+            }}
+          />
+        )}
 
         {/* Free input + actions */}
         <div className="mt-2 pt-2 border-t border-slate-800 flex items-center gap-2">
