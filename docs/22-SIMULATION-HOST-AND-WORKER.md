@@ -1139,3 +1139,30 @@ this stage: the canonical world and relationship changes persist, but
 in-progress Ink cursor persistence needs a separate final parity gate.
 This adds authored offline conversation to the Worker, not generic
 free-form AI chat, and does not yet authorize the plain `/` cutover.
+
+## P3.36 — Atomic, slot-scoped authored Ink checkpoints (exact-head gate)
+
+A live café conversation's compiled Ink cursor is saved as a **bounded, optional
+`meta.cafeNarrative` sidecar in the same IndexedDB transaction** as the
+canonical world snapshot and its cold conversation archive. The sole Worker
+derives the checkpoint from the running `NarrativeCoordinator`; the browser
+cannot supply an actor, flow state or narrative mutation. Save As and autosave
+each capture their own slot-specific moment. A cold Worker boot reads both
+world and cursor from the same saved slot generation, with no global shared
+Ink cache or main-thread runtime.
+
+Restore permits only the authored `cafe_meeting` flow bound to its known actor
+and actual authored venue. Invalid, oversized, stale, departed-guest or
+out-of-place cursors fail closed to **no active conversation** while the
+canonical world remains playable. A restored choice point cannot replay
+already-committed social effects merely by loading; the next explicit
+player choice still must pass live presence and owner validation. Other
+narrative flows remain owned by their separate authoring/integration stream.
+This is a café-specific checkpoint proof, not yet generic narrative
+persistence or authorization for the plain `/` production cutover.
+
+Acceptance includes: Save As slot independence; cold Worker restoration;
+post-choice checkpoint continuation; corrupt cursor handling; missing guest
+refusal; browser save/reload of live authored choice, alongside the existing
+single-owner tests. Latest upstream FakeNet Ink provenance work is integrated
+separately from Worker-authored café changes.

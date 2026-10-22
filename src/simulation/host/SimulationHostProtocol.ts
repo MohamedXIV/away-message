@@ -115,6 +115,7 @@ export interface LabCharacterResult {
 /** Only authored choice index crosses IPC; the Worker selects the real guest. */
 export type SimulationCafeNarrativeCommand =
   | { kind: 'startCafe' }
+  | { kind: 'current' }
   | { kind: 'choose'; choiceIndex: number }
   | { kind: 'end' };
 export interface SimulationCafeNarrativeResult {

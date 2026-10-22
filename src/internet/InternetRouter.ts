@@ -9,6 +9,7 @@ import { BidBaySite } from './sites/BidBaySite';
 import { MyPlaceSite } from './sites/MyPlaceSite';
 import { MailboxSite } from './sites/MailboxSite';
 import { NightBoardSite } from './sites/NightBoardSite';
+import { CanalWatchSite } from './sites/CanalWatchSite';
 import { CityWireSite } from './sites/CityWireSite';
 import { JobsSite } from './sites/JobsSite';
 import { GoldNetSite } from './sites/GoldNetSite';
@@ -283,6 +284,14 @@ export class InternetRouter {
       pathPattern: '/thread/:threadId',
       component: NightBoardSite,
       pageTitle: '[NightBoard] Thread View',
+    });
+
+    // 8b. Canal Watch — Ink-authored generated-site surface with provenance labels
+    this.registerRoute({
+      host: 'canalwatch.local',
+      pathPattern: '/',
+      component: CanalWatchSite,
+      pageTitle: 'CanalWatch — north bank field notes',
     });
 
     // 9. The City Wire

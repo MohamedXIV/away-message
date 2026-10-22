@@ -120,4 +120,89 @@ describe('#175 real indexedDB current-slot Worker ownership', () => {
       worker.close();
     }
   });
+  it('atomically persists a café Ink choice point in Save As, cold-loads it and isolates original slot', async () => {
+    const fixture = new SimulationKernel();
+    expect(fixture.dispatchAction({ type: 'TRAVEL_TO', to: 'cafe', mode: 'walk' }).success).toBe(true);
+    fixture.relocateActorSpatially('maya', { x: 20, y: 60, z: 0 });
+    expect(fixture.getCafeGuestRead('place_a1').guest?.actorId).toBe('maya');
+    await saveSlot(fixture, 'ink_source');
+
+    const first = workerHarness();
+    try {
+      await first.ask({ op: 'initSlot', slotId: 'ink_source' });
+      const start = await first.ask({ op: 'cafeNarrative', command: { kind: 'startCafe' } }) as {
+        active: boolean; frame: { choices: Array<{ text: string }> };
+      };
+      expect(start.active).toBe(true);
+      expect(start.frame.choices[0]?.text).toBe("Ask how they've been");
+      await first.ask({
+        op: 'saveSlot', slotId: 'ink_copy',
+        pulse: { pulseSlotId: 'ink_copy', pulsePayload: { view: 'cafe' } },
+      });
+      const saved = (await db.saves.get('ink_copy'))!;
+      expect(saved.meta?.cafeNarrative).toMatchObject({
+        version: 1,
+        actorId: 'maya',
+        coordinator: { version: 1, session: { flowId: 'cafe_meeting' } },
+      });
+      expect(saved.meta?.pulsePayload).toEqual({ view: 'cafe' });
+      expect(JSON.stringify(saved.meta?.cafeNarrative)).not.toContain('conversations');
+      expect((await db.saves.get('ink_source'))!.meta?.cafeNarrative).toBeNull();
+    } finally { first.close(); }
+
+    const fromCopy = workerHarness();
+    try {
+      await fromCopy.ask({ op: 'initSlot', slotId: 'ink_copy' });
+      const resumed = await fromCopy.ask({ op: 'cafeNarrative', command: { kind: 'current' } }) as {
+        active: boolean; frame: { choices: Array<{ text: string }> };
+      };
+      expect(resumed.active).toBe(true);
+      expect(resumed.frame.choices[0]?.text).toBe("Ask how they've been");
+      const answer = await fromCopy.ask({
+        op: 'cafeNarrative', command: { kind: 'choose', choiceIndex: 0 },
+      }) as { frame: { text: string } };
+      expect(answer.frame.text).toContain('the week comes out sideways');
+      await fromCopy.ask({
+        op: 'saveSlot', slotId: 'ink_copy',
+        pulse: { pulseSlotId: 'ink_copy', pulsePayload: null },
+      });
+    } finally { fromCopy.close(); }
+
+    const original = workerHarness();
+    try {
+      await original.ask({ op: 'initSlot', slotId: 'ink_source' });
+      expect(await original.ask({ op: 'cafeNarrative', command: { kind: 'current' } }))
+        .toEqual({ active: false, actor: null, frame: null });
+    } finally { original.close(); }
+
+    const restoredAgain = workerHarness();
+    try {
+      await restoredAgain.ask({ op: 'initSlot', slotId: 'ink_copy' });
+      const resumed = await restoredAgain.ask({
+        op: 'cafeNarrative', command: { kind: 'current' },
+      }) as { active: boolean; frame: { choices: Array<{ text: string }> } };
+      expect(resumed.active).toBe(true);
+      expect(resumed.frame.choices.some(choice => choice.text.includes('Let the conversation'))).toBe(true);
+    } finally { restoredAgain.close(); }
+  });
+
+  it('rejects malformed saved Ink metadata but preserves the canonical saved world', async () => {
+    const fixture = new SimulationKernel();
+    await saveSlot(fixture, 'ink_corrupt');
+    const record = (await db.saves.get('ink_corrupt'))!;
+    await db.saves.update('ink_corrupt', {
+      meta: { ...record.meta, cafeNarrative: { version: 1, actorId: 'maya', coordinator: { version: 777 } } },
+    });
+    const worker = workerHarness();
+    try {
+      await worker.ask({ op: 'initSlot', slotId: 'ink_corrupt' });
+      const world = await worker.ask({ op: 'query', query: { kind: 'world' } }) as {
+        playerLocation: string;
+      };
+      expect(world.playerLocation).toBe('home');
+      expect(await worker.ask({ op: 'cafeNarrative', command: { kind: 'current' } }))
+        .toEqual({ active: false, actor: null, frame: null });
+    } finally { worker.close(); }
+  });
+
 });

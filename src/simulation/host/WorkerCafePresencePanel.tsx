@@ -40,6 +40,18 @@ export function WorkerCafePresencePanel({
     return () => { alive = false; };
   }, [session, revision]);
 
+  // A cold-loaded Worker restores the saved authored choice point from the
+  // same atomic save document. No narrative state is reconstructed in React.
+  useEffect(() => {
+    let active = true;
+    void session.cafeNarrative({ kind: 'current' }).then(result => {
+      if (active && result.active) setDialogue(result);
+    }).catch(cause => {
+      if (active) setDialogueError(cause instanceof Error ? cause.message : String(cause));
+    });
+    return () => { active = false; };
+  }, [session]);
+
   // Revision mismatch immediately invalidates older presence evidence.
   const verified = read?.revision === revision && read.placeId === cafeVenue.placeId;
   const guest = verified ? read.guest : null;

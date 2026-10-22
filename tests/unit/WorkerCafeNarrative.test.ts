@@ -57,4 +57,36 @@ describe('Worker authored café narrative', () => {
       .toThrow('must be at Starlight Café');
     expect(() => narrative.run({ kind: 'choose', choiceIndex: 0 })).toThrow('No active');
   });
+  it('does not restore an orphaned cursor when the player or actor leaves the café', () => {
+    const source = presentAtCafe();
+    const first = createWorkerCafeNarrative(source);
+    first.run({ kind: 'startCafe' });
+    const checkpoint = first.checkpoint();
+    expect(checkpoint?.coordinator.session?.actorId).toBe('maya');
+
+    const departed = new SimulationKernel(source.exportSnapshot());
+    expect(departed.dispatchAction({ type: 'TRAVEL_TO', to: 'home', mode: 'walk' }).success).toBe(true);
+    const restored = createWorkerCafeNarrative(departed);
+    expect(restored.restore(checkpoint)).toBe(false);
+    expect(restored.run({ kind: 'current' }))
+      .toEqual({ active: false, actor: null, frame: null });
+  });
+
+  it('restores only verified authored choice points without replaying social effects', () => {
+    const source = presentAtCafe();
+    const first = createWorkerCafeNarrative(source);
+    first.run({ kind: 'startCafe' });
+    const checkpoint = first.checkpoint();
+    expect(checkpoint).not.toBeNull();
+    const second = createWorkerCafeNarrative(source);
+    const before = source.social.getRelationships('maya');
+    expect(second.restore(checkpoint)).toBe(true);
+    const current = second.run({ kind: 'current' });
+    expect(current.frame?.choices[0]?.text).toBe("Ask how they've been");
+    expect(source.social.getRelationships('maya')).toEqual(before);
+    expect(second.run({ kind: 'choose', choiceIndex: 0 }).frame?.text)
+      .toContain('week comes out sideways');
+    expect(source.social.getRelationships('maya')?.trust).toBeGreaterThan(before?.trust ?? 0);
+  });
+
 });

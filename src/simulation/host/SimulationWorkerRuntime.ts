@@ -1,7 +1,7 @@
 import { SimulationKernel } from '../../engine/kernel/SimulationKernel';
 import { createWorkerCafeNarrative } from './WorkerCafeNarrative';
 import { GENERATED_VENUE_SERVICES } from '../../engine/worldContent.generated';
-import { loadSlotEngine, saveSlot } from '../../persistence/slots';
+import { loadSlotEngineWithNarrative, saveSlot } from '../../persistence/slots';
 import type { LabProceduralCategory, SimulationQuery, SimulationWorkerReply, SimulationWorkerRequest } from './SimulationHostProtocol';
 
 /**
@@ -167,9 +167,15 @@ export function createSimulationWorkerRuntime(send: (message: SimulationWorkerRe
           break;
         case 'initSlot': {
           if (kernel) throw new Error('SimulationHost already initialized');
-          const loaded = await loadSlotEngine(raw.slotId);
+          const loaded = await loadSlotEngineWithNarrative(raw.slotId);
           if (!loaded) throw new Error(`Save slot '${raw.slotId}' is missing or unreadable`);
-          kernel = loaded;
+          kernel = loaded.engine;
+          if (loaded.cafeNarrative != null) {
+            cafeNarrative = createWorkerCafeNarrative(kernel);
+            // Corrupt or expired optional dialogue must never discard a
+            // valid canonical world. Restore fails closed to no conversation.
+            cafeNarrative.restore(loaded.cafeNarrative);
+          }
           unsubscribe = kernel.subscribeChanges(change => send({ type: 'change', change }));
           break;
         }
@@ -366,7 +372,11 @@ export function createSimulationWorkerRuntime(send: (message: SimulationWorkerRe
           value = await requireKernel().exportSnapshotAsync();
           break;
         case 'saveSlot':
-          value = await saveSlot(requireKernel(), raw.slotId, raw.saveName, raw.pulse);
+          value = await saveSlot(requireKernel(), raw.slotId, raw.saveName, {
+            ...raw.pulse,
+            // The renderer cannot submit an Ink cursor or impersonate a guest.
+            cafeNarrative: cafeNarrative?.checkpoint() ?? null,
+          });
           break;
         case 'load':
           requireKernel().loadSnapshot(raw.snapshot);

@@ -154,6 +154,16 @@ export const SEARCH_INDEX_DATABASE: SearchIndexEntry[] = [
     datePublished: 'Oct 04, 2006',
   },
   {
+    id: 'search_canalwatch',
+    title: 'CanalWatch: north bank field notes',
+    url: 'http://canalwatch.local/',
+    snippet: 'A hand-made personal page tracking the canal hum, pump schedules, intake tunnels, and things overheard near the water. Labels claims as claims.',
+    category: 'community',
+    keywords: ['canalwatch', 'canal', 'hum', 'pump', 'pumps', 'intake', 'field notes', 'nightboard', 'rumor'],
+    availableFromDay: 1,
+    datePublished: 'Oct 12, 2006',
+  },
+  {
     id: 'search_nightboard_toolbar_warn',
     title: 'NightBoard: "WARNING: WeatherBuddy bundles SearchMate toolbar!" (Thread #112)',
     url: 'http://nightboard.local/thread/112',

@@ -110,8 +110,17 @@ test('Worker café runs compiled Ink choices with a genuinely co-located known g
   await page.getByRole('button', { name: 'Continue last save' }).click();
   await expect(page.getByTestId('worker-city-place-location')).toHaveText('Starlight Café');
   await expect(page.getByTestId('worker-cafe-presence')).toContainText('is here at the café');
+  await page.getByRole('button', { name: 'Pause clock' }).click();
   await page.getByRole('button', { name: /Talk with / }).click();
   await expect(page.getByTestId('worker-cafe-dialogue-text')).toContainText('Hey! You made it!');
+  // Save the actual compiled Ink cursor with the canonical world, then cold
+  // boot another Worker and continue at this same authored choice point.
+  await page.getByRole('button', { name: 'Save game' }).click();
+  await expect(page.getByText('Saved to slot_1')).toBeVisible();
+  await page.reload();
+  await page.getByRole('button', { name: 'Continue last save' }).click();
+  await expect(page.getByTestId('worker-cafe-dialogue-text')).toContainText('Hey! You made it!');
+  await expect(page.getByRole('button', { name: "Ask how they've been" })).toBeEnabled();
   await page.getByRole('button', { name: "Ask how they've been" }).click();
   await expect(page.getByTestId('worker-cafe-dialogue-text')).toContainText('week comes out sideways');
   await page.getByRole('button', { name: 'Finish conversation' }).click();

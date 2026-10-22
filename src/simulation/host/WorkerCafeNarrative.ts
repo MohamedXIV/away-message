@@ -3,6 +3,7 @@ import { GENERATED_VENUE_SERVICES } from '../../engine/worldContent.generated';
 import { createSimulationNarrative } from '../../narrative/SimulationNarrativeAdapter';
 import { CAFE_MEETING_INTERACTION_ID } from '../../narrative/flows';
 import type { NarrativeFrame } from '../../narrative/contracts';
+import type { NarrativeCoordinatorState } from '../../narrative/NarrativeCoordinator';
 import type { SimulationCafeNarrativeCommand, SimulationCafeNarrativeResult } from './SimulationHostProtocol';
 
 const cafeVenue = (() => {
@@ -18,10 +19,12 @@ const cafeVenue = (() => {
 export function createWorkerCafeNarrative(engine: SimulationKernel) {
   const { coordinator } = createSimulationNarrative(engine);
   let actor: SimulationCafeNarrativeResult['actor'] = null;
+  let lastFrame: NarrativeFrame | null = null;
 
   function reset(): SimulationCafeNarrativeResult {
     coordinator.end();
     actor = null;
+    lastFrame = null;
     return { active: false, actor: null, frame: null };
   }
 
@@ -37,6 +40,7 @@ export function createWorkerCafeNarrative(engine: SimulationKernel) {
   }
 
   function present(frame: NarrativeFrame): SimulationCafeNarrativeResult {
+    lastFrame = frame;
     return {
       active: true,
       actor,
@@ -51,12 +55,64 @@ export function createWorkerCafeNarrative(engine: SimulationKernel) {
     };
   }
 
+  /** Optional slot sidecar; never include an NPC roster or owner graph. */
+  function checkpoint(): { version: 1; actorId: string; coordinator: NarrativeCoordinatorState } | null {
+    if (!actor || !lastFrame?.choices.length) return null;
+    try { requirePresent(actor.actorId); }
+    catch { reset(); return null; }
+    const snapshot = {
+      version: 1 as const,
+      actorId: actor.actorId,
+      coordinator: coordinator.save(),
+    };
+    // Bounded sidecar rather than unbounded, user-facing text/history export.
+    return JSON.stringify(snapshot).length <= 65536 ? snapshot : null;
+  }
+
+  /** Malformed or departed-guest sidecars are rejected without losing world state. */
+  function restore(input: unknown): boolean {
+    reset();
+    try {
+      if (!input || typeof input !== 'object' ||
+          JSON.stringify(input).length > 65536) return false;
+      const saved = input as {
+        version?: unknown; actorId?: unknown; coordinator?: NarrativeCoordinatorState;
+      };
+      if (saved.version !== 1 || typeof saved.actorId !== 'string' ||
+          saved.actorId.length < 1 || saved.actorId.length > 128) return false;
+      const state = saved.coordinator;
+      if (!state || state.version !== 1 ||
+          state.session?.flowId !== 'cafe_meeting' ||
+          state.session?.actorId !== saved.actorId ||
+          state.session?.placeId !== cafeVenue.placeId ||
+          state.host?.flowId !== 'cafe_meeting') return false;
+      const guest = requirePresent(saved.actorId);
+      coordinator.load(state);
+      const frame = coordinator.advanceToChoices();
+      if (!frame.choices.length) { reset(); return false; }
+      actor = { actorId: guest.actorId, displayName: guest.displayName };
+      lastFrame = frame;
+      return true;
+    } catch {
+      reset();
+      return false;
+    }
+  }
+
   return {
+    checkpoint,
+    restore,
     run(command: SimulationCafeNarrativeCommand): SimulationCafeNarrativeResult {
       if (!command || typeof command !== 'object') {
         throw new Error('Invalid café narrative command.');
       }
       if (command.kind === 'end') return reset();
+      if (command.kind === 'current') {
+        if (!actor || !lastFrame) return reset();
+        try { requirePresent(actor.actorId); }
+        catch { return reset(); }
+        return present(lastFrame);
+      }
       if (command.kind === 'startCafe') {
         if (actor) throw new Error('Finish the current café conversation first.');
         const guest = requirePresent();
