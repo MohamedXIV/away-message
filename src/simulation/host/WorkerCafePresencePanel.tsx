@@ -6,8 +6,11 @@ import { createWorldSceneProjection } from '../../world/phaser/presentationAdapt
 import type { WorkerGameSession } from './WorkerGameSession';
 
 /** Authored Phaser geometry is presentation; the Worker alone owns who is here. */
-const cafeVenue = GENERATED_VENUE_SERVICES.find(service => service.tags.includes('cafe'));
-if (!cafeVenue) throw new Error('Authored café venue is unavailable');
+const cafeVenue = (() => {
+  const venue = GENERATED_VENUE_SERVICES.find(service => service.tags.includes('cafe'));
+  if (!venue) throw new Error('Authored café venue is unavailable');
+  return venue;
+})();
 
 export function WorkerCafePresencePanel({
   session, world, revision,
