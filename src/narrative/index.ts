@@ -19,3 +19,4 @@ export type {
   NarrativeSessionRef,
 } from './NarrativeCoordinator';
 export { DEFAULT_NARRATIVE_FLOWS } from './flows';
+export * from './realization';
