@@ -45,6 +45,11 @@ describe('InternetRouter Unit Test Suite', () => {
     const resNightBoard = router.resolveRoute('nightboard.local/thread/104');
     expect(resNightBoard.is404).toBe(false);
     expect(resNightBoard.params['threadId']).toBe('104');
+
+    const resCanalWatch = router.resolveRoute('canalwatch.local');
+    expect(resCanalWatch.is404).toBe(false);
+    expect(resCanalWatch.host).toBe('canalwatch.local');
+    expect(resCanalWatch.pageTitle).toContain('CanalWatch');
   });
 
   it('falls back to 404 handler on unmapped domain names', () => {
