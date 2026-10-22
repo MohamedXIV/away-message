@@ -1239,3 +1239,34 @@ multi-day deterministic workload, fidelity/class/exam semantic proof,
 coarse-vs-single-minute policy decision, or independently sampled
 performance evidence. Those remain external gates for final #175/#177
 closeout; never count older direct-engine benchmarks as combined results.
+
+## P3.39 — Combined #177 rich population fixtures within canonical Worker (exact-head gate pending)
+
+This integration imports **the unmodified canonical #177 Draft #205**
+population fixture, normal-runner, owner tests and original measured report
+using PR #205 as a real merge parent. It preserves #205's upstream provenance
+and branch rather than recreating synthetic, less-representative data.
+
+The additive `WorkerRichPopulationGate.test.ts` takes each authentic
+20/100/250/500 NPC #177 fixture, with its seeded local/remote distributions,
+agenda entries, route-backed appointments and real canonical conversations,
+and initializes the sole `SimulationWorkerRuntime` through its production
+FIFO interface with the exact prepared snapshot. Separately reconstituting
+the same composed kernel provides a direct-owner reference. It checks the
+initial deterministic digest, no-minute semantics, atomic bounded
+`gameView` revisions, paginated contact history, normal one-minute world
+advancement and **identical canonical result digest** between direct and
+Worker owners. It also verifies the roster and appointment count after
+advancement, and records single-run per-tier IPC evidence.
+
+The known **coarse 30-minute jump vs 30 consecutive one-minute ticks**
+difference is recorded as a diagnostic at 20 actors, not declared
+equivalent. Fixing or explicitly defining this behavior still belongs to
+the #177 time/needs/Life owners. Existing #205 raw benchmark results are
+historical and must **never** be relabeled as measured on this combined
+Worker head. The post-integration browser 20/100/250/500 gate remains the
+same actual Chromium worker proof from P3.38; it uses light fixtures and
+does not pretend to include the richer #177 appointments.
+
+This is a combined deterministic/correctness gate, **not** a sampled
+post-optimization performance signoff or game-design parity acceptance.
