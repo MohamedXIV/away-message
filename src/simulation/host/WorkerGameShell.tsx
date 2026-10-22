@@ -14,7 +14,7 @@ import { WorkerStarterResidenceChoice } from './WorkerStarterResidenceChoice';
 const authoredPlaceNames = new Map(GENERATED_PLACES.map(place => [place.id, place.name] as const));
 
 /**
- * Opt-in Worker-first gameplay vertical slice. Never imports App, Zustand,
+ * Production Worker-first gameplay shell. Never imports App, Zustand,
  * SimulationKernel or a legacy engine; all facts are bounded RPC projections.
  * Full authored UI migration is a separate step of #175 on this Draft PR.
  */
@@ -71,7 +71,7 @@ export function WorkerGameShell() {
   }, [view.phase]);
 
   const openClassicMenu = (): void => {
-    // Available only outside a live game. A full navigation terminates the
+    // DEV-only diagnostic. A full navigation terminates the
     // Dedicated Worker; the legacy renderer is never co-mounted with it.
     const url = new URL('./', window.location.href);
     url.search = '';
@@ -147,9 +147,11 @@ export function WorkerGameShell() {
               <button className={control} disabled={busy} onClick={() => void act(() => session.newGame())}>New game</button>
               <button className={control} disabled={busy} aria-expanded={chooseResidence}
                 onClick={() => setChooseResidence(open => !open)}>Choose starting residence</button>
-              <button className={control} disabled={busy} onClick={openClassicMenu}>
-                Return to classic interface
-              </button>
+              {import.meta.env.DEV && (
+                <button className={control} disabled={busy} onClick={openClassicMenu}>
+                  Return to classic interface
+                </button>
+              )}
               <button className={control} disabled={busy} onClick={() => void act(() => session.loadGame(slot))}>
                 {view.phase === 'error' ? 'Recover saved slot' : 'Load game'}
               </button>

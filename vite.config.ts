@@ -10,8 +10,8 @@ export default defineConfig({
   // Dedicated Simulation Worker imports cold IndexedDB pages asynchronously.
   // That requires an ES-module worker output: IIFE cannot split worker chunks.
   worker: { format: 'es' },
-  // Separate HTML entry keeps normal gameplay's synchronous boot contract,
-  // while the Worker-first page cannot import the eager legacy defaultEngine.
+  // Both HTML entries mount the same canonical Worker shell in production.
+  // Legacy main-thread simulation is gated behind an explicit DEV-only query.
   build: {
     rollupOptions: {
       input: {

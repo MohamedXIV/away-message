@@ -25,8 +25,8 @@ test('Pulse BuddyItem and paged conversation use player-known Worker reads, incl
   // Prepare a CURRENT-FORMAT game slot using the normal game's QA fixture,
   // then navigate away: the old main-thread engine ceases to exist before
   // Worker boot. The new page NEVER imports that engine or its store.
-  await page.goto('/');
-  // Root now dynamically imports the selected runtime. A real legacy save
+  await page.goto('/?runtime=legacy');
+  // Classic is an explicit DEV-only slot-seeding fixture. A real legacy save
   // fixture may only read its engine after that asynchronous boot completes.
   await page.waitForFunction(() => !!(window as any).__simEngine &&
     !!(window as any).__slots, undefined, { timeout: 15_000 });

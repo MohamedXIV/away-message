@@ -8,8 +8,8 @@ export class DesktopPage {
   }
 
   async goto() {
-    await this.page.goto('/');
-    // The staged root selector resolves mutually-exclusive dynamic bundles.
+    await this.page.goto('/?runtime=legacy');
+    // Classic runs only as an explicit DEV fixture; / is now the Worker game.
     // DOM navigation can complete before the legacy test fixture is mounted.
     // Await the actual legacy boot contract instead of evaluating undefined
     // debug globals or using an arbitrary fixed delay.

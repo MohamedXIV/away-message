@@ -112,6 +112,12 @@ jobs:
 
       # #175 authored consumers: actual Phaser scene and Pulse contact/chat
       # backed only by bounded Worker projections and serializable commands.
+      # #175: normal / must be Worker-only. Classic remains DEV-only for
+      # explicit migration fixtures; invalid selector never falls back.
+      - name: Browser Worker default root cutover gate
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.ref == 'feat/175-single-worker-simulation-host'
+        run: npx playwright test tests/e2e/tier4_scenarios/ScenarioT_WorkerDefaultRoute.spec.ts
+
       - name: Browser Worker authored room and Pulse gates
         if: github.event_name == 'pull_request' && github.event.pull_request.head.ref == 'feat/175-single-worker-simulation-host'
         run: npx playwright test tests/e2e/tier4_scenarios/ScenarioK_WorkerAuthoredConsumers.spec.ts

@@ -1182,3 +1182,29 @@ The regression suite now checks the original café greeting after cold
 reload and rejects a tampered choice label. This is distinct from a
 replayable narrative event log; canonical choices and effects continue
 to be owned by Ink and the simulation domain, never by the saved UI text.
+
+## P3.37 — Normal root now boots one Dedicated Worker
+
+The supported production `/` route (and the opt-in `/?runtime=worker`
+alias) now exclusively boot `WorkerGameShell`. Production cannot select a
+Classic engine with `?runtime=legacy`: that selector fails closed, without
+starting **any** world. The old main-thread `App`, `useSimulationStore`,
+and debug globals are lazy imports only within a `import.meta.env.DEV`
+diagnostic branch, which is dead in the production Vite bundle.
+
+This preserves historical Classic browser test fixtures without making
+Classic a production authority: `DesktopPage.goto()` and independent
+legacy fixture pages now explicitly navigate with `runtime=legacy` in
+the Vite development server. Switching between the two runtimes requires
+a full document navigation; they are never mounted together. The Worker's
+Classic-menu button is also DEV-only.
+
+The new root-specific Chromium gate enters `/` with **no selector**,
+verifies the absence of Classic module requests and debug engine globals,
+plays a Phaser room -> city -> Pulse -> desktop loop on the Worker,
+saves and cold-loads the canonical slot, and proves an explicit DEV
+Classic page cannot leak its owner into a new ordinary root. Invalid
+selector tests remain fail-closed. This is the root-cutover acceptance
+candidate, **not yet the final #175 closeout**: broad authored gameplay
+parity and #177's combined 20/100/250/500 performance gate still need
+independent evidence.
