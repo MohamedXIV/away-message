@@ -1119,3 +1119,23 @@ as do the ordinary root cutover and final combined population gate.
 
 The same integration commit incorporates main's upstream NarrativeCoordinator
 and Ink authoring work without touching the separate narrative agent branch.
+
+## P3.35 — Worker-authored in-person Ink café dialogue (pending exact-head gate)
+
+The player can talk with an actual player-known NPC physically present in
+Starlight Café. The renderer sends only `startCafe`, a visible choice index,
+or `end` through a typed `cafeNarrative` RPC—never an NPC identity, venue
+ID, effect payload, full world snapshot or AI provider call.
+
+The sole Worker uses `SimulationNarrativeAdapter` and the existing compiled
+`cafe_meeting` Ink flow. Before starting and **before every subsequent
+choice** it verifies that the player is at the café and the **same** actor is
+still present in the authored venue. Social effects remain committed by
+`SimulationKernel`. A departed guest/player ends the Worker narrative
+session and prevents delayed choices from applying effects.
+
+Active dialogue is deliberately ephemeral across a cold snapshot load for
+this stage: the canonical world and relationship changes persist, but
+in-progress Ink cursor persistence needs a separate final parity gate.
+This adds authored offline conversation to the Worker, not generic
+free-form AI chat, and does not yet authorize the plain `/` cutover.

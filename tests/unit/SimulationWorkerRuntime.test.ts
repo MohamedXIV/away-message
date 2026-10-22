@@ -73,6 +73,21 @@ describe('#175 single-writer Worker runtime protocol', () => {
     }
   });
 
+  it('refuses Worker café dialogue until canonical physical co-location', async () => {
+    const { ask, runtime } = harness();
+    try {
+      await ask({ op: 'init' });
+      await expect(ask({ op: 'cafeNarrative', command: { kind: 'startCafe' } }))
+        .rejects.toThrow('must be at Starlight Café');
+      await expect(ask({ op: 'cafeNarrative', command: { kind: 'choose', choiceIndex: 0 } }))
+        .rejects.toThrow('No active café conversation');
+      expect(await ask({ op: 'cafeNarrative', command: { kind: 'end' } }))
+        .toEqual({ active: false, actor: null, frame: null });
+    } finally {
+      runtime.close();
+    }
+  });
+
   it('publishes HUD, physical place and player status atomically in one bounded FIFO reply', async () => {
     const { ask, runtime } = harness();
     const readState = vi.spyOn(SimulationKernel.prototype, 'getState');

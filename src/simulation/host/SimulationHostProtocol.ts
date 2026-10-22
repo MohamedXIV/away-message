@@ -112,6 +112,17 @@ export interface LabCharacterResult {
   registered: boolean;
 }
 
+/** Only authored choice index crosses IPC; the Worker selects the real guest. */
+export type SimulationCafeNarrativeCommand =
+  | { kind: 'startCafe' }
+  | { kind: 'choose'; choiceIndex: number }
+  | { kind: 'end' };
+export interface SimulationCafeNarrativeResult {
+  active: boolean;
+  actor: { actorId: string; displayName: string } | null;
+  frame: { text: string; tags: string[]; choices: Array<{ id: string; text: string }>; canContinue: boolean } | null;
+}
+
 export type SimulationHardwareCommand =
   | { kind: 'setup' }
   | { kind: 'power'; poweredOn: boolean }
@@ -126,6 +137,7 @@ export type SimulationWorkerRequest =
   | { id: number; op: 'initSlot'; slotId: string }
   | { id: number; op: 'dispatch'; action: SimulationAction }
   | { id: number; op: 'hardware'; command: SimulationHardwareCommand }
+  | { id: number; op: 'cafeNarrative'; command: SimulationCafeNarrativeCommand }
   | { id: number; op: 'labProcedural'; command: LabProceduralCommand }
   | { id: number; op: 'labOs'; command: LabOsCommand }
   | { id: number; op: 'labCharacter'; command: LabCharacterCommand }
@@ -151,6 +163,7 @@ export type SimulationWorkerReply =
 export interface SimulationHost {
   dispatch(action: SimulationAction): Promise<ActionResult>;
   hardware(command: SimulationHardwareCommand): Promise<ActionResult<OsInstallPlan>>;
+  cafeNarrative(command: SimulationCafeNarrativeCommand): Promise<SimulationCafeNarrativeResult>;
   labProcedural(command: LabProceduralCommand): Promise<LabProceduralResult>;
   labOs(command: LabOsCommand): Promise<LabOsResult>;
   labCharacter(command: LabCharacterCommand): Promise<LabCharacterResult>;

@@ -4,7 +4,7 @@ import type { OsInstallPlan } from '../../engine/kernel/ComputerOwnershipRuntime
 import type { SlotPulseMetadata, SlotSummary } from '../../persistence/slots';
 import type { SimulationChange } from '../../engine/kernel/SimulationPublication';
 import type {
-  LabCharacterCommand, LabCharacterResult, LabOsCommand, LabOsResult, LabProceduralCommand, LabProceduralResult, SimulationHardwareCommand, SimulationHost, SimulationQuery, SimulationQueryResult,
+  LabCharacterCommand, LabCharacterResult, LabOsCommand, LabOsResult, LabProceduralCommand, LabProceduralResult, SimulationCafeNarrativeCommand, SimulationCafeNarrativeResult, SimulationHardwareCommand, SimulationHost, SimulationQuery, SimulationQueryResult,
   SimulationWorkerCommand, SimulationWorkerReply,
 } from './SimulationHostProtocol';
 
@@ -126,6 +126,10 @@ export class WorkerSimulationHost implements SimulationHost {
 
   hardware(command: SimulationHardwareCommand): Promise<ActionResult<OsInstallPlan>> {
     return this.request({ op: 'hardware', command }) as Promise<ActionResult<OsInstallPlan>>;
+  }
+
+  cafeNarrative(command: SimulationCafeNarrativeCommand): Promise<SimulationCafeNarrativeResult> {
+    return this.request({ op: 'cafeNarrative', command }) as Promise<SimulationCafeNarrativeResult>;
   }
 
   labCharacter(command: LabCharacterCommand): Promise<LabCharacterResult> {

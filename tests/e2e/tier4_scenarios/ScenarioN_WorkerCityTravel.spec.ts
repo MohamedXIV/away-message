@@ -89,3 +89,33 @@ test('Worker cafe uses authored Phaser place and canonical presence, outing and 
     /No one you know is here right now|is here at the café/,
   );
 });
+
+test('Worker café runs compiled Ink choices with a genuinely co-located known guest', async ({ page }) => {
+  test.setTimeout(110_000);
+  // Legacy is a test-only canonical slot seeder, not a concurrent runtime or fake NPC.
+  await page.goto('/?runtime=legacy');
+  await expect.poll(async () => page.evaluate(() => Boolean((window as any).__simStore))).toBe(true);
+  await page.evaluate(async () => {
+    const engine = (window as any).__simStore.getState().engine;
+    const travel = engine.dispatchAction({ type: 'TRAVEL_TO', to: 'cafe', mode: 'walk' });
+    if (!travel.success) throw Error('Cannot reach café: ' + travel.error);
+    engine.relocateActorSpatially('maya', { x: 20, y: 60, z: 0 });
+    if (engine.getCafeGuestRead('place_a1').guest?.actorId !== 'maya') {
+      throw Error('Test actor is not physically present in the café');
+    }
+    await (window as any).__slots.saveSlot(engine, 'slot_1');
+  });
+  await page.goto('/?runtime=worker');
+  await expect(page.getByTestId('worker-first-shell')).toBeVisible();
+  await page.getByRole('button', { name: 'Continue last save' }).click();
+  await expect(page.getByTestId('worker-city-place-location')).toHaveText('Starlight Café');
+  await expect(page.getByTestId('worker-cafe-presence')).toContainText('is here at the café');
+  await page.getByRole('button', { name: /Talk with / }).click();
+  await expect(page.getByTestId('worker-cafe-dialogue-text')).toContainText('Hey! You made it!');
+  await page.getByRole('button', { name: "Ask how they've been" }).click();
+  await expect(page.getByTestId('worker-cafe-dialogue-text')).toContainText('week comes out sideways');
+  await page.getByRole('button', { name: 'Finish conversation' }).click();
+  await expect(page.getByTestId('worker-cafe-dialogue')).toHaveCount(0);
+  expect(await page.evaluate(() => !('__simEngine' in window) && !('__simStore' in window)))
+    .toBe(true);
+});

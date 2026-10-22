@@ -1,5 +1,5 @@
 import type { SimulationAction, ActionResult } from '../../engine/types';
-import type { LabCharacterCommand, LabCharacterResult, LabOsCommand, LabOsResult, LabProceduralCommand, LabProceduralResult, SimulationHardwareCommand, SimulationQuery, SimulationQueryResult } from './SimulationHostProtocol';
+import type { LabCharacterCommand, LabCharacterResult, LabOsCommand, LabOsResult, LabProceduralCommand, LabProceduralResult, SimulationCafeNarrativeCommand, SimulationCafeNarrativeResult, SimulationHardwareCommand, SimulationQuery, SimulationQueryResult } from './SimulationHostProtocol';
 import type { OsInstallPlan } from '../../engine/kernel/ComputerOwnershipRuntime';
 import type {
   SimulationHudProjection, SimulationWorldRead, SimulationPlayerStatusRead,
@@ -203,6 +203,11 @@ export class WorkerGameSession {
 
   hardware(command: SimulationHardwareCommand): Promise<ActionResult<OsInstallPlan>> {
     return this.active().hardware(command);
+  }
+
+  /** Authored dialogue commands; the Worker resolves the real guest and effects. */
+  cafeNarrative(command: SimulationCafeNarrativeCommand): Promise<SimulationCafeNarrativeResult> {
+    return this.active().cafeNarrative(command);
   }
 
   async labCharacter(command: LabCharacterCommand): Promise<LabCharacterResult> {

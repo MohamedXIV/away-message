@@ -4,6 +4,7 @@ import { GENERATED_VENUE_SERVICES } from '../../engine/worldContent.generated';
 import { PhysicalWorldBoundary } from '../../world/phaser/PhysicalWorldBoundary';
 import { createWorldSceneProjection } from '../../world/phaser/presentationAdapter';
 import type { WorkerGameSession } from './WorkerGameSession';
+import type { SimulationCafeNarrativeResult } from './SimulationHostProtocol';
 
 /** Authored Phaser geometry is presentation; the Worker alone owns who is here. */
 const cafeVenue = (() => {
@@ -21,6 +22,9 @@ export function WorkerCafePresencePanel({
 }) {
   const [read, setRead] = useState<SimulationCafeGuestRead | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [dialogue, setDialogue] = useState<SimulationCafeNarrativeResult | null>(null);
+  const [dialogueBusy, setDialogueBusy] = useState(false);
+  const [dialogueError, setDialogueError] = useState<string | null>(null);
 
   useEffect(() => {
     let alive = true;
@@ -48,6 +52,22 @@ export function WorkerCafePresencePanel({
     actorByAnchorId: guest ? { fixture_cafe_customer_anchor: guest.actorId } : {},
   }), [world, guest?.actorId]);
 
+  const interact = async (command: Parameters<WorkerGameSession['cafeNarrative']>[0]) => {
+    if (dialogueBusy) return;
+    setDialogueBusy(true);
+    setDialogueError(null);
+    try {
+      const result = await session.cafeNarrative(command);
+      setDialogue(result.active ? result : null);
+    } catch (cause) {
+      setDialogueError(cause instanceof Error ? cause.message : String(cause));
+    } finally {
+      setDialogueBusy(false);
+    }
+  };
+  // The UI does not enable choices against a stale guest projection.
+  const sameGuest = verified && Boolean(dialogue?.actor && guest?.actorId === dialogue.actor.actorId);
+
   return (
     <section data-testid="worker-cafe-scene"
       className="space-y-2 rounded border border-amber-800/40 bg-slate-900 p-3">
@@ -61,6 +81,39 @@ export function WorkerCafePresencePanel({
           : guest ? guest.displayName + ' is here at the café.'
           : 'No one you know is here right now.'}
       </p>
+      {!dialogue && verified && guest && (
+        <button type="button" disabled={dialogueBusy}
+          className="rounded border border-amber-500 px-3 py-2 text-sm text-amber-200 disabled:opacity-50"
+          onClick={() => void interact({ kind: 'startCafe' })}>
+          Talk with {guest.displayName}
+        </button>
+      )}
+      {dialogue?.frame && (
+        <div data-testid="worker-cafe-dialogue"
+          className="space-y-3 rounded border border-amber-700/50 bg-slate-950 p-4 text-sm">
+          <p className="text-xs font-bold text-amber-300">{dialogue.actor?.displayName ?? 'Café guest'} · in person</p>
+          <p data-testid="worker-cafe-dialogue-text" className="whitespace-pre-wrap leading-relaxed">
+            {dialogue.frame.text}
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {dialogue.frame.choices.map((choice, index) => (
+              <button type="button" key={choice.id}
+                disabled={dialogueBusy || !sameGuest}
+                className="rounded border border-amber-800 px-3 py-2 text-left disabled:opacity-40"
+                onClick={() => void interact({ kind: 'choose', choiceIndex: index })}>
+                {choice.text}
+              </button>
+            ))}
+          </div>
+          {!sameGuest && <p role="status" className="text-amber-200">
+            Checking that your guest is still here before the next choice.
+          </p>}
+          <button type="button" disabled={dialogueBusy}
+            className="rounded border border-slate-600 px-3 py-2 text-xs disabled:opacity-40"
+            onClick={() => void interact({ kind: 'end' })}>Finish conversation</button>
+        </div>
+      )}
+      {dialogueError && <p role="alert" className="text-xs text-red-300">{dialogueError}</p>}
       <p className="text-xs text-slate-500">
         A contact being online does not mean they are here in person.
       </p>

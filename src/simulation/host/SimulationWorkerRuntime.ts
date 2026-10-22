@@ -1,4 +1,5 @@
 import { SimulationKernel } from '../../engine/kernel/SimulationKernel';
+import { createWorkerCafeNarrative } from './WorkerCafeNarrative';
 import { GENERATED_VENUE_SERVICES } from '../../engine/worldContent.generated';
 import { loadSlotEngine, saveSlot } from '../../persistence/slots';
 import type { LabProceduralCategory, SimulationQuery, SimulationWorkerReply, SimulationWorkerRequest } from './SimulationHostProtocol';
@@ -9,6 +10,7 @@ import type { LabProceduralCategory, SimulationQuery, SimulationWorkerReply, Sim
  */
 export function createSimulationWorkerRuntime(send: (message: SimulationWorkerReply) => void) {
   let kernel: SimulationKernel | null = null;
+  let cafeNarrative: ReturnType<typeof createWorkerCafeNarrative> | null = null;
   let unsubscribe: (() => void) | null = null;
   let queue: Promise<void> = Promise.resolve();
   let closed = false;
@@ -173,6 +175,10 @@ export function createSimulationWorkerRuntime(send: (message: SimulationWorkerRe
         }
         case 'dispatch':
           value = requireKernel().dispatchAction(raw.action);
+          break;
+        case 'cafeNarrative':
+          cafeNarrative ??= createWorkerCafeNarrative(requireKernel());
+          value = cafeNarrative.run(raw.command);
           break;
         case 'hardware': {
           const owner = requireKernel();
@@ -364,6 +370,7 @@ export function createSimulationWorkerRuntime(send: (message: SimulationWorkerRe
           break;
         case 'load':
           requireKernel().loadSnapshot(raw.snapshot);
+          cafeNarrative = null;
           break;
         default: throw new Error('Unsupported SimulationHost operation');
       }
@@ -387,6 +394,7 @@ export function createSimulationWorkerRuntime(send: (message: SimulationWorkerRe
       unsubscribe?.();
       unsubscribe = null;
       kernel = null;
+      cafeNarrative = null;
     },
   };
 }
