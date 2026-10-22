@@ -98,9 +98,13 @@ test('20/100/250/500 canonical population slots load, tick, publish and cold-sav
       await rpc({ op: 'advance', minutes: 1, reason: 'population-browser-gate' });
       const tickMs = performance.now() - start;
       const after = await rpc({ op: 'query', query: { kind: 'hud' } });
+      // Canonical roster counts include authored seed buddies regenerated on
+      // restore, not just explicit BuddyCharacter overrides in the snapshot.
+      const roster = await rpc({ op: 'query', query: {
+        kind: 'labPage', actorPage: 0, meetingPage: 0,
+      } });
+      const count = roster.roster.total as number;
       const snapshot = await rpc({ op: 'export' });
-      const buddies = snapshot.social?.buddies;
-      const count = buddies ? Object.keys(buddies).length : 0;
       if (count !== population) throw new Error(`Worker has ${count} actors, expected ${population}`);
       if (after.time.totalMinutes !== before.time.totalMinutes + 1) {
         throw new Error('Worker clock did not advance exactly one world minute');
