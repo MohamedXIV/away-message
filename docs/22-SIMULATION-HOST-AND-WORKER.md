@@ -1344,3 +1344,25 @@ assumed equivalent. The next owner-side performance change must compare
 baseline/post-change evidence and preserve the deterministic world
 digests, save ownership and Life read purity. No speculative cache or
 duplicate Social/Life ledger is authorized by this gate.
+
+### P3.41.1 — Identity-only Life roster path, first measured candidate
+
+The first targeted optimization removes repeated full `BuddyCharacter`
+materialization from `NpcLifeRuntime.initializeEntryGoals`, the Life
+initialization walk, and minute-boundary pressure advancement. SocialEngine's
+`getBuddyIds()` enumerates the **same canonical SocialRoster insertion
+order** and returns a detached ID list. The goals selector still reads
+**every** directed/neutral bond against the **same** actor IDs in the same
+order; no goal probability, pressure policy, NPC reach, scheduler, or
+persistence semantics change. No independent roster, cache, or mirror
+authority is added. Late-joined actors still materialize only on a clock
+boundary and read-only Life projections remain side-effect-free.
+
+Regression guards assert detached identity-only roster order and pin
+canonical full-world SHA-256 digests for 20/100/250/500 authored-rich
+fixtures against the independently verified P3.41 pre-optimization
+exact-head run `390209994f54a2c822f0f2999150bcd459ace38e`.
+The benchmark workflow repeats the exact fixture and sampled workload
+on the optimized head so performance deltas can be evaluated with
+machine/runner limitations disclosed. Do not claim a speedup until
+this new exact-head run succeeds and its numbers are compared.

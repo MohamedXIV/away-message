@@ -36,6 +36,15 @@ function ownerHarness() {
   };
 }
 
+/** Golden digests from exact-head pre-optimization Verify #39820552647.
+ * Keep the same 20/100/250/500 canonical truth across identity-only reads.
+ */
+const BASELINE_DIGESTS: Record<number, string> = {
+  20: 'ac1555834149126f595b449cb4e90794ea9b6ab03a8c600bafdfaab63893e2d4',
+  100: '790d125b4fe4e517dc1bde8baf046afb66d09f38d9d0c22837d6db65de24e920',
+  250: 'de1b6b57d31fcc5c8c06f63de3e35946ec688400d48e82a0e9aae7c0fb360ac1',
+  500: '2b37e0a939df502607a7e1f96024a3a5cb05f17525e67d5e07facace7823d8f8',
+};
 describe('combined #175 Worker × #177 canonical rich population proof', () => {
   for (const population of POPULATION_SCALE_TIERS) {
     it(`replays ${population} actors with real agendas, contacts and route-backed appointments`, async () => {
@@ -99,6 +108,7 @@ describe('combined #175 Worker × #177 canonical rich population proof', () => {
 
         const result = await worker.ask({ op: 'export' }) as LiveSimulationState;
         expect(populationScaleDigest(result)).toBe(populationScaleDigest(expected.exportSnapshot()));
+        expect(populationScaleDigest(result)).toBe(BASELINE_DIGESTS[population]);
         const after = await worker.ask({ op: 'query', query: { kind: 'labPage' } }) as {
           roster: { total: number }; appointments: { total: number };
         };

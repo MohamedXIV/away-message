@@ -809,6 +809,13 @@ export class SocialEngine {
     return Array.from(this.roster.keys()).map(id => this.getBuddy(id)!);
   }
 
+  /** Identity-only, detached roster-order read for Life and population owners.
+   * No status/relationship projection and no second roster or cached truth.
+   */
+  public getBuddyIds(): string[] {
+    return Array.from(this.roster.keys());
+  }
+
   /**
    * Resolve one Pulse room's live members at the Social owner. An action needs
    * IDs, not 500 BuddyCharacter copies with private schedules, bio and status.
