@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { SimulationEngine } from '../../src/engine/SimulationEngine';
 import { createSimulationNarrative } from '../../src/narrative/SimulationNarrativeAdapter';
+import { realizeUtterance } from '../../src/narrative/realization';
 
 function cafeEngine(): SimulationEngine {
   const engine = new SimulationEngine();
@@ -9,7 +10,7 @@ function cafeEngine(): SimulationEngine {
 }
 
 describe('#182 NarrativeCoordinator + canonical simulation', () => {
-  it('runs the migrated cafe interaction end-to-end with a canonical social effect', () => {
+  it('runs the migrated cafe interaction end-to-end with a canonical social effect', async () => {
     const engine = cafeEngine();
     const { coordinator } = createSimulationNarrative(engine);
     const getState = vi.spyOn(engine, 'getState');
@@ -36,9 +37,23 @@ describe('#182 NarrativeCoordinator + canonical simulation', () => {
     expect(after?.familiarity).toBeGreaterThan(before?.familiarity ?? 0);
     expect(after?.trust).toBeGreaterThan(before?.trust ?? 0);
     expect(coordinator.getPendingEffects()).toEqual([]);
+
+    const plan = coordinator.getUtterancePlan();
+    expect(plan?.tier).toBe('L2');
+    expect(plan?.speakerKind).toBe('canonical_local');
+    expect(plan?.requiredFacts).toEqual(['the week', 'pieces']);
+    expect(plan?.offlineText).toBe(frame.text.trim());
+    const offline = await realizeUtterance(plan!);
+    expect(offline.source).toBe('offline');
+    expect(offline.text).toBe(frame.text.trim());
+    const realized = await realizeUtterance(plan!, {
+      ai: async () => 'Okay. The week comes out sideways, in pieces. I am listening.',
+    });
+    expect(realized.source).toBe('ai');
+    expect(engine.social.getRelationships('maya')).toEqual(after);
   });
 
-  it('launches an Ink flow from a real authored Scenario hook without copying Scenario state', () => {
+  it('launches an Ink flow from a real authored Scenario hook without copying Scenario state', async () => {
     const engine = new SimulationEngine();
     const { coordinator, adapter } = createSimulationNarrative(engine);
     const scenarioState = engine.getScenarioState();
@@ -66,6 +81,21 @@ describe('#182 NarrativeCoordinator + canonical simulation', () => {
       'Sit with it for a minute',
       'Close the window',
     ]);
+
+    // Unknown scenario bindings stay exact and offline: no AI call, no choice drift.
+    const plan = coordinator.getUtterancePlan();
+    expect(plan?.speakerKind).toBe('system');
+    expect(plan?.tier).toBe('L0');
+    const ai = vi.fn(async () => 'rewritten by ai');
+    const realized = await realizeUtterance(plan!, { ai });
+    expect(ai).not.toHaveBeenCalled();
+    expect(realized.source).toBe('offline');
+    expect(realized.text).toBe(frame.text.trim());
+    expect(coordinator.advanceToChoices().choices.map((choice) => choice.text)).toEqual([
+      'Sit with it for a minute',
+      'Close the window',
+    ]);
+
     expect(coordinator.choose(1).text).toContain('The window closes');
     expect(coordinator.getPendingEffects()).toEqual([]);
 

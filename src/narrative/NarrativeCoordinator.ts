@@ -6,6 +6,12 @@ import {
   type NarrativeFrame,
   type NarrativeHostState,
 } from './contracts';
+import { buildUtterancePlan } from './realization/RealizationPolicy';
+import type {
+  RealizationTier,
+  SpeakerKind,
+  UtterancePlan,
+} from './realization/contracts';
 
 /** Meaningful triggers only; ordinary time ticks are deliberately not a trigger. */
 export type NarrativeSemanticEventKind =
@@ -272,6 +278,26 @@ export class NarrativeCoordinator {
 
   public getCurrentFrame(): NarrativeFrame | null {
     return this.lastFrame ? clone(this.lastFrame) : null;
+  }
+
+  /**
+   * Semantic plan for the current authored frame. The plan contains the full
+   * offline realization plus tier/fact/tone/forbidden metadata for optional
+   * AI surface wording. It never contains effect payloads or canonical state.
+   */
+  public getUtterancePlan(options: {
+    speakerKind?: SpeakerKind;
+    requestedTier?: RealizationTier;
+    exactAuthored?: boolean;
+    maxChars?: number;
+  } = {}): UtterancePlan | null {
+    if (!this.lastFrame || !this.session) return null;
+    return buildUtterancePlan({
+      frame: this.lastFrame,
+      session: this.session,
+      ...(this.context ? { context: this.context } : {}),
+      ...options,
+    });
   }
 
   public getContext(): NarrativeContextProjection | null {

@@ -37,6 +37,7 @@ This direction is based on the current repository, not on the older removed-Ink 
 - `inkjs` is a real dependency and `npm run ink:compile` compiles authored `.ink` sources into committed JSON fixtures/flows;
 - `src/narrative/ink/InkRuntime.ts` wraps compiled stories; `NarrativeHost` validates bounded context queries and typed semantic effect requests;
 - `src/narrative/NarrativeCoordinator.ts` starts/resumes compiled flows from explicit interaction requests or meaningful semantic events;
+- `src/narrative/realization/` enforces L0–L3 plans with complete authored offline text and guarded optional AI wording (#183);
 - `SimulationNarrativeAdapter` maps the coordinator onto bounded SimulationKernel reads and canonical owner commands without a full `getState()` snapshot;
 - the legacy `NarrativeEngine` / `InkAdapter` / StoryKnot path is migration-only, unmounted in production, and has a bounded deletion plan in §17.2.
 
@@ -509,6 +510,34 @@ Wider freedom for surfaces where generation/unreliability is itself the fiction:
 
 Even L3 cannot silently mutate world truth.
 
+### Implemented realization contract (#183)
+
+`src/narrative/realization/` implements the tier policy and utterance plan:
+
+- `UtterancePlan` carries tier, speaker, speech act, the complete authored
+  `offlineText`, required-fact anchors, tone, allowed uncertainty, forbidden
+  claims and a length cap. It deliberately contains no choices, effect payloads
+  or canonical state.
+- Authored Ink tags feed the plan: `# tier:l0..l3`, `# speech:reassure`,
+  `# fact:the week`, `# tone:warm`, `# uncertainty:...`,
+  `# forbid:the exact reason`, `# maxchars:320`.
+- Canonical local/remote actors are capped at L2 even if a flow requests L3.
+  System/unknown bindings stay L0. L3 requires an explicitly surface-only
+  speaker.
+- `NarrativeCoordinator.getUtterancePlan()` produces the plan for the current
+  authored frame; plans should be derived per utterance, not from a combined
+  multi-line scene.
+- `realizeUtterance(plan, { ai })` always has the complete offline wording.
+  AI is optional, injected, timeout-bounded (default 2.5s) and rejected on
+  omitted required-fact anchors, forbidden claims, multi-line/overlong output,
+  or missing anchors for L1/L2. Every rejection returns the authored text.
+- The guard is deliberately lexical and bounded; it cannot prove semantics.
+  Authors provide stable fact anchors, and canonical owners remain the only
+  authority for outcomes and knowledge.
+- Realization returns text only. Choices, validated effect payloads and pending
+  effects never enter the plan or the AI boundary, so AI wording cannot change
+  them.
+
 ---
 
 ## 13. Offline parity
@@ -542,6 +571,12 @@ same gameplay meaning
 The current generic free-form fallback such as "connection's being weird" is not sufficient for long-term school/relationship content.
 
 Generated L3 internet surfaces may use deterministic/template fallback rather than authored line-by-line equivalents.
+
+#183 implements this for the narrative seam: compiled Ink always supplies the
+complete authored utterance, AI is an optional surface rewrite behind the
+meaning guard described in §12, and realization failures/timeouts return the
+authored text without touching choices or canonical effects. Scenario flows
+with unknown bindings remain exact L0 and therefore playable with no AI.
 
 ---
 
