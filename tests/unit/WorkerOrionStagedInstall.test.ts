@@ -61,6 +61,9 @@ describe('#219 persistent owner-backed Orion installation', () => {
     const initial = new SimulationKernel().exportSnapshot();
     const simulation = new SimulationKernel({
       ...initial,
+      // Independently model an earned upgrade budget; the default new-run
+      // $38 cannot afford the authentic $85 family computer.
+      player: { ...initial.player, cash: 200 },
       time: {
         ...initial.time,
         day: 6,
