@@ -22,13 +22,13 @@ export interface CityNode {
 
 export const CITY_NODES: Record<CityNodeId, CityNode> = {
   home: { id: 'home', name: 'Room 104', blurb: 'Your motel room. Bed, kettle, desk.', x: 50, y: 78, icon: '🛏️', hint: 'You live here.' },
-  lobby: { id: 'lobby', name: 'Motel Lobby', blurb: 'Henderson’s front desk. Keys, ledgers, notices.', x: 50, y: 62, icon: '🛎️', hours: [8, 20], hint: 'Henderson holds court 8–20.' },
-  cart: { id: 'cart', name: 'Food Cart', blurb: 'Ryan’s corner stand. Tacos, rush hours, overtime.', x: 22, y: 45, icon: '🚚', hours: [9, 23], hint: 'Ryan grills days, rush at night.' },
-  cafe: { id: 'cafe', name: 'Starlight Café', blurb: 'Warm coffee across town. Maya’s orbit.', x: 78, y: 40, icon: '☕', hours: [8, 23], hint: 'Maya drifts through most days.' },
-  diner: { id: 'diner', name: '4th St Diner', blurb: 'Blue plates and bottomless coffee. Maya works 11–22.', x: 70, y: 62, icon: '🍽️', hours: [11, 22], hint: 'Maya on shift 11–22.' },
-  canal: { id: 'canal', name: 'Canal Walk', blurb: 'Water, wires and hum. Nora walks here late.', x: 30, y: 22, icon: '🌊', hint: 'Nora walks here after 22:00.' },
+  lobby: { id: 'lobby', name: 'Motel Lobby', blurb: 'Front desk with keys, ledgers, and notices.', x: 50, y: 62, icon: '🛎️', hours: [8, 20], hint: 'Front desk staffed during office hours.' },
+  cart: { id: 'cart', name: 'Food Cart', blurb: 'Corner stand. Tacos, rush hours, overtime.', x: 22, y: 45, icon: '🚚', hours: [9, 23], hint: 'Shifts and rush hours depend on the crew.' },
+  cafe: { id: 'cafe', name: 'Starlight Café', blurb: 'Warm coffee across town; regulars come and go.', x: 78, y: 40, icon: '☕', hours: [8, 23], hint: 'Guests depend on who actually shows up.' },
+  diner: { id: 'diner', name: '4th St Diner', blurb: 'Blue plates and bottomless coffee.', x: 70, y: 62, icon: '🍽️', hours: [11, 22], hint: 'Staff on duty during dining hours.' },
+  canal: { id: 'canal', name: 'Canal Walk', blurb: 'Water, wires and hum. Late walkers pass through.', x: 30, y: 22, icon: '🌊', hint: 'Quieter after sundown; company varies.' },
   laundry: { id: 'laundry', name: 'Suds & Spin', blurb: 'Warm dryers and the bulletin board of town gossip.', x: 50, y: 38, icon: '🧺', hours: [7, 23], hint: 'Gossip never closes. Almost.' },
-  techmart: { id: 'techmart', name: 'Silicon & Spares', blurb: 'Used beige towers, CRT monitors, surplus electronics, and software CDs.', x: 38, y: 55, icon: '🖥️', hours: [9, 20], hint: 'Milo sells refurbished rigs, components, and OS upgrade CDs 9–20.' },
+  techmart: { id: 'techmart', name: 'Silicon & Spares', blurb: 'Used beige towers, CRT monitors, surplus electronics, and software CDs.', x: 38, y: 55, icon: '🖥️', hours: [9, 20], hint: 'Refurbished rigs, components, and OS upgrade CDs 9–20.' },
 };
 
 /** Display-hours check (same wrap logic as place hours). */

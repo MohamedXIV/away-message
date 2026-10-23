@@ -36,7 +36,7 @@ export interface MyPlaceEngineState {
   lastUpdateAtMinute?: number;
   lastUpdateLog?: string[];
   userProfile: MyPlaceProfile;
-  npcProfiles: Record<string, MyPlaceProfile>; // maya_x, tacocart_ryan, nightowl87
+  npcProfiles: Record<string, MyPlaceProfile>; // live owner-bound and surface-only profiles
   guestbook: Record<string, Array<{ author: string; text: string; date: string; minute: number }>>; // key: username
   proceduralCatalog?: MyPlaceRelease[];
 }
@@ -288,9 +288,11 @@ export class MyPlaceEngine {
   public getBoundActorIdForProfile(username: string): string | null {
     const key = String(username ?? '').trim();
     if (!key) return null;
+    // An alias alone is never evidence of a live MyPlace page. Fresh worlds
+    // deliberately omit historic seed profiles: do not rebind ghost actors.
     const profile = this.npcProfiles.get(key);
-    if (profile?.actorId) return profile.actorId;
-    return SEED_PROFILE_ACTOR_IDS[key] ?? null;
+    if (!profile) return null;
+    return profile.actorId ?? SEED_PROFILE_ACTOR_IDS[key] ?? null;
   }
 
   public static readonly ARCHETYPE_AVATARS: Record<CharacterArchetype, string> = {
@@ -342,7 +344,7 @@ export class MyPlaceEngine {
   }
 
   // AI-driven periodic NPC profile mutation — governed, personality-consistent.
-  // Candidates are ALL npc profiles (core 3 keep their exact legacy personas/picks).
+  // Candidates are currently registered profile pages, not an assumed core cast.
   public async maybeUpdateRandomNpcProfile(currentDay: number, currentMinute: number, _socialEngine?: { getRelationships: (id: string) => unknown }): Promise<{ username: string; profile: MyPlaceProfile } | null> {
     const requestEpoch = this.profileUpdateEpoch;
     // Throttle: only once every 2 days, 30% chance

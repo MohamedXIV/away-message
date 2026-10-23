@@ -135,11 +135,11 @@ export const SEARCH_INDEX_DATABASE: SearchIndexEntry[] = [
   // ----------------------------------------------------
   {
     id: 'search_nightboard_downloads',
-    title: 'NightBoard: "Why are downloads crawling on Orion 4.8?" (Thread #101)',
-    url: 'http://nightboard.local/thread/101',
-    snippet: 'User thread on slow connection speeds. Ryan_K recommends downloading FlashFetch from DownloadHub for multi-part acceleration.',
+    title: 'NightBoard: "Dialup modem optimization" (Thread #52)',
+    url: 'http://nightboard.local/thread/52',
+    snippet: 'User thread on dial-up troubleshooting, noisy copper lines and modem init strings.',
     category: 'community',
-    keywords: ['nightboard', 'thread', 'slow', 'downloads', 'crawling', 'ryan', 'flashfetch', 'forum', 'orion', 'speed'],
+    keywords: ['nightboard', 'thread', 'slow', 'downloads', 'crawling', 'modem', 'forum', 'orion', 'speed'],
     availableFromDay: 1,
     datePublished: 'Oct 03, 2006',
   },
@@ -147,9 +147,9 @@ export const SEARCH_INDEX_DATABASE: SearchIndexEntry[] = [
     id: 'search_nightboard_canal',
     title: 'NightBoard: "Strange low-frequency hum near the Industrial Canal" (Thread #104)',
     url: 'http://nightboard.local/thread/104',
-    snippet: 'NightOwl87 posts audio observations and late-night sightings near the old waterworks bridge and north industrial district.',
+    snippet: 'Anonymous posters share audio observations and late-night sightings near the old waterworks bridge and industrial district.',
     category: 'community',
-    keywords: ['nightboard', 'nightowl87', 'hum', 'canal', 'industrial', 'bridge', 'mystery', 'sounds', 'nora'],
+    keywords: ['nightboard', 'anonymous', 'hum', 'canal', 'industrial', 'bridge', 'mystery', 'sounds'],
     availableFromDay: 2,
     datePublished: 'Oct 04, 2006',
   },
@@ -177,35 +177,17 @@ export const SEARCH_INDEX_DATABASE: SearchIndexEntry[] = [
   // ----------------------------------------------------
   // SOCIAL & PEOPLE
   // ----------------------------------------------------
+  // Search discovery can list the MyPlace service but may not invent
+  // permanent actor pages: canonical profiles belong to each saved world.
   {
-    id: 'search_myplace_maya',
-    title: 'MyPlace: maya_x - Photography, Indie Music & Late Nights',
-    url: 'http://myplace.local/maya_x',
-    snippet: 'Maya\'s personal MyPlace profile. Photos from 4th Street Diner, favorite tracks, blog entries, and guestbook comments.',
+    id: 'search_myplace_directory',
+    title: 'MyPlace: personal profiles, music and local blogs',
+    url: 'http://myplace.local/',
+    snippet: 'Build a page, share music and browse community updates. Individual profiles are discovered in the current world.',
     category: 'social',
-    keywords: ['maya', 'maya_x', 'myplace', 'profile', 'diner', 'photos', 'blog', 'friends'],
+    keywords: ['myplace', 'profile', 'community', 'diner', 'photos', 'blog', 'friends', 'music', 'hardware', 'night'],
     availableFromDay: 1,
     datePublished: 'Oct 01, 2006',
-  },
-  {
-    id: 'search_myplace_ryan',
-    title: 'MyPlace: ryan_k - PC Modding, Bass Guitar & Audio Tech',
-    url: 'http://myplace.local/ryan_k',
-    snippet: 'Ryan\'s personal page. System specs, overclocking tests, links to favorite download utilities, and band schedule.',
-    category: 'social',
-    keywords: ['ryan', 'ryan_k', 'myplace', 'modding', 'hardware', 'guitar', 'music', 'overclock'],
-    availableFromDay: 1,
-    datePublished: 'Sep 18, 2006',
-  },
-  {
-    id: 'search_myplace_nightowl',
-    title: 'MyPlace: NightOwl87 - Urban Nocturne & Architecture',
-    url: 'http://myplace.local/nightowl87',
-    snippet: 'Nora\'s dark-themed portfolio featuring midnight city photography, industrial landscapes, and cryptic poetry excerpts.',
-    category: 'social',
-    keywords: ['nightowl87', 'nora', 'myplace', 'night', 'photography', 'poetry', 'urban', 'canal'],
-    availableFromDay: 2,
-    datePublished: 'Oct 02, 2006',
   },
 
   // ----------------------------------------------------

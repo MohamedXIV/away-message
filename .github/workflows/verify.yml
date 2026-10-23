@@ -160,6 +160,13 @@ jobs:
         if: github.event_name == 'pull_request' && github.event.pull_request.head.ref == 'feat/175-single-worker-simulation-host'
         run: npx playwright test tests/e2e/tier4_scenarios/ScenarioW_WorkerFullPlayAcceptance.spec.ts
 
+      # #213 stacked PR: genuine, unseeded new game with dynamic cast, café
+      # encounter, cold save/reopen and a second world's varied identities.
+      # This branch is a sibling Worker UX lane, not the canonical #175 branch.
+      - name: Browser Worker dynamic cast and actual new-game social acceptance
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.ref == 'feat/213-dynamic-worker-starter-cast'
+        run: npx playwright test tests/e2e/tier4_scenarios/ScenarioX_WorkerDynamicCast.spec.ts
+
       # #175 P3.20: real installed-app path and PCM WAV playback, not mocked UI.
       - name: Browser Worker RetroAmp real audio gate
         if: github.event_name == 'pull_request' && github.event.pull_request.head.ref == 'feat/175-single-worker-simulation-host'

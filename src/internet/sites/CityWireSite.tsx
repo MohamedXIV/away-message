@@ -112,7 +112,7 @@ export const CityWireSite: React.FC<SiteRouteProps> = (props) => {
                 Residents in the industrial canal district reported intermittent brownouts and low-frequency auditory hums late Monday night as municipal contractors energized high-voltage substations along the waterway. Officials claim the project will modernize telemetry routing for the local pumping stations, but night shift workers and motel guests described unusual flickering in commercial neon signs and telephone static.
               </p>
               <p className="text-xs leading-relaxed text-justify">
-                "The lights in the 4th Street Diner dimmed down to an amber glow around 2:45 AM," said Maya Lin, a counter waitress. "The streetlights along the canal were buzzing like guitar amplifiers."
+                "The lights in the 4th Street Diner dimmed down to an amber glow around 2:45 AM," said one diner worker, who asked not to be named. "The streetlights along the canal were buzzing like guitar amplifiers."
               </p>
             </>
           )}

@@ -113,8 +113,8 @@ export class WorkerSimulationHost implements SimulationHost {
     });
   }
 
-  async initialize(initialState?: InitialSimulationState): Promise<void> {
-    await this.request({ op: 'init', initialState }, WORKER_BOOT_TIMEOUT_MS);
+  async initialize(initialState?: InitialSimulationState, freshRosterSeed?: string): Promise<void> {
+    await this.request({ op: 'init', initialState, freshRosterSeed }, WORKER_BOOT_TIMEOUT_MS);
   }
 
   async initializeSlot(slotId: string): Promise<void> {
@@ -219,11 +219,12 @@ export class WorkerSimulationHost implements SimulationHost {
 /** A single Vite module Worker, not a dual-running browser simulation. */
 export async function createBrowserSimulationHost(
   initialState?: InitialSimulationState,
+  freshRosterSeed?: string,
 ): Promise<WorkerSimulationHost> {
   const worker = new Worker(new URL('./simulation.worker.ts', import.meta.url), { type: 'module' });
   const host = new WorkerSimulationHost(worker);
   try {
-    await host.initialize(initialState);
+    await host.initialize(initialState, freshRosterSeed);
     return host;
   } catch (cause) {
     host.dispose();
