@@ -50,7 +50,7 @@ export const MotelLinkSite: React.FC<SiteRouteProps> = () => {
 
         {/* Motel Services & Front Desk Message */}
         <div className="bg-slate-800 p-3 rounded border border-slate-700 space-y-2">
-          <h4 className="font-bold text-xs text-yellow-300">Notice from Front Desk (Mr. Henderson):</h4>
+          <h4 className="font-bold text-xs text-yellow-300">Notice from the Front Desk:</h4>
           <p className="text-xs text-gray-300 leading-relaxed">
             Welcome to the Starlite Motel. Ice machine is located next to Room 101. Weekly lodging rent is due Sunday evening at the counter. Please do not tamper with the copper telephony bridge box behind the stairwell.
           </p>

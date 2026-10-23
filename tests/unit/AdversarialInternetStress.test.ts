@@ -447,16 +447,17 @@ describe('Adversarial Stress Test Suite — Milestone 3 Fake Internet & Voyager 
   // =========================================================================
   describe('SearchEngine: Day 1..14 Availability Boundary Gating', () => {
     it('strictly hides Day 2+ content on Day 1', () => {
-      // Entries with availableFromDay: 2
-      // search_peerbox_p2p, search_nightboard_canal, search_myplace_nightowl
+      // Genuine Day 2+ community and networking entries only.
+      // Identity-bound MyPlace profiles are not unconditional index pages.
       const day1Peerbox = searchInternet('peerbox', 1);
       expect(day1Peerbox.some((r) => r.id === 'search_peerbox_p2p')).toBe(false);
 
       const day1Canal = searchInternet('industrial canal hum', 1);
       expect(day1Canal.some((r) => r.id === 'search_nightboard_canal')).toBe(false);
 
-      const day1Nora = searchInternet('nightowl87 architecture', 1);
-      expect(day1Nora.some((r) => r.id === 'search_myplace_nightowl')).toBe(false);
+      const day1Profiles = searchInternet('myplace profile', 1);
+      expect(day1Profiles.some((r) => r.id === 'search_myplace_directory')).toBe(true);
+      expect(day1Profiles.some((r) => /myplace\.local\/(?:maya_x|ryan_k|nightowl87)/.test(r.url))).toBe(false);
     });
 
     it('unlocks Day 2+ content on Day 2 onward', () => {
@@ -469,8 +470,11 @@ describe('Adversarial Stress Test Suite — Milestone 3 Fake Internet & Voyager 
         const canal = searchInternet('industrial canal hum', day);
         expect(canal.some((r) => r.id === 'search_nightboard_canal')).toBe(true);
 
-        const nora = searchInternet('nightowl87 architecture', day);
-        expect(nora.some((r) => r.id === 'search_myplace_nightowl')).toBe(true);
+        // A person's absence must not make temporal discovery fail. The
+        // MyPlace service remains indexed, but named pages require real truth.
+        const profiles = searchInternet('myplace profile', day);
+        expect(profiles.some((r) => r.id === 'search_myplace_directory')).toBe(true);
+        expect(profiles.some((r) => /myplace\.local\/(?:maya_x|ryan_k|nightowl87)/.test(r.url))).toBe(false);
       }
     });
 
@@ -588,9 +592,7 @@ describe('Adversarial Stress Test Suite — Milestone 3 Fake Internet & Voyager 
         'search_nightboard_downloads',
         'search_nightboard_canal',
         'search_nightboard_toolbar_warn',
-        'search_myplace_maya',
-        'search_myplace_ryan',
-        'search_myplace_nightowl',
+        'search_myplace_directory',
         'search_citywire_power',
         'search_jobs_diner',
         'search_motellink_portal',

@@ -27,6 +27,21 @@ describe('SearchEngine & SearchIndex Test Suite', () => {
     expect(withFlag.length).toBeGreaterThanOrEqual(withoutFlag.length);
   });
 
+  it('indexes genuine world services rather than permanent legacy actor profiles', () => {
+    const directory = searchInternet('myplace', 1, {});
+    expect(directory.some(result => result.id === 'search_myplace_directory' &&
+      result.url === 'http://myplace.local/')).toBe(true);
+    for (const query of ['myplace', 'maya', 'ryan', 'nightowl87', 'canal']) {
+      const results = searchInternet(query, 3, {});
+      expect(results.some(result =>
+        ['myplace.local/maya_x', 'myplace.local/ryan_k', 'myplace.local/nightowl87']
+          .some(legacyPage => result.url.toLowerCase().includes(legacyPage)))).toBe(false);
+      expect(results.some(result =>
+        ['Maya', 'Mr. Henderson', 'Ryan_K', 'NightOwl87', 'Nora']
+          .some(name => result.snippet.includes(name)))).toBe(false);
+    }
+  });
+
   it('handles empty or whitespace-only queries gracefully', () => {
     const emptyResults = searchInternet('   ', 1, {});
     expect(emptyResults).toEqual([]);
