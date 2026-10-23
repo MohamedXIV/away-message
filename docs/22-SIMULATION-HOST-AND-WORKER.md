@@ -1406,3 +1406,44 @@ behavior, rejected invalid modes and durations, and the actual Worker
 FIFO command path. The work intentionally does **not** change existing
 sleep/work/travel semantics or declare #177 Education-ready until
 specific class/exam/work fixtures select an explicit fidelity policy.
+
+## P3.43 — Non-product Education-readiness semantic acceptance fixture
+
+Issue #177's Senior Year prerequisite is tested using **four temporary
+actors**: two local students, a remote online contact, and a local teacher.
+The fixture does **not** install a school, expose new production gameplay,
+introduce a new scheduler or add a second simulation store. Actors are
+registered generically through the ordinary Social roster and identified by
+test-generated role tags rather than hardcoded special-character rules.
+
+One class and exam appear as ordinary appointments, and a work shift retains
+existing job-origin appointment provenance. Student agenda/planned routine
+and appointment/job obligations are projected on demand from the same Life
+Matrix as ordinary social activities. A selected intent includes reasons,
+time window, source and destination; a remote friend remains reachable
+online but ineligible for physical meetings or local trips.
+
+A *Finals Week*-style **test-only Situation** is a procedural event held by
+World, with one test-authored typed Life modifier projected from that real
+trigger using the pure existing WorldModifiers projector. This is a
+provenance and active-window proof, not a new global education event kind or
+production influence rule. The live World-owned knowledge ledger records
+the canonical fact that the exam is **not cancelled**, and a contradictory
+NightBoard claim that it **is cancelled**. Only actors explicitly receiving
+fact or claim receipts may learn them; the player and other characters do
+not inherit hidden truth. One Social-owned shared-study CoreMemory carries
+structured participant/subject/source/salience metadata rather than
+unstructured prose as authority.
+
+The integration regression compares in-memory reads before/after, cold
+reconstruction from an explicit canonical snapshot, and the actual
+SimulationWorkerRuntime FIFO's explicit full export and bounded Lab view.
+It verifies scheduling, provenance, intent/meeting eligibility,
+fact/claim separation, memory persistence, and no read-side mutation.
+The only use of full internal graph data is the **explicit save/export**
+and headless fixture, never a routine postMessage UI projection.
+
+**Not an Education product acceptance:** this fixture does not teach
+curriculum, implement exam outcomes, decide school-specific attendance,
+or replace a human end-to-end Worker gameplay playtest. It proves the
+existing engine's semantic boundaries before beginning Senior Year content.
