@@ -1,6 +1,7 @@
 import { SimulationKernel } from '../../engine/kernel/SimulationKernel';
 import { MAX_MINUTE_ACCURATE_ADVANCE } from '../../engine/kernel/TimeAdvancement';
 import { createWorkerCafeNarrative } from './WorkerCafeNarrative';
+import { buildFreshSandboxSocialState } from './FreshSandboxCast';
 import { GENERATED_VENUE_SERVICES } from '../../engine/worldContent.generated';
 import { loadSlotEngineWithNarrative, saveSlot } from '../../persistence/slots';
 import type { LabProceduralCategory, SimulationQuery, SimulationWorkerReply, SimulationWorkerRequest } from './SimulationHostProtocol';
@@ -161,11 +162,26 @@ export function createSimulationWorkerRuntime(send: (message: SimulationWorkerRe
     try {
       let value: unknown = null;
       switch (raw.op) {
-        case 'init':
+        case 'init': {
           if (kernel) throw new Error('SimulationHost already initialized');
-          kernel = new SimulationKernel(raw.initialState);
+          if (raw.freshRosterSeed !== undefined) {
+            if (raw.initialState?.social) throw new Error('Fresh roster cannot replace supplied Social state');
+            const social = buildFreshSandboxSocialState(raw.freshRosterSeed);
+            kernel = new SimulationKernel({
+              ...raw.initialState,
+              social,
+              // An empty NPC page collection prevents authored legacy MyPlace
+              // identities reappearing despite their absence from Social.
+              myplace: { ...raw.initialState?.myplace, npcProfiles: {} } as
+                NonNullable<ConstructorParameters<typeof SimulationKernel>[0]>['myplace'],
+              scenarioSeed: raw.initialState?.scenarioSeed ?? raw.freshRosterSeed,
+            });
+          } else {
+            kernel = new SimulationKernel(raw.initialState);
+          }
           unsubscribe = kernel.subscribeChanges(change => send({ type: 'change', change }));
           break;
+        }
         case 'initSlot': {
           if (kernel) throw new Error('SimulationHost already initialized');
           const loaded = await loadSlotEngineWithNarrative(raw.slotId);

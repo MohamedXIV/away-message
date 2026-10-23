@@ -135,7 +135,7 @@ export type SimulationHardwareCommand =
 
 
 export type SimulationWorkerRequest =
-  | { id: number; op: 'init'; initialState?: InitialSimulationState }
+  | { id: number; op: 'init'; initialState?: InitialSimulationState; freshRosterSeed?: string }
   | { id: number; op: 'initSlot'; slotId: string }
   | { id: number; op: 'dispatch'; action: SimulationAction }
   | { id: number; op: 'hardware'; command: SimulationHardwareCommand }

@@ -28,6 +28,8 @@ export interface WorkerSessionFactories {
 const browserFactories: WorkerSessionFactories = {
   newGame: (housingOfferId) => createBrowserSimulationHost(
     housingOfferId ? { starterHousingOfferId: housingOfferId } : undefined,
+    // Once per new save; generated actors persist, cold load never rerolls.
+    crypto.randomUUID(),
   ),
   loadGame: openBrowserSimulationSlot,
   saveGame: saveBrowserSimulationSlot,
