@@ -82,6 +82,9 @@ describe('#219 persistent owner-backed Orion installation', () => {
     expect(prepared.success).toBe(true);
     expect(prepared.data?.targetOs).toBe('Orion_5.0');
     expect(prepared.data?.mode).toBe('fresh');
+    // PC assembly already incurred its own 15 in-world minutes. Count only
+    // setup copying/configuration against the installer duration.
+    const beforeSetupMinutes = simulation.clock.getTotalMinutes();
     expect(simulation.startOsInstall(prepared.data!).success).toBe(true);
     expect(simulation.advanceOsInstall().success).toBe(true);
 
@@ -98,8 +101,8 @@ describe('#219 persistent owner-backed Orion installation', () => {
     expect(finished.os.currentOsId).toBe('Orion_5.0');
     expect(finished.os.installation).toBeUndefined();
     expect(restored.getDesktopRead().pcBootState).toBe('desktop');
-    expect(finished.time.totalMinutes - initial.time.totalMinutes)
-      .toBe(5 * 1440 + prepared.data!.durationMinutes);
+    expect(finished.time.totalMinutes - beforeSetupMinutes)
+      .toBe(prepared.data!.durationMinutes);
   });
 
   it('allows cancel without refunding spent time or granting installation rights', () => {
