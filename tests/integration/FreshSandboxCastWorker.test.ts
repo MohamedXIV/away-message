@@ -53,6 +53,11 @@ describe('#213 generated Worker starting cast', () => {
     expect(engine.social.getBuddyWithRole('landlord')).toBeDefined();
     expect(engine.social.getBuddyWithRole('cart-owner')).toBeDefined();
     for (const id of seedCharacterIds()) expect(engine.social.getBuddy(id)).toBeUndefined();
+    // A missing named seed is not an invisible NPC relationship: the sole
+    // canonical affinity graph must have no endpoints absent from this roster.
+    const savedGraph = engine.exportSnapshot().social.affinities ?? {};
+    expect(Object.keys(savedGraph).every(key =>
+      key.split('__').every(id => ids.includes(id)))).toBe(true);
     // Scenarios may legitimately introduce additional people. Validate the
     // two explicit preexisting acquaintances by identity, not a fixed count.
     const authoredAcquaintances = Object.keys(social.knownHandles ?? {});
