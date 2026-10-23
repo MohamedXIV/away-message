@@ -1,6 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import type { CSSProperties } from 'react';
 import type { SimulationChromeRead, SimulationDesktopRead } from '../../engine/kernel/SimulationPublication';
+import { getReleaseById } from '../../engine/OsCatalog';
 import { getOsPresentationProfile } from '../../desktop/host/OsPresentation';
+import { DesktopIconGrid } from '../../desktop/DesktopIconGrid';
 import { WindowFrameChrome } from '../../desktop/WindowFrameChrome';
 import { WindowManagerChrome } from '../../desktop/WindowManagerChrome';
 import { TaskbarChrome } from '../../desktop/TaskbarChrome';
@@ -24,23 +27,8 @@ import { WorkerTerminalPanel } from './WorkerTerminalPanel';
 import { WorkerLabInspectorPanel } from './WorkerLabInspectorPanel';
 import { WorkerRecycleBinPanel, WorkerAddRemovePanel, WorkerSaveLoadPanel } from './WorkerSystemUtilities';
 import { getWorkerInstalledPrograms, getWorkerInstalledShortcuts } from './WorkerInstalledAppLinks';
+import { buildWorkerDesktopIcons } from './workerDesktopIcons';
 import type { WorkerGameSession } from './WorkerGameSession';
-
-const APPLICATIONS = [
-  { id: 'terminal', label: 'Command Prompt', icon: '💻' },
-  { id: 'ailab', label: 'AI Lab Inspector', icon: '🔬' },
-  { id: 'trash', label: 'Recycle Bin', icon: '🗑️' },
-  { id: 'addremove', label: 'Add/Remove Programs', icon: '📦' },
-  { id: 'savegame', label: 'Save / Load Game', icon: '💾' },
-  { id: 'fileexplorer', label: 'My Computer', icon: '📁' },
-  { id: 'notepad', label: 'Notepad', icon: '📝' },
-  { id: 'pulse', label: 'Pulse Messenger', icon: '💬' },
-  { id: 'system', label: 'Computer & Setup', icon: '💻' },
-  { id: 'publicweb', label: 'Town Sites', icon: '🌐' },
-  { id: 'browser', label: 'Voyager Browser', icon: '🌐' },
-  { id: 'mailbox', label: 'Mailbox', icon: '✉️' },
-  { id: 'flashfetch', label: 'FlashFetch', icon: '⚡' },
-] as const;
 
 /**
  * Reuses the game's existing useWindowStore (UI-only windowing) and
@@ -62,6 +50,7 @@ export function WorkerDesktop({
   const [desktop, setDesktop] = useState<SimulationDesktopRead | null>(null);
   const [chrome, setChrome] = useState<SimulationChromeRead | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const desktopRef = useRef<HTMLElement>(null);
   const openWindow = useWindowStore(s => s.openWindow);
 
   useEffect(() => {
@@ -77,61 +66,128 @@ export function WorkerDesktop({
     return () => { current = false; };
   }, [session, revision]);
 
-  const open = (appId: string, customState?: Record<string, unknown>) =>
-    openWindow(appId, customState ?? {});
+  const profile = chrome?.osVersion ? getOsPresentationProfile(chrome.osVersion) : null;
+  const release = chrome?.osVersion ? getReleaseById(chrome.osVersion) : null;
+  const installedShortcuts = useMemo(
+    () => (desktop ? getWorkerInstalledShortcuts(desktop) : []),
+    [desktop],
+  );
+  const installedPrograms = useMemo(
+    () => (desktop ? getWorkerInstalledPrograms(desktop) : []),
+    [desktop],
+  );
+  const desktopIcons = useMemo(
+    () => buildWorkerDesktopIcons(installedShortcuts),
+    [installedShortcuts],
+  );
+
+  const allowedApps = useMemo(() => ['terminal', 'ailab', 'browser', 'fileexplorer', 'notepad', 'controlpanel', 'pulse', 'trash', 'addremove', 'savegame',
+    ...installedPrograms.filter(program => program.available).map(program => program.id)], [installedPrograms]);
+
+  const resolveAppId = (id: string): string | null => {
+    const mapped = id === 'controlpanel' ? 'system' : id;
+    return allowedApps.includes(mapped) || allowedApps.includes(id) ? mapped : null;
+  };
+
+  /** Window geometry is UI-only. Size it to the actual contained desktop and
+   * dock it beside the icon columns so the desktop remains usable while a
+   * window is open. On narrow screens, fit the window into the remaining
+   * space before falling back to an overlay position. */
+  const open = (appId: string, customState?: Record<string, unknown>) => {
+    const bounds = desktopRef.current?.getBoundingClientRect();
+    const desktopWidth = bounds?.width ?? 900;
+    const desktopHeight = bounds?.height ?? 570;
+    const taskbarHeight = profile?.shell.taskbarHeightPx ?? 28;
+    const availableWidth = Math.max(240, desktopWidth - 24);
+    const availableHeight = Math.max(160, desktopHeight - taskbarHeight - 24);
+    const isPulse = appId === 'pulse' || appId === 'app.pulse';
+    const desiredWidth = isPulse ? 360 : 620;
+    const desiredHeight = isPulse ? 520 : 440;
+
+    let iconRight = 0;
+    if (desktopRef.current && bounds) {
+      desktopRef.current.querySelectorAll<HTMLElement>('[data-desktop-icon]').forEach(button => {
+        iconRight = Math.max(iconRight, button.getBoundingClientRect().right - bounds.left);
+      });
+    }
+    const besideIconsX = iconRight > 0 ? Math.ceil(iconRight) + 10 : 60;
+    const widthBesideIcons = desktopWidth - besideIconsX - 12;
+
+    const size = widthBesideIcons >= 320
+      ? { width: Math.min(desiredWidth, widthBesideIcons), height: Math.min(desiredHeight, availableHeight) }
+      : { width: Math.min(desiredWidth, availableWidth), height: Math.min(desiredHeight, availableHeight) };
+    const position = {
+      x: widthBesideIcons >= 320
+        ? besideIconsX
+        : Math.max(8, Math.min(60, desktopWidth - size.width - 12)),
+      y: Math.max(8, Math.min(40, desktopHeight - taskbarHeight - size.height - 12)),
+    };
+
+    openWindow({
+      appId,
+      customState: customState ?? {},
+      defaultPosition: position,
+      defaultSize: size,
+      minSize: {
+        width: Math.min(isPulse ? 340 : 320, size.width),
+        height: Math.min(isPulse ? 300 : 220, size.height),
+      },
+    });
+  };
+
   const openDocument = (path: string) => open('notepad', { filePath: path });
   const openInstaller = (path: string) => open('installer', { filePath: path });
   const openArchive = (path: string) => open('zipmate', { archivePath: path });
   const openArtwork = (path: string) => open('photobox', { artworkPath: path });
   const openAudio = (path: string) => open('retroamp', { audioPath: path });
-  const profile = chrome?.osVersion ? getOsPresentationProfile(chrome.osVersion) : null;
-  const installedShortcuts = desktop ? getWorkerInstalledShortcuts(desktop) : [];
-  const installedPrograms = desktop ? getWorkerInstalledPrograms(desktop) : [];
-  const allowedApps = ['terminal', 'ailab', 'browser', 'fileexplorer', 'notepad', 'controlpanel', 'pulse', 'trash', 'addremove', 'savegame',
-    ...installedPrograms.filter(program => program.available).map(program => program.id)];
-  const resolveAppId = (id: string): string | null => ({
-    terminal: 'terminal', browser: 'browser', fileexplorer: 'fileexplorer', notepad: 'notepad',
-    trash: 'trash', addremove: 'addremove', savegame: 'savegame',
-    controlpanel: 'system', pulse: 'pulse', flashfetch: 'flashfetch',
-  } as Record<string, string>)[id] ?? null;
+
+  const shellStyle = {
+    fontFamily: profile?.uiFontStack ?? 'Tahoma, sans-serif',
+    fontSize: profile ? `${profile.baseFontSizePx}px` : undefined,
+    '--os-taskbar-height': `${profile?.shell.taskbarHeightPx ?? 28}px`,
+    '--os-icon-cell-width': `${profile?.desktop.iconCellWidthPx ?? 84}px`,
+    '--os-icon-cell-height': `${profile?.desktop.iconCellHeightPx ?? 88}px`,
+    '--os-icon-glyph-size': `${profile?.desktop.iconGlyphSizePx ?? 38}px`,
+  } as CSSProperties;
 
   return (
-    <section data-testid="worker-desktop"
-      className="relative h-[570px] overflow-hidden rounded-md border border-slate-600 bg-[#008080] text-black"
-      style={{ fontFamily: profile?.uiFontStack ?? 'Tahoma, sans-serif' }}>
-      <div className="pointer-events-none absolute right-3 top-2 text-xs text-white/80">
-        {chrome?.osVersion ?? 'No OS installed'} · Worker-backed desktop
-      </div>
-      {!desktop?.osVersion && (
-        <p data-testid="worker-desktop-uninstalled"
-          className="absolute left-3 right-3 top-3 rounded border border-amber-700 bg-amber-100/95 p-2 text-xs">
-          No canonical OS is installed. Window/file operations here are an engineering
-          migration surface, not an unlocked in-world computer.
-        </p>
+    <section
+      ref={desktopRef}
+      data-testid="worker-desktop"
+      data-theme={profile?.themeId}
+      data-os-theme={profile?.themeId}
+      data-os-wallpaper={profile?.desktop.wallpaperId}
+      data-os-icon-style={profile?.desktop.iconStyle}
+      data-os-release={chrome?.osVersion ?? undefined}
+      aria-label="Orion desktop"
+      style={shellStyle}
+      className="os-desktop h-[clamp(380px,68vh,680px)] w-full"
+    >
+      <div className="os-desktop-wallpaper" aria-hidden="true" />
+      {release && <div className="os-desktop-emblem" aria-hidden="true">ORION</div>}
+
+      <DesktopIconGrid
+        icons={desktopIcons}
+        onOpen={(icon) => open(icon.appId)}
+        testId="worker-desktop-icon-grid"
+        ariaLabel="Desktop icons"
+      />
+
+      {release && (
+        <div className="os-desktop-badge" data-testid="worker-desktop-os-badge" data-os-release={release.id}>
+          <span className="os-desktop-badge-mark" aria-hidden="true">O</span>
+          <span className="os-desktop-badge-copy">
+            <strong>{release.displayName}</strong>
+            <span>{release.codename} · Build {release.build}</span>
+          </span>
+        </div>
       )}
-      <div className="absolute left-3 top-24 bottom-11 flex w-28 flex-col gap-3 overflow-y-auto">
-        {APPLICATIONS.map(app => (
-          <button type="button" key={app.id} onClick={() => open(app.id)}
-            className="flex flex-col items-center gap-1 rounded px-1 py-1 text-xs text-white hover:bg-white/20"
-            aria-label={'Open ' + app.label}>
-            <span className="text-3xl">{app.icon}</span>{app.label}
-          </button>
-        ))}
-      </div>
-      {installedShortcuts.length > 0 && (
-        <div data-testid="worker-installed-shortcuts"
-          className="absolute left-36 top-24 flex max-h-[390px] w-32 flex-col gap-3 overflow-y-auto">
-          {installedShortcuts.map(shortcut => (
-            <button type="button" key={shortcut.id}
-              disabled={!shortcut.launchId}
-              title={shortcut.launchId ? 'Open installed ' + shortcut.label :
-                shortcut.label + ': installed, Worker UI not migrated yet'}
-              onClick={() => { if (shortcut.launchId) open(shortcut.launchId); }}
-              aria-label={'Installed shortcut: ' + shortcut.label}
-              className="flex flex-col items-center gap-1 rounded px-1 py-1 text-xs text-white hover:bg-white/20 disabled:cursor-not-allowed disabled:opacity-55">
-              <span className="text-3xl">{shortcut.icon}</span>{shortcut.label}
-            </button>
-          ))}
+
+      {desktop && !desktop.osVersion && (
+        <div data-testid="worker-desktop-uninstalled" role="status" className="os-desktop-note">
+          <strong>No Orion OS is installed.</strong>
+          Purchase and assemble a computer in Computer &amp; Setup. Window and file operations here remain an
+          engineering surface until a canonical OS boots.
         </div>
       )}
 
@@ -146,8 +202,8 @@ export function WorkerDesktop({
         renderApp={win => (
           <WorkerDesktopApp window={win} session={session} revision={revision}
             osVersion={chrome?.osVersion ?? null}
-            openDocument={openDocument} openInstaller={openInstaller} openArchive={openArchive}
-            openArtwork={openArtwork} openAudio={openAudio} />
+            openDocument={openDocument} openInstaller={openInstaller}
+            openArchive={openArchive} openArtwork={openArtwork} openAudio={openAudio} />
         )}
       />
 
@@ -168,11 +224,11 @@ export function WorkerDesktop({
         tray={<div data-testid="worker-taskbar-tray" className="ml-auto h-full">
           {chrome ? <SystemTrayChrome chrome={chrome}
             onOpenDialUp={() => open('system')} /> : (
-            <div role="status" className="px-2 py-1 text-xs">––:––</div>
+            <div role="status" className="os-tray-clock px-2 py-1">--:--</div>
           )}
         </div>}
       />
-      {error && <p role="alert" className="absolute bottom-11 right-3 bg-red-100 p-2 text-xs">{error}</p>}
+      {error && <p role="alert" className="os-context-menu absolute bottom-10 right-3 z-50 max-w-sm p-2 text-xs text-red-800">{error}</p>}
     </section>
   );
 }

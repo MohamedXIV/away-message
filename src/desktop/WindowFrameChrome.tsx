@@ -2,6 +2,7 @@ import React, { useRef, useCallback, useState, memo } from 'react';
 import { useWindowStore, type WindowState } from '../store/useWindowStore';
 import type { OsVersion } from '../engine/types';
 import { getOsPresentationProfile, resolveWindowTransition } from './host/OsPresentation';
+import { OsIcon } from './OsIcon';
 import { synthAudio } from '../audio/SynthAudio';
 
 export interface WindowFrameChromeProps {
@@ -33,6 +34,7 @@ export const WindowFrameChrome: React.FC<WindowFrameChromeProps> = memo(({ windo
     ? resolveWindowTransition(osPresentation, pendingExitAction, reducedMotion)
     : defaultWindowOpenTransition;
   const frameRef = useRef<HTMLDivElement>(null);
+  const taskbarHeightPx = osPresentation?.shell.taskbarHeightPx ?? 28;
 
   const focusWindow = useWindowStore((s) => s.focusWindow);
   const closeOrTrayWindow = useWindowStore((s) => s.closeOrTrayWindow);
@@ -60,9 +62,11 @@ export const WindowFrameChrome: React.FC<WindowFrameChromeProps> = memo(({ windo
       const handlePointerMove = (moveEvent: PointerEvent) => {
         const deltaX = moveEvent.clientX - startX;
         const deltaY = moveEvent.clientY - startY;
-        const maxW = typeof globalThis.innerWidth !== 'undefined' ? globalThis.innerWidth : 1920;
+        const desktop = frameRef.current?.offsetParent as HTMLElement | null;
+        const maxW = desktop?.clientWidth ?? (typeof globalThis.innerWidth !== 'undefined' ? globalThis.innerWidth : 1920);
+        const maxH = desktop?.clientHeight ?? (typeof globalThis.innerHeight !== 'undefined' ? globalThis.innerHeight : 1080);
         const newX = Math.max(-winState.size.width + 100, Math.min(maxW - 100, startPosX + deltaX));
-        const newY = Math.max(0, startPosY + deltaY);
+        const newY = Math.max(0, Math.min(Math.max(0, maxH - taskbarHeightPx - 96), startPosY + deltaY));
 
         setWindowPosition(winState.id, { x: newX, y: newY });
       };
@@ -78,7 +82,7 @@ export const WindowFrameChrome: React.FC<WindowFrameChromeProps> = memo(({ windo
       document.addEventListener('pointermove', handlePointerMove);
       document.addEventListener('pointerup', handlePointerUp);
     },
-    [winState.id, winState.position, winState.size, winState.isMaximized, focusWindow, setWindowPosition],
+    [winState.id, winState.position, winState.size, winState.isMaximized, focusWindow, setWindowPosition, taskbarHeightPx],
   );
 
   // Resizing Handler
@@ -105,6 +109,9 @@ export const WindowFrameChrome: React.FC<WindowFrameChromeProps> = memo(({ windo
       const handlePointerMove = (moveEvent: PointerEvent) => {
         const deltaX = moveEvent.clientX - startX;
         const deltaY = moveEvent.clientY - startY;
+        const desktop = frameRef.current?.offsetParent as HTMLElement | null;
+        const maxW = desktop?.clientWidth ?? (typeof globalThis.innerWidth !== 'undefined' ? globalThis.innerWidth : 1920);
+        const maxH = desktop?.clientHeight ?? (typeof globalThis.innerHeight !== 'undefined' ? globalThis.innerHeight : 1080);
 
         let newX = startPosX;
         let newY = startPosY;
@@ -117,7 +124,7 @@ export const WindowFrameChrome: React.FC<WindowFrameChromeProps> = memo(({ windo
           const maxDeltaW = startWidth - minW;
           const clampedDeltaX = Math.min(maxDeltaW, deltaX);
           newWidth = startWidth - clampedDeltaX;
-          newX = startPosX + clampedDeltaX;
+          newX = Math.max(0, startPosX + clampedDeltaX);
         }
         if (direction.includes('n')) {
           const maxDeltaH = startHeight - minH;
@@ -125,6 +132,9 @@ export const WindowFrameChrome: React.FC<WindowFrameChromeProps> = memo(({ windo
           newHeight = startHeight - clampedDeltaY;
           newY = Math.max(0, startPosY + clampedDeltaY);
         }
+
+        newWidth = Math.min(newWidth, Math.max(minW, maxW - newX));
+        newHeight = Math.min(newHeight, Math.max(minH, maxH - taskbarHeightPx - newY));
 
         setWindowPosition(winState.id, { x: newX, y: newY });
         setWindowSize(winState.id, { width: newWidth, height: newHeight });
@@ -141,15 +151,13 @@ export const WindowFrameChrome: React.FC<WindowFrameChromeProps> = memo(({ windo
       document.addEventListener('pointermove', handlePointerMove);
       document.addEventListener('pointerup', handlePointerUp);
     },
-    [winState.id, winState.position, winState.size, winState.minSize, winState.isMaximized, winState.isResizable, focusWindow, setWindowPosition, setWindowSize],
+    [winState.id, winState.position, winState.size, winState.minSize, winState.isMaximized, winState.isResizable, focusWindow, setWindowPosition, setWindowSize, taskbarHeightPx],
   );
 
-  const taskbarHeightPx = osPresentation?.shell.taskbarHeightPx ?? 28;
-  // Desktop is sometimes a contained, 570px-high Worker surface rather than
-  // the whole browser. A cascaded window must not leave its footer UNDER the
-  // taskbar: keeping a scrollable viewport is preferable to clipping controls.
-  // All geometry is presentation-only; persisted window positions remain intact.
-  const safeTop = `clamp(0px, ${winState.position.y}px, calc(100% - ${taskbarHeightPx + 160}px))`;
+  // Desktop is sometimes a contained, ~400-700px Worker surface rather than
+  // the whole browser. Keep the title bar above the taskbar and never leave
+  // window controls unreachable under the shell. Geometry remains presentation.
+  const safeTop = `clamp(0px, ${winState.position.y}px, calc(100% - ${taskbarHeightPx + 96}px))`;
   const frameStyle: React.CSSProperties = winState.isMaximized
     ? {
         position: 'absolute',
@@ -241,36 +249,39 @@ export const WindowFrameChrome: React.FC<WindowFrameChromeProps> = memo(({ windo
         className="os-themed-titlebar flex items-center justify-between px-2 py-0.5 cursor-default select-none"
       >
         <div className="flex items-center gap-1.5 overflow-hidden pr-2">
-          <span className="text-sm shrink-0">{winState.icon}</span>
-          <span className="truncate text-xs tracking-wide">{winState.title}</span>
+          <OsIcon appId={winState.appId} size={14} className="shrink-0" />
+          <span className="os-window-title truncate">{winState.title}</span>
         </div>
 
         <div className="flex items-center gap-1 shrink-0" onPointerDown={(e) => e.stopPropagation()}>
           <button
+            type="button"
             onClick={handleMinimize}
             title="Minimize"
             aria-label={`Minimize ${winState.title}`}
-            className="os-themed-btn w-5 h-5 flex items-center justify-center text-[10px] font-bold leading-none"
+            className="os-themed-btn os-window-control h-5 w-5 flex items-center justify-center text-[10px] font-bold leading-none"
           >
             _
           </button>
 
           {winState.isResizable && (
             <button
+              type="button"
               onClick={handleToggleMaximize}
               title={winState.isMaximized ? 'Restore' : 'Maximize'}
               aria-label={`${winState.isMaximized ? 'Restore' : 'Maximize'} ${winState.title}`}
-              className="os-themed-btn w-5 h-5 flex items-center justify-center text-[10px] font-bold leading-none"
+              className="os-themed-btn os-window-control h-5 w-5 flex items-center justify-center text-[10px] font-bold leading-none"
             >
               {winState.isMaximized ? '❐' : '□'}
             </button>
           )}
 
           <button
+            type="button"
             onClick={handleClose}
             title={String(winState.appId).includes('pulse') && (winState.customState as any)?.pulseSignedIn ? 'Minimize to tray' : 'Close'}
             aria-label={`Close ${winState.title}`}
-            className="os-themed-btn w-5 h-5 flex items-center justify-center text-[10px] font-bold leading-none ml-0.5"
+            className="os-themed-btn os-window-control ml-0.5 h-5 w-5 flex items-center justify-center text-[10px] font-bold leading-none"
           >
             ✕
           </button>

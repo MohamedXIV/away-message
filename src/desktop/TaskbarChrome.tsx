@@ -3,7 +3,8 @@ import type { OsVersion } from '../engine/types';
 import { useWindowStore, WindowState } from '../store/useWindowStore';
 import { soundManager } from '../audio/SoundManager';
 import { getOsPresentationProfile } from './host/OsPresentation';
-import { Globe, MessageSquare, LayoutGrid, X, Minus, Square, Home } from 'lucide-react';
+import { OsIcon } from './OsIcon';
+import { X, Minus, Square } from 'lucide-react';
 
 export interface TaskbarChromeProps {
   osVersion: OsVersion | null;
@@ -21,7 +22,7 @@ export const TaskbarChrome: React.FC<TaskbarChromeProps> = ({ osVersion, pulseIn
 }) => {
   const osPresentation = osVersion ? getOsPresentationProfile(osVersion) : null;
   const taskbarPresentation = osPresentation?.shell.taskbarId ?? 'classic';
-  const isCanalTaskbar = taskbarPresentation === 'canal';
+  const taskbarHeight = osPresentation?.shell.taskbarHeightPx ?? 28;
   const windows = useWindowStore((s) => s.windows);
   const windowOrder = useWindowStore((s) => s.windowOrder);
   const openWindows: WindowState[] = useMemo(
@@ -42,13 +43,12 @@ export const TaskbarChrome: React.FC<TaskbarChromeProps> = ({ osVersion, pulseIn
 
   const startButtonRef = useRef<HTMLButtonElement>(null);
 
-  // Toggle Start Menu
   const handleStartToggle = () => {
     soundManager.play('click');
+    setTabContextMenu(null);
     setIsStartMenuOpen((prev) => !prev);
   };
 
-  // Close Start Menu on click outside
   useEffect(() => {
     const handleOutsideClick = (e: MouseEvent) => {
       if (startButtonRef.current && !startButtonRef.current.contains(e.target as Node)) {
@@ -63,94 +63,99 @@ export const TaskbarChrome: React.FC<TaskbarChromeProps> = ({ osVersion, pulseIn
     return () => window.removeEventListener('mousedown', handleOutsideClick);
   }, []);
 
+  const openTabContextMenu = (event: React.MouseEvent<HTMLButtonElement>, windowId: string) => {
+    event.preventDefault();
+    const taskbar = event.currentTarget.closest<HTMLElement>('[data-os-taskbar]');
+    const rect = taskbar?.getBoundingClientRect();
+    setTabContextMenu({
+      windowId,
+      x: event.clientX - (rect?.left ?? 0),
+      y: -92,
+    });
+  };
+
   return (
     <>
-      {/* Start Menu Pop-up */}
       {renderStartMenu(() => setIsStartMenuOpen(false), isStartMenuOpen)}
 
-      {/* Taskbar Bar */}
       <div
         data-os-taskbar={taskbarPresentation}
         data-testid={testId}
-        style={{ height: `${osPresentation?.shell.taskbarHeightPx ?? 28}px` }}
-        className={`${contained ? 'absolute' : 'fixed'} bottom-0 left-0 right-0 w-full z-40 flex items-center px-1 select-none ${
-          isCanalTaskbar
-            ? 'bg-gradient-to-b from-[#1f48ab] via-[#245edb] to-[#122868] border-t border-[#3c7bf0]'
-            : 'bg-[#c0c0c0] border-t border-white shadow-[inset_0_1px_0_#dfdfdf]'
-        }`}
+        aria-label="Taskbar"
+        style={{ height: `${taskbarHeight}px` }}
+        className={`os-taskbar ${contained ? 'absolute' : 'fixed'} bottom-0 left-0 right-0 z-40 flex w-full select-none items-center`}
       >
-        {/* 1. Start Button */}
         <button
           ref={startButtonRef}
+          type="button"
           onClick={handleStartToggle}
-          className={`flex items-center gap-1.5 px-2 py-0.5 font-bold cursor-pointer transition-none ${
-            isCanalTaskbar
-              ? `h-7 rounded-r-xl rounded-l-md px-3 text-white italic text-[13px] bg-gradient-to-b from-[#388e3c] via-[#2e7d32] to-[#1b5e20] shadow-[inset_0_1px_0_rgba(255,255,255,0.6),0_1px_3px_rgba(0,0,0,0.3)] hover:brightness-110 ${
-                  isStartMenuOpen ? 'brightness-90 shadow-inner' : ''
-                }`
-              : `h-5.5 text-black text-[11px] orion-button ${
-                  isStartMenuOpen ? 'is-active' : ''
-                }`
-          }`}
+          aria-expanded={isStartMenuOpen}
+          aria-haspopup="menu"
+          className="os-start-button"
         >
-          {/* Orion Flag Icon */}
-          <div className="grid grid-cols-2 gap-0.5 w-3.5 h-3.5">
-            <div className="bg-red-500 rounded-[0.5px]" />
-            <div className="bg-green-500 rounded-[0.5px]" />
-            <div className="bg-blue-500 rounded-[0.5px]" />
-            <div className="bg-yellow-400 rounded-[0.5px]" />
-          </div>
-          <span>{isCanalTaskbar ? 'start' : 'Start'}</span>
+          <span className="os-start-flag" aria-hidden="true">
+            <i /><i /><i /><i />
+          </span>
+          <span>Start</span>
         </button>
 
-        {/* 2. Quick Launch Separator & Icons */}
-        <div className={`mx-1.5 h-4 w-[2px] ${isCanalTaskbar ? 'bg-[#193c94] border-r border-[#3c7bf0]' : 'border-l border-[#808080] border-r border-white'}`} />
-        <div className="flex items-center gap-0.5 mr-1.5">
+        <span className="os-taskbar-divider" aria-hidden="true" />
+
+        <div className="os-quick-launch" role="group" aria-label="Quick Launch">
           <button
+            type="button"
             onClick={() => minimizeAll()}
             title="Show Desktop"
-            className="p-1 hover:bg-white/20 rounded cursor-pointer text-gray-700"
+            aria-label="Show Desktop"
+            className="os-quick-button"
           >
-            <LayoutGrid className="w-3.5 h-3.5 text-blue-900 drop-shadow-sm" />
+            <OsIcon kind="desktop" size={16} />
           </button>
           <button
+            type="button"
             onClick={() => openWindow(browserAppId)}
             title="Voyager Browser"
-            className="p-1 hover:bg-white/20 rounded cursor-pointer text-gray-700"
+            aria-label="Voyager Browser"
+            className="os-quick-button"
           >
-            <Globe className="w-3.5 h-3.5 text-cyan-600 drop-shadow-sm" />
+            <OsIcon kind="browser" size={16} />
           </button>
           {isPulseInstalled && (
             <button
+              type="button"
               onClick={() => openWindow('pulse')}
               title="Pulse Messenger"
-              className="p-1 hover:bg-white/20 rounded cursor-pointer text-gray-700"
+              aria-label="Pulse Messenger"
+              className="os-quick-button"
             >
-              <MessageSquare className="w-3.5 h-3.5 text-amber-500 drop-shadow-sm" />
+              <OsIcon kind="pulse" size={16} />
             </button>
           )}
           <button
+            type="button"
             onClick={() => {
               soundManager.play('click');
               onStepAway();
             }}
             title="Step Away to Room"
-            className="p-1 hover:bg-white/20 rounded cursor-pointer text-gray-700"
+            aria-label="Step Away to Room"
+            className="os-quick-button"
           >
-            <Home className="w-3.5 h-3.5 text-emerald-600 drop-shadow-sm" />
+            <OsIcon kind="home" size={16} />
           </button>
         </div>
-        <div className={`mr-1.5 h-4 w-[2px] ${isCanalTaskbar ? 'bg-[#193c94] border-r border-[#3c7bf0]' : 'border-l border-[#808080] border-r border-white'}`} />
 
-        {/* 3. Window Tabs */}
-        <div className="flex-1 flex items-center gap-1 overflow-x-auto no-scrollbar h-full py-0.5">
+        <span className="os-taskbar-divider" aria-hidden="true" />
+
+        <div className="os-task-buttons" role="group" aria-label="Open windows">
           {openWindows.map((win) => {
             const isActive = activeWindowId === win.id && !win.isMinimized;
-
             return (
               <button
                 key={win.id}
+                type="button"
                 aria-label={'Taskbar ' + win.title}
+                data-active={isActive ? 'true' : 'false'}
                 onClick={() => {
                   soundManager.play('click');
                   if (win.isMinimized) {
@@ -162,76 +167,60 @@ export const TaskbarChrome: React.FC<TaskbarChromeProps> = ({ osVersion, pulseIn
                     focusWindow(win.id);
                   }
                 }}
-                onContextMenu={(e) => {
-                  e.preventDefault();
-                  setTabContextMenu({ windowId: win.id, x: e.clientX, y: e.clientY - 80 });
-                }}
-                className={`flex items-center gap-1.5 px-2 py-0.5 max-w-[160px] min-w-[100px] h-full text-left truncate text-[11px] cursor-pointer transition-none ${
-                  isCanalTaskbar
-                    ? `rounded-t-sm ${
-                        isActive
-                          ? 'bg-gradient-to-b from-[#122a68] to-[#1e4598] text-white shadow-inner border-t border-[#0c1f4e]'
-                          : 'bg-gradient-to-b from-[#386cd4] to-[#1e4598] text-gray-100 hover:brightness-110'
-                      }`
-                    : `${
-                        isActive
-                          ? 'orion-inset bg-[#dfdfdf] font-bold text-black'
-                          : 'orion-button text-black'
-                      }`
-                }`}
+                onContextMenu={(event) => openTabContextMenu(event, win.id)}
+                className="os-task-button"
               >
-                <span className="w-3.5 h-3.5 shrink-0 flex items-center justify-center text-xs">
-                  {win.icon || '🗂️'}
-                </span>
-                <span className="truncate flex-1">{win.title}</span>
+                <OsIcon appId={win.appId} size={14} />
+                <span className="os-task-button-label">{win.title}</span>
               </button>
             );
           })}
         </div>
 
-        {/* 4. Tab Context Menu */}
         {tabContextMenu && (
           <div
-            className="absolute z-50 orion-outset p-1 min-w-[120px] flex flex-col gap-0.5 text-black shadow-lg"
+            className="os-context-menu absolute z-50"
             style={{ left: tabContextMenu.x, top: tabContextMenu.y }}
             onClick={(e) => e.stopPropagation()}
           >
             <button
-              className="text-left px-2 py-1 hover:bg-orion-highlight hover:text-white flex items-center gap-1.5"
+              type="button"
+              className="os-context-item"
               onClick={() => {
                 minimizeWindow(tabContextMenu.windowId);
                 setTabContextMenu(null);
               }}
             >
-              <Minus className="w-3 h-3" />
+              <Minus className="h-3 w-3" />
               <span>Minimize</span>
             </button>
             <button
-              className="text-left px-2 py-1 hover:bg-orion-highlight hover:text-white flex items-center gap-1.5"
+              type="button"
+              className="os-context-item"
               onClick={() => {
                 restoreWindow(tabContextMenu.windowId);
                 focusWindow(tabContextMenu.windowId);
                 setTabContextMenu(null);
               }}
             >
-              <Square className="w-3 h-3" />
+              <Square className="h-3 w-3" />
               <span>Restore</span>
             </button>
-            <div className="h-[1px] bg-[#808080] my-0.5 border-b border-white" />
+            <div className="os-start-separator" />
             <button
-              className="text-left px-2 py-1 hover:bg-red-700 hover:text-white flex items-center gap-1.5 text-red-900 font-bold"
+              type="button"
+              className="os-context-item font-bold"
               onClick={() => {
                 closeWindow(tabContextMenu.windowId);
                 setTabContextMenu(null);
               }}
             >
-              <X className="w-3 h-3" />
+              <X className="h-3 w-3" />
               <span>Close</span>
             </button>
           </div>
         )}
 
-        {/* 5. System Tray */}
         {tray}
       </div>
     </>
