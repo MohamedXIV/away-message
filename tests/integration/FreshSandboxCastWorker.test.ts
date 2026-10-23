@@ -66,8 +66,13 @@ describe('#213 generated Worker starting cast', () => {
       const world = await worker.ask({ op: 'export' }) as SimulationState;
       expect(Object.keys(world.social.buddies ?? {})).toHaveLength(8);
       expect(world.social.removedSeedActorIds).toEqual(seedCharacterIds());
-      expect(Object.keys(world.myplace.npcProfiles)).not.toContain('maya_x');
-      expect(Object.keys(world.myplace.npcProfiles).length).toBeGreaterThan(0);
+      // TransportSimulationState retains a narrower historical MyPlace type;
+      // the active MyPlace runtime exports its page map on the real save.
+      const profiles = (world.myplace as typeof world.myplace & {
+        npcProfiles: Record<string, unknown>;
+      }).npcProfiles;
+      expect(Object.keys(profiles)).not.toContain('maya_x');
+      expect(Object.keys(profiles).length).toBeGreaterThan(0);
       await expect(worker.ask({ op: 'init' })).rejects.toThrow('already initialized');
     } finally {
       worker.runtime.close();
