@@ -185,7 +185,7 @@ export const MyPlaceSite: React.FC<SiteRouteProps> = (props) => {
                   >
                     ✉ Leave a Hello
                   </button>
-                )
+                )}
                 {(() => {
                   if (isOwnProfile) return null;
                   const boundActorId = engine.myplace.getBoundActorIdForProfile(currentUsername);

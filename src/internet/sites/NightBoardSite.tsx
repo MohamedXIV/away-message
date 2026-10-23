@@ -81,7 +81,7 @@ const INITIAL_THREADS: ThreadRecord[] = [
         author: 'Anonymous',
         tripcode: '!countershift',
         date: 'Aug 21, 2006 15:30 PM',
-        content: 'Could be someone from the motel office on a late coffee break, but I wouldn't swear to it.',
+        content: 'Could be someone from the motel office on a late coffee break; hard to tell at that hour.',
       },
     ],
   },
