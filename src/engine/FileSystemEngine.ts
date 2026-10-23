@@ -245,7 +245,14 @@ export class FileSystemEngine {
       id, name, path: filePath, parentPath, kind, sizeBytes, createdAtMinute,
       modifiedAtMinute, ...(appAssociation !== undefined ? { appAssociation } : {}),
       ...(targetPath !== undefined ? { targetPath } : {}),
-      ...(content !== undefined ? { content } : {}),
+      // Never publish ZIP binary/base64 through the generic selected-file query.
+      // Limit the UI-selected image payload: arbitrary giant VFS images must
+      // never be copied across the Worker boundary just to render a preview.
+      ...(kind !== 'archive' &&
+        (kind !== 'image' || (content?.length ?? 0) <= 16384) &&
+        (kind !== 'audio' || ((content?.length ?? 0) <= 96000 &&
+          content?.startsWith('data:audio/wav;base64,'))) &&
+        content !== undefined ? { content } : {}),
       ...(isReadOnly !== undefined ? { isReadOnly } : {}),
       ...(typeof textContent === 'string' ? { metadata: { textContent } } : {}),
     };

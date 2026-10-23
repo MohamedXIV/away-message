@@ -48,10 +48,9 @@ export function createLifeSources(input: LifeSourceAdapterInput): LifeSources {
 type SocialLifeReads = Pick<
   SocialEngine,
   | 'getBuddy'
-  | 'getBuddies'
   | 'getTraits'
   | 'getRelationships'
-  | 'getNpcBond'
+  | 'getNotableNpcBondsRead'
   | 'getOpenPromises'
   | 'getAgenda'
   | 'getPresence'
@@ -65,10 +64,6 @@ export interface SimulationLifeSourceHost {
   getNpcPressure?(actorId: string): LifePressureView | null;
   getPersonalGoals?(actorId: string): PersonalGoal[];
   getFidelityTier?(actorId: string): FidelityTier;
-}
-
-function hasNotableBond(bond: ReturnType<SocialEngine['getNpcBond']>): boolean {
-  return bond.romance !== 'none' || Object.values(bond.dims).some((value) => value !== 0);
 }
 
 export function createSimulationLifeSources(sim: SimulationLifeSourceHost): LifeSources {
@@ -92,17 +87,7 @@ export function createSimulationLifeSources(sim: SimulationLifeSourceHost): Life
       return relationship ? { targetId: 'player', ...relationship } : null;
     },
 
-    getNpcBonds: (actorId) => {
-      const actor = sim.social.getBuddy(actorId);
-      if (!actor) return [];
-
-      return sim.social
-        .getBuddies()
-        .filter((target) => target.id !== actor.id)
-        .map((target) => ({ targetId: target.id, bond: sim.social.getNpcBond(actor.id, target.id) }))
-        .filter(({ bond }) => hasNotableBond(bond))
-        .map(({ targetId, bond }) => ({ targetId, ...bond.dims }));
-    },
+    getNpcBonds: (actorId) => sim.social.getNotableNpcBondsRead(actorId),
 
     getPromises: (actorId) =>
       sim.social.getOpenPromises(actorId).map((promise) => ({

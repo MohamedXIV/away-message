@@ -563,6 +563,11 @@ export class SocialEngine {
     });
   }
 
+  /** Sparse, roster-ordered, detached Life Matrix relationship read. */
+  public getNotableNpcBondsRead(rawFrom: string): Array<{ targetId: string } & NpcBondDims> {
+    return this.graph.getNotableBondDimensions(rawFrom);
+  }
+
   public getNpcBond(rawFrom: string, rawTo: string): NpcBondState {
     return this.graph.getBond(rawFrom, rawTo);
   }
@@ -802,6 +807,13 @@ export class SocialEngine {
 
   public getBuddies(): BuddyCharacter[] {
     return Array.from(this.roster.keys()).map(id => this.getBuddy(id)!);
+  }
+
+  /** Identity-only, detached roster-order read for Life and population owners.
+   * No status/relationship projection and no second roster or cached truth.
+   */
+  public getBuddyIds(): string[] {
+    return Array.from(this.roster.keys());
   }
 
   /**

@@ -1,15 +1,22 @@
 import type { SimulationState as TransportSimulationState, SimulationAction, ActionResult, HardwareState, MessageRecord } from '../types';
 import type { Fulfillment } from '../DeliveryEngine';
+import { INSTALLER_SOFTWARE_IDS } from '../InstallerFileCatalog';
+import { inspectTextArchive } from './ZipArchiveCommands';
+import { DOWNLOAD_CATALOG } from '../../internet/sites/DownloadHubCatalog';
 import type { MyPlaceProfile } from '../MyPlaceEngine';
 import type { BuddyCharacter, BuddyPresence, BuddyMetVia } from '../types';
 import type { CharacterDefinition } from '../CharacterEngine';
-import type { OsRelease } from '../OsCatalog';
+import type { OsRelease, OsFamily } from '../OsCatalog';
+import { pickOsTemplate, templateToRelease } from '../../ai/osReleaseTemplates';
+import { generateNewcomer, type NewcomerResult } from '../CharacterDirector';
+import type { CharacterArchetype } from '../types';
 import { ProceduralDirector, type DirectorGenerateOptions } from '../ProceduralDirector';
 import { buildRecentNpcMail, buildRentMailHistory, buildWeeklyNpcThreads, buildWeeklyWeatherThread, npcThreadWeek } from '../BoardDirector';
 import { getWeatherForDay, gameDayName } from '../WeatherEngine';
 import { locationLabel } from '../AppointmentDirector';
 import { createEmptyComputerSetup, createEmptyDisplaySetup } from '../hardware/state';
 import { CoreSimulationRuntime } from './CoreSimulationRuntime';
+import { MAX_MINUTE_ACCURATE_ADVANCE, type MinuteAdvanceGranularity } from './TimeAdvancement';
 import { resolvePcBootStateFromOwnerStatus } from './ComputerOwnershipRuntime';
 import { NpcComputerSimulationRuntime } from './NpcComputerSimulationRuntime';
 import { PhysicalSimulationRuntime, type LiveSimulationState, type InitialSimulationState } from './PhysicalSimulationRuntime';
@@ -23,6 +30,8 @@ import type {
   ObservedSimulationDomain,
   SimulationActorRead,
   SimulationAppRead,
+  SimulationInstallerRead,
+  SimulationArchiveRead,
   SimulationShopRead,
   SimulationWebsiteRead,
   SimulationMyPlacePageRead,
@@ -30,6 +39,7 @@ import type {
   SimulationPulseProfileRead,
   SimulationChromeRead,
   SimulationDesktopRead,
+  SimulationInstalledProgramsRead,
   SimulationDirectoryRead,
   SimulationFileRead,
   SimulationChange,
@@ -211,7 +221,33 @@ export class SimulationKernel {
     this.withinBoundary(() => this.core.advanceRealTime(deltaRealSeconds), before);
   }
 
-  public advanceGameMinutes(minutes: number, reason?: string): void {
+  /**
+   * Coarse is the existing constant-boundary world-time contract for long
+   * activities. Minute fidelity is explicit and reproduces N normal
+   * one-minute calls exactly, including intermediate domain events.
+   * It is deliberately limited: never turn a multi-day time skip into
+   * 1,440 expensive NPC passes by accident.
+   */
+  public advanceGameMinutes(
+    minutes: number,
+    reason?: string,
+    granularity: MinuteAdvanceGranularity = 'coarse',
+  ): void {
+    if (granularity !== 'coarse' && granularity !== 'minute') {
+      throw new Error('Invalid time advance granularity');
+    }
+    if (granularity === 'minute') {
+      if (!Number.isSafeInteger(minutes) || minutes < 0 ||
+          minutes > MAX_MINUTE_ACCURATE_ADVANCE) {
+        throw new RangeError('Minute-accurate advance must be an integer from 0 to 60');
+      }
+      for (let step = 0; step < minutes; step += 1) {
+        // Keep real per-minute publications and event ordering identical to
+        // individually submitted one-minute commands. No shadow timer/cache.
+        this.advanceGameMinutes(1, reason, 'coarse');
+      }
+      return;
+    }
     const before = this.clock.getTotalMinutes();
     if (minutes > 0) this.npc.primeNpcMobility();
     this.withinBoundary(() => this.core.advanceGameMinutes(minutes, reason), before);
@@ -220,6 +256,20 @@ export class SimulationKernel {
   public dispatchAction(action: SimulationAction): ActionResult {
     if (action.type === 'STORE_PURCHASE_ITEM') {
       return this.purchaseStoreItem(action.storeId, action.skuId);
+    }
+    if (action.type === 'SOFTWARE_INSTALL_FROM_DOWNLOAD') {
+      const read = this.getInstallerRead(action.filePath);
+      if (!read.ready || !read.preview || !read.softwareId) {
+        return { success: false, error: read.reason || 'Installer unavailable.' };
+      }
+      if (!read.preview.compatibilityResult.isCompatible) {
+        return { success: false, error: 'Software incompatible with current system specifications.' };
+      }
+      const before = this.clock.getTotalMinutes();
+      return this.withinBoundary(() => this.core.dispatchAction({
+        type: 'SOFTWARE_INSTALL', softwareId: read.softwareId!,
+        selectedOptions: action.selectedOptions,
+      }), before);
     }
     if (action.type === 'HARDWARE_UPGRADE_OS') {
       return { success: false, error: 'Legacy OS upgrades are retired. Buy, insert, and boot from owned setup media instead.' };
@@ -529,11 +579,58 @@ export class SimulationKernel {
     };
   }
 
+  public getArchiveRead(path: string): SimulationArchiveRead {
+    const result = inspectTextArchive(this.vfs, path);
+    return { revision: this.revision, archivePath: path, ready: result.ready,
+      reason: result.reason, entries: result.entries.map(({name,sizeBytes,crc32})=>({name,sizeBytes,crc32})) };
+  }
+
   public getFileRead(path: string): SimulationFileRead {
     return { revision: this.revision, file: path ? this.vfs.readFileForDisplay(path) ?? null : null };
   }
 
   /** The desktop app ecosystem reads only Hardware, OS and Software owners. */
+  /** One immutable preflight against canonical VFS and completed download provenance. */
+  public getInstallerRead(filePath: string): SimulationInstallerRead {
+    const reply = (reason: string | null, softwareId: string | null = null,
+      preview: SimulationInstallerRead['preview'] = null): SimulationInstallerRead => ({
+      revision: this.revision, filePath, softwareId, ready: reason === null, reason, preview,
+    });
+    if (typeof filePath !== 'string' ||
+      !/^C:\/Downloads\/[a-z0-9._-]{1,80}\.exe$/i.test(filePath)) {
+      return reply('Installer must be an executable in C:/Downloads.');
+    }
+    const name = filePath.slice('C:/Downloads/'.length);
+    const softwareId = INSTALLER_SOFTWARE_IDS[name.toLowerCase()];
+    if (!softwareId) return reply('This is not an authored software installer.');
+    const file = this.vfs.readFile(filePath);
+    if (!file || file.kind !== 'installer') {
+      return reply('Completed installer file is not present in Downloads.', softwareId);
+    }
+    // Proof is a specific owner-created transfer, not a matching filename
+    // in the bounded recent-download UI page (which may have rolled off).
+    const receipt = file.metadata?.downloadTaskId;
+    const transfer = typeof receipt === 'string' ? this.downloads.getTask(receipt) : undefined;
+    if (!transfer || transfer.status !== 'complete' ||
+      transfer.targetDirectory !== 'C:/Downloads' || transfer.fileKind !== 'installer' ||
+      transfer.fileName !== name || transfer.sourceUrl !== 'http://downloadhub.local/files/' + name ||
+      transfer.totalBytes !== file.sizeBytes || file.metadata?.author !== transfer.sourceId) {
+      return reply('No matching completed DownloadHub transfer owns this file.', softwareId);
+    }
+    const published = DOWNLOAD_CATALOG.find(item =>
+      item.id === transfer.sourceId &&
+      item.downloadUrl === transfer.sourceUrl &&
+      item.fileSizeBytes === transfer.totalBytes);
+    if (!published) {
+      return reply('Download does not match the published authored software package.', softwareId);
+    }
+    try {
+      return reply(null, softwareId, this.software.previewInstaller(softwareId));
+    } catch (cause) {
+      return reply(cause instanceof Error ? cause.message : 'Installer preview unavailable.', softwareId);
+    }
+  }
+
   public getAppRead(): SimulationAppRead {
     return {
       revision: this.revision,
@@ -610,6 +707,16 @@ export class SimulationKernel {
   }
 
   /** Read only the page currently displayed by the real MyPlace site. */
+  /** Offline preview from the canonical Worker world. No world mutation,
+   * AI/network access, or main-thread snapshot is needed. */
+  public previewLabProceduralEvents(options: DirectorGenerateOptions):
+    ReturnType<ProceduralDirector['generateNextBatch']> {
+    return new ProceduralDirector(this.world).generateNextBatch(
+      this.clock.getTime().day, this.clock.getTotalMinutes(),
+      { ...options, useAI: false, inject: false },
+    );
+  }
+
   /**
    * AI Lab stages its asynchronous world batch before writing the owner.
    * Generation never leaks a stale response across a loaded save, and
@@ -639,6 +746,45 @@ export class SimulationKernel {
   ): string[] {
     return this.publishOwnerMutation(['world'],
       () => this.world.injectProceduralEvents(events), ids => ids.length > 0);
+  }
+
+  /**
+   * Offline OS Lab preview is a pure, deterministic view over the canonical
+   * world day. Never choose an OS build with RNG or register at preview time.
+   * Lab IDs are namespaced by seed/day/family so old authored release IDs
+   * (for example Orion_6.1) cannot be overwritten by a generated variant.
+   */
+  public previewOfflineLabOsRelease(seed: string, family: OsFamily): OsRelease {
+    const day = this.clock.getTime().day;
+    const template = pickOsTemplate(seed, family, day);
+    const release = templateToRelease(template, day + 2);
+    const input = `${seed}:${family}:${day}:${template.version}`;
+    let hash = 2166136261;
+    for (let i = 0; i < input.length; i++) {
+      hash = Math.imul(hash ^ input.charCodeAt(i), 16777619) >>> 0;
+    }
+    release.id = `${release.id}_lab_${hash.toString(36)}` as OsRelease['id'];
+    release.isProcedural = true;
+    return release;
+  }
+
+  /**
+   * Derive an offline newcomer entirely from Worker-owned social truth.
+   * Preview never registers an actor or sends a message. A later inject must
+   * recompute after its revision precondition; no client-supplied actor bodies.
+   */
+  public async previewOfflineLabNewcomer(
+    seed: string,
+    metVia: Extract<BuddyMetVia, 'nightboard' | 'myplace' | 'pulse-room' | 'work'>,
+    archetype?: CharacterArchetype,
+  ): Promise<NewcomerResult> {
+    const buddies = this.social.getBuddies();
+    return generateNewcomer({
+      seed, metVia, archetype, day: this.clock.getTime().day, useAI: false,
+    }, {
+      existingIds: buddies.map(actor => actor.id),
+      existingHandles: buddies.map(actor => actor.handle),
+    });
   }
 
   /** Lab registration and the matching world announcement are one commit. */
@@ -751,6 +897,28 @@ export class SimulationKernel {
       monitor: this.hardware.getDisplayState().monitor,
       bootMediaItems: this.inventory.getBootMediaItems(256),
       desktopFiles,
+      installedApps: this.software.getInstalledSoftware().slice(0, 64).map(
+        ({ appId, name, version }) => ({ appId, name, version }),
+      ),
+    };
+  }
+
+  /** The installed-program picker is a separate, capped owner projection.
+   * Never send hardware, downloads or the software registry graph to the UI.
+   */
+  public getInstalledProgramsRead(): SimulationInstalledProgramsRead {
+    return {
+      revision: this.revision,
+      programs: this.software.getInstalledSoftware().slice(0, 64).map(program => ({
+        id: program.id,
+        appId: program.appId,
+        name: program.name,
+        version: program.version,
+        installedBytes: program.installedBytes,
+        isPortable: program.isPortable,
+        isAdware: program.isAdware,
+        installPath: program.installPath,
+      })),
     };
   }
 

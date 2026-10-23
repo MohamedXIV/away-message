@@ -1,0 +1,1516 @@
+{
+  "schemaVersion": 1,
+  "issue": 177,
+  "purpose": "Away Message deterministic population scaling and stress evidence (Node process, canonical simulation; not browser FPS or Worker transport)",
+  "generatedAt": "2026-10-21T02:35:29.006Z",
+  "gitSha": "61fcf6607bb0a947f868d8ff66ac62220b03a2b1",
+  "environment": {
+    "node": "v24.22.0",
+    "platform": "linux",
+    "release": "6.8.0-1064-azure",
+    "arch": "x64",
+    "cpu": "Intel(R) Xeon(R) Platinum 8370C CPU @ 2.80GHz",
+    "cpuCount": 2,
+    "totalMemoryBytes": 8327032832
+  },
+  "config": {
+    "seed": "away-177-population-v1",
+    "populations": [
+      20,
+      100,
+      250,
+      500
+    ],
+    "samplePlan": {
+      "20": {
+        "idle": 5,
+        "normal": 5,
+        "extended": 2,
+        "reads": 5,
+        "persistence": 3
+      },
+      "100": {
+        "idle": 4,
+        "normal": 4,
+        "extended": 2,
+        "reads": 3,
+        "persistence": 3
+      },
+      "250": {
+        "idle": 3,
+        "normal": 2,
+        "extended": 1,
+        "reads": 2,
+        "persistence": 2
+      },
+      "500": {
+        "idle": 2,
+        "normal": 2,
+        "extended": 1,
+        "reads": 1,
+        "persistence": 1
+      }
+    },
+    "normalTickCount": 3,
+    "extendedDays": 3,
+    "idleFrames": 30,
+    "sampleOverride": null,
+    "warmupOverride": null,
+    "digest": "sha256 of canonical snapshot excluding wall-clock telemetry"
+  },
+  "correctness": {
+    "overall": true,
+    "checks": [
+      {
+        "id": "20.idle.no-population-work",
+        "ok": true,
+        "detail": "30 frames, clock unchanged=true, canonical digest unchanged=true"
+      },
+      {
+        "id": "20.normal.deterministic-digest",
+        "ok": true,
+        "detail": "same-seed replay digest bac3b6a23044289b vs bac3b6a23044289b"
+      },
+      {
+        "id": "20.normal.scheduled-activity",
+        "ok": true,
+        "detail": "2 trip record(s), 17 agenda entries, intents={\"prepare_to_leave\":2,\"pursue_personal_goal\":15}"
+      },
+      {
+        "id": "20.normal.population-stable",
+        "ok": true,
+        "detail": "20/20 actors after 4 minutes"
+      },
+      {
+        "id": "20.normal.remote-not-physical",
+        "ok": true,
+        "detail": "0 remote actors with local position/trip"
+      },
+      {
+        "id": "20.normal.tick-count",
+        "ok": true,
+        "detail": "clock 480 -> 484"
+      },
+      {
+        "id": "20.extended.population-stable",
+        "ok": true,
+        "detail": "20/20 actors after 3 day(s)"
+      },
+      {
+        "id": "20.extended.remote-not-physical",
+        "ok": true,
+        "detail": "0 remote actors with local position/trip"
+      },
+      {
+        "id": "20.extended.bounded-projections",
+        "ok": true,
+        "detail": "messenger=20, conversation=7, pulse=20"
+      },
+      {
+        "id": "20.extended.digest-present",
+        "ok": true,
+        "detail": "digest 56d723d3e4646926"
+      },
+      {
+        "id": "20.reads.side-effect-free",
+        "ok": true,
+        "detail": "digest stable=true"
+      },
+      {
+        "id": "20.reads.bounded",
+        "ok": true,
+        "detail": "messenger=20, conversation=7, pulse=20"
+      },
+      {
+        "id": "20.persistence.round-trip",
+        "ok": true,
+        "detail": "restored digest matches=true"
+      },
+      {
+        "id": "100.idle.no-population-work",
+        "ok": true,
+        "detail": "30 frames, clock unchanged=true, canonical digest unchanged=true"
+      },
+      {
+        "id": "100.normal.deterministic-digest",
+        "ok": true,
+        "detail": "same-seed replay digest e537d074b060e7a9 vs e537d074b060e7a9"
+      },
+      {
+        "id": "100.normal.scheduled-activity",
+        "ok": true,
+        "detail": "8 trip record(s), 77 agenda entries, intents={\"prepare_to_leave\":8,\"pursue_personal_goal\":69}"
+      },
+      {
+        "id": "100.normal.population-stable",
+        "ok": true,
+        "detail": "100/100 actors after 4 minutes"
+      },
+      {
+        "id": "100.normal.remote-not-physical",
+        "ok": true,
+        "detail": "0 remote actors with local position/trip"
+      },
+      {
+        "id": "100.normal.tick-count",
+        "ok": true,
+        "detail": "clock 480 -> 484"
+      },
+      {
+        "id": "100.extended.population-stable",
+        "ok": true,
+        "detail": "100/100 actors after 3 day(s)"
+      },
+      {
+        "id": "100.extended.remote-not-physical",
+        "ok": true,
+        "detail": "0 remote actors with local position/trip"
+      },
+      {
+        "id": "100.extended.bounded-projections",
+        "ok": true,
+        "detail": "messenger=32, conversation=7, pulse=36"
+      },
+      {
+        "id": "100.extended.digest-present",
+        "ok": true,
+        "detail": "digest a8a09dfc3362c173"
+      },
+      {
+        "id": "100.reads.side-effect-free",
+        "ok": true,
+        "detail": "digest stable=true"
+      },
+      {
+        "id": "100.reads.bounded",
+        "ok": true,
+        "detail": "messenger=32, conversation=7, pulse=34"
+      },
+      {
+        "id": "100.persistence.round-trip",
+        "ok": true,
+        "detail": "restored digest matches=true"
+      },
+      {
+        "id": "250.idle.no-population-work",
+        "ok": true,
+        "detail": "30 frames, clock unchanged=true, canonical digest unchanged=true"
+      },
+      {
+        "id": "250.normal.deterministic-digest",
+        "ok": true,
+        "detail": "same-seed replay digest 63fadf8baabedc9a vs 63fadf8baabedc9a"
+      },
+      {
+        "id": "250.normal.scheduled-activity",
+        "ok": true,
+        "detail": "19 trip record(s), 189 agenda entries, intents={\"prepare_to_leave\":19,\"pursue_personal_goal\":170}"
+      },
+      {
+        "id": "250.normal.population-stable",
+        "ok": true,
+        "detail": "250/250 actors after 4 minutes"
+      },
+      {
+        "id": "250.normal.remote-not-physical",
+        "ok": true,
+        "detail": "0 remote actors with local position/trip"
+      },
+      {
+        "id": "250.normal.tick-count",
+        "ok": true,
+        "detail": "clock 480 -> 484"
+      },
+      {
+        "id": "250.extended.population-stable",
+        "ok": true,
+        "detail": "250/250 actors after 3 day(s)"
+      },
+      {
+        "id": "250.extended.remote-not-physical",
+        "ok": true,
+        "detail": "0 remote actors with local position/trip"
+      },
+      {
+        "id": "250.extended.bounded-projections",
+        "ok": true,
+        "detail": "messenger=32, conversation=7, pulse=36"
+      },
+      {
+        "id": "250.extended.digest-present",
+        "ok": true,
+        "detail": "digest 6f16556ba306dec7"
+      },
+      {
+        "id": "250.reads.side-effect-free",
+        "ok": true,
+        "detail": "digest stable=true"
+      },
+      {
+        "id": "250.reads.bounded",
+        "ok": true,
+        "detail": "messenger=32, conversation=7, pulse=34"
+      },
+      {
+        "id": "250.persistence.round-trip",
+        "ok": true,
+        "detail": "restored digest matches=true"
+      },
+      {
+        "id": "500.idle.no-population-work",
+        "ok": true,
+        "detail": "30 frames, clock unchanged=true, canonical digest unchanged=true"
+      },
+      {
+        "id": "500.normal.deterministic-digest",
+        "ok": true,
+        "detail": "same-seed replay digest 7db04fe240127eca vs 7db04fe240127eca"
+      },
+      {
+        "id": "500.normal.scheduled-activity",
+        "ok": true,
+        "detail": "38 trip record(s), 377 agenda entries, intents={\"prepare_to_leave\":38,\"pursue_personal_goal\":339}"
+      },
+      {
+        "id": "500.normal.population-stable",
+        "ok": true,
+        "detail": "500/500 actors after 4 minutes"
+      },
+      {
+        "id": "500.normal.remote-not-physical",
+        "ok": true,
+        "detail": "0 remote actors with local position/trip"
+      },
+      {
+        "id": "500.normal.tick-count",
+        "ok": true,
+        "detail": "clock 480 -> 484"
+      },
+      {
+        "id": "500.extended.population-stable",
+        "ok": true,
+        "detail": "500/500 actors after 3 day(s)"
+      },
+      {
+        "id": "500.extended.remote-not-physical",
+        "ok": true,
+        "detail": "0 remote actors with local position/trip"
+      },
+      {
+        "id": "500.extended.bounded-projections",
+        "ok": true,
+        "detail": "messenger=32, conversation=7, pulse=36"
+      },
+      {
+        "id": "500.extended.digest-present",
+        "ok": true,
+        "detail": "digest 4717862cd20e9908"
+      },
+      {
+        "id": "500.reads.side-effect-free",
+        "ok": true,
+        "detail": "digest stable=true"
+      },
+      {
+        "id": "500.reads.bounded",
+        "ok": true,
+        "detail": "messenger=32, conversation=7, pulse=34"
+      },
+      {
+        "id": "500.persistence.round-trip",
+        "ok": true,
+        "detail": "restored digest matches=true"
+      }
+    ]
+  },
+  "populations": [
+    {
+      "population": 20,
+      "fixture": {
+        "seed": "away-177-population-v1",
+        "seedActors": 4,
+        "localActors": 17,
+        "remoteActors": 3,
+        "knownContacts": 20,
+        "agendaActors": 17,
+        "appointmentActors": 2,
+        "routes": [
+          {
+            "originPlaceId": "place_a1",
+            "destinationPlaceId": "place_b1",
+            "totalMinutes": 37
+          }
+        ],
+        "seededMessages": 120,
+        "heapAfterSetup": {
+          "heapUsedBytes": 27321872,
+          "rssBytes": 100913152
+        }
+      },
+      "idle": {
+        "presentationFrames": 30,
+        "singleFrame": {
+          "samples": 5,
+          "minMs": 0.015,
+          "medianMs": 0.02,
+          "meanMs": 0.026,
+          "p95Ms": 0.05,
+          "maxMs": 0.05
+        },
+        "burst": {
+          "samples": 5,
+          "minMs": 0.023,
+          "medianMs": 0.039,
+          "meanMs": 0.129,
+          "p95Ms": 0.505,
+          "maxMs": 0.505
+        },
+        "meanFrameMs": 0.001,
+        "clockUnchanged": true,
+        "digestUnchanged": true,
+        "digest": "33d2daddd35dca634317de7273585bed4fcd182c2659392f479f7b10011df844"
+      },
+      "normal": {
+        "tickCount": 3,
+        "coldFirstTick": {
+          "samples": 2,
+          "minMs": 6.018,
+          "medianMs": 6.018,
+          "meanMs": 6.223,
+          "p95Ms": 6.429,
+          "maxMs": 6.429
+        },
+        "perTick": {
+          "samples": 15,
+          "minMs": 4.124,
+          "medianMs": 8.062,
+          "meanMs": 9.195,
+          "p95Ms": 19.935,
+          "maxMs": 19.935
+        },
+        "perSampleTotal": {
+          "samples": 5,
+          "minMs": 18.092,
+          "medianMs": 24.639,
+          "meanMs": 27.585,
+          "p95Ms": 50.082,
+          "maxMs": 50.082
+        },
+        "ticksMeasured": 15,
+        "minutesAdvanced": 4,
+        "metrics": {
+          "population": 20,
+          "localActors": 17,
+          "remoteActors": 3,
+          "knownContacts": 20,
+          "agendaEntries": 17,
+          "appointments": 2,
+          "appointmentStatuses": {
+            "scheduled": 2
+          },
+          "trips": {
+            "active": 2
+          },
+          "tripActors": 2,
+          "intents": {
+            "prepare_to_leave": 2,
+            "pursue_personal_goal": 15
+          },
+          "blockedIntents": 0,
+          "messageCount": 127,
+          "fidelity": {
+            "important_local": 17,
+            "local_offscreen": 0,
+            "background_remote": 3
+          },
+          "spatialLocalActors": 17,
+          "remotePhysicalActors": 0,
+          "projections": {
+            "messengerContacts": 20,
+            "messengerBytes": 3797,
+            "pulseContacts": 20,
+            "pulseBytes": 3098,
+            "conversationMessages": 7,
+            "conversationBytes": 1775,
+            "hudBytes": 176,
+            "worldBytes": 425,
+            "chromeBytes": 812,
+            "presenceBytes": 1236,
+            "situationBytes": 66,
+            "websiteBytes": 375
+          },
+          "snapshotBytes": 147969,
+          "digest": "13f239986d62b933b456bd882981d8ed1c37525eec4816987263cb0d79291b21"
+        },
+        "digest": "13f239986d62b933b456bd882981d8ed1c37525eec4816987263cb0d79291b21"
+      },
+      "extended": {
+        "days": 3,
+        "dayJump": {
+          "samples": 6,
+          "minMs": 15.443,
+          "medianMs": 19.536,
+          "meanMs": 24.846,
+          "p95Ms": 48.047,
+          "maxMs": 48.047
+        },
+        "perSampleDayTimes": [
+          [
+            19.068,
+            15.443,
+            20.559
+          ],
+          [
+            19.536,
+            26.424,
+            48.047
+          ]
+        ],
+        "dayTrend": {
+          "firstDayMs": 19.068,
+          "lastDayMs": 20.559,
+          "ratio": 1.078
+        },
+        "heapDeltaBytes": -6944312,
+        "messageCount": 133,
+        "agendaEntries": 12,
+        "tripActors": 2,
+        "appointmentStatuses": {
+          "happened": 2
+        },
+        "snapshotBytes": 187148,
+        "digest": "56d723d3e4646926fd5432a2c21648223212915cfe8777db10f0efda8ca62982"
+      },
+      "reads": {
+        "stats": {
+          "hud": {
+            "samples": 5,
+            "minMs": 0.006,
+            "medianMs": 0.009,
+            "meanMs": 0.008,
+            "p95Ms": 0.012,
+            "maxMs": 0.012
+          },
+          "world": {
+            "samples": 5,
+            "minMs": 0.013,
+            "medianMs": 0.016,
+            "meanMs": 0.021,
+            "p95Ms": 0.043,
+            "maxMs": 0.043
+          },
+          "chrome": {
+            "samples": 5,
+            "minMs": 0.11,
+            "medianMs": 0.125,
+            "meanMs": 0.127,
+            "p95Ms": 0.142,
+            "maxMs": 0.142
+          },
+          "presence": {
+            "samples": 5,
+            "minMs": 0.009,
+            "medianMs": 0.01,
+            "meanMs": 0.01,
+            "p95Ms": 0.011,
+            "maxMs": 0.011
+          },
+          "situation": {
+            "samples": 5,
+            "minMs": 0.005,
+            "medianMs": 0.005,
+            "meanMs": 0.005,
+            "p95Ms": 0.006,
+            "maxMs": 0.006
+          },
+          "messenger": {
+            "samples": 5,
+            "minMs": 0.029,
+            "medianMs": 0.062,
+            "meanMs": 0.228,
+            "p95Ms": 0.577,
+            "maxMs": 0.577
+          },
+          "pulseContacts": {
+            "samples": 5,
+            "minMs": 0.019,
+            "medianMs": 0.022,
+            "meanMs": 0.022,
+            "p95Ms": 0.025,
+            "maxMs": 0.025
+          },
+          "conversationPage": {
+            "samples": 5,
+            "minMs": 0.004,
+            "medianMs": 0.004,
+            "meanMs": 0.005,
+            "p95Ms": 0.006,
+            "maxMs": 0.006
+          },
+          "selectedActor": {
+            "samples": 5,
+            "minMs": 0.05,
+            "medianMs": 0.051,
+            "meanMs": 0.056,
+            "p95Ms": 0.075,
+            "maxMs": 0.075
+          },
+          "targetedActorPass": {
+            "samples": 5,
+            "minMs": 4.604,
+            "medianMs": 5.913,
+            "meanMs": 6.444,
+            "p95Ms": 10.267,
+            "maxMs": 10.267
+          },
+          "allActorIntentPass": {
+            "samples": 2,
+            "minMs": 1.974,
+            "medianMs": 1.974,
+            "meanMs": 2.001,
+            "p95Ms": 2.028,
+            "maxMs": 2.028
+          }
+        },
+        "projectionBytes": {
+          "messenger": 3797,
+          "pulse": 3098,
+          "conversation": 1775,
+          "hud": 176,
+          "world": 425,
+          "chrome": 812,
+          "presence": 1236,
+          "situation": 66,
+          "website": 375
+        },
+        "digestStable": true
+      },
+      "persistence": {
+        "exportSnapshot": {
+          "samples": 3,
+          "minMs": 1.707,
+          "medianMs": 1.791,
+          "meanMs": 1.77,
+          "p95Ms": 1.813,
+          "maxMs": 1.813
+        },
+        "exportSnapshotAsync": {
+          "samples": 3,
+          "minMs": 1.768,
+          "medianMs": 2.31,
+          "meanMs": 2.241,
+          "p95Ms": 2.645,
+          "maxMs": 2.645
+        },
+        "restore": {
+          "samples": 3,
+          "minMs": 1.782,
+          "medianMs": 1.795,
+          "meanMs": 1.816,
+          "p95Ms": 1.871,
+          "maxMs": 1.871
+        },
+        "serializedSnapshotBytes": 147969,
+        "digestMatches": true,
+        "digest": "13f239986d62b933b456bd882981d8ed1c37525eec4816987263cb0d79291b21"
+      },
+      "scaling": {
+        "steadyTickP50Vs20": 1,
+        "steadyTickP50VsPrevious": null,
+        "steadyTickP50PerLocalActorMs": 0.474,
+        "exportP50Vs20": 1
+      }
+    },
+    {
+      "population": 100,
+      "fixture": {
+        "seed": "away-177-population-v1",
+        "seedActors": 4,
+        "localActors": 77,
+        "remoteActors": 23,
+        "knownContacts": 32,
+        "agendaActors": 77,
+        "appointmentActors": 8,
+        "routes": [
+          {
+            "originPlaceId": "place_a1",
+            "destinationPlaceId": "place_b1",
+            "totalMinutes": 37
+          }
+        ],
+        "seededMessages": 192,
+        "heapAfterSetup": {
+          "heapUsedBytes": 43656288,
+          "rssBytes": 134787072
+        }
+      },
+      "idle": {
+        "presentationFrames": 30,
+        "singleFrame": {
+          "samples": 4,
+          "minMs": 0.011,
+          "medianMs": 0.011,
+          "meanMs": 0.014,
+          "p95Ms": 0.022,
+          "maxMs": 0.022
+        },
+        "burst": {
+          "samples": 4,
+          "minMs": 0.025,
+          "medianMs": 0.03,
+          "meanMs": 0.039,
+          "p95Ms": 0.07,
+          "maxMs": 0.07
+        },
+        "meanFrameMs": 0.001,
+        "clockUnchanged": true,
+        "digestUnchanged": true,
+        "digest": "c349167e7e81971adb18778edf520d45489e3d3ba6cd1259dc492dec5fc6ff8d"
+      },
+      "normal": {
+        "tickCount": 3,
+        "coldFirstTick": {
+          "samples": 2,
+          "minMs": 75.743,
+          "medianMs": 75.743,
+          "meanMs": 89.514,
+          "p95Ms": 103.284,
+          "maxMs": 103.284
+        },
+        "perTick": {
+          "samples": 12,
+          "minMs": 59.465,
+          "medianMs": 70.805,
+          "meanMs": 75.185,
+          "p95Ms": 105.595,
+          "maxMs": 105.595
+        },
+        "perSampleTotal": {
+          "samples": 4,
+          "minMs": 202.741,
+          "medianMs": 222.59,
+          "meanMs": 225.556,
+          "p95Ms": 247.69,
+          "maxMs": 247.69
+        },
+        "ticksMeasured": 12,
+        "minutesAdvanced": 4,
+        "metrics": {
+          "population": 100,
+          "localActors": 77,
+          "remoteActors": 23,
+          "knownContacts": 32,
+          "agendaEntries": 77,
+          "appointments": 8,
+          "appointmentStatuses": {
+            "scheduled": 8
+          },
+          "trips": {
+            "active": 8
+          },
+          "tripActors": 8,
+          "intents": {
+            "prepare_to_leave": 8,
+            "pursue_personal_goal": 69
+          },
+          "blockedIntents": 0,
+          "messageCount": 199,
+          "fidelity": {
+            "important_local": 27,
+            "local_offscreen": 50,
+            "background_remote": 23
+          },
+          "spatialLocalActors": 77,
+          "remotePhysicalActors": 0,
+          "projections": {
+            "messengerContacts": 32,
+            "messengerBytes": 6191,
+            "pulseContacts": 34,
+            "pulseBytes": 5344,
+            "conversationMessages": 7,
+            "conversationBytes": 1775,
+            "hudBytes": 176,
+            "worldBytes": 425,
+            "chromeBytes": 813,
+            "presenceBytes": 2131,
+            "situationBytes": 66,
+            "websiteBytes": 375
+          },
+          "snapshotBytes": 657906,
+          "digest": "5f1c9f098e30512e80cb25260d931ca5101883f83219539de44a3c6315ca8b99"
+        },
+        "digest": "5f1c9f098e30512e80cb25260d931ca5101883f83219539de44a3c6315ca8b99"
+      },
+      "extended": {
+        "days": 3,
+        "dayJump": {
+          "samples": 6,
+          "minMs": 90.678,
+          "medianMs": 164.658,
+          "meanMs": 156.432,
+          "p95Ms": 180.001,
+          "maxMs": 180.001
+        },
+        "perSampleDayTimes": [
+          [
+            90.678,
+            154.064,
+            164.658
+          ],
+          [
+            175.088,
+            180.001,
+            174.1
+          ]
+        ],
+        "dayTrend": {
+          "firstDayMs": 90.678,
+          "lastDayMs": 164.658,
+          "ratio": 1.816
+        },
+        "heapDeltaBytes": -19697728,
+        "messageCount": 206,
+        "agendaEntries": 56,
+        "tripActors": 8,
+        "appointmentStatuses": {
+          "happened": 2,
+          "missed": 6
+        },
+        "snapshotBytes": 794124,
+        "digest": "a8a09dfc3362c173196b74170559cb1d436462fa3e5c01a24d45ff39d5f10b5a"
+      },
+      "reads": {
+        "stats": {
+          "hud": {
+            "samples": 3,
+            "minMs": 0.001,
+            "medianMs": 0.001,
+            "meanMs": 0.002,
+            "p95Ms": 0.005,
+            "maxMs": 0.005
+          },
+          "world": {
+            "samples": 3,
+            "minMs": 0.004,
+            "medianMs": 0.004,
+            "meanMs": 0.004,
+            "p95Ms": 0.005,
+            "maxMs": 0.005
+          },
+          "chrome": {
+            "samples": 3,
+            "minMs": 0.185,
+            "medianMs": 0.2,
+            "meanMs": 0.196,
+            "p95Ms": 0.202,
+            "maxMs": 0.202
+          },
+          "presence": {
+            "samples": 3,
+            "minMs": 0.037,
+            "medianMs": 0.041,
+            "meanMs": 0.043,
+            "p95Ms": 0.05,
+            "maxMs": 0.05
+          },
+          "situation": {
+            "samples": 3,
+            "minMs": 0.002,
+            "medianMs": 0.002,
+            "meanMs": 0.002,
+            "p95Ms": 0.004,
+            "maxMs": 0.004
+          },
+          "messenger": {
+            "samples": 3,
+            "minMs": 0.095,
+            "medianMs": 0.099,
+            "meanMs": 0.099,
+            "p95Ms": 0.103,
+            "maxMs": 0.103
+          },
+          "pulseContacts": {
+            "samples": 3,
+            "minMs": 0.068,
+            "medianMs": 0.069,
+            "meanMs": 0.073,
+            "p95Ms": 0.082,
+            "maxMs": 0.082
+          },
+          "conversationPage": {
+            "samples": 3,
+            "minMs": 0.003,
+            "medianMs": 0.003,
+            "meanMs": 0.006,
+            "p95Ms": 0.01,
+            "maxMs": 0.01
+          },
+          "selectedActor": {
+            "samples": 3,
+            "minMs": 0.03,
+            "medianMs": 0.031,
+            "meanMs": 0.032,
+            "p95Ms": 0.035,
+            "maxMs": 0.035
+          },
+          "targetedActorPass": {
+            "samples": 3,
+            "minMs": 25.91,
+            "medianMs": 26.698,
+            "meanMs": 31.183,
+            "p95Ms": 40.942,
+            "maxMs": 40.942
+          },
+          "allActorIntentPass": {
+            "samples": 2,
+            "minMs": 31.394,
+            "medianMs": 31.394,
+            "meanMs": 31.947,
+            "p95Ms": 32.499,
+            "maxMs": 32.499
+          }
+        },
+        "projectionBytes": {
+          "messenger": 6191,
+          "pulse": 5344,
+          "conversation": 1775,
+          "hud": 176,
+          "world": 425,
+          "chrome": 813,
+          "presence": 2131,
+          "situation": 66,
+          "website": 375
+        },
+        "digestStable": true
+      },
+      "persistence": {
+        "exportSnapshot": {
+          "samples": 3,
+          "minMs": 6.893,
+          "medianMs": 8.421,
+          "meanMs": 8.078,
+          "p95Ms": 8.921,
+          "maxMs": 8.921
+        },
+        "exportSnapshotAsync": {
+          "samples": 3,
+          "minMs": 6.604,
+          "medianMs": 6.613,
+          "meanMs": 6.651,
+          "p95Ms": 6.737,
+          "maxMs": 6.737
+        },
+        "restore": {
+          "samples": 3,
+          "minMs": 5.178,
+          "medianMs": 5.212,
+          "meanMs": 5.603,
+          "p95Ms": 6.418,
+          "maxMs": 6.418
+        },
+        "serializedSnapshotBytes": 657906,
+        "digestMatches": true,
+        "digest": "5f1c9f098e30512e80cb25260d931ca5101883f83219539de44a3c6315ca8b99"
+      },
+      "scaling": {
+        "steadyTickP50Vs20": 8.783,
+        "steadyTickP50VsPrevious": 8.783,
+        "steadyTickP50PerLocalActorMs": 0.92,
+        "exportP50Vs20": 4.702
+      }
+    },
+    {
+      "population": 250,
+      "fixture": {
+        "seed": "away-177-population-v1",
+        "seedActors": 4,
+        "localActors": 189,
+        "remoteActors": 61,
+        "knownContacts": 32,
+        "agendaActors": 189,
+        "appointmentActors": 19,
+        "routes": [
+          {
+            "originPlaceId": "place_a1",
+            "destinationPlaceId": "place_b1",
+            "totalMinutes": 37
+          }
+        ],
+        "seededMessages": 192,
+        "heapAfterSetup": {
+          "heapUsedBytes": 57313408,
+          "rssBytes": 264155136
+        }
+      },
+      "idle": {
+        "presentationFrames": 30,
+        "singleFrame": {
+          "samples": 3,
+          "minMs": 0.008,
+          "medianMs": 0.008,
+          "meanMs": 0.009,
+          "p95Ms": 0.011,
+          "maxMs": 0.011
+        },
+        "burst": {
+          "samples": 3,
+          "minMs": 0.011,
+          "medianMs": 0.017,
+          "meanMs": 0.015,
+          "p95Ms": 0.018,
+          "maxMs": 0.018
+        },
+        "meanFrameMs": 0.001,
+        "clockUnchanged": true,
+        "digestUnchanged": true,
+        "digest": "4326bac7e5a8f5377a9a0fcacf056124fef669ba59cab74231614bfe2ec5edc1"
+      },
+      "normal": {
+        "tickCount": 3,
+        "coldFirstTick": {
+          "samples": 1,
+          "minMs": 575.207,
+          "medianMs": 575.207,
+          "meanMs": 575.207,
+          "p95Ms": 575.207,
+          "maxMs": 575.207
+        },
+        "perTick": {
+          "samples": 6,
+          "minMs": 360.553,
+          "medianMs": 381.615,
+          "meanMs": 401.133,
+          "p95Ms": 460.411,
+          "maxMs": 460.411
+        },
+        "perSampleTotal": {
+          "samples": 2,
+          "minMs": 1202.578,
+          "medianMs": 1202.578,
+          "meanMs": 1203.4,
+          "p95Ms": 1204.222,
+          "maxMs": 1204.222
+        },
+        "ticksMeasured": 6,
+        "minutesAdvanced": 4,
+        "metrics": {
+          "population": 250,
+          "localActors": 189,
+          "remoteActors": 61,
+          "knownContacts": 32,
+          "agendaEntries": 189,
+          "appointments": 19,
+          "appointmentStatuses": {
+            "scheduled": 19
+          },
+          "trips": {
+            "active": 19
+          },
+          "tripActors": 19,
+          "intents": {
+            "prepare_to_leave": 19,
+            "pursue_personal_goal": 170
+          },
+          "blockedIntents": 0,
+          "messageCount": 199,
+          "fidelity": {
+            "important_local": 27,
+            "local_offscreen": 162,
+            "background_remote": 61
+          },
+          "spatialLocalActors": 189,
+          "remotePhysicalActors": 0,
+          "projections": {
+            "messengerContacts": 32,
+            "messengerBytes": 6192,
+            "pulseContacts": 34,
+            "pulseBytes": 5345,
+            "conversationMessages": 7,
+            "conversationBytes": 1776,
+            "hudBytes": 177,
+            "worldBytes": 426,
+            "chromeBytes": 814,
+            "presenceBytes": 2132,
+            "situationBytes": 67,
+            "websiteBytes": 376
+          },
+          "snapshotBytes": 1570901,
+          "digest": "d81a48f9fcefe5418104c9850abc4ef5c38f38aac14fe8d9860738cc5874d3cc"
+        },
+        "digest": "d81a48f9fcefe5418104c9850abc4ef5c38f38aac14fe8d9860738cc5874d3cc"
+      },
+      "extended": {
+        "days": 3,
+        "dayJump": {
+          "samples": 3,
+          "minMs": 533.941,
+          "medianMs": 541.509,
+          "meanMs": 684.476,
+          "p95Ms": 977.979,
+          "maxMs": 977.979
+        },
+        "perSampleDayTimes": [
+          [
+            533.941,
+            541.509,
+            977.979
+          ]
+        ],
+        "dayTrend": {
+          "firstDayMs": 533.941,
+          "lastDayMs": 977.979,
+          "ratio": 1.832
+        },
+        "heapDeltaBytes": -13878808,
+        "messageCount": 206,
+        "agendaEntries": 133,
+        "tripActors": 19,
+        "appointmentStatuses": {
+          "happened": 2,
+          "missed": 17
+        },
+        "snapshotBytes": 1882297,
+        "digest": "6f16556ba306dec77457b31ed5abed1e46a3b2de19286119e9d8811ad5319a21"
+      },
+      "reads": {
+        "stats": {
+          "hud": {
+            "samples": 2,
+            "minMs": 0,
+            "medianMs": 0,
+            "meanMs": 0.001,
+            "p95Ms": 0.002,
+            "maxMs": 0.002
+          },
+          "world": {
+            "samples": 2,
+            "minMs": 0.004,
+            "medianMs": 0.004,
+            "meanMs": 0.004,
+            "p95Ms": 0.004,
+            "maxMs": 0.004
+          },
+          "chrome": {
+            "samples": 2,
+            "minMs": 0.087,
+            "medianMs": 0.087,
+            "meanMs": 0.091,
+            "p95Ms": 0.095,
+            "maxMs": 0.095
+          },
+          "presence": {
+            "samples": 2,
+            "minMs": 0.022,
+            "medianMs": 0.022,
+            "meanMs": 0.023,
+            "p95Ms": 0.024,
+            "maxMs": 0.024
+          },
+          "situation": {
+            "samples": 2,
+            "minMs": 0.001,
+            "medianMs": 0.001,
+            "meanMs": 0.001,
+            "p95Ms": 0.001,
+            "maxMs": 0.001
+          },
+          "messenger": {
+            "samples": 2,
+            "minMs": 0.058,
+            "medianMs": 0.058,
+            "meanMs": 0.06,
+            "p95Ms": 0.061,
+            "maxMs": 0.061
+          },
+          "pulseContacts": {
+            "samples": 2,
+            "minMs": 0.125,
+            "medianMs": 0.125,
+            "meanMs": 0.153,
+            "p95Ms": 0.18,
+            "maxMs": 0.18
+          },
+          "conversationPage": {
+            "samples": 2,
+            "minMs": 0.003,
+            "medianMs": 0.003,
+            "meanMs": 0.003,
+            "p95Ms": 0.003,
+            "maxMs": 0.003
+          },
+          "selectedActor": {
+            "samples": 2,
+            "minMs": 0.027,
+            "medianMs": 0.027,
+            "meanMs": 0.027,
+            "p95Ms": 0.028,
+            "maxMs": 0.028
+          },
+          "targetedActorPass": {
+            "samples": 2,
+            "minMs": 68.471,
+            "medianMs": 68.471,
+            "meanMs": 79.741,
+            "p95Ms": 91.012,
+            "maxMs": 91.012
+          },
+          "allActorIntentPass": {
+            "samples": 1,
+            "minMs": 241.175,
+            "medianMs": 241.175,
+            "meanMs": 241.175,
+            "p95Ms": 241.175,
+            "maxMs": 241.175
+          }
+        },
+        "projectionBytes": {
+          "messenger": 6192,
+          "pulse": 5345,
+          "conversation": 1776,
+          "hud": 177,
+          "world": 426,
+          "chrome": 814,
+          "presence": 2132,
+          "situation": 67,
+          "website": 376
+        },
+        "digestStable": true
+      },
+      "persistence": {
+        "exportSnapshot": {
+          "samples": 2,
+          "minMs": 17.111,
+          "medianMs": 17.111,
+          "meanMs": 17.429,
+          "p95Ms": 17.746,
+          "maxMs": 17.746
+        },
+        "exportSnapshotAsync": {
+          "samples": 2,
+          "minMs": 28.842,
+          "medianMs": 28.842,
+          "meanMs": 39.804,
+          "p95Ms": 50.766,
+          "maxMs": 50.766
+        },
+        "restore": {
+          "samples": 2,
+          "minMs": 8.73,
+          "medianMs": 8.73,
+          "meanMs": 9.712,
+          "p95Ms": 10.693,
+          "maxMs": 10.693
+        },
+        "serializedSnapshotBytes": 1570901,
+        "digestMatches": true,
+        "digest": "d81a48f9fcefe5418104c9850abc4ef5c38f38aac14fe8d9860738cc5874d3cc"
+      },
+      "scaling": {
+        "steadyTickP50Vs20": 47.335,
+        "steadyTickP50VsPrevious": 5.39,
+        "steadyTickP50PerLocalActorMs": 2.019,
+        "exportP50Vs20": 9.554
+      }
+    },
+    {
+      "population": 500,
+      "fixture": {
+        "seed": "away-177-population-v1",
+        "seedActors": 4,
+        "localActors": 377,
+        "remoteActors": 123,
+        "knownContacts": 32,
+        "agendaActors": 377,
+        "appointmentActors": 38,
+        "routes": [
+          {
+            "originPlaceId": "place_a1",
+            "destinationPlaceId": "place_b1",
+            "totalMinutes": 37
+          }
+        ],
+        "seededMessages": 192,
+        "heapAfterSetup": {
+          "heapUsedBytes": 120858096,
+          "rssBytes": 337453056
+        }
+      },
+      "idle": {
+        "presentationFrames": 30,
+        "singleFrame": {
+          "samples": 2,
+          "minMs": 0.007,
+          "medianMs": 0.007,
+          "meanMs": 0.007,
+          "p95Ms": 0.007,
+          "maxMs": 0.007
+        },
+        "burst": {
+          "samples": 2,
+          "minMs": 0.016,
+          "medianMs": 0.016,
+          "meanMs": 0.038,
+          "p95Ms": 0.061,
+          "maxMs": 0.061
+        },
+        "meanFrameMs": 0.001,
+        "clockUnchanged": true,
+        "digestUnchanged": true,
+        "digest": "c01a69acf8698ffc7a186f5a913785545e70be5e56291601f4e65800b1367443"
+      },
+      "normal": {
+        "tickCount": 3,
+        "coldFirstTick": {
+          "samples": 1,
+          "minMs": 1588.55,
+          "medianMs": 1588.55,
+          "meanMs": 1588.55,
+          "p95Ms": 1588.55,
+          "maxMs": 1588.55
+        },
+        "perTick": {
+          "samples": 6,
+          "minMs": 1413.027,
+          "medianMs": 1542.211,
+          "meanMs": 1563.98,
+          "p95Ms": 1647.295,
+          "maxMs": 1647.295
+        },
+        "perSampleTotal": {
+          "samples": 2,
+          "minMs": 4673.84,
+          "medianMs": 4673.84,
+          "meanMs": 4691.941,
+          "p95Ms": 4710.042,
+          "maxMs": 4710.042
+        },
+        "ticksMeasured": 6,
+        "minutesAdvanced": 4,
+        "metrics": {
+          "population": 500,
+          "localActors": 377,
+          "remoteActors": 123,
+          "knownContacts": 32,
+          "agendaEntries": 377,
+          "appointments": 38,
+          "appointmentStatuses": {
+            "scheduled": 38
+          },
+          "trips": {
+            "active": 38
+          },
+          "tripActors": 38,
+          "intents": {
+            "prepare_to_leave": 38,
+            "pursue_personal_goal": 339
+          },
+          "blockedIntents": 0,
+          "messageCount": 199,
+          "fidelity": {
+            "important_local": 27,
+            "local_offscreen": 350,
+            "background_remote": 123
+          },
+          "spatialLocalActors": 377,
+          "remotePhysicalActors": 0,
+          "projections": {
+            "messengerContacts": 32,
+            "messengerBytes": 6192,
+            "pulseContacts": 34,
+            "pulseBytes": 5345,
+            "conversationMessages": 7,
+            "conversationBytes": 1776,
+            "hudBytes": 177,
+            "worldBytes": 426,
+            "chromeBytes": 814,
+            "presenceBytes": 2132,
+            "situationBytes": 67,
+            "websiteBytes": 376
+          },
+          "snapshotBytes": 3105903,
+          "digest": "3e2731bf72ffdd1601648e5bc6aa1b3616e6f500b58c592d85a906c48e0aa32b"
+        },
+        "digest": "3e2731bf72ffdd1601648e5bc6aa1b3616e6f500b58c592d85a906c48e0aa32b"
+      },
+      "extended": {
+        "days": 3,
+        "dayJump": {
+          "samples": 3,
+          "minMs": 1924.98,
+          "medianMs": 1979.058,
+          "meanMs": 2512.583,
+          "p95Ms": 3633.71,
+          "maxMs": 3633.71
+        },
+        "perSampleDayTimes": [
+          [
+            1979.058,
+            1924.98,
+            3633.71
+          ]
+        ],
+        "dayTrend": {
+          "firstDayMs": 1979.058,
+          "lastDayMs": 3633.71,
+          "ratio": 1.836
+        },
+        "heapDeltaBytes": -2259480,
+        "messageCount": 205,
+        "agendaEntries": 250,
+        "tripActors": 38,
+        "appointmentStatuses": {
+          "happened": 3,
+          "missed": 35
+        },
+        "snapshotBytes": 3704641,
+        "digest": "4717862cd20e9908e1d9f190dd7c3da6a9208851298ae94af2380cf44f6e7b90"
+      },
+      "reads": {
+        "stats": {
+          "hud": {
+            "samples": 1,
+            "minMs": 0.003,
+            "medianMs": 0.003,
+            "meanMs": 0.003,
+            "p95Ms": 0.003,
+            "maxMs": 0.003
+          },
+          "world": {
+            "samples": 1,
+            "minMs": 0.005,
+            "medianMs": 0.005,
+            "meanMs": 0.005,
+            "p95Ms": 0.005,
+            "maxMs": 0.005
+          },
+          "chrome": {
+            "samples": 1,
+            "minMs": 0.183,
+            "medianMs": 0.183,
+            "meanMs": 0.183,
+            "p95Ms": 0.183,
+            "maxMs": 0.183
+          },
+          "presence": {
+            "samples": 1,
+            "minMs": 0.057,
+            "medianMs": 0.057,
+            "meanMs": 0.057,
+            "p95Ms": 0.057,
+            "maxMs": 0.057
+          },
+          "situation": {
+            "samples": 1,
+            "minMs": 0.001,
+            "medianMs": 0.001,
+            "meanMs": 0.001,
+            "p95Ms": 0.001,
+            "maxMs": 0.001
+          },
+          "messenger": {
+            "samples": 1,
+            "minMs": 0.119,
+            "medianMs": 0.119,
+            "meanMs": 0.119,
+            "p95Ms": 0.119,
+            "maxMs": 0.119
+          },
+          "pulseContacts": {
+            "samples": 1,
+            "minMs": 0.066,
+            "medianMs": 0.066,
+            "meanMs": 0.066,
+            "p95Ms": 0.066,
+            "maxMs": 0.066
+          },
+          "conversationPage": {
+            "samples": 1,
+            "minMs": 0.002,
+            "medianMs": 0.002,
+            "meanMs": 0.002,
+            "p95Ms": 0.002,
+            "maxMs": 0.002
+          },
+          "selectedActor": {
+            "samples": 1,
+            "minMs": 0.017,
+            "medianMs": 0.017,
+            "meanMs": 0.017,
+            "p95Ms": 0.017,
+            "maxMs": 0.017
+          },
+          "targetedActorPass": {
+            "samples": 1,
+            "minMs": 128.499,
+            "medianMs": 128.499,
+            "meanMs": 128.499,
+            "p95Ms": 128.499,
+            "maxMs": 128.499
+          },
+          "allActorIntentPass": {
+            "samples": 1,
+            "minMs": 917.06,
+            "medianMs": 917.06,
+            "meanMs": 917.06,
+            "p95Ms": 917.06,
+            "maxMs": 917.06
+          }
+        },
+        "projectionBytes": {
+          "messenger": 6192,
+          "pulse": 5345,
+          "conversation": 1776,
+          "hud": 177,
+          "world": 426,
+          "chrome": 814,
+          "presence": 2132,
+          "situation": 67,
+          "website": 376
+        },
+        "digestStable": true
+      },
+      "persistence": {
+        "exportSnapshot": {
+          "samples": 1,
+          "minMs": 42.089,
+          "medianMs": 42.089,
+          "meanMs": 42.089,
+          "p95Ms": 42.089,
+          "maxMs": 42.089
+        },
+        "exportSnapshotAsync": {
+          "samples": 1,
+          "minMs": 33.943,
+          "medianMs": 33.943,
+          "meanMs": 33.943,
+          "p95Ms": 33.943,
+          "maxMs": 33.943
+        },
+        "restore": {
+          "samples": 1,
+          "minMs": 20.195,
+          "medianMs": 20.195,
+          "meanMs": 20.195,
+          "p95Ms": 20.195,
+          "maxMs": 20.195
+        },
+        "serializedSnapshotBytes": 3105903,
+        "digestMatches": true,
+        "digest": "3e2731bf72ffdd1601648e5bc6aa1b3616e6f500b58c592d85a906c48e0aa32b"
+      },
+      "scaling": {
+        "steadyTickP50Vs20": 191.294,
+        "steadyTickP50VsPrevious": 4.041,
+        "steadyTickP50PerLocalActorMs": 4.091,
+        "exportP50Vs20": 23.5
+      }
+    }
+  ],
+  "limitations": [
+    "Timings are Node process wall-clock measurements and vary by host load; no timing threshold gates this run.",
+    "Generated transit content currently exposes the routes listed per tier; the fixture documents rather than invents missing destinations.",
+    "Coarse multi-day jumps are measured with identical chunking per sample. Coarse jumps are not asserted to equal repeated one-minute ticks; see the #177 report.",
+    "Heap readings are process-wide observations, not per-fixture allocation deltas.",
+    "The fixture uses authored seed actors already present in a fresh SimulationEngine; generated actors are deterministic BuddyCharacter definitions, not inert object placeholders."
+  ]
+}

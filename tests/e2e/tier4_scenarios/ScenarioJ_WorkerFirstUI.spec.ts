@@ -1,0 +1,201 @@
+import { expect, test } from '@playwright/test';
+
+test('Worker-only boot route never imports Zustand engine and persists a playable session', async ({ page }) => {
+  test.setTimeout(90_000);
+  await page.goto('/worker.html');
+  const shell = page.getByTestId('worker-first-shell');
+  await expect(shell).toBeVisible();
+  expect(await page.evaluate(() => !('__simEngine' in window) && !('__simStore' in window))).toBe(true);
+
+  await shell.getByRole('button', { name: 'New game' }).click();
+  await expect(page.getByTestId('worker-phase')).toHaveText('game');
+  const initial = Number(await page.getByTestId('worker-minute').innerText());
+  await shell.getByRole('button', { name: 'Pause clock' }).click();
+  await expect(shell.getByRole('button', { name: 'Resume clock' })).toBeVisible();
+  await shell.getByRole('button', { name: 'Advance 15 minutes' }).click();
+  await expect.poll(async () => Number(await page.getByTestId('worker-minute').innerText()))
+    .toBeGreaterThanOrEqual(initial + 15);
+  const advanced = Number(await page.getByTestId('worker-minute').innerText());
+  await shell.getByRole('button', { name: 'Save game' }).click();
+  await expect(shell.getByText('Saved to slot_1')).toBeVisible();
+
+  await shell.getByRole('button', { name: 'Return to menu' }).click();
+  await expect(page.getByTestId('worker-phase')).toHaveText('menu');
+  await shell.getByRole('button', { name: 'Load game' }).click();
+  await expect(page.getByTestId('worker-phase')).toHaveText('game');
+  await expect.poll(async () => Number(await page.getByTestId('worker-minute').innerText()))
+    .toBeGreaterThanOrEqual(advanced);
+  expect(await page.evaluate(() => !('__simEngine' in window) && !('__simStore' in window))).toBe(true);
+  await expect(page.getByTestId('worker-world')).toContainText('Canonical world projection');
+});
+
+test('Worker-only entry rejects unreadable slots and never starts an anonymous fallback world', async ({ page }) => {
+  test.setTimeout(60_000);
+  await page.goto('/worker.html');
+  await expect(page.getByTestId('worker-first-shell')).toBeVisible();
+  await page.getByRole('button', { name: 'Load game' }).click();
+  await expect(page.getByTestId('worker-phase')).toHaveText('error');
+  await expect(page.getByRole('alert')).toContainText('missing or unreadable');
+  await expect(page.getByTestId('worker-hud')).toHaveCount(0);
+  expect(await page.evaluate(() => !('__simEngine' in window) && !('__simStore' in window))).toBe(true);
+  await page.getByRole('button', { name: 'New game' }).click();
+  await expect(page.getByTestId('worker-phase')).toHaveText('game');
+});
+
+test('Worker Save As copies the current Pulse moment into its own slot and restores without cross-slot leaks', async ({ page }) => {
+  test.setTimeout(90_000);
+  await page.goto('/worker.html');
+  await page.getByRole('button', { name: 'New game' }).click();
+  await expect(page.getByTestId('worker-phase')).toHaveText('game');
+  await page.getByRole('button', { name: 'Pause clock' }).click();
+  await page.evaluate(() => {
+    localStorage.setItem('away_message_pulse_state_v1:slot_1',
+      JSON.stringify({ version: 1, marker: 'from-current-world' }));
+  });
+  await page.getByRole('combobox', { name: 'Save slot' }).selectOption('slot_2');
+  await page.getByRole('button', { name: 'Save game' }).click();
+  await expect(page.getByText('Saved to slot_2')).toBeVisible();
+  expect(await page.evaluate(() => localStorage.getItem('pulse_current_slot'))).toBe('slot_2');
+  expect(await page.evaluate(() => localStorage.getItem('away_message_pulse_state_v1:slot_2')))
+    .toContain('from-current-world');
+
+  await page.getByRole('button', { name: 'Return to menu' }).click();
+  await page.evaluate(() => {
+    localStorage.removeItem('away_message_pulse_state_v1:slot_2');
+    localStorage.setItem('pulse_current_slot', 'slot_1');
+  });
+  await page.getByRole('button', { name: 'Load game' }).click();
+  await expect(page.getByTestId('worker-phase')).toHaveText('game');
+  expect(await page.evaluate(() => localStorage.getItem('pulse_current_slot'))).toBe('slot_2');
+  expect(await page.evaluate(() => localStorage.getItem('away_message_pulse_state_v1:slot_2')))
+    .toContain('from-current-world');
+  expect(await page.evaluate(() => !('__simEngine' in window) && !('__simStore' in window))).toBe(true);
+});
+
+test('root runtime=worker boots without requesting or evaluating the legacy engine and cold loads a slot', async ({ page }) => {
+  test.setTimeout(90_000);
+  const scripts: string[] = [];
+  page.on('request', request => {
+    if (request.resourceType() === 'script') scripts.push(new URL(request.url()).pathname);
+  });
+  await page.goto('/?runtime=worker');
+  await expect(page.getByTestId('worker-first-shell')).toBeVisible();
+  expect(await page.locator('#root').getAttribute('data-runtime')).toBe('worker');
+  expect(await page.evaluate(() => !('__simEngine' in window) && !('__simStore' in window)))
+    .toBe(true);
+  expect(scripts.some(path => /\/src\/(?:App|store\/useSimulationStore)(?:\.tsx?|\?)/.test(path)))
+    .toBe(false);
+
+  await page.getByRole('button', { name: 'New game' }).click();
+  await expect(page.getByTestId('worker-phase')).toHaveText('game');
+  await page.getByRole('button', { name: 'Pause clock' }).click();
+  await page.getByRole('button', { name: 'Advance 15 minutes' }).click();
+  await expect.poll(async () => Number(await page.getByTestId('worker-minute').innerText()))
+    .toBeGreaterThan(15);
+  const savedMinute = Number(await page.getByTestId('worker-minute').innerText());
+  await page.getByRole('button', { name: 'Save game' }).click();
+  await expect(page.getByText('Saved to slot_1')).toBeVisible();
+
+  await page.reload();
+  await expect(page.getByTestId('worker-phase')).toHaveText('menu');
+  await expect(page.getByTestId('worker-continue-summary')).toContainText('Day');
+  await page.getByRole('button', { name: 'Continue last save' }).click();
+  await expect(page.getByTestId('worker-phase')).toHaveText('game');
+  expect(Number(await page.getByTestId('worker-minute').innerText()))
+    .toBeGreaterThanOrEqual(savedMinute);
+  expect(await page.evaluate(() => !('__simEngine' in window) && !('__simStore' in window)))
+    .toBe(true);
+});
+
+test('root runtime selector rejects invalid runtimes without loading a legacy world', async ({ page }) => {
+  await page.goto('/?runtime=invalid');
+  await expect(page.getByTestId('runtime-boot-error')).toContainText('Unknown simulation runtime');
+  await expect(page.getByTestId('worker-first-shell')).toHaveCount(0);
+  expect(await page.evaluate(() => !('__simEngine' in window) && !('__simStore' in window)))
+    .toBe(true);
+});
+
+test('classic save -> Worker root -> classic root shares one persisted world without parallel engines', async ({ page }) => {
+  test.setTimeout(100_000);
+  await page.goto('/?runtime=legacy');
+  await expect(page.getByTestId('open-worker-preview')).toBeVisible();
+  await expect.poll(async () => page.evaluate(() => Boolean((window as any).__simStore)))
+    .toBe(true);
+
+  const fromLegacy = await page.evaluate(async () => {
+    const engine = (window as any).__simStore.getState().engine;
+    engine.advanceGameMinutes(45, 'cross-runtime migration gate');
+    const minute = engine.getState().time.totalMinutes as number;
+    await (window as any).__slots.saveSlot(engine, 'slot_1');
+    return minute;
+  });
+  await page.getByTestId('open-worker-preview').click();
+  await expect(page).toHaveURL(/runtime=worker/);
+  await expect(page.getByTestId('worker-first-shell')).toBeVisible();
+  expect(await page.evaluate(() => !('__simEngine' in window) && !('__simStore' in window)))
+    .toBe(true);
+
+  await expect(page.getByTestId('worker-continue-summary')).toBeVisible();
+  await page.getByRole('button', { name: 'Continue last save' }).click();
+  await expect(page.getByTestId('worker-phase')).toHaveText('game');
+  await page.getByRole('button', { name: 'Pause clock' }).click();
+  await expect.poll(async () => Number(await page.getByTestId('worker-minute').innerText()))
+    .toBeGreaterThanOrEqual(fromLegacy);
+  const loadedMinute = Number(await page.getByTestId('worker-minute').innerText());
+  await page.getByRole('button', { name: 'Advance 15 minutes' }).click();
+  await expect.poll(async () => Number(await page.getByTestId('worker-minute').innerText()))
+    .toBeGreaterThanOrEqual(loadedMinute + 15);
+  const fromWorker = Number(await page.getByTestId('worker-minute').innerText());
+  await page.getByRole('button', { name: 'Save game' }).click();
+  await expect(page.getByText('Saved to slot_1')).toBeVisible();
+  await page.getByRole('button', { name: 'Return to menu' }).click();
+  await page.getByRole('button', { name: 'Return to classic interface' }).click();
+  await expect(page).toHaveURL(/runtime=legacy/);
+  await expect(page.getByTestId('open-worker-preview')).toBeVisible();
+  await expect.poll(async () => page.evaluate(() => Boolean((window as any).__simStore)))
+    .toBe(true);
+  await page.getByRole('button', { name: '▶ Continue' }).click();
+  // Classic Continue requests a full-page reload; the new document's lazy
+  // module bootstrap must finish before probing the game engine. A missing
+  // store is a pending boot, not an assertion-time JavaScript exception.
+  await expect(page.getByTestId('open-worker-preview')).toHaveCount(0);
+  await expect.poll(async () => page.evaluate(() => {
+    const store = (window as any).__simStore;
+    return store?.getState().engine.getState().time.totalMinutes ?? -1;
+  }), { timeout: 15_000 }).toBeGreaterThanOrEqual(fromWorker);
+});
+
+test('returning from a Worker menu never carries a pending canonical owner or unsaved live world', async ({ page }) => {
+  await page.goto('/?runtime=worker');
+  await page.getByRole('button', { name: 'New game' }).click();
+  await expect(page.getByTestId('worker-phase')).toHaveText('game');
+  await page.getByRole('button', { name: 'Return to menu' }).click();
+  await expect(page.getByTestId('worker-hud')).toHaveCount(0);
+  await page.getByRole('button', { name: 'Return to classic interface' }).click();
+  await expect(page).toHaveURL(/runtime=legacy/);
+  await expect(page.getByTestId('worker-first-shell')).toHaveCount(0);
+  await expect.poll(async () => page.evaluate(() => Boolean((window as any).__simStore)))
+    .toBe(true);
+});
+
+test('Worker new-game residence choice uses authored offers and survives a cold save', async ({ page }) => {
+  test.setTimeout(90_000);
+  await page.goto('/?runtime=worker');
+  await expect(page.getByTestId('worker-first-shell')).toBeVisible();
+  await page.getByRole('button', { name: 'Choose starting residence' }).click();
+  // Choose an authored non-default room by its actual content ID, not by list order.
+  const selected = page.locator('[data-testid="worker-starter-offer"][data-place-id="room_208"]');
+  await expect(selected).toBeVisible();
+  await selected.click();
+  await expect(page.getByTestId('worker-phase')).toHaveText('game');
+  await expect(page.getByTestId('worker-physical-room')).toBeVisible();
+  await expect(page.getByTestId('worker-residence-place')).toHaveAttribute('data-place-id', 'room_208');
+  await page.getByRole('button', { name: 'Pause clock' }).click();
+  await page.getByRole('button', { name: 'Save game' }).click();
+  await expect(page.getByText('Saved to slot_1')).toBeVisible();
+  await page.reload();
+  await page.getByRole('button', { name: 'Continue last save' }).click();
+  await expect(page.getByTestId('worker-phase')).toHaveText('game');
+  await expect(page.getByTestId('worker-residence-place')).toHaveAttribute('data-place-id', 'room_208');
+  expect(await page.evaluate(() => !('__simEngine' in window) && !('__simStore' in window))).toBe(true);
+});

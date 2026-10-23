@@ -25,6 +25,15 @@ type MinuteOwners = Pick<
 export type TimeView = 'pc' | 'room' | 'cafe' | 'work' | 'city';
 export type TimeAdvanceMode = 'realtime' | 'jump';
 
+/**
+ * Two deliberately different simulation policies:
+ * - coarse: one aggregate domain boundary, required for long sleep/work/travel;
+ * - minute: replay the exact normal minute boundary, explicitly capped so
+ *   500-NPC worlds cannot accidentally process multi-day loops on one message.
+ */
+export type MinuteAdvanceGranularity = 'coarse' | 'minute';
+export const MAX_MINUTE_ACCURATE_ADVANCE = 60;
+
 export interface TimeAdvancementHooks {
   currentView(): TimeView;
   processDeliveries(): void;

@@ -245,10 +245,7 @@ export class DownloadManager {
   }
 
   private completeTask(task: DownloadTask, currentMinute: number): void {
-    task.status = 'complete';
     task.allocatedKbps = 0;
-    task.completedAtMinute = currentMinute;
-
     const filePath = `${task.targetDirectory}/${task.fileName}`;
     try {
       this.vfs.createFile(
@@ -262,15 +259,19 @@ export class DownloadManager {
           metadata: {
             author: task.sourceId,
             version: '1.0',
+            downloadTaskId: task.id,
           },
         },
         currentMinute
       );
-    } catch {
-      // File might already exist if re-downloaded.
+      task.status = 'complete';
+      task.completedAtMinute = currentMinute;
+      this.eventBus.emit('download:completed', { task: { ...task }, filePath });
+    } catch (cause) {
+      task.status = 'failed';
+      task.errorMessage = cause instanceof Error ? cause.message : 'Download file creation failed';
+      this.eventBus.emit('download:failed', { taskId: task.id, error: task.errorMessage });
     }
-
-    this.eventBus.emit('download:completed', { task: { ...task }, filePath });
   }
 
   public updateQueueSlots(): void {

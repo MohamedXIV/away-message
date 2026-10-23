@@ -20,6 +20,14 @@ import {
 } from '../apps/pulse/persistence';
 import { toSummary, type SlotSummary } from './slotUi';
 
+/** UI metadata is supplied by the main thread when the writer is a Worker. */
+export interface SlotPulseMetadata {
+  pulseSlotId: string;
+  pulsePayload: unknown;
+  /** Worker-owned Ink cursor; never accepted from the renderer as authority. */
+  cafeNarrative?: unknown;
+}
+
 export type SaveCompatibility = {
   status: 'ok' | 'legacy' | 'refused';
   reason?: string;
@@ -71,6 +79,7 @@ export async function saveSlot(
     'exportSnapshotAsync' | 'rebindColdConversationReader'>>,
   slotId: string,
   saveName?: string,
+  pulse?: SlotPulseMetadata,
 ): Promise<SlotSummary> {
   const snapshot = await (engine.exportSnapshotAsync?.() ?? engine.exportSnapshot()) as SimulationState;
   const { recent, pages, manifest } = splitConversationArchive(slotId, snapshot.social.conversations);
@@ -79,7 +88,8 @@ export async function saveSlot(
   const compactSnapshot: SimulationState = {
     ...snapshot, social: { ...snapshot.social, conversations: recent },
   };
-  const pulseSlotId = getCurrentPulseSlotId();
+  const pulseSlotId = pulse?.pulseSlotId ?? getCurrentPulseSlotId();
+  const pulsePayload = pulse ? pulse.pulsePayload : readPulsePayload(pulseSlotId);
   // Generate the slot version *within* the same write transaction to avoid
   // two overlapping saves assigning the same cold-reader generation.
   const committed = await db.transaction('rw', db.saves, db.conversation_pages, async () => {
@@ -127,8 +137,10 @@ export async function saveSlot(
     narrativeFlags: { ...snapshot.world.flags },
     meta: {
       pulseSlotId,
-      pulsePayload: readPulsePayload(pulseSlotId),
+      pulsePayload,
       conversationArchive: manifest,
+      // Bound to the same atomic document/archive transaction as this world.
+      cafeNarrative: pulse?.cafeNarrative ?? null,
     },
     snapshot: compactSnapshot,
   };
@@ -192,6 +204,7 @@ export async function loadSlotColdBootstrap(slotId: string): Promise<{
   snapshot: SimulationState;
   archive: { slotId: string; updatedAt: number; counts: Record<string, number>;
     indexes: Record<string, ConversationColdIndex> };
+  cafeNarrative: unknown;
 } | null> {
   try {
     return await db.transaction('r', db.saves, db.conversation_pages, async () => {
@@ -222,6 +235,7 @@ export async function loadSlotColdBootstrap(slotId: string): Promise<{
         snapshot,
         archive: { slotId, updatedAt: record.updatedAt,
           counts: { ...raw.counts }, indexes: raw.indexes },
+        cafeNarrative: record.meta?.cafeNarrative ?? null,
       };
     });
   } catch {
@@ -235,7 +249,13 @@ export async function loadSlotColdBootstrap(slotId: string): Promise<{
  * index-free save documents use the existing explicit eager load path.
  * A malformed/unavailable archive cannot silently produce a playable game.
  */
-export async function loadSlotEngine(slotId: string): Promise<SimulationEngine | null> {
+/** The Worker receives the world and optional Ink cursor from the SAME saved
+ * document generation, preventing mismatched Save As or autosave sessions.
+ */
+export async function loadSlotEngineWithNarrative(slotId: string): Promise<{
+  engine: SimulationEngine;
+  cafeNarrative: unknown;
+} | null> {
   const boot = await loadSlotColdBootstrap(slotId);
   if (boot) {
     const engine = new SimulationEngine(boot.snapshot);
@@ -251,10 +271,17 @@ export async function loadSlotEngine(slotId: string): Promise<SimulationEngine |
     // Future pages independently recheck this generation in each read transaction.
     const current = await db.saves.get(slotId);
     if (current?.updatedAt !== boot.archive.updatedAt) return null;
-    return engine;
+    return { engine, cafeNarrative: boot.cafeNarrative };
   }
   const snapshot = await loadSlotSnapshot(slotId);
-  return snapshot ? new SimulationEngine(snapshot) : null;
+  // Older v6 saves without a complete cold index have no atomic optional Ink
+  // sidecar. Never attach a potentially different slot generation's dialogue.
+  return snapshot ? { engine: new SimulationEngine(snapshot), cafeNarrative: null } : null;
+}
+
+/** Classic callers retain the existing engine-only cold boot contract. */
+export async function loadSlotEngine(slotId: string): Promise<SimulationEngine | null> {
+  return (await loadSlotEngineWithNarrative(slotId))?.engine ?? null;
 }
 
 /** Compatibility verdict using the current v6 document range. */

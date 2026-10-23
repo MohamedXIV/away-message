@@ -58,9 +58,12 @@ export async function restoreSlotPulse(slotId: string): Promise<void> {
     const meta = (record as SaveSlotRecord | undefined)?.meta as
       | { pulseSlotId?: string; pulsePayload?: unknown }
       | undefined;
-    if (meta && typeof meta.pulseSlotId === 'string' && meta.pulsePayload) {
-      setCurrentPulseSlotId(meta.pulseSlotId);
-      writePulsePayload(meta.pulseSlotId, meta.pulsePayload);
+    // A save belongs to the slot being OPENED, not the source slot it may
+    // originally have been copied from. Do not resurrect another timeline's
+    // Pulse identity when loading a Save As or autosave slot.
+    setCurrentPulseSlotId(slotId);
+    if (meta && meta.pulsePayload != null) {
+      writePulsePayload(slotId, meta.pulsePayload);
     }
   } catch { /* best-effort */ }
 }
