@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import { SimulationKernel } from '../../src/engine/kernel/SimulationKernel';
-import type { OsInstallPlan } from '../../src/engine/kernel/ComputerOwnershipRuntime';
 
 function fixture() {
   const simulation = new SimulationKernel();
