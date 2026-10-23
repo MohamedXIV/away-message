@@ -44,7 +44,6 @@ export function getWorkerInstalledShortcuts(read: Pick<SimulationDesktopRead, 'd
 /** Start menu shows installed programs even when a UI hasn't yet been migrated. */
 export function getWorkerInstalledPrograms(read: Pick<SimulationDesktopRead, 'installedApps'>) {
   return read.installedApps
-    .filter(app => app.appId !== 'app.pulse')
     .slice(0, 64)
     .map(app => ({
       id: WORKER_PORTED_APPS[app.appId]?.id ?? app.appId,

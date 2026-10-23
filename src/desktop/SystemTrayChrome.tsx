@@ -129,7 +129,7 @@ export const SystemTrayChrome: React.FC<SystemTrayChromeProps> = ({ onOpenDialUp
         )}
       </div>
 
-      <div className="relative">
+      {chrome.pulseInstalled && <div className="relative">
         <button
           type="button"
           className="os-tray-button relative"
@@ -169,7 +169,7 @@ export const SystemTrayChrome: React.FC<SystemTrayChromeProps> = ({ onOpenDialUp
             </button>
           </div>
         )}
-      </div>
+      </div>}
 
       <div
         className="os-tray-clock cursor-default"

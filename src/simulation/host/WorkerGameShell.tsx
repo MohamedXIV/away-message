@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import { WorkerGameSession } from './WorkerGameSession';
 import { WorkerPhysicalRoom } from './WorkerPhysicalRoom';
-import { WorkerPulsePanel } from './WorkerPulsePanel';
 import { WorkerDesktop } from './WorkerDesktop';
 import { WorkerCityTravel } from './WorkerCityTravel';
 import { WorkerCityPlaceView } from './WorkerCityPlaceView';
@@ -27,7 +26,7 @@ export function WorkerGameShell() {
   const [saveSummaries, setSaveSummaries] = useState<SlotSummary[]>([]);
   const [slotListError, setSlotListError] = useState<string | null>(null);
   const mostRecent = saveSummaries.find(saved => saved.hasSnapshot) ?? null;
-  const [panel, setPanel] = useState<'summary' | 'room' | 'city' | 'pulse' | 'desktop'>('room');
+  const [panel, setPanel] = useState<'summary' | 'room' | 'city' | 'desktop'>('room');
   const [chooseResidence, setChooseResidence] = useState(false);
   const [arrival, setArrival] = useState<{ location: string; receipt: string } | null>(null);
 
@@ -212,7 +211,7 @@ export function WorkerGameShell() {
             </div>
             {view.saved && <p role="status" className="text-sm text-emerald-300">{view.saved}</p>}
             <nav aria-label="Worker gameplay panels" className="flex flex-wrap gap-2 border-b border-slate-700 pb-2">
-              {(['room', 'city', 'desktop', 'pulse', 'summary'] as const).map(tab => (
+              {(['room', 'city', 'desktop', 'summary'] as const).map(tab => (
                 <button key={tab} type="button" onClick={() => setPanel(tab)}
                   aria-pressed={panel === tab}
                   className={`rounded border px-3 py-1 text-sm capitalize ${
@@ -250,9 +249,6 @@ export function WorkerGameShell() {
                   setArrival({ location, receipt });
                   setPanel('room');
                 }} />
-            )}
-            {panel === 'pulse' && (
-              <WorkerPulsePanel session={session} revision={view.hud.revision} />
             )}
             {panel === 'desktop' && (
               <WorkerDesktop session={session} revision={view.hud.revision} onStepAway={() => setPanel('room')} />

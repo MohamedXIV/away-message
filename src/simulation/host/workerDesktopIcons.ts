@@ -28,8 +28,6 @@ const SYSTEM_ICONS: readonly WorkerDesktopIcon[] = [
   { id: 'sys_addremove', label: 'Add/Remove Programs', appId: 'addremove', kind: 'installer', source: 'system' },
   { id: 'sys_savegame', label: 'Save / Load Game', appId: 'savegame', kind: 'save', source: 'system' },
   { id: 'sys_ailab', label: 'AI Lab Inspector', appId: 'ailab', kind: 'ailab', source: 'system' },
-  { id: 'sys_pulse', label: 'Pulse Messenger', appId: 'pulse', kind: 'pulse', source: 'system' },
-  { id: 'sys_flashfetch', label: 'FlashFetch', appId: 'flashfetch', kind: 'download', source: 'system' },
 ];
 
 export function getWorkerSystemDesktopIcons(): readonly WorkerDesktopIcon[] {

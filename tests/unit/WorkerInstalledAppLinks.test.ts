@@ -33,6 +33,7 @@ describe('Worker-installed software shortcuts', () => {
       { label: 'FlashFetch', launchId: 'flashfetch' },
     ]);
     expect(getWorkerInstalledPrograms(make(apps))).toEqual([
+      { id: 'pulse', label: 'Pulse Messenger', available: true },
       { id: 'retroamp', label: 'RetroAmp', available: true },
       { id: 'flashfetch', label: 'FlashFetch', available: true },
     ]);
