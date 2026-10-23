@@ -108,6 +108,12 @@ function educationFixture() {
     },
   });
   expect(memory?.meaning?.subject.id).toBe(factId);
+  // New registrants are admitted to the canonical NPC Life ledger at an
+  // authoritative minute boundary, not by projection reads. Commit that
+  // boundary before capturing our cold-save baseline: otherwise hydration
+  // correctly creates those entries and a premature snapshot differs.
+  game.advanceGameMinutes(1, 'readiness-fixture-commit-new-actors');
+  expect(game.clock.getTotalMinutes()).toBe(481);
   return {
     game, actors, studentOne: studentOne!, studentTwo: studentTwo!,
     remoteFriend: remoteFriend!, teacher: teacher!, examId, factId, claimId,
