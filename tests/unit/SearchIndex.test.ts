@@ -34,9 +34,11 @@ describe('SearchEngine & SearchIndex Test Suite', () => {
     for (const query of ['myplace', 'maya', 'ryan', 'nightowl87', 'canal']) {
       const results = searchInternet(query, 3, {});
       expect(results.some(result =>
-        /myplace\\.local\\/(maya_x|ryan_k|nightowl87)/i.test(result.url))).toBe(false);
+        ['myplace.local/maya_x', 'myplace.local/ryan_k', 'myplace.local/nightowl87']
+          .some(legacyPage => result.url.toLowerCase().includes(legacyPage)))).toBe(false);
       expect(results.some(result =>
-        /\\b(?:Maya|Mr\\. Henderson|Ryan_K|NightOwl87|Nora)\\b/i.test(result.snippet))).toBe(false);
+        ['Maya', 'Mr. Henderson', 'Ryan_K', 'NightOwl87', 'Nora']
+          .some(name => result.snippet.includes(name)))).toBe(false);
     }
   });
 
