@@ -17,7 +17,7 @@ export const MyPlaceSite: React.FC<SiteRouteProps> = (props) => {
   const effectiveParams = { ...props.params, ...props.routeParams };
   const requestedUsername = effectiveParams['username'] || '';
   const { userProfile, profile: selectedProfile, guestbook, time, currentMyPlaceId, locked: isLocked } = useMyPlacePageRead(requestedUsername);
-  // Default to YOUR page (wanderer06) — not Maya — and routing is strict
+  // Default to the player's page; never select a named NPC by fiat.
   const currentUsername = requestedUsername || userProfile.username;
   const isOwnProfile = currentUsername === userProfile.username;
 
@@ -174,15 +174,18 @@ export const MyPlaceSite: React.FC<SiteRouteProps> = (props) => {
                 <div className="mt-2 text-[11px] text-gray-600">View My: <a className="text-blue-700 underline" href="#" onClick={(e) => e.preventDefault()}>Pics</a> | <a className="text-blue-700 underline" href="#" onClick={(e) => e.preventDefault()}>Videos</a></div>
               </div>
               <div className="px-2 pb-2 space-y-1">
-                <button
-                  onClick={() => {
-                    const handle = profile.username === userProfile.username ? 'maya_x' : profile.username;
-                    engine.postMyPlaceComment(handle, 'Hey! Love the new look — what do you think of my page?');
-                  }}
-                  className="w-full bg-[#dbeafe] hover:bg-[#bfdbfe] border border-[#93c5fd] text-[#1e3a8a] font-bold py-1 text-xs flex items-center justify-center gap-1"
-                >
-                  ✉ Send Message
-                </button>
+                {!isOwnProfile && (
+                  <button
+                    onClick={() => {
+                      // A profile guestbook is not Pulse messaging. Never
+                      // redirect the player's own page to a fixed seed actor.
+                      engine.postMyPlaceComment(currentUsername, 'Hey! Love the new look — what do you think of my page?');
+                    }}
+                    className="w-full bg-[#dbeafe] hover:bg-[#bfdbfe] border border-[#93c5fd] text-[#1e3a8a] font-bold py-1 text-xs flex items-center justify-center gap-1"
+                  >
+                    ✉ Leave a Hello
+                  </button>
+                )}
                 {(() => {
                   if (isOwnProfile) return null;
                   const boundActorId = engine.myplace.getBoundActorIdForProfile(currentUsername);
@@ -307,7 +310,7 @@ export const MyPlaceSite: React.FC<SiteRouteProps> = (props) => {
           <div className="p-3 space-y-3 bg-white">
             {/* Network header */}
             <div className="border border-gray-400">
-              <div className="bg-[#ffcc99] border-b border-gray-400 px-2 py-1 font-bold text-sm">Maya is in your extended network</div>
+              <div className="bg-[#ffcc99] border-b border-gray-400 px-2 py-1 font-bold text-sm">{profile.displayName}'s MyPlace space</div>
               <div className="p-2 text-[11px] text-gray-700 flex items-center justify-between">
                 <span>{profile.displayName}'s Friend Space</span>
                 <span className="text-gray-500">[view all]</span>

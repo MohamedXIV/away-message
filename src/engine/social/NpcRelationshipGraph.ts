@@ -133,9 +133,15 @@ export class NpcRelationshipGraph {
     this.rebuildBondIndex();
   }
 
-  /** Authored seeds fill gaps; existing save-time affinities always win. */
+  /** Authored seeds fill gaps only for *existing* canonical actors.
+   * A fresh procedural world deliberately has no legacy named roster;
+   * seeding absent actor pairs would create invisible phantom graph edges.
+   */
   public seedMissing(seeds: Readonly<Record<string, number>>): void {
     for (const [key, value] of Object.entries(seeds)) {
+      const pair = key.split('__');
+      if (pair.length !== 2 ||
+        !this.policy.actorExists(pair[0]!) || !this.policy.actorExists(pair[1]!)) continue;
       if (!this.affinities.has(key)) this.affinities.set(key, value);
     }
   }
