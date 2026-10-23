@@ -127,7 +127,7 @@ export const DOOR_OPTIONS: RoomActivityOption[] = [
   {
     id: 'food_cart_shift',
     title: 'Work Food Cart Shift',
-    description: 'Head down to the bustling downtown food cart for a 4-hour evening rush shift with Ryan. Hard work on your feet, but pays reliable cash.',
+    description: 'Head down to the busy downtown food cart for a 4-hour evening rush shift. Expect long hours on your feet, but reliable cash.',
     icon: '🚚',
     durationMinutes: 240,
     energyChange: -40,
@@ -149,7 +149,7 @@ export const DOOR_OPTIONS: RoomActivityOption[] = [
   {
     id: 'canal_walk',
     title: 'Evening Walk along the Canal',
-    description: 'A 45-minute walk by the water to clear your head. Nora is rumored to walk here late at night — and the rain makes it better.',
+    description: 'A 45-minute walk by the water to clear your head. You may cross paths with other night walkers, especially in the rain.',
     icon: '🚶',
     durationMinutes: 45,
     energyChange: 6,
@@ -158,7 +158,7 @@ export const DOOR_OPTIONS: RoomActivityOption[] = [
   {
     id: 'diner_soup',
     title: 'Diner: Tomato Soup & Toast',
-    description: 'Quick and cheap at the 4th Street Diner. Maya works the lunch-to-dinner shift — you might catch her.',
+    description: 'Quick and cheap at the 4th Street Diner. Whoever is working the counter might have news from the neighborhood.',
     icon: '🍲',
     durationMinutes: 40,
     energyChange: 6,
@@ -169,7 +169,7 @@ export const DOOR_OPTIONS: RoomActivityOption[] = [
   {
     id: 'diner_platter',
     title: 'Diner: Blue Plate Platter',
-    description: 'The full hearty dinner at the 4th Street Diner. Proper food, proper mood repair. Maya works the lunch-to-dinner shift.',
+    description: 'The full hearty dinner at the 4th Street Diner. Proper food, proper mood repair, and the background hum of other customers.',
     icon: '🍽️',
     durationMinutes: 60,
     energyChange: 10,
@@ -180,7 +180,7 @@ export const DOOR_OPTIONS: RoomActivityOption[] = [
   {
     id: 'diner_pie',
     title: 'Diner: Apple Pie & Coffee',
-    description: 'Dessert and a bottomless coffee at the counter. Cheap comfort. Maya works the lunch-to-dinner shift.',
+    description: 'Dessert and a bottomless coffee at the counter. Cheap comfort; the diner staff changes with the day.',
     icon: '🥧',
     durationMinutes: 25,
     energyChange: 6,
@@ -202,7 +202,7 @@ export const DOOR_OPTIONS: RoomActivityOption[] = [
   {
     id: 'visit_cafe',
     title: 'Travel to Starlight Café',
-    description: 'Catch the cross-town bus to meet Maya at the Starlight Café for warm coffee and in-person conversation.',
+    description: 'Catch the cross-town bus to Starlight Café for warm coffee. Conversations depend on who is genuinely there.',
     icon: '☕',
     durationMinutes: 75,
     energyChange: 10,
