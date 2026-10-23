@@ -46,7 +46,11 @@ test('#219 real unseeded DOS boot requires an owned CD and delivers clean Orion 
   await expect(installer).toHaveAttribute('data-installer-edition', 'orion48');
   await expect(installer).toContainText('Orion 4.8 Text-Mode Setup');
   for (let step=0;step<3;step++) await installer.getByRole('button', { name: 'Next' }).click();
-  await installer.getByRole('button', { name: 'Install from disc' }).click();
+  await installer.getByRole('button', { name: 'Begin installation' }).click();
+  await expect(page.getByTestId('worker-os-install-progress')).toHaveAttribute('aria-label','OS installation progress');
+  for (let step = 0; step < 4; step++) {
+    await installer.getByRole('button', { name: 'Advance installation' }).click();
+  }
 
   const desktop = page.getByTestId('worker-desktop');
   await expect(desktop).toHaveAttribute('data-os-theme', 'orion48');

@@ -29,7 +29,12 @@ export async function installOrion48FromDos(page: Page) {
     await setup.getByRole('button', { name: 'Next' }).click();
   }
   await expect(setup).toContainText('Estimated installation:');
-  await setup.getByRole('button', { name: 'Install from disc' }).click();
+  await setup.getByRole('button', { name: 'Begin installation' }).click();
+  await expect(page.getByTestId('worker-os-install-progress')).toBeVisible();
+  for (let step = 0; step < 4; step++) {
+    await setup.getByRole('button', { name: 'Advance installation' }).click();
+    if (step < 3) await expect(setup.getByRole('button', { name: 'Advance installation' })).toBeEnabled();
+  }
   const desktop = page.getByTestId('worker-desktop');
   await expect(desktop).toBeVisible();
   await expect(page.getByTestId('worker-dos-boot')).toHaveCount(0);

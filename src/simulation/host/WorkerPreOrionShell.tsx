@@ -122,24 +122,36 @@ export function WorkerPreOrionShell({ session, revision, desktop }: Props) {
     }
   }
 
-  async function commitInstall() {
+  async function beginInstall() {
     if (!plan) return;
     setBusy(true);
     setNotice(null);
     try {
-      // The existing single Worker owner revalidates physical media and disk,
-      // advances the canonical world clock by plan.durationMinutes, and boots
-      // only the actual edition it installed. No decorative fake progress.
-      const result = await session.hardware({ kind: 'commitOs', plan });
-      if (!result.success) throw new Error(result.error || 'OS install failed.');
-      record('Orion setup completed after ' + plan.durationMinutes + ' in-world minutes.');
+      const result = await session.hardware({ kind: 'startOs', plan });
+      if (!result.success) throw new Error(result.error || 'OS setup could not start.');
+      record('Copying and configuring Orion: the game clock tracks each step.');
       setPlan(null);
     } catch (err) {
       setNotice(err instanceof Error ? err.message : String(err));
-      setPlan(null); // expired preflight must be deliberately verified again
-    } finally {
-      setBusy(false);
-    }
+    } finally { setBusy(false); }
+  }
+
+  async function advanceInstall() {
+    setBusy(true);
+    setNotice(null);
+    try {
+      const result = await session.hardware({ kind: 'advanceOs' });
+      if (!result.success) throw new Error(result.error || 'Could not continue the installation.');
+      if (!result.data) record('OS setup completed. Restart into Orion.');
+    } catch (err) {
+      setNotice(err instanceof Error ? err.message : String(err));
+    } finally { setBusy(false); }
+  }
+
+  async function cancelInstall() {
+    await physical(() => session.hardware({ kind: 'cancelOs' }),
+      'Setup canceled. Spent game minutes are not refunded.');
+    setPlan(null);
   }
 
   // Without an assembled/powered machine, this is a physical workbench, not
@@ -178,8 +190,10 @@ export function WorkerPreOrionShell({ session, revision, desktop }: Props) {
   }
 
   const media = desktop.bootMediaItems.find(item => item.location === 'inserted');
-  const edition = plan ? getOrionInstallerPresentation(plan.targetOs) : null;
-  const release = plan ? getReleaseById(plan.targetOs) : null;
+  const installation = desktop.osInstallation;
+  const effectivePlan = installation ?? plan;
+  const edition = effectivePlan ? getOrionInstallerPresentation(effectivePlan.targetOs) : null;
+  const release = effectivePlan ? getReleaseById(effectivePlan.targetOs) : null;
   return (
     <section data-testid="worker-dos-boot" aria-label="Booted DOS computer"
       className="flex min-h-[420px] flex-col gap-3 border-4 border-[#777] bg-[#080a08] p-4 font-mono text-[#a6ffb1]">
@@ -187,7 +201,7 @@ export function WorkerPreOrionShell({ session, revision, desktop }: Props) {
         <strong>DOS 1.0 — C:\\</strong>
         <span data-testid="worker-dos-media">{media ? 'D: ' + media.catalogItemId : 'D: NO DISC'}</span>
       </div>
-      {!plan ? (
+      {!effectivePlan ? (
         <>
           <div data-testid="worker-dos-transcript" className="flex-1 space-y-1 overflow-y-auto text-xs">
             {history.map((entry, i) => <p key={i} className="whitespace-pre-wrap">{entry}</p>)}
@@ -208,7 +222,7 @@ export function WorkerPreOrionShell({ session, revision, desktop }: Props) {
           </form>
           <p className="text-xs opacity-70">HELP · MEDIA · INSERT 1 · DIR D: · SETUP. No internet or Orion apps in DOS.</p>
         </>
-      ) : edition && (
+      ) : edition && effectivePlan && (
         <div data-testid="worker-orion-installer" data-installer-edition={edition.edition}
           className={'flex min-h-[330px] flex-1 flex-col gap-3 p-3 ' + edition.frameClass}>
           <header className={edition.titleClass}>
@@ -217,25 +231,51 @@ export function WorkerPreOrionShell({ session, revision, desktop }: Props) {
           </header>
           <div className="flex flex-1 flex-col justify-between gap-3 px-2 py-2">
             <div>
-              <p className="mb-2 text-sm font-bold">Step {stage + 1} / {edition.stages.length}: {edition.stages[stage]}</p>
-              <p className="text-sm">Verified owned disc: {media?.catalogItemId ?? plan.mediaInstanceId}</p>
-              <p className="text-sm">Target: {release?.displayName ?? plan.targetOs} ({release?.codename ?? 'system'})</p>
-              <p className="text-sm">Install mode: {plan.mode} · required disk: {(plan.installSizeBytes / 1_000_000_000).toFixed(1)} GB</p>
-              <p className="mt-2 text-sm">Estimated installation: {plan.durationMinutes} minutes of game time, based on your actual computer.</p>
-              <p className="mt-3 text-xs opacity-80">
-                File copying and configuration are committed as one validated in-world operation at the final step. These steps do not pretend to be asynchronous disk progress.
-              </p>
+              <p className="mb-2 text-sm font-bold">{installation
+                ? 'Installing from physical disc — saved progress'
+                : `Step ${stage + 1} / ${edition.stages.length}: ${edition.stages[stage]}`}</p>
+              <p className="text-sm">Verified owned disc: {media?.catalogItemId ?? effectivePlan.mediaInstanceId}</p>
+              <p className="text-sm">Target: {release?.displayName ?? effectivePlan.targetOs} ({release?.codename ?? 'system'})</p>
+              <p className="text-sm">Install mode: {effectivePlan.mode} · required disk: {(effectivePlan.installSizeBytes / 1_000_000_000).toFixed(1)} GB</p>
+              <p className="mt-2 text-sm">Estimated installation: {effectivePlan.durationMinutes} minutes of game time, based on your actual computer.</p>
+              {installation ? (
+                <div data-testid="worker-os-install-progress" aria-label="OS installation progress">
+                  <p className="font-bold">{installation.elapsedMinutes} of {installation.durationMinutes} world minutes spent</p>
+                  <div role="progressbar" aria-label="Orion file setup" aria-valuenow={installation.elapsedMinutes}
+                    aria-valuemin={0} aria-valuemax={installation.durationMinutes}
+                    className="mt-2 h-4 overflow-hidden border border-current bg-black/20">
+                    <div className="h-full bg-current opacity-60"
+                      style={{ width: `${Math.round(100 * installation.elapsedMinutes / installation.durationMinutes)}%` }} />
+                  </div>
+                  <p className="mt-2 text-xs">Progress belongs to your saved PC. Power loss or a removed CD pauses setup;
+                    reinsert the same owned disc to resume without repeating elapsed work.</p>
+                </div>
+              ) : (
+                <p className="mt-3 text-xs opacity-80">
+                  Verify the owned disc and choose setup stages. Starting will save progress before copying;
+                  each subsequent step spends actual world minutes.
+                </p>
+              )}
             </div>
             <div className="flex flex-wrap justify-end gap-3">
-              <button type="button" disabled={busy} onClick={() => setPlan(null)} className={edition.buttonClass}>Cancel / DOS</button>
-              {stage > 0 && <button type="button" disabled={busy} onClick={() => setStage(v => v - 1)}
-                className={edition.buttonClass}>Back</button>}
-              {stage < edition.stages.length - 1 ? (
-                <button type="button" disabled={busy} onClick={() => setStage(v => v + 1)}
-                  className={edition.buttonClass}>Next</button>
+              <button type="button" disabled={busy}
+                onClick={() => installation ? void cancelInstall() : setPlan(null)}
+                className={edition.buttonClass}>Cancel / DOS</button>
+              {installation ? (
+                <button type="button" disabled={busy} onClick={() => void advanceInstall()}
+                  className={edition.buttonClass}>{busy ? 'Working…' : 'Advance installation'}</button>
               ) : (
-                <button type="button" disabled={busy} onClick={() => void commitInstall()}
-                  className={edition.buttonClass}>{busy ? 'Installing…' : 'Install from disc'}</button>
+                <>
+                  {stage > 0 && <button type="button" disabled={busy} onClick={() => setStage(v => v - 1)}
+                    className={edition.buttonClass}>Back</button>}
+                  {stage < edition.stages.length - 1 ? (
+                    <button type="button" disabled={busy} onClick={() => setStage(v => v + 1)}
+                      className={edition.buttonClass}>Next</button>
+                  ) : (
+                    <button type="button" disabled={busy} onClick={() => void beginInstall()}
+                      className={edition.buttonClass}>{busy ? 'Starting…' : 'Begin installation'}</button>
+                  )}
+                </>
               )}
             </div>
           </div>
