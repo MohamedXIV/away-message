@@ -51,7 +51,18 @@ test('#213 plain-root New Game makes a varied, player-known cast with a real caf
   await page.getByRole('button', { name: 'New game' }).click();
   await expect(page.getByTestId('worker-phase')).toHaveText('game');
   await page.getByRole('button', { name: 'Pause clock' }).click();
+  await expect(page.getByTestId('worker-physical-room')).toBeVisible();
   const second = await inspectActualCast(page);
   expect(second).not.toEqual(first);
+
+  // The SECOND independent world must also support a real player-operated
+  // café/social path, not merely produce a different diagnostic roster.
+  await page.getByRole('button', { name: 'city', exact: true }).click();
+  await page.getByRole('button', { name: 'Choose Starlight Café' }).click();
+  await page.getByRole('button', { name: 'Travel to Starlight Café' }).click();
+  await expect(page.getByTestId('worker-city-place-location')).toContainText('Starlight Café');
+  await expect(page.getByTestId('worker-cafe-presence')).toContainText('is here at the café');
+  await page.getByRole('button', { name: /Talk with / }).click();
+  await expect(page.getByTestId('worker-cafe-dialogue-text')).toContainText('Hey! You made it!');
   await noShadowEngine(page);
 });
