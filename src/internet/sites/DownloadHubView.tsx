@@ -15,10 +15,14 @@ export interface DownloadHubViewProps {
   downloads: DownloadTask[];
   getDownloadStatus: (item: DownloadItem) => DownloadTask['status'] | null;
   handleDownloadFile: (item: DownloadItem) => void;
+  /** Optional OS-owned transfer viewer for clean installations without FlashFetch. */
+  onOpenTransfers?: () => void;
+  transferLabel?: string;
 }
 export const DownloadHubView: React.FC<DownloadHubViewProps> = ({
   selectedCat, setSelectedCat, filtered, dynamicCount, day,
   notice, setNotice, downloads, getDownloadStatus, handleDownloadFile,
+  onOpenTransfers, transferLabel = 'FlashFetch',
 }) => {
   return (
     <div className="w-full min-h-full bg-[#f4f7f6] text-black font-sans text-xs p-4 flex flex-col items-center">
@@ -71,7 +75,7 @@ export const DownloadHubView: React.FC<DownloadHubViewProps> = ({
       {notice && (
         <div className="max-w-4xl w-full mt-2 flex items-center justify-between border border-teal-600 bg-[#e0f2f1] px-3 py-2 text-xs font-bold text-teal-900 shadow">
           <span className="flex items-center gap-2">⬇ {notice}</span>
-          <button onClick={() => setNotice(null)} className="ml-2 rounded border border-teal-700 bg-white px-2 py-0.5 text-[11px] hover:bg-teal-50">Open FlashFetch</button>
+          <button onClick={() => { onOpenTransfers?.(); setNotice(null); }} className="ml-2 rounded border border-teal-700 bg-white px-2 py-0.5 text-[11px] hover:bg-teal-50">{onOpenTransfers ? 'View Downloads' : 'Dismiss'}</button>
         </div>
       )}
 
@@ -110,7 +114,7 @@ export const DownloadHubView: React.FC<DownloadHubViewProps> = ({
                     if (status === 'downloading' || status === 'queued') {
                       const task = downloads.find((t) => t.sourceId === item.id);
                       const pct = task ? Math.round((task.downloadedBytes / task.totalBytes) * 100) : 0;
-                      return <span className="inline-flex items-center gap-1 rounded bg-amber-100 px-2 py-1 text-[11px] font-bold text-amber-800 border border-amber-300">⏳ {status === 'queued' ? 'Queued' : `${pct}%`} — FlashFetch</span>;
+                      return <span className="inline-flex items-center gap-1 rounded bg-amber-100 px-2 py-1 text-[11px] font-bold text-amber-800 border border-amber-300">⏳ {status === 'queued' ? 'Queued' : `${pct}%`} — {transferLabel}</span>;
                     }
                     if (status === 'complete') {
                       return <span className="inline-flex items-center gap-1 rounded bg-green-100 px-2 py-1 text-[11px] font-bold text-green-800 border border-green-300">✓ Downloaded</span>;

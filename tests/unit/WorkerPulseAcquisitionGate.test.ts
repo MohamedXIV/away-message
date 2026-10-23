@@ -18,6 +18,10 @@ describe('#214 clean Orion software ownership', () => {
       .not.toContain("panel === 'pulse'");
     expect(source('../../src/desktop/SystemTrayChrome.tsx'))
       .toContain('chrome.pulseInstalled &&');
+    const workerBrowser = source('../../src/simulation/host/WorkerVoyagerPanel.tsx');
+    expect(workerBrowser).not.toContain("openWindow('flashfetch')");
+    expect(workerBrowser).toContain("openWindow('system')");
+    expect(workerBrowser).toContain('onOpenTransfers');
   });
 
   it('the genuine download catalog maps the real Pulse exe into the generic installer', () => {
