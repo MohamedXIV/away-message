@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { getOrionInstallerPresentation } from '../../src/desktop/host/OrionInstallerPresentation';
 import { STATIC_OS_CATALOG } from '../../src/engine/OsCatalog';
 import { resolvePcBootStateFromOwnerStatus } from '../../src/engine/kernel/ComputerOwnershipRuntime';
@@ -9,6 +11,16 @@ describe('#219 actual DOS + Orion disc setup', () => {
     expect(resolvePcBootStateFromOwnerStatus({ assembled: true, poweredOn: false }, null, () => false)).toBe('powered_off');
     expect(resolvePcBootStateFromOwnerStatus({ assembled: true, poweredOn: true }, null, () => false)).toBe('no_boot_device');
     expect(resolvePcBootStateFromOwnerStatus({ assembled: true, poweredOn: true }, 'Orion_4.8', () => false)).toBe('desktop');
+  });
+
+  it('does not expose the old instant-commit shortcut through the installed Orion system panel', () => {
+    const source = readFileSync(fileURLToPath(
+      new URL('../../src/simulation/host/WorkerSystemPanel.tsx', import.meta.url)), 'utf8');
+    expect(source).not.toContain("kind: 'commitOs'");
+    expect(source).toContain("kind: 'startOs'");
+    expect(source).toContain("kind: 'advanceOs'");
+    expect(source).toContain("kind: 'cancelOs'");
+    expect(source).toContain('getOrionInstallerPresentation');
   });
 
   it('derives four different installer identities from actual Orion release metadata', () => {
