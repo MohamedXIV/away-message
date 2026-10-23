@@ -1497,3 +1497,18 @@ The continuous browser acceptance now checks slot_2 selection after
 both cold loads, proves the second diary save uses slot_2, and verifies
 the authored Pulse message and diary survive another page reload.
 This is not a change to the Worker world owner or IndexedDB transaction.
+
+### P3.44.2 — Same-document Continue and Save As target ownership
+
+A loaded session can return to its menu without discarding `view.slotId`.
+If the player then selects another potential Save As destination and presses
+`Continue last save`, `view.slotId` may remain identical while the
+**session phase** changes back to `game`. Synchronizing the selector
+only on changes to `view.slotId` therefore misses this case.
+
+The presentation slot-select effect now runs on `phase` **or** `slotId`
+changes and writes only when `phase === 'game'`. A user editing the Save
+As selection during a live game does not trigger the effect. The browser
+journey explicitly returns to the menu in the same document, selects a
+different slot, Continues the last saved world, and requires the correct
+active slot to be restored before any further save.

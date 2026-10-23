@@ -191,4 +191,16 @@ test('authored social continuation: café Ink → real Pulse message → room �
   await expect(page.getByRole('textbox', { name: 'Notepad document' }))
     .toHaveValue('I spoke with Maya, then sent a Pulse message.');
   await assertNoMainThreadSimulation(page);
+
+  // Same-document Continue after changing the menu selector must still bind
+  // Save to the CURRENT saved world. This exercises the phase transition even
+  // though session.slotId remains slot_2 from the preceding game generation.
+  await page.getByRole('button', { name: 'room', exact: true }).click();
+  await page.getByRole('button', { name: 'Return to menu' }).click();
+  await expect(page.getByTestId('worker-phase')).toHaveText('menu');
+  await page.getByRole('combobox', { name: 'Save slot' }).selectOption('slot_1');
+  await page.getByRole('button', { name: 'Continue last save' }).click();
+  await expect(page.getByTestId('worker-phase')).toHaveText('game');
+  await expect(page.getByRole('combobox', { name: 'Save slot' })).toHaveValue('slot_2');
+  await assertNoMainThreadSimulation(page);
 });

@@ -37,8 +37,10 @@ export function WorkerGameShell() {
   // cold Load its default MUST be the slot owned by this Worker session.
   // Otherwise loading slot_2 silently makes a later Save overwrite slot_1.
   useEffect(() => {
-    setSlot(view.slotId);
-  }, [view.slotId]);
+    // Slot identity can stay unchanged through a menu → Continue cycle even
+    // when the user has manually selected a different Save As target there.
+    if (view.phase === 'game') setSlot(view.slotId);
+  }, [view.phase, view.slotId]);
 
   // UI-owned slot metadata only; no full save snapshot, canonical reader or
   // local simulation is created to display the last played world.
