@@ -140,6 +140,9 @@ test('authored social continuation: café Ink → real Pulse message → room �
   await page.getByRole('button', { name: 'Continue last save' }).click();
   await expect(page.getByTestId('worker-phase')).toHaveText('game');
   await expect(page.getByTestId('worker-cafe-dialogue-text')).toContainText('Hey! You made it!');
+  // Continue last save is an implicit Load; its selected write target must
+  // track the recovered World slot, not reset to the shell's initial slot_1.
+  await expect(page.getByRole('combobox', { name: 'Save slot' })).toHaveValue('slot_2');
   await page.getByRole('button', { name: "Ask how they've been" }).click();
   await expect(page.getByTestId('worker-cafe-dialogue-text')).toContainText('week comes out sideways');
   await page.getByRole('button', { name: 'Finish conversation' }).click();
@@ -176,6 +179,7 @@ test('authored social continuation: café Ink → real Pulse message → room �
   await expect(page.getByTestId('worker-phase')).toHaveText('menu');
   await page.getByRole('button', { name: 'Continue last save' }).click();
   await expect(page.getByTestId('worker-phase')).toHaveText('game');
+  await expect(page.getByRole('combobox', { name: 'Save slot' })).toHaveValue('slot_2');
   await expect(page.getByTestId('worker-physical-room')).toBeVisible();
   await page.getByRole('button', { name: 'pulse', exact: true }).click();
   await expect(page.getByTestId('worker-pulse-messages'))

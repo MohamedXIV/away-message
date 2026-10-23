@@ -33,6 +33,13 @@ export function WorkerGameShell() {
 
   useEffect(() => () => session.dispose(), [session]);
 
+  // The selector is user-editable for Load/Save As, but after Continue or
+  // cold Load its default MUST be the slot owned by this Worker session.
+  // Otherwise loading slot_2 silently makes a later Save overwrite slot_1.
+  useEffect(() => {
+    setSlot(view.slotId);
+  }, [view.slotId]);
+
   // UI-owned slot metadata only; no full save snapshot, canonical reader or
   // local simulation is created to display the last played world.
   useEffect(() => {

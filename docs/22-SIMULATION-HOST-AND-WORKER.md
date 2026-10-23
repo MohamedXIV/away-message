@@ -1481,3 +1481,19 @@ the player's actual UI, no injected commands/shortcuts and no parallel
 main-thread simulation. CI is an automated release *candidate*; it
 cannot substitute for human playtest findings about pacing, usability
 or visual design.
+
+### P3.44 acceptance-discovered save-slot selection regression
+
+The end-to-end café→Pulse→home→Notepad journey exposed a **real UI
+wiring bug**: after clicking **Continue last save** and loading slot_2,
+`WorkerGameSession` correctly owned slot_2 but the independent React
+selector silently remained at its default slot_1. A following Save button
+would write slot_1 (an unintended Save As). The fix synchronizes the
+editable selector with `view.slotId` on **actual Worker session-slot
+changes**. Manual selection of another slot is still allowed until the
+next confirmed load/save; a later explicit Save As remains intentional.
+
+The continuous browser acceptance now checks slot_2 selection after
+both cold loads, proves the second diary save uses slot_2, and verifies
+the authored Pulse message and diary survive another page reload.
+This is not a change to the Worker world owner or IndexedDB transaction.
