@@ -102,7 +102,9 @@ export class OsEngine {
   public getState(): OsEngineState {
     return {
       currentOsId: this.currentOsId,
-      installation: this.getInstallProgress(),
+      // Only emit this field while a physical installation is in progress.
+      // Idle worlds retain their deterministic, pre-install snapshot layout.
+      ...(this.installation ? { installation: this.getInstallProgress() } : {}),
       installedPatchIds: Array.from(this.installedPatchIds),
       lastBootAtMinute: this.lastBootAtMinute,
       lastInstallAtMinute: this.lastInstallAtMinute,
