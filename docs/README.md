@@ -41,6 +41,10 @@ Current cross-cutting architecture supplements:
 - `docs/superpowers/plans/2026-10-11-simulation-kernel-refactor-roadmap.md`
 - `docs/superpowers/plans/2026-10-11-ink-narrative-runtime-roadmap.md`
 
+## Current human playtest handoff (2026-10-23)
+
+The first playable Dedicated Worker acceptance passed a practical manual flow but exposed **four important game-feel/product gaps**. The dated factual report is [`docs/playtests/2026-10-23-first-worker-human-playtest.md`](playtests/2026-10-23-first-worker-human-playtest.md); issue [#211](https://github.com/MohamedXIV/away-message/issues/211) tracks [#212 Orion desktop](https://github.com/MohamedXIV/away-message/issues/212), [#213 dynamic cast](https://github.com/MohamedXIV/away-message/issues/213), [#214 Pulse web install](https://github.com/MohamedXIV/away-message/issues/214), and [#215 meaningful PC/ISP task timing](https://github.com/MohamedXIV/away-message/issues/215). **None are claimed fixed by the already-green Worker CI.**
+
 ## Goal
 
 Build an open-ended life sandbox where the player can keep living, working, upgrading, browsing, moving, meeting people and changing relationships without a scripted final day.
