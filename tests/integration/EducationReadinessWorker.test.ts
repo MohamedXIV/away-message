@@ -227,7 +227,7 @@ describe('#177 non-product Education readiness on canonical owners', () => {
       expect(actual.world.semanticKnowledge).toEqual(snapshot.world.semanticKnowledge);
       expect(actual.social.coreMemories).toEqual(snapshot.social.coreMemories);
       expect(actual.world.appointments).toEqual(snapshot.world.appointments);
-      expect(actual.social.agendas).toEqual(snapshot.social.agendas);
+      expect(actual.social.agenda).toEqual(snapshot.social.agenda);
       const lab = await ask({ op: 'query', query: { kind: 'labPage', actorPage: 0, meetingPage: 0 } }) as {
         appointments: { total: number; page: unknown[] };
         roster: { total: number };
