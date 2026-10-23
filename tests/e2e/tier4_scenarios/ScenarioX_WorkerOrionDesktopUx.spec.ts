@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { installOrion48FromDos } from './workerDosTestHelper';
 
 function assertNoMainThreadSimulation(page: Page) {
   return expect.poll(() => page.evaluate(() =>
@@ -13,24 +14,12 @@ async function startNewGame(page: Page) {
   await expect(page.getByTestId('worker-phase')).toHaveText('game');
   await page.getByRole('button', { name: 'Pause clock' }).click();
   await page.getByRole('button', { name: 'desktop', exact: true }).click();
-  const desktop = page.getByTestId('worker-desktop');
-  await expect(desktop).toBeVisible();
-  return desktop;
+  await expect(page.getByTestId('worker-physical-hardware-bench')).toBeVisible();
 }
 
 async function installStarterOrion48(page: Page) {
-  const desktop = await startNewGame(page);
-  await desktop.getByRole('button', { name: 'Open Computer & Setup' }).click();
-  const setup = page.getByTestId('worker-system-panel');
-  await setup.getByRole('button', { name: 'Purchase starter hardware bundle ($35)' }).click();
-  await setup.getByRole('button', { name: 'Assemble owned package' }).click();
-  await setup.getByRole('button', { name: 'Insert disc' }).click();
-  await setup.getByRole('button', { name: 'Verify OS installer' }).click();
-  await page.getByTestId('worker-os-plan')
-    .getByRole('button', { name: 'Commit verified OS installation' }).click();
-  await setup.getByRole('button', { name: 'Power on' }).click();
-  await expect(page.getByTestId('worker-boot-state')).toContainText('desktop');
-  await desktop.getByRole('button', { name: 'Close Computer & Setup' }).click();
+  await startNewGame(page);
+  const desktop = await installOrion48FromDos(page);
   await expect(desktop).toHaveAttribute('data-os-theme', 'orion48');
   await expect(desktop).toHaveAttribute('data-os-wallpaper', 'harbor_classic');
   return desktop;

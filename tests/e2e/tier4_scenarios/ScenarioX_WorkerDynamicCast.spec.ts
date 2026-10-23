@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { installOrion48FromDos } from './workerDosTestHelper';
 
 function noShadowEngine(page: Page) {
   return expect.poll(() => page.evaluate(() =>
@@ -8,6 +9,11 @@ function noShadowEngine(page: Page) {
 
 async function inspectActualCast(page: Page): Promise<string[]> {
   await page.getByRole('button', { name: 'desktop', exact: true }).click();
+  // A genuinely new player owns no installed Orion OS. Build the real PC,
+  // boot DOS and install 4.8 from an owned, inserted disc before using Lab.
+  if (await page.getByTestId('worker-physical-hardware-bench').isVisible().catch(() => false)) {
+    await installOrion48FromDos(page);
+  }
   const desktop = page.getByTestId('worker-desktop');
   await expect(desktop).toBeVisible();
   await desktop.getByRole('button', { name: 'Open AI Lab Inspector' }).click();
