@@ -79,9 +79,9 @@ const INITIAL_THREADS: ThreadRecord[] = [
       {
         id: 2,
         author: 'Anonymous',
-        tripcode: '!maya',
+        tripcode: '!countershift',
         date: 'Aug 21, 2006 15:30 PM',
-        content: 'Haha that is just Mr. Henderson from the motel front desk taking his night shift break!',
+        content: 'Could be someone from the motel office on a late coffee break, but I wouldn't swear to it.',
       },
     ],
   },
