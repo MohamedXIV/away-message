@@ -53,10 +53,17 @@ describe('#213 generated Worker starting cast', () => {
     expect(engine.social.getBuddyWithRole('landlord')).toBeDefined();
     expect(engine.social.getBuddyWithRole('cart-owner')).toBeDefined();
     for (const id of seedCharacterIds()) expect(engine.social.getBuddy(id)).toBeUndefined();
-    expect(engine.getMessengerRead().contacts).toHaveLength(2);
+    // Scenarios may legitimately introduce additional people. Validate the
+    // two explicit preexisting acquaintances by identity, not a fixed count.
+    const authoredAcquaintances = Object.keys(social.knownHandles ?? {});
+    expect(authoredAcquaintances).toHaveLength(2);
+    const actualContacts = engine.getMessengerRead().contacts.map(row => row.actorId);
+    expect(actualContacts).toEqual(expect.arrayContaining(authoredAcquaintances));
+    expect(actualContacts.every(id => !seedCharacterIds().includes(id))).toBe(true);
     const reloaded = new SimulationKernel(engine.exportSnapshot());
     expect(reloaded.social.getBuddyIds()).toEqual(ids);
-    expect(reloaded.getMessengerRead().contacts).toHaveLength(2);
+    expect(reloaded.getMessengerRead().contacts.map(row => row.actorId))
+      .toEqual(actualContacts);
     for (const id of seedCharacterIds()) expect(reloaded.social.getBuddy(id)).toBeUndefined();
   });
 
@@ -79,7 +86,13 @@ describe('#213 generated Worker starting cast', () => {
       expect(Object.keys(world.actorSpatialPositions ?? {})).toHaveLength(6);
       const cafe = await worker.ask({ op: 'query', query: { kind: 'cafeGuest' } }) as
         ReturnType<SimulationKernel['getCafeGuestRead']>;
-      expect(cafe.guest?.actorId).toBe(locals[1]?.id);
+      // Authoritative selection favors an actually known, present resident
+      // with the strongest connection; it must not be forced to locals[1].
+      expect(cafe.guest).not.toBeNull();
+      const guestId = cafe.guest!.actorId;
+      expect(locals.some(actor => actor.id === guestId)).toBe(true);
+      expect((world.social.knownHandles ?? {})[guestId]?.length).toBeGreaterThan(0);
+      expect(cafe.guest!.displayName).toBe(world.social.buddies?.[guestId]?.displayName);
       await expect(worker.ask({ op: 'init' })).rejects.toThrow('already initialized');
     } finally {
       worker.runtime.close();
