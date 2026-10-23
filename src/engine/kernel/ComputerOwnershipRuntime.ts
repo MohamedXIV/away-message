@@ -3,7 +3,7 @@ import { HARDWARE_STORE_INVENTORY, PHYSICAL_ITEM_CATALOG } from '../hardware/cat
 import { getReleaseById } from '../OsCatalog';
 import { createEmptyInventoryState, legacyModularToCanonical } from '../hardware/state';
 import type { CoreDomainOwners } from './CoreDomainOwners';
-import type { PlayerInventoryState } from '../types';
+import type { PlayerInventoryState, OsInstallationProgress } from '../types';
 import type {
   ActionResult,
   OsVersion,
@@ -457,6 +457,63 @@ export class ComputerOwnershipRuntime {
     };
   }
 
+  private matchesOsPlan(a: OsInstallPlan, b: OsInstallPlan): boolean {
+    return a.targetOs === b.targetOs &&
+      a.mediaInstanceId === b.mediaInstanceId && a.mode === b.mode &&
+      a.durationMinutes === b.durationMinutes && a.installSizeBytes === b.installSizeBytes;
+  }
+
+  /** The Worker OS owner records real progress, without granting Orion yet. */
+  public startOsInstall(plan: OsInstallPlan): ActionResult {
+    if (this.owners.os.getInstallProgress())
+      return { success: false, error: 'An OS installation already exists. Resume or cancel it.' };
+    const fresh = this.prepareOsInstallFromInsertedMedia();
+    if (!fresh.success || !fresh.data || !this.matchesOsPlan(fresh.data, plan))
+      return { success: false, error: fresh.error ?? 'Stale OS setup; run SETUP again.' };
+    if (!this.owners.hardware.getComputerState().poweredOn)
+      return { success: false, error: 'Power on the computer to install Orion.' };
+    this.owners.os.setInstallProgress({ ...fresh.data, elapsedMinutes: 0 });
+    this.invalidate();
+    return { success: true };
+  }
+
+  public cancelOsInstall(): ActionResult {
+    if (!this.owners.os.getInstallProgress())
+      return { success: false, error: 'No active installation to cancel.' };
+    this.owners.os.setInstallProgress(null);
+    this.invalidate();
+    return { success: true };
+  }
+
+  /** One player-operated step consumes up to a quarter of actual world-time.
+   * Partial progress survives cold saves. Ejected/wrong media cannot resume.
+   */
+  public advanceOsInstall(): ActionResult<OsInstallationProgress | null> {
+    const progress = this.owners.os.getInstallProgress();
+    if (!progress) return { success: false, error: 'Start a verified OS setup first.' };
+    if (!this.owners.hardware.getComputerState().poweredOn)
+      return { success: false, error: 'Power on the computer to resume installation.' };
+    const fresh = this.prepareOsInstallFromInsertedMedia();
+    if (!fresh.success || !fresh.data || !this.matchesOsPlan(fresh.data, progress))
+      return { success: false, error: fresh.error ?? 'The install disc or hardware changed. Restore it or cancel.' };
+    if (!Number.isSafeInteger(progress.elapsedMinutes) ||
+      progress.elapsedMinutes < 0 || progress.elapsedMinutes >= progress.durationMinutes)
+      return { success: false, error: 'Invalid saved installation progress.' };
+    const chunk = Math.min(Math.max(1, Math.ceil(progress.durationMinutes / 4)),
+      progress.durationMinutes - progress.elapsedMinutes);
+    const next: OsInstallationProgress = { ...progress, elapsedMinutes: progress.elapsedMinutes + chunk };
+    this.owners.os.setInstallProgress(next);
+    this.invalidate();
+    this.advanceMinutes(chunk, `Copy and configure ${progress.targetOs}`);
+    if (next.elapsedMinutes === next.durationMinutes) {
+      const done = this.commitOsInstall(next);
+      if (!done.success) return { success: false, error: done.error ?? 'Final OS setup validation failed.' };
+      return { success: true, data: null };
+    }
+    this.invalidate();
+    return { success: true, data: next };
+  }
+
   public commitOsInstall(plan: OsInstallPlan): ActionResult {
     const fresh = this.prepareOsInstallFromInsertedMedia();
     if (!fresh.success || !fresh.data) {
@@ -464,14 +521,15 @@ export class ComputerOwnershipRuntime {
     }
 
     const currentPlan = fresh.data;
-    const unchanged =
-      currentPlan.targetOs === plan.targetOs &&
-      currentPlan.mediaInstanceId === plan.mediaInstanceId &&
-      currentPlan.mode === plan.mode &&
-      currentPlan.durationMinutes === plan.durationMinutes &&
-      currentPlan.installSizeBytes === plan.installSizeBytes;
+    const unchanged = this.matchesOsPlan(currentPlan, plan);
     if (!unchanged) {
       return { success: false, error: 'The prepared OS installation is stale; run setup preflight again.' };
+    }
+
+    const ongoing = this.owners.os.getInstallProgress();
+    if (ongoing && (!this.matchesOsPlan(ongoing, plan) ||
+      ongoing.elapsedMinutes !== ongoing.durationMinutes)) {
+      return { success: false, error: 'Complete all in-world installation stages first.' };
     }
 
     const hardwareBefore = this.owners.hardware.getState();
@@ -493,7 +551,7 @@ export class ComputerOwnershipRuntime {
         plan.targetOs,
         hardwareForInstall,
         this.owners.clock.getTime().day,
-        this.owners.clock.getTotalMinutes() + plan.durationMinutes,
+        this.owners.clock.getTotalMinutes() + (ongoing ? 0 : plan.durationMinutes),
       );
       if (!result.success) {
         this.owners.hardware.loadState({ computer: computerBefore, display: displayBefore });
@@ -502,8 +560,9 @@ export class ComputerOwnershipRuntime {
         return { success: false, error: result.error ?? 'Operating system installation failed.' };
       }
 
+      this.owners.os.setInstallProgress(null);
       this.invalidate();
-      this.advanceMinutes(plan.durationMinutes, `Install ${plan.targetOs}`);
+      if (!ongoing) this.advanceMinutes(plan.durationMinutes, `Install ${plan.targetOs}`);
       this.invalidate();
       return { success: true };
     } catch (error) {

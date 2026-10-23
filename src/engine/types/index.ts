@@ -147,7 +147,18 @@ export interface RamPressure {
   status: 'nominal' | 'elevated' | 'critical';
 }
 
+export interface OsInstallationProgress {
+  targetOs: OsVersion;
+  mediaInstanceId: string;
+  mode: 'fresh' | 'upgrade' | 'patch';
+  durationMinutes: number;
+  installSizeBytes: number;
+  preparedAtTotalMinutes: number;
+  elapsedMinutes: number;
+}
+
 export interface OsEngineState {
+  installation?: OsInstallationProgress | null;
   currentOsId: OsVersion | null;
   installedPatchIds: OsVersion[];
   lastBootAtMinute?: number;
