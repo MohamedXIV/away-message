@@ -81,7 +81,7 @@ export function WorkerDesktop({
     [installedShortcuts],
   );
 
-  const allowedApps = useMemo(() => ['terminal', 'ailab', 'browser', 'fileexplorer', 'notepad', 'controlpanel', 'pulse', 'trash', 'addremove', 'savegame',
+  const allowedApps = useMemo(() => ['terminal', 'ailab', 'browser', 'fileexplorer', 'notepad', 'controlpanel', 'trash', 'addremove', 'savegame',
     ...installedPrograms.filter(program => program.available).map(program => program.id)], [installedPrograms]);
 
   const resolveAppId = (id: string): string | null => {
@@ -94,6 +94,14 @@ export function WorkerDesktop({
    * window is open. On narrow screens, fit the window into the remaining
    * space before falling back to an overlay position. */
   const open = (appId: string, customState?: Record<string, unknown>) => {
+    // Software eligibility belongs to the canonical installed-app read.
+    // Historical taskbar windows/Run commands must not bypass a missing or
+    // uninstalled third-party app. Core OS tools stay bundled.
+    if (['pulse', 'flashfetch', 'weatherbuddy', 'safesweep', 'retroamp', 'photobox', 'zipmate'].includes(appId)
+      && !installedPrograms.some(program => program.available && program.id === appId)) {
+      setError('Install ' + appId + ' from an owned downloaded installer before launching it.');
+      return;
+    }
     const bounds = desktopRef.current?.getBoundingClientRect();
     const desktopWidth = bounds?.width ?? 900;
     const desktopHeight = bounds?.height ?? 570;
@@ -201,6 +209,7 @@ export function WorkerDesktop({
         )}
         renderApp={win => (
           <WorkerDesktopApp window={win} session={session} revision={revision}
+            availableInstalledApps={installedPrograms.filter(program => program.available).map(program => program.id)}
             osVersion={chrome?.osVersion ?? null}
             openDocument={openDocument} openInstaller={openInstaller}
             openArchive={openArchive} openArtwork={openArtwork} openAudio={openAudio} />
@@ -235,17 +244,26 @@ export function WorkerDesktop({
 
 
 /** One stable React component identity per app/window, across Worker revisions. */
-function WorkerDesktopApp({ window: win, session, revision, osVersion, openDocument, openInstaller, openArchive, openArtwork, openAudio }: {
+function WorkerDesktopApp({ window: win, session, revision, osVersion, availableInstalledApps, openDocument, openInstaller, openArchive, openArtwork, openAudio }: {
   window: WindowState;
   session: WorkerGameSession;
   revision: number;
   osVersion: SimulationChromeRead['osVersion'];
+  availableInstalledApps: readonly string[];
   openDocument: (path: string) => void;
   openInstaller: (path: string) => void;
   openArchive: (path: string) => void;
   openArtwork: (path: string) => void;
   openAudio: (path: string) => void;
 }) {
+  // A previously open UI window is not an installation license: after
+  // uninstall (or loading a different world) it must not show the old app.
+  if (['pulse', 'flashfetch', 'weatherbuddy', 'safesweep', 'retroamp', 'photobox', 'zipmate'].includes(win.appId)
+    && !availableInstalledApps.includes(win.appId)) {
+    return <p role="status" className="p-3 text-xs text-amber-900">
+      Software not installed. Download and run its setup file from My Computer.
+    </p>;
+  }
   if (win.appId === 'ailab') return <WorkerLabInspectorPanel session={session} revision={revision} />;
   if (win.appId === 'trash') return <WorkerRecycleBinPanel session={session} revision={revision} />;
   if (win.appId === 'addremove') return <WorkerAddRemovePanel session={session} revision={revision} />;

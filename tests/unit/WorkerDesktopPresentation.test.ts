@@ -28,8 +28,10 @@ describe('Worker Orion desktop presentation', () => {
     const icons = getWorkerSystemDesktopIcons();
     expect(icons.map((icon) => icon.appId)).toEqual(expect.arrayContaining([
       'fileexplorer', 'browser', 'notepad', 'terminal', 'publicweb', 'system',
-      'mailbox', 'trash', 'addremove', 'savegame', 'ailab', 'pulse', 'flashfetch',
+      'mailbox', 'trash', 'addremove', 'savegame', 'ailab',
     ]));
+    expect(icons.map(icon => icon.appId)).not.toContain('pulse');
+    expect(icons.map(icon => icon.appId)).not.toContain('flashfetch');
     expect(new Set(icons.map((icon) => icon.label)).size).toBe(icons.length);
     expect(icons.every((icon) => icon.source === 'system')).toBe(true);
   });

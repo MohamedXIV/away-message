@@ -157,7 +157,7 @@ export const StartMenuChrome: React.FC<StartMenuChromeProps> = ({
                         <span className="os-start-item-label">Voyager Browser</span>
                       </button>
                     )}
-                    {isPulseInstalled && canLaunch('pulse') && (
+                    {isPulseInstalled && !installedPrograms?.some(program => program.id === 'pulse') && canLaunch('pulse') && (
                       <button type="button" className="os-start-item" onClick={() => handleLaunch('pulse')}>
                         <OsIcon kind="pulse" size={18} />
                         <span className="os-start-item-label">Pulse Messenger</span>
