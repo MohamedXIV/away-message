@@ -11,6 +11,7 @@ import { StartMenuChrome } from '../../desktop/StartMenuChrome';
 import { SystemTrayChrome } from '../../desktop/SystemTrayChrome';
 import { useWindowStore, type WindowState } from '../../store/useWindowStore';
 import { WorkerPulsePanel } from './WorkerPulsePanel';
+import { WorkerPreOrionShell } from './WorkerPreOrionShell';
 import { WorkerFileExplorer, WorkerNotepad } from './WorkerDesktopVfsApps';
 import { WorkerSystemPanel } from './WorkerSystemPanel';
 import { WorkerPublicSites } from './WorkerPublicSites';
@@ -157,6 +158,16 @@ export function WorkerDesktop({
     '--os-icon-cell-height': `${profile?.desktop.iconCellHeightPx ?? 88}px`,
     '--os-icon-glyph-size': `${profile?.desktop.iconGlyphSizePx ?? 38}px`,
   } as CSSProperties;
+
+  // The monitor cannot render an Orion desktop before the owner has booted
+  // a genuine installed release. Pre-Orion states instead show a hardware
+  // workbench, powered-off machine, or the minimal DOS command environment.
+  if (!desktop || !chrome) {
+    return <p role="status" data-testid="worker-desktop-loading">Reading physical computer state…</p>;
+  }
+  if (desktop.pcBootState !== 'desktop') {
+    return <WorkerPreOrionShell desktop={desktop} session={session} revision={revision} />;
+  }
 
   return (
     <section
