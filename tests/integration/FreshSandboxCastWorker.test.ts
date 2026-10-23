@@ -39,7 +39,8 @@ describe('#213 generated Worker starting cast', () => {
     for (const actor of members) {
       expect(seedCharacterIds()).not.toContain(actor.id);
       expect(actor.isProcedural).toBe(true);
-      expect(first.knownHandles?.[actor.id]).toBeUndefined();
+      if (actor.status === 'acquaintance') expect(first.knownHandles?.[actor.id]).toEqual([actor.handle]);
+      else expect(first.knownHandles?.[actor.id]).toBeUndefined();
     }
     expect(() => buildFreshSandboxSocialState('bad!')).toThrow('Invalid new-world');
   });
@@ -52,10 +53,10 @@ describe('#213 generated Worker starting cast', () => {
     expect(engine.social.getBuddyWithRole('landlord')).toBeDefined();
     expect(engine.social.getBuddyWithRole('cart-owner')).toBeDefined();
     for (const id of seedCharacterIds()) expect(engine.social.getBuddy(id)).toBeUndefined();
-    expect(engine.getMessengerRead().contacts).toHaveLength(0);
+    expect(engine.getMessengerRead().contacts).toHaveLength(2);
     const reloaded = new SimulationKernel(engine.exportSnapshot());
     expect(reloaded.social.getBuddyIds()).toEqual(ids);
-    expect(reloaded.getMessengerRead().contacts).toHaveLength(0);
+    expect(reloaded.getMessengerRead().contacts).toHaveLength(2);
     for (const id of seedCharacterIds()) expect(reloaded.social.getBuddy(id)).toBeUndefined();
   });
 
@@ -73,6 +74,12 @@ describe('#213 generated Worker starting cast', () => {
       }).npcProfiles;
       expect(Object.keys(profiles)).not.toContain('maya_x');
       expect(Object.keys(profiles).length).toBeGreaterThan(0);
+      const locals = Object.values(world.social.buddies ?? {}).filter(actor => actor.reach === 'local');
+      expect(locals).toHaveLength(6);
+      expect(Object.keys(world.actorSpatialPositions ?? {})).toHaveLength(6);
+      const cafe = await worker.ask({ op: 'query', query: { kind: 'cafeGuest' } }) as
+        ReturnType<SimulationKernel['getCafeGuestRead']>;
+      expect(cafe.guest?.actorId).toBe(locals[1]?.id);
       await expect(worker.ask({ op: 'init' })).rejects.toThrow('already initialized');
     } finally {
       worker.runtime.close();

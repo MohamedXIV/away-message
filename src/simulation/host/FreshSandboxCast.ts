@@ -25,6 +25,7 @@ export function buildFreshSandboxSocialState(seed: string): SocialEngineState {
   const relationships: SocialEngineState['relationships'] = {};
   const presence: SocialEngineState['presence'] = {};
   const conversations: SocialEngineState['conversations'] = {};
+  const knownHandles: NonNullable<SocialEngineState['knownHandles']> = {};
   for (const [index, slot] of START_ROLES.entries()) {
     const picked = pickTemplateName(slot.archetype, `${seed}:resident:${index}`, taken);
     taken.add(picked.id);
@@ -32,16 +33,20 @@ export function buildFreshSandboxSocialState(seed: string): SocialEngineState {
     const actor = buildCharacter({
       id: picked.id, displayName: picked.displayName, handle: picked.handle,
       archetype: slot.archetype, metVia: slot.reach === 'remote' ? 'nightboard' : 'intro',
-      reach: slot.reach, roles: [...slot.roles], status: 'stranger', createdDay: 1,
+      reach: slot.reach, roles: [...slot.roles],
+      status: index === 1 || index === 7 ? 'acquaintance' : 'stranger', createdDay: 1,
     }).definition;
     buddies[actor.id] = actor;
     relationships[actor.id] = { ...actor.initialRelationships };
     presence[actor.id] = { status: 'offline', awayMessage: '' };
     conversations[actor.id] = [];
+    // A non-sacred existing acquaintance provides a legitimate discovery
+    // bridge into café/social play. The identities vary with each world.
+    if (index === 1 || index === 7) knownHandles[actor.id] = [actor.handle];
   }
   return {
     relationships, presence, conversations, buddies,
     removedSeedActorIds: seedCharacterIds(),
-    knownHandles: {}, // A roster identity is not automatically known by the player.
+    knownHandles, // Only prior acquaintances are known; the rest need discovery.
   };
 }

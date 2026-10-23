@@ -176,6 +176,17 @@ export function createSimulationWorkerRuntime(send: (message: SimulationWorkerRe
                 NonNullable<ConstructorParameters<typeof SimulationKernel>[0]>['myplace'],
               scenarioSeed: raw.initialState?.scenarioSeed ?? raw.freshRosterSeed,
             });
+            // Give each local person a real, authored starting place. These
+            // are canonical NPC XYZ placements, not a rendered fake crowd,
+            // and are exported to the same world snapshot for cold restores.
+            const residents = Object.values(social.buddies ?? {})
+              .filter(actor => actor.reach === 'local');
+            for (const [index, actor] of residents.entries()) {
+              const placeId = index % 2 === 0 ? 'place_b1' : 'place_a1';
+              if (!kernel.relocateActorToGeneratedPlaceEntry(actor.id, placeId)) {
+                throw new Error('New-world actor entry place is unavailable');
+              }
+            }
           } else {
             kernel = new SimulationKernel(raw.initialState);
           }
