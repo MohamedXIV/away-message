@@ -47,9 +47,20 @@ test('#219 real unseeded DOS boot requires an owned CD and delivers clean Orion 
   await expect(installer).toContainText('Orion 4.8 Text-Mode Setup');
   for (let step=0;step<3;step++) await installer.getByRole('button', { name: 'Next' }).click();
   await installer.getByRole('button', { name: 'Begin installation' }).click();
-  await expect(page.getByTestId('worker-os-install-progress')).toHaveAttribute('aria-label','OS installation progress');
-  for (let step = 0; step < 4; step++) {
-    await installer.getByRole('button', { name: 'Advance installation' }).click();
+  const progress = page.getByTestId('worker-os-install-progress');
+  await expect(progress).toHaveAttribute('aria-label', 'OS installation progress');
+  await installer.getByRole('button', { name: 'Advance installation' }).click();
+  const minutesSpent = await progress.getByRole('progressbar').getAttribute('aria-valuenow');
+  expect(Number(minutesSpent)).toBeGreaterThan(0);
+  await page.getByRole('button', { name: 'Save game' }).click();
+  await expect(page.getByText('Saved to slot_1')).toBeVisible();
+  await page.reload();
+  await page.getByRole('button', { name: 'Continue last save' }).click();
+  await page.getByRole('button', { name: 'desktop', exact: true }).click();
+  const resumed = page.getByTestId('worker-orion-installer');
+  await expect(resumed.getByRole('progressbar')).toHaveAttribute('aria-valuenow', minutesSpent!);
+  for (let step = 0; step < 3; step++) {
+    await resumed.getByRole('button', { name: 'Advance installation' }).click();
   }
 
   const desktop = page.getByTestId('worker-desktop');
