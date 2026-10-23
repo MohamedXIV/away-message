@@ -47,7 +47,7 @@ describe('#219 persistent owner-backed Orion installation', () => {
     }
     const completed = reloaded.exportSnapshot();
     expect(completed.os.currentOsId).toBe('Orion_4.8');
-    expect(completed.os.installation).toBeNull();
+    expect(completed.os.installation).toBeUndefined();
     expect(reloaded.getDesktopRead().pcBootState).toBe('desktop');
     expect(completed.time.totalMinutes - beginning.time.totalMinutes).toBe(plan.durationMinutes);
     expect((beginning.computer.storage[0]?.freeBytes ?? 0) -
