@@ -8,13 +8,21 @@ function noShadowEngine(page: Page) {
 }
 
 async function inspectActualCast(page: Page): Promise<string[]> {
-  await page.getByRole('button', { name: 'desktop', exact: true }).click();
-  // A genuinely new player owns no installed Orion OS. Build the real PC,
-  // boot DOS and install 4.8 from an owned, inserted disc before using Lab.
-  if (await page.getByTestId('worker-physical-hardware-bench').isVisible().catch(() => false)) {
-    await installOrion48FromDos(page);
+  // An in-person café encounter can be the actual cold-saved location.
+  // Return to the owned home PC before inspecting its installed OS; do not
+  // invent a remotely accessible desktop while the player is out in town.
+  await page.getByRole('button', { name: 'room', exact: true }).click();
+  if (await page.getByTestId('worker-city-place').isVisible()) {
+    await page.getByRole('button', { name: 'Return home' }).click();
+    await expect(page.getByTestId('worker-physical-room')).toBeVisible();
   }
+  await page.getByRole('button', { name: 'desktop', exact: true }).click();
   const desktop = page.getByTestId('worker-desktop');
+  const bench = page.getByTestId('worker-physical-hardware-bench');
+  await expect(desktop.or(bench)).toBeVisible();
+  // A genuinely new player owns no Orion OS; use an actual purchased PC,
+  // physical disc, DOS setup and saved-time installation before opening Lab.
+  if (await bench.isVisible()) await installOrion48FromDos(page);
   await expect(desktop).toBeVisible();
   await desktop.getByRole('button', { name: 'Open AI Lab Inspector' }).click();
   const lab = page.getByTestId('worker-lab-inspector');
