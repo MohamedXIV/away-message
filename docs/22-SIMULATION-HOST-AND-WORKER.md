@@ -1447,3 +1447,37 @@ and headless fixture, never a routine postMessage UI projection.
 curriculum, implement exam outcomes, decide school-specific attendance,
 or replace a human end-to-end Worker gameplay playtest. It proves the
 existing engine's semantic boundaries before beginning Senior Year content.
+
+## P3.44 — Continuous player-operated Worker gameplay release acceptance
+
+The new `ScenarioW_WorkerFullPlayAcceptance.spec.ts` runs on plain
+`/`, never the special `worker.html` preview, and drives all game
+actions via visible mouse/keyboard. It has two distinct, transparent
+acceptance lanes so a deterministic social precondition is not mistaken
+for a guaranteed random encounter in a fresh world.
+
+1. **Fresh New Game:** real Phaser residence, physical shower and
+   canonical minute change; map travel and paid laundromat with real
+   cash/time change; return home; purchase/assemble an owned PC, insert
+   authored media, verify/install Orion and power on; write/save a
+   Notepad VFS file; save slot, fully reload document, continue,
+   inspect persistent PC/OS and reopen the same VFS document.
+2. **A known-person authored café continuation:** an explicit *DEV-only*
+   Classic fixture seeds a current-format slot with a previously known,
+   genuinely co-located café guest. It is destroyed before visiting
+   ordinary `/`. A real Worker cold-loads that slot; the player talks
+   through compiled café Ink, saves at a choice point, cold-reloads and
+   selects an authored choice, then sends a **real** Pulse Social message;
+   returns home through normal travel; saves a Notepad diary; saves and
+   cold-reloads the same world again, verifying the message, note,
+   residence and absence of any `__simStore`/`__simEngine` globals.
+
+This gate complements (not replaces) independently verified cold slots,
+500-NPC route fixtures, population benchmarks and Worker crash/error
+handling. A seeded **social starting state** is an explicit deterministic
+test prerequisite, not evidence that every new player discovers a café
+guest automatically. All subsequent gameplay decisions happen through
+the player's actual UI, no injected commands/shortcuts and no parallel
+main-thread simulation. CI is an automated release *candidate*; it
+cannot substitute for human playtest findings about pacing, usability
+or visual design.
