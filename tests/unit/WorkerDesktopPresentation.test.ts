@@ -45,10 +45,11 @@ describe('Worker Orion desktop presentation', () => {
       shortcut({ id: 'weather', label: 'WeatherBuddy', appId: 'app.weatherbuddy', launchId: 'weatherbuddy' }),
     ]);
     const installed = icons.filter((icon) => icon.source === 'installed');
-    expect(installed.map((icon) => icon.label)).toEqual(['WeatherBuddy', 'PhotoBox 3.0']);
-    expect(installed[0]).toMatchObject({ disabled: false, kind: 'weather' });
-    expect(installed[1]).toMatchObject({ disabled: true, kind: 'photo' });
-    expect(installed[1]?.title).toContain('Worker UI not migrated yet');
+    expect(installed.map((icon) => icon.label)).toEqual(['Pulse Messenger', 'WeatherBuddy', 'PhotoBox 3.0']);
+    expect(installed[0]).toMatchObject({ disabled: false, kind: 'pulse' });
+    expect(installed[1]).toMatchObject({ disabled: false, kind: 'weather' });
+    expect(installed[2]).toMatchObject({ disabled: true, kind: 'photo' });
+    expect(installed[2]?.title).toContain('Worker UI not migrated yet');
   });
 
   it('presents the installed OS as an in-world desktop, not a Worker diagnostic label', () => {
