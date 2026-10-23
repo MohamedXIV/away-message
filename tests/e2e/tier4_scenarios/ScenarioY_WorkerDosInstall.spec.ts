@@ -50,8 +50,12 @@ test('#219 real unseeded DOS boot requires an owned CD and delivers clean Orion 
   const progress = page.getByTestId('worker-os-install-progress');
   await expect(progress).toHaveAttribute('aria-label', 'OS installation progress');
   await installer.getByRole('button', { name: 'Advance installation' }).click();
+  // Worker publishes the revision asynchronously after the command resolves.
+  // Observe canonical progress, not the stale React frame at click return.
+  await expect.poll(async () => Number(
+    await progress.getByRole('progressbar').getAttribute('aria-valuenow'),
+  )).toBeGreaterThan(0);
   const minutesSpent = await progress.getByRole('progressbar').getAttribute('aria-valuenow');
-  expect(Number(minutesSpent)).toBeGreaterThan(0);
   await page.getByRole('button', { name: 'Save game' }).click();
   await expect(page.getByText('Saved to slot_1')).toBeVisible();
   await page.reload();
