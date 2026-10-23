@@ -228,7 +228,7 @@ export const DesktopShell: React.FC = () => {
   const handleContextMenu = (e: React.MouseEvent) => { e.preventDefault(); if ((e.target as HTMLElement).closest('.window-frame')) return; setContextMenu({ x: e.clientX, y: e.clientY, visible: true }); };
 
   return (
-    <div data-theme={themeAttr} className={`relative w-screen h-screen select-none overflow-hidden font-pixel text-xs ${getWallpaperClass(wallpaper)}`} style={presentation ? { fontFamily: presentation.uiFontStack, fontSize: presentation.baseFontSizePx } : undefined} onMouseDown={handleMouseDown} onMouseMove={handleMouseMove} onMouseUp={handleMouseUp} onContextMenu={handleContextMenu}>
+    <div data-theme={themeAttr} data-os-theme={themeAttr} className={`relative w-screen h-screen select-none overflow-hidden font-pixel text-xs ${getWallpaperClass(wallpaper)}`} style={presentation ? { fontFamily: presentation.uiFontStack, fontSize: presentation.baseFontSizePx } : undefined} onMouseDown={handleMouseDown} onMouseMove={handleMouseMove} onMouseUp={handleMouseUp} onContextMenu={handleContextMenu}>
       <div className="absolute inset-0 bottom-8 z-0 pointer-events-auto">
         {allIcons.map((icon) => {
           const pos = iconPositions[icon.id] || { x: 12 + icon.gridX * 80, y: 12 + icon.gridY * 88 };

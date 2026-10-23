@@ -1,18 +1,10 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import type { OsVersion } from '../engine/types';
+import { getReleaseById } from '../engine/OsCatalog';
 import { soundManager } from '../audio/SoundManager';
 import { getOsPresentationProfile } from './host/OsPresentation';
-import {
-  Folder,
-  FileText,
-  Terminal as TerminalIcon,
-  Globe,
-  MessageSquare,
-  Sliders,
-  PlaySquare,
-  Power,
-  User,
-} from 'lucide-react';
+import { OsIcon } from './OsIcon';
+import { User } from 'lucide-react';
 
 export interface StartMenuChromeProps {
   isOpen: boolean;
@@ -34,19 +26,27 @@ export const StartMenuChrome: React.FC<StartMenuChromeProps> = ({
 }) => {
   const osPresentation = osVersion ? getOsPresentationProfile(osVersion) : null;
   const startMenuPresentation = osPresentation?.shell.startMenuId ?? 'classic';
+  const taskbarHeightPx = osPresentation?.shell.taskbarHeightPx ?? 28;
+  const release = osVersion ? getReleaseById(osVersion) : null;
   const isCanalStartMenu = startMenuPresentation === 'canal';
   const canLaunch = (id: string) => !availableApps || availableApps.includes(id);
   // Pulse never ships with the OS — its menu entry appears only after install.
   const isPulseInstalled = pulseInstalled;
 
-  const [activeSubmenu, setActiveSubmenu] = useState<'programs' | 'accessories' | 'internet' | 'settings' | 'documents' | null>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const [activeSubmenu, setActiveSubmenu] = useState<'programs' | null>(null);
   const [isRunDialogOpen, setIsRunDialogOpen] = useState(false);
   const [isShutDownDialogOpen, setIsShutDownDialogOpen] = useState(false);
   const [runCommandText, setRunCommandText] = useState('');
   const [runError, setRunError] = useState<string | null>(null);
 
+  useEffect(() => {
+    if (isOpen) menuRef.current?.focus();
+    else setActiveSubmenu(null);
+  }, [isOpen]);
+
   const handleLaunch = (appId: string, customState?: Record<string, unknown>) => {
-    const mapped = canLaunch(appId) ? (resolveAppId ? resolveAppId(appId) : appId) : null;
+    const mapped = canLaunch(appId) ? (resolveAppId ? (resolveAppId(appId) ?? appId) : appId) : null;
     if (!mapped) {
       soundManager.play('error');
       setRunError(`Program not available: ${appId}`);
@@ -95,305 +95,279 @@ export const StartMenuChrome: React.FC<StartMenuChromeProps> = ({
     setRunError(null);
   };
 
+  const menuLabel = release ? `Orion ${release.version}` : 'Orion OS';
+
   return (
     <>
-      {/* 1. Main Start Menu Container */}
       {isOpen && (
-      <div
-        id="orion-start-menu"
-        data-os-start-menu={startMenuPresentation}
-        className={`absolute bottom-8 left-1 z-50 flex shadow-2xl ${
-          isCanalStartMenu
-            ? 'w-96 rounded-t-lg bg-[#245edb] border-2 border-[#003c74] flex-col overflow-hidden text-black'
-            : 'orion-outset bg-[#c0c0c0] min-w-[210px] text-black p-0.5'
-        }`}
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* Canal-style user header */}
-        {isCanalStartMenu && (
-          <div className="flex items-center gap-3 p-3 bg-gradient-to-r from-[#1f48ab] to-[#386cd4] text-white border-b border-[#0c1f4e]">
-            <div className="w-10 h-10 rounded-sm border-2 border-white/80 bg-blue-700 flex items-center justify-center shadow">
-              <User className="w-6 h-6 text-white" />
-            </div>
-            <span className="font-bold text-sm tracking-wide drop-shadow">Player</span>
-          </div>
-        )}
-
-        <div className="flex flex-1">
-          {/* Classic-family vertical brand banner */}
-          {!isCanalStartMenu && (
-            <div className="w-7 bg-gradient-to-b from-[#000080] via-[#1084d0] to-[#000040] text-white flex items-end justify-center pb-2 font-bold select-none">
-              <span className="[writing-mode:vertical-lr] rotate-180 tracking-widest text-[13px] text-gray-200">
-                Orion
-              </span>
+        <div
+          id="orion-start-menu"
+          ref={menuRef}
+          tabIndex={-1}
+          data-os-start-menu={startMenuPresentation}
+          className="os-start-menu"
+          style={{ bottom: `${taskbarHeightPx + 2}px` }}
+          onClick={(e) => e.stopPropagation()}
+          onKeyDown={(e) => {
+            if (e.key === 'Escape') {
+              e.preventDefault();
+              onClose();
+            }
+          }}
+        >
+          {isCanalStartMenu && (
+            <div className="os-start-menu-header">
+              <div className="os-start-menu-header-avatar">
+                <User className="h-6 w-6 text-white" />
+              </div>
+              <div>
+                <span className="os-start-menu-header-name">Player</span>
+                <span className="block text-[10px] text-white/70">{menuLabel}</span>
+              </div>
             </div>
           )}
 
-          {/* Menu Items Column */}
-          <div className="flex-1 flex flex-col py-1 text-[11px]">
-            {/* Programs Submenu Trigger */}
-            <div
-              className="relative"
-              onMouseEnter={() => setActiveSubmenu('programs')}
-              onMouseLeave={() => setActiveSubmenu(null)}
-            >
-              <button
-                className="w-full flex items-center justify-between px-3 py-1.5 hover:bg-orion-highlight hover:text-white cursor-pointer"
-                onClick={() => setActiveSubmenu(activeSubmenu === 'programs' ? null : 'programs')}
-              >
-                <div className="flex items-center gap-2">
-                  <Folder className="w-4 h-4 text-yellow-500" />
-                  <span className="font-bold">Programs</span>
-                </div>
-                <span>▸</span>
-              </button>
+          <div className="os-start-menu-main">
+            {!isCanalStartMenu && (
+              <div className="os-start-banner" aria-hidden="true">
+                <span className="os-start-banner-text">{menuLabel}</span>
+              </div>
+            )}
 
-              {/* Cascading Programs Menu */}
-              {activeSubmenu === 'programs' && (
-                <div className="absolute left-full top-0 -ml-1 orion-outset bg-[#c0c0c0] min-w-[180px] p-0.5 shadow-xl flex flex-col z-50 text-black">
-                  {canLaunch('browser') && (
-<button
-                    className="flex items-center gap-2 px-3 py-1.5 hover:bg-orion-highlight hover:text-white text-left"
-                    onClick={() => handleLaunch('browser')}
-                  >
-                    <Globe className="w-4 h-4 text-blue-600" />
-                    <span>Voyager Browser</span>
-                  </button>
-)}
-                  {isPulseInstalled && canLaunch('pulse') && (
-                    <button
-                      className="flex items-center gap-2 px-3 py-1.5 hover:bg-orion-highlight hover:text-white text-left"
-                      onClick={() => handleLaunch('pulse')}
-                    >
-                      <MessageSquare className="w-4 h-4 text-amber-500" />
-                      <span>Pulse Messenger</span>
-                    </button>
-                  )}
-                  {canLaunch('notepad') && (
-<button
-                    className="flex items-center gap-2 px-3 py-1.5 hover:bg-orion-highlight hover:text-white text-left"
-                    onClick={() => handleLaunch('notepad')}
-                  >
-                    <FileText className="w-4 h-4 text-blue-500" />
-                    <span>Notepad</span>
-                  </button>
-)}
-                  {canLaunch('terminal') && (
-<button
-                    className="flex items-center gap-2 px-3 py-1.5 hover:bg-orion-highlight hover:text-white text-left"
-                    onClick={() => handleLaunch('terminal')}
-                  >
-                    <TerminalIcon className="w-4 h-4 text-emerald-600" />
-                    <span>Terminal CLI</span>
-                  </button>
-)}
-                  {installedPrograms?.map(program => (
-                    <button key={program.id} type="button"
-                      disabled={!program.available}
-                      title={program.available ? 'Open installed program' : 'Installed program — Worker UI not yet available'}
-                      onClick={() => handleLaunch(program.id)}
-                      className="flex items-center gap-2 px-3 py-1.5 text-left hover:bg-orion-highlight hover:text-white disabled:opacity-50 disabled:cursor-not-allowed">
-                      <PlaySquare className="h-4 w-4 text-indigo-600" />
-                      <span>{program.label}</span>
-                    </button>
-                  ))}
-                  <div className="h-[1px] bg-[#808080] my-0.5 border-b border-white" />
-                  {canLaunch('addremove') && (
-<button
-                    className="flex items-center gap-2 px-3 py-1.5 hover:bg-orion-highlight hover:text-white text-left"
-                    onClick={() => handleLaunch('addremove')}
-                  >
-                    <PlaySquare className="w-4 h-4 text-indigo-600" />
-                    <span>Add/Remove Programs</span>
-                  </button>
-)}
-                  {canLaunch('savegame') && (
-<button
-                    className="flex items-center gap-2 px-3 py-1.5 hover:bg-orion-highlight hover:text-white text-left"
-                    onClick={() => handleLaunch('savegame')}
-                  >
-                    <span className="w-4 h-4 text-center text-[13px] leading-4">💾</span>
-                    <span>Save / Load Game</span>
-                  </button>
-)}
-                </div>
+            <div className="os-start-menu-body">
+              <div className="relative" onMouseLeave={() => setActiveSubmenu(null)}>
+                <button
+                  type="button"
+                  className="os-start-item os-start-program"
+                  aria-haspopup="menu"
+                  aria-expanded={activeSubmenu === 'programs'}
+                  onClick={() => setActiveSubmenu('programs')}
+                  onMouseEnter={() => setActiveSubmenu('programs')}
+                >
+                  <OsIcon kind="folder" size={18} />
+                  <span className="os-start-item-label">Programs</span>
+                  <span className="os-start-item-arrow" aria-hidden="true">▸</span>
+                </button>
+
+                {activeSubmenu === 'programs' && (
+                  <div className="os-start-submenu">
+                    {canLaunch('browser') && (
+                      <button type="button" className="os-start-item" onClick={() => handleLaunch('browser')}>
+                        <OsIcon kind="browser" size={18} />
+                        <span className="os-start-item-label">Voyager Browser</span>
+                      </button>
+                    )}
+                    {isPulseInstalled && canLaunch('pulse') && (
+                      <button type="button" className="os-start-item" onClick={() => handleLaunch('pulse')}>
+                        <OsIcon kind="pulse" size={18} />
+                        <span className="os-start-item-label">Pulse Messenger</span>
+                      </button>
+                    )}
+                    {canLaunch('notepad') && (
+                      <button type="button" className="os-start-item" onClick={() => handleLaunch('notepad')}>
+                        <OsIcon kind="notepad" size={18} />
+                        <span className="os-start-item-label">Notepad</span>
+                      </button>
+                    )}
+                    {canLaunch('terminal') && (
+                      <button type="button" className="os-start-item" onClick={() => handleLaunch('terminal')}>
+                        <OsIcon kind="terminal" size={18} />
+                        <span className="os-start-item-label">Terminal CLI</span>
+                      </button>
+                    )}
+                    {installedPrograms?.map(program => (
+                      <button key={program.id} type="button"
+                        className="os-start-item"
+                        disabled={!program.available}
+                        title={program.available ? 'Open installed program' : 'Installed program — Worker UI not yet available'}
+                        onClick={() => handleLaunch(program.id)}>
+                        <OsIcon appId={program.id} size={18} />
+                        <span className="os-start-item-label">{program.label}</span>
+                      </button>
+                    ))}
+                    <div className="os-start-separator" />
+                    {canLaunch('addremove') && (
+                      <button type="button" className="os-start-item" onClick={() => handleLaunch('addremove')}>
+                        <OsIcon kind="installer" size={18} />
+                        <span className="os-start-item-label">Add/Remove Programs</span>
+                      </button>
+                    )}
+                    {canLaunch('savegame') && (
+                      <button type="button" className="os-start-item" onClick={() => handleLaunch('savegame')}>
+                        <OsIcon kind="save" size={18} />
+                        <span className="os-start-item-label">Save / Load Game</span>
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {canLaunch('fileexplorer') && (
+                <button type="button" className="os-start-item"
+                  onClick={() => handleLaunch('fileexplorer', { initialPath: 'C:/Documents' })}>
+                  <OsIcon kind="folder" size={18} />
+                  <span className="os-start-item-label">Documents</span>
+                </button>
               )}
-            </div>
 
-            {/* Documents */}
-            {canLaunch('fileexplorer') && (
-<button
-              className="flex items-center gap-2 px-3 py-1.5 hover:bg-orion-highlight hover:text-white text-left"
-              onClick={() => handleLaunch('fileexplorer', { initialPath: 'C:/Documents' })}
-            >
-              <Folder className="w-4 h-4 text-yellow-500" />
-              <span>Documents</span>
-            </button>
-)}
+              {canLaunch('controlpanel') && (
+                <button type="button" className="os-start-item" onClick={() => handleLaunch('controlpanel')}>
+                  <OsIcon kind="control" size={18} />
+                  <span className="os-start-item-label">Settings / Control Panel</span>
+                </button>
+              )}
 
-            {/* Settings */}
-            {canLaunch('controlpanel') && (
-<button
-              className="flex items-center gap-2 px-3 py-1.5 hover:bg-orion-highlight hover:text-white text-left"
-              onClick={() => handleLaunch('controlpanel')}
-            >
-              <Sliders className="w-4 h-4 text-amber-600" />
-              <span>Settings / Control Panel</span>
-            </button>
-)}
-
-            {/* Dial-Up Networking */}
-            <button
-              className="flex items-center gap-2 px-3 py-1.5 hover:bg-orion-highlight hover:text-white text-left"
-              onClick={() => {
+              <button type="button" className="os-start-item" onClick={() => {
                 onOpenDialUp();
                 onClose();
-              }}
-            >
-              <Globe className="w-4 h-4 text-cyan-600" />
-              <span>Dial-up Connection...</span>
-            </button>
+              }}>
+                <OsIcon kind="dialup" size={18} />
+                <span className="os-start-item-label">Dial-up Connection...</span>
+              </button>
 
-            <div className="h-[1px] bg-[#808080] my-1 border-b border-white" />
+              <div className="os-start-separator" />
 
-            {/* Run... */}
-            <button
-              className="flex items-center gap-2 px-3 py-1.5 hover:bg-orion-highlight hover:text-white text-left"
-              onClick={() => {
+              <button type="button" className="os-start-item" onClick={() => {
                 setRunError(null);
                 setIsRunDialogOpen(true);
                 onClose();
-              }}
-            >
-              <PlaySquare className="w-4 h-4 text-emerald-600" />
-              <span>Run...</span>
-            </button>
+              }}>
+                <OsIcon kind="run" size={18} />
+                <span className="os-start-item-label">Run...</span>
+              </button>
 
-            {/* Shut Down... */}
-            <button
-              className="flex items-center gap-2 px-3 py-1.5 hover:bg-orion-highlight hover:text-white text-left"
-              onClick={() => {
+              <button type="button" className="os-start-item" onClick={() => {
                 setIsShutDownDialogOpen(true);
                 onClose();
-              }}
-            >
-              <Power className="w-4 h-4 text-red-600" />
-              <span>Shut Down...</span>
-            </button>
+              }}>
+                <OsIcon kind="power" size={18} />
+                <span className="os-start-item-label">Shut Down...</span>
+              </button>
+            </div>
           </div>
+
+          {isCanalStartMenu && (
+            <div className="os-start-menu-footer">
+              <button
+                type="button"
+                className="os-button"
+                onClick={() => {
+                  setIsShutDownDialogOpen(true);
+                  onClose();
+                }}
+              >
+                <OsIcon kind="power" size={14} />
+                <span>Turn Off Computer</span>
+              </button>
+            </div>
+          )}
         </div>
-
-        {/* Canal-style footer */}
-        {isCanalStartMenu && (
-          <div className="flex items-center justify-end gap-2 p-2 bg-gradient-to-r from-[#1f48ab] to-[#245edb] border-t border-[#3c7bf0] text-white text-[11px]">
-            <button
-              className="flex items-center gap-1 px-2 py-1 rounded bg-[#d32f2f] hover:brightness-110 font-bold shadow"
-              onClick={() => {
-                setIsShutDownDialogOpen(true);
-                onClose();
-              }}
-            >
-              <Power className="w-3.5 h-3.5" />
-              <span>Turn Off Computer</span>
-            </button>
-          </div>
-        )}
-      </div>
-
       )}
 
-      {/* 2. Run Dialog Modal */}
       {isRunDialogOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30">
-          <div className="orion-outset bg-[#c0c0c0] w-96 p-2 shadow-2xl text-black">
-            <div className="bg-gradient-to-r from-[#000080] to-[#1084d0] text-white px-2 py-1 font-bold flex justify-between items-center mb-3">
-              <span>Run</span>
+        <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/30 p-3"
+          onKeyDown={(e) => {
+            if (e.key === 'Escape') {
+              setIsRunDialogOpen(false);
+              setRunError(null);
+            }
+          }}>
+          <div className="os-dialog w-[360px] max-w-full" role="dialog" aria-modal="true" aria-labelledby="orion-run-title">
+            <div className="os-dialog-titlebar">
+              <span id="orion-run-title">Run</span>
               <button
-                className="orion-button h-4 w-4 text-[10px] font-bold p-0 leading-none"
+                type="button"
+                className="os-themed-btn h-4 w-4 text-[10px] font-bold leading-none"
+                aria-label="Close Run dialog"
                 onClick={() => { setIsRunDialogOpen(false); setRunError(null); }}
               >
                 ✕
               </button>
             </div>
-            <p className="text-xs mb-3">
-              Type the name of a program, folder, document, or Internet resource, and Orion will open it for you.
-            </p>
-            <form onSubmit={handleRunSubmit} className="flex flex-col gap-3">
-              <div className="flex items-center gap-2">
-                <label className="text-xs font-bold w-12">Open:</label>
-                <input
-                  type="text"
-                  autoFocus
-                  value={runCommandText}
-                  onChange={(e) => { setRunCommandText(e.target.value); if (runError) setRunError(null); }}
-                  placeholder="e.g. notepad, terminal, http://findit.local"
-                  className="orion-input flex-1"
-                />
-              </div>
-              {runError && (
-                <div className="flex items-center gap-2 border border-red-600 bg-[#ffe0e0] px-2 py-1 text-[11px] text-red-800">
-                  <span>⚠️</span>
-                  <span>{runError}</span>
+            <div className="p-3 text-xs">
+              <p className="mb-3">
+                Type the name of a program, folder, document, or Internet resource, and Orion will open it for you.
+              </p>
+              <form onSubmit={handleRunSubmit} className="flex flex-col gap-3">
+                <div className="flex items-center gap-2">
+                  <label className="w-12 text-xs font-bold" htmlFor="orion-run-input">Open:</label>
+                  <input
+                    id="orion-run-input"
+                    type="text"
+                    autoFocus
+                    value={runCommandText}
+                    onChange={(e) => { setRunCommandText(e.target.value); if (runError) setRunError(null); }}
+                    placeholder="e.g. notepad, terminal, http://findit.local"
+                    className="os-input flex-1"
+                  />
                 </div>
-              )}
-              <div className="flex justify-end gap-2 mt-2">
-                <button type="submit" className="orion-button min-w-[70px] font-bold">
-                  OK
-                </button>
-                <button
-                  type="button"
-                  className="orion-button min-w-[70px]"
-                  onClick={() => { setIsRunDialogOpen(false); setRunError(null); }}
-                >
-                  Cancel
-                </button>
-              </div>
-            </form>
+                {runError && (
+                  <div className="flex items-center gap-2 border border-red-700 bg-[#ffe0e0] px-2 py-1 text-[11px] text-red-800">
+                    <span aria-hidden="true">!</span>
+                    <span>{runError}</span>
+                  </div>
+                )}
+                <div className="mt-2 flex justify-end gap-2">
+                  <button type="submit" className="os-button min-w-[70px] font-bold">OK</button>
+                  <button
+                    type="button"
+                    className="os-button min-w-[70px]"
+                    onClick={() => { setIsRunDialogOpen(false); setRunError(null); }}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </form>
+            </div>
           </div>
         </div>
       )}
 
-      {/* 3. Shut Down Dialog Modal */}
       {isShutDownDialogOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="orion-outset bg-[#c0c0c0] w-88 p-3 shadow-2xl text-black">
-            <div className="bg-gradient-to-r from-[#000080] to-[#1084d0] text-white px-2 py-1 font-bold flex justify-between items-center mb-3">
-              <span>Shut Down Orion OS</span>
+        <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/40 p-3"
+          onKeyDown={(e) => {
+            if (e.key === 'Escape') setIsShutDownDialogOpen(false);
+          }}>
+          <div className="os-dialog w-[352px] max-w-full" role="dialog" aria-modal="true" aria-labelledby="orion-shutdown-title">
+            <div className="os-dialog-titlebar">
+              <span id="orion-shutdown-title">Shut Down Orion OS</span>
               <button
-                className="orion-button h-4 w-4 text-[10px] font-bold p-0 leading-none"
+                type="button"
+                className="os-themed-btn h-4 w-4 text-[10px] font-bold leading-none"
+                aria-label="Close Shut Down dialog"
                 onClick={() => setIsShutDownDialogOpen(false)}
               >
                 ✕
               </button>
             </div>
-            <p className="text-xs mb-3 font-semibold">What would you like the computer to do?</p>
-            <div className="flex flex-col gap-2 mb-4">
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input type="radio" name="shutdown_opt" defaultChecked />
-                <span>Sleep / Rest (Advance to next morning)</span>
-              </label>
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input type="radio" name="shutdown_opt" />
-                <span>Restart Orion OS</span>
-              </label>
-            </div>
-            <div className="flex justify-end gap-2">
-              <button
-                className="orion-button min-w-[70px] font-bold"
-                onClick={() => {
-                  soundManager.play('click');
-                  rest();
-                  setIsShutDownDialogOpen(false);
-                }}
-              >
-                OK
-              </button>
-              <button
-                className="orion-button min-w-[70px]"
-                onClick={() => setIsShutDownDialogOpen(false)}
-              >
-                Cancel
-              </button>
+            <div className="p-3 text-xs">
+              <p className="mb-3 font-semibold">What would you like the computer to do?</p>
+              <div className="mb-4 flex flex-col gap-2">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input type="radio" name="shutdown_opt" defaultChecked />
+                  <span>Sleep / Rest (Advance to next morning)</span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input type="radio" name="shutdown_opt" />
+                  <span>Restart Orion OS</span>
+                </label>
+              </div>
+              <div className="flex justify-end gap-2">
+                <button
+                  type="button"
+                  className="os-button min-w-[70px] font-bold"
+                  onClick={() => {
+                    soundManager.play('click');
+                    rest();
+                    setIsShutDownDialogOpen(false);
+                  }}
+                >
+                  OK
+                </button>
+                <button type="button" className="os-button min-w-[70px]" onClick={() => setIsShutDownDialogOpen(false)}>
+                  Cancel
+                </button>
+              </div>
             </div>
           </div>
         </div>

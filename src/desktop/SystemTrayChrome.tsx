@@ -3,7 +3,8 @@ import type { SimulationChromeRead } from '../engine/kernel/SimulationPublicatio
 import { useWindowStore } from '../store/useWindowStore';
 import { useAudioStore } from '../store/useAudioStore';
 import { soundManager } from '../audio/SoundManager';
-import { Volume2, VolumeX, Volume1, Wifi } from 'lucide-react';
+import { OsIcon } from './OsIcon';
+import { Volume2, VolumeX, Volume1 } from 'lucide-react';
 
 export interface SystemTrayChromeProps {
   onOpenDialUp: () => void;
@@ -32,7 +33,6 @@ export const SystemTrayChrome: React.FC<SystemTrayChromeProps> = ({ onOpenDialUp
     void buddyId;
   };
 
-  // Blinking modem LEDs during active downloads
   const activeDownloadCount = chrome.activeDownloadCount;
   useEffect(() => {
     if (activeDownloadCount === 0) {
@@ -56,7 +56,6 @@ export const SystemTrayChrome: React.FC<SystemTrayChromeProps> = ({ onOpenDialUp
     soundManager.play('click');
   };
 
-  // Format Clock: HH:MM AM/PM
   const formatTime = () => {
     const hour12 = time.hour % 12 === 0 ? 12 : time.hour % 12;
     const ampm = time.hour >= 12 ? 'PM' : 'AM';
@@ -68,50 +67,47 @@ export const SystemTrayChrome: React.FC<SystemTrayChromeProps> = ({ onOpenDialUp
   const currentWeekday = weekdays[(time.day - 1) % 7];
 
   return (
-    <div className="relative flex items-center gap-2 px-2 py-0.5 orion-inset bg-[#c0c0c0]/40 text-black text-[11px] h-full select-none">
-      {/* 1. Network Activity Monitor */}
-      <div
-        className="flex items-center gap-1 cursor-pointer px-1 py-0.5 hover:bg-white/20 rounded"
+    <div className="os-tray" data-testid="worker-system-tray">
+      <button
+        type="button"
+        className="os-tray-button"
         title={`${chrome.connectionType ? chrome.connectionType.toUpperCase() : 'OFFLINE'} (${chrome.connectionSpeedKbps} kbps) - ${activeDownloadCount} active download(s)`}
+        aria-label="Network connection"
         onClick={onOpenDialUp}
       >
-        <div className="flex items-center gap-0.5">
-          <div
-            className={`w-1.5 h-1.5 rounded-full transition-colors ${
-              txBlink ? 'bg-[#33ff33] shadow-[0_0_4px_#33ff33]' : 'bg-[#1b5e20]'
-            }`}
+        <span className="flex items-center gap-0.5" aria-hidden="true">
+          <span
+            className={`h-1.5 w-1.5 rounded-full ${txBlink ? 'bg-[#33ff33] shadow-[0_0_4px_#33ff33]' : 'bg-[#1b5e20]'}`}
             title="TX (Transmit)"
           />
-          <div
-            className={`w-1.5 h-1.5 rounded-full transition-colors ${
-              rxBlink ? 'bg-[#ffb000] shadow-[0_0_4px_#ffb000]' : 'bg-[#7f4f00]'
-            }`}
+          <span
+            className={`h-1.5 w-1.5 rounded-full ${rxBlink ? 'bg-[#ffb000] shadow-[0_0_4px_#ffb000]' : 'bg-[#7f4f00]'}`}
             title="RX (Receive)"
           />
-        </div>
-        <Wifi className="w-3.5 h-3.5 text-gray-700" />
-      </div>
+        </span>
+        <OsIcon kind="dialup" size={14} />
+      </button>
 
-      {/* 2. Volume Popup Trigger */}
       <div className="relative">
         <button
-          className="flex items-center cursor-pointer p-0.5 hover:bg-white/20 rounded"
+          type="button"
+          className="os-tray-button"
+          aria-label="Master Volume"
           onClick={() => setIsVolumePopupOpen((prev) => !prev)}
           title="Master Volume"
         >
           {isMuted ? (
-            <VolumeX className="w-3.5 h-3.5 text-red-600" />
+            <VolumeX className="h-3.5 w-3.5 text-red-600" />
           ) : masterVolume > 0.5 ? (
-            <Volume2 className="w-3.5 h-3.5 text-gray-800" />
+            <Volume2 className="h-3.5 w-3.5" />
           ) : (
-            <Volume1 className="w-3.5 h-3.5 text-gray-800" />
+            <Volume1 className="h-3.5 w-3.5" />
           )}
         </button>
 
-        {/* Vertical Volume Slider Popup */}
         {isVolumePopupOpen && (
           <div
-            className="absolute bottom-8 right-0 z-50 orion-outset bg-[#c0c0c0] p-2 flex flex-col items-center gap-2 shadow-xl w-24 text-black"
+            className="os-tray-popup flex w-24 flex-col items-center gap-2"
             onClick={(e) => e.stopPropagation()}
           >
             <span className="text-[10px] font-bold">Volume</span>
@@ -122,9 +118,10 @@ export const SystemTrayChrome: React.FC<SystemTrayChromeProps> = ({ onOpenDialUp
               step="0.05"
               value={isMuted ? 0 : masterVolume}
               onChange={(e) => handleVolumeChange(parseFloat(e.target.value))}
-              className="w-16 [writing-mode:bt-lr] h-24 accent-blue-700 cursor-pointer"
+              className="h-24 w-16 cursor-pointer accent-blue-700 [writing-mode:bt-lr]"
+              aria-label="Master volume"
             />
-            <label className="flex items-center gap-1 text-[10px] cursor-pointer">
+            <label className="flex cursor-pointer items-center gap-1 text-[10px]">
               <input type="checkbox" checked={isMuted} onChange={handleMuteToggle} />
               <span>Mute</span>
             </label>
@@ -132,55 +129,50 @@ export const SystemTrayChrome: React.FC<SystemTrayChromeProps> = ({ onOpenDialUp
         )}
       </div>
 
-      {/* 3. Pulse tray icon (unread badge + quick preview) */}
       <div className="relative">
         <button
-          className="relative flex items-center cursor-pointer p-0.5 hover:bg-white/20 rounded"
+          type="button"
+          className="os-tray-button relative"
+          aria-label="Pulse Messenger"
           onClick={() => setIsPulsePopupOpen((prev) => !prev)}
           title={chrome.unreadCount > 0 ? `${chrome.unreadCount} unread Pulse message(s)` : 'Pulse Messenger'}
         >
-          <span className="text-[13px] leading-none">💬</span>
+          <OsIcon kind="pulse" size={15} />
           {chrome.unreadCount > 0 && (
-            <span className="absolute -top-1 -right-1 bg-red-600 text-white text-[8px] font-bold px-1 rounded-full min-w-[14px] text-center">
+            <span className="absolute -right-1 -top-1 min-w-[14px] rounded-full bg-red-600 px-1 text-center text-[8px] font-bold text-white">
               {chrome.unreadCount > 9 ? '9+' : chrome.unreadCount}
             </span>
           )}
         </button>
         {isPulsePopupOpen && (
-          <div
-            className="absolute bottom-8 right-0 z-50 orion-outset bg-[#c0c0c0] p-2 shadow-xl w-56 text-black"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="text-[10px] font-bold mb-1">Pulse Messenger</div>
+          <div className="os-tray-popup w-56" onClick={(e) => e.stopPropagation()}>
+            <div className="mb-1 text-[10px] font-bold">Pulse Messenger</div>
             {chrome.unreadCount === 0 ? (
-              <div className="text-[10px] text-gray-700 italic">No unread messages. suspiciously quiet…</div>
+              <div className="text-[10px] italic opacity-70">No unread messages. suspiciously quiet…</div>
             ) : (
-              <div className="space-y-1 max-h-40 overflow-auto">
+              <div className="max-h-40 space-y-1 overflow-auto">
                 {unreadTrays.map((u) => (
                   <button
                     key={u.id}
+                    type="button"
                     onClick={() => openPulseFromTray(u.buddyId)}
-                    className="w-full text-left bg-white border border-gray-400 rounded px-1.5 py-1 hover:bg-blue-50"
+                    className="w-full rounded border border-gray-400 bg-white px-1.5 py-1 text-left text-black hover:bg-blue-50"
                   >
-                    <div className="text-[10px] font-bold text-blue-900 truncate">{u.buddyName}</div>
-                    <div className="text-[10px] text-gray-700 truncate">{u.text}</div>
+                    <div className="truncate text-[10px] font-bold text-blue-900">{u.buddyName}</div>
+                    <div className="truncate text-[10px] text-gray-700">{u.text}</div>
                   </button>
                 ))}
               </div>
             )}
-            <button
-              onClick={() => openPulseFromTray()}
-              className="mt-1.5 w-full bg-[#dfdfdf] hover:bg-white border border-gray-500 rounded text-[10px] font-bold py-1"
-            >
+            <button type="button" onClick={() => openPulseFromTray()} className="os-button mt-1.5 w-full font-bold">
               Open Pulse
             </button>
           </div>
         )}
       </div>
 
-      {/* 4. Live Simulation Clock */}
       <div
-        className="font-mono text-[11px] px-1 cursor-default text-black drop-shadow-xs"
+        className="os-tray-clock cursor-default"
         title={`Day ${time.day} (${currentWeekday}) • ${time.timeOfDay.toUpperCase()}`}
       >
         {formatTime()}
