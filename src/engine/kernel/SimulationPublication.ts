@@ -149,6 +149,7 @@ export interface SimulationDesktopRead {
   pcBootState: import('./ComputerOwnershipRuntime').PcBootState;
   monitor: ReturnType<import('../HardwareEngine').HardwareEngine['getDisplayState']>['monitor'];
   bootMediaItems: import('../types').OwnedItem[];
+  osInstallation: import('../types').OsInstallationProgress | null;
   desktopFiles: Array<Pick<import('../types').FileRecord,
     'id' | 'name' | 'path' | 'parentPath' | 'kind' | 'appAssociation'>>;
   /** Small authorized installed-program roster, not all software internals. */

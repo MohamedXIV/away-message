@@ -896,6 +896,7 @@ export class SimulationKernel {
       ),
       monitor: this.hardware.getDisplayState().monitor,
       bootMediaItems: this.inventory.getBootMediaItems(256),
+      osInstallation: this.os.getInstallProgress(),
       desktopFiles,
       installedApps: this.software.getInstalledSoftware().slice(0, 64).map(
         ({ appId, name, version }) => ({ appId, name, version }),
@@ -1450,6 +1451,18 @@ export class SimulationKernel {
 
   public commitOsInstall(...args: Parameters<NpcComputerSimulationRuntime['commitOsInstall']>): ReturnType<NpcComputerSimulationRuntime['commitOsInstall']> {
     return this.publishComputerMutation(() => this.npc.commitOsInstall(...args));
+  }
+
+  public startOsInstall(...args: Parameters<NpcComputerSimulationRuntime['startOsInstall']>): ReturnType<NpcComputerSimulationRuntime['startOsInstall']> {
+    return this.publishComputerMutation(() => this.npc.startOsInstall(...args));
+  }
+
+  public advanceOsInstall(): ReturnType<NpcComputerSimulationRuntime['advanceOsInstall']> {
+    return this.publishComputerMutation(() => this.npc.advanceOsInstall());
+  }
+
+  public cancelOsInstall(): ReturnType<NpcComputerSimulationRuntime['cancelOsInstall']> {
+    return this.publishComputerMutation(() => this.npc.cancelOsInstall());
   }
 
   public purchaseStoreItem(...args: Parameters<NpcComputerSimulationRuntime['purchaseStoreItem']>): ReturnType<NpcComputerSimulationRuntime['purchaseStoreItem']> {

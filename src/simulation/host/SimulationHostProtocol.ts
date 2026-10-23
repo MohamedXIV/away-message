@@ -131,7 +131,10 @@ export type SimulationHardwareCommand =
   | { kind: 'insertMedia'; instanceId: string }
   | { kind: 'ejectMedia' }
   | { kind: 'prepareOs' }
-  | { kind: 'commitOs'; plan: OsInstallPlan };
+  | { kind: 'commitOs'; plan: OsInstallPlan }
+  | { kind: 'startOs'; plan: OsInstallPlan }
+  | { kind: 'advanceOs' }
+  | { kind: 'cancelOs' };
 
 
 export type SimulationWorkerRequest =

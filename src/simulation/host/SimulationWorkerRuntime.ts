@@ -232,6 +232,11 @@ export function createSimulationWorkerRuntime(send: (message: SimulationWorkerRe
               break;
             case 'ejectMedia': value = owner.ejectOwnedMediaAtHome(); break;
             case 'prepareOs': value = owner.prepareOsInstallFromInsertedMedia(); break;
+            case 'startOs':
+              if (!raw.command.plan || typeof raw.command.plan !== 'object') throw new Error('OS setup requires verified media');
+              value = owner.startOsInstall(raw.command.plan); break;
+            case 'advanceOs': value = owner.advanceOsInstall(); break;
+            case 'cancelOs': value = owner.cancelOsInstall(); break;
             case 'commitOs':
               if (!raw.command.plan || typeof raw.command.plan !== 'object') {
                 throw new Error('OS installation needs an authoritative preflight plan');
