@@ -202,14 +202,6 @@ export function WorkerDesktop({
         </div>
       )}
 
-      {desktop && !desktop.osVersion && (
-        <div data-testid="worker-desktop-uninstalled" role="status" className="os-desktop-note">
-          <strong>No Orion OS is installed.</strong>
-          Purchase and assemble a computer in Computer &amp; Setup. Window and file operations here remain an
-          engineering surface until a canonical OS boots.
-        </div>
-      )}
-
       <WindowManagerChrome
         renderFrame={(win, isActive, children) => (
           <WindowFrameChrome window={win} isActive={isActive}

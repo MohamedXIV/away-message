@@ -30,6 +30,13 @@ describe('#213 generated Worker starting cast', () => {
     expect(first).toEqual(buildFreshSandboxSocialState('playtest-cast-001'));
     expect(first.buddies).not.toEqual(second.buddies);
     expect(first.removedSeedActorIds).toEqual(seedCharacterIds());
+    // Unique world seeds should actually diversify the *visible names*.
+    // The old base-31 hash correlated every slot through the UUID's final
+    // character and could make multiple fresh worlds look identical.
+    const casts = Array.from({ length: 20 }, (_, index) =>
+      Object.values(buildFreshSandboxSocialState(`world-variety-${index.toString().padStart(3,'0')}`).buddies ?? {})
+        .map(actor => actor.handle).join('|'));
+    expect(new Set(casts).size).toBeGreaterThanOrEqual(16);
     const members = Object.values(first.buddies ?? {});
     expect(members).toHaveLength(8);
     expect(members.filter(actor => actor.reach === 'remote')).toHaveLength(2);

@@ -56,7 +56,10 @@ test('ordinary / New Game installs Orion 4.8 and delivers a coherent, responsive
   await expect(desktop).not.toContainText('Worker-backed desktop');
 
   const metrics = await desktopGridMetrics(desktop);
-  expect(metrics.icons).toBeGreaterThanOrEqual(12);
+  // Clean Orion has no preinstalled Pulse or FlashFetch: 11 core icons.
+  expect(metrics.icons).toBe(11);
+  expect(metrics.appIds).not.toContain('pulse');
+  expect(metrics.appIds).not.toContain('flashfetch');
   expect(metrics.columns).toBeGreaterThanOrEqual(3);
   expect(metrics.scrollWidth).toBeLessThanOrEqual(metrics.clientWidth + 1);
   expect(metrics.scrollHeight).toBeLessThanOrEqual(metrics.clientHeight + 1);
@@ -157,7 +160,10 @@ test('the Orion desktop stays usable in a small viewport and honours reduced mot
   expect(desktopBox).not.toBeNull();
 
   const metrics = await desktopGridMetrics(desktop);
-  expect(metrics.icons).toBeGreaterThanOrEqual(12);
+  // Clean Orion has no preinstalled Pulse or FlashFetch: 11 core icons.
+  expect(metrics.icons).toBe(11);
+  expect(metrics.appIds).not.toContain('pulse');
+  expect(metrics.appIds).not.toContain('flashfetch');
   expect(metrics.columns).toBeGreaterThanOrEqual(3);
   expect(metrics.outside).toBe(0);
   expect(metrics.scrollWidth).toBeLessThanOrEqual(metrics.clientWidth + 1);
@@ -207,6 +213,13 @@ test('Orion 6.0 keeps a distinct authored desktop through the central OS contrac
   await page.evaluate(async () => {
     const store = (window as any).__simStore.getState();
     const engine = store.engine;
+    // Presentation-only DEV fixture: explicitly mark the machine assembled
+    // and powered as well as installed. A bare OS id on a non-existent PC
+    // must never unlock Orion after #219's real boot gate.
+    engine.hardware.loadState({
+      computer: { ...engine.hardware.getComputerState(), assembled: true, poweredOn: true },
+      display: engine.hardware.getDisplayState(),
+    });
     engine.core.os.loadState({ currentOsId: 'Orion_6.0' });
     engine.invalidateStateCache?.();
     store.syncStateFromEngine();
