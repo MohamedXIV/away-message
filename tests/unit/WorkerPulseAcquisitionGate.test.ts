@@ -23,7 +23,7 @@ describe('#214 clean Orion software ownership', () => {
   it('the genuine download catalog maps the real Pulse exe into the generic installer', () => {
     const published = DOWNLOAD_CATALOG.find(item => item.id === 'pulse_52');
     expect(published?.downloadUrl).toBe('http://downloadhub.local/files/pulse52_setup.exe');
-    expect(INSTALLER_SOFTWARE_IDS.pulse52_setup.exe).toBe('sw_pulse_52');
+    expect(INSTALLER_SOFTWARE_IDS['pulse52_setup.exe']).toBe('sw_pulse_52');
   });
 
   it('only publishes an installed Pulse shortcut from canonical owner desktop files', () => {
