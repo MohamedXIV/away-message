@@ -18,6 +18,24 @@ export type PcBootState =
   | 'no_boot_device'
   | 'desktop';
 
+/** One deterministic estimate derived from the player's physical PC.
+ * Memory pressure, processor throughput, hard-drive transfer rate and the
+ * actual optical drive all contribute. No separate simulated clock.
+ */
+export function estimateOsInstallationMinutes(input: {
+  installSizeGB: number;
+  ramMB: number;
+  cpuThroughputUnits: number;
+  storageThroughputUnits: number;
+  opticalSpeedMultiplier: number;
+}): number {
+  const memory = input.ramMB < 768 ? 1.6 : input.ramMB < 1024 ? 1.2 : 1;
+  const cpu = Math.max(0.7, Math.min(1.5, 1 / Math.max(0.2, input.cpuThroughputUnits)));
+  const disk = Math.max(0.7, Math.min(1.5, 1 / Math.max(0.2, input.storageThroughputUnits)));
+  const disc = Math.max(0.8, Math.min(1.3, 32 / Math.max(1, input.opticalSpeedMultiplier)));
+  return Math.max(1, Math.round((18 + input.installSizeGB * 12) * memory * cpu * disk * disc));
+}
+
 export type OsInstallMode = 'fresh' | 'upgrade' | 'patch';
 
 export interface OsInstallPlan {
@@ -441,8 +459,13 @@ export class ComputerOwnershipRuntime {
       };
     }
 
-    const ramFactor = hardware.ramMB < 768 ? 1.6 : hardware.ramMB < 1024 ? 1.2 : 1;
-    const durationMinutes = Math.round((18 + release.installSizeGB * 12) * ramFactor);
+    const durationMinutes = estimateOsInstallationMinutes({
+      installSizeGB: release.installSizeGB,
+      ramMB: hardware.ramMB,
+      cpuThroughputUnits: state.computer.cpu?.throughputUnits ?? 1,
+      storageThroughputUnits: primaryStorage.throughputUnits,
+      opticalSpeedMultiplier: state.computer.opticalDrives[0]?.speedMultiplier ?? 24,
+    });
 
     return {
       success: true,
