@@ -209,14 +209,23 @@ export function createSimulationWorkerRuntime(send: (message: SimulationWorkerRe
         }
         case 'dispatch': {
           const owner = requireKernel();
-          value = owner.dispatchAction(raw.action);
-          // The old Pulse React app generated its own replies after dispatch;
-          // the real Worker route has no legacy app owner. Commit a bounded,
-          // availability-gated fallback through the SAME canonical Social
-          // command before returning to the UI. Never invent a client transcript.
-          if (raw.action.type === 'SOCIAL_SEND_MESSAGE' &&
-            value && typeof value === 'object' && 'success' in value && value.success === true) {
-            owner.replyToWorkerPulseMessage(raw.action.buddyId, raw.action.text);
+          if (raw.action.type === 'PULSE_SEND_MESSAGE') {
+            // Only the real installed messenger may ask for an NPC DM reply.
+            // Generic Social sends (other web/legacy contexts) retain their
+            // existing authority and must not suddenly generate extra turns.
+            if (!owner.getChromeRead().pulseInstalled) {
+              value = { success: false, error: 'Install Pulse before sending Pulse messages.' };
+              break;
+            }
+            value = owner.dispatchAction({
+              type: 'SOCIAL_SEND_MESSAGE', buddyId: raw.action.buddyId,
+              text: raw.action.text,
+            });
+            if (value && typeof value === 'object' && 'success' in value && value.success === true) {
+              owner.replyToWorkerPulseMessage(raw.action.buddyId, raw.action.text);
+            }
+          } else {
+            value = owner.dispatchAction(raw.action);
           }
           break;
         }
