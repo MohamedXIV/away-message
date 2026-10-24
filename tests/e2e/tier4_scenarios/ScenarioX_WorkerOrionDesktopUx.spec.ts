@@ -159,6 +159,74 @@ test('ordinary / New Game installs Orion 4.8 and delivers a coherent, responsive
   await assertNoMainThreadSimulation(page);
 });
 
+
+test('right-click stays inside the game: context-aware desktop, file, browser and world commands', async ({ page }) => {
+  test.setTimeout(180_000);
+  const desktop = await installStarterOrion48(page);
+  const notepadIcon = desktop.locator('[data-desktop-icon="sys_notepad"]');
+  await notepadIcon.click({ button: 'right' });
+  const osMenu = page.getByTestId('worker-os-context-menu');
+  await expect(osMenu).toHaveAttribute('role', 'menu');
+  await expect(osMenu).toContainText('Notepad');
+  await osMenu.getByRole('menuitem', { name: 'Properties' }).click();
+  const properties = desktop.getByTestId('worker-icon-properties');
+  await expect(properties).toContainText('Orion system shortcut');
+  await properties.getByRole('button', { name: 'Close' }).click();
+  await expect(page.getByTestId('worker-window-notepad')).toHaveCount(0);
+
+  // Right click is selection + contextual Open, never the host browser's menu.
+  await notepadIcon.click({ button: 'right' });
+  await osMenu.getByRole('menuitem', { name: 'Open' }).click();
+  const note = page.getByTestId('worker-window-notepad');
+  await expect(note).toBeVisible();
+  await note.getByLabel('Name').fill('RightClickFile.txt');
+  await note.getByRole('textbox', { name: 'Notepad document' }).fill('An in-world file.');
+  await note.getByRole('button', { name: 'Save', exact: true }).click();
+  await desktop.getByRole('button', { name: 'Close Notepad' }).click();
+
+  // OS wallpaper has a distinct menu from an application shortcut.
+  await desktop.click({ button: 'right', position: { x: 500, y: 85 } });
+  await expect(osMenu).toContainText('Refresh desktop');
+  await osMenu.getByRole('menuitem', { name: 'My Computer' }).click();
+  const explorer = page.getByTestId('worker-window-fileexplorer');
+  await expect(explorer).toBeVisible();
+
+  const file = explorer.getByRole('button', { name: 'Open file: RightClickFile.txt' });
+  await file.click({ button: 'right' });
+  const fileMenu = page.getByTestId('worker-file-context-menu');
+  await expect(fileMenu).toContainText('RightClickFile.txt');
+  await fileMenu.getByRole('menuitem', { name: 'Properties' }).click();
+  await expect(explorer.getByTestId('worker-file-properties')).toContainText('C:/Documents/RightClickFile.txt');
+  await explorer.getByRole('button', { name: 'Close' }).click();
+  await expect(page.getByTestId('worker-window-notepad')).toHaveCount(0);
+
+  await file.click({ button: 'right' });
+  await fileMenu.getByRole('menuitem', { name: 'Open' }).click();
+  await expect(page.getByRole('textbox', { name: 'Notepad document' })).toHaveValue('An in-world file.');
+  await desktop.getByRole('button', { name: 'Close Notepad' }).click();
+  await desktop.getByRole('button', { name: 'Close My Computer' }).click();
+
+  // The fake internet has its *own* browser context, not OS file commands.
+  await desktop.locator('[data-desktop-icon="sys_browser"]').dblclick();
+  const browser = page.getByTestId('worker-voyager-page-area');
+  await expect(browser).toBeVisible();
+  await browser.click({ button: 'right', position: { x: 280, y: 175 } });
+  const webMenu = page.getByTestId('worker-web-context-menu');
+  await expect(webMenu).toContainText('Save page to C:/Documents');
+  await expect(webMenu).not.toContainText('Properties');
+  await webMenu.getByRole('menuitem', { name: 'Save page to C:/Documents' }).click();
+  await expect(browser).toContainText('Saved downloadhub_page.txt to C:/Documents');
+
+  // Outside the simulated PC, game-world actions remain game actions.
+  await page.getByTestId('worker-hud').click({ button: 'right' });
+  const worldMenu = page.getByTestId('worker-world-context-menu');
+  await expect(worldMenu).toContainText('Pause time');
+  await expect(worldMenu).toContainText('Save game');
+  await page.keyboard.press('Escape');
+  await expect(worldMenu).toHaveCount(0);
+  await assertNoMainThreadSimulation(page);
+});
+
 test('the Orion desktop stays usable in a small viewport and honours reduced motion', async ({ page }) => {
   test.setTimeout(180_000);
   await page.setViewportSize({ width: 820, height: 620 });
