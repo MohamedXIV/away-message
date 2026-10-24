@@ -130,6 +130,7 @@ export type SimulationHardwareCommand =
   | { kind: 'power'; poweredOn: boolean }
   | { kind: 'insertMedia'; instanceId: string }
   | { kind: 'ejectMedia' }
+  | { kind: 'installHardware'; instanceId: string; slot: `ram:${number}` }
   | { kind: 'prepareOs' }
   | { kind: 'commitOs'; plan: OsInstallPlan }
   | { kind: 'startOs'; plan: OsInstallPlan }

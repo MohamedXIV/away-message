@@ -179,9 +179,29 @@ export function WorkerPreOrionShell({ session, revision, desktop }: Props) {
               className="rounded border border-amber-500 px-3 py-2 text-sm">Assemble owned package</button>
           )}
           {desktop.pcBootState === 'powered_off' && apps?.computer.assembled && (
-            <button type="button" disabled={busy} onClick={() => void physical(
-              () => session.hardware({ kind: 'power', poweredOn: true }), 'Power on: booting DOS')}
-              className="rounded border border-amber-500 px-3 py-2 text-sm">Power on</button>
+            <>
+              <button type="button" disabled={busy} onClick={() => void physical(
+                () => session.hardware({ kind: 'power', poweredOn: true }), 'Computer powered on')}
+                className="rounded border border-amber-500 px-3 py-2 text-sm">Power on</button>
+              <div data-testid="worker-ram-install-bench" className="w-full border-t border-amber-900/50 pt-3">
+                <p className="mb-2">Motherboard RAM slots: {desktop.ramSlotsUsed} / {desktop.ramSlotCapacity}.
+                  Install only purchased memory while the machine is off.</p>
+                {desktop.ownedRamItems.map(item => (
+                  <button key={item.instanceId} type="button"
+                    disabled={busy || desktop.ramSlotsUsed >= desktop.ramSlotCapacity}
+                    onClick={() => void physical(
+                      () => session.hardware({
+                        kind: 'installHardware', instanceId: item.instanceId,
+                        slot: `ram:${desktop.ramSlotsUsed}`,
+                      }),
+                      'Installed owned RAM in motherboard slot ' + desktop.ramSlotsUsed)}
+                    className="mr-2 rounded border border-amber-500 px-3 py-2 text-sm">
+                    Install owned RAM: {item.catalogItemId}
+                  </button>
+                ))}
+                {desktop.ownedRamItems.length === 0 && <p>No loose RAM packages at home.</p>}
+              </div>
+            </>
           )}
         </div>
         {notice && <p role="status" className="text-sm">{notice}</p>}

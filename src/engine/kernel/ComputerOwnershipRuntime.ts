@@ -140,6 +140,9 @@ export class ComputerOwnershipRuntime {
     if (!state.computer.assembled) {
       return { success: false, error: 'Set up the computer before installing replacement hardware.' };
     }
+    if (state.computer.poweredOn) {
+      return { success: false, error: 'Shut down the computer before changing physical hardware.' };
+    }
 
     const isRamSlot = slot.startsWith('ram:');
     const isCpuSlot = slot === 'cpu';
@@ -169,6 +172,9 @@ export class ComputerOwnershipRuntime {
       }
       if (ramSlotIndex > state.computer.ramSticks.length) {
         return { success: false, error: 'RAM slots must be populated without leaving an unsupported gap.' };
+      }
+      if (ramSlotIndex >= (state.computer.motherboard?.ramSlots ?? 0)) {
+        return { success: false, error: 'Motherboard has no slot at that RAM index.' };
       }
     }
 

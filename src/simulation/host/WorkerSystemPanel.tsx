@@ -135,6 +135,22 @@ export function WorkerSystemPanel({
           {apps?.computer.poweredOn ? 'Power off' : 'Power on'}
         </button>
       </div>
+      <h3 className="border-t border-gray-400 pt-2 font-semibold">Silicon &amp; Spares · physical upgrades</h3>
+      <p>Retail parts and OS media are delivered as owned physical items. Nothing is pre-installed.</p>
+      <div data-testid="worker-os-upgrade-store" className="flex flex-wrap gap-2">
+        <button className={button} disabled={busy} onClick={() => void dispatch({
+          type: 'STORE_PURCHASE_ITEM', storeId: 'silicon_spares', skuId: 'part_ram_128mb',
+        }, 'Purchased physical 128MB RAM; shut down the PC to fit it')}>
+          Buy 128MB RAM ($32)
+        </button>
+        <button className={button} disabled={busy} onClick={() => void dispatch({
+          type: 'STORE_PURCHASE_ITEM', storeId: 'silicon_spares', skuId: 'disc_orion_50',
+        }, 'Purchased real Orion 5.0 setup CD; insert and verify before setup')}>
+          Buy Orion 5.0 setup CD ($29)
+        </button>
+      </div>
+      <p>RAM: {apps?.hardware.ramMB ?? 0} MB. Shut down and use the physical workbench
+        to install purchased components. OS eligibility remains Worker-verified.</p>
       <h3 className="font-semibold">Owned OS installation media</h3>
       <div className="flex flex-wrap gap-2">
         {(desktop?.bootMediaItems ?? []).map(item => (

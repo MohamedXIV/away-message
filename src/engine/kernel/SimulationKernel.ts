@@ -15,6 +15,7 @@ import { buildRecentNpcMail, buildRentMailHistory, buildWeeklyNpcThreads, buildW
 import { getWeatherForDay, gameDayName } from '../WeatherEngine';
 import { locationLabel } from '../AppointmentDirector';
 import { createEmptyComputerSetup, createEmptyDisplaySetup } from '../hardware/state';
+import { PHYSICAL_ITEM_CATALOG } from '../hardware/catalog';
 import { CoreSimulationRuntime } from './CoreSimulationRuntime';
 import { MAX_MINUTE_ACCURATE_ADVANCE, type MinuteAdvanceGranularity } from './TimeAdvancement';
 import { resolvePcBootStateFromOwnerStatus } from './ComputerOwnershipRuntime';
@@ -881,6 +882,10 @@ export class SimulationKernel {
   /** File-body-free desktop read. Only visible shortcut metadata crosses UI. */
   public getDesktopRead(): SimulationDesktopRead {
     const osVersion = this.os.getCurrentOsId();
+    const computer = this.hardware.getComputerState();
+    const ownedRamItems = this.inventory.getState().items.filter(item =>
+      item.location === 'room_package' &&
+      PHYSICAL_ITEM_CATALOG[item.catalogItemId]?.componentKind === 'ram').slice(0, 32);
     const desktopFiles = this.vfs.listDirectoryMetadata('C:/Desktop', 256).map(
       ({ id, name, path, parentPath, kind, appAssociation }) => ({
         id, name, path, parentPath, kind, appAssociation,
@@ -896,6 +901,9 @@ export class SimulationKernel {
       ),
       monitor: this.hardware.getDisplayState().monitor,
       bootMediaItems: this.inventory.getBootMediaItems(256),
+      ownedRamItems,
+      ramSlotsUsed: computer.ramSticks.length,
+      ramSlotCapacity: computer.motherboard?.ramSlots ?? 0,
       osInstallation: this.os.getInstallProgress(),
       desktopFiles,
       installedApps: this.software.getInstalledSoftware().slice(0, 64).map(

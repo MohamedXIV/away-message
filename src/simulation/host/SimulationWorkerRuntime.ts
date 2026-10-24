@@ -231,6 +231,14 @@ export function createSimulationWorkerRuntime(send: (message: SimulationWorkerRe
               value = owner.insertOwnedMediaAtHome(raw.command.instanceId);
               break;
             case 'ejectMedia': value = owner.ejectOwnedMediaAtHome(); break;
+            case 'installHardware':
+              if (typeof raw.command.instanceId !== 'string' || !raw.command.instanceId ||
+                typeof raw.command.slot !== 'string' ||
+                !/^ram:(0|[1-9][0-9]*)$/.test(raw.command.slot)) {
+                throw new Error('Owned RAM and a valid physical motherboard slot are required');
+              }
+              value = owner.installOwnedHardwareAtHome(raw.command.instanceId, raw.command.slot);
+              break;
             case 'prepareOs': value = owner.prepareOsInstallFromInsertedMedia(); break;
             case 'startOs':
               if (!raw.command.plan || typeof raw.command.plan !== 'object') throw new Error('OS setup requires verified media');

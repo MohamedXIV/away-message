@@ -105,6 +105,63 @@ describe('#219 persistent owner-backed Orion installation', () => {
       .toBe(prepared.data!.durationMinutes);
   });
 
+  it('upgrades installed Orion 4.8 using separately purchased owned 5.0 CD and power-off RAM', () => {
+    const initial = new SimulationKernel().exportSnapshot();
+    const sim = new SimulationKernel({
+      ...initial,
+      player: { ...initial.player, cash: 170 },
+      time: { ...initial.time, day: 6,
+        totalMinutes: initial.time.totalMinutes + 5 * 1440 },
+    });
+    expect(sim.purchaseStoreItem('silicon_spares', 'bundle_scrapyard').success).toBe(true);
+    expect(sim.setupComputerAtHome().success).toBe(true);
+    expect(sim.setComputerPower(true).success).toBe(true);
+    const firstCd = sim.exportSnapshot().inventory.items
+      .find(item => item.catalogItemId === 'media_orion_48_setup')!;
+    expect(sim.insertOwnedMediaAtHome(firstCd.instanceId).success).toBe(true);
+    const firstPlan = sim.prepareOsInstallFromInsertedMedia().data!;
+    expect(sim.startOsInstall(firstPlan).success).toBe(true);
+    for (let stage=0;stage<4;stage++) expect(sim.advanceOsInstall().success).toBe(true);
+    expect(sim.os.getCurrentOsId()).toBe('Orion_4.8');
+    const firstSpace = sim.hardware.getComputerState().storage[0]!.freeBytes;
+
+    expect(sim.purchaseStoreItem('silicon_spares', 'part_ram_128mb').success).toBe(true);
+    expect(sim.purchaseStoreItem('silicon_spares', 'disc_orion_50').success).toBe(true);
+    const owned = sim.exportSnapshot().inventory.items;
+    const ram = owned.find(item => item.catalogItemId === 'ram_sdram_128' &&
+      item.location === 'room_package')!;
+    const secondCd = owned.find(item => item.catalogItemId === 'media_orion_50_setup')!;
+    expect(ram).toBeDefined();
+    expect(secondCd).toBeDefined();
+
+    expect(sim.installOwnedHardwareAtHome(ram.instanceId, 'ram:1').success).toBe(false);
+    expect(sim.setComputerPower(false).success).toBe(true);
+    expect(sim.installOwnedHardwareAtHome(ram.instanceId, 'ram:1').success).toBe(true);
+    expect(sim.hardware.getState().ramMB).toBe(192);
+    expect(sim.setComputerPower(true).success).toBe(true);
+    expect(sim.ejectOwnedMediaAtHome().success).toBe(true);
+    expect(sim.insertOwnedMediaAtHome(secondCd.instanceId).success).toBe(true);
+    const upgrade = sim.prepareOsInstallFromInsertedMedia();
+    expect(upgrade.success).toBe(true);
+    expect(upgrade.data?.targetOs).toBe('Orion_5.0');
+    expect(upgrade.data?.mode).toBe('upgrade');
+    expect(upgrade.data?.installSizeBytes).toBe(200_000_000);
+    const beforeCopy = sim.clock.getTotalMinutes();
+    expect(sim.startOsInstall(upgrade.data!).success).toBe(true);
+    expect(sim.advanceOsInstall().success).toBe(true);
+    const halfway = sim.exportSnapshot();
+    expect(halfway.os.currentOsId).toBe('Orion_4.8');
+    expect(halfway.os.installation?.targetOs).toBe('Orion_5.0');
+    expect(halfway.computer.storage[0]!.freeBytes).toBe(firstSpace);
+    const restored = new SimulationKernel(halfway);
+    for (let stage=0;stage<3;stage++) expect(restored.advanceOsInstall().success).toBe(true);
+    expect(restored.os.getCurrentOsId()).toBe('Orion_5.0');
+    expect(restored.os.getInstallProgress()).toBeNull();
+    expect(restored.hardware.getComputerState().storage[0]!.freeBytes)
+      .toBe(firstSpace - upgrade.data!.installSizeBytes);
+    expect(restored.clock.getTotalMinutes() - beforeCopy).toBe(upgrade.data!.durationMinutes);
+  });
+
   it('allows cancel without refunding spent time or granting installation rights', () => {
     const { simulation, plan } = fixture();
     expect(simulation.startOsInstall(plan).success).toBe(true);
