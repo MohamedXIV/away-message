@@ -20,6 +20,16 @@ export function WorkerFileExplorer({
   const [offset, setOffset] = useState(0);
   const [folder, setFolder] = useState<'C:/Documents' | 'C:/Downloads' | 'C:/Pictures' | 'C:/Music'>(DOCUMENTS);
   const [error, setError] = useState<string | null>(null);
+  const [selectedFileId, setSelectedFileId] = useState<string | null>(null);
+
+  const openFile = (file: SimulationDirectoryRead['files'][number]) => {
+    if (file.kind === 'audio') openAudio(file.path);
+    else if (file.kind === 'image') openArtwork(file.path);
+    else if (file.kind === 'archive') openArchive(file.path);
+    else if (file.kind === 'installer') openInstaller(file.path);
+    else if (file.kind === 'text') openDocument(file.path);
+    else setError('Unsupported file type.');
+  };
 
   useEffect(() => {
     let active = true;
@@ -42,14 +52,22 @@ export function WorkerFileExplorer({
       <nav aria-label="Explorer folders" className="flex gap-2 border-b bg-[#eee] p-1 text-xs">
         {([DOCUMENTS, 'C:/Downloads', 'C:/Pictures', 'C:/Music'] as const).map(path => (
           <button type="button" key={path} aria-pressed={folder === path}
-            onClick={() => { setFolder(path); setPage(null); setOffset(0); }}
+            onClick={() => { setFolder(path); setPage(null); setOffset(0); setSelectedFileId(null); }}
             className="rounded border px-2 py-1">{path.split('/').pop()}</button>
         ))}
       </nav>
       <div className="min-h-0 flex-1 overflow-y-auto p-2 text-xs">
         {(page?.files ?? []).map(file => (
-          <button type="button" key={file.id} onClick={() => file.kind === 'audio' ? openAudio(file.path) : file.kind === 'image' ? openArtwork(file.path) : file.kind === 'archive' ? openArchive(file.path) : file.kind === 'installer' ? openInstaller(file.path) : file.kind === 'text' ? openDocument(file.path) : setError('Unsupported file type.')}
-            className="block w-full rounded px-2 py-1 text-left hover:bg-blue-100"
+          <button type="button" key={file.id}
+            aria-pressed={selectedFileId === file.id}
+            onClick={event => {
+              // Local files select on click and open on double-click.
+              // Keyboard/assistive activation has detail=0 and opens directly.
+              setSelectedFileId(file.id);
+              if (event.detail === 0) openFile(file);
+            }}
+            onDoubleClick={event => { if (event.button === 0) openFile(file); }}
+            className={`block w-full rounded px-2 py-1 text-left hover:bg-blue-100 ${selectedFileId === file.id ? 'bg-blue-200 outline outline-1 outline-blue-500' : ''}`}
             aria-label={'Open file: ' + file.name}>
             {file.kind === 'text' ? '📄' : '📦'} {file.name}
           </button>
@@ -60,10 +78,10 @@ export function WorkerFileExplorer({
         {error && <p role="alert" className="text-red-700">{error}</p>}
       </div>
       <div className="flex gap-2 border-t border-gray-400 bg-[#ddd] px-2 py-1 text-xs">
-        <button disabled={offset === 0} onClick={() => setOffset(n => Math.max(0, n - 32))}>
+        <button disabled={offset === 0} onClick={() => { setOffset(n => Math.max(0, n - 32)); setSelectedFileId(null); }}>
           Previous
         </button>
-        <button disabled={!page?.hasMore} onClick={() => setOffset(n => n + 32)}>Next</button>
+        <button disabled={!page?.hasMore} onClick={() => { setOffset(n => n + 32); setSelectedFileId(null); }}>Next</button>
       </div>
     </section>
   );
