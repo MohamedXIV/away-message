@@ -13,7 +13,8 @@ export interface StartMenuChromeProps {
   osVersion: OsVersion | null;
   pulseInstalled: boolean;
   launchApp: (appId: string, customState?: Record<string, unknown>) => void;
-  rest: () => void;
+  /** Computer power is not player sleep/rest. */
+  onPowerAction: (choice: 'shutdown' | 'restart') => void;
   availableApps?: readonly string[];
   resolveAppId?: (appId: string) => string | null;
   /** Optional bounded installed-app roster for Worker-owned desktop. */
@@ -22,7 +23,7 @@ export interface StartMenuChromeProps {
 
 export const StartMenuChrome: React.FC<StartMenuChromeProps> = ({
   isOpen, onClose, onOpenDialUp, osVersion, pulseInstalled,
-  launchApp, rest, availableApps, resolveAppId, installedPrograms,
+  launchApp, onPowerAction, availableApps, resolveAppId, installedPrograms,
 }) => {
   const osPresentation = osVersion ? getOsPresentationProfile(osVersion) : null;
   const startMenuPresentation = osPresentation?.shell.startMenuId ?? 'classic';
@@ -37,6 +38,7 @@ export const StartMenuChrome: React.FC<StartMenuChromeProps> = ({
   const [activeSubmenu, setActiveSubmenu] = useState<'programs' | null>(null);
   const [isRunDialogOpen, setIsRunDialogOpen] = useState(false);
   const [isShutDownDialogOpen, setIsShutDownDialogOpen] = useState(false);
+  const [powerChoice, setPowerChoice] = useState<'shutdown' | 'restart'>('shutdown');
   const [runCommandText, setRunCommandText] = useState('');
   const [runError, setRunError] = useState<string | null>(null);
 
@@ -344,11 +346,13 @@ export const StartMenuChrome: React.FC<StartMenuChromeProps> = ({
               <p className="mb-3 font-semibold">What would you like the computer to do?</p>
               <div className="mb-4 flex flex-col gap-2">
                 <label className="flex items-center gap-2 cursor-pointer">
-                  <input type="radio" name="shutdown_opt" defaultChecked />
-                  <span>Sleep / Rest (Advance to next morning)</span>
+                  <input type="radio" name="shutdown_opt" checked={powerChoice === 'shutdown'}
+                    onChange={() => setPowerChoice('shutdown')} />
+                  <span>Shut down computer</span>
                 </label>
                 <label className="flex items-center gap-2 cursor-pointer">
-                  <input type="radio" name="shutdown_opt" />
+                  <input type="radio" name="shutdown_opt" checked={powerChoice === 'restart'}
+                    onChange={() => setPowerChoice('restart')} />
                   <span>Restart Orion OS</span>
                 </label>
               </div>
@@ -358,7 +362,7 @@ export const StartMenuChrome: React.FC<StartMenuChromeProps> = ({
                   className="os-button min-w-[70px] font-bold"
                   onClick={() => {
                     soundManager.play('click');
-                    rest();
+                    onPowerAction(powerChoice);
                     setIsShutDownDialogOpen(false);
                   }}
                 >

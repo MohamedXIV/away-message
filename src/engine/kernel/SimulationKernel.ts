@@ -15,6 +15,7 @@ import { buildRecentNpcMail, buildRentMailHistory, buildWeeklyNpcThreads, buildW
 import { getWeatherForDay, gameDayName } from '../WeatherEngine';
 import { locationLabel } from '../AppointmentDirector';
 import { createEmptyComputerSetup, createEmptyDisplaySetup } from '../hardware/state';
+
 import { CoreSimulationRuntime } from './CoreSimulationRuntime';
 import { MAX_MINUTE_ACCURATE_ADVANCE, type MinuteAdvanceGranularity } from './TimeAdvancement';
 import { resolvePcBootStateFromOwnerStatus } from './ComputerOwnershipRuntime';
@@ -881,6 +882,8 @@ export class SimulationKernel {
   /** File-body-free desktop read. Only visible shortcut metadata crosses UI. */
   public getDesktopRead(): SimulationDesktopRead {
     const osVersion = this.os.getCurrentOsId();
+    const slots = this.hardware.getRamSlotSummary();
+    const ownedRamItems = this.inventory.getLooseRamItems(32);
     const desktopFiles = this.vfs.listDirectoryMetadata('C:/Desktop', 256).map(
       ({ id, name, path, parentPath, kind, appAssociation }) => ({
         id, name, path, parentPath, kind, appAssociation,
@@ -896,6 +899,10 @@ export class SimulationKernel {
       ),
       monitor: this.hardware.getDisplayState().monitor,
       bootMediaItems: this.inventory.getBootMediaItems(256),
+      ownedRamItems,
+      ramSlotsUsed: slots.used,
+      ramSlotCapacity: slots.capacity,
+      osInstallation: this.os.getInstallProgress(),
       desktopFiles,
       installedApps: this.software.getInstalledSoftware().slice(0, 64).map(
         ({ appId, name, version }) => ({ appId, name, version }),
@@ -1093,6 +1100,53 @@ export class SimulationKernel {
       contacts: this.social.getMessengerSummary(maxContacts),
       unreadCounts: this.social.getConversationUnreadCounts(500, true),
     };
+  }
+
+  /**
+   * Worker-only offline-safe Pulse fallback. Player sends already pass through
+   * the canonical Social gate; this is called only after a successful send.
+   * No fake React transcript, private actor data or second Social authority.
+   * Human/AI conversation quality remains a separate #223 acceptance task.
+   */
+  public replyToWorkerPulseMessage(buddyId: string, playerText: string): boolean {
+    const actor = this.getPlayerActorRead(buddyId)?.actor;
+    if (!actor?.canChatNow.allowed) return false;
+    const buddy = this.social.getBuddy(buddyId);
+    if (!buddy) return false;
+    const written = playerText.trim().toLowerCase();
+    const voice = buddy.archetype ?? 'regular';
+    const seed = `${buddyId}:${this.clock.getTotalMinutes()}:${this.social.getConversationPage(buddyId, 0, 1).total}`;
+    let lines: string[];
+    if (/\b(hi|hey|hello|yo|sup)\b/.test(written)) {
+      lines = voice === 'student' ? ['heyyy! how has your day been?', 'oh hi!! what are you up to?']
+        : voice === 'trader' ? ['hey. what is on your mind?', 'hey, just checking in. what is up?']
+        : ['hey :) how has your day been?', 'oh hi! anything interesting going on?'];
+    } else if (/\b(how are you|how's it going|you okay)\b/.test(written)) {
+      lines = ['a little tired, but glad to see your message. what about you?', 'been a long day lol. how are things with you?'];
+    } else if (written.includes('?')) {
+      lines = voice === 'nightowl'
+        ? ["not totally sure. i might look into it tonight.", "that's a good question. give me a minute to think."]
+        : voice === 'trader'
+          ? ["i'd need to check before saying for sure.", "not sure yet. what's your take?"]
+          : ["hmm, i'm not sure yet. what do you think?", "i'm curious too. tell me more?"];
+    } else {
+      lines = voice === 'student'
+        ? ['omg really? tell me more!', 'lol i know what you mean. what happened next?']
+        : voice === 'artist'
+          ? ["i can picture that, actually. what was it like?", "that's interesting. i've been thinking about something similar."]
+          : voice === 'trader'
+            ? ['interesting. what happened after that?', 'got it. tell me more.']
+            : voice === 'nightowl'
+              ? ['huh. that gives me something to think about.', 'i hear you. tell me a bit more?']
+              : ["yeah, i get what you mean. what happened next?", "i'm listening. tell me more?"];
+    }
+    let hash = 2166136261;
+    for (const char of seed) hash = Math.imul(hash ^ char.charCodeAt(0), 16777619) >>> 0;
+    const text = lines[hash % lines.length]!;
+    return this.dispatchAction({
+      type: 'SOCIAL_RECEIVE_MESSAGE', buddyId, text,
+      tags: ['worker_pulse', 'offline_template'],
+    }).success;
   }
 
   public getConversationRead(actorId: string, offset = 0, limit = 30): SimulationConversationRead {
@@ -1450,6 +1504,18 @@ export class SimulationKernel {
 
   public commitOsInstall(...args: Parameters<NpcComputerSimulationRuntime['commitOsInstall']>): ReturnType<NpcComputerSimulationRuntime['commitOsInstall']> {
     return this.publishComputerMutation(() => this.npc.commitOsInstall(...args));
+  }
+
+  public startOsInstall(...args: Parameters<NpcComputerSimulationRuntime['startOsInstall']>): ReturnType<NpcComputerSimulationRuntime['startOsInstall']> {
+    return this.publishComputerMutation(() => this.npc.startOsInstall(...args));
+  }
+
+  public advanceOsInstall(): ReturnType<NpcComputerSimulationRuntime['advanceOsInstall']> {
+    return this.publishComputerMutation(() => this.npc.advanceOsInstall());
+  }
+
+  public cancelOsInstall(): ReturnType<NpcComputerSimulationRuntime['cancelOsInstall']> {
+    return this.publishComputerMutation(() => this.npc.cancelOsInstall());
   }
 
   public purchaseStoreItem(...args: Parameters<NpcComputerSimulationRuntime['purchaseStoreItem']>): ReturnType<NpcComputerSimulationRuntime['purchaseStoreItem']> {

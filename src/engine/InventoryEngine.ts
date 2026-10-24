@@ -159,6 +159,21 @@ export class InventoryEngine {
     return items;
   }
 
+  /** Only physically loose RAM at home, capped and cloned per entry. Never
+   * clone the entire Inventory state for a Desktop read. */
+  public getLooseRamItems(limit = 32): OwnedItem[] {
+    const max = Number.isFinite(limit) ? Math.max(0, Math.min(32, Math.trunc(limit))) : 32;
+    const items: OwnedItem[] = [];
+    if (max === 0) return items;
+    for (const item of this.state.items) {
+      if (item.location !== 'room_package') continue;
+      if (getPhysicalCatalogItem(item.catalogItemId)?.componentKind !== 'ram') continue;
+      items.push({ ...item });
+      if (items.length >= max) break;
+    }
+    return items;
+  }
+
   public getState(): Readonly<PlayerInventoryState> {
     return cloneState(this.state);
   }

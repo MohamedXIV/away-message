@@ -74,10 +74,18 @@ describe('Worker Orion desktop presentation', () => {
     expect(desktopIconGridSource).toContain("event.key === 'ArrowDown'");
     expect(desktopIconGridSource).toContain("event.key === 'ArrowRight'");
     expect(desktopIconGridSource).toContain('data-desktop-icon');
+    expect(desktopIconGridSource).toContain('button.disabled');
+    expect(desktopIconGridSource).toContain('[data-desktop-icon]:not(:disabled)');
+    expect(desktopIconGridSource).toContain('desktop-icon-pages');
+    expect(osThemeCss).toContain('.os-desktop-icon-pager');
+    expect(osThemeCss).toContain('.os-desktop[data-os-theme="orion60"]');
+    expect(osThemeCss).toContain('.os-desktop[data-os-theme="orion70"]');
   });
 
   it('keeps the authored shell controls reachable inside the contained desktop', () => {
     expect(windowChromeSource).toContain('offsetParent');
+    expect(windowChromeSource).toContain('maxW - winState.size.width');
+    expect(windowChromeSource).not.toContain('maxW - 100');
     expect(windowChromeSource).toContain('taskbarHeightPx');
     expect(osThemeCss).toContain('.os-start-button:focus-visible');
     expect(osThemeCss).toContain('.os-task-button:focus-visible');

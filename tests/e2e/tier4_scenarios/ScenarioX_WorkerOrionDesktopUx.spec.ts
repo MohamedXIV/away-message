@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { installOrion48FromDos } from './workerDosTestHelper';
 
 function assertNoMainThreadSimulation(page: Page) {
   return expect.poll(() => page.evaluate(() =>
@@ -13,24 +14,12 @@ async function startNewGame(page: Page) {
   await expect(page.getByTestId('worker-phase')).toHaveText('game');
   await page.getByRole('button', { name: 'Pause clock' }).click();
   await page.getByRole('button', { name: 'desktop', exact: true }).click();
-  const desktop = page.getByTestId('worker-desktop');
-  await expect(desktop).toBeVisible();
-  return desktop;
+  await expect(page.getByTestId('worker-physical-hardware-bench')).toBeVisible();
 }
 
 async function installStarterOrion48(page: Page) {
-  const desktop = await startNewGame(page);
-  await desktop.getByRole('button', { name: 'Open Computer & Setup' }).click();
-  const setup = page.getByTestId('worker-system-panel');
-  await setup.getByRole('button', { name: 'Purchase starter hardware bundle ($35)' }).click();
-  await setup.getByRole('button', { name: 'Assemble owned package' }).click();
-  await setup.getByRole('button', { name: 'Insert disc' }).click();
-  await setup.getByRole('button', { name: 'Verify OS installer' }).click();
-  await page.getByTestId('worker-os-plan')
-    .getByRole('button', { name: 'Commit verified OS installation' }).click();
-  await setup.getByRole('button', { name: 'Power on' }).click();
-  await expect(page.getByTestId('worker-boot-state')).toContainText('desktop');
-  await desktop.getByRole('button', { name: 'Close Computer & Setup' }).click();
+  await startNewGame(page);
+  const desktop = await installOrion48FromDos(page);
   await expect(desktop).toHaveAttribute('data-os-theme', 'orion48');
   await expect(desktop).toHaveAttribute('data-os-wallpaper', 'harbor_classic');
   return desktop;
@@ -67,7 +56,10 @@ test('ordinary / New Game installs Orion 4.8 and delivers a coherent, responsive
   await expect(desktop).not.toContainText('Worker-backed desktop');
 
   const metrics = await desktopGridMetrics(desktop);
-  expect(metrics.icons).toBeGreaterThanOrEqual(12);
+  // Clean Orion has no preinstalled Pulse or FlashFetch: 11 core icons.
+  expect(metrics.icons).toBe(11);
+  expect(metrics.appIds).not.toContain('pulse');
+  expect(metrics.appIds).not.toContain('flashfetch');
   expect(metrics.columns).toBeGreaterThanOrEqual(3);
   expect(metrics.scrollWidth).toBeLessThanOrEqual(metrics.clientWidth + 1);
   expect(metrics.scrollHeight).toBeLessThanOrEqual(metrics.clientHeight + 1);
@@ -168,7 +160,10 @@ test('the Orion desktop stays usable in a small viewport and honours reduced mot
   expect(desktopBox).not.toBeNull();
 
   const metrics = await desktopGridMetrics(desktop);
-  expect(metrics.icons).toBeGreaterThanOrEqual(12);
+  // Clean Orion has no preinstalled Pulse or FlashFetch: 11 core icons.
+  expect(metrics.icons).toBe(11);
+  expect(metrics.appIds).not.toContain('pulse');
+  expect(metrics.appIds).not.toContain('flashfetch');
   expect(metrics.columns).toBeGreaterThanOrEqual(3);
   expect(metrics.outside).toBe(0);
   expect(metrics.scrollWidth).toBeLessThanOrEqual(metrics.clientWidth + 1);
@@ -184,6 +179,21 @@ test('the Orion desktop stays usable in a small viewport and honours reduced mot
   expect(frameBox!.x).toBeGreaterThanOrEqual(desktopBox!.x - 1);
   expect(frameBox!.x + frameBox!.width).toBeLessThanOrEqual(desktopBox!.x + desktopBox!.width + 1);
   expect(frameBox!.y + frameBox!.height).toBeLessThanOrEqual(desktopBox!.y + desktopBox!.height - 28 + 1);
+
+  // Drag deliberately beyond the right edge; the entire titlebar and its
+  // Close button must remain reachable inside the contained OS surface.
+  const bar = note.locator('.os-themed-titlebar');
+  const barBox = await bar.boundingBox();
+  expect(barBox).not.toBeNull();
+  await page.mouse.move(barBox!.x + 70, barBox!.y + 12);
+  await page.mouse.down();
+  await page.mouse.move(desktopBox!.x + desktopBox!.width + 300, barBox!.y + 12, { steps: 8 });
+  await page.mouse.up();
+  const moved = await note.boundingBox();
+  expect(moved).not.toBeNull();
+  expect(moved!.x).toBeGreaterThanOrEqual(desktopBox!.x - 1);
+  expect(moved!.x + moved!.width).toBeLessThanOrEqual(desktopBox!.x + desktopBox!.width + 1);
+  await expect(note.getByRole('button', { name: 'Close Notepad' })).toBeVisible();
   await desktop.getByRole('button', { name: 'Close Notepad' }).click();
 
   const taskbar = page.getByTestId('worker-desktop-taskbar');
@@ -218,6 +228,13 @@ test('Orion 6.0 keeps a distinct authored desktop through the central OS contrac
   await page.evaluate(async () => {
     const store = (window as any).__simStore.getState();
     const engine = store.engine;
+    // Presentation-only DEV fixture: explicitly mark the machine assembled
+    // and powered as well as installed. A bare OS id on a non-existent PC
+    // must never unlock Orion after #219's real boot gate.
+    engine.hardware.loadState({
+      computer: { ...engine.hardware.getComputerState(), assembled: true, poweredOn: true },
+      display: engine.hardware.getDisplayState(),
+    });
     engine.core.os.loadState({ currentOsId: 'Orion_6.0' });
     engine.invalidateStateCache?.();
     store.syncStateFromEngine();

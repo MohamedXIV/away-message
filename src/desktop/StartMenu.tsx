@@ -9,10 +9,13 @@ export type StartMenuProps = Pick<StartMenuChromeProps, 'isOpen' | 'onClose' | '
 /** The synchronous game adapter; Worker imports only StartMenuChrome. */
 export const StartMenu: React.FC<StartMenuProps> = props => {
   const chrome = useSimulationChrome();
-  const dispatchAction = useSimulationStore(s => s.dispatchAction);
+  const setComputerPower = useSimulationStore(s => s.setComputerPower);
   const openWindow = useWindowStore(s => s.openWindow);
   return <StartMenuChrome {...props}
     osVersion={chrome.osVersion} pulseInstalled={chrome.pulseInstalled}
     launchApp={(appId, customState) => { openWindow(appId, customState ?? {}); }}
-    rest={() => { dispatchAction({ type: 'PLAYER_REST_OR_SLEEP', wakeHour: 8 }); }} />;
+    onPowerAction={(choice) => {
+      const off = setComputerPower(false);
+      if (off.success && choice === 'restart') setComputerPower(true);
+    }} />;
 };

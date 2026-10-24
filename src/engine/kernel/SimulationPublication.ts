@@ -149,6 +149,11 @@ export interface SimulationDesktopRead {
   pcBootState: import('./ComputerOwnershipRuntime').PcBootState;
   monitor: ReturnType<import('../HardwareEngine').HardwareEngine['getDisplayState']>['monitor'];
   bootMediaItems: import('../types').OwnedItem[];
+  /** Bounded real loose RAM, never a full inventory or invented equipment. */
+  ownedRamItems: import('../types').OwnedItem[];
+  ramSlotsUsed: number;
+  ramSlotCapacity: number;
+  osInstallation: import('../types').OsInstallationProgress | null;
   desktopFiles: Array<Pick<import('../types').FileRecord,
     'id' | 'name' | 'path' | 'parentPath' | 'kind' | 'appAssociation'>>;
   /** Small authorized installed-program roster, not all software internals. */

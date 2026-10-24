@@ -1,4 +1,4 @@
-import React, { useCallback, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { OsIcon } from './OsIcon';
 import type { OsIconKind } from './osIconKinds';
 
@@ -29,6 +29,39 @@ export const DesktopIconGrid: React.FC<DesktopIconGridProps> = ({
 }) => {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const gridRef = useRef<HTMLDivElement>(null);
+  const [pages, setPages] = useState({ overflow: false, back: false, forward: false });
+
+  useEffect(() => {
+    const grid = gridRef.current;
+    if (!grid) return;
+    const refresh = () => {
+      const scrollable = grid.scrollWidth > grid.clientWidth + 2;
+      const next = {
+        overflow: scrollable,
+        back: scrollable && grid.scrollLeft > 2,
+        forward: scrollable && grid.scrollLeft + grid.clientWidth < grid.scrollWidth - 2,
+      };
+      setPages(prev => prev.overflow === next.overflow && prev.back === next.back &&
+        prev.forward === next.forward ? prev : next);
+    };
+    const observer = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(refresh) : null;
+    observer?.observe(grid);
+    grid.addEventListener('scroll', refresh, { passive: true });
+    window.addEventListener('resize', refresh);
+    const frame = requestAnimationFrame(refresh);
+    return () => {
+      cancelAnimationFrame(frame);
+      observer?.disconnect();
+      grid.removeEventListener('scroll', refresh);
+      window.removeEventListener('resize', refresh);
+    };
+  }, [icons]);
+
+  const movePage = (direction: -1 | 1) => {
+    const grid = gridRef.current;
+    if (!grid) return;
+    grid.scrollBy({ left: Math.max(120, grid.clientWidth - 96) * direction, behavior: 'instant' });
+  };
 
   const focusDirection = useCallback((from: HTMLButtonElement, direction: Direction) => {
     const grid = gridRef.current;
@@ -39,7 +72,7 @@ export const DesktopIconGrid: React.FC<DesktopIconGridProps> = ({
     const originY = origin.top + origin.height / 2;
     let best: { button: HTMLButtonElement; score: number } | null = null;
     for (const button of buttons) {
-      if (button === from) continue;
+      if (button === from || button.disabled) continue;
       const rect = button.getBoundingClientRect();
       const dx = rect.left + rect.width / 2 - originX;
       const dy = rect.top + rect.height / 2 - originY;
@@ -54,7 +87,7 @@ export const DesktopIconGrid: React.FC<DesktopIconGridProps> = ({
 
   const handleKeyDown = useCallback((event: React.KeyboardEvent<HTMLButtonElement>) => {
     const buttons = Array.from(
-      gridRef.current?.querySelectorAll<HTMLButtonElement>('[data-desktop-icon]') ?? [],
+      gridRef.current?.querySelectorAll<HTMLButtonElement>('[data-desktop-icon]:not(:disabled)') ?? [],
     );
     if (event.key === 'ArrowDown') {
       event.preventDefault();
@@ -80,6 +113,7 @@ export const DesktopIconGrid: React.FC<DesktopIconGridProps> = ({
   }, [focusDirection]);
 
   return (
+    <>
     <div
       ref={gridRef}
       data-testid={testId}
@@ -122,5 +156,16 @@ export const DesktopIconGrid: React.FC<DesktopIconGridProps> = ({
         );
       })}
     </div>
+    {pages.overflow && (
+      <div className="os-desktop-icon-pager" data-testid="desktop-icon-pages"
+        role="group" aria-label="More installed desktop icons">
+        <button type="button" aria-label="Previous desktop icons" disabled={!pages.back}
+          onClick={() => movePage(-1)} title="Previous icons">◀</button>
+        <span aria-hidden="true">Icons</span>
+        <button type="button" aria-label="Next desktop icons" disabled={!pages.forward}
+          onClick={() => movePage(1)} title="More icons">▶</button>
+      </div>
+    )}
+    </>
   );
 };

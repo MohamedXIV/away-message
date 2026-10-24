@@ -4,6 +4,7 @@ import type {
 } from '../../engine/kernel/SimulationPublication';
 import type { OsInstallPlan } from '../../engine/kernel/ComputerOwnershipRuntime';
 import type { SimulationHardwareCommand } from './SimulationHostProtocol';
+import { getOrionInstallerPresentation } from '../../desktop/host/OrionInstallerPresentation';
 import type { WorkerGameSession } from './WorkerGameSession';
 
 /**
@@ -134,10 +135,27 @@ export function WorkerSystemPanel({
           {apps?.computer.poweredOn ? 'Power off' : 'Power on'}
         </button>
       </div>
+      <h3 className="border-t border-gray-400 pt-2 font-semibold">Silicon &amp; Spares · physical upgrades</h3>
+      <p>Retail parts and OS media are delivered as owned physical items. Nothing is pre-installed.</p>
+      <div data-testid="worker-os-upgrade-store" className="flex flex-wrap gap-2">
+        <button className={button} disabled={busy} onClick={() => void dispatch({
+          type: 'STORE_PURCHASE_ITEM', storeId: 'silicon_spares', skuId: 'part_ram_128mb',
+        }, 'Purchased physical 128MB RAM; shut down the PC to fit it')}>
+          Buy 128MB RAM ($32)
+        </button>
+        <button className={button} disabled={busy} onClick={() => void dispatch({
+          type: 'STORE_PURCHASE_ITEM', storeId: 'silicon_spares', skuId: 'disc_orion_50',
+        }, 'Purchased real Orion 5.0 setup CD; insert and verify before setup')}>
+          Buy Orion 5.0 setup CD ($29)
+        </button>
+      </div>
+      <p>RAM: {apps?.hardware.ramMB ?? 0} MB. Shut down and use the physical workbench
+        to install purchased components. OS eligibility remains Worker-verified.</p>
       <h3 className="font-semibold">Owned OS installation media</h3>
       <div className="flex flex-wrap gap-2">
         {(desktop?.bootMediaItems ?? []).map(item => (
-          <div key={item.instanceId} className="rounded border border-gray-400 p-2">
+          <div key={item.instanceId} data-testid={'worker-owned-cd-' + item.catalogItemId}
+            className="rounded border border-gray-400 p-2">
             {item.catalogItemId} ({item.location})
             <button className={'ml-2 ' + button}
               disabled={busy || item.location === 'inserted'}
@@ -157,14 +175,38 @@ export function WorkerSystemPanel({
           Verify OS installer
         </button>
       </div>
-      {plan && (
-        <div className="rounded border border-blue-700 bg-blue-50 p-2"
+      {plan && !desktop?.osInstallation && (
+        <div className={'border p-3 ' + getOrionInstallerPresentation(plan.targetOs).frameClass}
           data-testid="worker-os-plan">
+          <p className="font-bold">{getOrionInstallerPresentation(plan.targetOs).heading}</p>
           <p>Owner-verified {plan.mode}: {plan.targetOs} · {plan.durationMinutes} game minutes</p>
-          <button className={button} disabled={busy}
-            onClick={() => void hardware({ kind: 'commitOs', plan }, 'OS installed by Worker')}>
-            Commit verified OS installation
+          <p className="my-2 text-xs">The real owned disc must stay inserted. Progress is saved in the OS owner,
+            and each stage consumes actual in-world time.</p>
+          <button className={getOrionInstallerPresentation(plan.targetOs).buttonClass} disabled={busy}
+            onClick={() => void hardware({ kind: 'startOs', plan }, 'OS installation started')}>
+            Begin installation
           </button>
+        </div>
+      )}
+      {desktop?.osInstallation && (
+        <div data-testid="worker-system-os-install-progress"
+          data-installer-edition={getOrionInstallerPresentation(desktop.osInstallation.targetOs).edition}
+          className={'border p-3 ' + getOrionInstallerPresentation(desktop.osInstallation.targetOs).frameClass}>
+          <strong>{getOrionInstallerPresentation(desktop.osInstallation.targetOs).heading}</strong>
+          <p>Copying and configuring from owned disc: {desktop.osInstallation.elapsedMinutes} /
+            {desktop.osInstallation.durationMinutes} world minutes</p>
+          <progress className="w-full" aria-label="Orion installation progress"
+            value={desktop.osInstallation.elapsedMinutes} max={desktop.osInstallation.durationMinutes} />
+          <div className="mt-3 flex flex-wrap gap-2">
+            <button className={getOrionInstallerPresentation(desktop.osInstallation.targetOs).buttonClass}
+              disabled={busy} onClick={() => void hardware({ kind: 'advanceOs' }, 'Installation advanced')}>
+              Advance installation
+            </button>
+            <button className={getOrionInstallerPresentation(desktop.osInstallation.targetOs).buttonClass}
+              disabled={busy} onClick={() => void hardware({ kind: 'cancelOs' }, 'Installation canceled; elapsed game time remains spent')}>
+              Cancel installation
+            </button>
+          </div>
         </div>
       )}
 

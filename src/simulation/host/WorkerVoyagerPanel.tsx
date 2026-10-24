@@ -139,14 +139,18 @@ function WorkerDownloadHub({ site }: { site: SimulationWebsiteRead }) {
       network.startDownload({ sourceId: item.id, url: item.downloadUrl,
         fileName: name, totalBytes: item.fileSizeBytes, sourceMaxKbps: 256,
         fileKind: 'installer' });
-      setNotice('Requested ' + name + ' from canonical Worker');
+      setNotice('Download queued: ' + name + '. View progress in Computer & Setup.');
     }
-    openWindow('flashfetch');
+    // FlashFetch is optional third-party software. The default Orion browser
+    // must never grant it just to show a transfer. Use the OS-bundled
+    // Computer & Setup transfer ledger until FlashFetch is actually installed.
+    openWindow('system');
   };
   return <DownloadHubView
     selectedCat={category} setSelectedCat={setCategory}
     filtered={category === 'ALL' ? catalog : catalog.filter(item => item.category === category)}
     dynamicCount={dynamic.length} day={site.time.day}
     notice={notice} setNotice={setNotice} downloads={downloads}
-    getDownloadStatus={status} handleDownloadFile={start} />;
+    getDownloadStatus={status} handleDownloadFile={start}
+    onOpenTransfers={() => openWindow('system')} transferLabel="Downloads" />;
 }

@@ -15,7 +15,7 @@ import {
   type OsThemeId,
 } from './OsCatalog';
 import { pickOsTemplate, templateToRelease } from '../ai/osReleaseTemplates';
-import type { HardwareState, OsVersion, SoftwareRequirement } from './types';
+import type { HardwareState, OsVersion, SoftwareRequirement, OsInstallationProgress } from './types';
 
 export type OsInstallPhase =
   | 'idle'
@@ -35,6 +35,7 @@ export type OsInstallResult = {
 };
 
 export interface OsEngineState {
+  installation?: OsInstallationProgress | null;
   currentOsId: OsVersion | null;
   installedPatchIds: OsVersion[];
   lastBootAtMinute?: number;
@@ -57,6 +58,7 @@ export class OsEngine {
   private lastInstallLog: string[] = [];
   private pendingReboot = false;
   private installPhase: OsInstallPhase = 'idle';
+  private installation: OsInstallationProgress | null = null;
 
   constructor(eventBus: EventBus, initialState?: Partial<OsEngineState>) {
     this.eventBus = eventBus;
@@ -71,6 +73,7 @@ export class OsEngine {
     this.lastInstallAtMinute = initialState?.lastInstallAtMinute;
     this.lastInstallLog = initialState?.lastInstallLog ? [...initialState.lastInstallLog] : [];
     this.pendingReboot = initialState?.pendingReboot ?? false;
+    this.installation = initialState?.installation ? { ...initialState.installation } : null;
 
     if (initialState?.proceduralCatalog) {
       try {
@@ -90,9 +93,18 @@ export class OsEngine {
     return this.currentOsId;
   }
 
+  public getInstallProgress(): OsInstallationProgress | null {
+    return this.installation ? { ...this.installation } : null;
+  }
+  public setInstallProgress(progress: OsInstallationProgress | null): void {
+    this.installation = progress ? { ...progress } : null;
+  }
   public getState(): OsEngineState {
     return {
       currentOsId: this.currentOsId,
+      // Only emit this field while a physical installation is in progress.
+      // Idle worlds retain their deterministic, pre-install snapshot layout.
+      ...(this.installation ? { installation: this.getInstallProgress() } : {}),
       installedPatchIds: Array.from(this.installedPatchIds),
       lastBootAtMinute: this.lastBootAtMinute,
       lastInstallAtMinute: this.lastInstallAtMinute,
@@ -114,6 +126,7 @@ export class OsEngine {
     this.lastInstallAtMinute = state.lastInstallAtMinute;
     this.lastInstallLog = state.lastInstallLog ? [...state.lastInstallLog] : [];
     this.pendingReboot = state.pendingReboot ?? false;
+    this.installation = state.installation ? { ...state.installation } : null;
     if (state.proceduralCatalog) {
       try {
         restoreProceduralReleases(state.proceduralCatalog);

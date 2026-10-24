@@ -1,5 +1,5 @@
 import { buildCharacter } from '../../engine/CharacterEngine';
-import { pickTemplateName } from '../../engine/characterTemplates';
+import { pickTemplateName, spreadSeed } from '../../engine/characterTemplates';
 import { seedCharacterIds } from '../../engine/seedCharacters';
 import type { CharacterArchetype, SocialEngineState } from '../../engine/types';
 
@@ -27,7 +27,11 @@ export function buildFreshSandboxSocialState(seed: string): SocialEngineState {
   const conversations: SocialEngineState['conversations'] = {};
   const knownHandles: NonNullable<SocialEngineState['knownHandles']> = {};
   for (const [index, slot] of START_ROLES.entries()) {
-    const picked = pickTemplateName(slot.archetype, `${seed}:resident:${index}`, taken);
+    // Mix each role independently before passing a seed into the small
+    // archetype name pool. A raw base-31 hash % 4 ties all eight roles
+    // to the same UUID suffix, yielding duplicate-looking whole casts.
+    const picked = pickTemplateName(slot.archetype,
+      String(spreadSeed(`${seed}:resident:${index}`)), taken);
     taken.add(picked.id);
     taken.add(picked.handle);
     const actor = buildCharacter({

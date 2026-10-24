@@ -11,6 +11,7 @@ import { StartMenuChrome } from '../../desktop/StartMenuChrome';
 import { SystemTrayChrome } from '../../desktop/SystemTrayChrome';
 import { useWindowStore, type WindowState } from '../../store/useWindowStore';
 import { WorkerPulsePanel } from './WorkerPulsePanel';
+import { WorkerPreOrionShell } from './WorkerPreOrionShell';
 import { WorkerFileExplorer, WorkerNotepad } from './WorkerDesktopVfsApps';
 import { WorkerSystemPanel } from './WorkerSystemPanel';
 import { WorkerPublicSites } from './WorkerPublicSites';
@@ -50,8 +51,24 @@ export function WorkerDesktop({
   const [desktop, setDesktop] = useState<SimulationDesktopRead | null>(null);
   const [chrome, setChrome] = useState<SimulationChromeRead | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [bootPresentation, setBootPresentation] = useState(false);
+  const [openingAppId, setOpeningAppId] = useState<string | null>(null);
+  const bootTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const previousBootState = useRef<string | null>(null);
+
+  const showBoot = (editionId: string | null) => {
+    if (bootTimer.current !== null) clearTimeout(bootTimer.current);
+    setBootPresentation(true);
+    // Visual transition only. The authoritative physical boot already spent
+    // its hardware-dependent game minutes inside ComputerOwnershipRuntime.
+    const seconds = editionId ? getReleaseById(editionId as NonNullable<SimulationChromeRead['osVersion']>)?.bootTimeSeconds ?? 38 : 38;
+    bootTimer.current = setTimeout(() => setBootPresentation(false),
+      Math.min(4200, Math.max(1800, seconds * 55)));
+  };
+  useEffect(() => () => { if (bootTimer.current !== null) clearTimeout(bootTimer.current); }, []);
   const desktopRef = useRef<HTMLElement>(null);
   const openWindow = useWindowStore(s => s.openWindow);
+  const closeWindow = useWindowStore(s => s.closeWindow);
 
   useEffect(() => {
     let current = true;
@@ -65,6 +82,42 @@ export function WorkerDesktop({
     }).catch(cause => { if (current) setError(String(cause)); });
     return () => { current = false; };
   }, [session, revision]);
+
+  useEffect(() => {
+    const next = desktop?.pcBootState;
+    // Both the first DOS boot and every installed Orion boot have a visual
+    // transition. No boot sequence is shown while hardware is powered off.
+    if ((next === 'desktop' || next === 'no_boot_device')
+      && previousBootState.current && previousBootState.current !== next) {
+      showBoot(desktop?.osVersion ?? null);
+    }
+    if (next) previousBootState.current = next;
+  }, [desktop?.pcBootState]);
+
+  const computerPowerAction = async (choice: 'shutdown' | 'restart') => {
+    setError(null);
+    if (choice === 'restart') setBootPresentation(true);
+    try {
+      const off = await session.hardware({ kind: 'power', poweredOn: false });
+      if (!off.success) throw new Error(off.error ?? 'Computer shutdown was rejected');
+      // Window geometry is UI-only. A powered-off machine cannot retain
+      // running desktop windows or auto-resume them after power-on.
+      const state = useWindowStore.getState();
+      for (const id of state.windowOrder) {
+        if (state.windows[id]?.isOpen) closeWindow(id);
+      }
+      if (choice === 'restart') {
+        const on = await session.hardware({ kind: 'power', poweredOn: true });
+        if (!on.success) throw new Error(on.error ?? 'Computer restart was rejected');
+        showBoot(desktop?.osVersion ?? null);
+      } else {
+        setBootPresentation(false);
+      }
+    } catch (cause) {
+      setBootPresentation(false);
+      setError(cause instanceof Error ? cause.message : String(cause));
+    }
+  };
 
   const profile = chrome?.osVersion ? getOsPresentationProfile(chrome.osVersion) : null;
   const release = chrome?.osVersion ? getReleaseById(chrome.osVersion) : null;
@@ -93,7 +146,7 @@ export function WorkerDesktop({
    * dock it beside the icon columns so the desktop remains usable while a
    * window is open. On narrow screens, fit the window into the remaining
    * space before falling back to an overlay position. */
-  const open = (appId: string, customState?: Record<string, unknown>) => {
+  const open = async (appId: string, customState?: Record<string, unknown>) => {
     // Software eligibility belongs to the canonical installed-app read.
     // Historical taskbar windows/Run commands must not bypass a missing or
     // uninstalled third-party app. Core OS tools stay bundled.
@@ -102,6 +155,35 @@ export function WorkerDesktop({
       setError('Install ' + appId + ' from an owned downloaded installer before launching it.');
       return;
     }
+    // Running applications consumes canonical game time. The loading
+    // indicator is presentation only; the Worker owns all time and work.
+    // Cold boots are separate and are charged by physical PC power-on.
+    if (openingAppId) return;
+    // Focusing/restoring a running window is not a fresh process launch.
+    const existing = useWindowStore.getState().windows[appId];
+    if (existing?.isOpen) {
+      openWindow({ appId, customState: customState ?? {} });
+      return;
+    }
+    setOpeningAppId(appId);
+    try {
+      const read = await session.read({ kind: 'apps' });
+      const heavy = ['pulse', 'browser', 'photobox', 'retroamp', 'ailab'].includes(appId);
+      const baseMinutes = heavy ? 2 : 1;
+      const memoryFactor = read.hardware.ramMB < 128 ? 2 : read.hardware.ramMB < 256 ? 1.5 : 1;
+      const cpuFactor = Math.max(0.65, Math.min(2.5, 2 / Math.max(1, read.hardware.cpuTier)));
+      const workMinutes = Math.max(1, Math.ceil(baseMinutes * memoryFactor * cpuFactor));
+      await session.advanceMinutes(workMinutes);
+      // Human-readable launch transition with the same hardware-dependent
+      // ranking as world-time cost; no extra time owner or fake progress %.
+      const presentationMs = Math.min(2200, Math.max(650, workMinutes * 230));
+      await new Promise<void>(resolve => setTimeout(resolve, presentationMs));
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause));
+      setOpeningAppId(null);
+      return;
+    }
+    setOpeningAppId(null);
     const bounds = desktopRef.current?.getBoundingClientRect();
     const desktopWidth = bounds?.width ?? 900;
     const desktopHeight = bounds?.height ?? 570;
@@ -158,6 +240,32 @@ export function WorkerDesktop({
     '--os-icon-glyph-size': `${profile?.desktop.iconGlyphSizePx ?? 38}px`,
   } as CSSProperties;
 
+  // The monitor cannot render an Orion desktop before the owner has booted
+  // a genuine installed release. Pre-Orion states instead show a hardware
+  // workbench, powered-off machine, or the minimal DOS command environment.
+  if (!desktop || !chrome) {
+    return <p role="status" data-testid="worker-desktop-loading">Reading physical computer state…</p>;
+  }
+  if (bootPresentation) {
+    return <section data-testid="worker-orion-boot-screen" aria-label="Computer boot screen"
+      data-os-theme={profile?.themeId} className="relative flex h-[clamp(380px,68vh,680px)] w-full flex-col items-center justify-center overflow-hidden bg-[#070e1c] text-[#dcefff]">
+      <div className="absolute inset-0 animate-pulse bg-[radial-gradient(ellipse_at_50%_45%,rgba(68,126,190,0.35),transparent_70%)]" />
+      <div className="relative text-center">
+        <div className="mb-3 text-5xl font-black tracking-[0.18em] drop-shadow-[0_0_25px_rgba(180,218,255,0.65)]">{release ? 'ORION' : 'OAKHAVEN'}</div>
+        <div className="text-base tracking-[0.23em]">{release?.displayName ?? 'Oakhaven Compatible DOS'}</div>
+        <div className="mx-auto my-8 flex w-28 justify-center gap-3" aria-hidden="true">
+          <span className="h-3 w-3 animate-bounce rounded-full bg-sky-300" />
+          <span className="h-3 w-3 animate-bounce rounded-full bg-sky-300 [animation-delay:150ms]" />
+          <span className="h-3 w-3 animate-bounce rounded-full bg-sky-300 [animation-delay:300ms]" />
+        </div>
+        <p className="text-xs opacity-70">Initializing system hardware…</p>
+      </div>
+    </section>;
+  }
+  if (desktop.pcBootState !== 'desktop') {
+    return <WorkerPreOrionShell desktop={desktop} session={session} revision={revision} />;
+  }
+
   return (
     <section
       ref={desktopRef}
@@ -191,14 +299,6 @@ export function WorkerDesktop({
         </div>
       )}
 
-      {desktop && !desktop.osVersion && (
-        <div data-testid="worker-desktop-uninstalled" role="status" className="os-desktop-note">
-          <strong>No Orion OS is installed.</strong>
-          Purchase and assemble a computer in Computer &amp; Setup. Window and file operations here remain an
-          engineering surface until a canonical OS boots.
-        </div>
-      )}
-
       <WindowManagerChrome
         renderFrame={(win, isActive, children) => (
           <WindowFrameChrome window={win} isActive={isActive}
@@ -225,10 +325,7 @@ export function WorkerDesktop({
             availableApps={allowedApps} installedPrograms={installedPrograms}
             resolveAppId={resolveAppId}
             launchApp={open} onOpenDialUp={() => open('system')}
-            rest={() => {
-              void session.dispatch({ type: 'PLAYER_REST_OR_SLEEP', wakeHour: 8 })
-                .catch(cause => setError(String(cause)));
-            }} />
+            onPowerAction={choice => { void computerPowerAction(choice); }} />
         )}
         tray={<div data-testid="worker-taskbar-tray" className="ml-auto h-full">
           {chrome ? <SystemTrayChrome chrome={chrome}
@@ -237,6 +334,10 @@ export function WorkerDesktop({
           )}
         </div>}
       />
+      {openingAppId && <div role="status" data-testid="worker-app-startup"
+        className="pointer-events-none absolute inset-x-0 top-2 z-40 mx-auto w-max max-w-[90%] rounded border border-white/50 bg-slate-900/95 px-4 py-2 font-mono text-xs text-white shadow-xl">
+        Opening {openingAppId} on {release?.displayName ?? 'Orion'}…
+      </div>}
       {error && <p role="alert" className="os-context-menu absolute bottom-10 right-3 z-50 max-w-sm p-2 text-xs text-red-800">{error}</p>}
     </section>
   );

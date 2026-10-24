@@ -207,9 +207,28 @@ export function createSimulationWorkerRuntime(send: (message: SimulationWorkerRe
           unsubscribe = kernel.subscribeChanges(change => send({ type: 'change', change }));
           break;
         }
-        case 'dispatch':
-          value = requireKernel().dispatchAction(raw.action);
+        case 'dispatch': {
+          const owner = requireKernel();
+          if (raw.action.type === 'PULSE_SEND_MESSAGE') {
+            // Only the real installed messenger may ask for an NPC DM reply.
+            // Generic Social sends (other web/legacy contexts) retain their
+            // existing authority and must not suddenly generate extra turns.
+            if (!owner.getChromeRead().pulseInstalled) {
+              value = { success: false, error: 'Install Pulse before sending Pulse messages.' };
+              break;
+            }
+            value = owner.dispatchAction({
+              type: 'SOCIAL_SEND_MESSAGE', buddyId: raw.action.buddyId,
+              text: raw.action.text,
+            });
+            if (value && typeof value === 'object' && 'success' in value && value.success === true) {
+              owner.replyToWorkerPulseMessage(raw.action.buddyId, raw.action.text);
+            }
+          } else {
+            value = owner.dispatchAction(raw.action);
+          }
           break;
+        }
         case 'cafeNarrative':
           cafeNarrative ??= createWorkerCafeNarrative(requireKernel());
           value = cafeNarrative.run(raw.command);
@@ -231,7 +250,20 @@ export function createSimulationWorkerRuntime(send: (message: SimulationWorkerRe
               value = owner.insertOwnedMediaAtHome(raw.command.instanceId);
               break;
             case 'ejectMedia': value = owner.ejectOwnedMediaAtHome(); break;
+            case 'installHardware':
+              if (typeof raw.command.instanceId !== 'string' || !raw.command.instanceId ||
+                typeof raw.command.slot !== 'string' ||
+                !/^ram:(0|[1-9][0-9]*)$/.test(raw.command.slot)) {
+                throw new Error('Owned RAM and a valid physical motherboard slot are required');
+              }
+              value = owner.installOwnedHardwareAtHome(raw.command.instanceId, raw.command.slot);
+              break;
             case 'prepareOs': value = owner.prepareOsInstallFromInsertedMedia(); break;
+            case 'startOs':
+              if (!raw.command.plan || typeof raw.command.plan !== 'object') throw new Error('OS setup requires verified media');
+              value = owner.startOsInstall(raw.command.plan); break;
+            case 'advanceOs': value = owner.advanceOsInstall(); break;
+            case 'cancelOs': value = owner.cancelOsInstall(); break;
             case 'commitOs':
               if (!raw.command.plan || typeof raw.command.plan !== 'object') {
                 throw new Error('OS installation needs an authoritative preflight plan');
