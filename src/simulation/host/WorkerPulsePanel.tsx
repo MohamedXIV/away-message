@@ -81,7 +81,7 @@ export function WorkerPulsePanel({
     setError(null);
     try {
       const result = await session.dispatch({
-        type: 'SOCIAL_SEND_MESSAGE', buddyId: selected, text: message,
+        type: 'PULSE_SEND_MESSAGE', buddyId: selected, text: message,
       });
       if (!result.success) throw new Error(result.error || 'Message rejected');
       setText('');
