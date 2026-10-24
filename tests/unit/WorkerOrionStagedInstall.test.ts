@@ -41,6 +41,8 @@ describe('#219 persistent owner-backed Orion installation', () => {
     expect(reloaded.setComputerPower(false).success).toBe(true);
     expect(reloaded.advanceOsInstall().success).toBe(false);
     expect(reloaded.setComputerPower(true).success).toBe(true);
+    const rebootMinutes = reloaded.exportSnapshot().time.totalMinutes - beforeBlocked.time.totalMinutes;
+    expect(rebootMinutes).toBeGreaterThan(0); // real physical boot has its own cost
 
     for (let step = 0; step < 4 && !reloaded.os.getCurrentOsId(); step++) {
       expect(reloaded.advanceOsInstall().success).toBe(true);
@@ -49,7 +51,8 @@ describe('#219 persistent owner-backed Orion installation', () => {
     expect(completed.os.currentOsId).toBe('Orion_4.8');
     expect(completed.os.installation).toBeUndefined();
     expect(reloaded.getDesktopRead().pcBootState).toBe('desktop');
-    expect(completed.time.totalMinutes - beginning.time.totalMinutes).toBe(plan.durationMinutes);
+    expect(completed.time.totalMinutes - beginning.time.totalMinutes)
+      .toBe(plan.durationMinutes + rebootMinutes); // setup never charges a second time
     expect((beginning.computer.storage[0]?.freeBytes ?? 0) -
       (completed.computer.storage[0]?.freeBytes ?? 0)).toBe(plan.installSizeBytes);
     expect(reloaded.advanceOsInstall().success).toBe(false);
