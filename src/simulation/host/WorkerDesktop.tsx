@@ -3,7 +3,8 @@ import type { CSSProperties } from 'react';
 import type { SimulationChromeRead, SimulationDesktopRead } from '../../engine/kernel/SimulationPublication';
 import { getReleaseById } from '../../engine/OsCatalog';
 import { getOsPresentationProfile } from '../../desktop/host/OsPresentation';
-import { DesktopIconGrid } from '../../desktop/DesktopIconGrid';
+import { DesktopIconGrid, type DesktopIconItem } from '../../desktop/DesktopIconGrid';
+import { InGameContextMenu, type GameContextMenuState } from '../../desktop/InGameContextMenu';
 import { WindowFrameChrome } from '../../desktop/WindowFrameChrome';
 import { WindowManagerChrome } from '../../desktop/WindowManagerChrome';
 import { TaskbarChrome } from '../../desktop/TaskbarChrome';
@@ -51,6 +52,8 @@ export function WorkerDesktop({
   const [desktop, setDesktop] = useState<SimulationDesktopRead | null>(null);
   const [chrome, setChrome] = useState<SimulationChromeRead | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [contextMenu, setContextMenu] = useState<GameContextMenuState | null>(null);
+  const [iconDetails, setIconDetails] = useState<DesktopIconItem | null>(null);
   const [bootPresentation, setBootPresentation] = useState(false);
   const [openingAppId, setOpeningAppId] = useState<string | null>(null);
   const bootTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -231,6 +234,56 @@ export function WorkerDesktop({
   const openArtwork = (path: string) => open('photobox', { artworkPath: path });
   const openAudio = (path: string) => open('retroamp', { audioPath: path });
 
+  const refreshDesktop = () => {
+    void Promise.all([session.read({ kind: 'desktop' }), session.read({ kind: 'chrome' })])
+      .then(([nextDesktop, nextChrome]) => {
+        setDesktop(nextDesktop);
+        setChrome(nextChrome);
+        setError(null);
+      }).catch(cause => setError(String(cause)));
+  };
+
+  const contextForIcon = (icon: DesktopIconItem, x: number, y: number) => {
+    setContextMenu({
+      x, y, label: icon.label, items: [
+        { label: 'Open', disabled: icon.disabled, onSelect: () => void open(icon.appId) },
+        { label: 'Properties', onSelect: () => setIconDetails(icon), separatorBefore: true },
+      ],
+    });
+  };
+
+  const contextForDesktop = (event: React.MouseEvent<HTMLElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const target = event.target as HTMLElement;
+    if (target.closest('[data-desktop-icon]')) return;
+    const windowElement = target.closest<HTMLElement>('[data-testid^="worker-window-"]');
+    if (windowElement) {
+      const appId = windowElement.dataset.testid?.replace(/^worker-window-/, '') ?? '';
+      const window = Object.values(useWindowStore.getState().windows)
+        .find(win => win.isOpen && win.appId === appId);
+      if (window) {
+        setContextMenu({
+          x: event.clientX, y: event.clientY, label: window.title || 'Application',
+          items: [
+            { label: 'Minimize window', onSelect: () => useWindowStore.getState().minimizeWindow(window.id) },
+            { label: 'Close window', onSelect: () => closeWindow(window.id) },
+          ],
+        });
+      }
+      return;
+    }
+    if (target.closest('[data-testid="worker-desktop-taskbar"]')) return;
+    setContextMenu({
+      x: event.clientX, y: event.clientY, label: 'Orion Desktop',
+      items: [
+        { label: 'Refresh desktop', onSelect: refreshDesktop },
+        { label: 'My Computer', onSelect: () => void open('fileexplorer') },
+        { label: 'Display & system settings', onSelect: () => void open('system'), separatorBefore: true },
+      ],
+    });
+  };
+
   const shellStyle = {
     fontFamily: profile?.uiFontStack ?? 'Tahoma, sans-serif',
     fontSize: profile ? `${profile.baseFontSizePx}px` : undefined,
@@ -276,6 +329,7 @@ export function WorkerDesktop({
       data-os-icon-style={profile?.desktop.iconStyle}
       data-os-release={chrome?.osVersion ?? undefined}
       aria-label="Orion desktop"
+      onContextMenu={contextForDesktop}
       style={shellStyle}
       className="os-desktop h-[clamp(380px,68vh,680px)] w-full"
     >
@@ -285,6 +339,7 @@ export function WorkerDesktop({
       <DesktopIconGrid
         icons={desktopIcons}
         onOpen={(icon) => open(icon.appId)}
+        onIconContextMenu={(icon, event) => contextForIcon(icon, event.clientX, event.clientY)}
         testId="worker-desktop-icon-grid"
         ariaLabel="Desktop icons"
       />
@@ -339,6 +394,19 @@ export function WorkerDesktop({
         Opening {openingAppId} on {release?.displayName ?? 'Orion'}…
       </div>}
       {error && <p role="alert" className="os-context-menu absolute bottom-10 right-3 z-50 max-w-sm p-2 text-xs text-red-800">{error}</p>}
+      <InGameContextMenu menu={contextMenu} onClose={() => setContextMenu(null)} testId="worker-os-context-menu" />
+      {iconDetails && (
+        <div role="dialog" aria-label={iconDetails.label + ' properties'} data-testid="worker-icon-properties"
+          className="os-context-menu absolute left-1/2 top-1/4 z-[60] w-[min(340px,90%)] -translate-x-1/2 p-3 text-xs">
+          <h3 className="mb-2 border-b pb-2 font-bold">{iconDetails.label} — Properties</h3>
+          <p>Type: {iconDetails.source === 'installed' ? 'Installed program shortcut' : 'Orion system shortcut'}</p>
+          <p>Target: {iconDetails.appId}</p>
+          <p>Status: {iconDetails.disabled ? 'Unavailable' : 'Ready'}</p>
+          <button type="button" className="os-context-item mt-3 justify-center border" onClick={() => setIconDetails(null)}>
+            Close
+          </button>
+        </div>
+      )}
     </section>
   );
 }

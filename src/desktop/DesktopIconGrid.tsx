@@ -15,6 +15,7 @@ export interface DesktopIconItem {
 interface DesktopIconGridProps {
   icons: readonly DesktopIconItem[];
   onOpen: (icon: DesktopIconItem) => void;
+  onIconContextMenu?: (icon: DesktopIconItem, event: React.MouseEvent<HTMLButtonElement>) => void;
   testId?: string;
   ariaLabel?: string;
 }
@@ -25,7 +26,7 @@ type Direction = 'up' | 'down' | 'left' | 'right';
  * into new columns, so short or narrow desktops grow sideways instead of
  * becoming one thin scrolling strip. */
 export const DesktopIconGrid: React.FC<DesktopIconGridProps> = ({
-  icons, onOpen, testId = 'desktop-icon-grid', ariaLabel = 'Desktop icons',
+  icons, onOpen, onIconContextMenu, testId = 'desktop-icon-grid', ariaLabel = 'Desktop icons',
 }) => {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const gridRef = useRef<HTMLDivElement>(null);
@@ -139,6 +140,12 @@ export const DesktopIconGrid: React.FC<DesktopIconGridProps> = ({
             title={icon.title ?? (icon.disabled ? unavailableLabel : `Open ${icon.label}`)}
             className="os-desktop-icon"
             onFocus={() => setSelectedId(icon.id)}
+            onContextMenu={event => {
+              event.preventDefault();
+              event.stopPropagation();
+              setSelectedId(icon.id);
+              onIconContextMenu?.(icon, event);
+            }}
             onClick={(event) => {
               // A pointer click only selects a desktop icon. Keyboard and
               // assistive-technology activation dispatch detail=0 clicks.
