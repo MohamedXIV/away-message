@@ -159,6 +159,12 @@ export function WorkerDesktop({
     // indicator is presentation only; the Worker owns all time and work.
     // Cold boots are separate and are charged by physical PC power-on.
     if (openingAppId) return;
+    // Focusing/restoring a running window is not a fresh process launch.
+    const existing = useWindowStore.getState().windows[appId];
+    if (existing?.isOpen) {
+      openWindow({ appId, customState: customState ?? {} });
+      return;
+    }
     setOpeningAppId(appId);
     try {
       const read = await session.read({ kind: 'apps' });
@@ -168,8 +174,10 @@ export function WorkerDesktop({
       const cpuFactor = Math.max(0.65, Math.min(2.5, 2 / Math.max(1, read.hardware.cpuTier)));
       const workMinutes = Math.max(1, Math.ceil(baseMinutes * memoryFactor * cpuFactor));
       await session.advanceMinutes(workMinutes);
-      // Short visual handoff, not a second simulated task or fake progress bar.
-      await new Promise<void>(resolve => setTimeout(resolve, heavy ? 850 : 420));
+      // Human-readable launch transition with the same hardware-dependent
+      // ranking as world-time cost; no extra time owner or fake progress %.
+      const presentationMs = Math.min(2200, Math.max(650, workMinutes * 230));
+      await new Promise<void>(resolve => setTimeout(resolve, presentationMs));
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));
       setOpeningAppId(null);
