@@ -220,7 +220,7 @@ test('right-click stays inside the game: context-aware desktop, file, browser an
   // Outside the simulated PC, game-world actions remain game actions.
   await page.getByTestId('worker-hud').click({ button: 'right' });
   const worldMenu = page.getByTestId('worker-world-context-menu');
-  await expect(worldMenu).toContainText('Pause time');
+  await expect(worldMenu).toContainText('Resume time');
   await expect(worldMenu).toContainText('Save game');
   await page.keyboard.press('Escape');
   await expect(worldMenu).toHaveCount(0);

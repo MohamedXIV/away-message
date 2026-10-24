@@ -50,7 +50,7 @@ export function WorkerFileExplorer({
   }, [session, revision, offset, folder, refreshToken]);
 
   return (
-    <section data-testid="worker-explorer" className="flex h-full flex-col bg-[#fff] text-black"
+    <section data-testid="worker-explorer" className="relative flex h-full flex-col bg-[#fff] text-black"
       onContextMenu={event => {
         event.preventDefault();
         event.stopPropagation();

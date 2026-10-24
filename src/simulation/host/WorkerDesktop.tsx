@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { CSSProperties } from 'react';
+import type { CSSProperties, MouseEvent as ReactMouseEvent } from 'react';
 import type { SimulationChromeRead, SimulationDesktopRead } from '../../engine/kernel/SimulationPublication';
 import { getReleaseById } from '../../engine/OsCatalog';
 import { getOsPresentationProfile } from '../../desktop/host/OsPresentation';
@@ -252,7 +252,7 @@ export function WorkerDesktop({
     });
   };
 
-  const contextForDesktop = (event: React.MouseEvent<HTMLElement>) => {
+  const contextForDesktop = (event: ReactMouseEvent<HTMLElement>) => {
     event.preventDefault();
     event.stopPropagation();
     const target = event.target as HTMLElement;
