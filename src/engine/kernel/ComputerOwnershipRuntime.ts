@@ -120,12 +120,28 @@ export class ComputerOwnershipRuntime {
   }
 
   public setComputerPower(poweredOn: boolean): ActionResult {
-    if (!this.owners.hardware.getComputerState().assembled) {
+    const computer = this.owners.hardware.getComputerBootStatus();
+    if (!computer.assembled) {
       return { success: false, error: 'Set up the computer at your current residence before powering it on.' };
     }
+    if (computer.poweredOn === poweredOn) return { success: true };
+
+    // PC startup costs *world* time, not a React timer or player sleep.
+    // Release catalog and real assembled CPU/RAM are the single source for
+    // cold-boot cost. The short screen animation merely presents this work.
+    const hardware = poweredOn ? this.owners.hardware.getState() : null;
+    const release = poweredOn ? getReleaseById(this.owners.os.getCurrentOsId() ?? '') : null;
+    const bootSeconds = release?.bootTimeSeconds ?? 38; // minimal DOS fallback
+    const memoryFactor = hardware && hardware.ramMB < 128 ? 2
+      : hardware && hardware.ramMB < 256 ? 1.5 : 1;
+    const cpuFactor = hardware ? Math.max(0.65, Math.min(2.5, 2 / Math.max(1, hardware.cpuTier))) : 1;
+    const bootMinutes = poweredOn
+      ? Math.max(1, Math.ceil(bootSeconds * memoryFactor * cpuFactor / 60))
+      : 0;
 
     this.owners.hardware.setPower(poweredOn);
     this.invalidate();
+    if (bootMinutes > 0) this.advanceMinutes(bootMinutes, `Boot ${release?.displayName ?? 'Oakhaven DOS'} on owned hardware`);
     return { success: true };
   }
 
