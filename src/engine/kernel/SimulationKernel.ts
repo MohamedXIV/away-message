@@ -1117,11 +1117,11 @@ export class SimulationKernel {
     const voice = buddy.archetype ?? 'regular';
     const seed = `${buddyId}:${this.clock.getTotalMinutes()}:${this.social.getConversationPage(buddyId, 0, 1).total}`;
     let lines: string[];
-    if (/\\b(hi|hey|hello|yo|sup)\\b/.test(written)) {
+    if (/\b(hi|hey|hello|yo|sup)\b/.test(written)) {
       lines = voice === 'student' ? ['heyyy! how has your day been?', 'oh hi!! what are you up to?']
         : voice === 'trader' ? ['hey. what is on your mind?', 'hey, just checking in. what is up?']
         : ['hey :) how has your day been?', 'oh hi! anything interesting going on?'];
-    } else if (/\\b(how are you|how's it going|you okay)\\b/.test(written)) {
+    } else if (/\b(how are you|how's it going|you okay)\b/.test(written)) {
       lines = ['a little tired, but glad to see your message. what about you?', 'been a long day lol. how are things with you?'];
     } else if (written.includes('?')) {
       lines = voice === 'nightowl'
