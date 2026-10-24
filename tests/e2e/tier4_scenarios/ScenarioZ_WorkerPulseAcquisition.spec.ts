@@ -47,6 +47,23 @@ test('#214 fresh Orion acquires Pulse only through real internet â†’ VFS setup â
   await installer.getByRole('button', { name: 'Finish' }).click();
   await expect(desktop.getByRole('button', { name: 'Open Pulse Messenger' })).toHaveCount(1);
   await expect(page.getByTestId('worker-window-pulse')).toBeVisible();
+  // Real Worker now exposes the original retro Pulse account onboarding,
+  // instead of opening a permanently signed-in engineering chat panel.
+  const messenger = page.getByTestId('worker-pulse-panel');
+  await expect(messenger).toHaveAttribute('data-pulse-phase', 'sign-in');
+  await messenger.getByText('Get a new Pulse ID').click();
+  await messenger.getByLabel('Pulse ID').fill('new_player06');
+  await messenger.getByLabel('Password', { exact: true }).fill('localtest123');
+  await messenger.getByLabel('Confirm password').fill('localtest123');
+  await messenger.getByRole('button', { name: 'Create Pulse ID' }).click();
+  await expect(messenger).toHaveAttribute('data-pulse-phase', 'signed-in');
+  await expect(messenger).toContainText('new_player06');
+  await messenger.getByRole('button', { name: 'Sign out' }).click();
+  await expect(messenger).toHaveAttribute('data-pulse-phase', 'sign-in');
+  await messenger.getByLabel('Pulse ID').fill('new_player06');
+  await messenger.getByLabel('Password', { exact: true }).fill('localtest123');
+  await messenger.getByRole('button', { name: 'Sign In', exact: true }).click();
+  await expect(messenger).toHaveAttribute('data-pulse-phase', 'signed-in');
 
   await page.getByRole('button', { name: 'Save game' }).click();
   await expect(page.getByText('Saved to slot_1')).toBeVisible();
