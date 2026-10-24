@@ -44,7 +44,8 @@ export const VoyagerBrowserChrome: React.FC<VoyagerBrowserChromeProps> = ({
               <button onClick={() => onSavePage()} className="block w-full px-3 py-1 text-left hover:bg-[#000080] hover:text-white font-bold">💾 Save Page</button>
               <button onClick={() => onSavePage()} className="block w-full px-3 py-1 text-left hover:bg-[#000080] hover:text-white">Save As...</button>
               <div className="my-0.5 h-px bg-gray-400" />
-              <button onClick={() => window.print?.()} className="block w-full px-3 py-1 text-left hover:bg-[#000080] hover:text-white">Print...</button>
+              <button type="button" disabled title="No in-game printer is installed"
+                className="block w-full px-3 py-1 text-left opacity-50 cursor-not-allowed">Print... (no printer)</button>
               <button onClick={() => setIsFileMenuOpen(false)} className="block w-full px-3 py-1 text-left hover:bg-[#000080] hover:text-white">Close</button>
             </div>
           )}
