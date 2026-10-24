@@ -1102,6 +1102,53 @@ export class SimulationKernel {
     };
   }
 
+  /**
+   * Worker-only offline-safe Pulse fallback. Player sends already pass through
+   * the canonical Social gate; this is called only after a successful send.
+   * No fake React transcript, private actor data or second Social authority.
+   * Human/AI conversation quality remains a separate #223 acceptance task.
+   */
+  public replyToWorkerPulseMessage(buddyId: string, playerText: string): boolean {
+    const actor = this.getPlayerActorRead(buddyId)?.actor;
+    if (!actor?.canChatNow.allowed) return false;
+    const buddy = this.social.getBuddy(buddyId);
+    if (!buddy) return false;
+    const written = playerText.trim().toLowerCase();
+    const voice = buddy.archetype ?? 'regular';
+    const seed = `${buddyId}:${this.clock.getTotalMinutes()}:${this.social.getConversationPage(buddyId, 0, 1).total}`;
+    let lines: string[];
+    if (/\\b(hi|hey|hello|yo|sup)\\b/.test(written)) {
+      lines = voice === 'student' ? ['heyyy! how has your day been?', 'oh hi!! what are you up to?']
+        : voice === 'trader' ? ['hey. what is on your mind?', 'hey, just checking in. what is up?']
+        : ['hey :) how has your day been?', 'oh hi! anything interesting going on?'];
+    } else if (/\\b(how are you|how's it going|you okay)\\b/.test(written)) {
+      lines = ['a little tired, but glad to see your message. what about you?', 'been a long day lol. how are things with you?'];
+    } else if (written.includes('?')) {
+      lines = voice === 'nightowl'
+        ? ["not totally sure. i might look into it tonight.", "that's a good question. give me a minute to think."]
+        : voice === 'trader'
+          ? ["i'd need to check before saying for sure.", "not sure yet. what's your take?"]
+          : ["hmm, i'm not sure yet. what do you think?", "i'm curious too. tell me more?"];
+    } else {
+      lines = voice === 'student'
+        ? ['omg really? tell me more!', 'lol i know what you mean. what happened next?']
+        : voice === 'artist'
+          ? ["i can picture that, actually. what was it like?", "that's interesting. i've been thinking about something similar."]
+          : voice === 'trader'
+            ? ['interesting. what happened after that?', 'got it. tell me more.']
+            : voice === 'nightowl'
+              ? ['huh. that gives me something to think about.', 'i hear you. tell me a bit more?']
+              : ["yeah, i get what you mean. what happened next?", "i'm listening. tell me more?"];
+    }
+    let hash = 2166136261;
+    for (const char of seed) hash = Math.imul(hash ^ char.charCodeAt(0), 16777619) >>> 0;
+    const text = lines[hash % lines.length]!;
+    return this.dispatchAction({
+      type: 'SOCIAL_RECEIVE_MESSAGE', buddyId, text,
+      tags: ['worker_pulse', 'offline_template'],
+    }).success;
+  }
+
   public getConversationRead(actorId: string, offset = 0, limit = 30): SimulationConversationRead {
     // An arbitrary/guessed actor ID is NOT authorization to read their
     // transcript. Source-owned learned handles are the Pulse discovery gate.
