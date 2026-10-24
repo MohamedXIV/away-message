@@ -80,6 +80,9 @@ test('Orion 5.0: owned Family Refurb CD boots actual second-edition DOS installe
     await progress.getByRole('progressbar').getAttribute('aria-valuenow'))).toBeGreaterThan(0);
   const elapsed = await progress.getByRole('progressbar').getAttribute('aria-valuenow');
   await expect(page.getByTestId('worker-desktop')).toHaveCount(0);
+  // A cold-loaded slot_3 stays selected when saving. Explicitly choose an
+  // independent slot_1 checkpoint rather than mistaking the save destination.
+  await page.getByRole('combobox', { name: 'Save slot' }).selectOption('slot_1');
   await page.getByRole('button', { name: 'Save game' }).click();
   await expect(page.getByText('Saved to slot_1')).toBeVisible();
   await page.reload();
