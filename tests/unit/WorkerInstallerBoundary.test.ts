@@ -13,7 +13,7 @@ describe('Worker Installer owner isolation', () => {
     expect(panel).not.toContain('defaultEngine');
   });
   it('opens downloaded files and rechecks canonical provenance at commit', () => {
-    expect(explorer).toContain("file.kind === 'installer' ? openInstaller(file.path)");
+    expect(explorer).toContain("file.kind === 'installer') openInstaller(file.path)");
     expect(kernel).toContain("transfer.status !== 'complete'");
     expect(kernel).toContain('file.metadata?.author !== transfer.sourceId');
     expect(kernel).toContain('DOWNLOAD_CATALOG.find');

@@ -26,6 +26,6 @@ describe('PhotoBox owner-backed authored SVG presentation',()=>{
     expect(worker).not.toContain('useSimulationStore');
     expect(worker).not.toContain('defaultEngine');
     expect(explorer).toContain("'C:/Pictures'");
-    expect(explorer).toContain("file.kind === 'image' ? openArtwork(file.path)");
+    expect(explorer).toContain("file.kind === 'image') openArtwork(file.path)");
   });
 });

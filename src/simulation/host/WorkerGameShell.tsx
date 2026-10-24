@@ -9,6 +9,7 @@ import { listSlots, type SlotSummary } from '../../persistence/slotUi';
 import { GENERATED_PLACES } from '../../engine/worldContent.generated';
 import { CITY_NODES } from '../../engine/CityMap';
 import { WorkerStarterResidenceChoice } from './WorkerStarterResidenceChoice';
+import { InGameContextMenu, type GameContextMenuState } from '../../desktop/InGameContextMenu';
 
 const authoredPlaceNames = new Map(GENERATED_PLACES.map(place => [place.id, place.name] as const));
 
@@ -29,6 +30,7 @@ export function WorkerGameShell() {
   const [panel, setPanel] = useState<'summary' | 'room' | 'city' | 'desktop'>('room');
   const [chooseResidence, setChooseResidence] = useState(false);
   const [arrival, setArrival] = useState<{ location: string; receipt: string } | null>(null);
+  const [contextMenu, setContextMenu] = useState<GameContextMenuState | null>(null);
 
   useEffect(() => () => session.dispose(), [session]);
 
@@ -97,7 +99,25 @@ export function WorkerGameShell() {
 
   const control = 'rounded border border-amber-800/60 bg-slate-800 px-3 py-2 text-sm text-slate-100 hover:border-amber-400 hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-40';
   return (
-    <main className="h-full w-full overflow-y-auto bg-[#090e1b] text-slate-100" data-testid="worker-first-shell">
+    <main className="h-full w-full overflow-y-auto bg-[#090e1b] text-slate-100" data-testid="worker-first-shell"
+      onContextMenu={event => {
+        // All gameplay surfaces consume right-click. Nested OS / app targets
+        // stop propagation and expose their own contextual menus.
+        event.preventDefault();
+        if (view.phase !== 'game' || !view.hud) return;
+        setContextMenu({
+          x: event.clientX, y: event.clientY, label: panel === 'room' ? 'Your surroundings' : 'Game',
+          items: [
+            ...(panel !== 'room' ? [{ label: 'Look around', onSelect: () => setPanel('room') }] : []),
+            { label: 'Open town map', onSelect: () => setPanel('city') },
+            ...(view.world?.playerLocation === 'home' && panel !== 'desktop'
+              ? [{ label: 'Use computer', onSelect: () => setPanel('desktop') }] : []),
+            { label: view.hud.paused ? 'Resume time' : 'Pause time',
+              onSelect: () => void act(() => session.dispatch({ type: 'TIME_SET_PAUSED', paused: !view.hud!.paused })) },
+            { label: 'Save game', onSelect: () => void act(() => session.save(slot)) },
+          ],
+        });
+      }}>
       <div className="mx-auto flex min-h-full max-w-6xl flex-col gap-4 p-4 sm:p-6">
         <header className="flex flex-wrap items-center justify-between gap-3 border-b border-amber-900/50 pb-4">
           <div>
@@ -261,6 +281,7 @@ export function WorkerGameShell() {
           </>
         )}
       </div>
+      <InGameContextMenu menu={contextMenu} onClose={() => setContextMenu(null)} testId="worker-world-context-menu" />
     </main>
   );
 }
