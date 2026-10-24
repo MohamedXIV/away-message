@@ -24,7 +24,7 @@ async function inspectActualCast(page: Page): Promise<string[]> {
   // physical disc, DOS setup and saved-time installation before opening Lab.
   if (await bench.isVisible()) await installOrion48FromDos(page);
   await expect(desktop).toBeVisible();
-  await desktop.getByRole('button', { name: 'Open AI Lab Inspector' }).click();
+  await desktop.getByRole('button', { name: 'Open AI Lab Inspector' }).dblclick();
   const lab = page.getByTestId('worker-lab-inspector');
   await expect(lab.getByTestId('worker-lab-actor')).toHaveCount(8);
   const roster = await lab.getByTestId('worker-lab-actor').allTextContents();

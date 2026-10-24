@@ -197,7 +197,7 @@ test('right-click stays inside the game: context-aware desktop, file, browser an
   await expect(fileMenu).toContainText('RightClickFile.txt');
   await fileMenu.getByRole('menuitem', { name: 'Properties' }).click();
   await expect(explorer.getByTestId('worker-file-properties')).toContainText('C:/Documents/RightClickFile.txt');
-  await explorer.getByRole('button', { name: 'Close' }).click();
+  await explorer.getByTestId('worker-file-properties').getByRole('button', { name: 'Close', exact: true }).click();
   await expect(page.getByTestId('worker-window-notepad')).toHaveCount(0);
 
   await file.click({ button: 'right' });
