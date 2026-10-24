@@ -168,7 +168,7 @@ jobs:
       # Exercise the new DOS-to-real-Orion journey on the actual stacked head.
       - name: Browser DOS owned-media install and clean Orion first boot
         if: github.event_name == 'pull_request' && github.event.pull_request.head.ref == 'feat/219-dos-first-boot-and-orion-disc-setup'
-        run: npx playwright test tests/e2e/tier4_scenarios/ScenarioY_WorkerDosInstall.spec.ts tests/e2e/tier4_scenarios/ScenarioX_WorkerOrionDesktopUx.spec.ts tests/e2e/tier4_scenarios/ScenarioX_WorkerDynamicCast.spec.ts tests/e2e/tier4_scenarios/ScenarioZ_WorkerPulseAcquisition.spec.ts tests/e2e/tier4_scenarios/ScenarioAA_WorkerOrion50OwnedDisc.spec.ts
+        run: npx playwright test tests/e2e/tier4_scenarios/ScenarioY_WorkerDosInstall.spec.ts tests/e2e/tier4_scenarios/ScenarioX_WorkerOrionDesktopUx.spec.ts tests/e2e/tier4_scenarios/ScenarioX_WorkerDynamicCast.spec.ts tests/e2e/tier4_scenarios/ScenarioZ_WorkerPulseAcquisition.spec.ts tests/e2e/tier4_scenarios/ScenarioAA_WorkerOrion50OwnedDisc.spec.ts tests/e2e/tier4_scenarios/ScenarioAB_WorkerDesktopInstalledOverflow.spec.ts
 
       - name: Browser Worker dynamic cast and actual new-game social acceptance
         if: github.event_name == 'pull_request' && github.event.pull_request.head.ref == 'feat/213-dynamic-worker-starter-cast'
