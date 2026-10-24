@@ -44,7 +44,7 @@ test('Orion retail upgrade: buy 128MB RAM and 5.0 CD, power off to install, copy
   // insert its 4.8 CD and finish four clock-backed DOS copy stages.
   let desktop = await installOrion48FromDos(page);
   await expect(desktop).toHaveAttribute('data-os-theme', 'orion48');
-  await desktop.getByRole('button', { name: 'Open Computer & Setup' }).click();
+  await desktop.getByRole('button', { name: 'Open Computer & Setup' }).dblclick();
   let system = page.getByTestId('worker-system-panel');
   const shop = system.getByTestId('worker-os-upgrade-store');
   await expect(shop).toBeVisible();
@@ -64,7 +64,7 @@ test('Orion retail upgrade: buy 128MB RAM and 5.0 CD, power off to install, copy
   await bench.getByRole('button', { name: 'Power on' }).click();
   desktop = page.getByTestId('worker-desktop');
   await expect(desktop).toHaveAttribute('data-os-theme', 'orion48');
-  await desktop.getByRole('button', { name: 'Open Computer & Setup' }).click();
+  await desktop.getByRole('button', { name: 'Open Computer & Setup' }).dblclick();
   system = page.getByTestId('worker-system-panel');
   await expect(system).toContainText('RAM: 192 MB');
 
@@ -98,7 +98,7 @@ test('Orion retail upgrade: buy 128MB RAM and 5.0 CD, power off to install, copy
   await page.getByRole('button', { name: 'desktop', exact: true }).click();
   desktop = page.getByTestId('worker-desktop');
   await expect(desktop).toHaveAttribute('data-os-theme', 'orion48');
-  await desktop.getByRole('button', { name: 'Open Computer & Setup' }).click();
+  await desktop.getByRole('button', { name: 'Open Computer & Setup' }).dblclick();
   system = page.getByTestId('worker-system-panel');
   const resumed = system.getByTestId('worker-system-os-install-progress');
   await expect(resumed.getByRole('progressbar')).toHaveAttribute('value', spent!);

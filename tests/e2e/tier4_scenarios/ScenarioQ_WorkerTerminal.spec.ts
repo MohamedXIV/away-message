@@ -8,7 +8,7 @@ test('Worker Command Prompt reads and writes real VFS data shared with Explorer 
   await page.getByRole('button', { name: 'Pause clock' }).click();
   await page.getByRole('button', { name: 'desktop', exact: true }).click();
   const desktop = page.getByTestId('worker-desktop');
-  await desktop.getByRole('button', { name: 'Open Command Prompt' }).click();
+  await desktop.getByRole('button', { name: 'Open Command Prompt' }).dblclick();
   const terminal = page.getByTestId('worker-terminal');
   const output = terminal.getByTestId('worker-terminal-output');
   const command = terminal.getByRole('textbox', { name: 'Command line' });
@@ -35,10 +35,10 @@ test('Worker Command Prompt reads and writes real VFS data shared with Explorer 
   // using the visible titlebar instead of force-clicking through the window.
   await desktop.getByRole('button', { name: 'Minimize Terminal CLI' }).click();
   await expect(terminal).toHaveCount(0);
-  await desktop.getByRole('button', { name: 'Open My Computer' }).click({ timeout: 6_000 });
+  await desktop.getByRole('button', { name: 'Open My Computer' }).dblclick({ timeout: 6_000 });
   const explorer = page.getByTestId('worker-window-fileexplorer');
   await expect(explorer.getByRole('button', { name: 'Open file: WorkerCommandNote.txt' })).toBeVisible();
-  await explorer.getByRole('button', { name: 'Open file: WorkerCommandNote.txt' }).click();
+  await explorer.getByRole('button', { name: 'Open file: WorkerCommandNote.txt' }).dblclick();
   await expect(page.getByRole('textbox', { name: 'Notepad document' })).toHaveValue('Same owner same file');
 
   await page.getByRole('button', { name: 'Save game' }).click();
@@ -47,7 +47,7 @@ test('Worker Command Prompt reads and writes real VFS data shared with Explorer 
   await page.getByRole('button', { name: 'Load game' }).click();
   await expect(page.getByTestId('worker-phase')).toHaveText('game');
   await page.getByRole('button', { name: 'desktop', exact: true }).click();
-  await page.getByTestId('worker-desktop').getByRole('button', { name: 'Open Command Prompt' }).click({ timeout: 6_000 });
+  await page.getByTestId('worker-desktop').getByRole('button', { name: 'Open Command Prompt' }).dblclick({ timeout: 6_000 });
   const recovered = page.getByTestId('worker-terminal');
   await recovered.getByRole('textbox', { name: 'Command line' }).fill('TYPE C:/Documents/WorkerCommandNote.txt');
   await recovered.getByRole('textbox', { name: 'Command line' }).press('Enter');
@@ -60,7 +60,7 @@ test('Worker terminal rejects parent-directory escape and cannot fabricate netwo
   await page.getByRole('button', { name: 'New game' }).click();
   await expect(page.getByTestId('worker-phase')).toHaveText('game');
   await page.getByRole('button', { name: 'desktop', exact: true }).click();
-  await page.getByTestId('worker-desktop').getByRole('button', { name: 'Open Command Prompt' }).click();
+  await page.getByTestId('worker-desktop').getByRole('button', { name: 'Open Command Prompt' }).dblclick();
   const terminal = page.getByTestId('worker-terminal');
   const prompt = terminal.getByRole('textbox', { name: 'Command line' });
   for (const cmd of ['CD ../../', 'SAVE C:/Windows/Injected.txt no', 'DEL C:/Documents/../../Readme.txt']) {

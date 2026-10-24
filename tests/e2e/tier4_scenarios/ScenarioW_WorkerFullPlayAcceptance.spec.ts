@@ -52,7 +52,7 @@ test('fresh root New Game: room needs → town outing → real PC installation �
   await page.getByRole('button', { name: 'desktop', exact: true }).click();
   const desktop = page.getByTestId('worker-desktop');
   await expect(desktop).toBeVisible();
-  await desktop.getByRole('button', { name: 'Open Computer & Setup' }).click();
+  await desktop.getByRole('button', { name: 'Open Computer & Setup' }).dblclick();
   const setup = page.getByTestId('worker-system-panel');
   await setup.getByRole('button', { name: 'Purchase starter hardware bundle ($35)' }).click();
   await setup.getByRole('button', { name: 'Assemble owned package' }).click();
@@ -64,7 +64,7 @@ test('fresh root New Game: room needs → town outing → real PC installation �
   await expect(page.getByTestId('worker-boot-state')).toContainText('desktop');
   await desktop.getByRole('button', { name: 'Close Computer & Setup' }).click();
 
-  await desktop.getByRole('button', { name: 'Open Notepad' }).click();
+  await desktop.getByRole('button', { name: 'Open Notepad' }).dblclick();
   const note = page.getByTestId('worker-window-notepad');
   await note.getByLabel('Name').fill('FirstDayJourney.txt');
   await note.getByRole('textbox', { name: 'Notepad document' })
@@ -86,12 +86,12 @@ test('fresh root New Game: room needs → town outing → real PC installation �
   await expect(page.getByTestId('worker-physical-room')).toBeVisible();
 
   await page.getByRole('button', { name: 'desktop', exact: true }).click();
-  await page.getByRole('button', { name: 'Open Computer & Setup' }).click();
+  await page.getByRole('button', { name: 'Open Computer & Setup' }).dblclick();
   await expect(page.getByTestId('worker-boot-state')).toContainText('desktop');
   await desktop.getByRole('button', { name: 'Close Computer & Setup' }).click();
-  await desktop.getByRole('button', { name: 'Open My Computer' }).click();
+  await desktop.getByRole('button', { name: 'Open My Computer' }).dblclick();
   await page.getByTestId('worker-window-fileexplorer')
-    .getByRole('button', { name: 'Open file: FirstDayJourney.txt' }).click();
+    .getByRole('button', { name: 'Open file: FirstDayJourney.txt' }).dblclick();
   await expect(page.getByRole('textbox', { name: 'Notepad document' }))
     .toHaveValue('Shower, launder my clothes, and get Orion running.');
   await assertNoMainThreadSimulation(page);
@@ -165,7 +165,7 @@ test('authored social continuation: café Ink → real Pulse message → room �
   await expect(page.getByTestId('worker-physical-room')).toBeVisible();
   await page.getByRole('button', { name: 'desktop', exact: true }).click();
   const desktop = page.getByTestId('worker-desktop');
-  await desktop.getByRole('button', { name: 'Open Notepad' }).click();
+  await desktop.getByRole('button', { name: 'Open Notepad' }).dblclick();
   const note = page.getByTestId('worker-window-notepad');
   await note.getByLabel('Name').fill('CafeConversation.txt');
   await note.getByRole('textbox', { name: 'Notepad document' })
@@ -185,9 +185,9 @@ test('authored social continuation: café Ink → real Pulse message → room �
   await expect(page.getByTestId('worker-pulse-messages'))
     .toContainText('Enjoyed catching up at the café!');
   await page.getByRole('button', { name: 'desktop', exact: true }).click();
-  await desktop.getByRole('button', { name: 'Open My Computer' }).click();
+  await desktop.getByRole('button', { name: 'Open My Computer' }).dblclick();
   await page.getByTestId('worker-window-fileexplorer')
-    .getByRole('button', { name: 'Open file: CafeConversation.txt' }).click();
+    .getByRole('button', { name: 'Open file: CafeConversation.txt' }).dblclick();
   await expect(page.getByRole('textbox', { name: 'Notepad document' }))
     .toHaveValue('I spoke with Maya, then sent a Pulse message.');
   await assertNoMainThreadSimulation(page);

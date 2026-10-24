@@ -14,7 +14,7 @@ test('#214 fresh Orion acquires Pulse only through real internet â†’ VFS setup â
   await expect(page.getByRole('button', { name: 'pulse', exact: true })).toHaveCount(0);
   await expect(desktop.getByRole('button', { name: 'Open FlashFetch' })).toHaveCount(0);
 
-  await desktop.getByRole('button', { name: 'Open Voyager Browser' }).click();
+  await desktop.getByRole('button', { name: 'Open Voyager Browser' }).dblclick();
   const browser = page.getByTestId('worker-window-browser');
   await expect(browser.getByText('DownloadHub.local â€” Software Archive')).toBeVisible();
   const pulse = browser.getByRole('row').filter({ hasText: 'Pulse Messenger 5.2 Classic' });
@@ -35,10 +35,10 @@ test('#214 fresh Orion acquires Pulse only through real internet â†’ VFS setup â
   await desktop.getByRole('button', { name: 'Close Computer & Setup' }).click();
   await desktop.getByRole('button', { name: 'Close Voyager Browser' }).click();
 
-  await desktop.getByRole('button', { name: 'Open My Computer' }).click();
+  await desktop.getByRole('button', { name: 'Open My Computer' }).dblclick();
   const explorer = page.getByTestId('worker-window-fileexplorer');
   await explorer.getByRole('button', { name: 'Downloads', exact: true }).click();
-  await explorer.getByRole('button', { name: 'Open file: pulse52_setup.exe' }).click();
+  await explorer.getByRole('button', { name: 'Open file: pulse52_setup.exe' }).dblclick();
   const installer = page.getByTestId('worker-installer');
   await expect(installer).toContainText('Pulse Messenger');
   for (let step=0; step<4; step++) {
@@ -72,7 +72,7 @@ test('#214 fresh Orion acquires Pulse only through real internet â†’ VFS setup â
   await page.getByRole('button', { name: 'desktop', exact: true }).click();
   const loaded = page.getByTestId('worker-desktop');
   await expect(loaded.getByRole('button', { name: 'Open Pulse Messenger' })).toHaveCount(1);
-  await loaded.getByRole('button', { name: 'Open Computer & Setup' }).click();
+  await loaded.getByRole('button', { name: 'Open Computer & Setup' }).dblclick();
   await page.getByTestId('worker-system-panel').getByRole('button', { name: 'Uninstall Pulse Messenger' }).click();
   await expect(loaded.getByRole('button', { name: 'Open Pulse Messenger' })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'pulse', exact: true })).toHaveCount(0);

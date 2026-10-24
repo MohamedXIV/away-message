@@ -92,7 +92,11 @@ test('ordinary / New Game installs Orion 4.8 and delivers a coherent, responsive
   await page.keyboard.press('Alt+F4');
   await expect(page.getByTestId('worker-window-mailbox')).toHaveCount(0);
 
-  await desktop.getByRole('button', { name: 'Open Notepad' }).click();
+  const notepadIcon = desktop.getByRole('button', { name: 'Open Notepad' });
+  await notepadIcon.click();
+  await expect(notepadIcon).toHaveAttribute('data-selected', 'true');
+  await expect(page.getByTestId('worker-window-notepad')).toHaveCount(0);
+  await notepadIcon.dblclick();
   const note = page.getByTestId('worker-window-notepad');
   await expect(note).toBeVisible();
   const before = await note.boundingBox();
@@ -143,9 +147,13 @@ test('ordinary / New Game installs Orion 4.8 and delivers a coherent, responsive
   await page.getByRole('button', { name: 'desktop', exact: true }).click();
   const recoveredDesktop = page.getByTestId('worker-desktop');
   await expect(recoveredDesktop).toHaveAttribute('data-os-theme', 'orion48');
-  await recoveredDesktop.getByRole('button', { name: 'Open My Computer' }).click();
-  await page.getByTestId('worker-window-fileexplorer')
-    .getByRole('button', { name: 'Open file: DesktopUxNote.txt' }).click();
+  await recoveredDesktop.getByRole('button', { name: 'Open My Computer' }).dblclick();
+  const documentIcon = page.getByTestId('worker-window-fileexplorer')
+    .getByRole('button', { name: 'Open file: DesktopUxNote.txt' });
+  await documentIcon.click();
+  await expect(documentIcon).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByRole('textbox', { name: 'Notepad document' })).toHaveCount(0);
+  await documentIcon.dblclick();
   await expect(page.getByRole('textbox', { name: 'Notepad document' }))
     .toHaveValue('A believable Orion desktop.');
   await assertNoMainThreadSimulation(page);
@@ -169,7 +177,7 @@ test('the Orion desktop stays usable in a small viewport and honours reduced mot
   expect(metrics.scrollWidth).toBeLessThanOrEqual(metrics.clientWidth + 1);
   expect(metrics.scrollHeight).toBeLessThanOrEqual(metrics.clientHeight + 1);
 
-  await desktop.getByRole('button', { name: 'Open Notepad' }).click();
+  await desktop.getByRole('button', { name: 'Open Notepad' }).dblclick();
   const note = page.getByTestId('worker-window-notepad');
   await expect(note).toBeVisible();
   await expect(note).toHaveAttribute('data-os-window-animation', 'snap');
@@ -265,7 +273,7 @@ test('Orion 6.0 keeps a distinct authored desktop through the central OS contrac
   await page.keyboard.press('Escape');
   await expect(menu).toHaveCount(0);
 
-  await desktop.getByRole('button', { name: 'Open Notepad' }).click();
+  await desktop.getByRole('button', { name: 'Open Notepad' }).dblclick();
   const note = page.getByTestId('worker-window-notepad');
   await expect(note).toHaveAttribute('data-os-theme', 'orion60');
   await expect(note).toHaveAttribute('data-os-window-chrome', 'soft-classic');

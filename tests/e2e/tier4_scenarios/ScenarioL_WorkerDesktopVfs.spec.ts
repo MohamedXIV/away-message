@@ -11,7 +11,7 @@ test('Worker-owned desktop reuses window store; Explorer and Notepad persist rea
   await expect(desktop).toBeVisible();
   expect(await page.evaluate(() => !('__simEngine' in window) && !('__simStore' in window))).toBe(true);
 
-  await desktop.getByRole('button', { name: 'Open Notepad' }).click();
+  await desktop.getByRole('button', { name: 'Open Notepad' }).dblclick();
   const notepad = page.getByTestId('worker-window-notepad');
   await expect(notepad).toBeVisible();
   await notepad.getByLabel('Name').fill('OwnerBoundaryNote.txt');
@@ -27,11 +27,11 @@ test('Worker-owned desktop reuses window store; Explorer and Notepad persist rea
   await expect(notepad).toBeVisible();
   await desktop.getByRole('button', { name: 'Close Notepad' }).click();
   await expect(notepad).toHaveCount(0);
-  await desktop.getByRole('button', { name: 'Open My Computer' }).click();
+  await desktop.getByRole('button', { name: 'Open My Computer' }).dblclick();
   const explorer = page.getByTestId('worker-window-fileexplorer');
   await expect(explorer).toBeVisible();
   await expect(explorer.getByRole('button', { name: 'Open file: OwnerBoundaryNote.txt' })).toBeVisible();
-  await explorer.getByRole('button', { name: 'Open file: OwnerBoundaryNote.txt' }).click();
+  await explorer.getByRole('button', { name: 'Open file: OwnerBoundaryNote.txt' }).dblclick();
   await expect(page.getByTestId('worker-window-notepad')).toBeVisible();
   await expect(page.getByRole('textbox', { name: 'Notepad document' }))
     .toHaveValue('Written into the one canonical Worker world');
@@ -45,7 +45,7 @@ test('Worker desktop Pulse window can minimize, restore and query same authorize
   await expect(page.getByTestId('worker-phase')).toHaveText('game');
   await page.getByRole('button', { name: 'desktop', exact: true }).click();
   const desktop = page.getByTestId('worker-desktop');
-  await desktop.getByRole('button', { name: 'Open Pulse Messenger' }).click();
+  await desktop.getByRole('button', { name: 'Open Pulse Messenger' }).dblclick();
   await expect(page.getByTestId('worker-window-pulse')).toBeVisible();
   await expect(page.getByTestId('worker-pulse-panel')).toBeVisible();
   await desktop.getByRole('button', { name: 'Minimize Pulse Messenger' }).click();
@@ -64,7 +64,7 @@ test('Worker desktop public network reads canonical CityWire and job-board proje
   await expect(page.getByTestId('worker-phase')).toHaveText('game');
   await page.getByRole('button', { name: 'desktop', exact: true }).click();
   const desktop = page.getByTestId('worker-desktop');
-  await desktop.getByRole('button', { name: 'Open Town Sites' }).click();
+  await desktop.getByRole('button', { name: 'Open Town Sites' }).dblclick();
   const publicWeb = page.getByTestId('worker-public-sites');
   await expect(publicWeb.getByRole('heading', { name: 'The City Wire' })).toBeVisible();
   await publicWeb.getByRole('button', { name: 'Jobs.local' }).click();
@@ -84,7 +84,7 @@ test('Worker windows reuse authored WindowFrame dragging, sizing and maximize wi
   await expect(page.getByTestId('worker-phase')).toHaveText('game');
   await page.getByRole('button', { name: 'desktop', exact: true }).click();
   const desktop = page.getByTestId('worker-desktop');
-  await desktop.getByRole('button', { name: 'Open Notepad' }).click();
+  await desktop.getByRole('button', { name: 'Open Notepad' }).dblclick();
   const frame = page.getByTestId('worker-window-notepad');
   await expect(frame).toHaveClass(/os-themed-window/);
   const before = await frame.boundingBox();
@@ -110,7 +110,7 @@ test('Worker desktop mounts the original authored Mailbox using owner-backed let
   await expect(page.getByTestId('worker-phase')).toHaveText('game');
   await page.getByRole('button', { name: 'desktop', exact: true }).click();
   const desktop = page.getByTestId('worker-desktop');
-  await desktop.getByRole('button', { name: 'Open Mailbox' }).click();
+  await desktop.getByRole('button', { name: 'Open Mailbox' }).dblclick();
   const mail = page.getByTestId('worker-window-mailbox');
   await expect(mail).toBeVisible();
   await expect(mail.getByRole('button', { name: /Inbox/ })).toBeVisible();
@@ -182,8 +182,8 @@ test('shared Worker window manager handles Alt+Tab and Alt+F4 across real app wi
   await expect(page.getByTestId('worker-phase')).toHaveText('game');
   await page.getByRole('button', { name: 'desktop', exact: true }).click();
   const desktop = page.getByTestId('worker-desktop');
-  await desktop.getByRole('button', { name: 'Open Notepad' }).click();
-  await desktop.getByRole('button', { name: 'Open Mailbox' }).click();
+  await desktop.getByRole('button', { name: 'Open Notepad' }).dblclick();
+  await desktop.getByRole('button', { name: 'Open Mailbox' }).dblclick();
   const notepad = desktop.getByTestId('worker-window-notepad');
   const mailbox = desktop.getByTestId('worker-window-mailbox');
   await expect(mailbox.locator('.os-themed-titlebar')).toHaveAttribute('data-inactive', 'false');
@@ -210,7 +210,7 @@ test('authored FlashFetch uses the Worker OsHost boundary and refuses real-world
   await expect(page.getByTestId('worker-phase')).toHaveText('game');
   await page.getByRole('button', { name: 'desktop', exact: true }).click();
   const desktop = page.getByTestId('worker-desktop');
-  await desktop.getByRole('button', { name: 'Open FlashFetch' }).click();
+  await desktop.getByRole('button', { name: 'Open FlashFetch' }).dblclick();
   const flash = page.getByTestId('worker-window-flashfetch');
   await expect(flash).toBeVisible();
   await expect(flash.getByText('FlashFetch is ready')).toBeVisible();
@@ -229,7 +229,7 @@ test('shared Voyager and DownloadHub use Worker reads and canonical VFS Save Pag
   await expect(page.getByTestId('worker-phase')).toHaveText('game');
   await page.getByRole('button', { name: 'desktop', exact: true }).click();
   const desktop = page.getByTestId('worker-desktop');
-  await desktop.getByRole('button', { name: 'Open Voyager Browser' }).click();
+  await desktop.getByRole('button', { name: 'Open Voyager Browser' }).dblclick();
   const browser = page.getByTestId('worker-window-browser');
   await expect(browser.getByText('DownloadHub.local — Software Archive')).toBeVisible();
   await expect(browser.getByText('Pulse Messenger 5.2 Classic')).toBeVisible();
@@ -243,7 +243,7 @@ test('shared Voyager and DownloadHub use Worker reads and canonical VFS Save Pag
   // The desktop shortcut is occluded by the browser window; minimize it first.
   await desktop.getByRole('button', { name: 'Minimize Voyager Browser' }).click();
   await expect(browser).toHaveCount(0);
-  await desktop.getByRole('button', { name: 'Open My Computer' }).click();
+  await desktop.getByRole('button', { name: 'Open My Computer' }).dblclick();
   await expect(page.getByTestId('worker-window-fileexplorer').getByRole('button', {
     name: 'Open file: downloadhub_page.txt',
   })).toBeVisible();
