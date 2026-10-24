@@ -7,6 +7,7 @@ import { useOsHost } from '../../desktop/host/OsHostApiContext';
 import { useWindowStore } from '../../store/useWindowStore';
 import { WorkerOsHostProvider } from './WorkerOsHostProvider';
 import { WorkerPublicSites } from './WorkerPublicSites';
+import { InGameContextMenu, type GameContextMenuState } from '../../desktop/InGameContextMenu';
 import type { WorkerGameSession } from './WorkerGameSession';
 
 function gameUrl(value: string): URL | null {
@@ -55,6 +56,7 @@ function BrowserContent({ session, revision, site, initialUrl }: {
   const [status, setStatus] = useState('Done');
   const [menuOpen, setMenuOpen] = useState(false);
   const [saved, setSaved] = useState<string | null>(null);
+  const [contextMenu, setContextMenu] = useState<GameContextMenuState | null>(null);
   const navigate = (raw: string, remember = true) => {
     const url = gameUrl(raw);
     if (!url) { setStatus('Blocked: only in-game HTTP .local pages are supported'); return; }
@@ -95,7 +97,25 @@ function BrowserContent({ session, revision, site, initialUrl }: {
       <button type="button" onClick={() => navigate('downloadhub.local')} className="mt-2 border p-1">DownloadHub</button>
     </div>;
   }
-  return <VoyagerBrowserChrome currentUrl={currentUrl} inputUrl={inputUrl}
+  return <div className="h-full" data-testid="worker-voyager-page-area"
+    onContextMenu={event => {
+      event.preventDefault();
+      event.stopPropagation();
+      const anchor = (event.target as HTMLElement).closest<HTMLAnchorElement>('a[href]');
+      const link = anchor ? gameUrl(anchor.getAttribute('href') ?? '') : null;
+      setContextMenu({
+        x: event.clientX, y: event.clientY, label: link ? 'In-game link' : currentUrl,
+        items: [
+          ...(link ? [{ label: 'Open link', onSelect: () => navigate(link.href) }] : []),
+          { label: 'Back', disabled: index === 0, onSelect: back },
+          { label: 'Forward', disabled: index >= history.length - 1, onSelect: forward },
+          { label: 'Refresh this page', onSelect: () => navigate(currentUrl, false) },
+          { label: 'Home', onSelect: () => navigate('downloadhub.local') },
+          { label: 'Save page to C:/Documents', onSelect: save, separatorBefore: true },
+        ],
+      });
+    }}>
+    <VoyagerBrowserChrome currentUrl={currentUrl} inputUrl={inputUrl}
     onInputUrlChange={setInputUrl} historyIndex={index} historyLength={history.length}
     isFileMenuOpen={menuOpen} setIsFileMenuOpen={setMenuOpen} saveNotice={saved}
     isLoading={false} loadProgress={100} statusText={status}
@@ -103,7 +123,9 @@ function BrowserContent({ session, revision, site, initialUrl }: {
     content={content} onNavigate={navigate}
     onNavigateSubmit={e => { e.preventDefault(); navigate(inputUrl); }}
     onBack={back} onForward={forward} onRefresh={() => navigate(currentUrl, false)}
-    onHome={() => navigate('downloadhub.local')} onSavePage={save} />;
+    onHome={() => navigate('downloadhub.local')} onSavePage={save} />
+    <InGameContextMenu menu={contextMenu} onClose={() => setContextMenu(null)} testId="worker-web-context-menu" />
+  </div>;
 }
 
 function WorkerDownloadHub({ site }: { site: SimulationWebsiteRead }) {
