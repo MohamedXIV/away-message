@@ -882,7 +882,7 @@ export class SimulationKernel {
   /** File-body-free desktop read. Only visible shortcut metadata crosses UI. */
   public getDesktopRead(): SimulationDesktopRead {
     const osVersion = this.os.getCurrentOsId();
-    const computer = this.hardware.getComputerState();
+    const slots = this.hardware.getRamSlotSummary();
     const ownedRamItems = this.inventory.getLooseRamItems(32);
     const desktopFiles = this.vfs.listDirectoryMetadata('C:/Desktop', 256).map(
       ({ id, name, path, parentPath, kind, appAssociation }) => ({
@@ -900,8 +900,8 @@ export class SimulationKernel {
       monitor: this.hardware.getDisplayState().monitor,
       bootMediaItems: this.inventory.getBootMediaItems(256),
       ownedRamItems,
-      ramSlotsUsed: computer.ramSticks.length,
-      ramSlotCapacity: computer.motherboard?.ramSlots ?? 0,
+      ramSlotsUsed: slots.used,
+      ramSlotCapacity: slots.capacity,
       osInstallation: this.os.getInstallProgress(),
       desktopFiles,
       installedApps: this.software.getInstalledSoftware().slice(0, 64).map(
