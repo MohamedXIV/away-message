@@ -68,6 +68,7 @@ export function WorkerDesktop({
   useEffect(() => () => { if (bootTimer.current !== null) clearTimeout(bootTimer.current); }, []);
   const desktopRef = useRef<HTMLElement>(null);
   const openWindow = useWindowStore(s => s.openWindow);
+  const closeWindow = useWindowStore(s => s.closeWindow);
 
   useEffect(() => {
     let current = true;
@@ -84,7 +85,10 @@ export function WorkerDesktop({
 
   useEffect(() => {
     const next = desktop?.pcBootState;
-    if (next === 'desktop' && previousBootState.current && previousBootState.current !== 'desktop') {
+    // Both the first DOS boot and every installed Orion boot have a visual
+    // transition. No boot sequence is shown while hardware is powered off.
+    if ((next === 'desktop' || next === 'no_boot_device')
+      && previousBootState.current && previousBootState.current !== next) {
       showBoot(desktop?.osVersion ?? null);
     }
     if (next) previousBootState.current = next;
@@ -96,6 +100,12 @@ export function WorkerDesktop({
     try {
       const off = await session.hardware({ kind: 'power', poweredOn: false });
       if (!off.success) throw new Error(off.error ?? 'Computer shutdown was rejected');
+      // Window geometry is UI-only. A powered-off machine cannot retain
+      // running desktop windows or auto-resume them after power-on.
+      const state = useWindowStore.getState();
+      for (const id of state.windowOrder) {
+        if (state.windows[id]?.isOpen) closeWindow(id);
+      }
       if (choice === 'restart') {
         const on = await session.hardware({ kind: 'power', poweredOn: true });
         if (!on.success) throw new Error(on.error ?? 'Computer restart was rejected');
@@ -229,11 +239,11 @@ export function WorkerDesktop({
     return <p role="status" data-testid="worker-desktop-loading">Reading physical computer state…</p>;
   }
   if (bootPresentation) {
-    return <section data-testid="worker-orion-boot-screen" aria-label="Orion computer boot screen"
+    return <section data-testid="worker-orion-boot-screen" aria-label="Computer boot screen"
       data-os-theme={profile?.themeId} className="relative flex h-[clamp(380px,68vh,680px)] w-full flex-col items-center justify-center overflow-hidden bg-[#070e1c] text-[#dcefff]">
       <div className="absolute inset-0 animate-pulse bg-[radial-gradient(ellipse_at_50%_45%,rgba(68,126,190,0.35),transparent_70%)]" />
       <div className="relative text-center">
-        <div className="mb-3 text-5xl font-black tracking-[0.18em] drop-shadow-[0_0_25px_rgba(180,218,255,0.65)]">ORION</div>
+        <div className="mb-3 text-5xl font-black tracking-[0.18em] drop-shadow-[0_0_25px_rgba(180,218,255,0.65)]">{release ? 'ORION' : 'OAKHAVEN'}</div>
         <div className="text-base tracking-[0.23em]">{release?.displayName ?? 'Oakhaven Compatible DOS'}</div>
         <div className="mx-auto my-8 flex w-28 justify-center gap-3" aria-hidden="true">
           <span className="h-3 w-3 animate-bounce rounded-full bg-sky-300" />
