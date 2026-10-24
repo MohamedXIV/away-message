@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { SimulationDirectoryRead } from '../../engine/kernel/SimulationPublication';
 import type { WorkerGameSession } from './WorkerGameSession';
+import { InGameContextMenu, type GameContextMenuState } from '../../desktop/InGameContextMenu';
 
 const DOCUMENTS = 'C:/Documents';
 
@@ -21,6 +22,10 @@ export function WorkerFileExplorer({
   const [folder, setFolder] = useState<'C:/Documents' | 'C:/Downloads' | 'C:/Pictures' | 'C:/Music'>(DOCUMENTS);
   const [error, setError] = useState<string | null>(null);
   const [selectedFileId, setSelectedFileId] = useState<string | null>(null);
+  const [contextMenu, setContextMenu] = useState<GameContextMenuState | null>(null);
+  const [fileProperties, setFileProperties] = useState<SimulationDirectoryRead['files'][number] | null>(null);
+  const [refreshToken, setRefreshToken] = useState(0);
+  const refresh = () => { setPage(null); setRefreshToken(n => n + 1); };
 
   const openFile = (file: SimulationDirectoryRead['files'][number]) => {
     if (file.kind === 'audio') openAudio(file.path);
@@ -42,10 +47,20 @@ export function WorkerFileExplorer({
       })
       .catch(cause => { if (active) setError(String(cause)); });
     return () => { active = false; };
-  }, [session, revision, offset, folder]);
+  }, [session, revision, offset, folder, refreshToken]);
 
   return (
-    <section data-testid="worker-explorer" className="flex h-full flex-col bg-[#fff] text-black">
+    <section data-testid="worker-explorer" className="flex h-full flex-col bg-[#fff] text-black"
+      onContextMenu={event => {
+        event.preventDefault();
+        event.stopPropagation();
+        setContextMenu({ x: event.clientX, y: event.clientY, label: folder,
+          items: [
+            { label: 'Refresh folder', onSelect: refresh },
+            { label: 'Documents', onSelect: () => { setFolder(DOCUMENTS); setOffset(0); } },
+            { label: 'Downloads', onSelect: () => { setFolder('C:/Downloads'); setOffset(0); } },
+          ] });
+      }}>
       <div className="border-b border-gray-400 bg-[#ddd] px-2 py-1 text-xs">
         Address: {folder} · {(page?.files.length ?? 0)} visible files
       </div>
@@ -60,6 +75,19 @@ export function WorkerFileExplorer({
         {(page?.files ?? []).map(file => (
           <button type="button" key={file.id}
             aria-pressed={selectedFileId === file.id}
+            onContextMenu={event => {
+              event.preventDefault();
+              event.stopPropagation();
+              setSelectedFileId(file.id);
+              setContextMenu({
+                x: event.clientX, y: event.clientY, label: file.name,
+                items: [
+                  { label: 'Open', disabled: !['audio', 'image', 'archive', 'installer', 'text'].includes(file.kind),
+                    onSelect: () => openFile(file) },
+                  { label: 'Properties', onSelect: () => setFileProperties(file), separatorBefore: true },
+                ],
+              });
+            }}
             onClick={event => {
               // Local files select on click and open on double-click.
               // Keyboard/assistive activation has detail=0 and opens directly.
@@ -77,6 +105,18 @@ export function WorkerFileExplorer({
         )}
         {error && <p role="alert" className="text-red-700">{error}</p>}
       </div>
+      <InGameContextMenu menu={contextMenu} onClose={() => setContextMenu(null)} testId="worker-file-context-menu" />
+      {fileProperties && (
+        <div role="dialog" aria-label={fileProperties.name + ' properties'}
+          data-testid="worker-file-properties"
+          className="absolute inset-x-3 top-16 z-30 border-2 border-gray-700 bg-[#eee] p-3 text-xs shadow-xl">
+          <h3 className="mb-2 border-b font-semibold">{fileProperties.name} — Properties</h3>
+          <p>Location: {fileProperties.path}</p>
+          <p>Type: {fileProperties.kind}</p>
+          <p>Size: {fileProperties.sizeBytes.toLocaleString()} bytes</p>
+          <button type="button" className="mt-3 border border-gray-600 px-3 py-1" onClick={() => setFileProperties(null)}>Close</button>
+        </div>
+      )}
       <div className="flex gap-2 border-t border-gray-400 bg-[#ddd] px-2 py-1 text-xs">
         <button disabled={offset === 0} onClick={() => { setOffset(n => Math.max(0, n - 32)); setSelectedFileId(null); }}>
           Previous
