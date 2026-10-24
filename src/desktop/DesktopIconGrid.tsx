@@ -139,12 +139,16 @@ export const DesktopIconGrid: React.FC<DesktopIconGridProps> = ({
             title={icon.title ?? (icon.disabled ? unavailableLabel : `Open ${icon.label}`)}
             className="os-desktop-icon"
             onFocus={() => setSelectedId(icon.id)}
-            onClick={() => {
+            onClick={(event) => {
+              // A pointer click only selects a desktop icon. Keyboard and
+              // assistive-technology activation dispatch detail=0 clicks.
               setSelectedId(icon.id);
-              if (!icon.disabled) onOpen(icon);
+              if (event.detail === 0 && !icon.disabled) onOpen(icon);
             }}
-            onDoubleClick={() => {
-              if (!icon.disabled) onOpen(icon);
+            onDoubleClick={(event) => {
+              // Ignore non-primary pointer activation; a double-click opens
+              // exactly once instead of launching on both preceding clicks.
+              if (event.button === 0 && !icon.disabled) onOpen(icon);
             }}
             onKeyDown={handleKeyDown}
           >
