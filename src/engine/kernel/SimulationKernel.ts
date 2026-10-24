@@ -15,7 +15,7 @@ import { buildRecentNpcMail, buildRentMailHistory, buildWeeklyNpcThreads, buildW
 import { getWeatherForDay, gameDayName } from '../WeatherEngine';
 import { locationLabel } from '../AppointmentDirector';
 import { createEmptyComputerSetup, createEmptyDisplaySetup } from '../hardware/state';
-import { PHYSICAL_ITEM_CATALOG } from '../hardware/catalog';
+
 import { CoreSimulationRuntime } from './CoreSimulationRuntime';
 import { MAX_MINUTE_ACCURATE_ADVANCE, type MinuteAdvanceGranularity } from './TimeAdvancement';
 import { resolvePcBootStateFromOwnerStatus } from './ComputerOwnershipRuntime';
@@ -883,9 +883,7 @@ export class SimulationKernel {
   public getDesktopRead(): SimulationDesktopRead {
     const osVersion = this.os.getCurrentOsId();
     const computer = this.hardware.getComputerState();
-    const ownedRamItems = this.inventory.getState().items.filter(item =>
-      item.location === 'room_package' &&
-      PHYSICAL_ITEM_CATALOG[item.catalogItemId]?.componentKind === 'ram').slice(0, 32);
+    const ownedRamItems = this.inventory.getLooseRamItems(32);
     const desktopFiles = this.vfs.listDirectoryMetadata('C:/Desktop', 256).map(
       ({ id, name, path, parentPath, kind, appAssociation }) => ({
         id, name, path, parentPath, kind, appAssociation,

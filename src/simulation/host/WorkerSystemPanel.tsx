@@ -154,7 +154,8 @@ export function WorkerSystemPanel({
       <h3 className="font-semibold">Owned OS installation media</h3>
       <div className="flex flex-wrap gap-2">
         {(desktop?.bootMediaItems ?? []).map(item => (
-          <div key={item.instanceId} className="rounded border border-gray-400 p-2">
+          <div key={item.instanceId} data-testid={'worker-owned-cd-' + item.catalogItemId}
+            className="rounded border border-gray-400 p-2">
             {item.catalogItemId} ({item.location})
             <button className={'ml-2 ' + button}
               disabled={busy || item.location === 'inserted'}
