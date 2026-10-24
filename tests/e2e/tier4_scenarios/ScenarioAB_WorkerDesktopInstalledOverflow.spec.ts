@@ -24,7 +24,14 @@ test('owned installed shortcuts remain discoverable and keyboard-navigable beyon
       display: engine.hardware.getDisplayState(),
     });
     engine.core.os.loadState({ currentOsId: 'Orion_6.0' });
-    const actualPackages = engine.software.getCatalog().map((definition: any) => ({
+    // The catalog contains Pulse 5.2 and 6.0 with the same appId and
+    // Desktop .lnk name. A canonical installed roster has one active
+    // release per app, not two conflicting shortcuts.
+    const uniqueDefinitions = Array.from(
+      new Map(engine.software.getCatalog().map((definition: any) =>
+        [definition.appId, definition])).values(),
+    );
+    const actualPackages = uniqueDefinitions.map((definition: any) => ({
       id: 'inst_' + definition.id,
       appId: definition.appId,
       name: definition.name,
