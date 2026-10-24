@@ -179,6 +179,21 @@ test('the Orion desktop stays usable in a small viewport and honours reduced mot
   expect(frameBox!.x).toBeGreaterThanOrEqual(desktopBox!.x - 1);
   expect(frameBox!.x + frameBox!.width).toBeLessThanOrEqual(desktopBox!.x + desktopBox!.width + 1);
   expect(frameBox!.y + frameBox!.height).toBeLessThanOrEqual(desktopBox!.y + desktopBox!.height - 28 + 1);
+
+  // Drag deliberately beyond the right edge; the entire titlebar and its
+  // Close button must remain reachable inside the contained OS surface.
+  const bar = note.locator('.os-themed-titlebar');
+  const barBox = await bar.boundingBox();
+  expect(barBox).not.toBeNull();
+  await page.mouse.move(barBox!.x + 70, barBox!.y + 12);
+  await page.mouse.down();
+  await page.mouse.move(desktopBox!.x + desktopBox!.width + 300, barBox!.y + 12, { steps: 8 });
+  await page.mouse.up();
+  const moved = await note.boundingBox();
+  expect(moved).not.toBeNull();
+  expect(moved!.x).toBeGreaterThanOrEqual(desktopBox!.x - 1);
+  expect(moved!.x + moved!.width).toBeLessThanOrEqual(desktopBox!.x + desktopBox!.width + 1);
+  await expect(note.getByRole('button', { name: 'Close Notepad' })).toBeVisible();
   await desktop.getByRole('button', { name: 'Close Notepad' }).click();
 
   const taskbar = page.getByTestId('worker-desktop-taskbar');

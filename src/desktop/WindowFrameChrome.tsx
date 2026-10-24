@@ -65,7 +65,9 @@ export const WindowFrameChrome: React.FC<WindowFrameChromeProps> = memo(({ windo
         const desktop = frameRef.current?.offsetParent as HTMLElement | null;
         const maxW = desktop?.clientWidth ?? (typeof globalThis.innerWidth !== 'undefined' ? globalThis.innerWidth : 1920);
         const maxH = desktop?.clientHeight ?? (typeof globalThis.innerHeight !== 'undefined' ? globalThis.innerHeight : 1080);
-        const newX = Math.max(-winState.size.width + 100, Math.min(maxW - 100, startPosX + deltaX));
+        // Keep the whole titlebar—including minimize/maximize/close—inside
+        // the actual contained desktop, not only a 100px draggable sliver.
+        const newX = Math.max(0, Math.min(Math.max(0, maxW - winState.size.width), startPosX + deltaX));
         const newY = Math.max(0, Math.min(Math.max(0, maxH - taskbarHeightPx - 96), startPosY + deltaY));
 
         setWindowPosition(winState.id, { x: newX, y: newY });
@@ -171,7 +173,7 @@ export const WindowFrameChrome: React.FC<WindowFrameChromeProps> = memo(({ windo
       }
     : {
         position: 'absolute',
-        left: `${winState.position.x}px`,
+        left: `clamp(0px, ${winState.position.x}px, max(0px, 100% - ${winState.size.width}px))`,
         top: safeTop,
         width: `${winState.size.width}px`,
         height: `${winState.size.height}px`,
