@@ -207,9 +207,19 @@ export function createSimulationWorkerRuntime(send: (message: SimulationWorkerRe
           unsubscribe = kernel.subscribeChanges(change => send({ type: 'change', change }));
           break;
         }
-        case 'dispatch':
-          value = requireKernel().dispatchAction(raw.action);
+        case 'dispatch': {
+          const owner = requireKernel();
+          value = owner.dispatchAction(raw.action);
+          // The old Pulse React app generated its own replies after dispatch;
+          // the real Worker route has no legacy app owner. Commit a bounded,
+          // availability-gated fallback through the SAME canonical Social
+          // command before returning to the UI. Never invent a client transcript.
+          if (raw.action.type === 'SOCIAL_SEND_MESSAGE' &&
+            value && typeof value === 'object' && 'success' in value && value.success === true) {
+            owner.replyToWorkerPulseMessage(raw.action.buddyId, raw.action.text);
+          }
           break;
+        }
         case 'cafeNarrative':
           cafeNarrative ??= createWorkerCafeNarrative(requireKernel());
           value = cafeNarrative.run(raw.command);
