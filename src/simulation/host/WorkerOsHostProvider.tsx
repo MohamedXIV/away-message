@@ -85,12 +85,12 @@ export function WorkerOsHostProvider({ session, windowId, appRead, onError, chil
         startDownload: params => {
           let target: URL;
           try { target = new URL(params.url); }
-          catch { onError('A valid in-game .local HTTP download address is required'); return; }
+          catch { onError('Enter a valid download address'); return; }
           if (target.protocol !== 'http:' || !target.hostname.endsWith('.local') ||
             target.username || target.password ||
             !/^[a-z0-9._-]{1,80}$/i.test(params.fileName) ||
             !Number.isSafeInteger(params.totalBytes) || params.totalBytes <= 0) {
-            onError('Only authorized in-game .local downloads with a valid file name are supported');
+            onError('The download address or file name is invalid');
             return;
           }
           send({

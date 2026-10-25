@@ -92,8 +92,8 @@ function BrowserContent({ session, revision, site, initialUrl }: {
       initialTab={url.hostname === 'jobs.local' ? 'jobs' : 'news'} />;
   } else {
     content = <div className="p-4 text-sm text-gray-800">
-      <h2 className="font-bold">This local site is not ported yet.</h2>
-      <p>Available: downloadhub.local, citywire.local, jobs.local.</p>
+      <h2 className="font-bold">The page cannot be displayed.</h2>
+      <p>Please check the address or try another website.</p>
       <button type="button" onClick={() => navigate('downloadhub.local')} className="mt-2 border p-1">DownloadHub</button>
     </div>;
   }
@@ -119,7 +119,7 @@ function BrowserContent({ session, revision, site, initialUrl }: {
     onInputUrlChange={setInputUrl} historyIndex={index} historyLength={history.length}
     isFileMenuOpen={menuOpen} setIsFileMenuOpen={setMenuOpen} saveNotice={saved}
     isLoading={false} loadProgress={100} statusText={status}
-    isSearchMateInstalled={false} connectionType={network.status === 'connected' ? 'in-game' : null}
+    isSearchMateInstalled={false} connectionType={network.status === 'connected' ? `${network.effectiveKbps} kbps` : null}
     content={content} onNavigate={navigate}
     onNavigateSubmit={e => { e.preventDefault(); navigate(inputUrl); }}
     onBack={back} onForward={forward} onRefresh={() => navigate(currentUrl, false)}
@@ -153,7 +153,7 @@ function WorkerDownloadHub({ site }: { site: SimulationWebsiteRead }) {
     const name = item.downloadUrl.split('/').pop() || '';
     if (!url || url.hostname !== 'downloadhub.local' || !url.pathname.startsWith('/files/') ||
       !/^[a-z0-9._-]{1,80}$/i.test(name)) {
-      setNotice('Blocked unsupported download origin'); return;
+      setNotice('This download address is unavailable'); return;
     }
     if (status(item) === 'queued' || status(item) === 'downloading') {
       setNotice('This download is already in progress');
