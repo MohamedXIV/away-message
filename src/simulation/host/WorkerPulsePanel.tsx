@@ -47,11 +47,20 @@ export function WorkerPulsePanel({
 
   useEffect(() => {
     let active = true;
+    if (!account) {
+      setMessenger(null);
+      setPresence(null);
+      setSelected(null);
+      return () => { active = false; };
+    }
     void Promise.all([
       session.read({ kind: 'messenger', maxContacts: 32 }),
       session.read({ kind: 'presence' }),
     ]).then(([next, nextPresence]) => {
-      if (!active || next.revision !== revision || nextPresence.revision !== revision) return;
+      // The revision prop belongs to an independently refreshed HUD read.
+      // This effect's cleanup, not exact numeric equality across separate
+      // Worker queries, prevents stale requests from updating this view.
+      if (!active) return;
       setMessenger(next);
       setPresence(nextPresence);
       setSelected(current =>
@@ -61,7 +70,7 @@ export function WorkerPulsePanel({
       if (active) setError(cause instanceof Error ? cause.message : String(cause));
     });
     return () => { active = false; };
-  }, [session, revision]);
+  }, [session, revision, account]);
 
   useEffect(() => {
     let active = true;
@@ -70,7 +79,7 @@ export function WorkerPulsePanel({
     void session.read({
       kind: 'conversation', actorId: selected, offset: pageOffset, limit: 30,
     }).then(result => {
-      if (active && result.revision === revision) setPage(result);
+      if (active) setPage(result);
     }).catch(cause => {
       if (active) setError(cause instanceof Error ? cause.message : String(cause));
     });
