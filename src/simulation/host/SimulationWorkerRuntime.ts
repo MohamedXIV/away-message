@@ -1,7 +1,7 @@
 import { SimulationKernel } from '../../engine/kernel/SimulationKernel';
 import { MAX_MINUTE_ACCURATE_ADVANCE } from '../../engine/kernel/TimeAdvancement';
 import { createWorkerCafeNarrative } from './WorkerCafeNarrative';
-import { createWorkerPulseNarrative, deliverPendingPulseReplies } from './WorkerPulseNarrative';
+import { createWorkerPulseNarrative, reconcileWorkerPulseSocial } from './WorkerPulseNarrative';
 import { buildFreshSandboxSocialState } from './FreshSandboxCast';
 import { GENERATED_VENUE_SERVICES } from '../../engine/worldContent.generated';
 import { loadSlotEngineWithNarrative, saveSlot } from '../../persistence/slots';
@@ -50,7 +50,7 @@ export function createSimulationWorkerRuntime(send: (message: SimulationWorkerRe
         kernel.advanceRealTime(elapsed);
         const after = kernel.getHudProjection().time;
         if (before.day !== after.day || before.hour !== after.hour || before.minute !== after.minute) {
-          deliverPendingPulseReplies(kernel);
+          reconcileWorkerPulseSocial(kernel);
         }
       }
     }).catch(cause => {
@@ -411,7 +411,7 @@ export function createSimulationWorkerRuntime(send: (message: SimulationWorkerRe
             throw new Error('Minute-accurate advance exceeds 60-minute bound');
           }
           requireKernel().advanceGameMinutes(raw.minutes, raw.reason, raw.granularity);
-          if (raw.minutes > 0) deliverPendingPulseReplies(requireKernel());
+          if (raw.minutes > 0) reconcileWorkerPulseSocial(requireKernel());
           break;
         case 'realtime':
           if (clockTimer !== null) {
@@ -426,7 +426,7 @@ export function createSimulationWorkerRuntime(send: (message: SimulationWorkerRe
             owner.advanceRealTime(raw.seconds);
             const after = owner.getHudProjection().time;
             if (before.day !== after.day || before.hour !== after.hour || before.minute !== after.minute) {
-              deliverPendingPulseReplies(owner);
+              reconcileWorkerPulseSocial(owner);
             }
           }
           break;
