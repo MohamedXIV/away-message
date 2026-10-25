@@ -1,11 +1,43 @@
 import type { NarrativeFlowDefinition } from '../NarrativeCoordinator';
 import cafeMeetingCompiled from '../ink/flows/cafe-meeting.ink.json';
 import pulseCheckinCompiled from '../ink/flows/pulse-checkin.ink.json';
+import pulseNearbyCompiled from '../ink/flows/pulse-nearby.ink.json';
+import pulseRemoteCompiled from '../ink/flows/pulse-remote.ink.json';
+import pulseNightCompiled from '../ink/flows/pulse-night.ink.json';
+import pulseShiftCompiled from '../ink/flows/pulse-shift.ink.json';
+import pulseTrustedCompiled from '../ink/flows/pulse-trusted.ink.json';
+import pulseRepairCompiled from '../ink/flows/pulse-repair.ink.json';
+import pulseReminisceCompiled from '../ink/flows/pulse-reminisce.ink.json';
 import scenarioOldDebtCompiled from '../ink/flows/scenario-old-debt.ink.json';
 
 export const CAFE_MEETING_INTERACTION_ID = 'cafe_meeting';
 export const CAFE_MEETING_FLOW_ID = 'cafe_meeting';
 export const PULSE_CHECKIN_FLOW_ID = 'pulse_checkin';
+/** Reusable authored Pulse variants; context selection is Worker-only. */
+export const PULSE_CONTEXTUAL_FLOWS: Readonly<Record<string, NarrativeFlowDefinition>> = Object.freeze({
+  nearby: { flowId: 'pulse_nearby', compiledStory: pulseNearbyCompiled, startsOn: {
+    semanticKinds: ['conversation_started'], conversationChannels: ['pulse'],
+  } },
+  remote: { flowId: 'pulse_remote', compiledStory: pulseRemoteCompiled, startsOn: {
+    semanticKinds: ['conversation_started'], conversationChannels: ['pulse'],
+  } },
+  night: { flowId: 'pulse_night', compiledStory: pulseNightCompiled, startsOn: {
+    semanticKinds: ['conversation_started'], conversationChannels: ['pulse'],
+  } },
+  shift: { flowId: 'pulse_shift', compiledStory: pulseShiftCompiled, startsOn: {
+    semanticKinds: ['conversation_started'], conversationChannels: ['pulse'],
+  } },
+  trusted: { flowId: 'pulse_trusted', compiledStory: pulseTrustedCompiled, startsOn: {
+    semanticKinds: ['conversation_started'], conversationChannels: ['pulse'],
+  } },
+  repair: { flowId: 'pulse_repair', compiledStory: pulseRepairCompiled, startsOn: {
+    semanticKinds: ['conversation_started'], conversationChannels: ['pulse'],
+  } },
+  reminisce: { flowId: 'pulse_reminisce', compiledStory: pulseReminisceCompiled, startsOn: {
+    semanticKinds: ['conversation_started'], conversationChannels: ['pulse'],
+  } },
+});
+
 export const SCENARIO_OLD_DEBT_FLOW_ID = 'scenario_old_debt';
 export const SCENARIO_OLD_DEBT_SEARCH_CUE = 'old_obligation_recalled';
 export const SCENARIO_OLD_DEBT_ENCOUNTER_CUE = 'unfinished_business_nearby';

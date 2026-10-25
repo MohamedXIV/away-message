@@ -23,8 +23,8 @@ describe('#223 offline Ink-first Worker Pulse', () => {
     const offer = narrative.run({ kind: 'choices', actorId });
     expect(offer.choices.map(x => x.text)).toEqual([
       'Hey! How have you been lately?',
-      'Do you ever log off, or is that just a myth? ;)',
-      "Hope you're having a nice evening.",
+      'How was your shift at the diner?',
+      'Hope you get a chance to rest after work.',
     ]);
     const before = engine.getConversationRead(actorId, 0, 20).messages.length;
     expect(() => narrative.run({ kind: 'choose', actorId, choiceIndex: 99,
@@ -49,7 +49,7 @@ describe('#223 offline Ink-first Worker Pulse', () => {
     const result = narrative.run({ kind: 'choose', actorId, choiceIndex: 0,
       expectedText: chosen.text });
     expect(result.sent).toBe(chosen.text);
-    expect(result.reply).toContain('thanks for checking in');
+    expect(result.reply).toContain('long shift');
     const page = engine.getConversationRead(actorId, 0, 20);
     expect(page.messages.map(m => m.text)).toEqual([chosen.text, result.reply]);
     expect(page.messages.map(m => m.senderId)).toEqual(['player', actorId]);
@@ -75,6 +75,90 @@ describe('#223 offline Ink-first Worker Pulse', () => {
     expect(result.reply).toBeNull();
     expect(engine.getConversationRead(actorId, 0, 20).messages.map(m => m.text))
       .toEqual([selected.text]);
+  });
+
+  it('separates local real-world occupations from remote-only Pulse friends', () => {
+    const { engine, narrative } = fixture();
+    const discovered = Object.keys(engine.exportSnapshot().social.knownHandles ?? {});
+    const localId = discovered.find(id => engine.social.getBuddy(id)?.reach === 'local')!;
+    const remoteId = discovered.find(id => engine.social.getBuddy(id)?.reach === 'remote')!;
+    expect(localId).toBeTruthy();
+    expect(remoteId).toBeTruthy();
+
+    const local = narrative.run({ kind: 'choices', actorId: localId }).choices.map(c => c.text);
+    const remote = narrative.run({ kind: 'choices', actorId: remoteId }).choices.map(c => c.text);
+    expect(local).toContain('How was your shift at the diner?');
+    expect(remote).toContain("What's been happening on your side of the screen?");
+    expect(remote.some(text => /diner|meet me|in the village/i.test(text))).toBe(false);
+    expect(remote).not.toEqual(local);
+  });
+
+  it('offers repair and trusted conversations based on current canonical bond semantics', () => {
+    const { engine, actorId, narrative } = fixture();
+    const readActor = engine.getPlayerActorRead.bind(engine);
+    const mock = vi.spyOn(engine, 'getPlayerActorRead');
+    mock.mockImplementation(id => {
+      const actor = readActor(id);
+      return actor && id === actorId
+        ? { ...actor, actor: { ...actor.actor, relationship: {
+          ...actor.actor.relationship, conflicted: true, trusted: false,
+        } } } : actor;
+    });
+    const repair = narrative.run({ kind: 'choices', actorId }).choices;
+    expect(repair.map(c => c.text)).toContain("I'm sorry for my part in it.");
+    expect(repair.map(c => c.text)).not.toContain('How was your shift at the diner?');
+    const selected = repair[1]!;
+    const chosen = narrative.run({ kind: 'choose', actorId, choiceIndex: 1,
+      expectedText: selected.text });
+    expect(chosen.sent).toBe("I'm sorry for my part in it.");
+
+    mock.mockImplementation(id => {
+      const actor = readActor(id);
+      return actor && id === actorId
+        ? { ...actor, actor: { ...actor.actor, relationship: {
+          ...actor.actor.relationship, conflicted: false, trusted: true,
+        } } } : actor;
+    });
+    const trusted = narrative.run({ kind: 'choices', actorId }).choices;
+    expect(trusted.map(c => c.text)).toContain('Something on your mind? You can tell me.');
+    expect(trusted).not.toEqual(repair);
+    expect(() => narrative.run({ kind: 'choose', actorId, choiceIndex: 1,
+      expectedText: selected.text })).toThrow('no longer available');
+  });
+
+  it('unlocks reminiscence only for a typed memory involving player and selected actor', () => {
+    const { engine, actorId, narrative } = fixture();
+    const standard = narrative.run({ kind: 'choices', actorId }).choices;
+    engine.social.addCoreMemory(actorId, {
+      kind: 'shared_moment', day: 1, text: 'A good afternoon with an old acquaintance',
+      meaning: {
+        participants: ['player', 'other_actor'],
+        subject: { kind: 'fact', id: 'old_photo' },
+        source: { kind: 'direct_experience', refId: 'photo_001' },
+        salience: 'medium', valence: 'positive',
+      },
+    });
+    expect(narrative.run({ kind: 'choices', actorId }).choices).toEqual(standard);
+
+    engine.social.addCoreMemory(actorId, {
+      kind: 'shared_moment', day: 2, text: 'An afternoon the player spent with this actor',
+      meaning: {
+        participants: ['player', actorId],
+        subject: { kind: 'fact', id: 'shared_afternoon' },
+        source: { kind: 'direct_experience', refId: 'afternoon_001' },
+        salience: 'high', valence: 'positive',
+      },
+    });
+    const choices = narrative.run({ kind: 'choices', actorId }).choices.map(c => c.text);
+    expect(choices).toContain('Remember when we spent that time together?');
+    expect(choices).not.toContain('How was your shift at the diner?');
+    const cold = new SimulationKernel(engine.exportSnapshot());
+    const readChrome = cold.getChromeRead.bind(cold);
+    vi.spyOn(cold, 'getChromeRead').mockImplementation(() => ({
+      ...readChrome(), pulseInstalled: true,
+    }));
+    expect(createWorkerPulseNarrative(cold).run({ kind: 'choices', actorId })
+      .choices.map(c => c.text)).toEqual(choices);
   });
 
   it('rejects unrestricted legacy Pulse sends instead of pretending to parse prose', async () => {
