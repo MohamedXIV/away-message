@@ -1,5 +1,6 @@
 import type { SimulationKernel } from '../../engine/kernel/SimulationKernel';
 import { createSimulationNarrative } from '../../narrative/SimulationNarrativeAdapter';
+import { PULSE_CONTEXTUAL_FLOWS } from '../../narrative/flows';
 import type { NarrativeCoordinator } from '../../narrative/NarrativeCoordinator';
 import type { SimulationPulseNarrativeCommand, SimulationPulseNarrativeResult } from './SimulationHostProtocol';
 
@@ -24,7 +25,25 @@ export function createWorkerPulseNarrative(engine: SimulationKernel) {
     if (!actor || actor.lifecycle === 'departed' || actor.connection === 'blocked') {
       throw new Error('This contact is unavailable.');
     }
-    const { coordinator } = createSimulationNarrative(engine);
+    // Prioritize canonical contact and relationship truth over flavor roles.
+    // Only mutual, typed shared memories can unlock reminiscence: never
+    // expose private NPC memory text or pretend the player knows a secret.
+    const hasSharedMemory = engine.social.getCoreMemories(actorId).some(memory =>
+      memory.kind === 'shared_moment'
+      && memory.meaning?.participants.includes('player')
+      && memory.meaning.participants.includes(actorId));
+    const key = actor.relationship.conflicted ? 'repair'
+      : hasSharedMemory ? 'reminisce'
+      : actor.relationship.trusted ? 'trusted'
+      : actor.reach === 'remote' ? 'remote'
+      : actor.roles.includes('diner-staff') ? 'nearby'
+      : actor.roles.includes('canal-regular') ? 'night'
+      : actor.roles.includes('shift-worker') ? 'shift'
+      : null;
+    // Without a matching contextual flow the original Ink check-in remains
+    // available. All choices/effects still originate from inkjs inside Worker.
+    const flow = key ? PULSE_CONTEXTUAL_FLOWS[key] : undefined;
+    const { coordinator } = createSimulationNarrative(engine, flow ? [flow] : undefined);
     const started = coordinator.handleSemanticEvent({
       kind: 'conversation_started', channel: 'pulse', actorId,
     });
