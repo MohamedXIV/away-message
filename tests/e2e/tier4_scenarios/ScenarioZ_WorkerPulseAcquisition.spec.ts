@@ -51,6 +51,16 @@ test('#214 fresh Orion acquires Pulse only through real internet â†’ VFS setup â
   // instead of opening a permanently signed-in engineering chat panel.
   const messenger = page.getByTestId('worker-pulse-panel');
   await expect(messenger).toHaveAttribute('data-pulse-phase', 'sign-in');
+  // Signed-out Pulse really closes, so Quick Launch must cold-start and
+  // charge the same Worker hardware time as desktop and Start Menu.
+  const taskbar = desktop.getByTestId('worker-desktop-taskbar');
+  const quickPulse = taskbar.getByRole('button', { name: 'Pulse Messenger', exact: true });
+  await expect(quickPulse).toBeVisible();
+  await desktop.getByRole('button', { name: 'Close Pulse Messenger' }).click();
+  const beforeCold = Number(await page.getByTestId('worker-minute').textContent());
+  await quickPulse.click();
+  await expect(messenger).toBeVisible();
+  expect(Number(await page.getByTestId('worker-minute').textContent())).toBeGreaterThan(beforeCold);
   await messenger.getByText('Get a new Pulse ID').click();
   await messenger.getByLabel('Pulse ID').fill('new_player06');
   await messenger.getByLabel('Password', { exact: true }).fill('localtest123');
@@ -65,20 +75,14 @@ test('#214 fresh Orion acquires Pulse only through real internet â†’ VFS setup â
   await messenger.getByRole('button', { name: 'Sign In', exact: true }).click();
   await expect(messenger).toHaveAttribute('data-pulse-phase', 'signed-in');
 
-  // Quick Launch must not bypass the same CPU/RAM cold-start gate that
-  // desktop double-click and Start menu use. An already-open Pulse is warm.
-  const taskbar = desktop.getByTestId('worker-desktop-taskbar');
-  const quickPulse = taskbar.getByRole('button', { name: 'Pulse Messenger', exact: true });
-  await expect(quickPulse).toBeVisible();
+  // Signed-in Pulse closes to tray (still running), so quick launch
+  // restores the existing session immediately without a second startup cost.
   const beforeWarm = Number(await page.getByTestId('worker-minute').textContent());
+  await desktop.getByRole('button', { name: 'Close Pulse Messenger' }).click();
+  await expect(messenger).toHaveCount(0);
   await quickPulse.click();
   await expect(messenger).toBeVisible();
   expect(Number(await page.getByTestId('worker-minute').textContent())).toBe(beforeWarm);
-  await desktop.getByRole('button', { name: 'Close Pulse Messenger' }).click();
-  const beforeCold = Number(await page.getByTestId('worker-minute').textContent());
-  await quickPulse.click();
-  await expect(messenger).toBeVisible();
-  expect(Number(await page.getByTestId('worker-minute').textContent())).toBeGreaterThan(beforeCold);
 
   await page.getByRole('button', { name: 'Save game' }).click();
   await expect(page.getByText('Saved to slot_1')).toBeVisible();
