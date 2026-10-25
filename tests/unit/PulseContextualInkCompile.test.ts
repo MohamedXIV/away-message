@@ -8,6 +8,7 @@ import { Story } from 'inkjs/engine/Story';
 const dialogueFlows = [
   'pulse-nearby', 'pulse-remote', 'pulse-night', 'pulse-shift',
   'pulse-trusted', 'pulse-repair', 'pulse-reminisce',
+  'pulse-followup-personal', 'pulse-followup-topic', 'pulse-followup-courtesy',
 ] as const;
 
 describe('#223 authored contextual Ink consistency', () => {

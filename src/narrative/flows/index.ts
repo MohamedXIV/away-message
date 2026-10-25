@@ -8,12 +8,24 @@ import pulseShiftCompiled from '../ink/flows/pulse-shift.ink.json';
 import pulseTrustedCompiled from '../ink/flows/pulse-trusted.ink.json';
 import pulseRepairCompiled from '../ink/flows/pulse-repair.ink.json';
 import pulseReminisceCompiled from '../ink/flows/pulse-reminisce.ink.json';
+import pulseFollowupPersonal from '../ink/flows/pulse-followup-personal.ink.json';
+import pulseFollowupTopic from '../ink/flows/pulse-followup-topic.ink.json';
+import pulseFollowupCourtesy from '../ink/flows/pulse-followup-courtesy.ink.json';
 import scenarioOldDebtCompiled from '../ink/flows/scenario-old-debt.ink.json';
 
 export const CAFE_MEETING_INTERACTION_ID = 'cafe_meeting';
 export const CAFE_MEETING_FLOW_ID = 'cafe_meeting';
 export const PULSE_CHECKIN_FLOW_ID = 'pulse_checkin';
 /** Reusable authored Pulse variants; context selection is Worker-only. */
+export const PULSE_FOLLOWUP_FLOWS: readonly NarrativeFlowDefinition[] = [
+  { flowId: 'pulse_followup_personal', compiledStory: pulseFollowupPersonal,
+    startsOn: { semanticKinds: ['conversation_started'], conversationChannels: ['pulse'] } },
+  { flowId: 'pulse_followup_topic', compiledStory: pulseFollowupTopic,
+    startsOn: { semanticKinds: ['conversation_started'], conversationChannels: ['pulse'] } },
+  { flowId: 'pulse_followup_courtesy', compiledStory: pulseFollowupCourtesy,
+    startsOn: { semanticKinds: ['conversation_started'], conversationChannels: ['pulse'] } },
+];
+
 export const PULSE_CONTEXTUAL_FLOWS: Readonly<Record<string, NarrativeFlowDefinition>> = Object.freeze({
   nearby: { flowId: 'pulse_nearby', compiledStory: pulseNearbyCompiled, startsOn: {
     semanticKinds: ['conversation_started'], conversationChannels: ['pulse'],
