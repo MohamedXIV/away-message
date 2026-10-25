@@ -1,5 +1,5 @@
 import type { SimulationAction, ActionResult } from '../../engine/types';
-import type { LabCharacterCommand, LabCharacterResult, LabOsCommand, LabOsResult, LabProceduralCommand, LabProceduralResult, SimulationCafeNarrativeCommand, SimulationCafeNarrativeResult, SimulationHardwareCommand, SimulationQuery, SimulationQueryResult } from './SimulationHostProtocol';
+import type { LabCharacterCommand, LabCharacterResult, LabOsCommand, LabOsResult, LabProceduralCommand, LabProceduralResult, SimulationCafeNarrativeCommand, SimulationCafeNarrativeResult, SimulationPulseNarrativeCommand, SimulationPulseNarrativeResult, SimulationHardwareCommand, SimulationQuery, SimulationQueryResult } from './SimulationHostProtocol';
 import type { OsInstallPlan } from '../../engine/kernel/ComputerOwnershipRuntime';
 import type {
   SimulationHudProjection, SimulationWorldRead, SimulationPlayerStatusRead,
@@ -210,6 +210,11 @@ export class WorkerGameSession {
   /** Authored dialogue commands; the Worker resolves the real guest and effects. */
   cafeNarrative(command: SimulationCafeNarrativeCommand): Promise<SimulationCafeNarrativeResult> {
     return this.active().cafeNarrative(command);
+  }
+
+  /** Context-safe authored chat; the UI never submits arbitrary message text. */
+  pulseNarrative(command: SimulationPulseNarrativeCommand): Promise<SimulationPulseNarrativeResult> {
+    return this.active().pulseNarrative(command);
   }
 
   async labCharacter(command: LabCharacterCommand): Promise<LabCharacterResult> {

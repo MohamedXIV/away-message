@@ -154,11 +154,10 @@ test('authored social continuation: café Ink → real Pulse message → room �
   const pulse = page.getByTestId('worker-pulse-panel');
   await expect(pulse).toBeVisible();
   await expect(pulse).toContainText('Maya');
-  await pulse.getByRole('textbox', { name: 'Pulse message' })
-    .fill('Enjoyed catching up at the café!');
-  await pulse.getByRole('button', { name: 'Send' }).click();
+  await pulse.getByTestId('worker-pulse-choices')
+    .getByRole('button', { name: 'Hey! How have you been lately?' }).click();
   await expect(page.getByTestId('worker-pulse-messages'))
-    .toContainText('Enjoyed catching up at the café!');
+    .toContainText('Hey! How have you been lately?');
 
   await page.getByRole('button', { name: 'room', exact: true }).click();
   await page.getByRole('button', { name: 'Return home' }).click();
@@ -183,7 +182,7 @@ test('authored social continuation: café Ink → real Pulse message → room �
   await expect(page.getByTestId('worker-physical-room')).toBeVisible();
   await page.getByRole('button', { name: 'pulse', exact: true }).click();
   await expect(page.getByTestId('worker-pulse-messages'))
-    .toContainText('Enjoyed catching up at the café!');
+    .toContainText('Hey! How have you been lately?');
   await page.getByRole('button', { name: 'desktop', exact: true }).click();
   await desktop.getByRole('button', { name: 'Open My Computer' }).dblclick();
   await page.getByTestId('worker-window-fileexplorer')

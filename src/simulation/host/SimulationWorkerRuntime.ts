@@ -1,6 +1,7 @@
 import { SimulationKernel } from '../../engine/kernel/SimulationKernel';
 import { MAX_MINUTE_ACCURATE_ADVANCE } from '../../engine/kernel/TimeAdvancement';
 import { createWorkerCafeNarrative } from './WorkerCafeNarrative';
+import { createWorkerPulseNarrative } from './WorkerPulseNarrative';
 import { buildFreshSandboxSocialState } from './FreshSandboxCast';
 import { GENERATED_VENUE_SERVICES } from '../../engine/worldContent.generated';
 import { loadSlotEngineWithNarrative, saveSlot } from '../../persistence/slots';
@@ -210,20 +211,9 @@ export function createSimulationWorkerRuntime(send: (message: SimulationWorkerRe
         case 'dispatch': {
           const owner = requireKernel();
           if (raw.action.type === 'PULSE_SEND_MESSAGE') {
-            // Only the real installed messenger may ask for an NPC DM reply.
-            // Generic Social sends (other web/legacy contexts) retain their
-            // existing authority and must not suddenly generate extra turns.
-            if (!owner.getChromeRead().pulseInstalled) {
-              value = { success: false, error: 'Install Pulse before sending Pulse messages.' };
-              break;
-            }
-            value = owner.dispatchAction({
-              type: 'SOCIAL_SEND_MESSAGE', buddyId: raw.action.buddyId,
-              text: raw.action.text,
-            });
-            if (value && typeof value === 'object' && 'success' in value && value.success === true) {
-              owner.replyToWorkerPulseMessage(raw.action.buddyId, raw.action.text);
-            }
+            // There is no connected semantic AI-intent resolver. Old raw-text
+            // actions must not silently revive keyword/template replies.
+            value = { success: false, error: 'Choose one of the available replies to send a message.' };
           } else {
             value = owner.dispatchAction(raw.action);
           }
@@ -232,6 +222,11 @@ export function createSimulationWorkerRuntime(send: (message: SimulationWorkerRe
         case 'cafeNarrative':
           cafeNarrative ??= createWorkerCafeNarrative(requireKernel());
           value = cafeNarrative.run(raw.command);
+          break;
+        case 'pulseNarrative':
+          // Per-command coordinator: no duplicate mutable narrative authority
+          // or per-contact Ink cursor living outside the canonical save.
+          value = createWorkerPulseNarrative(requireKernel()).run(raw.command);
           break;
         case 'hardware': {
           const owner = requireKernel();

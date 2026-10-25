@@ -114,8 +114,11 @@ describe('NarrativeCoordinator', () => {
     const pulse = coordinator.handleSemanticEvent({
       kind: 'conversation_started', actorId: 'maya', channel: 'pulse',
     });
-    expect(pulse.started).toBe(false);
-    expect(pulse.reason).toBe('no_flow');
+    expect(pulse.started).toBe(true);
+    expect(pulse.flowId).toBe('pulse_checkin');
+    expect(coordinator.advanceToChoices().choices.map(choice => choice.text))
+      .toContain('Hey! How have you been lately?');
+    coordinator.end();
 
     const inPerson = coordinator.handleSemanticEvent({
       kind: 'conversation_started', actorId: 'maya', placeId: 'place_a1', channel: 'in_person',
