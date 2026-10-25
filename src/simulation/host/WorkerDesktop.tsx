@@ -49,6 +49,10 @@ export function WorkerDesktop({
   revision: number;
   onStepAway: () => void;
 }) {
+  // Diagnostics are invisible during ordinary play, including the local dev server.
+  // Enable deliberately with ?devtools=1 on development builds only.
+  const devToolsVisible = import.meta.env.DEV &&
+    new URLSearchParams(window.location.search).get('devtools') === '1';
   const [desktop, setDesktop] = useState<SimulationDesktopRead | null>(null);
   const [chrome, setChrome] = useState<SimulationChromeRead | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -133,11 +137,11 @@ export function WorkerDesktop({
     [desktop],
   );
   const desktopIcons = useMemo(
-    () => buildWorkerDesktopIcons(installedShortcuts),
+    () => buildWorkerDesktopIcons(installedShortcuts).filter(icon => devToolsVisible || icon.appId !== 'ailab'),
     [installedShortcuts],
   );
 
-  const allowedApps = useMemo(() => ['terminal', 'ailab', 'browser', 'fileexplorer', 'notepad', 'controlpanel', 'trash', 'addremove', 'savegame',
+  const allowedApps = useMemo(() => ['terminal', ...(devToolsVisible ? ['ailab'] : []), 'browser', 'fileexplorer', 'notepad', 'controlpanel', 'trash', 'addremove', 'savegame',
     ...installedPrograms.filter(program => program.available).map(program => program.id)], [installedPrograms]);
 
   const resolveAppId = (id: string): string | null => {
@@ -150,6 +154,7 @@ export function WorkerDesktop({
    * window is open. On narrow screens, fit the window into the remaining
    * space before falling back to an overlay position. */
   const open = async (appId: string, customState?: Record<string, unknown>) => {
+    if (appId === 'ailab' && !devToolsVisible) return;
     // Software eligibility belongs to the canonical installed-app read.
     // Historical taskbar windows/Run commands must not bypass a missing or
     // uninstalled third-party app. Core OS tools stay bundled.

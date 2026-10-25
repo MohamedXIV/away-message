@@ -208,7 +208,7 @@ export function WorkerSaveLoadPanel({ session }: { session: WorkerGameSession })
             <button className={button} disabled={busy || !summary?.hasSnapshot}
               onClick={() => void load(id)}>Load</button>
             <button className={button} disabled={busy || !summary || isActive}
-              title={isActive ? 'Cannot delete the active cold-reader slot' : undefined}
+              title={isActive ? 'Cannot delete the save currently in use' : undefined}
               onClick={() => setDeleteCandidate(id)}>Delete</button>
             {deleteCandidate === id && !isActive && <>
               <button className={button} disabled={busy} onClick={() => void remove(id)}>Confirm delete</button>
@@ -217,7 +217,7 @@ export function WorkerSaveLoadPanel({ session }: { session: WorkerGameSession })
           </div>
         </div>;
       })}
-      <p className="text-[11px] text-gray-600">Loading restores the saved day and your conversations. The active slot is protected while its cold conversation reader is in use.</p>
+      <p className="text-[11px] text-gray-600">Loading restores the saved day and conversations. You cannot delete the save you are currently playing.</p>
     </div>
     {notice && <p role="status" className="border-t border-gray-400 bg-[#fff7c7] px-2 py-1">{notice}</p>}
   </section>;

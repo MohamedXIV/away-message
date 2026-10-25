@@ -56,8 +56,8 @@ test('ordinary / New Game installs Orion 4.8 and delivers a coherent, responsive
   await expect(desktop).not.toContainText('Worker-backed desktop');
 
   const metrics = await desktopGridMetrics(desktop);
-  // Clean Orion has no preinstalled Pulse or FlashFetch: 11 core icons.
-  expect(metrics.icons).toBe(11);
+  // Ordinary play hides the Lab diagnostics and excludes uninstalled third-party software.
+  expect(metrics.icons).toBe(10);
   expect(metrics.appIds).not.toContain('pulse');
   expect(metrics.appIds).not.toContain('flashfetch');
   expect(metrics.columns).toBeGreaterThanOrEqual(3);
@@ -258,8 +258,8 @@ test('the Orion desktop stays usable in a small viewport and honours reduced mot
   expect(desktopBox).not.toBeNull();
 
   const metrics = await desktopGridMetrics(desktop);
-  // Clean Orion has no preinstalled Pulse or FlashFetch: 11 core icons.
-  expect(metrics.icons).toBe(11);
+  // Ordinary play hides the Lab diagnostics and excludes uninstalled third-party software.
+  expect(metrics.icons).toBe(10);
   expect(metrics.appIds).not.toContain('pulse');
   expect(metrics.appIds).not.toContain('flashfetch');
   expect(metrics.columns).toBeGreaterThanOrEqual(3);

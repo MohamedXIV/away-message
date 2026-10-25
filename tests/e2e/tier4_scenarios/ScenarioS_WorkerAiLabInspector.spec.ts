@@ -2,13 +2,13 @@ import { expect, test } from '@playwright/test';
 
 test('AI Lab diagnostics are owner-derived bounded pages without a shadow engine', async ({ page }) => {
   test.setTimeout(60_000);
-  await page.goto('/worker.html');
+  await page.goto('/worker.html?devtools=1');
   await page.getByRole('button', { name: 'New game' }).click();
   await expect(page.getByTestId('worker-phase')).toHaveText('game');
   await page.getByRole('button', { name: 'Pause clock' }).click();
   await page.getByRole('button', { name: 'desktop', exact: true }).click();
   const desktop = page.getByTestId('worker-desktop');
-  await desktop.getByRole('button', { name: 'Open AI Lab Inspector' }).click();
+  await desktop.getByRole('button', { name: 'Open AI Lab Inspector' }).dblclick();
   const lab = page.getByTestId('worker-lab-inspector');
   await expect(lab.getByTestId('worker-lab-summary')).toContainText('World events:');
   await expect(lab.getByTestId('worker-lab-body')).toContainText('Energy');
@@ -29,11 +29,11 @@ test('AI Lab diagnostics are owner-derived bounded pages without a shadow engine
 
 test('AI Lab diagnostic windows do not persist across a cold Worker save/load', async ({ page }) => {
   test.setTimeout(60_000);
-  await page.goto('/worker.html');
+  await page.goto('/worker.html?devtools=1');
   await page.getByRole('button', { name: 'New game' }).click();
   await expect(page.getByTestId('worker-phase')).toHaveText('game');
   await page.getByRole('button', { name: 'desktop', exact: true }).click();
-  await page.getByTestId('worker-desktop').getByRole('button', { name: 'Open AI Lab Inspector' }).click();
+  await page.getByTestId('worker-desktop').getByRole('button', { name: 'Open AI Lab Inspector' }).dblclick();
   await expect(page.getByTestId('worker-lab-summary')).toBeVisible();
   await page.getByRole('button', { name: 'Save game' }).click();
   await expect(page.getByText('Saved to slot_1')).toBeVisible();
@@ -43,19 +43,19 @@ test('AI Lab diagnostic windows do not persist across a cold Worker save/load', 
   await expect(page.getByTestId('worker-phase')).toHaveText('game');
   await page.getByRole('button', { name: 'desktop', exact: true }).click();
   await expect(page.getByTestId('worker-lab-inspector')).toHaveCount(0);
-  await page.getByTestId('worker-desktop').getByRole('button', { name: 'Open AI Lab Inspector' }).click();
+  await page.getByTestId('worker-desktop').getByRole('button', { name: 'Open AI Lab Inspector' }).dblclick();
   await expect(page.getByTestId('worker-lab-summary')).toBeVisible();
   expect(await page.evaluate(() => !('__simEngine' in window) && !('__simStore' in window))).toBe(true);
 });
 
 test('Worker AI Lab previews and injects events that survive cold save/load', async ({ page }) => {
   test.setTimeout(80_000);
-  await page.goto('/worker.html');
+  await page.goto('/worker.html?devtools=1');
   await page.getByRole('button', { name: 'New game' }).click();
   await expect(page.getByTestId('worker-phase')).toHaveText('game');
   await page.getByRole('button', { name: 'Pause clock' }).click();
   await page.getByRole('button', { name: 'desktop', exact: true }).click();
-  await page.getByTestId('worker-desktop').getByRole('button', { name: 'Open AI Lab Inspector' }).click();
+  await page.getByTestId('worker-desktop').getByRole('button', { name: 'Open AI Lab Inspector' }).dblclick();
   const lab = page.getByTestId('worker-lab-inspector');
   const summary = lab.getByTestId('worker-lab-summary');
   await expect(summary).toContainText('World events:');
@@ -82,20 +82,20 @@ test('Worker AI Lab previews and injects events that survive cold save/load', as
   await expect(page.getByTestId('worker-phase')).toHaveText('game');
   await page.getByRole('button', { name: 'Pause clock' }).click();
   await page.getByRole('button', { name: 'desktop', exact: true }).click();
-  await page.getByTestId('worker-desktop').getByRole('button', { name: 'Open AI Lab Inspector' }).click();
+  await page.getByTestId('worker-desktop').getByRole('button', { name: 'Open AI Lab Inspector' }).dblclick();
   await expect(page.getByTestId('worker-lab-summary')).toContainText((pending + 2) + ' pending');
   expect(await page.evaluate(() => !('__simEngine' in window) && !('__simStore' in window))).toBe(true);
 });
 
 test('Worker OS Lab previews an installable release and preserves OS/world state after cold load', async ({ page }) => {
   test.setTimeout(80_000);
-  await page.goto('/worker.html');
+  await page.goto('/worker.html?devtools=1');
   await page.getByRole('button', { name: 'New game' }).click();
   await expect(page.getByTestId('worker-phase')).toHaveText('game');
   await page.getByRole('button', { name: 'Pause clock' }).click();
   await page.getByRole('button', { name: 'desktop', exact: true }).click();
   await page.getByTestId('worker-desktop')
-    .getByRole('button', { name: 'Open AI Lab Inspector' }).click();
+    .getByRole('button', { name: 'Open AI Lab Inspector' }).dblclick();
   const lab = page.getByTestId('worker-lab-inspector');
   const summary = lab.getByTestId('worker-lab-summary');
   await expect(summary).toContainText('OS pending');
@@ -128,19 +128,19 @@ test('Worker OS Lab previews an installable release and preserves OS/world state
   await page.getByRole('button', { name: 'Pause clock' }).click();
   await page.getByRole('button', { name: 'desktop', exact: true }).click();
   await page.getByTestId('worker-desktop')
-    .getByRole('button', { name: 'Open AI Lab Inspector' }).click();
+    .getByRole('button', { name: 'Open AI Lab Inspector' }).dblclick();
   await expect(page.getByTestId('worker-lab-summary')).toContainText((pendingOs + 1) + ' OS pending');
   await expect(page.getByTestId('worker-lab-summary')).toContainText((pending + 1) + ' pending');
 });
 
 test('Worker Character Lab previews an online remote NPC and cold restores its single canonical identity', async ({ page }) => {
   test.setTimeout(80_000);
-  await page.goto('/worker.html');
+  await page.goto('/worker.html?devtools=1');
   await page.getByRole('button', { name: 'New game' }).click();
   await expect(page.getByTestId('worker-phase')).toHaveText('game');
   await page.getByRole('button', { name: 'Pause clock' }).click();
   await page.getByRole('button', { name: 'desktop', exact: true }).click();
-  await page.getByTestId('worker-desktop').getByRole('button', { name: 'Open AI Lab Inspector' }).click();
+  await page.getByTestId('worker-desktop').getByRole('button', { name: 'Open AI Lab Inspector' }).dblclick();
   const lab = page.getByTestId('worker-lab-inspector');
   const summary = lab.getByTestId('worker-lab-summary');
   await expect(summary).toContainText('Actors');
@@ -170,7 +170,7 @@ test('Worker Character Lab previews an online remote NPC and cold restores its s
   await expect(page.getByTestId('worker-phase')).toHaveText('game');
   await page.getByRole('button', { name: 'Pause clock' }).click();
   await page.getByRole('button', { name: 'desktop', exact: true }).click();
-  await page.getByTestId('worker-desktop').getByRole('button', { name: 'Open AI Lab Inspector' }).click();
+  await page.getByTestId('worker-desktop').getByRole('button', { name: 'Open AI Lab Inspector' }).dblclick();
   await expect(page.getByTestId('worker-lab-summary')).toContainText('Actors ' + (roster + 1) + ' (');
   expect(await page.evaluate(() => !('__simEngine' in window) && !('__simStore' in window))).toBe(true);
 });

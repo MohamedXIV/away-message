@@ -36,7 +36,8 @@ async function inspectActualCast(page: Page): Promise<string[]> {
 /** No Classic, seeded guest or direct engine access: a genuine first-day player. */
 test('#213 plain-root New Game makes a varied, player-known cast with a real café encounter and cold restore', async ({ page }) => {
   test.setTimeout(180_000);
-  await page.goto('/');
+  // Explicit developer-only diagnostic opt-in; gameplay still runs the real Worker route.
+  await page.goto('/?devtools=1');
   await expect(page.locator('#root')).toHaveAttribute('data-runtime', 'worker');
   await page.getByRole('button', { name: 'New game' }).click();
   await expect(page.getByTestId('worker-phase')).toHaveText('game');

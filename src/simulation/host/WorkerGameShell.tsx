@@ -21,6 +21,8 @@ const authoredPlaceNames = new Map(GENERATED_PLACES.map(place => [place.id, plac
 export function WorkerGameShell() {
   const session = useMemo(() => new WorkerGameSession(), []);
   const view = useSyncExternalStore(session.subscribe, session.getSnapshot, session.getSnapshot);
+  const devToolsVisible = import.meta.env.DEV &&
+    new URLSearchParams(window.location.search).get('devtools') === '1';
   const [busy, setBusy] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
   const [slot, setSlot] = useState('slot_1');
@@ -174,7 +176,7 @@ export function WorkerGameShell() {
               <button className={control} disabled={busy} onClick={() => void act(() => session.newGame())}>New game</button>
               <button className={control} disabled={busy} aria-expanded={chooseResidence}
                 onClick={() => setChooseResidence(open => !open)}>Choose starting residence</button>
-              {import.meta.env.DEV && (
+              {devToolsVisible && (
                 <button className={control} disabled={busy} onClick={openClassicMenu}>
                   Return to classic interface
                 </button>
@@ -272,7 +274,7 @@ export function WorkerGameShell() {
             {panel === 'desktop' && (
               <WorkerDesktop session={session} revision={view.hud.revision} onStepAway={() => setPanel('room')} />
             )}
-            {import.meta.env.DEV && <details data-testid="worker-world" className="rounded border border-slate-800 px-3 py-2 text-xs text-slate-500">
+            {devToolsVisible && <details data-testid="worker-world" className="rounded border border-slate-800 px-3 py-2 text-xs text-slate-500">
               <summary className="cursor-pointer">Technical diagnostics</summary>
               <h2>Canonical world projection</h2>
               <p>View: {view.world.activeView} · Place: {view.world.residencePlaceId} · Battery: {view.hud.socialBattery} · Revision: {view.hud.revision}</p>
