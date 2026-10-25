@@ -19,17 +19,17 @@ Pick something to say to your friend. # greeting
 === ask_how ===
 ~ temp speaker = narrative_query("actor_id", "")
 ~ request_social_act(speaker, "empathy")
-Still awake, obviously. How about you? # empathy # tier:l2 # speech:reassure # fact:still awake, # fact:iously how about you # tone:warm # forbid:exam result
+Still awake, obviously. How about you? # empathy # tier:l2 # speech:reassure # fact:Still awake # fact:How about you # tone:warm # forbid:exam result
 -> close
 
 === joke ===
 ~ temp speaker = narrative_query("actor_id", "")
 ~ request_social_act(speaker, "intellectual_curiosity")
-I've walked that way a few times. It's quieter after dark. # curious # tier:l2 # speech:tease # fact:i've walked # fact:'s quieter after dark # tone:playful # forbid:an insult
+I've walked that way a few times. It's quieter after dark. # curious # tier:l2 # speech:question # fact:walked that way # fact:after dark # tone:curious # forbid:an insult
 -> close
 
 === pause ===
-I know. Just one more thing before I log off. # quiet # tier:l1 # speech:observe # fact:i know # fact:hing before i log off # tone:quiet
+I know. Just one more thing before I log off. # quiet # tier:l1 # speech:observe # fact:one more thing # fact:log off # tone:quiet
 -> close
 
 === close ===

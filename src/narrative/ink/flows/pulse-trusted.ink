@@ -19,17 +19,17 @@ Pick something to say to your friend. # greeting
 === ask_how ===
 ~ temp speaker = narrative_query("actor_id", "")
 ~ request_social_act(speaker, "empathy")
-I'm okay. It's nice that you checked in. # empathy # tier:l2 # speech:reassure # fact:i'm okay # fact:e that you checked in # tone:warm # forbid:exam result
+I'm okay. It's nice that you checked in. # empathy # tier:l2 # speech:reassure # fact:nice that # fact:checked in # tone:warm # forbid:exam result
 -> close
 
 === joke ===
 ~ temp speaker = narrative_query("actor_id", "")
 ~ request_social_act(speaker, "vulnerable_share")
-Maybe. Give me a moment to figure out where to start. # vulnerable # tier:l2 # speech:tease # fact:maybe give # fact:re out where to start # tone:playful # forbid:an insult
+Maybe. Give me a moment to figure out where to start. # vulnerable # tier:l2 # speech:reassure # fact:Give me a moment # fact:where to start # tone:warm # forbid:an insult
 -> close
 
 === pause ===
-Me too. I don't take that for granted. # quiet # tier:l1 # speech:observe # fact:me too # fact:take that for granted # tone:quiet
+Me too. I don't take that for granted. # quiet # tier:l1 # speech:observe # fact:don't take # fact:for granted # tone:quiet
 -> close
 
 === close ===
