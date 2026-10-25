@@ -98,7 +98,12 @@ describe('Issue #14 canonical first-PC lifecycle', () => {
     expect(engine.dispatchAction({ type: 'TRAVEL_TO', to: 'home', mode: 'walk' }).success).toBe(true);
 
     const extraRam = ownedInstance(engine, 'ram_sdram_128');
+    // Physical upgrades are not hot-swappable. Power down before opening
+    // the case, install owned RAM, then reboot the same installed Orion.
+    expect(engine.installOwnedHardwareAtHome(extraRam, 'ram:1').success).toBe(false);
+    expect(engine.setComputerPower(false).success).toBe(true);
     expect(engine.installOwnedHardwareAtHome(extraRam, 'ram:1').success).toBe(true);
+    expect(engine.setComputerPower(true).success).toBe(true);
     expect(engine.getState().computer.ramSticks.reduce((sum, stick) => sum + stick.sizeMb, 0)).toBe(192);
 
     // 7. Upgrade Orion through owned media while the same Pulse 5.2 installation survives unchanged.
@@ -124,7 +129,9 @@ describe('Issue #14 canonical first-PC lifecycle', () => {
     const pulseBeforeMonitorSwap = installedPulse52(engine);
     const budgetMonitor = engine.getState().display.monitor!;
     const trinitron = ownedInstance(engine, 'mon_trinitron_17');
+    expect(engine.setComputerPower(false).success).toBe(true);
     expect(engine.installOwnedHardwareAtHome(trinitron, 'monitor:0').success).toBe(true);
+    expect(engine.setComputerPower(true).success).toBe(true);
     expect(engine.getState().display.monitor).toMatchObject({
       id: 'mon_trinitron_17',
       curvature: 0,

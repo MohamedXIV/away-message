@@ -147,7 +147,18 @@ export interface RamPressure {
   status: 'nominal' | 'elevated' | 'critical';
 }
 
+export interface OsInstallationProgress {
+  targetOs: OsVersion;
+  mediaInstanceId: string;
+  mode: 'fresh' | 'upgrade' | 'patch';
+  durationMinutes: number;
+  installSizeBytes: number;
+  preparedAtTotalMinutes: number;
+  elapsedMinutes: number;
+}
+
 export interface OsEngineState {
+  installation?: OsInstallationProgress | null;
   currentOsId: OsVersion | null;
   installedPatchIds: OsVersion[];
   lastBootAtMinute?: number;
@@ -717,6 +728,8 @@ export interface WorldState {
   appointments: Appointment[];
   windowObservationHistory: string[];
   triggeredEvents: GlobalEvent[];
+  /** Canonical queued non-catalog events. Authored catalog pending entries derive from content. */
+  pendingProceduralEvents?: Array<Omit<GlobalEvent, 'isTriggered' | 'triggeredAtMinute'>>;
   // Per-buddy attitude bank — each buddy sees same event through different eyes
   buddyKnowledge: Record<string, BuddyEventKnowledge[]>; // key: buddyId
   /** #187: one World-owned truth/claim/actor-awareness ledger. Never a UI projection. */
@@ -881,13 +894,19 @@ export type SimulationAction =
   | { type: 'DOWNLOAD_RESUME'; taskId: string }
   | { type: 'DOWNLOAD_CANCEL'; taskId: string }
   | { type: 'VFS_CREATE_FILE'; file: Omit<FileRecord, 'id' | 'createdAtMinute' | 'modifiedAtMinute'> & { id?: string } }
+  | { type: 'VFS_ARCHIVE_CREATE'; archiveName: string; filePaths: string[] }
+  | { type: 'VFS_ARCHIVE_EXTRACT'; archivePath: string }
+  | { type: 'RETROAMP_IMPORT_SAMPLE' }
+  | { type: 'PHOTOBOX_EXPORT_ARTWORK'; scene: import('../PhotoBoxArtwork').PhotoBoxScene; filters: import('../PhotoBoxArtwork').PhotoBoxFilters }
   | { type: 'VFS_DELETE_FILE'; path: string }
   | { type: 'VFS_MOVE_TRASH'; path: string }
   | { type: 'VFS_RESTORE_TRASH'; trashPath: string }
   | { type: 'VFS_EMPTY_TRASH' }
   | { type: 'SOFTWARE_INSTALL'; softwareId: string; selectedOptions?: Record<string, boolean> }
+  | { type: 'SOFTWARE_INSTALL_FROM_DOWNLOAD'; filePath: string; selectedOptions?: Record<string, boolean> }
   | { type: 'SOFTWARE_UNINSTALL'; installedId: string }
   | { type: 'SOCIAL_SEND_MESSAGE'; buddyId: string; text: string; tags?: string[]; imageUrl?: string; imagePrompt?: string; imageCaption?: string }
+  | { type: 'PULSE_SEND_MESSAGE'; buddyId: string; text: string }
   | { type: 'SOCIAL_RECEIVE_MESSAGE'; buddyId: string; text: string; timestampMinute?: number; deliveredAway?: boolean; tags?: string[]; imageUrl?: string; imagePrompt?: string; imageCaption?: string }
   | { type: 'SOCIAL_APPLY_ACTION'; buddyId: string; socialAction: string }
   // Character Lives (v4): the player's answer to an NPC mediation request.

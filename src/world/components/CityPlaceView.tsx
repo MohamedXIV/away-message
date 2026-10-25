@@ -145,7 +145,7 @@ export const CityPlaceView: React.FC<CityPlaceViewProps> = ({ location, onOpenMa
             </div>
             {!player.rentPaid && player.cash >= player.rentAmount && (
               <button
-                onClick={() => { payRent(); setNotice('Rent paid. Henderson nods approvingly.'); }}
+                onClick={() => { payRent(); setNotice('Rent paid. The front desk records your payment.'); }}
                 className="mt-2 px-3 py-1.5 rounded bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold cursor-pointer"
               >
                 Pay ${player.rentAmount.toFixed(2)}

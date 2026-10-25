@@ -48,9 +48,9 @@ describe('#184 playable fake-net surfaces', () => {
     await waitForText(container, 'North Bank Owl');
 
     expect(container.textContent).toContain('rumor');
-    expect(container.textContent).toContain('canonical');
+    expect(container.textContent).toContain('reported');
     expect(container.textContent).toContain('opinion');
-    expect(container.textContent).toContain('roleplay / lie');
+    expect(container.textContent).toContain('disputed');
     expect(container.textContent).toContain('unverified');
     expect(container.textContent).toContain('pumps cutting out');
     expect(engine.social.getBuddy('northbank_owl')).toBeUndefined();
@@ -82,7 +82,7 @@ describe('#184 playable fake-net surfaces', () => {
     });
     await waitForText(container, 'Sub-Canal Infrastructure Hum');
 
-    expect(container.textContent).toContain('Ink-authored thread');
+    expect(container.textContent).toContain('Discussion thread');
     if (npcTitle) expect(container.textContent).toContain(npcTitle);
   });
 
@@ -100,12 +100,12 @@ describe('#184 playable fake-net surfaces', () => {
     });
     await waitForText(container, 'CANAL WATCH');
 
-    expect(container.textContent).toContain('canonical');
+    expect(container.textContent).toContain('reported');
     expect(container.textContent).toContain('claim');
     expect(container.textContent).toContain('unverified');
     expect(container.textContent).toContain('guestbook');
     expect(container.textContent).toContain('intake map');
-    expect(container.textContent).toContain('not world truth');
+    expect(container.textContent).toContain('compare sources');
 
     const back = Array.from(container.querySelectorAll('button'))
       .find((button) => button.textContent?.includes('back to NightBoard'));

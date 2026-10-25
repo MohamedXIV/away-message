@@ -63,10 +63,10 @@ export const NightBoardInkThread: React.FC<{
     <div className="w-full border border-emerald-800 bg-[#0b1220] p-3 font-mono text-xs text-gray-200">
       <div className="flex items-start justify-between gap-3 border-b border-gray-700 pb-2">
         <div>
-          <div className="text-[10px] uppercase tracking-widest text-emerald-500">Ink-authored thread</div>
+          <div className="text-[10px] uppercase tracking-widest text-emerald-500">NightBoard discussion</div>
           <h2 className="text-sm font-bold text-emerald-300">{narrative?.title ?? 'Canal pumps & the low hum'}</h2>
           <div className="text-[10px] text-gray-500">
-            Authored structure · offline wording · provenance labels are not world truth unless marked canonical
+            People share rumors, opinions and local news. Read with care.
           </div>
         </div>
         {onClose && (
@@ -80,7 +80,7 @@ export const NightBoardInkThread: React.FC<{
       </div>
 
       {error && <div className="mt-3 border border-rose-800 bg-rose-950 p-2 text-rose-300">{error}</div>}
-      {!error && !narrative && <div className="mt-3 text-gray-500">opening authored thread…</div>}
+      {!error && !narrative && <div className="mt-3 text-gray-500">Loading discussion…</div>}
 
       {narrative && (
         <div className="mt-3 space-y-2">

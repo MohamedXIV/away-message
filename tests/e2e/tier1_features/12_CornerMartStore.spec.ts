@@ -133,7 +133,7 @@ test.describe('Issue #28 living CornerMart single-view proof', () => {
     // edge of 60s even while headed Chromium stays near 60 FPS. Keep a bounded
     // 90s test budget as scheduling margin; individual assertions remain tight.
     test.setTimeout(90_000);
-    await page.goto('/?fixture=store');
+    await page.goto('/?runtime=legacy&fixture=store');
 
     // Clean-server mounts have crossed the default 5s assertion budget
     // (~5.0s observed), so give only the cold-mount checks wider headroom.

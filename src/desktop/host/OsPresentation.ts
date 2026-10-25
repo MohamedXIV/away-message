@@ -12,6 +12,14 @@ export type WindowTransitionAction = 'open' | 'close' | 'minimize' | 'restore';
 
 export type OsDefaultWallpaperId = 'classic_teal' | 'bliss_green';
 
+export type OsDesktopWallpaperId =
+  | 'harbor_classic'
+  | 'aperture_sand'
+  | 'canal_bliss'
+  | 'lumen_gloss';
+
+export type OsIconStyleId = 'classic' | 'soft' | 'gloss';
+
 export interface OsPresentationProfile {
   themeId: OsThemeId;
   uiFontStack: string;
@@ -20,6 +28,15 @@ export interface OsPresentationProfile {
     fontWeight: number;
   };
   baseFontSizePx: number;
+  /** Authored desktop surface identity. Keep icon language and wallpaper out
+   * of individual applications so every Orion generation stays coherent. */
+  desktop: {
+    wallpaperId: OsDesktopWallpaperId;
+    iconStyle: OsIconStyleId;
+    iconCellWidthPx: number;
+    iconCellHeightPx: number;
+    iconGlyphSizePx: number;
+  };
   window: {
     chromeId: 'beveled' | 'flat-classic' | 'soft-classic' | 'gloss';
     borderRadiusPx: number;
@@ -50,6 +67,13 @@ const PRESENTATION_BY_THEME: Record<OsThemeId, OsPresentationProfile> = {
     uiFontStack: '"MS Sans Serif", Tahoma, Arial, sans-serif',
     titlebar: { fontStack: '"MS Sans Serif", Tahoma, Arial, sans-serif', fontWeight: 700 },
     baseFontSizePx: 12,
+    desktop: {
+      wallpaperId: 'harbor_classic',
+      iconStyle: 'classic',
+      iconCellWidthPx: 84,
+      iconCellHeightPx: 88,
+      iconGlyphSizePx: 38,
+    },
     window: {
       chromeId: 'beveled',
       borderRadiusPx: 0,
@@ -75,6 +99,13 @@ const PRESENTATION_BY_THEME: Record<OsThemeId, OsPresentationProfile> = {
     uiFontStack: 'Tahoma, Arial, sans-serif',
     titlebar: { fontStack: 'Tahoma, Arial, sans-serif', fontWeight: 700 },
     baseFontSizePx: 12,
+    desktop: {
+      wallpaperId: 'aperture_sand',
+      iconStyle: 'soft',
+      iconCellWidthPx: 86,
+      iconCellHeightPx: 90,
+      iconGlyphSizePx: 40,
+    },
     window: {
       chromeId: 'flat-classic',
       borderRadiusPx: 2,
@@ -100,6 +131,13 @@ const PRESENTATION_BY_THEME: Record<OsThemeId, OsPresentationProfile> = {
     uiFontStack: 'Tahoma, "Trebuchet MS", Arial, sans-serif',
     titlebar: { fontStack: '"Trebuchet MS", Tahoma, Arial, sans-serif', fontWeight: 700 },
     baseFontSizePx: 13,
+    desktop: {
+      wallpaperId: 'canal_bliss',
+      iconStyle: 'soft',
+      iconCellWidthPx: 88,
+      iconCellHeightPx: 92,
+      iconGlyphSizePx: 42,
+    },
     window: {
       chromeId: 'soft-classic',
       borderRadiusPx: 5,
@@ -125,6 +163,13 @@ const PRESENTATION_BY_THEME: Record<OsThemeId, OsPresentationProfile> = {
     uiFontStack: '"Segoe UI", Tahoma, Arial, sans-serif',
     titlebar: { fontStack: '"Segoe UI", Tahoma, Arial, sans-serif', fontWeight: 600 },
     baseFontSizePx: 13,
+    desktop: {
+      wallpaperId: 'lumen_gloss',
+      iconStyle: 'gloss',
+      iconCellWidthPx: 88,
+      iconCellHeightPx: 90,
+      iconGlyphSizePx: 40,
+    },
     window: {
       chromeId: 'gloss',
       borderRadiusPx: 8,

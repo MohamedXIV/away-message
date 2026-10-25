@@ -79,9 +79,9 @@ const INITIAL_THREADS: ThreadRecord[] = [
       {
         id: 2,
         author: 'Anonymous',
-        tripcode: '!maya',
+        tripcode: '!countershift',
         date: 'Aug 21, 2006 15:30 PM',
-        content: 'Haha that is just Mr. Henderson from the motel front desk taking his night shift break!',
+        content: 'Could be someone from the motel office on a late coffee break; hard to tell at that hour.',
       },
     ],
   },
@@ -241,7 +241,7 @@ export const NightBoardSite: React.FC<SiteRouteProps> = (props) => {
       {/* Authored Ink thread entry — existing static/NPC/dynamic threads are unchanged. */}
       <div className="max-w-4xl w-full mb-3 flex items-center justify-between gap-3 border border-emerald-800 bg-[#0b1220] px-3 py-1.5 text-[11px]">
         <span className="text-emerald-300">
-          Ink-authored thread: <span className="font-bold">canal pumps &amp; the low hum</span>
+          Discussion thread: <span className="font-bold">canal pumps &amp; the low hum</span>
         </span>
         <button
           onClick={() => setInkOpen((open) => !open)}

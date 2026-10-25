@@ -171,11 +171,18 @@ export class WorldEventsEngine {
     if (this._cachedState) return this._cachedState;
     const buddyKnowledge: Record<string, BuddyEventKnowledge[]> = {};
     for (const [k, v] of this.buddyKnowledge.entries()) buddyKnowledge[k] = v.map((e) => ({ ...e }));
+    // Static authored pending events come from the catalog, not save data.
+    // Dynamic future events are canonical world truth and must survive cold boots.
+    const catalogIds = new Set(GLOBAL_EVENTS_CATALOG.map(event => event.id));
+    const pendingProceduralEvents = Array.from(this.pendingEvents.values())
+      .filter(event => !catalogIds.has(event.id))
+      .map(event => ({ ...event }));
     const state: WorldEventsState = {
       flags: Object.fromEntries(this.flags.entries()),
       appointments: this.appointments.map((a) => ({ ...a })),
       windowObservationHistory: [...this.windowObservationHistory],
       triggeredEvents: Array.from(this.triggeredEvents.values()).map((e) => ({ ...e })),
+      ...(pendingProceduralEvents.length ? { pendingProceduralEvents } : {}),
       buddyKnowledge,
       semanticKnowledge: this.semanticKnowledge.getState(),
     };
@@ -197,11 +204,13 @@ export class WorldEventsEngine {
     }
     this.appointments = state.appointments ? state.appointments.map((a) => ({ ...a })) : [];
     this.windowObservationHistory = state.windowObservationHistory ? [...state.windowObservationHistory] : [];
+    // A hot load must never retain queued events from the previous world.
+    // The source-of-truth snapshot and authored catalog rebuild this queue.
+    this.pendingEvents.clear();
     this.triggeredEvents.clear();
     if (state.triggeredEvents) {
       for (const e of state.triggeredEvents) {
         this.triggeredEvents.set(e.id, { ...e });
-        this.pendingEvents.delete(e.id);
       }
     }
     // Restore per-buddy attitudes (normalize old handle keys to canonical ids)
@@ -217,11 +226,35 @@ export class WorldEventsEngine {
         }))].slice(-20));
       }
     }
-    // Ensure pending still contains non-triggered catalog entries
+    // Authored pending entries are deterministic content, never stored twice.
+    const catalogIds = new Set(GLOBAL_EVENTS_CATALOG.map(event => event.id));
     for (const evt of GLOBAL_EVENTS_CATALOG) {
-      if (!this.triggeredEvents.has(evt.id) && !this.pendingEvents.has(evt.id)) {
-        this.pendingEvents.set(evt.id, evt);
-      }
+      if (!this.triggeredEvents.has(evt.id)) this.pendingEvents.set(evt.id, evt);
+    }
+    // Persisted procedural events may be future obligations: restore only
+    // structurally valid, non-catalog, non-triggered definitions.
+    for (const evt of Array.isArray(state.pendingProceduralEvents) ? state.pendingProceduralEvents : []) {
+      if (!evt || typeof evt.id !== 'string' || !/^[a-z0-9_]+$/.test(evt.id)
+        || catalogIds.has(evt.id) || this.triggeredEvents.has(evt.id)
+        || this.pendingEvents.has(evt.id)
+        || typeof evt.title !== 'string' || !evt.title
+        || typeof evt.description !== 'string' || !evt.description
+        || typeof evt.knowledgePrompt !== 'string' || !evt.knowledgePrompt
+        || !Number.isSafeInteger(evt.triggerDay)
+        || (evt.triggerHour !== undefined && !Number.isSafeInteger(evt.triggerHour))
+        || !(['city_news', 'site_launch', 'economy', 'culture', 'system', 'os_release', 'pulse_update'] as string[])
+          .includes(evt.category)) continue;
+      this.pendingEvents.set(evt.id, {
+        id: evt.id,
+        title: evt.title.slice(0, 80),
+        description: evt.description.slice(0, 400),
+        category: evt.category,
+        triggerDay: Math.max(1, Math.min(365, evt.triggerDay)),
+        triggerHour: Math.max(0, Math.min(23, evt.triggerHour ?? 10)),
+        knowledgePrompt: evt.knowledgePrompt.slice(0, 220),
+        ...(typeof evt.siteUrl === 'string' && /^https?:\/\/[a-z0-9_-]+\.local(?:\/|$)/i.test(evt.siteUrl)
+          ? { siteUrl: evt.siteUrl.slice(0, 160) } : {}),
+      });
     }
     // Backfill attitudes for already-triggered events (migration)
     for (const evt of this.triggeredEvents.values()) {

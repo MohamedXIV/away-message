@@ -106,12 +106,19 @@ function getDefaultIcon(appId: string): string {
     case 'notepad':
     case 'app.notepad':
       return '📝';
+    case 'installer':
+      return '📦';
     case 'trash':
     case 'app.trash':
       return '🗑️';
     case 'browser':
     case 'app.browser':
+    case 'publicweb':
       return '🌐';
+    case 'system':
+      return '💻';
+    case 'mailbox':
+      return '✉️';
     case 'pulse':
     case 'app.pulse':
       return '💬';
@@ -163,12 +170,20 @@ function getDefaultTitle(appId: string): string {
     case 'notepad':
     case 'app.notepad':
       return 'Notepad';
+    case 'installer':
+      return 'Setup Wizard';
     case 'trash':
     case 'app.trash':
       return 'Recycle Bin';
     case 'browser':
     case 'app.browser':
       return 'Voyager Browser';
+    case 'publicweb':
+      return 'Town Sites';
+    case 'system':
+      return 'Computer & Setup';
+    case 'mailbox':
+      return 'Mailbox';
     case 'pulse':
     case 'app.pulse':
       return 'Pulse Messenger';

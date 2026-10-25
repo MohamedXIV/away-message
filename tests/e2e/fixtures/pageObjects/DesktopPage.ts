@@ -8,7 +8,15 @@ export class DesktopPage {
   }
 
   async goto() {
-    await this.page.goto('/');
+    await this.page.goto('/?runtime=legacy');
+    // Classic runs only as an explicit DEV fixture; / is now the Worker game.
+    // DOM navigation can complete before the legacy test fixture is mounted.
+    // Await the actual legacy boot contract instead of evaluating undefined
+    // debug globals or using an arbitrary fixed delay.
+    await this.page.waitForFunction(() =>
+      !!(window as any).__simStore && !!(window as any).__simEngine,
+      { timeout: 15_000 },
+    );
     // E2E starts from a clean browser with no boot request. Enter the live
     // game explicitly rather than mutating simulation state behind MainMenu.
     const skip = this.page.getByRole('button', { name: 'skip to desktop' });

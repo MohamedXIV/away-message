@@ -620,8 +620,9 @@ describe('Adversarial Stress Test Suite — Milestone 1 Engine', () => {
       // t1 created the file in VFS
       expect(downloadManager.getTask(t1.id)?.status).toBe('complete');
       expect(vfs.readFile('C:/Downloads/large1.iso')).toBeDefined();
-      // t2 finished download task but VFS file creation threw Disk Full (silently caught)
-      expect(downloadManager.getTask(t2.id)?.status).toBe('complete');
+      // Owner now reports failed instead of claiming a file was downloaded.
+      expect(downloadManager.getTask(t2.id)?.status).toBe('failed');
+      expect(downloadManager.getTask(t2.id)?.errorMessage).toMatch(/disk full/i);
       expect(vfs.readFile('C:/Downloads/large2.iso')).toBeUndefined();
     });
   });

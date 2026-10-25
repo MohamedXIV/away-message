@@ -1,0 +1,182 @@
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { OsIcon } from './OsIcon';
+import type { OsIconKind } from './osIconKinds';
+
+export interface DesktopIconItem {
+  id: string;
+  label: string;
+  appId: string;
+  kind: OsIconKind;
+  source?: 'system' | 'installed';
+  disabled?: boolean;
+  title?: string;
+}
+
+interface DesktopIconGridProps {
+  icons: readonly DesktopIconItem[];
+  onOpen: (icon: DesktopIconItem) => void;
+  onIconContextMenu?: (icon: DesktopIconItem, event: React.MouseEvent<HTMLButtonElement>) => void;
+  testId?: string;
+  ariaLabel?: string;
+}
+
+type Direction = 'up' | 'down' | 'left' | 'right';
+
+/** Shared responsive desktop icon surface. Icons flow top-to-bottom and then
+ * into new columns, so short or narrow desktops grow sideways instead of
+ * becoming one thin scrolling strip. */
+export const DesktopIconGrid: React.FC<DesktopIconGridProps> = ({
+  icons, onOpen, onIconContextMenu, testId = 'desktop-icon-grid', ariaLabel = 'Desktop icons',
+}) => {
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const gridRef = useRef<HTMLDivElement>(null);
+  const [pages, setPages] = useState({ overflow: false, back: false, forward: false });
+
+  useEffect(() => {
+    const grid = gridRef.current;
+    if (!grid) return;
+    const refresh = () => {
+      const scrollable = grid.scrollWidth > grid.clientWidth + 2;
+      const next = {
+        overflow: scrollable,
+        back: scrollable && grid.scrollLeft > 2,
+        forward: scrollable && grid.scrollLeft + grid.clientWidth < grid.scrollWidth - 2,
+      };
+      setPages(prev => prev.overflow === next.overflow && prev.back === next.back &&
+        prev.forward === next.forward ? prev : next);
+    };
+    const observer = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(refresh) : null;
+    observer?.observe(grid);
+    grid.addEventListener('scroll', refresh, { passive: true });
+    window.addEventListener('resize', refresh);
+    const frame = requestAnimationFrame(refresh);
+    return () => {
+      cancelAnimationFrame(frame);
+      observer?.disconnect();
+      grid.removeEventListener('scroll', refresh);
+      window.removeEventListener('resize', refresh);
+    };
+  }, [icons]);
+
+  const movePage = (direction: -1 | 1) => {
+    const grid = gridRef.current;
+    if (!grid) return;
+    grid.scrollBy({ left: Math.max(120, grid.clientWidth - 96) * direction, behavior: 'instant' });
+  };
+
+  const focusDirection = useCallback((from: HTMLButtonElement, direction: Direction) => {
+    const grid = gridRef.current;
+    if (!grid) return;
+    const buttons = Array.from(grid.querySelectorAll<HTMLButtonElement>('[data-desktop-icon]'));
+    const origin = from.getBoundingClientRect();
+    const originX = origin.left + origin.width / 2;
+    const originY = origin.top + origin.height / 2;
+    let best: { button: HTMLButtonElement; score: number } | null = null;
+    for (const button of buttons) {
+      if (button === from || button.disabled) continue;
+      const rect = button.getBoundingClientRect();
+      const dx = rect.left + rect.width / 2 - originX;
+      const dy = rect.top + rect.height / 2 - originY;
+      const primary = direction === 'down' ? dy : direction === 'up' ? -dy : direction === 'right' ? dx : -dx;
+      if (primary <= 2) continue;
+      const secondary = direction === 'down' || direction === 'up' ? Math.abs(dx) : Math.abs(dy);
+      const score = primary * 8 + secondary;
+      if (!best || score < best.score) best = { button, score };
+    }
+    best?.button.focus();
+  }, []);
+
+  const handleKeyDown = useCallback((event: React.KeyboardEvent<HTMLButtonElement>) => {
+    const buttons = Array.from(
+      gridRef.current?.querySelectorAll<HTMLButtonElement>('[data-desktop-icon]:not(:disabled)') ?? [],
+    );
+    if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      focusDirection(event.currentTarget, 'down');
+    } else if (event.key === 'ArrowUp') {
+      event.preventDefault();
+      focusDirection(event.currentTarget, 'up');
+    } else if (event.key === 'ArrowRight') {
+      event.preventDefault();
+      focusDirection(event.currentTarget, 'right');
+    } else if (event.key === 'ArrowLeft') {
+      event.preventDefault();
+      focusDirection(event.currentTarget, 'left');
+    } else if (event.key === 'Home') {
+      event.preventDefault();
+      buttons[0]?.focus();
+    } else if (event.key === 'End') {
+      event.preventDefault();
+      buttons[buttons.length - 1]?.focus();
+    } else if (event.key === 'Escape') {
+      setSelectedId(null);
+    }
+  }, [focusDirection]);
+
+  return (
+    <>
+    <div
+      ref={gridRef}
+      data-testid={testId}
+      role="group"
+      aria-label={ariaLabel}
+      className="os-desktop-icon-grid"
+      onPointerDown={(event) => {
+        if (event.target === event.currentTarget) setSelectedId(null);
+      }}
+    >
+      {icons.map((icon) => {
+        const unavailableLabel = `${icon.label} (installed; desktop app not available yet)`;
+        return (
+          <button
+            key={icon.id}
+            type="button"
+            data-desktop-icon={icon.id}
+            data-app-id={icon.appId}
+            data-icon-source={icon.source ?? 'system'}
+            data-selected={selectedId === icon.id ? 'true' : undefined}
+            disabled={icon.disabled}
+            aria-label={icon.disabled ? unavailableLabel : `Open ${icon.label}`}
+            title={icon.title ?? (icon.disabled ? unavailableLabel : `Open ${icon.label}`)}
+            className="os-desktop-icon"
+            onFocus={() => setSelectedId(icon.id)}
+            onContextMenu={event => {
+              event.preventDefault();
+              event.stopPropagation();
+              setSelectedId(icon.id);
+              onIconContextMenu?.(icon, event);
+            }}
+            onClick={(event) => {
+              // A pointer click only selects a desktop icon. Keyboard and
+              // assistive-technology activation dispatch detail=0 clicks.
+              setSelectedId(icon.id);
+              if (event.detail === 0 && !icon.disabled) onOpen(icon);
+            }}
+            onDoubleClick={(event) => {
+              // Ignore non-primary pointer activation; a double-click opens
+              // exactly once instead of launching on both preceding clicks.
+              if (event.button === 0 && !icon.disabled) onOpen(icon);
+            }}
+            onKeyDown={handleKeyDown}
+          >
+            <span className="os-desktop-icon-glyph" aria-hidden="true">
+              <OsIcon kind={icon.kind} size={32} />
+            </span>
+            <span className="os-desktop-icon-label">{icon.label}</span>
+          </button>
+        );
+      })}
+    </div>
+    {pages.overflow && (
+      <div className="os-desktop-icon-pager" data-testid="desktop-icon-pages"
+        role="group" aria-label="More installed desktop icons">
+        <button type="button" aria-label="Previous desktop icons" disabled={!pages.back}
+          onClick={() => movePage(-1)} title="Previous icons">◀</button>
+        <span aria-hidden="true">Icons</span>
+        <button type="button" aria-label="Next desktop icons" disabled={!pages.forward}
+          onClick={() => movePage(1)} title="More icons">▶</button>
+      </div>
+    )}
+    </>
+  );
+};

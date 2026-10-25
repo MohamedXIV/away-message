@@ -4,6 +4,20 @@ import { createCoreDomainOwners } from '../../src/engine/kernel/CoreDomainOwners
 import { NpcLifeRuntime } from '../../src/engine/kernel/NpcLifeRuntime';
 
 describe('NpcLifeRuntime — one canonical pressure and goals owner', () => {
+  it('reads detached identity-only Social roster in the same order as full buddy projection', () => {
+    const game = new SimulationEngine();
+    const before = JSON.stringify(game.exportSnapshot());
+    const expected = game.social.getBuddies().map(buddy => buddy.id);
+    const ids = game.social.getBuddyIds();
+    expect(ids).toEqual(expected);
+    expect(ids).not.toBe(game.social.getBuddyIds());
+    ids.reverse();
+    ids.push('forged-buddy');
+    expect(game.social.getBuddyIds()).toEqual(expected);
+    expect(JSON.stringify(game.exportSnapshot())).toEqual(before);
+  });
+
+
   it('reconstructs the existing NPC life slice and selectors from one owner graph', () => {
     const source = new SimulationEngine();
     const snapshot = source.exportSnapshot();

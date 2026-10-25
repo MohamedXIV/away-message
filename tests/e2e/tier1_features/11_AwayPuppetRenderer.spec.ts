@@ -27,7 +27,7 @@ async function readCharacterStats(page: import('@playwright/test').Page): Promis
 
 test.describe('Issue #25 Away Puppet Phaser browser proof', () => {
   test('renders a modular three-actor group and preserves surfaces across authored view changes', async ({ page }) => {
-    await page.goto('/?fixture=world');
+    await page.goto('/?runtime=legacy&fixture=world');
 
     await expect(page.getByTestId('physical-world-host')).toBeVisible();
     await expect(page.getByTestId('phaser-container').locator('canvas')).toBeVisible();

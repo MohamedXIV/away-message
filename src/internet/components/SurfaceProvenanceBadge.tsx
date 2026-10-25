@@ -3,34 +3,34 @@ import type { SurfaceProvenance } from '../../narrative/fakeNet/contracts';
 
 const BADGES: Record<SurfaceProvenance, { label: string; className: string; title: string }> = {
   canonical_fact: {
-    label: 'canonical',
+    label: 'reported',
     className: 'border-emerald-500 bg-emerald-950 text-emerald-300',
-    title: 'Checked against a canonical game-world fact.',
+    title: 'Reported in town records.',
   },
   rumor: {
     label: 'rumor',
     className: 'border-amber-500 bg-amber-950 text-amber-300',
-    title: 'Repeated by someone. Not confirmed world truth.',
+    title: 'Passed along by other people. Details are unconfirmed.',
   },
   claim: {
     label: 'claim',
     className: 'border-amber-500 bg-amber-950 text-amber-300',
-    title: 'A claim from this surface. Not confirmed world truth.',
+    title: 'A statement from this poster. Check other sources.',
   },
   opinion: {
     label: 'opinion',
     className: 'border-sky-500 bg-sky-950 text-sky-300',
-    title: 'A personal opinion. Not a world fact.',
+    title: 'The poster’s personal opinion.',
   },
   lie: {
-    label: 'roleplay / lie',
+    label: 'disputed',
     className: 'border-rose-500 bg-rose-950 text-rose-300',
-    title: 'Authored unreliability or roleplay. Not canonical.',
+    title: 'Other people dispute this account.',
   },
   unknown: {
     label: 'unverified',
     className: 'border-gray-500 bg-gray-900 text-gray-300',
-    title: 'Unknown or unverified. Not canonical.',
+    title: 'No reliable source has confirmed this.',
   },
 };
 

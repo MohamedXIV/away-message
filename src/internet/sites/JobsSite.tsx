@@ -17,7 +17,7 @@ const JOB_LISTINGS: JobListing[] = [
     title: 'Night Shift Short-Order Cook / Counter Help',
     employer: '4th Street Diner',
     payRate: '$8.50 / hr + Tips',
-    description: 'Looking for reliable late-night staff (10 PM - 6 AM). Experience with flat-top grills and coffee urns preferred. Ask for Maya or Sal.',
+    description: 'Looking for reliable late-night staff (10 PM - 6 AM). Experience with flat-top grills and coffee urns preferred. Ask the shift manager.',
   },
   {
     id: 'job_2',

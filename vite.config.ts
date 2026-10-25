@@ -7,6 +7,19 @@ export default defineConfig({
   // absolute asset URLs would 404 there. Local dev/preview unaffected.
   base: './',
   plugins: [react()],
+  // Dedicated Simulation Worker imports cold IndexedDB pages asynchronously.
+  // That requires an ES-module worker output: IIFE cannot split worker chunks.
+  worker: { format: 'es' },
+  // Both HTML entries mount the same canonical Worker shell in production.
+  // Legacy main-thread simulation is gated behind an explicit DEV-only query.
+  build: {
+    rollupOptions: {
+      input: {
+        game: path.resolve(__dirname, 'index.html'),
+        worker: path.resolve(__dirname, 'worker.html'),
+      },
+    },
+  },
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),

@@ -98,7 +98,9 @@ export class SoftwareRegistry {
         installedBytes: 15_728_640,
         requirements: {
           minOs: 'Orion_4.8',
-          minRamMB: 512,
+          // A period-correct small PCM music player must run on the authored
+          // Scrap Yard starter PC. This is not the 512 MB PhotoBox class.
+          minRamMB: 64,
           minCpuTier: 1,
           requiredDiskBytes: 18_000_000,
         },

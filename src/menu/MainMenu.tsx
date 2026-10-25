@@ -85,6 +85,15 @@ export const MainMenu: React.FC<MainMenuProps> = ({ onBoot }) => {
 
   const byId = new Map(slots.map((s) => [s.id, s]));
 
+  const openWorkerPreview = (): void => {
+    // Full-document navigation stops the existing legacy runtime before a
+    // Dedicated Worker is mounted. This never starts a second live world.
+    const url = new URL(window.location.href);
+    url.search = '';
+    url.searchParams.set('runtime', 'worker');
+    window.location.assign(url.toString());
+  };
+
   const handleContinue = async () => {
     soundManager.play('click');
     const recent = await mostRecentSlot();
@@ -245,6 +254,18 @@ export const MainMenu: React.FC<MainMenuProps> = ({ onBoot }) => {
                 </div>
               );
             })}
+          </div>
+
+          <div className="border-t border-slate-700 pt-3">
+            <button type="button" onClick={openWorkerPreview}
+              className="w-full rounded border border-emerald-600/60 bg-emerald-950/40 px-3 py-2 text-sm font-bold text-emerald-200 hover:bg-emerald-900/50"
+              data-testid="open-worker-preview">
+              Try Dedicated Worker Preview
+            </button>
+            <p className="mt-1 text-[10px] leading-relaxed text-slate-400">
+              Experimental interface. Opens a fresh page, not a second world.
+              Save your current game first. Existing save slots stay available.
+            </p>
           </div>
 
           <div className="flex gap-2 pt-1">

@@ -98,3 +98,164 @@ jobs:
 
       - name: Browser Pulse cold history gate
         run: npx playwright test tests/e2e/tier4_scenarios/ScenarioH_PulseColdPaging.spec.ts
+
+      # #175: real module Worker proof until the production cutover gates it universally.
+      - name: Browser Simulation Worker contract gate
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.ref == 'feat/175-single-worker-simulation-host'
+        run: npx playwright test tests/e2e/tier4_scenarios/ScenarioI_SimulationWorker.spec.ts
+
+      # Staged P3.1/P3.2: verifies Worker-only React boot with NO legacy
+      # defaultEngine, owner-backed reads, save/restart and fail-closed load.
+      - name: Browser Worker-first UI cutover gate
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.ref == 'feat/175-single-worker-simulation-host'
+        run: npx playwright test tests/e2e/tier4_scenarios/ScenarioJ_WorkerFirstUI.spec.ts
+
+      # #175 authored consumers: actual Phaser scene and Pulse contact/chat
+      # backed only by bounded Worker projections and serializable commands.
+      # #175: normal / must be Worker-only. Classic remains DEV-only for
+      # explicit migration fixtures; invalid selector never falls back.
+      - name: Browser Worker default root cutover gate
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.ref == 'feat/175-single-worker-simulation-host'
+        run: npx playwright test tests/e2e/tier4_scenarios/ScenarioT_WorkerDefaultRoute.spec.ts
+
+      - name: Browser Worker authored room and Pulse gates
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.ref == 'feat/175-single-worker-simulation-host'
+        run: npx playwright test tests/e2e/tier4_scenarios/ScenarioK_WorkerAuthoredConsumers.spec.ts
+
+      # #175: same UI-only window store, Worker-only bounded OS/VFS facts,
+      # real Notepad -> File Explorer round trip, and minimize/restore/close.
+      - name: Browser Worker desktop and VFS gates
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.ref == 'feat/175-single-worker-simulation-host'
+        run: npx playwright test tests/e2e/tier4_scenarios/ScenarioL_WorkerDesktopVfs.spec.ts
+
+      # #175 physical PC/OS workflow: owned hardware, disc preflight and
+      # install transaction stay entirely inside the canonical Worker.
+      - name: Browser Worker physical OS ownership gates
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.ref == 'feat/175-single-worker-simulation-host'
+        run: npx playwright test tests/e2e/tier4_scenarios/ScenarioM_WorkerPhysicalOs.spec.ts
+
+      - name: Browser Worker city travel and persistence gates
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.ref == 'feat/175-single-worker-simulation-host'
+        run: npx playwright test tests/e2e/tier4_scenarios/ScenarioN_WorkerCityTravel.spec.ts
+
+      # #175 P3.38: genuinely populated 20/100/250/500 NPC worlds boot,
+      # advance, save and reload through the same production-route Worker.
+      # Fixture seeding in Classic is an explicit DEV-only setup page and
+      # ceases to exist before any measured Worker work.
+      - name: Browser Worker population transport and 500-actor cold persistence
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.ref == 'feat/175-single-worker-simulation-host'
+        run: npx playwright test tests/e2e/tier4_scenarios/ScenarioU_WorkerPopulationScale.spec.ts
+
+      # #175 P3.40: the ACTUAL #177 route/appointment/agenda fixture
+      # crosses the same production-root Worker, survives real 500-NPC
+      # progression and is cold-recovered from its own saved slot.
+      - name: Browser Worker rich 500-NPC agenda and appointment cold gate
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.ref == 'feat/175-single-worker-simulation-host'
+        run: npx playwright test tests/e2e/tier4_scenarios/ScenarioV_WorkerRichPopulation.spec.ts
+
+      # #175 P3.44: continuous player-operated story acceptance on ordinary
+      # plain root, including a fresh New Game and one deterministic social
+      # precondition from the separate DEV-only seeder. No test engine survives.
+      - name: Browser Worker complete authored-play acceptance
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.ref == 'feat/175-single-worker-simulation-host'
+        run: npx playwright test tests/e2e/tier4_scenarios/ScenarioW_WorkerFullPlayAcceptance.spec.ts
+
+      # #213 stacked PR: genuine, unseeded new game with dynamic cast, café
+      # encounter, cold save/reopen and a second world's varied identities.
+      # This branch is a sibling Worker UX lane, not the canonical #175 branch.
+      # #219/#214/#213/#212 integrated first-boot release candidate: the
+      # regular integration branch keeps larger old Worker suites optional.
+      # Exercise the new DOS-to-real-Orion journey on the actual stacked head.
+      - name: Browser DOS owned-media install and clean Orion first boot
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.ref == 'feat/219-dos-first-boot-and-orion-disc-setup'
+        run: npx playwright test tests/e2e/tier4_scenarios/ScenarioY_WorkerDosInstall.spec.ts tests/e2e/tier4_scenarios/ScenarioX_WorkerOrionDesktopUx.spec.ts tests/e2e/tier4_scenarios/ScenarioX_WorkerDynamicCast.spec.ts tests/e2e/tier4_scenarios/ScenarioZ_WorkerPulseAcquisition.spec.ts tests/e2e/tier4_scenarios/ScenarioAA_WorkerOrion50OwnedDisc.spec.ts tests/e2e/tier4_scenarios/ScenarioAB_WorkerDesktopInstalledOverflow.spec.ts tests/e2e/tier4_scenarios/ScenarioAC_WorkerOrionUpgrade.spec.ts
+
+      - name: Browser Worker dynamic cast and actual new-game social acceptance
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.ref == 'feat/213-dynamic-worker-starter-cast'
+        run: npx playwright test tests/e2e/tier4_scenarios/ScenarioX_WorkerDynamicCast.spec.ts
+
+      # #175 P3.20: real installed-app path and PCM WAV playback, not mocked UI.
+      - name: Browser Worker RetroAmp real audio gate
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.ref == 'feat/175-single-worker-simulation-host'
+        run: npx playwright test tests/e2e/tier4_scenarios/ScenarioO_WorkerRetroAmpRealAudio.spec.ts
+
+      # #175 P3.21: prove fail-closed Worker crash + new-Worker saved-slot
+      # recovery and full-page cold persistence; never instantiate local engine.
+      - name: Browser Worker crash recovery and cold slot gates
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.ref == 'feat/175-single-worker-simulation-host'
+        run: npx playwright test tests/e2e/tier4_scenarios/ScenarioP_WorkerFaultRecovery.spec.ts
+
+      # #175 P3.22: real Worker-owned Command Prompt / VFS / save persistence.
+      - name: Browser Worker terminal file-ownership gate
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.ref == 'feat/175-single-worker-simulation-host'
+        run: npx playwright test tests/e2e/tier4_scenarios/ScenarioQ_WorkerTerminal.spec.ts
+
+      # #175 P3.23: real Worker Recycle Bin / Add-Remove / Save-Load parity.
+      - name: Browser Worker system utilities ownership gate
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.ref == 'feat/175-single-worker-simulation-host'
+        run: npx playwright test tests/e2e/tier4_scenarios/ScenarioR_WorkerSystemUtilities.spec.ts
+
+      # #175 P3.24: genuine bounded AI Lab read-only Worker diagnostics.
+      - name: Browser Worker AI Lab inspector gate
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.ref == 'feat/175-single-worker-simulation-host'
+        run: npx playwright test tests/e2e/tier4_scenarios/ScenarioS_WorkerAiLabInspector.spec.ts
+
+  # #175 P3.41: separate runner so the 17 browser gates retain their normal
+  # lifecycle. Real measurements are multi-sampled and saved as immutable
+  # exact-head artifacts; no wall-clock number decides pass/fail.
+  population_evidence:
+    name: Exact-head rich population performance evidence
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.ref == 'feat/175-single-worker-simulation-host'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout the actual PR head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+
+      - name: Verify exact head identity
+        shell: bash
+        env:
+          EXPECTED_SHA: ${{ github.event.pull_request.head.sha }}
+        run: test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+
+      - name: Install Node 24 (match original #177 scaling runner)
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Prepare evidence folder
+        run: mkdir -p benchmark-artifacts
+
+      - name: Canonical #177 A-E stress - multi-sample, all four populations
+        env:
+          SIM_BENCH_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          POP_SCALE_SAMPLES: '3'
+          POP_SCALE_WARMUPS: '1'
+          POP_SCALE_TICKS: '3'
+          POP_SCALE_DAYS: '3'
+          POP_SCALE_OUTPUT: benchmark-artifacts/population-direct.json
+        run: npm run bench:population
+
+      - name: Combined Worker FIFO / direct owner - rich sampled proof
+        env:
+          WORKER_RICH_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          WORKER_RICH_SAMPLES: '3'
+          WORKER_RICH_WARMUPS: '1'
+          WORKER_RICH_OUTPUT: benchmark-artifacts/worker-rich.json
+        run: npm run bench:worker-rich
+
+      - name: Upload exact-head performance evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rich-population-${{ github.event.pull_request.head.sha }}-${{ github.run_attempt }}
+          path: benchmark-artifacts/*.json
+          if-no-files-found: warn
+          retention-days: 30

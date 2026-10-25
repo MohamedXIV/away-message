@@ -396,7 +396,7 @@ export const BuddyListWindow: React.FC<BuddyListWindowProps> = ({
               <input
                 value={targetHandle}
                 onChange={(e) => setTargetHandle(e.target.value)}
-                placeholder="e.g. tacocart_ryan"
+                placeholder="Enter a known Pulse ID"
                 className="w-full rounded border border-gray-400 bg-white px-2 py-1 text-xs outline-none focus:border-[#5b2d8f]"
                 autoFocus
               />

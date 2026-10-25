@@ -113,10 +113,12 @@ export class NpcLifeRuntime {
     if (!buddy) return [];
     const traits = this.owners.social.getTraits(actorId);
     const tier = this.getFidelityTier(actorId);
-    const bonds = this.owners.social
-      .getBuddies()
-      .filter((target) => target.id !== actorId)
-      .map((target) => ({ targetId: target.id, ...this.owners.social.getNpcBond(actorId, target.id).dims }));
+    // Identity-only Social read preserves canonical roster order and the
+    // exact neutral/directed bond set without allocating full player-facing
+    // BuddyCharacter/status projections for every potential target.
+    const bonds = this.owners.social.getBuddyIds()
+      .filter((targetId) => targetId !== actorId)
+      .map((targetId) => ({ targetId, ...this.owners.social.getNpcBond(actorId, targetId).dims }));
     const events = this.owners.world.getTriggeredEvents().map((e) => ({ ...e }));
     return initializeActorGoals(
       actorId,
@@ -203,8 +205,8 @@ export class NpcLifeRuntime {
 
   /** Materialize canonical entries for every known buddy (ctor/load deterministic defaults). */
   private ensureAllNpcLifeEntries(): void {
-    for (const buddy of this.owners.social.getBuddies()) {
-      this.getOrCreateNpcLifeEntry(buddy.id);
+    for (const actorId of this.owners.social.getBuddyIds()) {
+      this.getOrCreateNpcLifeEntry(actorId);
     }
   }
 
@@ -214,9 +216,9 @@ export class NpcLifeRuntime {
    * identically whether or not anyone looked. Idempotent at a fixed minute.
    */
   public advanceAllNpcPressuresToNow(): void {
-    for (const buddy of this.owners.social.getBuddies()) {
-      const entry = this.getOrCreateNpcLifeEntry(buddy.id);
-      if (entry) this.advanceNpcLifeEntryToNow(buddy.id, entry);
+    for (const actorId of this.owners.social.getBuddyIds()) {
+      const entry = this.getOrCreateNpcLifeEntry(actorId);
+      if (entry) this.advanceNpcLifeEntryToNow(actorId, entry);
     }
   }
 

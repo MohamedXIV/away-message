@@ -64,12 +64,12 @@ export const CanalWatchSite: React.FC<SiteRouteProps> = ({ navigate }) => {
 
       <main className="mx-auto max-w-3xl px-4 py-4">
         <div className="mb-4 border border-[#b49a72] bg-[#fbf6e9] p-2 font-mono text-[10px] leading-4 text-[#5e4b35]">
-          <span className="font-bold">labels on this page:</span>{' '}
-          <span className="border border-emerald-700 px-1 text-emerald-800">canonical</span> means checked against
-          the game world. <span className="border border-amber-700 px-1 text-amber-800">rumor / claim</span>,{' '}
-          <span className="border border-sky-700 px-1 text-sky-800">opinion</span>,{' '}
-          <span className="border border-rose-700 px-1 text-rose-800">roleplay / lie</span> and{' '}
-          <span className="border border-gray-600 px-1 text-gray-700">unverified</span> are not world truth.
+          <span className="font-bold">a note about sources:</span>{' '}
+          <span className="border border-emerald-700 px-1 text-emerald-800">reported</span> items appear in town records.
+          <span className="border border-amber-700 px-1 text-amber-800"> rumors / claims</span> may be secondhand;
+          <span className="border border-sky-700 px-1 text-sky-800"> opinions</span> are personal;
+          <span className="border border-rose-700 px-1 text-rose-800"> disputed</span> accounts have conflicting stories.
+          Read carefully and compare sources.
         </div>
 
         {error && <div className="border border-rose-700 bg-rose-100 p-2 font-mono text-xs text-rose-900">{error}</div>}

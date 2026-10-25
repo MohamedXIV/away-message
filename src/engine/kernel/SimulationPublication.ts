@@ -78,6 +78,14 @@ export interface SimulationWorldRead {
   metInPerson: boolean;
 }
 
+/** One FIFO Worker read of the three small play-screen projections. Never a full-state snapshot. */
+export interface SimulationGameViewRead {
+  revision: number;
+  hud: SimulationHudProjection;
+  world: SimulationWorldRead;
+  player: SimulationPlayerStatusRead;
+}
+
 /** A five-day weather window, not a live GameContext or owner handle. */
 export interface SimulationWeatherBuddyRead {
   revision: number;
@@ -141,8 +149,24 @@ export interface SimulationDesktopRead {
   pcBootState: import('./ComputerOwnershipRuntime').PcBootState;
   monitor: ReturnType<import('../HardwareEngine').HardwareEngine['getDisplayState']>['monitor'];
   bootMediaItems: import('../types').OwnedItem[];
+  /** Bounded real loose RAM, never a full inventory or invented equipment. */
+  ownedRamItems: import('../types').OwnedItem[];
+  ramSlotsUsed: number;
+  ramSlotCapacity: number;
+  osInstallation: import('../types').OsInstallationProgress | null;
   desktopFiles: Array<Pick<import('../types').FileRecord,
     'id' | 'name' | 'path' | 'parentPath' | 'kind' | 'appAssociation'>>;
+  /** Small authorized installed-program roster, not all software internals. */
+  installedApps: Array<Pick<import('../types').InstalledSoftwareRecord,
+    'appId' | 'name' | 'version'>>;
+}
+
+/** Dedicated, capped Add/Remove roster: no hardware, downloads or VFS bodies. */
+export interface SimulationInstalledProgramsRead {
+  revision: number;
+  programs: Array<Pick<import('../types').InstalledSoftwareRecord,
+    'id' | 'appId' | 'name' | 'version' | 'installedBytes' |
+    'isPortable' | 'isAdware' | 'installPath'>>;
 }
 
 /** UI-readable presence projection. Omits relationships, memories and chat history. */
@@ -161,6 +185,16 @@ export interface SimulationMailboxRead {
     'id' | 'items' | 'fulfillment' | 'readyMinute' | 'status'>>;
 }
 
+/** One selected installer, never the complete VFS or download ledger. */
+export interface SimulationInstallerRead {
+  revision: number;
+  filePath: string;
+  softwareId: string | null;
+  ready: boolean;
+  reason: string | null;
+  preview: import('../SoftwareRegistry').InstallerPreview | null;
+}
+
 /** Legacy desktop app dependencies, projected only from the relevant owners. */
 export interface SimulationAppRead {
   revision: number;
@@ -169,6 +203,15 @@ export interface SimulationAppRead {
   hardware: import('../types').HardwareState;
   os: ReturnType<import('../OsEngine').OsEngine['getState']>;
   installedSoftware: import('../types').InstalledSoftwareRecord[];
+}
+
+/** Verified one-archive metadata only; raw ZIP bytes never cross to the browser. */
+export interface SimulationArchiveRead {
+  revision: number;
+  archivePath: string;
+  ready: boolean;
+  reason: string | null;
+  entries: Array<{ name: string; sizeBytes: number; crc32: string }>;
 }
 
 /** Per-directory visible metadata; file contents are requested separately. */
@@ -312,6 +355,28 @@ export interface SimulationLabInspectorRead {
     rentPaid: boolean;
     rentOverdue: boolean;
   };
+}
+
+/** Dedicated read-only developer AI Lab page. Never use as a player-facing query. */
+export interface SimulationLabPageRead {
+  revision: number;
+  day: number;
+  currentOsId: string | null;
+  eventCounts: SimulationLabInspectorRead['eventCounts'];
+  roster: Pick<SimulationLabInspectorRead['roster'], 'total' | 'procedural'>;
+  actors: Array<Pick<SimulationLabInspectorRead['actors'][number],
+    'id' | 'displayName' | 'handle' | 'relationship' | 'stage' | 'dailyMood' | 'status'> & {
+    memoryCount: number;
+    promiseCount: number;
+    recentMemories: Array<Pick<import('../types').CoreMemory, 'id' | 'kind' | 'day' | 'text'>>;
+  }>;
+  appointments: {
+    total: number;
+    todayCount: number;
+    page: Array<Pick<SimulationLabInspectorRead['appointments']['page'][number],
+      'id' | 'characterId' | 'locationId' | 'targetDay' | 'status' | 'rsvp'>>;
+  };
+  body: SimulationLabInspectorRead['body'];
 }
 
 /** Player's active journey only: no NPC trips, all-actor positions or transit network. */

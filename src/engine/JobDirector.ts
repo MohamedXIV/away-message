@@ -18,7 +18,7 @@ export interface Gig {
 
 export const GIGS: Record<string, Gig> = {
   cart_helper: {
-    id: 'cart_helper', title: "Ryan's Cart Relief", blurb: 'Lunch rush backup at the food cart. Tacos, change, small talk.',
+    id: 'cart_helper', title: "Food Cart Relief", blurb: 'Lunch rush backup at the food cart. Tacos, change, small talk.',
     pay: 40, durationMin: 180, minEnergy: 25, contactRole: 'cart-owner', baseOdds: 80,
   },
   diner_dishwasher: {
@@ -26,7 +26,7 @@ export const GIGS: Record<string, Gig> = {
     pay: 45, durationMin: 240, minEnergy: 30, contactRole: 'diner-staff', baseOdds: 75,
   },
   flyer_run: {
-    id: 'flyer_run', title: 'Motel Flyer Run', blurb: 'Henderson needs flyers on every door in the district. Easy legs, easy money.',
+    id: 'flyer_run', title: 'Motel Flyer Run', blurb: 'The motel office needs flyers on every door in the district. Easy legs, easy money.',
     pay: 20, durationMin: 120, minEnergy: 15, contactRole: 'landlord', baseOdds: 90,
   },
   night_stock: {

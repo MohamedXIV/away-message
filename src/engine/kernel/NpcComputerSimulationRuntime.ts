@@ -273,6 +273,18 @@ export class NpcComputerSimulationRuntime {
     return this.computerOwnership.commitOsInstall(plan);
   }
 
+  public startOsInstall(plan: OsInstallPlan): ActionResult {
+    return this.computerOwnership.startOsInstall(plan);
+  }
+
+  public advanceOsInstall(): ActionResult<import('../types').OsInstallationProgress | null> {
+    return this.computerOwnership.advanceOsInstall();
+  }
+
+  public cancelOsInstall(): ActionResult {
+    return this.computerOwnership.cancelOsInstall();
+  }
+
   public purchaseStoreItem(
     storeId: 'silicon_spares',
     skuId: string,

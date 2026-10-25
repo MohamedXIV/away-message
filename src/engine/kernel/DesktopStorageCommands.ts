@@ -1,4 +1,7 @@
 import type { ActionResult, SimulationAction } from '../types';
+import { createTextArchive, extractTextArchive } from './ZipArchiveCommands';
+import { exportPhotoBoxArtwork } from './PhotoBoxExportCommands';
+import { createRetroAmpSample, RETROAMP_SAMPLE_PATH } from './RetroAmpSample';
 import type { CoreDomainOwners } from './CoreDomainOwners';
 
 /**
@@ -11,7 +14,7 @@ import type { CoreDomainOwners } from './CoreDomainOwners';
  */
 export class DesktopStorageCommands {
   constructor(
-    private readonly owners: Pick<CoreDomainOwners, 'world' | 'downloads' | 'vfs' | 'software' | 'telemetry'>,
+    private readonly owners: Pick<CoreDomainOwners, 'world' | 'downloads' | 'vfs' | 'software' | 'telemetry' | 'os' | 'hardware'>,
     private readonly publishState: () => void,
   ) {}
 
@@ -62,7 +65,67 @@ export class DesktopStorageCommands {
         return { success: ok };
       }
 
+      case 'VFS_ARCHIVE_CREATE': {
+        try {
+          const data=createTextArchive(this.owners.vfs,action.archiveName,action.filePaths,currentMinutes);
+          this.publishState(); return{success:true,data};
+        } catch(cause){return{success:false,error:cause instanceof Error?cause.message:'Archive creation failed'}}
+      }
+      case 'VFS_ARCHIVE_EXTRACT': {
+        try {
+          const data=extractTextArchive(this.owners.vfs,action.archivePath,currentMinutes);
+          this.publishState(); return{success:true,data};
+        } catch(cause){return{success:false,error:cause instanceof Error?cause.message:'Extraction failed'}}
+      }
+      case 'PHOTOBOX_EXPORT_ARTWORK': {
+        if (!this.owners.software.isInstalled('app.photobox')) {
+          return { success: false, error: 'Install PhotoBox before exporting artwork.' };
+        }
+        if (this.owners.os.getCurrentOsId() !== 'Orion_6.0' ||
+            this.owners.hardware.getState().ramMB < 768) {
+          return { success: false, error: 'PhotoBox requires Orion 6.0 and at least 768 MB RAM.' };
+        }
+        try {
+          const result = exportPhotoBoxArtwork(this.owners.vfs, action.scene, action.filters, currentMinutes);
+          this.publishState();
+          return { success: true, data: result };
+        } catch (cause) {
+          return { success: false, error: cause instanceof Error ? cause.message : 'Image export failed' };
+        }
+      }
+      case 'RETROAMP_IMPORT_SAMPLE': {
+        if (!this.owners.software.isInstalled('app.retroamp')) {
+          return { success: false, error: 'RetroAmp must be installed to import music.' };
+        }
+        if (!this.owners.os.getCurrentOsId() ||
+          !this.owners.hardware.getComputerBootStatus().poweredOn) {
+          return { success: false, error: 'Boot the installed OS before importing music.' };
+        }
+        const wave = createRetroAmpSample();
+        const existing = this.owners.vfs.readFile(RETROAMP_SAMPLE_PATH);
+        if (existing) return existing.kind === 'audio' &&
+          existing.sizeBytes === wave.sizeBytes && existing.content === wave.content &&
+          existing.appAssociation === 'app.retroamp'
+            ? { success: true, data: { path: RETROAMP_SAMPLE_PATH, alreadyPresent: true } }
+            : { success: false, error: 'A different file already occupies the sample path.' };
+        try {
+          this.owners.vfs.createFile({
+            name: 'Motel Night Loop.wav', path: RETROAMP_SAMPLE_PATH,
+            parentPath: 'C:/Music', kind: 'audio',
+            sizeBytes: wave.sizeBytes, content: wave.content,
+            appAssociation: 'app.retroamp',
+          }, currentMinutes);
+          this.publishState();
+          return { success: true, data: { path: RETROAMP_SAMPLE_PATH } };
+        } catch (cause) {
+          return { success: false, error: cause instanceof Error ? cause.message : 'WAV import failed' };
+        }
+      }
       case 'VFS_CREATE_FILE': {
+        // Only the download owner can mint successful-transfer provenance.
+        if (action.file.metadata && 'downloadTaskId' in action.file.metadata) {
+          return { success: false, error: 'Download receipts are owner-only metadata.' };
+        }
         try {
           const file = this.owners.vfs.createFile(action.file, currentMinutes);
           this.publishState();

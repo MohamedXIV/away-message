@@ -99,6 +99,14 @@ export class HardwareEngine {
     return { assembled: this.computer.assembled, poweredOn: this.computer.poweredOn };
   }
 
+  /** Two scalars for the physical workbench; never clone a full computer. */
+  public getRamSlotSummary(): { used: number; capacity: number } {
+    return {
+      used: this.computer.ramSticks.length,
+      capacity: this.computer.motherboard?.ramSlots ?? 0,
+    };
+  }
+
   public getComputerState(): Readonly<ComputerSetupState> {
     return cloneComputer(this.computer);
   }
