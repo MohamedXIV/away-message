@@ -76,6 +76,15 @@ test('#214 fresh Orion acquires Pulse only through real internet â†’ VFS setup â
   await messenger.getByRole('button', { name: 'Sign In', exact: true }).click();
   await expect(messenger).toHaveAttribute('data-pulse-phase', 'signed-in');
 
+  // Offline dialogue is choice-driven and Worker-authored. No free textbox
+  // invites arbitrary messages to a keyword bot.
+  const choices = messenger.getByTestId('worker-pulse-choices');
+  await expect(choices.getByRole('button', { name: 'Hey! How have you been lately?' })).toBeVisible();
+  await expect(messenger.getByRole('textbox', { name: 'Pulse message' })).toHaveCount(0);
+  await choices.getByRole('button', { name: 'Hey! How have you been lately?' }).click();
+  await expect(messenger.getByTestId('worker-pulse-messages'))
+    .toContainText('Hey! How have you been lately?');
+
   // Signed-in Pulse closes to tray (still running), so quick launch
   // restores the existing session immediately without a second startup cost.
   const beforeWarm = Number(await page.getByTestId('worker-minute').textContent());

@@ -21,7 +21,7 @@ export function createWorkerPulseNarrative(engine: SimulationKernel) {
       throw new Error('This contact is not in your buddy list.');
     }
     const actor = engine.getPlayerActorRead(actorId)?.actor;
-    if (!actor || actor.lifecycle === 'gone' || actor.lifecycle === 'blocked') {
+    if (!actor || actor.lifecycle === 'departed' || actor.connection === 'blocked') {
       throw new Error('This contact is unavailable.');
     }
     const { coordinator } = createSimulationNarrative(engine);

@@ -9,6 +9,7 @@ import { findPulseAccount, loadPulseAccounts, loadPulseCredentials, savePulseCre
 import { formatSimulationMinutes } from '../../apps/pulse/utils/timeFormat';
 import { useWindowStore } from '../../store/useWindowStore';
 import type { WorkerGameSession } from './WorkerGameSession';
+import type { SimulationPulseNarrativeResult } from './SimulationHostProtocol';
 
 /**
  * The real BuddyItem UI with canonical, player-known only Messenger rows.
@@ -40,7 +41,8 @@ export function WorkerPulsePanel({
   const [selected, setSelected] = useState<string | null>(null);
   const [pageOffset, setPageOffset] = useState(0);
   const [page, setPage] = useState<SimulationConversationRead | null>(null);
-  const [text, setText] = useState('');
+  const [choices, setChoices] = useState<SimulationPulseNarrativeResult['choices']>([]);
+  const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -75,29 +77,48 @@ export function WorkerPulsePanel({
     return () => { active = false; };
   }, [session, selected, pageOffset, revision]);
 
+  useEffect(() => {
+    let active = true;
+    setChoices([]);
+    if (!account || !selected) return () => { active = false; };
+    void session.pulseNarrative({ kind: 'choices', actorId: selected })
+      .then(result => {
+        if (active && result.actorId === selected) setChoices(result.choices);
+      })
+      .catch(cause => {
+        if (active) setError(cause instanceof Error ? cause.message : String(cause));
+      });
+    return () => { active = false; };
+  }, [session, selected, revision, account]);
+
   const select = (id: string) => {
     if (selected === id) return;
     setSelected(id);
     setPageOffset(0);
-    setText('');
+    setChoices([]);
     setError(null);
   };
 
-  const send = async () => {
-    if (!selected || !text.trim()) return;
-    const message = text.trim().slice(0, 1000);
+  const choose = async (index: number) => {
+    if (!selected || !choices[index] || sending) return;
+    const chosen = choices[index]!;
+    setSending(true);
     setError(null);
     try {
-      const result = await session.dispatch({
-        type: 'PULSE_SEND_MESSAGE', buddyId: selected, text: message,
+      const result = await session.pulseNarrative({
+        kind: 'choose', actorId: selected, choiceIndex: index,
+        expectedText: chosen.text,
       });
-      if (!result.success) throw new Error(result.error || 'Message rejected');
-      setText('');
-      setPageOffset(0);
-      // A real Social revision invalidates the bounded page and messenger
-      // read through the session subscription; no duplicate UI transcript.
+      if (result.actorId === selected) {
+        setChoices(result.choices);
+        setPageOffset(0);
+      }
+      // A real Social revision refreshes the canonical transcript.
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));
+      setChoices([]);
+    } finally {
+      setSending(false);
     }
   };
 
@@ -118,7 +139,7 @@ export function WorkerPulsePanel({
             <p className="text-[11px] text-[#eee0ff]">{account.username} · {account.status} · {messenger?.contacts.length ?? 0} contacts</p></div>
         </div>
         <button type="button" className="rounded border border-white/60 bg-white/15 px-2 py-1 text-xs hover:bg-white/25"
-          onClick={() => { savePulseCredentials(null); setAccount(null); setSelected(null); setText(''); }}>
+          onClick={() => { savePulseCredentials(null); setAccount(null); setSelected(null); setChoices([]); }}>
           Sign out
         </button>
       </div>
@@ -160,7 +181,7 @@ export function WorkerPulsePanel({
               </p>
             ))}
             {page && page.messages.length === 0 && (
-              <p className="text-xs text-[#776886]">No messages yet. Say hello to begin a conversation.</p>
+              <p className="text-xs text-[#776886]">No messages yet. Pick a message below to start talking.</p>
             )}
           </div>
           {page?.hasOlder && (
@@ -170,15 +191,22 @@ export function WorkerPulsePanel({
             </button>
           )}
           {selected && (
-            <form className="mt-2 flex gap-2" onSubmit={event => {
-              event.preventDefault(); void send();
-            }}>
-              <input aria-label="Pulse message" value={text}
-                onChange={event => setText(event.target.value)} maxLength={1000}
-                className="min-w-0 flex-1 rounded border border-[#a88cc6] bg-white px-2 py-1 text-sm text-[#342047]" />
-              <button type="submit" disabled={!text.trim()}
-                className="rounded border border-[#583483] bg-gradient-to-b from-[#9265c7] to-[#5d348e] px-3 py-1 text-sm font-semibold text-white disabled:opacity-40">Send</button>
-            </form>
+            <div className="mt-2 border-t border-[#ded0ee] pt-2"
+              data-testid="worker-pulse-choices">
+              <p className="mb-2 text-xs font-semibold text-[#6a4788]">
+                Choose your message
+              </p>
+              {choices.map((choice, index) => (
+                <button key={choice.id} type="button" disabled={sending}
+                  onClick={() => { void choose(index); }}
+                  className="mb-1 block w-full rounded border border-[#ac8fca] bg-gradient-to-b from-[#faf4ff] to-[#ece0f6] px-3 py-2 text-left text-sm text-[#342047] hover:from-white hover:to-[#dfccee] disabled:opacity-50">
+                  {choice.text}
+                </button>
+              ))}
+              {choices.length === 0 && !error && (
+                <p className="text-xs text-[#776886]">Checking available messages...</p>
+              )}
+            </div>
           )}
         </div>
       </div>
