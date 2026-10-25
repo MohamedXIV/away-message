@@ -11,12 +11,19 @@ import pulseReminisceCompiled from '../ink/flows/pulse-reminisce.ink.json';
 import pulseFollowupPersonal from '../ink/flows/pulse-followup-personal.ink.json';
 import pulseFollowupTopic from '../ink/flows/pulse-followup-topic.ink.json';
 import pulseFollowupCourtesy from '../ink/flows/pulse-followup-courtesy.ink.json';
+import pulseOutreachReply from '../ink/flows/pulse-outreach-reply.ink.json';
 import scenarioOldDebtCompiled from '../ink/flows/scenario-old-debt.ink.json';
 
 export const CAFE_MEETING_INTERACTION_ID = 'cafe_meeting';
 export const CAFE_MEETING_FLOW_ID = 'cafe_meeting';
 export const PULSE_CHECKIN_FLOW_ID = 'pulse_checkin';
 /** Reusable authored Pulse variants; context selection is Worker-only. */
+/** An incoming NPC outreach opens a real Ink reply menu, not generic greetings. */
+export const PULSE_OUTREACH_REPLY_FLOW: NarrativeFlowDefinition = {
+  flowId: 'pulse_outreach_reply', compiledStory: pulseOutreachReply,
+  startsOn: { semanticKinds: ['conversation_started'], conversationChannels: ['pulse'] },
+};
+
 export const PULSE_FOLLOWUP_FLOWS: readonly NarrativeFlowDefinition[] = [
   { flowId: 'pulse_followup_personal', compiledStory: pulseFollowupPersonal,
     startsOn: { semanticKinds: ['conversation_started'], conversationChannels: ['pulse'] } },
