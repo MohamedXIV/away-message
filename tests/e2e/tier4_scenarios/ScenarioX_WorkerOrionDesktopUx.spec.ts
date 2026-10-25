@@ -84,13 +84,20 @@ test('ordinary / New Game installs Orion 4.8 and delivers a coherent, responsive
   await page.keyboard.press('ArrowDown');
   await expect(desktop.locator('[data-desktop-icon="sys_browser"]')).toBeFocused();
   await page.keyboard.press('ArrowRight');
-  await expect(desktop.locator('[data-desktop-icon="sys_mailbox"]')).toBeFocused();
+  // The diagnostic-only Lab shortcut is hidden in normal play, so a
+  // different icon can now occupy the adjacent column at a given height.
+  const focusedIcon = desktop.locator('[data-desktop-icon]:focus');
+  await expect(focusedIcon).toHaveCount(1);
+  const focusedAppId = await focusedIcon.getAttribute('data-app-id');
+  expect(focusedAppId).toBeTruthy();
+  expect(focusedAppId).not.toBe('browser');
   await page.keyboard.press('Enter');
-  await expect(page.getByTestId('worker-window-mailbox')).toBeVisible();
-  await expect(page.getByTestId('worker-window-mailbox').locator('.os-themed-titlebar'))
+  const focusedWindow = page.getByTestId('worker-window-' + focusedAppId);
+  await expect(focusedWindow).toBeVisible();
+  await expect(focusedWindow.locator('.os-themed-titlebar'))
     .toHaveAttribute('data-inactive', 'false');
   await page.keyboard.press('Alt+F4');
-  await expect(page.getByTestId('worker-window-mailbox')).toHaveCount(0);
+  await expect(focusedWindow).toHaveCount(0);
 
   const notepadIcon = desktop.getByRole('button', { name: 'Open Notepad' });
   await notepadIcon.click();
