@@ -34,8 +34,12 @@ function fixture(seed = 'npc-outreach-demo-001') {
     const day = Array.from({ length: 12 }, (_, i) => i + 2)
       .find(d => ids.some(id => socialHashText(id + ':outreach:chance:' + d) % 100 < 70));
     if (!day) throw new Error('No deterministic outreach day in fixture');
-    engine.advanceGameMinutes((day - 1) * 1440);
+    // The default world starts at 08:00, before people should message.
+    // Advance to 10:00 on the selected day, not 08:00.
+    const current = engine.getChromeRead().time;
+    engine.advanceGameMinutes((day - 1) * 1440 + 600 - current.totalMinutes);
     expect(engine.getChromeRead().time.day).toBe(day);
+    expect(engine.getChromeRead().time.hour).toBe(10);
     return day;
   }
   return {
@@ -147,6 +151,35 @@ describe('#223 NPC-initiated Pulse — canonical social opportunity', () => {
     expect(ctx.narrative.run({ kind: 'choices', actorId: id }).phase).toBe('second');
     expect(initiateWorkerPulseOutreach(ctx.engine)).toBeLessThanOrEqual(1);
     expect(ctx.narrative.run({ kind: 'choices', actorId: id }).phase).toBe('second');
+  });
+
+  it('can initiate a shared-memory check-in only after a typed mutual event', () => {
+    const ctx = fixture('npc-outreach-demo-005');
+    ctx.engine.social.addCoreMemory(ctx.ids[0]!, {
+      text: 'The player really attended this gathering with the contact',
+      kind: 'shared_moment', day: 1,
+      meaning: {
+        participants: ['player', ctx.ids[0]!],
+        subject: { kind: 'event', id: 'shared_gathering' },
+        source: { kind: 'direct_experience', refId: 'gathering_01' },
+        salience: 'high', valence: 'positive',
+      },
+    });
+    ctx.toEligibleDay();
+    initiateWorkerPulseOutreach(ctx.engine);
+    const first = ctx.engine.getConversationRead(ctx.ids[0]!, 0, 10).messages;
+    if (first.length) {
+      expect(first[0]?.tags).toContain('pulse:v2:outreach:shared');
+      expect(PULSE_OUTREACH_LINES.shared).toContain(first[0]?.text);
+    }
+    // Whichever daily candidate writes, any other NPC without a mutual
+    // memory must never claim the private event.
+    for (const id of ctx.ids.slice(1)) {
+      const other = ctx.engine.getConversationRead(id, 0, 10).messages;
+      for (const msg of other) {
+        expect(msg.tags).not.toContain('pulse:v2:outreach:shared');
+      }
+    }
   });
 
   it('never mentions a private or merely textual memory as shared experience', () => {
