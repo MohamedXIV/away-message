@@ -57,12 +57,12 @@ export function WorkerPublicSites({
       </header>
       <div className="min-h-0 flex-1 overflow-y-auto p-3 text-xs">
         {error && <p role="alert" className="text-red-700">{error}</p>}
-        {(!page || page.kind !== tab) && !error && <p role="status">Reading public records from the Worker…</p>}
+        {(!page || page.kind !== tab) && !error && <p role="status">Loading local news and listings…</p>}
         {page?.kind === 'news' && (
           <>
             <h2 className="border-b-2 border-slate-900 pb-2 text-xl font-bold">The City Wire</h2>
             <p className="my-2 text-gray-600">
-              Day {page.read.time.day} · {page.read.world.triggeredEvents.length} published world events
+              Day {page.read.time.day} · {page.read.world.triggeredEvents.length} local stories
             </p>
             {page.read.world.triggeredEvents.map(event => (
               <article key={event.id} className="border-b border-gray-300 py-2">
@@ -77,7 +77,7 @@ export function WorkerPublicSites({
         {page?.kind === 'jobs' && (
           <>
             <h2 className="border-b-2 border-slate-900 pb-2 text-xl font-bold">Oakhaven Job Board</h2>
-            <p className="my-2 text-gray-600">Canonical available gigs, up to 32 listings</p>
+            <p className="my-2 text-gray-600">Local job openings</p>
             {page.read.jobs.map(job => (
               <article key={job.gigId} className="border-b border-gray-300 py-2">
                 <h3 className="font-semibold">{job.title}</h3>
@@ -93,7 +93,7 @@ export function WorkerPublicSites({
         )}
       </div>
       <footer className="shrink-0 border-t border-gray-300 bg-[#e8e7e1] px-2 py-1 text-[10px] text-gray-700">
-        Live public simulation facts. Applications and external network access are not enabled here.
+        Oakhaven Community Network · Local news and classifieds
       </footer>
     </section>
   );

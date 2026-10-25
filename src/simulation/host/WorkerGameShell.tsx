@@ -157,9 +157,8 @@ export function WorkerGameShell() {
           <section className="flex flex-col gap-3" data-testid="worker-recovery-controls">
             {view.phase === 'error' && (
               <p className="text-sm text-amber-200" role="status">
-                The canonical Worker stopped. Unsaved progress cannot be restored.
-                Choose a saved slot to start a fresh Worker, or deliberately start a new game.
-                No replacement simulation is running on this page.
+                The game encountered an error. Unsaved progress may be lost.
+                Load a saved game to continue, or start a new game.
               </p>
             )}
             {mostRecent && <p data-testid="worker-continue-summary" className="text-sm text-slate-300">
@@ -201,7 +200,7 @@ export function WorkerGameShell() {
             )}
           </section>
         )}
-        {view.phase === 'loading' && <p role="status">Starting canonical Worker world…</p>}
+        {view.phase === 'loading' && <p role="status">Starting your game…</p>}
         {(view.error || localError) && (
           <p role="alert" className="rounded-md border border-red-800 p-3 text-sm text-red-300">
             {view.error || localError}
@@ -273,11 +272,11 @@ export function WorkerGameShell() {
             {panel === 'desktop' && (
               <WorkerDesktop session={session} revision={view.hud.revision} onStepAway={() => setPanel('room')} />
             )}
-            <details data-testid="worker-world" className="rounded border border-slate-800 px-3 py-2 text-xs text-slate-500">
+            {import.meta.env.DEV && <details data-testid="worker-world" className="rounded border border-slate-800 px-3 py-2 text-xs text-slate-500">
               <summary className="cursor-pointer">Technical diagnostics</summary>
               <h2>Canonical world projection</h2>
               <p>View: {view.world.activeView} · Place: {view.world.residencePlaceId} · Battery: {view.hud.socialBattery} · Revision: {view.hud.revision}</p>
-            </details>
+            </details>}
           </>
         )}
       </div>

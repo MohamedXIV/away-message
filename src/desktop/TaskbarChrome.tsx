@@ -10,6 +10,8 @@ export interface TaskbarChromeProps {
   osVersion: OsVersion | null;
   pulseInstalled: boolean;
   onStepAway: () => void;
+  /** Worker route: OS quick-launch uses the same hardware-gated cold start as Start and desktop icons. */
+  launchApp?: (appId: string) => void;
   browserAppId?: string;
   renderStartMenu: (close: () => void, isOpen: boolean) => React.ReactNode;
   tray: React.ReactNode;
@@ -18,7 +20,7 @@ export interface TaskbarChromeProps {
 }
 
 export const TaskbarChrome: React.FC<TaskbarChromeProps> = ({ osVersion, pulseInstalled,
-  onStepAway, browserAppId = 'browser', renderStartMenu, tray, contained = false, testId,
+  onStepAway, launchApp, browserAppId = 'browser', renderStartMenu, tray, contained = false, testId,
 }) => {
   const osPresentation = osVersion ? getOsPresentationProfile(osVersion) : null;
   const taskbarPresentation = osPresentation?.shell.taskbarId ?? 'classic';
@@ -113,7 +115,7 @@ export const TaskbarChrome: React.FC<TaskbarChromeProps> = ({ osVersion, pulseIn
           </button>
           <button
             type="button"
-            onClick={() => openWindow(browserAppId)}
+            onClick={() => { if (launchApp) launchApp(browserAppId); else openWindow(browserAppId); }}
             title="Voyager Browser"
             aria-label="Voyager Browser"
             className="os-quick-button"
@@ -123,7 +125,7 @@ export const TaskbarChrome: React.FC<TaskbarChromeProps> = ({ osVersion, pulseIn
           {isPulseInstalled && (
             <button
               type="button"
-              onClick={() => openWindow('pulse')}
+              onClick={() => { if (launchApp) launchApp('pulse'); else openWindow('pulse'); }}
               title="Pulse Messenger"
               aria-label="Pulse Messenger"
               className="os-quick-button"

@@ -37,7 +37,7 @@ export function WorkerOsHostProvider({ session, windowId, appRead, onError, chil
     const send = (action: Parameters<WorkerGameSession['dispatch']>[0]) => {
       void session.dispatch(action)
         .then(result => {
-          if (!result.success) onError(result.error || 'Simulation command rejected');
+          if (!result.success) onError(result.error || 'The operation could not be completed');
         })
         .catch(cause => onError(cause instanceof Error ? cause.message : String(cause)));
     };
@@ -152,7 +152,7 @@ export function WorkerFlashFetchPanel({ session, revision, windowId }: {
             <FlashFetchApp />
           </WorkerOsHostProvider>
         </div>
-      ) : <p role="status" className="p-2 text-xs">Loading canonical downloads…</p>}
+      ) : <p role="status" className="p-2 text-xs">Loading downloads…</p>}
     </section>
   );
 }

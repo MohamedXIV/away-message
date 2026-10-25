@@ -49,9 +49,9 @@ export function WorkerSystemPanel({
       const result = await session.hardware(command);
       if (!result.success) throw new Error(result.error || label + ' was rejected');
       if (command.kind === 'prepareOs') {
-        if (!result.data) throw new Error('Owner supplied no installation plan');
+        if (!result.data) throw new Error('Unable to prepare setup. Check the installation disc.');
         setPlan(result.data);
-        setNotice('OS install preflight accepted by the Worker');
+        setNotice('Installation disc verified. Ready to continue setup.');
       } else {
         setPlan(null);
         setNotice(label);
@@ -71,7 +71,7 @@ export function WorkerSystemPanel({
     setNotice(null);
     try {
       const result = await session.dispatch(action);
-      if (!result.success) throw new Error(result.error || 'Canonical action refused');
+      if (!result.success) throw new Error(result.error || 'This action could not be completed');
       setNotice(label);
     } catch (error) {
       setNotice(error instanceof Error ? error.message : String(error));
@@ -87,9 +87,9 @@ export function WorkerSystemPanel({
     const cleaned = url.trim();
     let parsed: URL;
     try { parsed = new URL(cleaned); }
-    catch { setNotice('Enter an in-game .local HTTP address'); return; }
+    catch { setNotice('Enter a valid website address.'); return; }
     if (parsed.protocol !== 'http:' || !parsed.hostname.endsWith('.local')) {
-      setNotice('Only the authored in-game .local network is supported');
+      setNotice('This address cannot be reached.');
       return;
     }
     const fileName = decodeURIComponent(parsed.pathname.split('/').at(-1) || '');
@@ -101,7 +101,7 @@ export function WorkerSystemPanel({
       type: 'DOWNLOAD_START', sourceId: 'worker_browser',
       url: parsed.href, fileName, totalBytes: 1024 * 1024 * 5,
       sourceMaxKbps: 256, manager: 'browser',
-    }, 'Download queued by the Worker').then(() => setUrl(''));
+    }, 'Download added to queue').then(() => setUrl(''));
   };
 
   const button = 'rounded border border-gray-500 bg-[#eee] px-2 py-1 text-xs disabled:opacity-40';
@@ -121,12 +121,12 @@ export function WorkerSystemPanel({
         <button className={button} disabled={busy || desktop?.pcBootState !== 'no_computer'}
           onClick={() => void dispatch({
             type: 'STORE_PURCHASE_ITEM', storeId: 'silicon_spares', skuId: 'bundle_scrapyard',
-          }, 'Purchased the owned Scrap Yard bundle for the room')}>
+          }, 'Scrap Yard computer bundle purchased')}>
           Purchase starter hardware bundle ($35)
         </button>
         <button className={button} disabled={busy || desktop?.pcBootState !== 'awaiting_setup'}
           onClick={() => void hardware({ kind: 'setup' }, 'Computer assembled at home')}>
-          Assemble owned package
+          Assemble computer
         </button>
         <button className={button} disabled={busy || !apps?.computer.assembled}
           onClick={() => void hardware({
@@ -145,13 +145,13 @@ export function WorkerSystemPanel({
         </button>
         <button className={button} disabled={busy} onClick={() => void dispatch({
           type: 'STORE_PURCHASE_ITEM', storeId: 'silicon_spares', skuId: 'disc_orion_50',
-        }, 'Purchased real Orion 5.0 setup CD; insert and verify before setup')}>
+        }, 'Orion 5.0 setup CD purchased. Insert the disc to install.')}>
           Buy Orion 5.0 setup CD ($29)
         </button>
       </div>
       <p>RAM: {apps?.hardware.ramMB ?? 0} MB. Shut down and use the physical workbench
-        to install purchased components. OS eligibility remains Worker-verified.</p>
-      <h3 className="font-semibold">Owned OS installation media</h3>
+        to install purchased components. Check your system requirements before installing.</p>
+      <h3 className="font-semibold">Installation discs</h3>
       <div className="flex flex-wrap gap-2">
         {(desktop?.bootMediaItems ?? []).map(item => (
           <div key={item.instanceId} data-testid={'worker-owned-cd-' + item.catalogItemId}
@@ -165,7 +165,7 @@ export function WorkerSystemPanel({
             </button>
           </div>
         ))}
-        {desktop?.bootMediaItems.length === 0 && <span>No owned boot media</span>}
+        {desktop?.bootMediaItems.length === 0 && <span>No installation discs available</span>}
       </div>
       <div className="flex flex-wrap gap-2">
         <button className={button} disabled={busy}
@@ -179,9 +179,8 @@ export function WorkerSystemPanel({
         <div className={'border p-3 ' + getOrionInstallerPresentation(plan.targetOs).frameClass}
           data-testid="worker-os-plan">
           <p className="font-bold">{getOrionInstallerPresentation(plan.targetOs).heading}</p>
-          <p>Owner-verified {plan.mode}: {plan.targetOs} · {plan.durationMinutes} game minutes</p>
-          <p className="my-2 text-xs">The real owned disc must stay inserted. Progress is saved in the OS owner,
-            and each stage consumes actual in-world time.</p>
+          <p>{plan.mode === 'upgrade' ? 'Upgrade' : 'Install'}: {plan.targetOs} · Estimated {plan.durationMinutes} minutes</p>
+          <p className="my-2 text-xs">Keep the installation disc inserted until setup finishes.</p>
           <button className={getOrionInstallerPresentation(plan.targetOs).buttonClass} disabled={busy}
             onClick={() => void hardware({ kind: 'startOs', plan }, 'OS installation started')}>
             Begin installation
@@ -194,7 +193,7 @@ export function WorkerSystemPanel({
           className={'border p-3 ' + getOrionInstallerPresentation(desktop.osInstallation.targetOs).frameClass}>
           <strong>{getOrionInstallerPresentation(desktop.osInstallation.targetOs).heading}</strong>
           <p>Copying and configuring from owned disc: {desktop.osInstallation.elapsedMinutes} /
-            {desktop.osInstallation.durationMinutes} world minutes</p>
+            {desktop.osInstallation.durationMinutes} minutes</p>
           <progress className="w-full" aria-label="Orion installation progress"
             value={desktop.osInstallation.elapsedMinutes} max={desktop.osInstallation.durationMinutes} />
           <div className="mt-3 flex flex-wrap gap-2">
@@ -203,7 +202,7 @@ export function WorkerSystemPanel({
               Advance installation
             </button>
             <button className={getOrionInstallerPresentation(desktop.osInstallation.targetOs).buttonClass}
-              disabled={busy} onClick={() => void hardware({ kind: 'cancelOs' }, 'Installation canceled; elapsed game time remains spent')}>
+              disabled={busy} onClick={() => void hardware({ kind: 'cancelOs' }, 'Installation canceled')}>
               Cancel installation
             </button>
           </div>
@@ -221,15 +220,15 @@ export function WorkerSystemPanel({
       ))}
       {apps?.installedSoftware.length === 0 && <span>No installed programs</span>}
 
-      <h3 className="border-t border-gray-400 pt-2 font-semibold">In-game DownloadManager</h3>
+      <h3 className="border-t border-gray-400 pt-2 font-semibold">Downloads</h3>
       <form onSubmit={createSimulatedDownload} className="flex gap-2">
-        <input aria-label="In-game download URL" value={url}
+        <input aria-label="Download URL" value={url}
           placeholder="http://downloadhub.local/files/example.zip"
           onChange={event => setUrl(event.target.value)}
           className="min-w-0 flex-1 rounded border border-gray-500 p-1" />
         <button className={button} disabled={busy}>Download</button>
       </form>
-      <p className="text-gray-700">These are simulated game files, not external network requests.</p>
+      <p className="text-gray-700">Downloads are saved to your computer.</p>
       {(apps?.downloads ?? []).map(task => (
         <div key={task.id} className="flex flex-wrap items-center gap-2 border-b border-gray-300 py-1">
           <span>{task.fileName} · {task.status} ·

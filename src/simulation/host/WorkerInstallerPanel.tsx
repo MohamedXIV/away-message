@@ -46,7 +46,7 @@ export function WorkerInstallerPanel({ session, revision, windowId, filePath }: 
     }).then(result => {
       setProgress(result.success ? 100 : 0);
       setInstalled(result.success);
-      setError(result.success ? null : result.error || 'Canonical installation refused.');
+      setError(result.success ? null : result.error || 'Installation failed. Please check the setup file and system requirements.');
       setStage(6);
     }).catch(cause => {
       setError(cause instanceof Error ? cause.message : String(cause));

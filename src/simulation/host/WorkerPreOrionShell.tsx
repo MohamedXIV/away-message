@@ -150,7 +150,7 @@ export function WorkerPreOrionShell({ session, revision, desktop }: Props) {
 
   async function cancelInstall() {
     await physical(() => session.hardware({ kind: 'cancelOs' }),
-      'Setup canceled. Spent game minutes are not refunded.');
+      'Setup canceled.');
     setPlan(null);
   }
 
@@ -162,9 +162,9 @@ export function WorkerPreOrionShell({ session, revision, desktop }: Props) {
         className="flex min-h-80 flex-col gap-3 border border-neutral-600 bg-[#252422] p-4 text-[#f1e4c8]">
         <h2 className="text-lg font-bold">Computer &amp; Setup — physical workbench</h2>
         <p role="status">{desktop.pcBootState === 'powered_off'
-          ? 'Computer powered off. No OS is running.'
-          : 'No computer is booted. Purchase and assemble a real machine first.'}</p>
-        <p className="text-xs">Only the real owned hardware and media are available here. There is no fake OS or Pulse.</p>
+          ? 'Computer is turned off.'
+          : 'No computer is ready. Purchase and assemble one first.'}</p>
+        <p className="text-xs">Install an operating system before using programs or the internet.</p>
         <div className="flex flex-wrap gap-2">
           {desktop.pcBootState === 'no_computer' && (
             <button type="button" disabled={busy}

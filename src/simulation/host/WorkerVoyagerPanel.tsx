@@ -40,7 +40,7 @@ export function WorkerVoyagerPanel({ session, revision, windowId, initialUrl = '
     {apps && site ? <WorkerOsHostProvider session={session} windowId={windowId}
       appRead={apps} onError={setError}>
       <BrowserContent session={session} revision={revision} site={site} initialUrl={initialUrl} />
-    </WorkerOsHostProvider> : <p role="status">Reading canonical network…</p>}
+    </WorkerOsHostProvider> : <p role="status">Connecting to network…</p>}
   </section>;
 }
 
@@ -59,7 +59,7 @@ function BrowserContent({ session, revision, site, initialUrl }: {
   const [contextMenu, setContextMenu] = useState<GameContextMenuState | null>(null);
   const navigate = (raw: string, remember = true) => {
     const url = gameUrl(raw);
-    if (!url) { setStatus('Blocked: only in-game HTTP .local pages are supported'); return; }
+    if (!url) { setStatus('Cannot open this address'); return; }
     const next = url.hostname + url.pathname + url.search;
     setCurrentUrl(next); setInputUrl(next); setStatus(network.status === 'connected' ? 'Done' : 'Offline preview');
     if (remember) { setHistory(old => [...old.slice(0, index + 1), next]); setIndex(index + 1); }
@@ -156,7 +156,7 @@ function WorkerDownloadHub({ site }: { site: SimulationWebsiteRead }) {
       setNotice('Blocked unsupported download origin'); return;
     }
     if (status(item) === 'queued' || status(item) === 'downloading') {
-      setNotice('Already queued in the canonical Worker');
+      setNotice('This download is already in progress');
     } else {
       network.startDownload({ sourceId: item.id, url: item.downloadUrl,
         fileName: name, totalBytes: item.fileSizeBytes, sourceMaxKbps: 256,

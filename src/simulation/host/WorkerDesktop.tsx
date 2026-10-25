@@ -155,7 +155,7 @@ export function WorkerDesktop({
     // uninstalled third-party app. Core OS tools stay bundled.
     if (['pulse', 'flashfetch', 'weatherbuddy', 'safesweep', 'retroamp', 'photobox', 'zipmate'].includes(appId)
       && !installedPrograms.some(program => program.available && program.id === appId)) {
-      setError('Install ' + appId + ' from an owned downloaded installer before launching it.');
+      setError('Install ' + appId + ' before opening it.');
       return;
     }
     // Running applications consumes canonical game time. The loading
@@ -373,7 +373,7 @@ export function WorkerDesktop({
 
       <TaskbarChrome contained testId="worker-desktop-taskbar"
         osVersion={chrome?.osVersion ?? null} pulseInstalled={chrome?.pulseInstalled ?? false}
-        onStepAway={onStepAway} browserAppId="browser"
+        onStepAway={onStepAway} launchApp={open} browserAppId="browser"
         renderStartMenu={(close, isOpen) => (
           <StartMenuChrome isOpen={isOpen} onClose={close}
             osVersion={chrome?.osVersion ?? null} pulseInstalled={chrome?.pulseInstalled ?? false}
