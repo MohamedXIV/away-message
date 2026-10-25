@@ -8,11 +8,13 @@ import { Volume2, VolumeX, Volume1 } from 'lucide-react';
 
 export interface SystemTrayChromeProps {
   onOpenDialUp: () => void;
+  /** Worker desktop: restoring/opening Pulse must use the shared OS launch path. */
+  onLaunchPulse?: () => void;
   chrome: SimulationChromeRead;
 }
 
 /** Presentation-only OS tray. World event sound subscription lives in the legacy adapter. */
-export const SystemTrayChrome: React.FC<SystemTrayChromeProps> = ({ onOpenDialUp, chrome }) => {
+export const SystemTrayChrome: React.FC<SystemTrayChromeProps> = ({ onOpenDialUp, onLaunchPulse, chrome }) => {
   const time = chrome.time;
   const unreadTrays = chrome.unreadPreviews;
   const openWindow = useWindowStore((s) => s.openWindow);
@@ -28,8 +30,12 @@ export const SystemTrayChrome: React.FC<SystemTrayChromeProps> = ({ onOpenDialUp
   const openPulseFromTray = (buddyId?: string) => {
     soundManager.play('click');
     setIsPulsePopupOpen(false);
-    const id = openWindow('pulse');
-    focusWindow(id);
+    if (onLaunchPulse) {
+      onLaunchPulse();
+    } else {
+      const id = openWindow('pulse');
+      focusWindow(id);
+    }
     void buddyId;
   };
 

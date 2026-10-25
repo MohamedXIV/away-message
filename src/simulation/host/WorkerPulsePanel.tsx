@@ -7,6 +7,7 @@ import { BuddyItem } from '../../apps/pulse/components/BuddyItem';
 import { PulseLoginSplash, type PulseLoginSession } from '../../apps/pulse/components/PulseLoginSplash';
 import { findPulseAccount, loadPulseAccounts, loadPulseCredentials, savePulseCredentials } from '../../apps/pulse/persistence';
 import { formatSimulationMinutes } from '../../apps/pulse/utils/timeFormat';
+import { useWindowStore } from '../../store/useWindowStore';
 import type { WorkerGameSession } from './WorkerGameSession';
 
 /**
@@ -14,10 +15,11 @@ import type { WorkerGameSession } from './WorkerGameSession';
  * No direct SocialEngine methods, chat map, or Zustand state cross this view.
  */
 export function WorkerPulsePanel({
-  session, revision,
+  session, revision, windowId,
 }: {
   session: WorkerGameSession;
   revision: number;
+  windowId: string;
 }) {
   const [account, setAccount] = useState<PulseLoginSession | null>(() => {
     const saved = loadPulseCredentials();
@@ -27,6 +29,12 @@ export function WorkerPulsePanel({
       ? { username: existing.id, status: 'online', awayMessage: 'back online :)', signedInAt: Date.now() }
       : null;
   });
+  const updateWindowCustomState = useWindowStore(s => s.updateWindowCustomState);
+  // Signed-in Pulse remains resident when its window is closed. This is
+  // UI-only session state, not an alternative Social or simulation owner.
+  useEffect(() => {
+    updateWindowCustomState(windowId, { pulseSignedIn: account !== null });
+  }, [account, windowId, updateWindowCustomState]);
   const [messenger, setMessenger] = useState<SimulationMessengerRead | null>(null);
   const [presence, setPresence] = useState<SimulationPresenceRead | null>(null);
   const [selected, setSelected] = useState<string | null>(null);

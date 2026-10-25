@@ -389,7 +389,7 @@ export function WorkerDesktop({
         )}
         tray={<div data-testid="worker-taskbar-tray" className="ml-auto h-full">
           {chrome ? <SystemTrayChrome chrome={chrome}
-            onOpenDialUp={() => open('system')} /> : (
+            onOpenDialUp={() => open('system')} onLaunchPulse={() => { void open('pulse'); }} /> : (
             <div role="status" className="os-tray-clock px-2 py-1">--:--</div>
           )}
         </div>}
@@ -471,7 +471,7 @@ function WorkerDesktopApp({ window: win, session, revision, osVersion, available
   if (win.appId === 'publicweb') return <WorkerPublicSites session={session} revision={revision} />;
   if (win.appId === 'pulse') {
     return <div className="h-full overflow-y-auto bg-slate-900 p-2">
-      <WorkerPulsePanel session={session} revision={revision} />
+      <WorkerPulsePanel session={session} revision={revision} windowId={win.id} />
     </div>;
   }
   return <p role="alert" className="p-3 text-xs text-red-800">
