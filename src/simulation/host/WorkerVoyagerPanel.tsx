@@ -75,7 +75,7 @@ function BrowserContent({ session, revision, site, initialUrl }: {
     if (!url) return;
     const name = url.hostname.replace('.local', '') + '_page.txt';
     const path = 'C:/Documents/' + name;
-    const content = 'Saved in-game page: ' + currentUrl;
+    const content = 'Saved webpage: ' + currentUrl;
     void session.dispatch({ type: 'VFS_CREATE_FILE',
       file: { name, path, parentPath: 'C:/Documents', kind: 'text',
         content, sizeBytes: new TextEncoder().encode(content).length,
@@ -147,7 +147,7 @@ function WorkerDownloadHub({ site }: { site: SimulationWebsiteRead }) {
     task.sourceId === item.id || task.fileName === item.downloadUrl.split('/').pop())?.status ?? null;
   const start = (item: DownloadItem) => {
     if (network.status !== 'connected') {
-      setNotice('Offline: assemble, install OS, power on and connect first.'); return;
+      setNotice('No connection. Set up your computer and connect to the internet first.'); return;
     }
     const url = gameUrl(item.downloadUrl);
     const name = item.downloadUrl.split('/').pop() || '';

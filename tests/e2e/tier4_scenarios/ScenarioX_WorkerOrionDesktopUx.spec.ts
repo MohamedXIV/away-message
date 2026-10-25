@@ -160,6 +160,28 @@ test('ordinary / New Game installs Orion 4.8 and delivers a coherent, responsive
 });
 
 
+test('Quick Launch starts a cold browser with hardware time, then restores its open window instantly', async ({ page }) => {
+  test.setTimeout(180_000);
+  const desktop = await installStarterOrion48(page);
+  const taskbar = desktop.getByTestId('worker-desktop-taskbar');
+  const quickBrowser = taskbar.getByRole('button', { name: 'Voyager Browser', exact: true });
+  await expect(page.getByTestId('worker-window-browser')).toHaveCount(0);
+  const before = Number(await page.getByTestId('worker-minute').textContent());
+  await quickBrowser.click();
+  await expect(page.getByTestId('worker-window-browser')).toBeVisible();
+  const afterCold = Number(await page.getByTestId('worker-minute').textContent());
+  expect(afterCold).toBeGreaterThan(before);
+  await quickBrowser.click();
+  await expect(page.getByTestId('worker-window-browser')).toBeVisible();
+  const afterWarm = Number(await page.getByTestId('worker-minute').textContent());
+  expect(afterWarm).toBe(afterCold);
+  await desktop.getByRole('button', { name: 'Close Voyager Browser' }).click();
+  await quickBrowser.click();
+  await expect(page.getByTestId('worker-window-browser')).toBeVisible();
+  expect(Number(await page.getByTestId('worker-minute').textContent())).toBeGreaterThan(afterWarm);
+  await assertNoMainThreadSimulation(page);
+});
+
 test('right-click stays inside the game: context-aware desktop, file, browser and world commands', async ({ page }) => {
   test.setTimeout(180_000);
   const desktop = await installStarterOrion48(page);

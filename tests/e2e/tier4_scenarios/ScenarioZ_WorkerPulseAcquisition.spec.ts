@@ -65,6 +65,21 @@ test('#214 fresh Orion acquires Pulse only through real internet â†’ VFS setup â
   await messenger.getByRole('button', { name: 'Sign In', exact: true }).click();
   await expect(messenger).toHaveAttribute('data-pulse-phase', 'signed-in');
 
+  // Quick Launch must not bypass the same CPU/RAM cold-start gate that
+  // desktop double-click and Start menu use. An already-open Pulse is warm.
+  const taskbar = desktop.getByTestId('worker-desktop-taskbar');
+  const quickPulse = taskbar.getByRole('button', { name: 'Pulse Messenger', exact: true });
+  await expect(quickPulse).toBeVisible();
+  const beforeWarm = Number(await page.getByTestId('worker-minute').textContent());
+  await quickPulse.click();
+  await expect(messenger).toBeVisible();
+  expect(Number(await page.getByTestId('worker-minute').textContent())).toBe(beforeWarm);
+  await desktop.getByRole('button', { name: 'Close Pulse Messenger' }).click();
+  const beforeCold = Number(await page.getByTestId('worker-minute').textContent());
+  await quickPulse.click();
+  await expect(messenger).toBeVisible();
+  expect(Number(await page.getByTestId('worker-minute').textContent())).toBeGreaterThan(beforeCold);
+
   await page.getByRole('button', { name: 'Save game' }).click();
   await expect(page.getByText('Saved to slot_1')).toBeVisible();
   await page.reload();

@@ -148,7 +148,7 @@ function getRadiusForLayout(layout: GeneratedSiteContent['layout'], element: 'ca
   return map[layout]?.[element] || 'rounded-lg';
 }
 
-export const GeneratedSite: React.FC<GeneratedSiteProps> = ({ content, navigate, url, meta }) => {
+export const GeneratedSite: React.FC<GeneratedSiteProps> = ({ content, navigate, url }) => {
   const dispatchAction = useSimulationStore((s) => s.dispatchAction);
   const navigateWithinSite = (href: string) => {
     try {
@@ -201,8 +201,8 @@ export const GeneratedSite: React.FC<GeneratedSiteProps> = ({ content, navigate,
           </div>
           <div className="max-w-[45%] border px-2 py-1 text-right text-[10px] rounded-lg" style={{ borderColor: theme.accent, backgroundColor: 'rgba(0,0,0,0.18)' }}>
             <div>{content.statusLine}</div>
-            <div className="mt-1 opacity-75">{meta?.fromCache ? 'cached copy' : meta?.fallback ? 'offline copy' : `generated in ${meta?.latencyMs ?? 0}ms`}</div>
-            <div className="mt-1 font-mono text-[9px] opacity-60">visits: {(hashString(content.siteName) % 9000) + 100} • online: {(hashString(content.title) % 12) + 1}</div>
+             
+             
           </div>
         </div>
       </header>
@@ -284,7 +284,7 @@ export const GeneratedSite: React.FC<GeneratedSiteProps> = ({ content, navigate,
 
         <footer className="mx-auto mt-5 max-w-5xl border-t pt-3 text-[10px] opacity-75" style={{ borderColor: theme.accent }}>
           <div>{content.footerNote}</div>
-          <div className="mt-1">{meta?.providerId ? `${meta.providerId} / ${meta.model}` : 'fictional local web page'}</div>
+          <div className="mt-1">{url.host}</div>
         </footer>
       </main>
     </div>
