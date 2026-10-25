@@ -42,6 +42,7 @@ export function WorkerPulsePanel({
   const [pageOffset, setPageOffset] = useState(0);
   const [page, setPage] = useState<SimulationConversationRead | null>(null);
   const [choices, setChoices] = useState<SimulationPulseNarrativeResult['choices']>([]);
+  const [conversationPhase, setConversationPhase] = useState<SimulationPulseNarrativeResult['phase']>('first');
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -89,10 +90,14 @@ export function WorkerPulsePanel({
   useEffect(() => {
     let active = true;
     setChoices([]);
+    setConversationPhase('first');
     if (!account || !selected) return () => { active = false; };
     void session.pulseNarrative({ kind: 'choices', actorId: selected })
       .then(result => {
-        if (active && result.actorId === selected) setChoices(result.choices);
+        if (active && result.actorId === selected) {
+          setChoices(result.choices);
+          setConversationPhase(result.phase);
+        }
       })
       .catch(cause => {
         if (active) setError(cause instanceof Error ? cause.message : String(cause));
@@ -105,6 +110,7 @@ export function WorkerPulsePanel({
     setSelected(id);
     setPageOffset(0);
     setChoices([]);
+    setConversationPhase('first');
     setError(null);
   };
 
@@ -120,6 +126,7 @@ export function WorkerPulsePanel({
       });
       if (result.actorId === selected) {
         setChoices(result.choices);
+        setConversationPhase(result.phase);
         setPageOffset(0);
       }
       // A real Social revision refreshes the canonical transcript.
@@ -213,7 +220,13 @@ export function WorkerPulsePanel({
                 </button>
               ))}
               {choices.length === 0 && !error && (
-                <p className="text-xs text-[#776886]">Checking available messages...</p>
+                <p className="text-xs text-[#776886]" data-testid="worker-pulse-conversation-state">
+                  {conversationPhase === 'waiting_first' || conversationPhase === 'waiting_second'
+                    ? 'Message sent. They will answer when they can get online.'
+                    : conversationPhase === 'complete'
+                      ? 'You have caught up for today. Check back tomorrow.'
+                      : 'Checking available messages...'}
+                </p>
               )}
             </div>
           )}

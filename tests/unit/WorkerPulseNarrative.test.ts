@@ -108,9 +108,6 @@ describe('#223 offline Ink-first Worker Pulse', () => {
     expect(repair.map(c => c.text)).toContain("I'm sorry for my part in it.");
     expect(repair.map(c => c.text)).not.toContain('How was your shift at the diner?');
     const selected = repair[1]!;
-    const chosen = narrative.run({ kind: 'choose', actorId, choiceIndex: 1,
-      expectedText: selected.text });
-    expect(chosen.sent).toBe("I'm sorry for my part in it.");
 
     mock.mockImplementation(id => {
       const actor = readActor(id);

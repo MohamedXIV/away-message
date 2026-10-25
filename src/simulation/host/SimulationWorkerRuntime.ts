@@ -1,7 +1,7 @@
 import { SimulationKernel } from '../../engine/kernel/SimulationKernel';
 import { MAX_MINUTE_ACCURATE_ADVANCE } from '../../engine/kernel/TimeAdvancement';
 import { createWorkerCafeNarrative } from './WorkerCafeNarrative';
-import { createWorkerPulseNarrative } from './WorkerPulseNarrative';
+import { createWorkerPulseNarrative, deliverPendingPulseReplies } from './WorkerPulseNarrative';
 import { buildFreshSandboxSocialState } from './FreshSandboxCast';
 import { GENERATED_VENUE_SERVICES } from '../../engine/worldContent.generated';
 import { loadSlotEngineWithNarrative, saveSlot } from '../../persistence/slots';
@@ -46,7 +46,12 @@ export function createSimulationWorkerRuntime(send: (message: SimulationWorkerRe
       const elapsed = clockSecondsPending;
       clockSecondsPending = 0;
       if (!closed && clockTimer !== null && kernel && elapsed > 0) {
+        const before = kernel.getHudProjection().time;
         kernel.advanceRealTime(elapsed);
+        const after = kernel.getHudProjection().time;
+        if (before.day !== after.day || before.hour !== after.hour || before.minute !== after.minute) {
+          deliverPendingPulseReplies(kernel);
+        }
       }
     }).catch(cause => {
       // A timer tick has no request ID; notify the client explicitly rather
@@ -406,6 +411,7 @@ export function createSimulationWorkerRuntime(send: (message: SimulationWorkerRe
             throw new Error('Minute-accurate advance exceeds 60-minute bound');
           }
           requireKernel().advanceGameMinutes(raw.minutes, raw.reason, raw.granularity);
+          if (raw.minutes > 0) deliverPendingPulseReplies(requireKernel());
           break;
         case 'realtime':
           if (clockTimer !== null) {
@@ -414,7 +420,15 @@ export function createSimulationWorkerRuntime(send: (message: SimulationWorkerRe
           if (!Number.isFinite(raw.seconds) || raw.seconds < 0 || raw.seconds > 2) {
             throw new Error('Invalid bounded realtime delta');
           }
-          requireKernel().advanceRealTime(raw.seconds);
+          {
+            const owner = requireKernel();
+            const before = owner.getHudProjection().time;
+            owner.advanceRealTime(raw.seconds);
+            const after = owner.getHudProjection().time;
+            if (before.day !== after.day || before.hour !== after.hour || before.minute !== after.minute) {
+              deliverPendingPulseReplies(owner);
+            }
+          }
           break;
         case 'clock':
           requireKernel();

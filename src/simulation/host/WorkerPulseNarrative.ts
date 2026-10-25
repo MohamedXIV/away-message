@@ -21,7 +21,7 @@ type Thread =
   | { stage: 'first' }
   | { stage: 'second'; topic: number }
   | { stage: 'waiting_first'; topic: number; flowId: string; sentMinute: number }
-  | { stage: 'waiting_second'; topic: number; sentMinute: number }
+  | { stage: 'waiting_second'; topic: number; replyIndex: number; sentMinute: number }
   | { stage: 'complete' };
 
 function totalMinutes(engine: SimulationKernel): number {
@@ -53,9 +53,9 @@ function thread(engine: SimulationKernel, actorId: string): Thread {
   if (first && last.senderId === 'player' && first[2] && firstFlows.some(f => f.flowId === first[2])) {
     return { stage: 'waiting_first', topic: Number(first[1]), flowId: first[2], sentMinute: last.timestampMinute };
   }
-  const second = /^pulse:v2:followup_out:([0-2])$/.exec(marker);
+  const second = /^pulse:v2:followup_out:([0-2]):([0-2])$/.exec(marker);
   if (second && last.senderId === 'player') {
-    return { stage: 'waiting_second', topic: Number(second[1]), sentMinute: last.timestampMinute };
+    return { stage: 'waiting_second', topic: Number(second[1]), replyIndex: Number(second[2]), sentMinute: last.timestampMinute };
   }
   return { stage: 'first' };
 }
@@ -131,7 +131,8 @@ function deliver(engine: SimulationKernel, actorId: string, state: Extract<Threa
     ? flowById.get(state.flowId)
     : PULSE_FOLLOWUP_FLOWS[state.topic];
   if (!flow) throw new Error('Unknown authored thread.');
-  const text = responseFor(engine, actorId, flow, state.topic);
+  const text = responseFor(engine, actorId, flow,
+    state.stage === 'waiting_first' ? state.topic : state.replyIndex);
   const tag = state.stage === 'waiting_first'
     ? `pulse:v2:response:${state.topic}` : 'pulse:v2:closed';
   receive(engine, actorId, text, [tag]);
@@ -193,7 +194,7 @@ export function createWorkerPulseNarrative(engine: SimulationKernel) {
       const topic = first ? command.choiceIndex : state.stage === 'second' ? state.topic : 0;
       const tag = first
         ? `pulse:v2:open:${topic}:${flow.flowId}`
-        : `pulse:v2:followup_out:${topic}`;
+        : `pulse:v2:followup_out:${topic}:${command.choiceIndex}`;
       const sentText = choices[command.choiceIndex]!.text;
       const sent = engine.dispatchAction({
         type: 'SOCIAL_SEND_MESSAGE', buddyId: command.actorId, text: sentText,
