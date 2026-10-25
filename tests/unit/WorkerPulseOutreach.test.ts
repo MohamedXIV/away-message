@@ -8,7 +8,7 @@ import {
 } from '../../src/simulation/host/WorkerPulseNarrative';
 import { PULSE_OUTREACH_LINES } from '../../src/simulation/host/PulseOutreachContent';
 
-function fixture(seed = 'npc-outreach-demo-001') {
+function fixture(seed = 'npc-outreach-demo-002') {
   const initial = buildFreshSandboxSocialState(seed);
   const ids = Object.keys(initial.knownHandles ?? {});
   const engine = new SimulationKernel({ social: initial });
