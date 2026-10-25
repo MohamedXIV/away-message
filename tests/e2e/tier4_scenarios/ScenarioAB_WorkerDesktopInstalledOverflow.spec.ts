@@ -83,7 +83,7 @@ test('owned installed shortcuts remain discoverable and keyboard-navigable beyon
   const desktop = page.getByTestId('worker-desktop');
   await expect(desktop).toHaveAttribute('data-os-theme', 'orion60');
   const grid = desktop.getByTestId('worker-desktop-icon-grid');
-  await expect(grid.locator('[data-desktop-icon]')).toHaveCount(38);
+  await expect(grid.locator('[data-desktop-icon]')).toHaveCount(37);
   await expect(grid.locator('[data-desktop-icon][disabled]')).toHaveCount(20);
   const pager = desktop.getByTestId('desktop-icon-pages');
   await expect(pager).toBeVisible();

@@ -54,7 +54,8 @@ test('#214 fresh Orion acquires Pulse only through real internet â†’ VFS setup â
   // Signed-out Pulse really closes, so Quick Launch must cold-start and
   // charge the same Worker hardware time as desktop and Start Menu.
   const taskbar = desktop.getByTestId('worker-desktop-taskbar');
-  const quickPulse = taskbar.getByRole('button', { name: 'Pulse Messenger', exact: true });
+  const quickPulse = taskbar.getByRole('group', { name: 'Quick Launch' })
+    .getByRole('button', { name: 'Pulse Messenger', exact: true });
   await expect(quickPulse).toBeVisible();
   await desktop.getByRole('button', { name: 'Close Pulse Messenger' }).click();
   const beforeCold = Number(await page.getByTestId('worker-minute').textContent());

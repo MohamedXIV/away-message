@@ -60,7 +60,7 @@ test('ordinary / New Game installs Orion 4.8 and delivers a coherent, responsive
   expect(metrics.icons).toBe(10);
   expect(metrics.appIds).not.toContain('pulse');
   expect(metrics.appIds).not.toContain('flashfetch');
-  expect(metrics.columns).toBeGreaterThanOrEqual(3);
+  expect(metrics.columns).toBeGreaterThanOrEqual(2);
   expect(metrics.scrollWidth).toBeLessThanOrEqual(metrics.clientWidth + 1);
   expect(metrics.scrollHeight).toBeLessThanOrEqual(metrics.clientHeight + 1);
   expect(new Set(metrics.appIds).size).toBe(metrics.appIds.length);

@@ -15,7 +15,7 @@ test('#219 real unseeded DOS boot requires an owned CD and delivers clean Orion 
 
   await bench.getByRole('button', { name: 'Purchase starter hardware bundle ($35)' }).click();
   await bench.getByRole('button', { name: 'Assemble owned package' }).click();
-  await expect(bench).toContainText('powered off');
+  await expect(bench).toContainText('turned off');
   await bench.getByRole('button', { name: 'Power on' }).click();
   const dos = page.getByTestId('worker-dos-boot');
   await expect(dos).toBeVisible();

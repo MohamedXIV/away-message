@@ -76,7 +76,7 @@ test('Orion retail upgrade: buy 128MB RAM and 5.0 CD, power off to install, copy
   await system.getByRole('button', { name: 'Verify OS installer' }).click();
   const plan = system.getByTestId('worker-os-plan');
   await expect(plan).toContainText('Orion 5.0');
-  await expect(plan).toContainText('upgrade');
+  await expect(plan).toContainText('Upgrade');
   await plan.getByRole('button', { name: 'Begin installation' }).click();
   const progress = system.getByTestId('worker-system-os-install-progress');
   await expect(progress).toHaveAttribute('data-installer-edition', 'orion50');
