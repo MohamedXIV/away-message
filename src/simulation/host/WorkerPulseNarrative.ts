@@ -1,7 +1,9 @@
 import type { SimulationKernel } from '../../engine/kernel/SimulationKernel';
 import type { MessageRecord } from '../../engine/types';
+import { socialHashText } from '../../engine/social/SocialMemoryLedger';
+import { PULSE_OUTREACH_LINES, type PulseOutreachMotive } from './PulseOutreachContent';
 import { createSimulationNarrative } from '../../narrative/SimulationNarrativeAdapter';
-import { DEFAULT_NARRATIVE_FLOWS, PULSE_CONTEXTUAL_FLOWS, PULSE_FOLLOWUP_FLOWS } from '../../narrative/flows';
+import { DEFAULT_NARRATIVE_FLOWS, PULSE_CONTEXTUAL_FLOWS, PULSE_FOLLOWUP_FLOWS, PULSE_OUTREACH_REPLY_FLOW } from '../../narrative/flows';
 import type { NarrativeFlowDefinition } from '../../narrative/NarrativeCoordinator';
 import type { SimulationPulseNarrativeCommand, SimulationPulseNarrativeResult } from './SimulationHostProtocol';
 
@@ -9,19 +11,23 @@ const MAX_CHOICES = 8;
 const MIN_REPLY_WAIT_MINUTES = 10;
 const MAX_CONTACT_CHECK = 100;
 const MAX_DELIVERIES_PER_ADVANCE = 4;
+const MAX_OUTREACH_CANDIDATES_PER_DAY = 2;
+const OUTREACH_COOLDOWN_MINUTES = 2 * 1440;
 const MARKER = 'pulse:v2:';
 const firstFlows = [
   DEFAULT_NARRATIVE_FLOWS.find(flow => flow.flowId === 'pulse_checkin')!,
   ...Object.values(PULSE_CONTEXTUAL_FLOWS),
 ];
-const allFlows = [...firstFlows, ...PULSE_FOLLOWUP_FLOWS];
+const allFlows = [...firstFlows, ...PULSE_FOLLOWUP_FLOWS, PULSE_OUTREACH_REPLY_FLOW];
 const flowById = new Map(allFlows.map(flow => [flow.flowId, flow]));
 
 type Thread =
   | { stage: 'first' }
   | { stage: 'second'; topic: number }
+  | { stage: 'outreach' }
   | { stage: 'waiting_first'; topic: number; flowId: string; sentMinute: number }
   | { stage: 'waiting_second'; topic: number; replyIndex: number; sentMinute: number }
+  | { stage: 'waiting_outreach'; replyIndex: number; sentMinute: number }
   | { stage: 'complete' };
 
 function totalMinutes(engine: SimulationKernel): number {
@@ -44,6 +50,12 @@ function thread(engine: SimulationKernel, actorId: string): Thread {
   if (marker === 'pulse:v2:closed' && last.senderId === actorId) {
     const currentDay = engine.getChromeRead().time.day;
     return last.day === currentDay ? { stage: 'complete' } : { stage: 'first' };
+  }
+  const outreach = /^pulse:v2:outreach:(promise|shared|trusted|remote|diner|canal|shift|hello)$/.exec(marker);
+  if (outreach && last.senderId === actorId) return { stage: 'outreach' };
+  const outboundOutreach = /^pulse:v2:outreach_out:([0-2])$/.exec(marker);
+  if (outboundOutreach && last.senderId === 'player') {
+    return { stage: 'waiting_outreach', replyIndex: Number(outboundOutreach[1]), sentMinute: last.timestampMinute };
   }
   const response = /^pulse:v2:response:([0-2])$/.exec(marker);
   if (response && last.senderId === actorId) {
@@ -91,6 +103,7 @@ function firstFlow(engine: SimulationKernel, actorId: string): NarrativeFlowDefi
 function flowFor(state: Thread, engine: SimulationKernel, actorId: string): NarrativeFlowDefinition | null {
   if (state.stage === 'first') return firstFlow(engine, actorId);
   if (state.stage === 'second') return PULSE_FOLLOWUP_FLOWS[state.topic] ?? null;
+  if (state.stage === 'outreach') return PULSE_OUTREACH_REPLY_FLOW;
   return null;
 }
 
@@ -126,10 +139,11 @@ function receive(engine: SimulationKernel, actorId: string, text: string, tags: 
   if (!result.success) throw new Error(result.error ?? 'Unable to deliver authored reply.');
 }
 
-function deliver(engine: SimulationKernel, actorId: string, state: Extract<Thread, { stage: 'waiting_first' | 'waiting_second' }>): string {
+function deliver(engine: SimulationKernel, actorId: string, state: Extract<Thread, { stage: 'waiting_first' | 'waiting_second' | 'waiting_outreach' }>): string {
   const flow = state.stage === 'waiting_first'
     ? flowById.get(state.flowId)
-    : PULSE_FOLLOWUP_FLOWS[state.topic];
+    : state.stage === 'waiting_second' ? PULSE_FOLLOWUP_FLOWS[state.topic]
+    : PULSE_OUTREACH_REPLY_FLOW;
   if (!flow) throw new Error('Unknown authored thread.');
   const text = responseFor(engine, actorId, flow,
     state.stage === 'waiting_first' ? state.topic : state.replyIndex);
@@ -160,7 +174,7 @@ export function deliverPendingPulseReplies(engine: SimulationKernel): number {
     if (delivered >= MAX_DELIVERIES_PER_ADVANCE) break;
     const id = contact.actorId;
     const state = thread(engine, id);
-    if (state.stage !== 'waiting_first' && state.stage !== 'waiting_second') continue;
+    if (state.stage !== 'waiting_first' && state.stage !== 'waiting_second' && state.stage !== 'waiting_outreach') continue;
     if (totalMinutes(engine) - state.sentMinute < MIN_REPLY_WAIT_MINUTES) continue;
     const actor = engine.getPlayerActorRead(id)?.actor;
     if (!actor?.canChatNow.allowed) continue;
@@ -168,6 +182,69 @@ export function deliverPendingPulseReplies(engine: SimulationKernel): number {
     delivered += 1;
   }
   return delivered;
+}
+
+/** A very small, deterministic world-initiated chat opportunity.
+ * At most two known candidates may initiate on a given world day. A real
+ * conversation, busy/blocked NPC, or recent exchange excludes the actor.
+ * The only bookmark is a canonical inbound Social message tag.
+ */
+export function initiateWorkerPulseOutreach(engine: SimulationKernel): number {
+  const time = engine.getChromeRead();
+  const { day, hour } = time.time;
+  if (!time.pulseInstalled || day < 2 || hour < 9 || hour >= 23) return 0;
+  const now = totalMinutes(engine);
+  const candidates = engine.getMessengerRead(MAX_CONTACT_CHECK).contacts
+    .map(row => ({ id: row.actorId, order: socialHashText(row.actorId + ':outreach:' + day) }))
+    .sort((a, b) => a.order - b.order || a.id.localeCompare(b.id))
+    .slice(0, MAX_OUTREACH_CANDIDATES_PER_DAY);
+  let initiated = 0;
+  for (const { id } of candidates) {
+    if (thread(engine, id).stage !== 'first') continue;
+    if (engine.social.hasConversationMessageOnDay(id, day)) continue;
+    const previous = latest(engine, id);
+    if (previous && now - previous.timestampMinute < OUTREACH_COOLDOWN_MINUTES) continue;
+    const actor = engine.getPlayerActorRead(id)?.actor;
+    if (!actor || actor.lifecycle === 'departed' ||
+      actor.connection === 'blocked' || actor.connection === 'distant' ||
+      actor.relationship.conflicted || !actor.canChatNow.allowed) continue;
+    const mood = engine.social.getDailyMood(id, day);
+    if (mood === 'cold' || mood === 'off') continue;
+    const promise = engine.social.getOpenPromises(id).length > 0;
+    // No untyped memory text may be promoted to a supposed shared fact.
+    const shared = engine.social.getCoreMemories(id).some(memory =>
+      memory.kind === 'shared_moment'
+      && memory.meaning?.participants.includes('player')
+      && memory.meaning.participants.includes(id));
+    const motive: PulseOutreachMotive =
+      promise ? 'promise'
+      : shared ? 'shared'
+      : actor.relationship.trusted ? 'trusted'
+      : actor.reach === 'remote' ? 'remote'
+      : actor.roles.includes('diner-staff') ? 'diner'
+      : actor.roles.includes('canal-regular') ? 'canal'
+      : actor.roles.includes('shift-worker') ? 'shift'
+      : 'hello';
+    const chance = promise || shared ? 90 : actor.relationship.trusted ? 70 : 45;
+    const roll = socialHashText(id + ':outreach:chance:' + day) % 100;
+    if (roll >= chance) continue;
+    const options = PULSE_OUTREACH_LINES[motive];
+    const line = options[socialHashText(id + ':outreach:line:' + day) % options.length]!;
+    receive(engine, id, line, [
+      'systemic_outreach', 'pulse:v2:outreach:' + motive,
+    ]);
+    initiated += 1;
+  }
+  return initiated;
+}
+
+/** Reconcile owed replies before any unsolicited new message; only Worker
+ * time advancement invokes this. Reading the Pulse UI never generates chat.
+ */
+export function reconcileWorkerPulseSocial(engine: SimulationKernel): { replies: number; outreach: number } {
+  const replies = deliverPendingPulseReplies(engine);
+  const outreach = initiateWorkerPulseOutreach(engine);
+  return { replies, outreach };
 }
 
 export function createWorkerPulseNarrative(engine: SimulationKernel) {
@@ -194,6 +271,7 @@ export function createWorkerPulseNarrative(engine: SimulationKernel) {
       const topic = first ? command.choiceIndex : state.stage === 'second' ? state.topic : 0;
       const tag = first
         ? `pulse:v2:open:${topic}:${flow.flowId}`
+        : state.stage === 'outreach' ? `pulse:v2:outreach_out:${command.choiceIndex}`
         : `pulse:v2:followup_out:${topic}:${command.choiceIndex}`;
       const sentText = choices[command.choiceIndex]!.text;
       const sent = engine.dispatchAction({
@@ -206,7 +284,9 @@ export function createWorkerPulseNarrative(engine: SimulationKernel) {
         // Follow-up paths choose the actual reply index; the original first
         // choice index only selects the correct second-turn flow.
         const replyIndex = first ? topic : command.choiceIndex;
-        const replyFlow = first ? flow : PULSE_FOLLOWUP_FLOWS[topic]!;
+        const replyFlow = first ? flow
+          : state.stage === 'outreach' ? PULSE_OUTREACH_REPLY_FLOW
+          : PULSE_FOLLOWUP_FLOWS[topic]!;
         const spoken = responseFor(engine, command.actorId, replyFlow, replyIndex);
         receive(engine, command.actorId, spoken, [first ? `pulse:v2:response:${topic}` : 'pulse:v2:closed']);
         reply = spoken;

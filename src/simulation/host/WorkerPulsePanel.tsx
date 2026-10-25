@@ -221,7 +221,7 @@ export function WorkerPulsePanel({
               ))}
               {choices.length === 0 && !error && (
                 <p className="text-xs text-[#776886]" data-testid="worker-pulse-conversation-state">
-                  {conversationPhase === 'waiting_first' || conversationPhase === 'waiting_second'
+                  {conversationPhase === 'waiting_first' || conversationPhase === 'waiting_second' || conversationPhase === 'waiting_outreach'
                     ? 'Message sent. They will answer when they can get online.'
                     : conversationPhase === 'complete'
                       ? 'You have caught up for today. Check back tomorrow.'

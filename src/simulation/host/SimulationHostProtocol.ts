@@ -121,7 +121,7 @@ export interface SimulationPulseNarrativeResult {
   revision: number;
   actorId: string;
   choices: Array<{ id: string; text: string }>;
-  phase: 'first' | 'second' | 'waiting_first' | 'waiting_second' | 'complete';
+  phase: 'first' | 'second' | 'outreach' | 'waiting_first' | 'waiting_second' | 'waiting_outreach' | 'complete';
   sent?: string;
   reply?: string | null;
 }
