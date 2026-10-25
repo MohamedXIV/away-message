@@ -24,7 +24,7 @@ We can talk, but I don't want to pretend everything's fine. # empathy # tier:l2 
 
 === joke ===
 ~ temp speaker = narrative_query("actor_id", "")
-~ request_social_act(speaker, "vulnerable_share")
+~ request_social_act(speaker, "empathy")
 I hear you. I still need some time to sort things out. # empathy # tier:l2 # speech:reassure # fact:still need # fact:sort things out # tone:guarded # forbid:an insult
 -> close
 
