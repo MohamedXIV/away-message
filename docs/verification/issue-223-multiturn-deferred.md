@@ -1,0 +1,9 @@
+## #223 — two-turn authored Pulse with deferred delivery
+
+- Real conversation stage is derived from **canonical Social message tags**, separately for each player-known actor, not kept in a React, browser-storage or second Worker chat store. The current actor can be in `first`, `waiting_first`, `second`, `waiting_second`, or `complete`.
+- A first-turn Ink choice receives an authored Ink response when the actor can currently chat. The response opens one of three separately authored Ink follow-up scenes (**personal check-in, topic, courtesy**) rather than resetting to a generic greeting.
+- Both turns are real Social messages; their markers survive saves, full reload, and account sign-out/sign-in. The Worker refuses stale/forged choice text, extra messages while awaiting a reply, and new messages after completing today's conversation.
+- Offline/busy actors accept one outbound message, **never** pretend to respond immediately. On actual Worker-world minute progression, a bounded delivery reconciler reviews up to 100 known contacts, delivers at most 4 eligible messages per advance, and requires at least 10 elapsed world minutes plus `canChatNow` permission. It reconstructs the same Ink flow and chosen index so the later reply matches the message's topic.
+- Period-authentic Messenger UI shows a waiting/finished state, not a spinner that never ends. Source/compiled parity tests cover all three follow-up Ink scenes.
+
+**Remaining:** richer long-running conversations and actor-specific tone; smaller-grained typing/notifications; explicit NPC-initiated chat; human playtest. AI free text remains optional and must *never replace* Ink choices. Bound of 100 recent known contacts and four deliveries per clock reconciliation is deliberately an interim performance cap, not a global social rule.
