@@ -195,7 +195,7 @@ export const GeneratedSite: React.FC<GeneratedSiteProps> = ({ content, navigate,
       <header className={`border-b-4 p-4 ${headerRadius}`} style={{ backgroundColor: theme.primary, borderColor: theme.accent, color: '#ffffff' }}>
         <div className="mx-auto flex max-w-5xl items-start justify-between gap-4">
           <div>
-            <div className="text-[10px] uppercase tracking-[0.22em] opacity-80">{content.archetype}</div>
+             
             <h1 className="text-2xl font-bold tracking-tight">{content.siteName}</h1>
             <p className="mt-1 text-sm opacity-95">{content.tagline}</p>
           </div>
@@ -242,7 +242,7 @@ export const GeneratedSite: React.FC<GeneratedSiteProps> = ({ content, navigate,
               <section key={`${section.heading}-${index}`} className={`${sectionClasses(layout)} ${cardRadius} overflow-hidden`} style={{ borderColor: theme.accent }}>
                 <div className="overflow-hidden">
                   <SectionImage host={url.host} heading={section.heading} index={index} theme={theme} archetype={content.archetype} className={`h-36 w-full object-cover ${imageRadius} border-b`} style={{ borderColor: theme.accent }} />
-                  <div className="px-1 py-0.5 text-center font-mono text-[9px] opacity-50">{section.heading} • free image • pollinations → picsum → fallback</div>
+                  <div className="px-1 py-0.5 text-center font-mono text-[9px] opacity-50">{section.heading}</div>
                 </div>
                 <h3 className="border-b pb-2 font-bold px-1" style={{ borderColor: theme.secondary, color: theme.primary }}>{section.heading}</h3>
                 <div className="px-1 pt-2 text-sm leading-6">

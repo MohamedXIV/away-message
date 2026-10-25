@@ -24,6 +24,6 @@ export function WorkerMailboxPanel({ session, revision }: {
   }, [session, revision]);
 
   if (error) return <p role="alert" className="p-3 text-red-800">{error}</p>;
-  if (!mail) return <p role="status" className="p-3 text-xs">Loading mailbox from Worker…</p>;
+  if (!mail) return <p role="status" className="p-3 text-xs">Checking mailbox…</p>;
   return <MailboxView mailbox={mail} />;
 }

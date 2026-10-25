@@ -30,7 +30,7 @@ export function WorkerRecycleBinPanel({ session, revision }: {
     setBusy(true); setNotice(null);
     try {
       const result = await session.dispatch(action);
-      if (!result.success) throw new Error(result.error ?? 'Worker refused this operation');
+      if (!result.success) throw new Error(result.error ?? 'The operation could not be completed');
       setSelected(null);
       setConfirmEmpty(false);
       setNotice(message);
@@ -48,7 +48,7 @@ export function WorkerRecycleBinPanel({ session, revision }: {
       <button className={button} disabled={busy || !page?.files.length}
         onClick={() => setConfirmEmpty(value => !value)}>Empty Recycle Bin</button>
       {confirmEmpty && <button className={button + ' text-red-700'} disabled={busy}
-        onClick={() => void act({ type: 'VFS_EMPTY_TRASH' }, 'Recycle Bin emptied by Worker')}>
+        onClick={() => void act({ type: 'VFS_EMPTY_TRASH' }, 'Recycle Bin emptied')}>
         Confirm permanent deletion
       </button>}
     </div>
@@ -97,7 +97,7 @@ export function WorkerAddRemovePanel({ session, revision }: {
     setBusy(true); setNotice(null);
     try {
       const result = await session.dispatch({ type: 'SOFTWARE_UNINSTALL', installedId: selectedProgram.id });
-      if (!result.success) throw new Error(result.error ?? 'Uninstall refused by canonical Worker');
+      if (!result.success) throw new Error(result.error ?? 'This program could not be uninstalled');
       setNotice('Removed ' + selectedProgram.name);
       setSelected(null); setConfirm(false);
     } catch (error) { setNotice(error instanceof Error ? error.message : String(error)); }
@@ -106,7 +106,7 @@ export function WorkerAddRemovePanel({ session, revision }: {
   return <section data-testid="worker-addremove" className="flex h-full min-h-0 flex-col bg-[#c0c0c0] text-black text-xs">
     <div className="border-b border-gray-500 bg-[#dfdfdf] p-3">
       <h2 className="font-bold">Add/Remove Programs</h2>
-      <p className="text-gray-600">Select installed software to uninstall it from the canonical computer.</p>
+      <p className="text-gray-600">Select a program to remove it from this computer.</p>
     </div>
     <div className="min-h-0 flex-1 overflow-y-auto bg-white p-2">
       {programs.length === 0 && <p>No installed programs found.</p>}
@@ -192,7 +192,7 @@ export function WorkerSaveLoadPanel({ session }: { session: WorkerGameSession })
   const rows = [...SAVE_SLOTS, AUTOSAVE_ID];
   const active = session.getSnapshot().slotId;
   return <section data-testid="worker-save-load" className="flex h-full min-h-0 flex-col bg-[#ece9d8] text-black text-xs">
-    <h2 className="border-b border-gray-500 bg-[#dfdfdf] p-3 font-bold">Save / Load Game — Worker-owned world</h2>
+    <h2 className="border-b border-gray-500 bg-[#dfdfdf] p-3 font-bold">Save / Load Game</h2>
     <div className="min-h-0 flex-1 space-y-2 overflow-y-auto p-3">
       {rows.map((id, index) => {
         const summary = byId.get(id);
@@ -217,7 +217,7 @@ export function WorkerSaveLoadPanel({ session }: { session: WorkerGameSession })
           </div>
         </div>;
       })}
-      <p className="text-[11px] text-gray-600">Loading starts a fresh Dedicated Worker. The active slot is protected while its cold conversation reader is in use.</p>
+      <p className="text-[11px] text-gray-600">Loading restores the saved day and your conversations. The active slot is protected while its cold conversation reader is in use.</p>
     </div>
     {notice && <p role="status" className="border-t border-gray-400 bg-[#fff7c7] px-2 py-1">{notice}</p>}
   </section>;

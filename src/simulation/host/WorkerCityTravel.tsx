@@ -41,7 +41,7 @@ export function WorkerCityTravel({
       // closures and encounters belong to the canonical Worker.
       const result = await session.dispatch({ type: 'TRAVEL_TO', to: destination, mode });
       if (!result.success) {
-        setNotice(result.error ?? 'Travel was refused by the simulation');
+        setNotice(result.error ?? 'Travel is not available right now');
         return;
       }
       const data = result.data as { summary?: string; encounter?: string } | undefined;

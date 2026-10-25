@@ -71,6 +71,6 @@ export function WorkerRetroAmpPanel({ session, revision, initialPath }: {
       <p className="p-3 text-xs">Install RetroAmp first.</p> :
       apps ?
         <RetroAmpApp tracks={tracks} onAddFile={busy ? undefined : () => { void importSample(); }} /> :
-        <p role="status" className="p-3 text-xs">Reading music files from the Worker…</p>}
+        <p role="status" className="p-3 text-xs">Loading music library…</p>}
   </section>;
 }
