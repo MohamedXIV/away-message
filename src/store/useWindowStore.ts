@@ -287,12 +287,15 @@ export const useWindowStore = create<WindowStore>()(
         y: Math.max(30, 40 + cascadeStep),
       };
 
-      // Pulse keeps standard WindowFrame but starts tall-narrow like the screenshot (360×560)
+      // Pulse keeps standard WindowFrame. Its messenger layout is genuinely
+      // split-pane when the desktop has room and compact on a narrow surface.
       const framelessDefault = false;
       const isPulse = config.appId === 'pulse' || config.appId === 'app.pulse' || config.appId === 'pulse_messenger';
-      // Pulse opens tall-narrow on the login panel (360×620), then goes rectangular on sign-in
-      const pulseDefaultSize = { width: 360, height: 620 } as WindowSize;
-      const pulseMinSize = { width: 340, height: 460 } as WindowSize;
+      const pulseNarrowSurface = typeof window !== 'undefined' && window.innerWidth < 720;
+      const pulseDefaultSize = (pulseNarrowSurface
+        ? { width: 360, height: 560 }
+        : { width: 600, height: 540 }) as WindowSize;
+      const pulseMinSize = { width: 340, height: 360 } as WindowSize;
       const newWindow: WindowState = {
         id,
         appId: config.appId,

@@ -34,6 +34,9 @@ export const PulseLoginSplash: React.FC<PulseLoginSplashProps> = ({ onLogin }) =
   const [isSigningIn, setIsSigningIn] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [wink, setWink] = useState(false);
+  const [wideLayout, setWideLayout] = useState(false);
+  const rootRef = React.useRef<HTMLDivElement>(null);
+  const passwordRef = React.useRef<HTMLInputElement>(null);
   // Face state machine: asleep (grey, idle) → suspicious (wrong creds, 0.5s)
   // → happy (correct login, ~1s blend) → onLogin opens the app.
   const [face, setFace] = useState<'asleep' | 'suspicious' | 'happy'>('asleep');
@@ -43,6 +46,19 @@ export const PulseLoginSplash: React.FC<PulseLoginSplashProps> = ({ onLogin }) =
     return () => {
       if (suspiciousTimer.current !== null) window.clearTimeout(suspiciousTimer.current);
     };
+  }, []);
+
+  // The Pulse window is resizable independently of the browser viewport, so
+  // width comes from the container rather than a responsive viewport breakpoint.
+  useEffect(() => {
+    const element = rootRef.current;
+    if (!element || typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(entries => {
+      const width = entries[0]?.contentRect.width ?? element.clientWidth;
+      setWideLayout(width >= 520);
+    });
+    observer.observe(element);
+    return () => observer.disconnect();
   }, []);
 
   // Famous Yahoo wink every ~2.8s — only when happy (awake)
@@ -111,9 +127,24 @@ export const PulseLoginSplash: React.FC<PulseLoginSplashProps> = ({ onLogin }) =
 
   const isAsleep = face === 'asleep';
   const isSuspicious = face === 'suspicious';
+  const savedId = loadPulseCredentials()?.id;
+  const rememberedAccounts = accounts
+    .slice()
+    .sort((a, b) => Number(b.id === savedId) - Number(a.id === savedId) || a.id.localeCompare(b.id))
+    .slice(0, 4);
+
+  const chooseRememberedId = (id: string) => {
+    setMode('signin');
+    setUsername(id);
+    setPassword('');
+    setConfirm('');
+    setError(null);
+    setFace('asleep');
+    window.setTimeout(() => passwordRef.current?.focus(), 0);
+  };
 
   return (
-    <div className="flex h-full flex-col bg-[#f0eef5] font-sans text-xs text-[#2b2b2b] overflow-hidden">
+    <div ref={rootRef} className="flex h-full flex-col bg-[#f0eef5] font-sans text-xs text-[#2b2b2b] overflow-hidden">
       {/* Pulse purple header */}
       <div className="bg-gradient-to-b from-[#5b2d8f] to-[#3b1a5e] px-3 py-2 text-white shadow">
         <div className="flex items-center justify-between">
@@ -128,8 +159,13 @@ export const PulseLoginSplash: React.FC<PulseLoginSplashProps> = ({ onLogin }) =
         </div>
       </div>
 
+      <div className={wideLayout
+        ? 'grid min-h-0 flex-1 grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)]'
+        : 'flex min-h-0 flex-1 flex-col'}>
       {/* Smiley hero — asleep (grey) by default, livens up on login */}
-      <div className="flex flex-col items-center bg-gradient-to-b from-white to-[#e9e3f5] border-b border-[#c8b8e6] px-4 py-5">
+      <div className={`flex flex-col items-center justify-center bg-gradient-to-b from-white to-[#e9e3f5] px-4 ${
+        wideLayout ? 'border-r border-[#c8b8e6] py-6' : 'border-b border-[#c8b8e6] py-5'
+      }`}>
         <div
           className={`relative flex h-[92px] w-[92px] items-center justify-center rounded-full border-4 border-[#4a1a6b] shadow-[0_6px_16px_rgba(75,30,110,0.35),inset_0_2px_0_rgba(255,255,255,0.9)] select-none ${
             isAsleep ? 'bg-[#9a9ab8]' : 'bg-[#ffd400]'
@@ -193,8 +229,38 @@ export const PulseLoginSplash: React.FC<PulseLoginSplashProps> = ({ onLogin }) =
       </div>
 
       {/* Form — Yahoo fieldset style */}
-      <form onSubmit={handleSubmit} className="flex-1 overflow-auto bg-[#f7f5fb] p-4">
-        <div className="mx-auto w-full max-w-[320px] space-y-3">
+      <form onSubmit={handleSubmit} className={`min-h-0 overflow-auto bg-[#f7f5fb] ${wideLayout ? 'p-3' : 'flex-1 p-4'}`}>
+        <div className={`mx-auto w-full max-w-[320px] ${wideLayout ? 'space-y-2' : 'space-y-3'}`}>
+          {mode === 'signin' && rememberedAccounts.length > 0 && (
+            <div className="border border-[#c8b8e6] bg-white/80 p-2">
+              <p className="mb-1 text-[10px] font-bold uppercase tracking-wide text-[#5b3a7b]">
+                Remembered on this PC
+              </p>
+              <div className="flex flex-wrap gap-1">
+                {rememberedAccounts.map(account => (
+                  <button
+                    key={account.id}
+                    type="button"
+                    onClick={() => chooseRememberedId(account.id)}
+                    aria-label={`Sign in as ${account.id}`}
+                    className={`border px-2 py-0.5 text-[11px] ${
+                      account.id === savedId
+                        ? 'border-[#5b2d8f] bg-[#ede2fb] font-bold text-[#3b1a5e]'
+                        : 'border-[#bfaed6] bg-[#fbf8ff] text-[#4e2a77] hover:bg-[#f0e8fa]'
+                    }`}
+                  >
+                    {account.id}
+                    {account.id === savedId && <span className="ml-1 text-[9px] text-[#7650a0]">last used</span>}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+          {mode === 'signin' && accounts.length === 0 && (
+            <p className="border border-dashed border-[#c8b8e6] bg-white/70 px-2 py-1.5 text-[10px] text-[#6b5a8a]">
+              No Pulse IDs on this PC yet. Pick an ID and password to create one.
+            </p>
+          )}
           <div>
             <label className="mb-1 block font-bold text-[#3b1a5e]" htmlFor="pulse-username">Pulse ID</label>
             <input
@@ -210,6 +276,7 @@ export const PulseLoginSplash: React.FC<PulseLoginSplashProps> = ({ onLogin }) =
             <label className="mb-1 block font-bold text-[#3b1a5e]" htmlFor="pulse-password">Password</label>
             <input
               id="pulse-password"
+              ref={passwordRef}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               type="password"
@@ -247,7 +314,8 @@ export const PulseLoginSplash: React.FC<PulseLoginSplashProps> = ({ onLogin }) =
           )}
 
           {error && (
-            <div className="rounded border border-red-300 bg-red-50 px-2.5 py-2 text-[11px] font-bold text-red-700">
+            <div role="alert" aria-live="polite"
+              className="rounded border border-red-300 bg-red-50 px-2.5 py-2 text-[11px] font-bold text-red-700">
               {error}
             </div>
           )}
@@ -295,6 +363,7 @@ export const PulseLoginSplash: React.FC<PulseLoginSplashProps> = ({ onLogin }) =
           </div>
         </div>
       </form>
+      </div>
 
       <div className="flex items-center justify-between border-t border-[#c8b8e6] bg-[#efebf8] px-3 py-1.5 text-[10px] text-[#6b5a8a]">
         <span>© 2005 Pulse Network • dial-up friendly</span>

@@ -199,8 +199,10 @@ export function WorkerDesktop({
     const availableWidth = Math.max(240, desktopWidth - 24);
     const availableHeight = Math.max(160, desktopHeight - taskbarHeight - 24);
     const isPulse = appId === 'pulse' || appId === 'app.pulse';
-    const desiredWidth = isPulse ? 360 : 620;
-    const desiredHeight = isPulse ? 520 : 440;
+    // Pulse is a split-pane messenger when the desktop has room. Narrow
+    // browser/mobile surfaces still clamp to the available width.
+    const desiredWidth = isPulse ? 600 : 620;
+    const desiredHeight = isPulse ? 540 : 440;
 
     let iconRight = 0;
     if (desktopRef.current && bounds) {
@@ -228,7 +230,7 @@ export function WorkerDesktop({
       defaultSize: size,
       minSize: {
         width: Math.min(isPulse ? 340 : 320, size.width),
-        height: Math.min(isPulse ? 300 : 220, size.height),
+        height: Math.min(isPulse ? 360 : 220, size.height),
       },
     });
   };
@@ -470,9 +472,7 @@ function WorkerDesktopApp({ window: win, session, revision, osVersion, available
     initialUrl={typeof win.customState?.initialUrl === 'string' ? win.customState.initialUrl : undefined} />;
   if (win.appId === 'publicweb') return <WorkerPublicSites session={session} revision={revision} />;
   if (win.appId === 'pulse') {
-    return <div className="h-full overflow-y-auto bg-slate-900 p-2">
-      <WorkerPulsePanel session={session} revision={revision} windowId={win.id} />
-    </div>;
+    return <WorkerPulsePanel session={session} revision={revision} windowId={win.id} />;
   }
   return <p role="alert" className="p-3 text-xs text-red-800">
     This app is not available in the Worker desktop: {win.appId}

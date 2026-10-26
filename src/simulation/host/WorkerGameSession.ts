@@ -217,6 +217,11 @@ export class WorkerGameSession {
     return this.active().pulseNarrative(command);
   }
 
+  /** Opening a known conversation acknowledges its canonical unread messages. */
+  markConversationRead(actorId: string): Promise<boolean> {
+    return this.active().markConversationRead(actorId);
+  }
+
   async labCharacter(command: LabCharacterCommand): Promise<LabCharacterResult> {
     const host = this.active();
     const generation = this.epoch;
