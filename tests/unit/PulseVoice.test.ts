@@ -41,7 +41,7 @@ describe('#223 character-specific offline Pulse realization', () => {
     expect(pulseOutreachOptions('hello', reserved)).toEqual(pulseOutreachOptions('hello', { ...reserved }));
   });
 
-  it('frames World-owned news according to that actor's recorded attitude', () => {
+  it("frames World-owned news according to that actor's recorded attitude", () => {
     const title = 'Canal Bridge Night Market announced';
     const guarded = formatPulseNewsLine(title, 'skeptical', reserved);
     const upbeat = formatPulseNewsLine(title, 'hyped', bright);
