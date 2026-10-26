@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { SimulationKernel } from '../../src/engine/kernel/SimulationKernel';
 import { buildFreshSandboxSocialState } from '../../src/simulation/host/FreshSandboxCast';
 import { createWorkerPulseNarrative } from '../../src/simulation/host/WorkerPulseNarrative';
+import { realizePulseReply } from '../../src/simulation/host/PulseVoice';
 import { createSimulationWorkerRuntime } from '../../src/simulation/host/SimulationWorkerRuntime';
 import type { SimulationWorkerReply } from '../../src/simulation/host/SimulationHostProtocol';
 
@@ -57,6 +58,28 @@ describe('#223 offline Ink-first Worker Pulse', () => {
     const restored = new SimulationKernel(engine.exportSnapshot());
     expect(restored.getConversationRead(actorId, 0, 20).messages.map(m => m.text))
       .toEqual([chosen.text, result.reply]);
+  });
+
+  it('uses saved NPC temperament for the same authorized Ink meaning', () => {
+    const { engine, actorId, narrative } = fixture();
+    const buddy = engine.social.getBuddy(actorId)!;
+    const readActor = engine.getPlayerActorRead.bind(engine);
+    vi.spyOn(engine, 'getPlayerActorRead').mockImplementation(id => {
+      const read = readActor(id);
+      return read && id === actorId
+        ? { ...read, actor: { ...read.actor, canChatNow: { allowed: true, reasons: [] } } }
+        : read;
+    });
+    const offered = narrative.run({ kind: 'choices', actorId });
+    const chosen = narrative.run({ kind: 'choose', actorId, choiceIndex: 0,
+      expectedText: offered.choices[0]!.text });
+    const ink = "It was a long shift, but I'm doing okay. Thanks for asking.";
+    expect(chosen.reply).toBe(realizePulseReply(ink, buddy.traits));
+    expect(chosen.reply).toMatch(/long shift/i);
+    const restored = new SimulationKernel(engine.exportSnapshot());
+    expect(restored.social.getBuddy(actorId)?.traits).toEqual(buddy.traits);
+    expect(restored.getConversationRead(actorId, 0, 10).messages.at(-1)?.text)
+      .toBe(chosen.reply);
   });
 
   it('retains player message but does not invent an immediate answer from offline contacts', () => {

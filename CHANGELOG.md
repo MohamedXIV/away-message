@@ -7,6 +7,7 @@ Game versions use SemVer (`0.x.y` while in demo); save *format* versions are tra
 ## [Unreleased]
 
 ### Added
+- Pulse check-ins and follow-up replies now pick wording from each friend's temperament; spontaneous messages can discuss news the sender actually learned, and the resulting chat stays in save history.
 - Modular PC Hardware & Silicon & Spares: fresh starts begin on Day 1 with an empty motel desk; visit Milo's Silicon & Spares downtown (Tech Mart) to buy starter towers, RAM sticks, larger hard drives, CRT/LCD monitors, or boxed OS install discs
 - Authentic Retro OS Setup Wizard: insert retail OS CD boxes and launch SETUP.EXE with hardware eligibility checks, simulated optical drive/hard drive chatter, BIOS reboot sequence, and era-specific splash screens
 - Generational OS Atmosphere: Orion 4.8 Harbor, 5.0 Aurora, 6.0 Glassline, and 7.0 Lumen dynamically reshape window frames, period typography (MS Sans Serif, Tahoma, Trebuchet MS, Segoe UI), window movement sound effects, and Web Audio startup chimes without code duplication
