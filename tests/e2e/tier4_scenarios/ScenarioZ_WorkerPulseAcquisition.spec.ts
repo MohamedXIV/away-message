@@ -75,6 +75,11 @@ test('#214 fresh Orion acquires Pulse only through real internet â†’ VFS setup â
   await messenger.getByLabel('Password', { exact: true }).fill('localtest123');
   await messenger.getByRole('button', { name: 'Sign In', exact: true }).click();
   await expect(messenger).toHaveAttribute('data-pulse-phase', 'signed-in');
+  await expect(messenger).toHaveAttribute('data-pulse-layout', 'split');
+  const contacts = messenger.getByTestId('worker-pulse-contacts');
+  await expect(contacts).toBeVisible();
+  await expect(contacts).toContainText('Online');
+  await expect(contacts).toContainText('Offline');
 
   // Offline dialogue is choice-driven and Worker-authored. No free textbox
   // invites arbitrary messages to a keyword bot.
@@ -84,6 +89,8 @@ test('#214 fresh Orion acquires Pulse only through real internet â†’ VFS setup â
   await choices.getByRole('button', { name: 'Hey! How have you been lately?' }).click();
   await expect(messenger.getByTestId('worker-pulse-messages'))
     .toContainText('Hey! How have you been lately?');
+  await expect(messenger.getByTestId('worker-pulse-messages'))
+    .toContainText(/\d{1,2}:\d{2} (AM|PM)/);
 
   // Signed-in Pulse closes to tray (still running), so quick launch
   // restores the existing session immediately without a second startup cost.
@@ -92,6 +99,9 @@ test('#214 fresh Orion acquires Pulse only through real internet â†’ VFS setup â
   await expect(messenger).toHaveCount(0);
   await quickPulse.click();
   await expect(messenger).toBeVisible();
+  await expect(messenger).toHaveAttribute('data-pulse-phase', 'signed-in');
+  await expect(messenger.getByTestId('worker-pulse-messages'))
+    .toContainText('Hey! How have you been lately?');
   expect(Number(await page.getByTestId('worker-minute').textContent())).toBe(beforeWarm);
 
   await page.getByRole('button', { name: 'Save game' }).click();
@@ -101,6 +111,33 @@ test('#214 fresh Orion acquires Pulse only through real internet â†’ VFS setup â
   await page.getByRole('button', { name: 'desktop', exact: true }).click();
   const loaded = page.getByTestId('worker-desktop');
   await expect(loaded.getByRole('button', { name: 'Open Pulse Messenger' })).toHaveCount(1);
+
+  // A cold reload requires the real remembered account sign-in again, but the
+  // canonical transcript must restore exactly from the saved social state.
+  await loaded.getByRole('button', { name: 'Open Pulse Messenger' }).dblclick();
+  const restored = page.getByTestId('worker-pulse-panel');
+  await expect(restored).toHaveAttribute('data-pulse-phase', 'sign-in');
+  await restored.getByLabel('Pulse ID').fill('new_player06');
+  await restored.getByLabel('Password', { exact: true }).fill('localtest123');
+  await restored.getByRole('button', { name: 'Sign In', exact: true }).click();
+  await expect(restored).toHaveAttribute('data-pulse-phase', 'signed-in');
+  await expect(restored.getByTestId('worker-pulse-messages'))
+    .toContainText('Hey! How have you been lately?');
+
+  // An away-but-reachable canonical contact can answer immediately; the UI
+  // must not show an offline wait state for a person the Worker says can chat.
+  const awayRow = restored.getByTestId('worker-pulse-contacts')
+    .locator('[data-testid^="worker-pulse-contact-"]').filter({ hasText: 'AWAY' }).first();
+  await expect(awayRow).toBeVisible();
+  await awayRow.click();
+  const awayChoices = restored.getByTestId('worker-pulse-choices');
+  await expect(awayChoices.getByRole('button').first()).toBeVisible();
+  await awayChoices.getByRole('button').first().click();
+  await expect(restored.getByTestId('worker-pulse-messages')
+    .locator('[data-sender="buddy"]')).toHaveCount(1, { timeout: 15_000 });
+
+  await loaded.getByRole('button', { name: 'Close Pulse Messenger' }).click();
+
   await loaded.getByRole('button', { name: 'Open Computer & Setup' }).dblclick();
   await page.getByTestId('worker-system-panel').getByRole('button', { name: 'Uninstall Pulse Messenger' }).click();
   await expect(loaded.getByRole('button', { name: 'Open Pulse Messenger' })).toHaveCount(0);

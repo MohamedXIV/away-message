@@ -137,6 +137,10 @@ export class WorkerSimulationHost implements SimulationHost {
     return this.request({ op: 'pulseNarrative', command }) as Promise<SimulationPulseNarrativeResult>;
   }
 
+  markConversationRead(actorId: string): Promise<boolean> {
+    return this.request({ op: 'markConversationRead', actorId }) as Promise<boolean>;
+  }
+
   labCharacter(command: LabCharacterCommand): Promise<LabCharacterResult> {
     return this.request({ op: 'labCharacter', command }) as Promise<LabCharacterResult>;
   }

@@ -158,6 +158,7 @@ export type SimulationWorkerRequest =
   | { id: number; op: 'hardware'; command: SimulationHardwareCommand }
   | { id: number; op: 'cafeNarrative'; command: SimulationCafeNarrativeCommand }
   | { id: number; op: 'pulseNarrative'; command: SimulationPulseNarrativeCommand }
+  | { id: number; op: 'markConversationRead'; actorId: string }
   | { id: number; op: 'labProcedural'; command: LabProceduralCommand }
   | { id: number; op: 'labOs'; command: LabOsCommand }
   | { id: number; op: 'labCharacter'; command: LabCharacterCommand }
@@ -185,6 +186,8 @@ export interface SimulationHost {
   hardware(command: SimulationHardwareCommand): Promise<ActionResult<OsInstallPlan>>;
   cafeNarrative(command: SimulationCafeNarrativeCommand): Promise<SimulationCafeNarrativeResult>;
   pulseNarrative(command: SimulationPulseNarrativeCommand): Promise<SimulationPulseNarrativeResult>;
+  /** Player opening a known thread acknowledges its canonical unread state. */
+  markConversationRead(actorId: string): Promise<boolean>;
   labProcedural(command: LabProceduralCommand): Promise<LabProceduralResult>;
   labOs(command: LabOsCommand): Promise<LabOsResult>;
   labCharacter(command: LabCharacterCommand): Promise<LabCharacterResult>;

@@ -233,6 +233,14 @@ export function createSimulationWorkerRuntime(send: (message: SimulationWorkerRe
           // or per-contact Ink cursor living outside the canonical save.
           value = createWorkerPulseNarrative(requireKernel()).run(raw.command);
           break;
+        case 'markConversationRead': {
+          const actorId = raw.actorId;
+          if (typeof actorId !== 'string' || !actorId || actorId.length > 128) {
+            throw new Error('Invalid conversation identity');
+          }
+          value = requireKernel().markConversationAsRead(actorId);
+          break;
+        }
         case 'hardware': {
           const owner = requireKernel();
           switch (raw.command?.kind) {

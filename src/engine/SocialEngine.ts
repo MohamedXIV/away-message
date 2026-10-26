@@ -1153,6 +1153,7 @@ export class SocialEngine {
     actorId: string;
     displayName: string;
     handle: string;
+    archetype: BuddyCharacter['archetype'];
     onlineStatus: BuddyPresence['status'];
     relationshipStage: RelationshipStage;
     lastMessageMinute: number | null;
@@ -1168,6 +1169,7 @@ export class SocialEngine {
         actorId: id,
         displayName: buddy.displayName,
         handle: buddy.handle,
+        archetype: buddy.archetype,
         onlineStatus: this.online.get(id)?.status ?? 'offline',
         relationshipStage: this.getRelationshipStage(id),
         lastMessageMinute: summary.lastMessageMinute,
