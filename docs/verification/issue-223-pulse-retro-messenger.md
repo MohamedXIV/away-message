@@ -11,7 +11,9 @@ The Worker-playable Pulse now has a period-authentic messenger surface instead o
 - Subtle in-app unread notice when canonical Social unread increases on another thread. The notice opens that conversation. No React-owned message or presence is created.
 - Account screen polish: remembered-ID chips, clear empty state, `role="alert"` errors, and a two-column hero/form layout on wide Pulse windows. Existing sign-up/sign-in/sign-out/persistence semantics were not replaced.
 - Signed-in session and selected thread are kept in **UI-only window custom state**, so closing to the tray and reopening restores the same Pulse session and conversation. This is not canonical game state and is cleared on sign-out.
-- New minimal Worker command `markConversationRead(actorId)` forwards to the existing `SimulationKernel.markConversationAsRead`, so opening a known thread clears its canonical unread state. Unknown identities are refused/no-op; no Social owner was duplicated.
+- That UI session is bound to the **actual save-slot ID**. A same-username account in another slot cannot inherit authentication, even when the two slots use different passwords. Save As / slot changes invalidate the UI session immediately.
+- New minimal Worker command `markConversationRead(actorId)` forwards to the existing `SimulationKernel.markConversationAsRead`. Acknowledgement is gated on the Pulse window being active and visible, the browser tab being visible, the thread being on the newest page, and no compact buddy drawer obscuring it. A message arriving behind another OS window stays unread until the player focuses the conversation. Unknown identities are refused/no-op; no Social owner was duplicated.
+- Secondary labels were raised from 7–9px to 10–12px across the messenger, drawer, conversation and account surfaces while preserving the compact 2005 hierarchy.
 
 ## Reused from legacy Pulse
 
@@ -36,9 +38,15 @@ The Worker exposes **no** NPC typing/transport signal. `SimulationPulseNarrative
 
 - `npx tsc --noEmit` — pass.
 - `npm run build` — pass.
-- `npx vitest run` — 369 files / 2083 tests pass.
-- `npx playwright test tests/e2e/tier4_scenarios/ScenarioZ_WorkerPulseAcquisition.spec.ts` — pass on the actual `/` Worker route. The scenario now also checks split layout, online/offline groups, era timestamps, an away-but-reachable canonical contact producing a real authored NPC reply, tray close/reopen preserving the selected transcript, cold reload sign-in and saved transcript restore, then real uninstall.
-- Focused unit coverage: contact view/grouping/presence copy, waiting/complete state text, and Worker mark-read acknowledgement/refusal.
+- `node scripts/verify-vitest-baseline.mjs --self-test` — pass.
+- `node scripts/verify-vitest-baseline.mjs` — **371 files / 2,092 tests pass**.
+- `npx playwright test tests/e2e/tier4_scenarios/ScenarioZ_WorkerPulseAcquisition.spec.ts` — pass on the actual `/` Worker route. The scenario checks split layout, online/offline groups, era timestamps, an away-but-reachable canonical contact producing a real authored NPC reply, tray close/reopen preserving the selected transcript, cold reload sign-in and saved transcript restore, then real uninstall.
+- Focused unit/component coverage:
+  - contact view/grouping/presence copy and waiting/complete state text;
+  - Worker mark-read acknowledgement/refusal;
+  - same-username/different-password session restore rejected across slots while same-slot tray restore remains signed in;
+  - a mounted-but-background Pulse conversation leaves a fresh arrival unread until the Pulse window becomes active.
+- Updated screenshots re-captured after the readability pass.
 - Screenshots from the real in-game Pulse window:
   - Before: [`00b-before-window.png`](assets/issue-223-pulse-retro/00b-before-window.png)
   - After (split): [`03b-conversation-window.png`](assets/issue-223-pulse-retro/03b-conversation-window.png), [`01b-account-window.png`](assets/issue-223-pulse-retro/01b-account-window.png)

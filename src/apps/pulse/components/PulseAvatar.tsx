@@ -3,7 +3,7 @@ import type { BuddyCharacter, BuddyPresenceStatus } from '../../../engine/types'
 import { buddySignatureColor, resolveArchetype } from '../../../engine/characterTemplates';
 
 const SIZES = {
-  sm: { box: 24, text: 'text-[9px]', dot: 'h-2 w-2', offset: '-bottom-0.5 -right-0.5' },
+  sm: { box: 24, text: 'text-[10px]', dot: 'h-2 w-2', offset: '-bottom-0.5 -right-0.5' },
   md: { box: 32, text: 'text-[11px]', dot: 'h-2.5 w-2.5', offset: '-bottom-0.5 -right-0.5' },
   lg: { box: 40, text: 'text-sm', dot: 'h-3 w-3', offset: '-bottom-0.5 -right-0.5' },
 } as const;

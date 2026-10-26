@@ -472,7 +472,8 @@ function WorkerDesktopApp({ window: win, session, revision, osVersion, available
     initialUrl={typeof win.customState?.initialUrl === 'string' ? win.customState.initialUrl : undefined} />;
   if (win.appId === 'publicweb') return <WorkerPublicSites session={session} revision={revision} />;
   if (win.appId === 'pulse') {
-    return <WorkerPulsePanel session={session} revision={revision} windowId={win.id} />;
+    return <WorkerPulsePanel session={session} revision={revision} windowId={win.id}
+      slotId={session.getSnapshot().slotId} />;
   }
   return <p role="alert" className="p-3 text-xs text-red-800">
     This app is not available in the Worker desktop: {win.appId}

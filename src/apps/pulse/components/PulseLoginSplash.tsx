@@ -133,6 +133,10 @@ export const PulseLoginSplash: React.FC<PulseLoginSplashProps> = ({ onLogin }) =
     .sort((a, b) => Number(b.id === savedId) - Number(a.id === savedId) || a.id.localeCompare(b.id))
     .slice(0, 4);
 
+  const accountFieldClass = `w-full rounded border border-[#a99bd6] bg-white px-2.5 ${
+    wideLayout ? 'py-1.5' : 'py-2'
+  } shadow-[inset_0_1px_2px_rgba(0,0,0,0.08)] outline-none focus:border-[#5b2d8f] focus:ring-2 focus:ring-[#d8c8f5]`;
+
   const chooseRememberedId = (id: string) => {
     setMode('signin');
     setUsername(id);
@@ -155,7 +159,7 @@ export const PulseLoginSplash: React.FC<PulseLoginSplashProps> = ({ onLogin }) =
               <div className="text-[11px] font-bold -mt-1 tracking-wide">Messenger</div>
             </div>
           </div>
-          <div className="text-[10px] font-mono opacity-70">v5.2 • 2005</div>
+          <div className="text-[11px] font-mono opacity-70">v5.2 • 2005</div>
         </div>
       </div>
 
@@ -222,18 +226,18 @@ export const PulseLoginSplash: React.FC<PulseLoginSplashProps> = ({ onLogin }) =
           </div>
           <div className="text-[11px] text-[#5b4a7a]">your friends are only a click away</div>
         </div>
-        <div className="mt-2 flex items-center gap-1.5 text-[10px] text-[#6b5a8a]">
+        <div className="mt-2 flex items-center gap-1.5 text-[11px] text-[#6b5a8a]">
           <span className="h-2 w-2 rounded-full bg-[#2ecc71] shadow-[0_0_6px_rgba(46,204,113,0.9)] animate-pulse" />
           <span>Pulse Network • dial-up friendly</span>
         </div>
       </div>
 
       {/* Form — Yahoo fieldset style */}
-      <form onSubmit={handleSubmit} className={`min-h-0 overflow-auto bg-[#f7f5fb] ${wideLayout ? 'p-3' : 'flex-1 p-4'}`}>
-        <div className={`mx-auto w-full max-w-[320px] ${wideLayout ? 'space-y-2' : 'space-y-3'}`}>
+      <form onSubmit={handleSubmit} className={`min-h-0 overflow-auto bg-[#f7f5fb] ${wideLayout ? 'p-2' : 'flex-1 p-4'}`}>
+        <div className={`mx-auto w-full max-w-[320px] ${wideLayout ? 'space-y-1.5' : 'space-y-3'}`}>
           {mode === 'signin' && rememberedAccounts.length > 0 && (
             <div className="border border-[#c8b8e6] bg-white/80 p-2">
-              <p className="mb-1 text-[10px] font-bold uppercase tracking-wide text-[#5b3a7b]">
+              <p className="mb-1 text-[11px] font-bold uppercase tracking-wide text-[#5b3a7b]">
                 Remembered on this PC
               </p>
               <div className="flex flex-wrap gap-1">
@@ -250,14 +254,14 @@ export const PulseLoginSplash: React.FC<PulseLoginSplashProps> = ({ onLogin }) =
                     }`}
                   >
                     {account.id}
-                    {account.id === savedId && <span className="ml-1 text-[9px] text-[#7650a0]">last used</span>}
+                    {account.id === savedId && <span className="ml-1 text-[10px] text-[#7650a0]">last used</span>}
                   </button>
                 ))}
               </div>
             </div>
           )}
           {mode === 'signin' && accounts.length === 0 && (
-            <p className="border border-dashed border-[#c8b8e6] bg-white/70 px-2 py-1.5 text-[10px] text-[#6b5a8a]">
+            <p className="border border-dashed border-[#c8b8e6] bg-white/70 px-2 py-1.5 text-[11px] text-[#6b5a8a]">
               No Pulse IDs on this PC yet. Pick an ID and password to create one.
             </p>
           )}
@@ -268,7 +272,7 @@ export const PulseLoginSplash: React.FC<PulseLoginSplashProps> = ({ onLogin }) =
               value={username}
               onChange={(e) => setUsername(e.target.value)}
               placeholder="e.g. wanderer06"
-              className="w-full rounded border border-[#a99bd6] bg-white px-2.5 py-2 shadow-[inset_0_1px_2px_rgba(0,0,0,0.08)] outline-none focus:border-[#5b2d8f] focus:ring-2 focus:ring-[#d8c8f5]"
+              className={accountFieldClass}
               autoComplete="username"
             />
           </div>
@@ -281,10 +285,10 @@ export const PulseLoginSplash: React.FC<PulseLoginSplashProps> = ({ onLogin }) =
               onChange={(e) => setPassword(e.target.value)}
               type="password"
               placeholder="••••••••"
-              className="w-full rounded border border-[#a99bd6] bg-white px-2.5 py-2 shadow-[inset_0_1px_2px_rgba(0,0,0,0.08)] outline-none focus:border-[#5b2d8f] focus:ring-2 focus:ring-[#d8c8f5]"
+              className={accountFieldClass}
               autoComplete="current-password"
             />
-            <div className="mt-1 text-right">
+            <div className={`${wideLayout ? 'mt-0.5' : 'mt-1'} text-right`}>
               <a className="text-[11px] text-[#5b2d8f] underline decoration-dotted underline-offset-2 hover:text-[#3b1a5e]" href="#" onClick={(e) => e.preventDefault()}>Forgot your password?</a>
             </div>
           </div>
@@ -297,7 +301,7 @@ export const PulseLoginSplash: React.FC<PulseLoginSplashProps> = ({ onLogin }) =
                 onChange={(e) => setConfirm(e.target.value)}
                 type="password"
                 placeholder="••••••••"
-                className="w-full rounded border border-[#a99bd6] bg-white px-2.5 py-2 shadow-[inset_0_1px_2px_rgba(0,0,0,0.08)] outline-none focus:border-[#5b2d8f] focus:ring-2 focus:ring-[#d8c8f5]"
+                className={accountFieldClass}
                 autoComplete="new-password"
               />
             </div>
@@ -335,7 +339,9 @@ export const PulseLoginSplash: React.FC<PulseLoginSplashProps> = ({ onLogin }) =
 
           <button
             disabled={isSigningIn || !username.trim()}
-            className="w-full rounded bg-gradient-to-b from-[#6a3fb8] to-[#4a2390] px-3 py-2.5 font-bold text-white shadow-[0_2px_0_#2a1550] hover:from-[#7550c0] hover:to-[#512aa0] disabled:cursor-wait disabled:opacity-60"
+            className={`w-full rounded bg-gradient-to-b from-[#6a3fb8] to-[#4a2390] px-3 ${
+              wideLayout ? 'py-2' : 'py-2.5'
+            } font-bold text-white shadow-[0_2px_0_#2a1550] hover:from-[#7550c0] hover:to-[#512aa0] disabled:cursor-wait disabled:opacity-60`}
           >
             {isSigningIn ? (mode === 'signup' ? 'Creating ID…' : 'Signing in…') : mode === 'signup' ? 'Create Pulse ID' : 'Sign In'}
           </button>
@@ -365,7 +371,7 @@ export const PulseLoginSplash: React.FC<PulseLoginSplashProps> = ({ onLogin }) =
       </form>
       </div>
 
-      <div className="flex items-center justify-between border-t border-[#c8b8e6] bg-[#efebf8] px-3 py-1.5 text-[10px] text-[#6b5a8a]">
+      <div className="flex items-center justify-between border-t border-[#c8b8e6] bg-[#efebf8] px-3 py-1 text-[11px] text-[#6b5a8a]">
         <span>© 2005 Pulse Network • dial-up friendly</span>
         <span className="font-mono">v5.2 • Orion • dial-up</span>
       </div>

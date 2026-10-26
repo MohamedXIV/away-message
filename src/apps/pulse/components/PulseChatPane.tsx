@@ -88,7 +88,7 @@ export const PulseChatPane: React.FC<PulseChatPaneProps> = ({
 
   if (!contact) {
     return (
-      <div className="flex min-h-0 flex-1 items-center justify-center bg-[#fffdf8] p-6 text-center text-[11px] italic text-[#7d6d8d]">
+      <div className="flex min-h-0 flex-1 items-center justify-center bg-[#fffdf8] p-6 text-center text-[12px] italic text-[#7d6d8d]">
         Choose a buddy to open a conversation.
       </div>
     );
@@ -105,21 +105,21 @@ export const PulseChatPane: React.FC<PulseChatPaneProps> = ({
           <div className="flex items-center gap-1.5">
             <h3 className="truncate text-[12px] font-bold text-[#2f194c]">{contact.displayName}</h3>
             <span className={`h-2 w-2 shrink-0 rounded-full ${PULSE_STATUS_DOT[contact.status]}`} aria-hidden="true" />
-            <span className="shrink-0 text-[9px] font-bold uppercase tracking-wide text-[#6d5684]">
+            <span className="shrink-0 text-[10px] font-bold uppercase tracking-wide text-[#6d5684]">
               {PULSE_STATUS_LABEL[contact.status]}
             </span>
           </div>
-          <p className="truncate text-[10px] text-[#6d5684]">
+          <p className="truncate text-[11px] text-[#6d5684]">
             @{contact.handle}
             {contact.awayMessage && contact.status !== 'offline' ? ` — “${contact.awayMessage}”` : ''}
           </p>
         </div>
-        <span className="shrink-0 border border-[#b49dcb] bg-[#fff9e8] px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wider text-[#6b4f1d]">
+        <span className="shrink-0 border border-[#b49dcb] bg-[#fff9e8] px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-[#6b4f1d]">
           IM
         </span>
       </header>
 
-      <div className="flex shrink-0 items-center justify-between gap-1 border-b border-[#ded1ec] bg-[#f4eefb] px-2 py-0.5 text-[9px] text-[#6d5684]">
+      <div className="flex shrink-0 items-center justify-between gap-1 border-b border-[#ded1ec] bg-[#f4eefb] px-2 py-0.5 text-[10px] text-[#6d5684]">
         <span>
           {loading ? 'Opening conversation…' : !page || page.total === 0
             ? 'No messages yet'
@@ -139,12 +139,12 @@ export const PulseChatPane: React.FC<PulseChatPaneProps> = ({
         aria-live="polite"
         aria-label={`Conversation with ${contact.displayName}`}
         data-testid="worker-pulse-messages"
-        className="min-h-0 flex-1 overflow-y-auto bg-[linear-gradient(180deg,#fffdf8_0%,#fbf7ff_100%)] px-2 py-2 text-[11px]"
+        className="min-h-0 flex-1 overflow-y-auto bg-[linear-gradient(180deg,#fffdf8_0%,#fbf7ff_100%)] px-2 py-2 text-[12px]"
       >
         {loading && messages.length === 0 ? (
           <p className="py-6 text-center italic text-[#8b7c9a]">Opening conversation…</p>
         ) : messages.length === 0 ? (
-          <div className="mx-auto mt-4 max-w-[260px] border border-dashed border-[#c9b7dc] bg-white/70 px-3 py-3 text-center text-[10px] text-[#7d6d8d]">
+          <div className="mx-auto mt-4 max-w-[260px] border border-dashed border-[#c9b7dc] bg-white/70 px-3 py-3 text-center text-[11px] text-[#7d6d8d]">
             <p className="font-bold text-[#4f326e]">Conversation with {contact.displayName}</p>
             <p className="mt-1">{waiting
               ? 'Your message is on its way.'
@@ -160,7 +160,7 @@ export const PulseChatPane: React.FC<PulseChatPaneProps> = ({
           return (
             <React.Fragment key={message.id}>
               {showDay && (
-                <div className="my-2 flex items-center gap-2 text-[8px] font-bold uppercase tracking-widest text-[#9a89aa]">
+                <div className="my-2 flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-[#9a89aa]">
                   <span className="h-px flex-1 bg-[#e2d7ee]" aria-hidden="true" />
                   <span>{messageDayLabel(message.day)}</span>
                   <span className="h-px flex-1 bg-[#e2d7ee]" aria-hidden="true" />
@@ -175,13 +175,13 @@ export const PulseChatPane: React.FC<PulseChatPaneProps> = ({
                   }`}
                   data-sender={player ? 'player' : 'buddy'}
                 >
-                  <div className="mb-0.5 flex flex-wrap items-baseline gap-1 text-[9px]">
+                  <div className="mb-0.5 flex flex-wrap items-baseline gap-1 text-[10px]">
                     <span className="font-bold" style={{ color: player ? '#4a2a77' : signature }}>{senderName}</span>
-                    <time className="text-[9px] text-[#8b7c9a]" title={`Day ${message.day}`}>
+                    <time className="text-[10px] text-[#8b7c9a]" title={`Day ${message.day}`}>
                       ({formatSimulationMinutes(message.timestampMinute % 1440)})
                     </time>
                     {offline && (
-                      <span className="border border-[#c8a74a] bg-[#fff3c2] px-1 text-[7px] font-bold uppercase tracking-wide text-[#6d5000]">
+                      <span className="border border-[#c8a74a] bg-[#fff3c2] px-1 text-[9px] font-bold uppercase tracking-wide text-[#6d5000]">
                         offline message
                       </span>
                     )}
@@ -194,7 +194,7 @@ export const PulseChatPane: React.FC<PulseChatPaneProps> = ({
                         loading="lazy"
                         className="max-h-48 w-auto border border-[#bca8d2] bg-white object-contain" />
                       {message.imageCaption && (
-                        <figcaption className="mt-0.5 text-[9px] italic text-[#6d5684]">{message.imageCaption}</figcaption>
+                        <figcaption className="mt-0.5 text-[10px] italic text-[#6d5684]">{message.imageCaption}</figcaption>
                       )}
                     </figure>
                   )}
@@ -208,7 +208,7 @@ export const PulseChatPane: React.FC<PulseChatPaneProps> = ({
       <div className="shrink-0 border-t border-[#bca8d2] bg-[#ece5f4] p-1.5" data-testid="worker-pulse-composer">
         {choices.length > 0 ? (
           <div onKeyDown={handleComposerKeyDown} data-testid="worker-pulse-choices" aria-label="Written replies">
-            <div className="mb-1 flex items-center justify-between text-[9px] font-bold uppercase tracking-wide text-[#5b3a7b]">
+            <div className="mb-1 flex items-center justify-between text-[10px] font-bold uppercase tracking-wide text-[#5b3a7b]">
               <span>Pick a message</span>
               <span aria-hidden="true" className="font-normal normal-case tracking-normal text-[#8b7c9a]">1–9 selects</span>
             </div>
@@ -223,18 +223,18 @@ export const PulseChatPane: React.FC<PulseChatPaneProps> = ({
                     onClick={() => onChoose(index)}
                     aria-label={choice.text}
                     aria-keyshortcuts={String(index + 1)}
-                    className={`flex w-full items-start gap-1.5 border px-2 py-1.5 text-left text-[11px] leading-snug ${
+                    className={`flex w-full items-start gap-1.5 border px-2 py-1.5 text-left text-[12px] leading-snug ${
                       active
                         ? 'border-[#6b3d9d] bg-[#fff6d8] text-[#2f194c]'
                         : 'border-[#ac8fca] bg-gradient-to-b from-white to-[#f0e7f9] text-[#342047] hover:from-[#fffdf4] hover:to-[#e4d4f2]'
                     } disabled:opacity-60`}
                   >
                     <span aria-hidden="true"
-                      className="mt-px flex h-4 w-4 shrink-0 items-center justify-center border border-[#a78fc2] bg-white text-[8px] font-bold text-[#5b3a7b]">
+                      className="mt-px flex h-4 w-4 shrink-0 items-center justify-center border border-[#a78fc2] bg-white text-[10px] font-bold text-[#5b3a7b]">
                       {index + 1}
                     </span>
                     <span className="min-w-0 flex-1">{choice.text}</span>
-                    {active && sending && <span className="shrink-0 text-[8px] italic text-[#6d5684]">sending…</span>}
+                    {active && sending && <span className="shrink-0 text-[10px] italic text-[#6d5684]">sending…</span>}
                   </button>
                 );
               })}
@@ -243,7 +243,7 @@ export const PulseChatPane: React.FC<PulseChatPaneProps> = ({
         ) : (
           <p role="status" data-testid="worker-pulse-conversation-state"
             aria-live="polite"
-            className={`border px-2 py-1.5 text-[10px] ${
+            className={`border px-2 py-1.5 text-[11px] ${
               waiting
                 ? 'border-[#c8a74a] bg-[#fff8d8] text-[#624900]'
                 : 'border-[#bca8d2] bg-white/80 text-[#5b4a6d]'
@@ -253,7 +253,7 @@ export const PulseChatPane: React.FC<PulseChatPaneProps> = ({
               : pulseConversationStateText(phase, contact, sending)}
           </p>
         )}
-        <p className="mt-1 text-[8px] leading-tight text-[#857396]">
+        <p className="mt-1 text-[10px] leading-tight text-[#857396]">
           Replies are written for this conversation. Free typing needs a connected AI service.
         </p>
       </div>

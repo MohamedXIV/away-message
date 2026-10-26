@@ -94,19 +94,19 @@ const PulseContactRow: React.FC<PulseContactRowProps> = ({ contact, selected, on
         archetype={contact.archetype} status={contact.status} size="md" />
       <span className="min-w-0 flex-1">
         <span className="flex items-center gap-1.5">
-          <span className="truncate text-[11px] font-bold text-[#3c2360]">{contact.displayName}</span>
+          <span className="truncate text-[12px] font-bold text-[#3c2360]">{contact.displayName}</span>
           {contact.status !== 'online' && (
-            <span className={`shrink-0 rounded-sm border border-black/10 px-1 text-[8px] font-bold uppercase tracking-wide ${
+            <span className={`shrink-0 rounded-sm border border-black/10 px-1 text-[10px] font-bold uppercase tracking-wide ${
               contact.status === 'offline' ? 'bg-[#e5e0ea] text-[#6f647c]' : 'bg-[#fff4c4] text-[#725600]'
             }`}>{statusLabel}</span>
           )}
           {contact.unread > 0 && (
-            <span className="ml-auto shrink-0 rounded-full border border-[#8d2f1f] bg-[#d84a32] px-1.5 text-[9px] font-bold leading-4 text-white">
+            <span className="ml-auto shrink-0 rounded-full border border-[#8d2f1f] bg-[#d84a32] px-1.5 text-[10px] font-bold leading-4 text-white">
               {contact.unread > 99 ? '99+' : contact.unread}
             </span>
           )}
         </span>
-        <span className="mt-0.5 flex items-center gap-1 text-[9px] text-[#79688a]">
+        <span className="mt-0.5 flex items-center gap-1 text-[10px] text-[#79688a]">
           <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${PULSE_STATUS_DOT[contact.status]}`} aria-hidden="true" />
           <span className="truncate italic">{presence}</span>
         </span>
@@ -134,9 +134,9 @@ const PulseBuddyGroup: React.FC<PulseBuddyGroupProps> = ({
         type="button"
         aria-expanded={expanded}
         onClick={() => setExpanded(current => !current)}
-        className="flex w-full items-center gap-1 border-y border-[#c9b7dc] bg-[#e7def2] px-2 py-1 text-left text-[9px] font-bold uppercase tracking-wider text-[#5b3a7b] hover:bg-[#ded1ec]"
+        className="flex w-full items-center gap-1 border-y border-[#c9b7dc] bg-[#e7def2] px-2 py-1 text-left text-[10px] font-bold uppercase tracking-wider text-[#5b3a7b] hover:bg-[#ded1ec]"
       >
-        <span aria-hidden="true" className="text-[8px]">{expanded ? '▼' : '►'}</span>
+        <span aria-hidden="true" className="text-[10px]">{expanded ? '▼' : '►'}</span>
         <span>{title} ({contacts.length})</span>
       </button>
       {expanded && (
@@ -145,7 +145,7 @@ const PulseBuddyGroup: React.FC<PulseBuddyGroupProps> = ({
               <PulseContactRow key={contact.actorId} contact={contact}
                 selected={selectedId === contact.actorId} onSelect={onSelect} />
             ))}</div>
-          : <p className="px-3 py-2 text-[10px] italic text-[#8b7c9a]">{emptyLabel}</p>
+          : <p className="px-3 py-2 text-[11px] italic text-[#8b7c9a]">{emptyLabel}</p>
       )}
     </section>
   );
@@ -182,17 +182,17 @@ export const PulseBuddyList: React.FC<PulseBuddyListProps> = ({
           value={search}
           onChange={event => setSearch(event.target.value)}
           placeholder="Search buddies…"
-          className="w-full border border-[#a78fc2] bg-white px-2 py-1 font-sans text-[11px] text-[#332247] shadow-[inset_1px_1px_2px_rgba(55,30,80,0.12)] outline-none focus:border-[#5b2d8f]"
+          className="w-full border border-[#a78fc2] bg-white px-2 py-1 font-sans text-[12px] text-[#332247] shadow-[inset_1px_1px_2px_rgba(55,30,80,0.12)] outline-none focus:border-[#5b2d8f]"
         />
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto">
         {contacts.length === 0 ? (
-          <div className="p-4 text-center text-[10px] text-[#7d6d8d]">
+          <div className="p-4 text-center text-[11px] text-[#7d6d8d]">
             <p className="font-bold text-[#4f326e]">No buddies yet</p>
             <p className="mt-1">Meet people around town to add them to Pulse.</p>
           </div>
         ) : filtered.length === 0 ? (
-          <p className="p-4 text-center text-[10px] italic text-[#7d6d8d]">No buddies match “{search.trim()}”.</p>
+          <p className="p-4 text-center text-[11px] italic text-[#7d6d8d]">No buddies match “{search.trim()}”.</p>
         ) : (
           <>
             <PulseBuddyGroup title="Online" contacts={online} selectedId={selectedId}
@@ -202,7 +202,7 @@ export const PulseBuddyList: React.FC<PulseBuddyListProps> = ({
           </>
         )}
       </div>
-      <div className="flex items-center justify-between gap-2 border-t border-[#bca8d2] bg-[#ece5f4] px-2 py-1 text-[9px] text-[#6a5680]">
+      <div className="flex items-center justify-between gap-2 border-t border-[#bca8d2] bg-[#ece5f4] px-2 py-1 text-[10px] text-[#6a5680]">
         <span>{onlineCount} online · {contacts.length} contacts</span>
         <span>Pulse 5.2</span>
       </div>
@@ -225,7 +225,7 @@ export const PulseContactRail: React.FC<PulseContactRailProps> = ({
     <div className="flex shrink-0 items-stretch gap-1 overflow-x-auto border-b border-[#bca8d2] bg-[#f1ebf8] px-1 py-1"
       data-testid="worker-pulse-contact-rail">
       {contacts.length === 0 ? (
-        <p className="px-2 py-1 text-[10px] italic text-[#7d6d8d]">No buddies yet.</p>
+        <p className="px-2 py-1 text-[11px] italic text-[#7d6d8d]">No buddies yet.</p>
       ) : contacts.map(contact => {
         const selected = contact.actorId === selectedId;
         return (
@@ -235,18 +235,18 @@ export const PulseContactRail: React.FC<PulseContactRailProps> = ({
             onClick={() => onSelect(contact.actorId)}
             aria-pressed={selected}
             aria-label={`${contact.displayName}, ${PULSE_STATUS_LABEL[contact.status]}${contact.unread > 0 ? `, ${contact.unread} unread` : ''}`}
-            className={`relative flex min-w-[58px] max-w-[78px] shrink-0 flex-col items-center gap-0.5 border px-1 py-1 text-center ${
+            className={`relative flex min-w-[64px] max-w-[86px] shrink-0 flex-col items-center gap-0.5 border px-1 py-1 text-center ${
               selected ? 'border-[#77549b] bg-white shadow-[inset_0_0_0_1px_#d9c9ec]' : 'border-transparent hover:border-[#c7b6da] hover:bg-white/60'
             }`}
           >
             <PulseAvatar actorId={contact.actorId} name={contact.displayName}
               archetype={contact.archetype} status={contact.status} size="sm" />
-            <span className="w-full truncate text-[9px] font-bold text-[#3c2360]">{contact.displayName}</span>
+            <span className="w-full truncate text-[10px] font-bold text-[#3c2360]">{contact.displayName}</span>
             {contact.status !== 'online' && (
-              <span className="text-[8px] uppercase text-[#756487]">{PULSE_STATUS_LABEL[contact.status]}</span>
+              <span className="text-[10px] uppercase text-[#756487]">{PULSE_STATUS_LABEL[contact.status]}</span>
             )}
             {contact.unread > 0 && (
-              <span className="absolute -right-0.5 -top-0.5 rounded-full border border-[#8d2f1f] bg-[#d84a32] px-1 text-[8px] font-bold leading-3 text-white">
+              <span className="absolute -right-0.5 -top-0.5 rounded-full border border-[#8d2f1f] bg-[#d84a32] px-1 text-[10px] font-bold leading-3 text-white">
                 {contact.unread > 9 ? '9+' : contact.unread}
               </span>
             )}
@@ -254,7 +254,7 @@ export const PulseContactRail: React.FC<PulseContactRailProps> = ({
         );
       })}
       <button type="button" onClick={onOpenList}
-        className="ml-auto flex min-w-[46px] shrink-0 flex-col items-center justify-center border border-[#b49dcb] bg-[#fff9e8] px-1 text-[8px] font-bold leading-tight text-[#5b3a7b] hover:bg-white">
+        className="ml-auto flex min-w-[52px] shrink-0 flex-col items-center justify-center border border-[#b49dcb] bg-[#fff9e8] px-1 text-[10px] font-bold leading-tight text-[#5b3a7b] hover:bg-white">
         <span aria-hidden="true" className="text-sm">☰</span>
         All
       </button>

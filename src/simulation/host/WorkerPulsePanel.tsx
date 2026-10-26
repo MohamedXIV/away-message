@@ -9,20 +9,12 @@ import { PulseChatPane } from '../../apps/pulse/components/PulseChatPane';
 import { PULSE_STATUS_LABEL } from '../../apps/pulse/components/PulseAvatar';
 import { PulseLoginSplash, type PulseLoginSession } from '../../apps/pulse/components/PulseLoginSplash';
 import { findPulseAccount, loadPulseAccounts, loadPulseCredentials, savePulseCredentials } from '../../apps/pulse/persistence';
+import { restorePulseUiSession, shouldAcknowledgePulseConversation } from '../../apps/pulse/utils/workerPulseUi';
 import { useWindowStore } from '../../store/useWindowStore';
 import type { WorkerGameSession } from './WorkerGameSession';
 import type { SimulationPulseNarrativeResult } from './SimulationHostProtocol';
 
 const SPLIT_LAYOUT_MIN_WIDTH = 560;
-
-function isPulseSession(value: unknown): value is PulseLoginSession {
-  if (!value || typeof value !== 'object') return false;
-  const candidate = value as Partial<PulseLoginSession>;
-  return typeof candidate.username === 'string' && candidate.username.length > 0
-    && (candidate.status === 'online' || candidate.status === 'away' || candidate.status === 'busy')
-    && typeof candidate.awayMessage === 'string'
-    && typeof candidate.signedInAt === 'number';
-}
 
 function storedSnapshot(windowId: string) {
   return (useWindowStore.getState().windows[windowId]?.customState ?? {}) as Record<string, unknown>;
@@ -35,30 +27,45 @@ function storedSnapshot(windowId: string) {
  * text, invent replies or keep a second conversation store.
  */
 export function WorkerPulsePanel({
-  session, revision, windowId,
+  session, revision, windowId, slotId,
 }: {
   session: WorkerGameSession;
   revision: number;
   windowId: string;
+  /** The save slot that currently owns canonical state and Pulse identities. */
+  slotId: string;
 }) {
   const remembered = storedSnapshot(windowId);
-  const [account, setAccount] = useState<PulseLoginSession | null>(() => {
-    const saved = loadPulseCredentials();
-    const accounts = loadPulseAccounts();
+  const [bootstrap] = useState<{ account: PulseLoginSession | null; selected: string | null }>(() => {
+    const saved = loadPulseCredentials(slotId);
+    const accounts = loadPulseAccounts(slotId);
     if (saved?.autoSign && saved.password) {
       const existing = findPulseAccount(accounts, saved.id);
       if (existing?.password === saved.password) {
-        return { username: existing.id, status: 'online', awayMessage: 'back online :)', signedInAt: Date.now() };
+        return {
+          account: { username: existing.id, status: 'online', awayMessage: 'back online :)', signedInAt: Date.now() },
+          selected: remembered.pulseSessionSlotId === slotId
+            && typeof remembered.pulseSelectedActorId === 'string'
+            ? remembered.pulseSelectedActorId : null,
+        };
       }
     }
-    // A UI-session restore must still belong to this save slot's local IDs.
-    return isPulseSession(remembered.pulseSession)
-      && findPulseAccount(accounts, remembered.pulseSession.username)
-      ? remembered.pulseSession : null;
+    const restored = restorePulseUiSession({
+      storedSession: remembered.pulseSession,
+      storedSlotId: remembered.pulseSessionSlotId,
+      storedSelectedActorId: remembered.pulseSelectedActorId,
+      slotId,
+      accounts,
+    });
+    return restored
+      ? { account: restored.session, selected: restored.selectedActorId }
+      : { account: null, selected: null };
   });
-  const [selected, setSelected] = useState<string | null>(
-    typeof remembered.pulseSelectedActorId === 'string' ? remembered.pulseSelectedActorId : null,
+  const [account, setAccount] = useState<PulseLoginSession | null>(bootstrap.account);
+  const [accountSlotId, setAccountSlotId] = useState<string | null>(
+    bootstrap.account ? slotId : null,
   );
+  const [selected, setSelected] = useState<string | null>(bootstrap.selected);
   const [messenger, setMessenger] = useState<SimulationMessengerRead | null>(null);
   const [presence, setPresence] = useState<SimulationPresenceRead | null>(null);
   const [page, setPage] = useState<SimulationConversationRead | null>(null);
@@ -80,6 +87,22 @@ export function WorkerPulsePanel({
   const unreadBaseline = useRef<Record<string, number> | null>(null);
   const acknowledgedMessages = useRef(new Set<string>());
   const updateWindowCustomState = useWindowStore(s => s.updateWindowCustomState);
+  const windowActive = useWindowStore(s => s.activeWindowId === windowId);
+  const windowVisible = useWindowStore(s => {
+    const win = s.windows[windowId];
+    return Boolean(win?.isOpen) && !win?.isMinimized;
+  });
+  const [documentVisible, setDocumentVisible] = useState(
+    () => typeof document === 'undefined' || document.visibilityState !== 'hidden',
+  );
+  // A stale UI session must never authenticate against a different slot.
+  const currentAccount = account && accountSlotId === slotId ? account : null;
+
+  useEffect(() => {
+    const update = () => setDocumentVisible(document.visibilityState !== 'hidden');
+    document.addEventListener('visibilitychange', update);
+    return () => document.removeEventListener('visibilitychange', update);
+  }, []);
 
   useEffect(() => {
     const element = panelRef.current;
@@ -94,15 +117,37 @@ export function WorkerPulsePanel({
 
   useEffect(() => {
     updateWindowCustomState(windowId, {
-      pulseSignedIn: account !== null,
-      pulseSession: account,
-      pulseSelectedActorId: selected,
+      pulseSignedIn: currentAccount !== null,
+      pulseSession: currentAccount,
+      pulseSessionSlotId: currentAccount ? accountSlotId : null,
+      pulseSelectedActorId: currentAccount ? selected : null,
     });
-  }, [account, selected, windowId, updateWindowCustomState]);
+  }, [currentAccount, accountSlotId, selected, windowId, updateWindowCustomState]);
+
+  useEffect(() => {
+    if (!account || !accountSlotId || accountSlotId === slotId) return;
+    // Save As / slot switch invalidates the UI-only session immediately. The
+    // player must authenticate against the new slot's own account store.
+    setAccount(null);
+    setAccountSlotId(null);
+    setSelected(null);
+    setMessenger(null);
+    setPresence(null);
+    setPage(null);
+    setPageOffset(0);
+    setChoices([]);
+    setConversationPhase('first');
+    setPendingChoiceIndex(null);
+    setNotice(null);
+    setDrawerOpen(false);
+    setError(null);
+    unreadBaseline.current = null;
+    acknowledgedMessages.current.clear();
+  }, [account, accountSlotId, slotId]);
 
   useEffect(() => {
     let active = true;
-    if (!account) {
+    if (!currentAccount) {
       setMessenger(null);
       setPresence(null);
       setSelected(null);
@@ -128,11 +173,11 @@ export function WorkerPulsePanel({
       if (active) setError(cause instanceof Error ? cause.message : String(cause));
     });
     return () => { active = false; };
-  }, [session, revision, account]);
+  }, [session, revision, currentAccount]);
 
   useEffect(() => {
     let active = true;
-    if (!account || !selected) {
+    if (!currentAccount || !selected) {
       setPage(null);
       setPageLoading(false);
       return () => { active = false; };
@@ -151,14 +196,14 @@ export function WorkerPulsePanel({
       }
     });
     return () => { active = false; };
-  }, [session, selected, pageOffset, revision, account]);
+  }, [session, selected, pageOffset, revision, currentAccount]);
 
   useEffect(() => {
     let active = true;
     setChoices([]);
     setConversationPhase('first');
-    setChoicesLoading(Boolean(account && selected));
-    if (!account || !selected) {
+    setChoicesLoading(Boolean(currentAccount && selected));
+    if (!currentAccount || !selected) {
       setChoicesLoading(false);
       return () => { active = false; };
     }
@@ -175,7 +220,7 @@ export function WorkerPulsePanel({
       })
       .finally(() => { if (active) setChoicesLoading(false); });
     return () => { active = false; };
-  }, [session, selected, revision, account]);
+  }, [session, selected, revision, currentAccount]);
 
   useEffect(() => {
     if (!messenger) return;
@@ -202,16 +247,28 @@ export function WorkerPulsePanel({
   }, [notice]);
 
   useEffect(() => {
-    if (!account || !selected || !page || pageOffset !== 0) return;
+    if (!currentAccount || !selected || !page) return;
     const latest = page.messages.at(-1);
     if (!latest) return;
     const key = `${selected}:${latest.id}`;
-    if (acknowledgedMessages.current.has(key)) return;
+    const allowed = shouldAcknowledgePulseConversation({
+      signedIn: true,
+      selectedActorId: selected,
+      pageOffset,
+      latestMessageId: latest.id,
+      alreadyAcknowledged: acknowledgedMessages.current.has(key),
+      windowActive,
+      windowVisible,
+      documentVisible,
+      conversationObscured: compact && drawerOpen,
+    });
+    if (!allowed) return;
     acknowledgedMessages.current.add(key);
     void session.markConversationRead(selected).catch(() => {
       acknowledgedMessages.current.delete(key);
     });
-  }, [session, account, selected, page, pageOffset]);
+  }, [session, currentAccount, selected, page, pageOffset, windowActive, windowVisible,
+    documentVisible, compact, drawerOpen]);
 
   const contacts = useMemo(
     () => messenger ? buildPulseContactViews(messenger.contacts, presence?.presence ?? {}) : [],
@@ -239,6 +296,7 @@ export function WorkerPulsePanel({
     setDrawerOpen(false);
     setNotice(null);
     setAccount(null);
+    setAccountSlotId(null);
     setSelected(null);
     setMessenger(null);
     setPresence(null);
@@ -246,11 +304,14 @@ export function WorkerPulsePanel({
     setPageOffset(0);
     setChoices([]);
     setConversationPhase('first');
+    setPendingChoiceIndex(null);
     setError(null);
+    unreadBaseline.current = null;
+    acknowledgedMessages.current.clear();
   };
 
   const choose = async (index: number) => {
-    if (!selected || !choices[index] || sending) return;
+    if (!currentAccount || !selected || !choices[index] || sending) return;
     const chosen = choices[index]!;
     setSending(true);
     setPendingChoiceIndex(index);
@@ -283,11 +344,15 @@ export function WorkerPulsePanel({
     }
   };
 
-  if (!account) {
+  if (!currentAccount) {
     return (
       <section ref={panelRef} className="flex h-full min-h-0 flex-col bg-[#efeaf6]"
         data-testid="worker-pulse-panel" data-pulse-phase="sign-in" data-pulse-layout="sign-in">
-        <PulseLoginSplash onLogin={(next) => { setError(null); setAccount(next); }} />
+        <PulseLoginSplash onLogin={(next) => {
+          setError(null);
+          setAccount(next);
+          setAccountSlotId(slotId);
+        }} />
       </section>
     );
   }
@@ -305,38 +370,38 @@ export function WorkerPulsePanel({
             P
           </span>
           <div className="min-w-0 flex-1">
-            <h2 className="text-[12px] font-bold tracking-wide">Pulse Messenger</h2>
-            <p className="truncate text-[9px] text-[#eee0ff]">
-              {account.username} · {PULSE_STATUS_LABEL[account.status]} · {totals.online.length} of {contacts.length} online
+            <h2 className="text-[13px] font-bold tracking-wide">Pulse Messenger</h2>
+            <p className="truncate text-[11px] text-[#eee0ff]">
+              {currentAccount.username} · {PULSE_STATUS_LABEL[currentAccount.status]} · {totals.online.length} of {contacts.length} online
             </p>
           </div>
           {compact && (
             <button type="button" onClick={() => setDrawerOpen(true)}
               aria-expanded={drawerOpen}
-              className="relative border border-white/60 bg-white/15 px-2 py-1 text-[10px] font-bold hover:bg-white/25">
+              className="relative border border-white/60 bg-white/15 px-2 py-1 text-[11px] font-bold hover:bg-white/25">
               Buddies
               {totalUnread > 0 && (
-                <span className="absolute -right-1.5 -top-1.5 min-w-[14px] rounded-full border border-white bg-[#d84a32] px-1 text-center text-[8px] leading-3 text-white">
+                <span className="absolute -right-1.5 -top-1.5 min-w-[14px] rounded-full border border-white bg-[#d84a32] px-1 text-center text-[10px] leading-3 text-white">
                   {totalUnread > 9 ? '9+' : totalUnread}
                 </span>
               )}
             </button>
           )}
           <button type="button"
-            className="border border-white/60 bg-white/15 px-2 py-1 text-[10px] font-bold hover:bg-white/25"
+            className="border border-white/60 bg-white/15 px-2 py-1 text-[11px] font-bold hover:bg-white/25"
             onClick={signOut}>
             Sign out
           </button>
         </div>
-        <div className="flex items-center justify-between border-t border-white/15 px-2 py-0.5 text-[8px] text-[#e5d5fb]">
-          <span>Signed in as {account.username} · {account.awayMessage}</span>
-          <span>Pulse 5.2 · 2005</span>
+        <div className="flex items-center justify-between border-t border-white/15 px-2 py-0.5 text-[10px] text-[#e5d5fb]">
+          <span className="min-w-0 truncate">Signed in as {currentAccount.username} · {currentAccount.awayMessage}</span>
+          <span className="shrink-0">Pulse 5.2 · 2005</span>
         </div>
       </header>
 
       {notice && (
         <div role="status" aria-live="polite"
-          className="flex shrink-0 items-center gap-2 border-b border-[#c8a74a] bg-[#fff5bf] px-2 py-1 text-[10px] text-[#4e3a00]">
+          className="flex shrink-0 items-center gap-2 border-b border-[#c8a74a] bg-[#fff5bf] px-2 py-1 text-[11px] text-[#4e3a00]">
           <span aria-hidden="true">✉</span>
           <span className="min-w-0 flex-1 truncate">
             New message{notice.count > 1 ? `s (${notice.count})` : ''} from <strong>{notice.name}</strong>
@@ -355,7 +420,7 @@ export function WorkerPulsePanel({
           <PulseContactRail contacts={contacts} selectedId={selected}
             onSelect={selectContact} onOpenList={() => setDrawerOpen(true)} />
           <div className="flex min-h-0 flex-1 flex-col">
-            <PulseChatPane contact={activeContact} accountName={account.username}
+            <PulseChatPane contact={activeContact} accountName={currentAccount.username}
               page={page} pageOffset={pageOffset} loading={pageLoading}
               choices={choices} choicesLoading={choicesLoading}
               phase={conversationPhase} sending={sending} pendingChoiceIndex={pendingChoiceIndex}
@@ -370,7 +435,7 @@ export function WorkerPulsePanel({
             <PulseBuddyList contacts={contacts} selectedId={selected}
               onSelect={selectContact} />
           </div>
-          <PulseChatPane contact={activeContact} accountName={account.username}
+          <PulseChatPane contact={activeContact} accountName={currentAccount.username}
             page={page} pageOffset={pageOffset} loading={pageLoading}
             choices={choices} choicesLoading={choicesLoading}
             phase={conversationPhase} sending={sending} pendingChoiceIndex={pendingChoiceIndex}
@@ -384,15 +449,15 @@ export function WorkerPulsePanel({
         <div className="absolute inset-0 z-30 flex bg-black/35" role="dialog" aria-modal="true" aria-label="Buddy list">
           <div className="flex h-full w-[86%] max-w-[310px] flex-col border-r-2 border-[#5b3a7b] bg-[#fbf8ff] shadow-2xl">
             <div className="flex items-center justify-between gap-2 border-b border-[#5b3a7b] bg-gradient-to-b from-[#7743b4] to-[#4a2378] px-2 py-1 text-white">
-              <h3 className="text-[11px] font-bold tracking-wide">Buddy List</h3>
+              <h3 className="text-[12px] font-bold tracking-wide">Buddy List</h3>
               <div className="flex items-center gap-1">
                 <button type="button" onClick={signOut}
                   aria-label="Sign out of Pulse"
-                  className="border border-white/60 bg-white/15 px-1.5 py-0.5 text-[9px] font-bold hover:bg-white/25">
+                  className="border border-white/60 bg-white/15 px-1.5 py-0.5 text-[10px] font-bold hover:bg-white/25">
                   Sign out
                 </button>
                 <button type="button" onClick={() => setDrawerOpen(false)}
-                  className="h-5 w-5 border border-white/60 bg-white/15 text-[10px] font-bold hover:bg-white/25"
+                  className="h-5 w-5 border border-white/60 bg-white/15 text-[11px] font-bold hover:bg-white/25"
                   aria-label="Close buddy list">✕</button>
               </div>
             </div>
@@ -407,7 +472,7 @@ export function WorkerPulsePanel({
       )}
 
       {error && (
-        <p role="alert" className="shrink-0 border-t border-red-300 bg-red-50 p-2 text-[10px] text-red-800">
+        <p role="alert" className="shrink-0 border-t border-red-300 bg-red-50 p-2 text-[11px] text-red-800">
           {error}
         </p>
       )}
