@@ -1,7 +1,8 @@
 import type { SimulationKernel } from '../../engine/kernel/SimulationKernel';
 import type { MessageRecord } from '../../engine/types';
 import { socialHashText } from '../../engine/social/SocialMemoryLedger';
-import { PULSE_OUTREACH_LINES, type PulseOutreachMotive } from './PulseOutreachContent';
+import { pulseOutreachOptions, type PulseOutreachMotive } from './PulseOutreachContent';
+import { formatPulseNewsLine, realizePulseReply } from './PulseVoice';
 import { createSimulationNarrative } from '../../narrative/SimulationNarrativeAdapter';
 import { DEFAULT_NARRATIVE_FLOWS, PULSE_CONTEXTUAL_FLOWS, PULSE_FOLLOWUP_FLOWS, PULSE_OUTREACH_REPLY_FLOW } from '../../narrative/flows';
 import type { NarrativeFlowDefinition } from '../../narrative/NarrativeCoordinator';
@@ -51,7 +52,7 @@ function thread(engine: SimulationKernel, actorId: string): Thread {
     const currentDay = engine.getChromeRead().time.day;
     return last.day === currentDay ? { stage: 'complete' } : { stage: 'first' };
   }
-  const outreach = /^pulse:v2:outreach:(promise|shared|trusted|remote|diner|canal|shift|hello)$/.exec(marker);
+  const outreach = /^pulse:v2:outreach:(promise|shared|trusted|remote|diner|canal|shift|hello|news)$/.exec(marker);
   if (outreach && last.senderId === actorId) return { stage: 'outreach' };
   const outboundOutreach = /^pulse:v2:outreach_out:([0-2])$/.exec(marker);
   if (outboundOutreach && last.senderId === 'player') {
@@ -127,7 +128,9 @@ function responseFor(engine: SimulationKernel, actorId: string, flow: NarrativeF
   const chosen = coordinator.choose(index);
   const response = chosen.canContinue && chosen.choices.length === 0
     ? coordinator.advanceToChoices() : chosen;
-  return response.text.trim().slice(0, 500);
+  const authored = response.text.trim().slice(0, 500);
+  const buddy = engine.social.getBuddy(actorId);
+  return buddy ? realizePulseReply(authored, buddy.traits).slice(0, 500) : authored;
 }
 
 function receive(engine: SimulationKernel, actorId: string, text: string, tags: string[]) {
@@ -184,6 +187,29 @@ export function deliverPendingPulseReplies(engine: SimulationKernel): number {
   return delivered;
 }
 
+/** A recent World-owned event may be discussed only by a person with a
+ * matching learned-event record. No global event feed is treated as something
+ * every actor knows, and no untyped memory text is promoted to an event.
+ */
+function recentKnownPulseEvent(engine: SimulationKernel, actorId: string, now: number) {
+  const learned = engine.world.getBuddyKnowledge(actorId)
+    .filter(entry => entry.learnedAtMinute <= now && now - entry.learnedAtMinute <= 2 * 1440);
+  if (!learned.length) return null;
+  const events = engine.world.getTriggeredEventsForIds(
+    new Set(learned.map(entry => entry.eventId)), engine.getChromeRead().time.day,
+  );
+  const byId = new Map(events.map(event => [event.id, event]));
+  const newestFirst = learned.sort((a, b) =>
+    b.learnedAtMinute - a.learnedAtMinute || a.eventId.localeCompare(b.eventId));
+  for (const entry of newestFirst) {
+    const event = byId.get(entry.eventId);
+    if (event && (event.triggeredAtMinute ?? Number.POSITIVE_INFINITY) <= now) {
+      return { event, attitude: entry.attitude };
+    }
+  }
+  return null;
+}
+
 /** A very small, deterministic world-initiated chat opportunity.
  * At most two known candidates may initiate on a given world day. A real
  * conversation, busy/blocked NPC, or recent exchange excludes the actor.
@@ -208,6 +234,8 @@ export function initiateWorkerPulseOutreach(engine: SimulationKernel): number {
     if (!actor || actor.lifecycle === 'departed' ||
       actor.connection === 'blocked' || actor.connection === 'distant' ||
       actor.relationship.conflicted || !actor.canChatNow.allowed) continue;
+    const buddy = engine.social.getBuddy(id);
+    if (!buddy) continue;
     const mood = engine.social.getDailyMood(id, day);
     if (mood === 'cold' || mood === 'off') continue;
     const promise = engine.social.getOpenPromises(id).length > 0;
@@ -216,22 +244,31 @@ export function initiateWorkerPulseOutreach(engine: SimulationKernel): number {
       memory.kind === 'shared_moment'
       && memory.meaning?.participants.includes('player')
       && memory.meaning.participants.includes(id));
-    const motive: PulseOutreachMotive =
+    const news = !promise && !shared ? recentKnownPulseEvent(engine, id, now) : null;
+    const motive: PulseOutreachMotive | 'news' =
       promise ? 'promise'
       : shared ? 'shared'
+      : news ? 'news'
       : actor.relationship.trusted ? 'trusted'
       : actor.reach === 'remote' ? 'remote'
       : actor.roles.includes('diner-staff') ? 'diner'
       : actor.roles.includes('canal-regular') ? 'canal'
       : actor.roles.includes('shift-worker') ? 'shift'
       : 'hello';
-    const chance = promise || shared ? 90 : actor.relationship.trusted ? 70 : 45;
+    const chance = promise || shared ? 90 : news ? 75 : actor.relationship.trusted ? 70 : 45;
     const roll = socialHashText(id + ':outreach:chance:' + day) % 100;
     if (roll >= chance) continue;
-    const options = PULSE_OUTREACH_LINES[motive];
-    const line = options[socialHashText(id + ':outreach:line:' + day) % options.length]!;
+    let line: string;
+    if (motive === 'news') {
+      if (!news) continue;
+      line = formatPulseNewsLine(news.event.title, news.attitude, buddy.traits);
+    } else {
+      const options = pulseOutreachOptions(motive, buddy.traits);
+      line = options[socialHashText(id + ':outreach:line:' + day) % options.length]!;
+    }
     receive(engine, id, line, [
       'systemic_outreach', 'pulse:v2:outreach:' + motive,
+      ...(motive === 'news' && news ? ['world_event:' + news.event.id] : []),
     ]);
     initiated += 1;
   }

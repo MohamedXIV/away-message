@@ -6,7 +6,8 @@ import {
   createWorkerPulseNarrative, initiateWorkerPulseOutreach,
   reconcileWorkerPulseSocial, deliverPendingPulseReplies,
 } from '../../src/simulation/host/WorkerPulseNarrative';
-import { PULSE_OUTREACH_LINES } from '../../src/simulation/host/PulseOutreachContent';
+import { pulseOutreachOptions } from '../../src/simulation/host/PulseOutreachContent';
+import { formatPulseNewsLine } from '../../src/simulation/host/PulseVoice';
 
 function fixture(seed = 'npc-outreach-demo-002') {
   const initial = buildFreshSandboxSocialState(seed);
@@ -20,6 +21,10 @@ function fixture(seed = 'npc-outreach-demo-002') {
   const read = engine.getPlayerActorRead.bind(engine);
   let available = true;
   let conflicted = false;
+  let worldNews = false;
+  const readKnowledge = engine.world.getBuddyKnowledge.bind(engine.world);
+  vi.spyOn(engine.world, 'getBuddyKnowledge').mockImplementation(id =>
+    worldNews ? readKnowledge(id) : []);
   vi.spyOn(engine, 'getPlayerActorRead').mockImplementation(actorId => {
     const result = read(actorId);
     if (!result || !ids.includes(actorId)) return result;
@@ -47,6 +52,7 @@ function fixture(seed = 'npc-outreach-demo-002') {
     setAvailable(value: boolean) { available = value; },
     setConflicted(value: boolean) { conflicted = value; },
     setInstalled(value: boolean) { installed = value; },
+    setWorldNews(value: boolean) { worldNews = value; },
     narrative: createWorkerPulseNarrative(engine),
   };
 }
@@ -70,7 +76,8 @@ describe('#223 NPC-initiated Pulse — canonical social opportunity', () => {
     expect(first[0]?.day).toBe(day);
     expect(first[0]?.senderId).toBe(origin);
     expect(first[0]?.tags).toContain('pulse:v2:outreach:trusted');
-    expect(PULSE_OUTREACH_LINES.trusted).toContain(first[0]?.text);
+    expect(pulseOutreachOptions('trusted', ctx.engine.social.getBuddy(origin!)!.traits))
+      .toContain(first[0]?.text);
     expect(ctx.engine.getMessengerRead().unreadCounts[origin!]).toBeGreaterThanOrEqual(1);
 
     const view = ctx.narrative.run({ kind: 'choices', actorId: origin! });
@@ -170,7 +177,8 @@ describe('#223 NPC-initiated Pulse — canonical social opportunity', () => {
     const first = ctx.engine.getConversationRead(ctx.ids[0]!, 0, 10).messages;
     if (first.length) {
       expect(first[0]?.tags).toContain('pulse:v2:outreach:shared');
-      expect(PULSE_OUTREACH_LINES.shared).toContain(first[0]?.text);
+      expect(pulseOutreachOptions('shared', ctx.engine.social.getBuddy(ctx.ids[0]!)!.traits))
+        .toContain(first[0]?.text);
     }
     // Whichever daily candidate writes, any other NPC without a mutual
     // memory must never claim the private event.
@@ -208,6 +216,51 @@ describe('#223 NPC-initiated Pulse — canonical social opportunity', () => {
           expect(message.text).not.toMatch(/remember that day we shared|time we spent together/i);
         }
       }
+    }
+  });
+
+  it('mentions only an event the actual actor learned, with its World-owned attitude and cold history', () => {
+    const ctx = fixture('npc-outreach-event-voice-001');
+    const day = Array.from({ length: 9 }, (_, i) => i + 5)
+      .find(d => ctx.ids.map(id => ({
+        id, order: socialHashText(id + ':outreach:' + d),
+      })).sort((a, b) => a.order - b.order || a.id.localeCompare(b.id))
+        .slice(0, 2).some(({ id }) => socialHashText(id + ':outreach:chance:' + d) % 100 < 75));
+    expect(day).toBeDefined();
+    const current = ctx.engine.getChromeRead().time.totalMinutes;
+    ctx.engine.advanceGameMinutes((day! - 1) * 1440 + 17 * 60 - current);
+    const eventId = day! >= 11 ? 'orion_os_7_release'
+      : day! >= 9 ? 'goldnet_surge'
+      : day! >= 7 ? 'orion_os_7_beta' : 'city_canal_festival';
+    const event = ctx.engine.world.getTriggeredEventsForIds(new Set([eventId]))[0];
+    expect(event).toBeTruthy();
+
+    // The World owner, not text similarity or a global omniscient feed, grants
+    // each eligible actor knowledge of this actually triggered event.
+    const now = ctx.engine.getChromeRead().time.totalMinutes;
+    for (const id of ctx.ids) {
+      ctx.engine.world.learnEventForBuddy(id, eventId, {
+        kind: 'direct_observation', sourceId: 'event_voice_test', atMinute: now,
+      });
+    }
+    ctx.setWorldNews(true);
+    expect(initiateWorkerPulseOutreach(ctx.engine)).toBeGreaterThan(0);
+    const news = ctx.ids.flatMap(id => ctx.engine.getConversationRead(id, 0, 10).messages
+      .filter(message => message.tags?.includes('pulse:v2:outreach:news'))
+      .map(message => ({ id, message })));
+    expect(news.length).toBeGreaterThan(0);
+    for (const { id, message } of news) {
+      const learned = ctx.engine.world.getBuddyKnowledge(id).find(row => row.eventId === eventId);
+      expect(learned).toBeTruthy();
+      expect(message.tags).toContain('world_event:' + eventId);
+      expect(message.text).toBe(formatPulseNewsLine(event!.title, learned!.attitude,
+        ctx.engine.social.getBuddy(id)!.traits));
+    }
+
+    const restored = new SimulationKernel(ctx.engine.exportSnapshot());
+    for (const { id, message } of news) {
+      expect(restored.getConversationRead(id, 0, 10).messages.some(row =>
+        row.text === message.text && row.tags?.includes('world_event:' + eventId))).toBe(true);
     }
   });
 });
