@@ -12,6 +12,7 @@ import pulseFollowupPersonal from '../ink/flows/pulse-followup-personal.ink.json
 import pulseFollowupTopic from '../ink/flows/pulse-followup-topic.ink.json';
 import pulseFollowupCourtesy from '../ink/flows/pulse-followup-courtesy.ink.json';
 import pulseOutreachReply from '../ink/flows/pulse-outreach-reply.ink.json';
+import pulseOutreachNewsReply from '../ink/flows/pulse-outreach-news-reply.ink.json';
 import scenarioOldDebtCompiled from '../ink/flows/scenario-old-debt.ink.json';
 
 export const CAFE_MEETING_INTERACTION_ID = 'cafe_meeting';
@@ -21,6 +22,12 @@ export const PULSE_CHECKIN_FLOW_ID = 'pulse_checkin';
 /** An incoming NPC outreach opens a real Ink reply menu, not generic greetings. */
 export const PULSE_OUTREACH_REPLY_FLOW: NarrativeFlowDefinition = {
   flowId: 'pulse_outreach_reply', compiledStory: pulseOutreachReply,
+  startsOn: { semanticKinds: ['conversation_started'], conversationChannels: ['pulse'] },
+};
+
+/** World-event-aware outreach continuation after verified actor knowledge. */
+export const PULSE_OUTREACH_NEWS_REPLY_FLOW: NarrativeFlowDefinition = {
+  flowId: 'pulse_outreach_news_reply', compiledStory: pulseOutreachNewsReply,
   startsOn: { semanticKinds: ['conversation_started'], conversationChannels: ['pulse'] },
 };
 

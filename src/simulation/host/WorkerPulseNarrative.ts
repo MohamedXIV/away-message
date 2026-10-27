@@ -4,7 +4,7 @@ import { socialHashText } from '../../engine/social/SocialMemoryLedger';
 import { pulseOutreachOptions, type PulseOutreachMotive } from './PulseOutreachContent';
 import { formatPulseNewsLine, realizePulseReply } from './PulseVoice';
 import { createSimulationNarrative } from '../../narrative/SimulationNarrativeAdapter';
-import { DEFAULT_NARRATIVE_FLOWS, PULSE_CONTEXTUAL_FLOWS, PULSE_FOLLOWUP_FLOWS, PULSE_OUTREACH_REPLY_FLOW } from '../../narrative/flows';
+import { DEFAULT_NARRATIVE_FLOWS, PULSE_CONTEXTUAL_FLOWS, PULSE_FOLLOWUP_FLOWS, PULSE_OUTREACH_REPLY_FLOW, PULSE_OUTREACH_NEWS_REPLY_FLOW } from '../../narrative/flows';
 import type { NarrativeFlowDefinition } from '../../narrative/NarrativeCoordinator';
 import type { SimulationPulseNarrativeCommand, SimulationPulseNarrativeResult } from './SimulationHostProtocol';
 
@@ -19,7 +19,7 @@ const firstFlows = [
   DEFAULT_NARRATIVE_FLOWS.find(flow => flow.flowId === 'pulse_checkin')!,
   ...Object.values(PULSE_CONTEXTUAL_FLOWS),
 ];
-const allFlows = [...firstFlows, ...PULSE_FOLLOWUP_FLOWS, PULSE_OUTREACH_REPLY_FLOW];
+const allFlows = [...firstFlows, ...PULSE_FOLLOWUP_FLOWS, PULSE_OUTREACH_REPLY_FLOW, PULSE_OUTREACH_NEWS_REPLY_FLOW];
 const flowById = new Map(allFlows.map(flow => [flow.flowId, flow]));
 
 type Thread =
@@ -101,10 +101,36 @@ function firstFlow(engine: SimulationKernel, actorId: string): NarrativeFlowDefi
   return (key && PULSE_CONTEXTUAL_FLOWS[key]) || firstFlows[0]!;
 }
 
+/** Only a real NPC opening with World-owned learned-event provenance may use
+ * news-specific Ink. The same canonical Social transcript carries the marker
+ * across delayed replies and cold saves; no separate conversation state.
+ */
+function outreachReplyFlow(engine: SimulationKernel, actorId: string): NarrativeFlowDefinition {
+  const rows = engine.getConversationRead(actorId, 0, 2).messages;
+  const last = rows.at(-1);
+  const source = last?.senderId === actorId ? last
+    : last?.senderId === 'player' && last.tags?.some(tag => /^pulse:v2:outreach_out:[0-2]$/.test(tag))
+      ? rows.at(-2) : null;
+  if (source?.senderId !== actorId || !source.tags?.includes('pulse:v2:outreach:news')) {
+    return PULSE_OUTREACH_REPLY_FLOW;
+  }
+  const eventTag = source.tags.find(tag => tag.startsWith('world_event:'));
+  const eventId = eventTag?.slice('world_event:'.length);
+  if (!eventId || eventId.length > 128) return PULSE_OUTREACH_REPLY_FLOW;
+  const now = totalMinutes(engine);
+  const learned = engine.world.getBuddyKnowledge(actorId).some(entry =>
+    entry.eventId === eventId && entry.learnedAtMinute <= now);
+  if (!learned) return PULSE_OUTREACH_REPLY_FLOW;
+  const realEvent = engine.world.getTriggeredEventsForIds(
+    new Set([eventId]), engine.getChromeRead().time.day,
+  ).some(event => event.id === eventId && (event.triggeredAtMinute ?? Number.POSITIVE_INFINITY) <= now);
+  return realEvent ? PULSE_OUTREACH_NEWS_REPLY_FLOW : PULSE_OUTREACH_REPLY_FLOW;
+}
+
 function flowFor(state: Thread, engine: SimulationKernel, actorId: string): NarrativeFlowDefinition | null {
   if (state.stage === 'first') return firstFlow(engine, actorId);
   if (state.stage === 'second') return PULSE_FOLLOWUP_FLOWS[state.topic] ?? null;
-  if (state.stage === 'outreach') return PULSE_OUTREACH_REPLY_FLOW;
+  if (state.stage === 'outreach') return outreachReplyFlow(engine, actorId);
   return null;
 }
 
@@ -146,7 +172,7 @@ function deliver(engine: SimulationKernel, actorId: string, state: Extract<Threa
   const flow = state.stage === 'waiting_first'
     ? flowById.get(state.flowId)
     : state.stage === 'waiting_second' ? PULSE_FOLLOWUP_FLOWS[state.topic]
-    : PULSE_OUTREACH_REPLY_FLOW;
+    : outreachReplyFlow(engine, actorId);
   if (!flow) throw new Error('Unknown authored thread.');
   const text = responseFor(engine, actorId, flow,
     state.stage === 'waiting_first' ? state.topic : state.replyIndex);
@@ -322,7 +348,7 @@ export function createWorkerPulseNarrative(engine: SimulationKernel) {
         // choice index only selects the correct second-turn flow.
         const replyIndex = first ? topic : command.choiceIndex;
         const replyFlow = first ? flow
-          : state.stage === 'outreach' ? PULSE_OUTREACH_REPLY_FLOW
+          : state.stage === 'outreach' ? outreachReplyFlow(engine, command.actorId)
           : PULSE_FOLLOWUP_FLOWS[topic]!;
         const spoken = responseFor(engine, command.actorId, replyFlow, replyIndex);
         receive(engine, command.actorId, spoken, [first ? `pulse:v2:response:${topic}` : 'pulse:v2:closed']);

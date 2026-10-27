@@ -98,6 +98,18 @@ const REPLY_VOICES: Record<string, Record<PulseVoice, string>> = {
     gentle: "It's good knowing you're there. How's your day going?",
     direct: "Good to know you're there. How's your day going?",
   },
+  "That story's still on my mind. I want to see what actually happens.": {
+    reserved: "That story's still on my mind. I'll see what actually happens.",
+    bright: "I keep thinking about that story! I really want to see what happens!",
+    gentle: "That story's stayed with me. I hope things work out well.",
+    direct: "That story's on my mind. I'm waiting to see what actually happens.",
+  },
+  "It's hard to tell yet. I'll keep an eye on what happens next.": {
+    reserved: "Hard to tell yet. I'll keep an eye on what happens.",
+    bright: "Who knows yet! I'm keeping an eye on what happens next.",
+    gentle: "It's hard to know yet. I'll keep an eye on what happens.",
+    direct: "Too early to tell. I'll watch what happens next.",
+  },
   "No worries. Talk when you've got a moment.": {
     reserved: "No worries. Talk when you've got a moment.",
     bright: "No worries! Catch you when you've got a moment!",

@@ -41,6 +41,14 @@ describe('#223 character-specific offline Pulse realization', () => {
     expect(pulseOutreachOptions('hello', reserved)).toEqual(pulseOutreachOptions('hello', { ...reserved }));
   });
 
+  it('realizes an Ink news follow-up in distinct voices without new World claims', () => {
+    const ink = "That story's still on my mind. I want to see what actually happens.";
+    const lines = [reserved, bright, gentle, direct].map(traits => realizePulseReply(ink, traits));
+    expect(new Set(lines).size).toBe(4);
+    expect(lines.every(line => /story/i.test(line))).toBe(true);
+    expect(lines.every(line => !/I saw|I attended|my friend told me/i.test(line))).toBe(true);
+  });
+
   it("frames World-owned news according to that actor's recorded attitude", () => {
     const title = 'Canal Bridge Night Market announced';
     const guarded = formatPulseNewsLine(title, 'skeptical', reserved);

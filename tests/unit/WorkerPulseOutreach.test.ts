@@ -263,14 +263,26 @@ describe('#223 NPC-initiated Pulse — canonical social opportunity', () => {
     const offered = ctx.narrative.run({ kind: 'choices', actorId: selected.id });
     expect(offered.choices.map(choice => choice.text))
       .toContain('What did you make of that news?');
+    ctx.setAvailable(false);
     const reply = ctx.narrative.run({
       kind: 'choose', actorId: selected.id, choiceIndex: 0,
       expectedText: offered.choices[0]!.text,
     });
-    expect(reply.reply).toMatch(/story/i);
-    expect(reply.reply).not.toContain('Nothing urgent');
+    expect(reply.reply).toBeNull();
+    expect(ctx.narrative.run({ kind: 'choices', actorId: selected.id }).phase)
+      .toBe('waiting_outreach');
+    ctx.engine.advanceGameMinutes(10);
+    expect(deliverPendingPulseReplies(ctx.engine)).toBe(0);
+    ctx.setAvailable(true);
+    expect(deliverPendingPulseReplies(ctx.engine)).toBe(1);
+    const conversation = ctx.engine.getConversationRead(selected.id, 0, 10).messages;
+    expect(conversation.at(-1)?.text).toMatch(/story/i);
+    expect(conversation.at(-1)?.text).not.toContain('Nothing urgent');
+    expect(conversation.at(-1)?.tags).toContain('pulse:v2:closed');
 
     const restored = new SimulationKernel(ctx.engine.exportSnapshot());
+    expect(restored.getConversationRead(selected.id, 0, 10).messages.at(-1)?.text)
+      .toBe(conversation.at(-1)?.text);
     for (const { id, message } of news) {
       expect(restored.getConversationRead(id, 0, 10).messages.some(row =>
         row.text === message.text && row.tags?.includes('world_event:' + eventId))).toBe(true);
