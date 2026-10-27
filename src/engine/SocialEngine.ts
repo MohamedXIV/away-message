@@ -323,7 +323,9 @@ export class SocialEngine {
       npcSocialLog,
       playerReads,
       knownHandles,
-      pulseAccounts: Object.fromEntries(Array.from(this.pulseAccounts, ([id, contacts]) => [id, [...contacts]])),
+      ...(this.pulseAccounts.size > 0 ? {
+        pulseAccounts: Object.fromEntries(Array.from(this.pulseAccounts, ([id, contacts]) => [id, [...contacts]])),
+      } : {}),
       epitaphs,
     };
   }
