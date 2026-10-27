@@ -115,9 +115,10 @@ export function checkPulseCredentials(
   slotId?: string
 ): { ok: boolean; accounts: PulseAccount[]; created: boolean } {
   const clean = cleanId(id);
-  if (!clean || !password) return { ok: false, accounts, created: false };
+  if (!/^[a-zA-Z0-9_.-]{3,32}$/.test(clean) || !password) return { ok: false, accounts, created: false };
   const existing = findPulseAccount(accounts, clean);
   if (!existing) {
+    if (accounts.length >= 10) return { ok: false, accounts, created: false };
     const next = [...accounts, { id: clean, password: password.slice(0, 64), createdAt: Date.now() }];
     savePulseAccounts(next, slotId);
     return { ok: true, accounts: next, created: true };
@@ -143,6 +144,7 @@ export function signUpPulseAccount(
   if (!password) return { ok: false, error: 'Choose a password.', accounts };
   if (password !== confirm) return { ok: false, error: 'Passwords do not match.', accounts };
   if (findPulseAccount(accounts, clean)) return { ok: false, error: 'That ID is already taken on this PC.', accounts };
+  if (accounts.length >= 10) return { ok: false, error: 'This save supports up to ten Pulse IDs.', accounts };
   const next = [...accounts, { id: clean, password: password.slice(0, 64), createdAt: Date.now() }];
   savePulseAccounts(next, slotId);
   return { ok: true, accounts: next };

@@ -87,6 +87,13 @@ export function normalizeBuddyId(id: string): string {
   return BUDDY_ID_ALIASES[id] ?? id;
 }
 
+/** The account name is an online identity, never the canonical actor ID. */
+export function normalizePulseAccountId(raw: string): string {
+  const id = typeof raw === 'string' ? raw.trim().toLowerCase() : '';
+  if (!/^[a-z0-9_.-]{3,32}$/.test(id)) throw new Error('Invalid Pulse account ID.');
+  return id;
+}
+
 /** Neutral directed bond (strangers who never interacted). Never stored — read default. */
 export function neutralNpcBond(): NpcBondState {  return {
     dims: {
@@ -195,6 +202,8 @@ export class SocialEngine {
   /** Earned Pulse contacts are separate from relationship, physical presence and actor identity. */
   private readonly directory = new SocialContactDirectory(
     normalizeBuddyId, id => this.roster.has(id), MAX_KNOWN_HANDLES, MAX_EPITAPHS);
+  /** Per-handle buddy memberships. Their transcripts stay in the ONE ConversationHistory. */
+  private readonly pulseAccounts = new Map<string, Set<string>>();
   private eventBus: EventBus;
 
   constructor(eventBus: EventBus, initialState?: SocialEngineState) {
@@ -255,6 +264,10 @@ export class SocialEngine {
     this.playerLinks.forget(id);
     this.online.forget(id);
     this.conversations.delete(id);
+    for (const [account, members] of this.pulseAccounts) {
+      members.delete(id);
+      this.conversations.delete(this.pulseConversationId(account, id));
+    }
     this.memory.forget(id);
     this.graph.forget(id);
     this.activity.forget(id);
@@ -310,6 +323,7 @@ export class SocialEngine {
       npcSocialLog,
       playerReads,
       knownHandles,
+      pulseAccounts: Object.fromEntries(Array.from(this.pulseAccounts, ([id, contacts]) => [id, [...contacts]])),
       epitaphs,
     };
   }
@@ -351,6 +365,16 @@ export class SocialEngine {
     // Player-belief import is validated by its canonical owner.
     this.playerRead.restore(state.playerReads);
     this.directory.restore(state);
+    this.pulseAccounts.clear();
+    for (const [rawAccount, contacts] of Object.entries(state.pulseAccounts ?? {}).slice(0, 10)) {
+      let id: string;
+      try { id = normalizePulseAccountId(rawAccount); } catch { continue; }
+      if (!Array.isArray(contacts)) continue;
+      const learned = contacts.filter((contact): contact is string =>
+        typeof contact === 'string' && this.isKnown(contact) && this.roster.has(normalizeBuddyId(contact)))
+        .slice(0, 100).map(normalizeBuddyId);
+      this.pulseAccounts.set(id, new Set(learned));
+    }
 
     // Backfill empty presence/conversations for any buddy missing them (old saves).
     for (const buddy of this.roster.values()) {
@@ -700,6 +724,54 @@ export class SocialEngine {
   public getKnownHandles(rawId: string): string[] { return this.directory.getKnownHandles(rawId); }
   public isKnown(rawId: string): boolean { return this.directory.isKnown(rawId); }
 
+  public openPulseAccount(rawAccount: string): boolean {
+    const id = normalizePulseAccountId(rawAccount);
+    if (this.pulseAccounts.has(id)) return false;
+    if (this.pulseAccounts.size >= 10) throw new Error('Pulse supports up to ten accounts in this save.');
+    this.pulseAccounts.set(id, new Set());
+    return true;
+  }
+
+  public getPulseAccountIds(): string[] { return [...this.pulseAccounts.keys()]; }
+
+  public hasPulseBuddy(rawAccount: string, rawActorId: string): boolean {
+    const id = normalizePulseAccountId(rawAccount);
+    return this.pulseAccounts.get(id)?.has(normalizeBuddyId(rawActorId)) ?? false;
+  }
+
+  public addPulseBuddy(rawAccount: string, rawActorId: string): boolean {
+    const account = normalizePulseAccountId(rawAccount);
+    const members = this.pulseAccounts.get(account);
+    if (!members) throw new Error('Open the Pulse account first.');
+    const actorId = normalizeBuddyId(rawActorId);
+    if (!this.isKnown(actorId) || !this.roster.has(actorId)) {
+      throw new Error('Only known buddies can be added to Pulse.');
+    }
+    if (members.has(actorId)) return false;
+    if (members.size >= 100) throw new Error('This Pulse account is full.');
+    members.add(actorId);
+    this.conversations.ensure(this.pulseConversationId(account, actorId));
+    return true;
+  }
+
+  /** Bounded public choices: only player-learned handles, never private roster data. */
+  public getAvailablePulseBuddies(rawAccount: string): Array<{ actorId: string; displayName: string; handle: string }> {
+    const account = normalizePulseAccountId(rawAccount);
+    const members = this.pulseAccounts.get(account);
+    if (!members) return [];
+    const available: Array<{ actorId: string; displayName: string; handle: string }> = [];
+    for (const [id, buddy] of this.roster) {
+      if (!this.isKnown(id) || members.has(id)) continue;
+      available.push({ actorId: id, displayName: buddy.displayName, handle: buddy.handle });
+      if (available.length >= 100) break;
+    }
+    return available.sort((a, b) => a.displayName.localeCompare(b.displayName));
+  }
+
+  public pulseConversationId(rawAccount: string, rawActorId: string): string {
+    return `pulse:${normalizePulseAccountId(rawAccount)}:${normalizeBuddyId(rawActorId)}`;
+  }
+
   /**
    * Resolve a surface handle only through player-learned contact knowledge.
    * Roster existence, actor ids and caller-supplied aliases are not evidence.
@@ -792,8 +864,9 @@ export class SocialEngine {
   }
 
   /** Mutate the canonical conversation only if unread messages exist. */
-  public markAsRead(rawConversationId: string): boolean {
-    return this.conversations.markRead(rawConversationId);
+  public markAsRead(rawConversationId: string, accountId?: string): boolean {
+    return this.conversations.markRead(accountId
+      ? this.pulseConversationId(accountId, rawConversationId) : rawConversationId);
   }
 
   /** A derived public projection; callers cannot write to the live roster via status. */
@@ -1111,17 +1184,18 @@ export class SocialEngine {
    * Offset is measured backward from newest; returned messages remain in
    * chronological display order. #173 may change storage, not this contract.
    */
-  public getConversationPage(rawConversationId: string, offset = 0, limit = 30): {
+  public getConversationPage(rawConversationId: string, offset = 0, limit = 30, accountId?: string): {
     conversationId: string;
     messages: MessageRecord[];
     total: number;
     hasOlder: boolean;
   } {
-    return this.conversations.page(rawConversationId, offset, limit);
+    return this.conversations.page(accountId
+      ? this.pulseConversationId(accountId, rawConversationId) : rawConversationId, offset, limit);
   }
 
-  public getConversationPageAsync(id: string, offset = 0, limit = 30) {
-    return this.conversations.pageAsync(id, offset, limit);
+  public getConversationPageAsync(id: string, offset = 0, limit = 30, accountId?: string) {
+    return this.conversations.pageAsync(accountId ? this.pulseConversationId(accountId, id) : id, offset, limit);
   }
 
   /** Source-owned unread counts, indexed by ConversationHistory (no transcript scan). */
@@ -1149,7 +1223,7 @@ export class SocialEngine {
   }
 
   /** Public messenger rows use derived conversation indices, not historical message arrays. */
-  public getMessengerSummary(maxContacts = 32): Array<{
+  public getMessengerSummary(maxContacts = 32, accountId?: string): Array<{
     actorId: string;
     displayName: string;
     handle: string;
@@ -1162,16 +1236,19 @@ export class SocialEngine {
     const limit = Number.isFinite(maxContacts) ? Math.max(0, Math.min(100, Math.floor(maxContacts))) : 32;
     if (limit === 0) return [];
     const rows = [];
+    const members = accountId ? this.pulseAccounts.get(normalizePulseAccountId(accountId)) : null;
+    if (accountId && !members) return [];
     for (const [id, buddy] of this.roster) {
-      if (!this.isKnown(id)) continue;
-      const summary = this.conversations.summary(id);
+      if (!this.isKnown(id) || (members && !members.has(id))) continue;
+      const summary = this.conversations.summary(accountId ? this.pulseConversationId(accountId, id) : id);
       rows.push({
         actorId: id,
         displayName: buddy.displayName,
         handle: buddy.handle,
         archetype: buddy.archetype,
         onlineStatus: this.online.get(id)?.status ?? 'offline',
-        relationshipStage: this.getRelationshipStage(id),
+        // An online alias cannot inherit the physical player's relationship stage.
+        relationshipStage: accountId ? 'stranger' : this.getRelationshipStage(id),
         lastMessageMinute: summary.lastMessageMinute,
         unread: summary.unread,
       });

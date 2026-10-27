@@ -53,9 +53,9 @@ function createSession(options: SessionOptions = {}) {
         if (options.conversationPage) return options.conversationPage(query.offset ?? 0);
         return {
           revision: 1,
-          conversationId: 'actor_a',
+          conversationId: 'pulse:shared_id:actor_a',
           messages: [{
-            id: 'message_1', conversationId: 'actor_a', senderId: 'actor_a',
+            id: 'message_1', conversationId: 'pulse:shared_id:actor_a', senderId: 'actor_a',
             recipientId: 'player', text: 'are you around?', timestampMinute: 10,
             day: 1, isRead: false, deliveredAway: false,
           }],
@@ -185,7 +185,7 @@ describe('#223 Worker Pulse UI session and attention', () => {
       useWindowStore.setState({ activeWindowId: 'pulse' });
     });
     await waitFor(() => markConversationRead.mock.calls.length === 1);
-    expect(markConversationRead).toHaveBeenCalledWith('actor_a');
+    expect(markConversationRead).toHaveBeenCalledWith('actor_a', 'shared_id');
   });
 
   it('freezes the older history page when a new revision arrives', async () => {
@@ -198,10 +198,10 @@ describe('#223 Worker Pulse UI session and attention', () => {
         const count = Math.min(30, total - offset);
         return {
           revision: 1,
-          conversationId: 'actor_a',
+          conversationId: 'pulse:shared_id:actor_a',
           messages: Array.from({ length: count }, (_, index) => ({
             id: `message_${start + index}`,
-            conversationId: 'actor_a',
+            conversationId: 'pulse:shared_id:actor_a',
             senderId: index % 2 === 0 ? 'actor_a' : 'player',
             recipientId: index % 2 === 0 ? 'player' : 'actor_a',
             text: `message ${start + index}`,
@@ -248,10 +248,10 @@ describe('#223 Worker Pulse UI session and attention', () => {
         const start = Math.max(0, latestIndex - 29);
         return {
           revision: 1,
-          conversationId: 'actor_a',
+          conversationId: 'pulse:shared_id:actor_a',
           messages: Array.from({ length: latestIndex - start + 1 }, (_, index) => ({
             id: `message_${start + index}`,
-            conversationId: 'actor_a',
+            conversationId: 'pulse:shared_id:actor_a',
             senderId: (start + index) % 2 === 0 ? 'actor_a' : 'player',
             recipientId: (start + index) % 2 === 0 ? 'player' : 'actor_a',
             text: `message ${start + index}`,
@@ -361,7 +361,7 @@ describe('#223 Worker Pulse UI session and attention', () => {
     await waitFor(() => pulseNarrative.mock.calls.some(([command]) =>
       (command as { kind: string }).kind === 'choose'));
     expect(pulseNarrative).toHaveBeenCalledWith({
-      kind: 'choose', actorId: 'actor_a', choiceIndex: 0, expectedText: 'Hello there',
+      kind: 'choose', actorId: 'actor_a', accountId: 'shared_id', choiceIndex: 0, expectedText: 'Hello there',
     });
   });
 });

@@ -149,10 +149,10 @@ export function createSimulationWorkerRuntime(send: (message: SimulationWorkerRe
       case 'situation': return engine.getSituationRead();
       case 'residence': return engine.getResidenceRead();
       case 'transit': return engine.getTransitRead();
-      case 'messenger': return engine.getMessengerRead(request.maxContacts);
+      case 'messenger': return engine.getMessengerRead(request.maxContacts, request.accountId);
       case 'actor': return engine.getPlayerActorRead(request.actorId);
       case 'conversation': return engine.getConversationReadAsync(
-        request.actorId, request.offset, request.limit,
+        request.actorId, request.offset, request.limit, request.accountId,
       );
       case 'directory': return engine.getDirectoryRead(request.path, request.offset, request.limit);
       case 'file': return engine.getFileRead(request.path);
@@ -238,7 +238,7 @@ export function createSimulationWorkerRuntime(send: (message: SimulationWorkerRe
           if (typeof actorId !== 'string' || !actorId || actorId.length > 128) {
             throw new Error('Invalid conversation identity');
           }
-          value = requireKernel().markConversationAsRead(actorId);
+          value = requireKernel().markConversationAsRead(actorId, raw.accountId);
           break;
         }
         case 'hardware': {

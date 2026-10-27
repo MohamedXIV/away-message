@@ -62,8 +62,13 @@ export class SocialInteractionCommands {
           // cost more, and an empty meter refuses (apologies always pass).
           const gate = this.playerContacts.gatePlayerMessage(action.buddyId, action.text, action.tags);
           if (!gate.ok) return { success: false, error: gate.error };
+          if (action.pulseAccountId && !this.owners.social.hasPulseBuddy(action.pulseAccountId, action.buddyId)) {
+            return { success: false, error: 'This buddy is not on this Pulse account.' };
+          }
           const msg = this.owners.social.sendMessage(
-            action.buddyId,
+            action.pulseAccountId
+              ? this.owners.social.pulseConversationId(action.pulseAccountId, action.buddyId)
+              : action.buddyId,
             'player',
             action.buddyId,
             action.text,
@@ -82,8 +87,13 @@ export class SocialInteractionCommands {
       }
 
       case 'SOCIAL_RECEIVE_MESSAGE': {
+        if (action.pulseAccountId && !this.owners.social.hasPulseBuddy(action.pulseAccountId, action.buddyId)) {
+          return { success: false, error: 'This buddy is not on this Pulse account.' };
+        }
         const msg = this.owners.social.sendMessage(
-          action.buddyId,
+          action.pulseAccountId
+            ? this.owners.social.pulseConversationId(action.pulseAccountId, action.buddyId)
+            : action.buddyId,
           action.buddyId,
           'player',
           action.text,

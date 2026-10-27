@@ -36,15 +36,15 @@ function totalMinutes(engine: SimulationKernel): number {
   return (day - 1) * 1440 + hour * 60 + minute;
 }
 
-function latest(engine: SimulationKernel, actorId: string): MessageRecord | null {
-  return engine.getConversationRead(actorId, 0, 1).messages.at(-1) ?? null;
+function latest(engine: SimulationKernel, actorId: string, accountId?: string): MessageRecord | null {
+  return engine.getConversationRead(actorId, 0, 1, accountId).messages.at(-1) ?? null;
 }
 
 /** The canonical Social transcript is the only thread bookmark, including
  * across cold saves. Never persist a second React/Worker chat cursor.
  */
-function thread(engine: SimulationKernel, actorId: string): Thread {
-  const last = latest(engine, actorId);
+function thread(engine: SimulationKernel, actorId: string, accountId?: string): Thread {
+  const last = latest(engine, actorId, accountId);
   if (!last) return { stage: 'first' };
   const marker = last.tags?.find(tag => tag.startsWith(MARKER));
   if (!marker) return { stage: 'first' };
@@ -73,8 +73,9 @@ function thread(engine: SimulationKernel, actorId: string): Thread {
   return { stage: 'first' };
 }
 
-function authorize(engine: SimulationKernel, actorId: string) {
-  if (!actorId || actorId.length > 128 || !engine.social.isKnown(actorId)) {
+function authorize(engine: SimulationKernel, actorId: string, accountId?: string) {
+  if (!actorId || actorId.length > 128 || !engine.social.isKnown(actorId)
+    || (accountId && !engine.social.hasPulseBuddy(accountId, actorId))) {
     throw new Error('This contact is not in your buddy list.');
   }
   const actor = engine.getPlayerActorRead(actorId)?.actor;
@@ -84,8 +85,11 @@ function authorize(engine: SimulationKernel, actorId: string) {
   return actor;
 }
 
-function firstFlow(engine: SimulationKernel, actorId: string): NarrativeFlowDefinition {
-  const actor = authorize(engine, actorId);
+function firstFlow(engine: SimulationKernel, actorId: string, accountId?: string): NarrativeFlowDefinition {
+  const actor = authorize(engine, actorId, accountId);
+  // A fresh screen name is not automatically the known physical player.
+  // Do not expose promises/trust/remembered personal facts across aliases.
+  if (accountId) return firstFlows[0]!;
   const shared = engine.social.getCoreMemories(actorId).some(memory =>
     memory.kind === 'shared_moment'
     && memory.meaning?.participants.includes('player')
@@ -138,8 +142,8 @@ function outreachReplyFlow(engine: SimulationKernel, actorId: string): Narrative
   return realEvent ? PULSE_OUTREACH_NEWS_REPLY_FLOW : PULSE_OUTREACH_REPLY_FLOW;
 }
 
-function flowFor(state: Thread, engine: SimulationKernel, actorId: string): NarrativeFlowDefinition | null {
-  if (state.stage === 'first') return firstFlow(engine, actorId);
+function flowFor(state: Thread, engine: SimulationKernel, actorId: string, accountId?: string): NarrativeFlowDefinition | null {
+  if (state.stage === 'first') return firstFlow(engine, actorId, accountId);
   if (state.stage === 'second') return PULSE_FOLLOWUP_FLOWS[state.topic] ?? null;
   if (state.stage === 'outreach') return outreachReplyFlow(engine, actorId);
   return null;
@@ -170,16 +174,16 @@ function responseFor(engine: SimulationKernel, actorId: string, flow: NarrativeF
   return buddy ? realizePulseReply(authored, buddy.traits).slice(0, 500) : authored;
 }
 
-function receive(engine: SimulationKernel, actorId: string, text: string, tags: string[]) {
+function receive(engine: SimulationKernel, actorId: string, text: string, tags: string[], accountId?: string) {
   if (!text) throw new Error('Authored reply was empty.');
   const result = engine.dispatchAction({
-    type: 'SOCIAL_RECEIVE_MESSAGE', buddyId: actorId, text,
+    type: 'SOCIAL_RECEIVE_MESSAGE', buddyId: actorId, text, pulseAccountId: accountId,
     tags: ['ink_pulse', 'authored', ...tags],
   });
   if (!result.success) throw new Error(result.error ?? 'Unable to deliver authored reply.');
 }
 
-function deliver(engine: SimulationKernel, actorId: string, state: Extract<Thread, { stage: 'waiting_first' | 'waiting_second' | 'waiting_outreach' }>): string {
+function deliver(engine: SimulationKernel, actorId: string, state: Extract<Thread, { stage: 'waiting_first' | 'waiting_second' | 'waiting_outreach' }>, accountId?: string): string {
   const flow = state.stage === 'waiting_first'
     ? flowById.get(state.flowId)
     : state.stage === 'waiting_second' ? PULSE_FOLLOWUP_FLOWS[state.topic]
@@ -189,13 +193,13 @@ function deliver(engine: SimulationKernel, actorId: string, state: Extract<Threa
     state.stage === 'waiting_first' ? state.topic : state.replyIndex);
   const tag = state.stage === 'waiting_first'
     ? `pulse:v2:response:${state.topic}` : 'pulse:v2:closed';
-  receive(engine, actorId, text, [tag]);
+  receive(engine, actorId, text, [tag], accountId);
   return text;
 }
 
-function view(engine: SimulationKernel, actorId: string): SimulationPulseNarrativeResult {
-  const state = thread(engine, actorId);
-  const flow = flowFor(state, engine, actorId);
+function view(engine: SimulationKernel, actorId: string, accountId?: string): SimulationPulseNarrativeResult {
+  const state = thread(engine, actorId, accountId);
+  const flow = flowFor(state, engine, actorId, accountId);
   return {
     revision: engine.getMessengerRead(0).revision,
     actorId,
@@ -210,16 +214,19 @@ function view(engine: SimulationKernel, actorId: string): SimulationPulseNarrati
  */
 export function deliverPendingPulseReplies(engine: SimulationKernel): number {
   let delivered = 0;
-  for (const contact of engine.getMessengerRead(MAX_CONTACT_CHECK).contacts) {
-    if (delivered >= MAX_DELIVERIES_PER_ADVANCE) break;
+  const accounts: Array<string | undefined> = [undefined, ...engine.social.getPulseAccountIds()];
+  for (const accountId of accounts) {
+    for (const contact of engine.getMessengerRead(MAX_CONTACT_CHECK, accountId).contacts) {
+    if (delivered >= MAX_DELIVERIES_PER_ADVANCE) return delivered;
     const id = contact.actorId;
-    const state = thread(engine, id);
+    const state = thread(engine, id, accountId);
     if (state.stage !== 'waiting_first' && state.stage !== 'waiting_second' && state.stage !== 'waiting_outreach') continue;
     if (totalMinutes(engine) - state.sentMinute < MIN_REPLY_WAIT_MINUTES) continue;
     const actor = engine.getPlayerActorRead(id)?.actor;
     if (!actor?.canChatNow.allowed) continue;
-    deliver(engine, id, state);
+    deliver(engine, id, state, accountId);
     delivered += 1;
+    }
   }
   return delivered;
 }
@@ -324,15 +331,23 @@ export function reconcileWorkerPulseSocial(engine: SimulationKernel): { replies:
 export function createWorkerPulseNarrative(engine: SimulationKernel) {
   return {
     run(command: SimulationPulseNarrativeCommand): SimulationPulseNarrativeResult {
-      if (!command || (command.kind !== 'choices' && command.kind !== 'choose')) {
+      if (!command || !['openAccount', 'addBuddy', 'choices', 'choose'].includes(command.kind)) {
         throw new Error('Invalid Pulse narrative operation.');
       }
       if (!engine.getChromeRead().pulseInstalled) throw new Error('Install Pulse Messenger to chat.');
-      const actor = authorize(engine, command.actorId);
-      if (command.kind === 'choices') return view(engine, command.actorId);
+      if (command.kind === 'openAccount') {
+        engine.openPulseAccount(command.accountId);
+        return { revision: engine.getRevision(), actorId: '', phase: 'first', choices: [] };
+      }
+      if (command.kind === 'addBuddy') {
+        engine.addPulseBuddy(command.accountId, command.actorId);
+        return { revision: engine.getRevision(), actorId: command.actorId, phase: 'first', choices: [] };
+      }
+      const actor = authorize(engine, command.actorId, command.accountId);
+      if (command.kind === 'choices') return view(engine, command.actorId, command.accountId);
 
-      const state = thread(engine, command.actorId);
-      const flow = flowFor(state, engine, command.actorId);
+      const state = thread(engine, command.actorId, command.accountId);
+      const flow = flowFor(state, engine, command.actorId, command.accountId);
       if (!flow) throw new Error('This conversation is waiting or has ended for now.');
       const { choices } = openInk(engine, command.actorId, flow);
       if (!Number.isSafeInteger(command.choiceIndex)
@@ -350,6 +365,7 @@ export function createWorkerPulseNarrative(engine: SimulationKernel) {
       const sentText = choices[command.choiceIndex]!.text;
       const sent = engine.dispatchAction({
         type: 'SOCIAL_SEND_MESSAGE', buddyId: command.actorId, text: sentText,
+        pulseAccountId: command.accountId,
         tags: ['ink_pulse', 'authored', tag],
       });
       if (!sent.success) throw new Error(sent.error ?? 'Message could not be sent.');
@@ -362,10 +378,10 @@ export function createWorkerPulseNarrative(engine: SimulationKernel) {
           : state.stage === 'outreach' ? outreachReplyFlow(engine, command.actorId)
           : PULSE_FOLLOWUP_FLOWS[topic]!;
         const spoken = responseFor(engine, command.actorId, replyFlow, replyIndex);
-        receive(engine, command.actorId, spoken, [first ? `pulse:v2:response:${topic}` : 'pulse:v2:closed']);
+        receive(engine, command.actorId, spoken, [first ? `pulse:v2:response:${topic}` : 'pulse:v2:closed'], command.accountId);
         reply = spoken;
       }
-      return { ...view(engine, command.actorId), sent: sentText, reply };
+      return { ...view(engine, command.actorId, command.accountId), sent: sentText, reply };
     },
   };
 }
