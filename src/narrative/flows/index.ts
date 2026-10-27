@@ -13,6 +13,8 @@ import pulseFollowupTopic from '../ink/flows/pulse-followup-topic.ink.json';
 import pulseFollowupCourtesy from '../ink/flows/pulse-followup-courtesy.ink.json';
 import pulseOutreachReply from '../ink/flows/pulse-outreach-reply.ink.json';
 import pulseOutreachNewsReply from '../ink/flows/pulse-outreach-news-reply.ink.json';
+import pulseOutreachPromiseReply from '../ink/flows/pulse-outreach-promise-reply.ink.json';
+import pulseOutreachSharedReply from '../ink/flows/pulse-outreach-shared-reply.ink.json';
 import scenarioOldDebtCompiled from '../ink/flows/scenario-old-debt.ink.json';
 
 export const CAFE_MEETING_INTERACTION_ID = 'cafe_meeting';
@@ -28,6 +30,18 @@ export const PULSE_OUTREACH_REPLY_FLOW: NarrativeFlowDefinition = {
 /** World-event-aware outreach continuation after verified actor knowledge. */
 export const PULSE_OUTREACH_NEWS_REPLY_FLOW: NarrativeFlowDefinition = {
   flowId: 'pulse_outreach_news_reply', compiledStory: pulseOutreachNewsReply,
+  startsOn: { semanticKinds: ['conversation_started'], conversationChannels: ['pulse'] },
+};
+
+/** Active canonical Social promise continuation; never marks the promise as done. */
+export const PULSE_OUTREACH_PROMISE_REPLY_FLOW: NarrativeFlowDefinition = {
+  flowId: 'pulse_outreach_promise_reply', compiledStory: pulseOutreachPromiseReply,
+  startsOn: { semanticKinds: ['conversation_started'], conversationChannels: ['pulse'] },
+};
+
+/** Mutual typed Social memory continuation, regardless of emotional valence. */
+export const PULSE_OUTREACH_SHARED_REPLY_FLOW: NarrativeFlowDefinition = {
+  flowId: 'pulse_outreach_shared_reply', compiledStory: pulseOutreachSharedReply,
   startsOn: { semanticKinds: ['conversation_started'], conversationChannels: ['pulse'] },
 };
 
