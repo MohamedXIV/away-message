@@ -78,8 +78,13 @@ test('#214 fresh Orion acquires Pulse only through real internet â†’ VFS setup â
   await expect(messenger).toHaveAttribute('data-pulse-layout', 'split');
   const contacts = messenger.getByTestId('worker-pulse-contacts');
   await expect(contacts).toBeVisible();
-  await expect(contacts).toContainText('Online');
-  await expect(contacts).toContainText('Offline');
+  // A brand-new online identity starts with no buddies even though the
+  // physical player's world has known people. Contacts must be added by this ID.
+  await expect(contacts).toContainText('No buddies yet');
+  const finder = messenger.getByRole('combobox', { name: 'Find a known buddy' });
+  await expect(finder.locator('option')).not.toHaveCount(0);
+  await messenger.getByRole('button', { name: 'Add', exact: true }).click();
+  await expect(contacts.locator('[data-testid^="worker-pulse-contact-"]')).toHaveCount(1);
 
   // Offline dialogue is choice-driven and Worker-authored. No free textbox
   // invites arbitrary messages to a keyword bot.
@@ -91,6 +96,24 @@ test('#214 fresh Orion acquires Pulse only through real internet â†’ VFS setup â
     .toContainText('Hey! How have you been lately?');
   await expect(messenger.getByTestId('worker-pulse-messages'))
     .toContainText(/\d{1,2}:\d{2} (AM|PM)/);
+  await expect(messenger.getByTestId('worker-pulse-messages').locator('[data-sender="buddy"]')).toHaveCount(0);
+
+  // A second account is a separate identity, not a shared device-local buddy list.
+  await messenger.getByRole('button', { name: 'Sign out' }).click();
+  await messenger.getByText('Get a new Pulse ID').click();
+  await messenger.getByLabel('Pulse ID').fill('second_player06');
+  await messenger.getByLabel('Password', { exact: true }).fill('secondpass123');
+  await messenger.getByLabel('Confirm password').fill('secondpass123');
+  await messenger.getByRole('button', { name: 'Create Pulse ID' }).click();
+  await expect(messenger).toHaveAttribute('data-pulse-phase', 'signed-in');
+  await expect(messenger.getByTestId('worker-pulse-contacts')).toContainText('No buddies yet');
+  await expect(messenger.getByTestId('worker-pulse-messages')).toHaveCount(0);
+
+  await messenger.getByRole('button', { name: 'Sign out' }).click();
+  await messenger.getByLabel('Pulse ID').fill('new_player06');
+  await messenger.getByLabel('Password', { exact: true }).fill('localtest123');
+  await messenger.getByRole('button', { name: 'Sign In', exact: true }).click();
+  await expect(messenger.getByTestId('worker-pulse-messages')).toContainText('Hey! How have you been lately?');
 
   // Signed-in Pulse closes to tray (still running), so quick launch
   // restores the existing session immediately without a second startup cost.
@@ -124,17 +147,12 @@ test('#214 fresh Orion acquires Pulse only through real internet â†’ VFS setup â
   await expect(restored.getByTestId('worker-pulse-messages'))
     .toContainText('Hey! How have you been lately?');
 
-  // An away-but-reachable canonical contact can answer immediately; the UI
-  // must not show an offline wait state for a person the Worker says can chat.
-  const awayRow = restored.getByTestId('worker-pulse-contacts')
-    .locator('[data-testid^="worker-pulse-contact-"]').filter({ hasText: 'AWAY' }).first();
-  await expect(awayRow).toBeVisible();
-  await awayRow.click();
-  const awayChoices = restored.getByTestId('worker-pulse-choices');
-  await expect(awayChoices.getByRole('button').first()).toBeVisible();
-  await awayChoices.getByRole('button').first().click();
+  // The player message survives a cold save; no NPC answer materializes
+  // immediately just because Pulse has been reopened on this device.
   await expect(restored.getByTestId('worker-pulse-messages')
-    .locator('[data-sender="buddy"]')).toHaveCount(1, { timeout: 15_000 });
+    .locator('[data-sender="buddy"]')).toHaveCount(0);
+  await expect(restored.getByTestId('worker-pulse-conversation-state'))
+    .toContainText(/waiting|reply/i);
 
   await loaded.getByRole('button', { name: 'Close Pulse Messenger' }).click();
 

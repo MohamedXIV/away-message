@@ -224,6 +224,8 @@ export function deliverPendingPulseReplies(engine: SimulationKernel): number {
     if (totalMinutes(engine) - state.sentMinute < MIN_REPLY_WAIT_MINUTES) continue;
     const actor = engine.getPlayerActorRead(id)?.actor;
     if (!actor?.canChatNow.allowed) continue;
+    // Away/busy/offline is not a fake typing session. Wait for real online presence.
+    if (accountId && engine.social.getPresence(id)?.status !== 'online') continue;
     deliver(engine, id, state, accountId);
     delivered += 1;
     }
@@ -370,7 +372,9 @@ export function createWorkerPulseNarrative(engine: SimulationKernel) {
       });
       if (!sent.success) throw new Error(sent.error ?? 'Message could not be sent.');
       let reply: string | null = null;
-      if (actor.canChatNow.allowed) {
+      if (!command.accountId && actor.canChatNow.allowed) {
+        // Legacy accountless simulations retain their exact golden traces.
+        // Signed-in Pulse users get a world-time reply, never an instant response.
         // Follow-up paths choose the actual reply index; the original first
         // choice index only selects the correct second-turn flow.
         const replyIndex = first ? topic : command.choiceIndex;

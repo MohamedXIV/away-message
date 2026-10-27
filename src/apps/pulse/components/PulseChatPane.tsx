@@ -26,7 +26,7 @@ export function pulseConversationStateText(
     return `Waiting for ${name} to reply…`;
   }
   if (phase === 'complete') {
-    return `You've caught up with ${name} for today. The thread opens again tomorrow.`;
+    return `${name} has finished this chat for now. You can start a new conversation tomorrow.`;
   }
   return 'No reply options are available right now.';
 }
