@@ -257,10 +257,48 @@ describe('#223 NPC-initiated Pulse — canonical social opportunity', () => {
         ctx.engine.social.getBuddy(id)!.traits));
     }
 
+    // A real World-known news opening must not fall through to the generic
+    // "nothing urgent, just checking in" reply once the player answers.
+    const selected = news[0]!;
+    const offered = ctx.narrative.run({ kind: 'choices', actorId: selected.id });
+    expect(offered.choices.map(choice => choice.text))
+      .toContain('What did you make of that news?');
+    ctx.setAvailable(false);
+    const reply = ctx.narrative.run({
+      kind: 'choose', actorId: selected.id, choiceIndex: 0,
+      expectedText: offered.choices[0]!.text,
+    });
+    expect(reply.reply).toBeNull();
+    expect(ctx.narrative.run({ kind: 'choices', actorId: selected.id }).phase)
+      .toBe('waiting_outreach');
+    ctx.engine.advanceGameMinutes(10);
+    expect(deliverPendingPulseReplies(ctx.engine)).toBe(0);
+    ctx.setAvailable(true);
+    expect(deliverPendingPulseReplies(ctx.engine)).toBe(1);
+    const conversation = ctx.engine.getConversationRead(selected.id, 0, 10).messages;
+    expect(conversation.at(-1)?.text).toMatch(/story/i);
+    expect(conversation.at(-1)?.text).not.toContain('Nothing urgent');
+    expect(conversation.at(-1)?.tags).toContain('pulse:v2:closed');
+
     const restored = new SimulationKernel(ctx.engine.exportSnapshot());
+    expect(restored.getConversationRead(selected.id, 0, 10).messages.at(-1)?.text)
+      .toBe(conversation.at(-1)?.text);
     for (const { id, message } of news) {
       expect(restored.getConversationRead(id, 0, 10).messages.some(row =>
         row.text === message.text && row.tags?.includes('world_event:' + eventId))).toBe(true);
     }
+  });
+
+  it('does not treat forged news tags as actor knowledge', () => {
+    const ctx = fixture('npc-outreach-unknown-news-001');
+    const id = ctx.ids[0]!;
+    const injected = ctx.engine.dispatchAction({
+      type: 'SOCIAL_RECEIVE_MESSAGE', buddyId: id,
+      text: 'Have you seen this?',
+      tags: ['ink_pulse', 'pulse:v2:outreach:news', 'world_event:unlearned_event'],
+    });
+    expect(injected.success).toBe(true);
+    const options = ctx.narrative.run({ kind: 'choices', actorId: id }).choices;
+    expect(options[0]?.text).toBe("Hey, good to hear from you. What's up?");
   });
 });
