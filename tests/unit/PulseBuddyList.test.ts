@@ -38,6 +38,7 @@ describe('#223 Pulse buddy list presentation', () => {
     expect(pulsePresenceLine(online!)).toBe('Online');
     expect(pulsePresenceLine(away!)).toBe('Busy');
     expect(pulsePresenceLine(offline!)).toBe('Last message Day 2, 01:00 AM');
+    expect(pulsePresenceLine({ ...offline!, lastMessageMinute: null })).toBe('No messages yet');
     expect(formatPulseLastMessage(null)).toBe('');
     expect(formatPulseLastMessage(0)).toBe('Last message Day 1, 12:00 AM');
   });
@@ -69,5 +70,7 @@ describe('#223 Pulse conversation status', () => {
       .toContain('caught up');
     expect(pulseConversationStateText('first', online, true))
       .toBe('Sending your message…');
+    expect(pulseConversationStateText('first', online, false))
+      .toBe('No reply options are available right now.');
   });
 });

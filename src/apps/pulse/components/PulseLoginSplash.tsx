@@ -148,7 +148,7 @@ export const PulseLoginSplash: React.FC<PulseLoginSplashProps> = ({ onLogin }) =
   };
 
   return (
-    <div ref={rootRef} className="flex h-full flex-col bg-[#f0eef5] font-sans text-xs text-[#2b2b2b] overflow-hidden">
+    <div ref={rootRef} className="pulse-panel flex h-full flex-col overflow-hidden bg-[#f0eef5] font-pixel text-xs text-[#2b2b2b]">
       {/* Pulse purple header */}
       <div className="bg-gradient-to-b from-[#5b2d8f] to-[#3b1a5e] px-3 py-2 text-white shadow">
         <div className="flex items-center justify-between">
@@ -168,7 +168,7 @@ export const PulseLoginSplash: React.FC<PulseLoginSplashProps> = ({ onLogin }) =
         : 'flex min-h-0 flex-1 flex-col'}>
       {/* Smiley hero — asleep (grey) by default, livens up on login */}
       <div className={`flex flex-col items-center justify-center bg-gradient-to-b from-white to-[#e9e3f5] px-4 ${
-        wideLayout ? 'border-r border-[#c8b8e6] py-6' : 'border-b border-[#c8b8e6] py-5'
+        wideLayout ? 'border-r border-[#c8b8e6] py-6' : 'border-b border-[#c8b8e6] py-3'
       }`}>
         <div
           className={`relative flex h-[92px] w-[92px] items-center justify-center rounded-full border-4 border-[#4a1a6b] shadow-[0_6px_16px_rgba(75,30,110,0.35),inset_0_2px_0_rgba(255,255,255,0.9)] select-none ${
@@ -220,16 +220,18 @@ export const PulseLoginSplash: React.FC<PulseLoginSplashProps> = ({ onLogin }) =
             </>
           )}
         </div>
-        <div className="mt-3 text-center">
+        <div className={`${wideLayout ? 'mt-3' : 'mt-2'} text-center`}>
           <div className="text-sm font-bold text-[#3b1a5e]">
             {isAsleep ? 'Zzz… ☺' : isSuspicious ? 'Hmm?! ' + '🤨' : wink ? 'See you there! ' + SMILEY_WINK : 'Hello! ' + '☺'}
           </div>
           <div className="text-[11px] text-[#5b4a7a]">your friends are only a click away</div>
         </div>
-        <div className="mt-2 flex items-center gap-1.5 text-[11px] text-[#6b5a8a]">
-          <span className="h-2 w-2 rounded-full bg-[#2ecc71] shadow-[0_0_6px_rgba(46,204,113,0.9)] animate-pulse" />
-          <span>Pulse Network • dial-up friendly</span>
-        </div>
+        {wideLayout && (
+          <div className="mt-2 flex items-center gap-1.5 text-[11px] text-[#6b5a8a]">
+            <span className="h-2 w-2 animate-pulse rounded-full bg-[#2ecc71] shadow-[0_0_6px_rgba(46,204,113,0.9)]" />
+            <span>Pulse Network • dial-up friendly</span>
+          </div>
+        )}
       </div>
 
       {/* Form — Yahoo fieldset style */}
@@ -373,7 +375,7 @@ export const PulseLoginSplash: React.FC<PulseLoginSplashProps> = ({ onLogin }) =
 
       <div className="flex items-center justify-between border-t border-[#c8b8e6] bg-[#efebf8] px-3 py-1 text-[11px] text-[#6b5a8a]">
         <span>© 2005 Pulse Network • dial-up friendly</span>
-        <span className="font-mono">v5.2 • Orion • dial-up</span>
+        {wideLayout && <span className="shrink-0 font-mono">v5.2 • Orion • dial-up</span>}
       </div>
     </div>
   );

@@ -230,7 +230,7 @@ export function WorkerDesktop({
       defaultSize: size,
       minSize: {
         width: Math.min(isPulse ? 340 : 320, size.width),
-        height: Math.min(isPulse ? 360 : 220, size.height),
+        height: Math.min(isPulse ? 420 : 220, size.height),
       },
     });
   };

@@ -77,6 +77,10 @@ export function WorkerPulsePanel({
   const [sending, setSending] = useState(false);
   const [pendingChoiceIndex, setPendingChoiceIndex] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [refreshNonce, setRefreshNonce] = useState(0);
+  const [latestVisible, setLatestVisible] = useState(true);
+  const [conversationRevision, setConversationRevision] = useState(revision);
+  const [scrollToLatestSignal, setScrollToLatestSignal] = useState(0);
   const [notice, setNotice] = useState<{ actorId: string; name: string; count: number } | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [compact, setCompact] = useState<boolean>(() => {
@@ -84,6 +88,8 @@ export function WorkerPulsePanel({
     return typeof width !== 'number' || width < SPLIT_LAYOUT_MIN_WIDTH;
   });
   const panelRef = useRef<HTMLElement>(null);
+  const drawerRef = useRef<HTMLDivElement>(null);
+  const drawerReturnFocus = useRef<HTMLElement | null>(null);
   const unreadBaseline = useRef<Record<string, number> | null>(null);
   const acknowledgedMessages = useRef(new Set<string>());
   const updateWindowCustomState = useWindowStore(s => s.updateWindowCustomState);
@@ -103,6 +109,12 @@ export function WorkerPulsePanel({
     document.addEventListener('visibilitychange', update);
     return () => document.removeEventListener('visibilitychange', update);
   }, []);
+
+  useEffect(() => {
+    // Freeze an offset-from-newest page while the player is reading older
+    // history. Only the newest, actually-visible page follows revisions.
+    if (pageOffset === 0 && latestVisible) setConversationRevision(revision);
+  }, [revision, pageOffset, latestVisible]);
 
   useEffect(() => {
     const element = panelRef.current;
@@ -173,7 +185,7 @@ export function WorkerPulsePanel({
       if (active) setError(cause instanceof Error ? cause.message : String(cause));
     });
     return () => { active = false; };
-  }, [session, revision, currentAccount]);
+  }, [session, revision, refreshNonce, currentAccount]);
 
   useEffect(() => {
     let active = true;
@@ -189,6 +201,7 @@ export function WorkerPulsePanel({
       if (!active) return;
       setPage(result);
       setPageLoading(false);
+      setError(null);
     }).catch(cause => {
       if (active) {
         setPageLoading(false);
@@ -196,7 +209,7 @@ export function WorkerPulsePanel({
       }
     });
     return () => { active = false; };
-  }, [session, selected, pageOffset, revision, currentAccount]);
+  }, [session, selected, pageOffset, conversationRevision, refreshNonce, currentAccount]);
 
   useEffect(() => {
     let active = true;
@@ -220,7 +233,7 @@ export function WorkerPulsePanel({
       })
       .finally(() => { if (active) setChoicesLoading(false); });
     return () => { active = false; };
-  }, [session, selected, revision, currentAccount]);
+  }, [session, selected, revision, refreshNonce, currentAccount]);
 
   useEffect(() => {
     if (!messenger) return;
@@ -247,6 +260,20 @@ export function WorkerPulsePanel({
   }, [notice]);
 
   useEffect(() => {
+    if (!compact) setDrawerOpen(false);
+  }, [compact]);
+
+  useEffect(() => {
+    if (!drawerOpen) return;
+    const timer = window.setTimeout(() => {
+      const target = drawerRef.current?.querySelector<HTMLInputElement>('input[type="search"]')
+        ?? drawerRef.current?.querySelector<HTMLElement>('button, input');
+      target?.focus();
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [drawerOpen]);
+
+  useEffect(() => {
     if (!currentAccount || !selected || !page) return;
     const latest = page.messages.at(-1);
     if (!latest) return;
@@ -261,6 +288,7 @@ export function WorkerPulsePanel({
       windowVisible,
       documentVisible,
       conversationObscured: compact && drawerOpen,
+      latestVisible,
     });
     if (!allowed) return;
     acknowledgedMessages.current.add(key);
@@ -268,7 +296,7 @@ export function WorkerPulsePanel({
       acknowledgedMessages.current.delete(key);
     });
   }, [session, currentAccount, selected, page, pageOffset, windowActive, windowVisible,
-    documentVisible, compact, drawerOpen]);
+    documentVisible, compact, drawerOpen, latestVisible]);
 
   const contacts = useMemo(
     () => messenger ? buildPulseContactViews(messenger.contacts, presence?.presence ?? {}) : [],
@@ -278,8 +306,48 @@ export function WorkerPulsePanel({
   const totals = partitionPulseContacts(contacts);
   const totalUnread = contacts.reduce((sum, contact) => sum + contact.unread, 0);
 
-  const selectContact = (actorId: string) => {
+  const retryReads = () => {
+    setError(null);
+    setRefreshNonce(current => current + 1);
+  };
+
+  const openDrawer = (opener?: HTMLElement) => {
+    drawerReturnFocus.current = opener
+      ?? (document.activeElement instanceof HTMLElement ? document.activeElement : null);
+    setDrawerOpen(true);
+  };
+
+  const closeDrawer = () => {
     setDrawerOpen(false);
+    const target = drawerReturnFocus.current;
+    drawerReturnFocus.current = null;
+    window.setTimeout(() => target?.focus(), 0);
+  };
+
+  const handleDrawerKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      closeDrawer();
+      return;
+    }
+    if (event.key !== 'Tab' || !drawerRef.current) return;
+    const focusable = Array.from(drawerRef.current.querySelectorAll<HTMLElement>(
+      'button:not([disabled]), input:not([disabled]), [href], [tabindex]:not([tabindex="-1"])',
+    ));
+    if (focusable.length === 0) return;
+    const first = focusable[0]!;
+    const last = focusable[focusable.length - 1]!;
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
+  };
+
+  const selectContact = (actorId: string) => {
+    if (drawerOpen) closeDrawer();
     setNotice(current => current?.actorId === actorId ? null : current);
     if (selected === actorId) return;
     setSelected(actorId);
@@ -289,6 +357,7 @@ export function WorkerPulsePanel({
     setConversationPhase('first');
     setPendingChoiceIndex(null);
     setError(null);
+    setLatestVisible(true);
   };
 
   const signOut = () => {
@@ -306,6 +375,7 @@ export function WorkerPulsePanel({
     setConversationPhase('first');
     setPendingChoiceIndex(null);
     setError(null);
+    setLatestVisible(true);
     unreadBaseline.current = null;
     acknowledgedMessages.current.clear();
   };
@@ -325,6 +395,10 @@ export function WorkerPulsePanel({
         setChoices(result.choices);
         setConversationPhase(result.phase);
         setPageOffset(0);
+        setLatestVisible(true);
+        setConversationRevision(result.revision);
+        setRefreshNonce(current => current + 1);
+        setScrollToLatestSignal(current => current + 1);
       }
       // A real Social revision refreshes the canonical transcript.
     } catch (cause) {
@@ -346,7 +420,7 @@ export function WorkerPulsePanel({
 
   if (!currentAccount) {
     return (
-      <section ref={panelRef} className="flex h-full min-h-0 flex-col bg-[#efeaf6]"
+      <section ref={panelRef} className="pulse-panel flex h-full min-h-0 flex-col bg-[#efeaf6] font-pixel"
         data-testid="worker-pulse-panel" data-pulse-phase="sign-in" data-pulse-layout="sign-in">
         <PulseLoginSplash onLogin={(next) => {
           setError(null);
@@ -359,7 +433,7 @@ export function WorkerPulsePanel({
 
   return (
     <section ref={panelRef}
-      className="relative flex h-full min-h-0 flex-col overflow-hidden bg-[#f0eaf8] font-sans text-[#2f194c]"
+      className="pulse-panel relative flex h-full min-h-0 flex-col overflow-hidden bg-[#f0eaf8] font-pixel text-[#2f194c]"
       data-testid="worker-pulse-panel"
       data-pulse-phase="signed-in"
       data-pulse-layout={compact ? 'compact' : 'split'}>
@@ -372,11 +446,12 @@ export function WorkerPulsePanel({
           <div className="min-w-0 flex-1">
             <h2 className="text-[13px] font-bold tracking-wide">Pulse Messenger</h2>
             <p className="truncate text-[11px] text-[#eee0ff]">
-              {currentAccount.username} · {PULSE_STATUS_LABEL[currentAccount.status]} · {totals.online.length} of {contacts.length} online
+              {currentAccount.username} · {PULSE_STATUS_LABEL[currentAccount.status]}
+              {!compact ? ` · ${totals.online.length} of ${contacts.length} online` : ''}
             </p>
           </div>
           {compact && (
-            <button type="button" onClick={() => setDrawerOpen(true)}
+            <button type="button" onClick={(event) => openDrawer(event.currentTarget)}
               aria-expanded={drawerOpen}
               className="relative border border-white/60 bg-white/15 px-2 py-1 text-[11px] font-bold hover:bg-white/25">
               Buddies
@@ -393,10 +468,11 @@ export function WorkerPulsePanel({
             Sign out
           </button>
         </div>
-        <div className="flex items-center justify-between border-t border-white/15 px-2 py-0.5 text-[10px] text-[#e5d5fb]">
-          <span className="min-w-0 truncate">Signed in as {currentAccount.username} · {currentAccount.awayMessage}</span>
-          <span className="shrink-0">Pulse 5.2 · 2005</span>
-        </div>
+        {!compact && (
+          <div className="flex items-center justify-between border-t border-white/15 px-2 py-0.5 text-[10px] text-[#e5d5fb]">
+            <span className="min-w-0 truncate">Signed in as {currentAccount.username} · {currentAccount.awayMessage}</span>
+          </div>
+        )}
       </header>
 
       {notice && (
@@ -404,7 +480,7 @@ export function WorkerPulsePanel({
           className="flex shrink-0 items-center gap-2 border-b border-[#c8a74a] bg-[#fff5bf] px-2 py-1 text-[11px] text-[#4e3a00]">
           <span aria-hidden="true">✉</span>
           <span className="min-w-0 flex-1 truncate">
-            New message{notice.count > 1 ? `s (${notice.count})` : ''} from <strong>{notice.name}</strong>
+            New IM{notice.count > 1 ? `s (${notice.count})` : ''} from <strong>{notice.name}</strong>
           </span>
           <button type="button" onClick={() => selectContact(notice.actorId)}
             className="border border-[#8b6b2d] bg-white px-1.5 py-0.5 font-bold hover:bg-[#fffbe6]">
@@ -415,18 +491,40 @@ export function WorkerPulsePanel({
         </div>
       )}
 
+      {error && (
+        <div role="alert"
+          className="flex shrink-0 items-center gap-1.5 border-b border-red-300 bg-red-50 px-2 py-1 text-[10px] text-red-800">
+          <span className="min-w-0 flex-1 truncate" title={error}>{error}</span>
+          <button type="button" onClick={retryReads}
+            className="shrink-0 border border-red-300 bg-white px-1.5 py-0.5 font-bold hover:bg-red-100">
+            Retry
+          </button>
+          <button type="button" aria-label="Dismiss error" onClick={() => setError(null)}
+            className="shrink-0 px-1 font-bold hover:text-red-950">✕</button>
+        </div>
+      )}
+
       {compact ? (
         <>
           <PulseContactRail contacts={contacts} selectedId={selected}
-            onSelect={selectContact} onOpenList={() => setDrawerOpen(true)} />
+            onSelect={selectContact} onOpenList={openDrawer} />
           <div className="flex min-h-0 flex-1 flex-col">
             <PulseChatPane contact={activeContact} accountName={currentAccount.username}
-              page={page} pageOffset={pageOffset} loading={pageLoading}
+              page={page} pageOffset={pageOffset} latestUnread={activeContact?.unread ?? 0}
+              loading={pageLoading}
               choices={choices} choicesLoading={choicesLoading}
               phase={conversationPhase} sending={sending} pendingChoiceIndex={pendingChoiceIndex}
+              compact
               onOlder={() => setPageOffset(current => current + 30)}
               onNewer={() => setPageOffset(current => Math.max(0, current - 30))}
-              onChoose={index => { void choose(index); }} />
+              onNewest={() => setPageOffset(0)}
+              onChoose={index => { void choose(index); }}
+              onLatestVisibilityChange={setLatestVisible}
+              scrollToLatestSignal={scrollToLatestSignal}
+              onJumpToLatest={() => {
+                setRefreshNonce(current => current + 1);
+                setScrollToLatestSignal(current => current + 1);
+              }} />
           </div>
         </>
       ) : (
@@ -436,18 +534,28 @@ export function WorkerPulsePanel({
               onSelect={selectContact} />
           </div>
           <PulseChatPane contact={activeContact} accountName={currentAccount.username}
-            page={page} pageOffset={pageOffset} loading={pageLoading}
+            page={page} pageOffset={pageOffset} latestUnread={activeContact?.unread ?? 0}
+            loading={pageLoading}
             choices={choices} choicesLoading={choicesLoading}
             phase={conversationPhase} sending={sending} pendingChoiceIndex={pendingChoiceIndex}
+            compact={false}
             onOlder={() => setPageOffset(current => current + 30)}
             onNewer={() => setPageOffset(current => Math.max(0, current - 30))}
-            onChoose={index => { void choose(index); }} />
+            onNewest={() => setPageOffset(0)}
+            onChoose={index => { void choose(index); }}
+            onLatestVisibilityChange={setLatestVisible}
+            scrollToLatestSignal={scrollToLatestSignal}
+            onJumpToLatest={() => {
+              setRefreshNonce(current => current + 1);
+              setScrollToLatestSignal(current => current + 1);
+            }} />
         </div>
       )}
 
       {compact && drawerOpen && (
         <div className="absolute inset-0 z-30 flex bg-black/35" role="dialog" aria-modal="true" aria-label="Buddy list">
-          <div className="flex h-full w-[86%] max-w-[310px] flex-col border-r-2 border-[#5b3a7b] bg-[#fbf8ff] shadow-2xl">
+          <div ref={drawerRef} onKeyDown={handleDrawerKeyDown} data-testid="worker-pulse-drawer"
+            className="flex h-full w-[92%] max-w-[310px] flex-col border-r-2 border-[#5b3a7b] bg-[#fbf8ff] shadow-2xl">
             <div className="flex items-center justify-between gap-2 border-b border-[#5b3a7b] bg-gradient-to-b from-[#7743b4] to-[#4a2378] px-2 py-1 text-white">
               <h3 className="text-[12px] font-bold tracking-wide">Buddy List</h3>
               <div className="flex items-center gap-1">
@@ -456,7 +564,7 @@ export function WorkerPulsePanel({
                   className="border border-white/60 bg-white/15 px-1.5 py-0.5 text-[10px] font-bold hover:bg-white/25">
                   Sign out
                 </button>
-                <button type="button" onClick={() => setDrawerOpen(false)}
+                <button type="button" onClick={closeDrawer}
                   className="h-5 w-5 border border-white/60 bg-white/15 text-[11px] font-bold hover:bg-white/25"
                   aria-label="Close buddy list">✕</button>
               </div>
@@ -466,16 +574,19 @@ export function WorkerPulsePanel({
                 onSelect={selectContact} />
             </div>
           </div>
-          <button type="button" aria-label="Close buddy list" onClick={() => setDrawerOpen(false)}
+          <button type="button" aria-label="Close buddy list" tabIndex={-1} onClick={closeDrawer}
             className="h-full min-w-0 flex-1" />
         </div>
       )}
 
-      {error && (
-        <p role="alert" className="shrink-0 border-t border-red-300 bg-red-50 p-2 text-[11px] text-red-800">
-          {error}
-        </p>
-      )}
+      <footer data-testid="worker-pulse-statusbar"
+        className="flex shrink-0 items-center justify-between gap-2 border-t border-[#8f78aa] bg-[#e4d9f0] px-2 py-0.5 text-[10px] text-[#5a456f] shadow-[inset_0_1px_0_#fff]">
+        <span className="flex min-w-0 items-center gap-1 truncate">
+          <span className="h-2 w-2 shrink-0 rounded-full bg-[#35a853]" aria-hidden="true" />
+          {totals.online.length} of {contacts.length} buddies online
+        </span>
+        <span className="shrink-0">Pulse 5.2 · 2005</span>
+      </footer>
     </section>
   );
 }
