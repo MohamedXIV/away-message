@@ -97,7 +97,7 @@ const PulseContactRow: React.FC<PulseContactRowProps> = ({ contact, selected, on
           <span className="truncate text-[12px] font-bold text-[#3c2360]">{contact.displayName}</span>
           {contact.status !== 'online' && (
             <span className={`shrink-0 rounded-sm border border-black/10 px-1 text-[10px] font-bold uppercase tracking-wide ${
-              contact.status === 'offline' ? 'bg-[#e5e0ea] text-[#6f647c]' : 'bg-[#fff4c4] text-[#725600]'
+              contact.status === 'offline' ? 'bg-[#e5e0ea] text-[#5b4a6d]' : 'bg-[#fff4c4] text-[#725600]'
             }`}>{statusLabel}</span>
           )}
           {contact.unread > 0 && (
@@ -106,7 +106,7 @@ const PulseContactRow: React.FC<PulseContactRowProps> = ({ contact, selected, on
             </span>
           )}
         </span>
-        <span className="mt-0.5 flex items-center gap-1 text-[10px] text-[#79688a]">
+        <span className="mt-0.5 flex items-center gap-1 text-[10px] text-[#6b5a7a]">
           <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${PULSE_STATUS_DOT[contact.status]}`} aria-hidden="true" />
           <span className="truncate italic">{presence}</span>
         </span>
@@ -145,7 +145,7 @@ const PulseBuddyGroup: React.FC<PulseBuddyGroupProps> = ({
               <PulseContactRow key={contact.actorId} contact={contact}
                 selected={selectedId === contact.actorId} onSelect={onSelect} />
             ))}</div>
-          : <p className="px-3 py-2 text-[11px] italic text-[#8b7c9a]">{emptyLabel}</p>
+          : <p className="px-3 py-2 text-[11px] italic text-[#6b5a7a]">{emptyLabel}</p>
       )}
     </section>
   );
@@ -187,17 +187,17 @@ export const PulseBuddyList: React.FC<PulseBuddyListProps> = ({
             event.currentTarget.blur();
           }}
           placeholder="Search buddies…"
-          className="w-full border border-[#a78fc2] bg-white px-2 py-1 font-pixel text-[12px] text-[#332247] shadow-[inset_1px_1px_2px_rgba(55,30,80,0.12)] outline-none focus:border-[#5b2d8f]"
+          className="w-full border border-[#a78fc2] bg-white px-2 py-1 font-pixel text-[12px] text-[#332247] placeholder:text-[#6b5a7a] shadow-[inset_1px_1px_2px_rgba(55,30,80,0.12)] outline-none focus:border-[#5b2d8f]"
         />
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto">
         {contacts.length === 0 ? (
-          <div className="p-4 text-center text-[11px] text-[#7d6d8d]">
+          <div className="p-4 text-center text-[11px] text-[#6b5a7a]">
             <p className="font-bold text-[#4f326e]">No buddies yet</p>
             <p className="mt-1">Meet people around town to add them to Pulse.</p>
           </div>
         ) : filtered.length === 0 ? (
-          <p className="p-4 text-center text-[11px] italic text-[#7d6d8d]">No buddies match “{search.trim()}”.</p>
+          <p className="p-4 text-center text-[11px] italic text-[#6b5a7a]">No buddies match “{search.trim()}”.</p>
         ) : (
           <>
             <PulseBuddyGroup title="Online" contacts={online} selectedId={selectedId}
@@ -227,7 +227,7 @@ export const PulseContactRail: React.FC<PulseContactRailProps> = ({
       data-testid="worker-pulse-contact-rail">
       <div className="flex min-w-0 flex-1 items-stretch gap-1 overflow-x-auto px-1 py-1">
         {contacts.length === 0 ? (
-          <p className="px-2 py-1 text-[11px] italic text-[#7d6d8d]">No buddies yet.</p>
+          <p className="px-2 py-1 text-[11px] italic text-[#6b5a7a]">No buddies yet.</p>
         ) : contacts.map(contact => {
           const selected = contact.actorId === selectedId;
           return (
@@ -245,7 +245,7 @@ export const PulseContactRail: React.FC<PulseContactRailProps> = ({
                 archetype={contact.archetype} status={contact.status} size="sm" />
               <span className="w-full truncate text-[10px] font-bold text-[#3c2360]">{contact.displayName}</span>
               {contact.status !== 'online' && (
-                <span className="text-[10px] uppercase text-[#756487]">{PULSE_STATUS_LABEL[contact.status]}</span>
+                <span className="text-[10px] uppercase text-[#6b5a7a]">{PULSE_STATUS_LABEL[contact.status]}</span>
               )}
               {contact.unread > 0 && (
                 <span className="absolute -right-0.5 -top-0.5 rounded-full border border-[#8d2f1f] bg-[#d84a32] px-1 text-[10px] font-bold leading-3 text-white">

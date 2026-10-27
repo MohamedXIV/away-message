@@ -162,7 +162,7 @@ export const PulseChatPane: React.FC<PulseChatPaneProps> = ({
 
   if (!contact) {
     return (
-      <div className="flex min-h-0 flex-1 items-center justify-center bg-[#fffdf8] p-6 text-center text-[12px] italic text-[#7d6d8d]">
+      <div className="flex min-h-0 flex-1 items-center justify-center bg-[#fffdf8] p-6 text-center text-[12px] italic text-[#6b5a7a]">
         Choose a buddy to open a conversation.
       </div>
     );
@@ -228,9 +228,9 @@ export const PulseChatPane: React.FC<PulseChatPaneProps> = ({
           className="absolute inset-0 overflow-y-auto bg-[linear-gradient(180deg,#fffdf8_0%,#fbf7ff_100%)] px-2 py-2 pb-8 text-[12px]"
         >
           {loading && messages.length === 0 ? (
-            <p className="py-6 text-center italic text-[#8b7c9a]">Opening conversation…</p>
+            <p className="py-6 text-center italic text-[#6d5684]">Opening conversation…</p>
           ) : messages.length === 0 ? (
-            <div className="mx-auto mt-3 max-w-[260px] border border-dashed border-[#c9b7dc] bg-white/70 px-3 py-2 text-center text-[11px] text-[#7d6d8d]">
+            <div className="mx-auto mt-3 max-w-[260px] border border-dashed border-[#c9b7dc] bg-white/70 px-3 py-2 text-center text-[11px] text-[#6b5a7a]">
               <p className="font-bold text-[#4f326e]">Conversation with {contact.displayName}</p>
               <p className="mt-1">{waiting
                 ? 'Your message is on its way.'
@@ -246,7 +246,7 @@ export const PulseChatPane: React.FC<PulseChatPaneProps> = ({
             return (
               <React.Fragment key={message.id}>
                 {showDay && (
-                  <div className="my-2 flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-[#9a89aa]">
+                  <div className="my-2 flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-[#6d5684]">
                     <span className="h-px flex-1 bg-[#e2d7ee]" aria-hidden="true" />
                     <span>Day {message.day}</span>
                     <span className="h-px flex-1 bg-[#e2d7ee]" aria-hidden="true" />
@@ -263,7 +263,7 @@ export const PulseChatPane: React.FC<PulseChatPaneProps> = ({
                   >
                     <div className="mb-0.5 flex flex-wrap items-baseline gap-1 text-[10px]">
                       <span className="font-bold" style={{ color: player ? '#4a2a77' : signature }}>{senderName}</span>
-                      <time className="text-[10px] text-[#8b7c9a]" title={`Day ${message.day}`}>
+                      <time className="text-[10px] text-[#6d5684]" title={`Day ${message.day}`}>
                         ({formatSimulationMinutes(message.timestampMinute % 1440)})
                       </time>
                       {offline && (
@@ -305,7 +305,7 @@ export const PulseChatPane: React.FC<PulseChatPaneProps> = ({
             aria-label="Written replies" aria-describedby="pulse-reply-help">
             <div className="mb-0.5 flex items-center justify-between gap-2 text-[10px] font-bold uppercase tracking-wide text-[#5b3a7b]">
               <span>Quick replies</span>
-              <span aria-hidden="true" className="font-normal normal-case tracking-normal text-[#8b7c9a]">Written only · 1–9</span>
+              <span aria-hidden="true" className="font-normal normal-case tracking-normal text-[#6d5684]">Written only · 1–9</span>
             </div>
             <p id="pulse-reply-help" className="sr-only">
               Choose one written reply. Press 1 through 9 to send quickly.

@@ -299,6 +299,25 @@ describe('#223 Worker Pulse UI session and attention', () => {
     await waitFor(() => container.querySelector('[data-testid="worker-pulse-new-messages"]') === null);
   });
 
+  it('renders transcript timestamps, day separators and reply hints at AA secondary contrast', async () => {
+    checkPulseCredentials([], 'shared_id', 'slot-a-password', 'slot_1');
+    setPulseWindow('slot_1', 'pulse');
+    const { session } = createSession({ choices: [{ id: 'choice_1', text: 'Hello there' }] });
+
+    await act(async () => {
+      root.render(React.createElement(WorkerPulsePanel, { session, revision: 1, windowId: 'pulse', slotId: 'slot_1' }));
+    });
+    await waitFor(() => container.querySelector('[data-testid="worker-pulse-choices"]') !== null);
+    const timestamp = container.querySelector('[data-testid="worker-pulse-messages"] time');
+    expect(timestamp?.className).toContain('text-[#6d5684]');
+    const day = Array.from(container.querySelectorAll('div'))
+      .find(element => element.textContent?.trim() === 'Day 1');
+    expect(day?.className).toContain('text-[#6d5684]');
+    const hint = Array.from(container.querySelectorAll('span'))
+      .find(element => element.textContent === 'Written only · 1–9');
+    expect(hint?.className).toContain('text-[#6d5684]');
+  });
+
   it('focuses the compact drawer search and restores focus on Escape', async () => {
     checkPulseCredentials([], 'shared_id', 'slot-a-password', 'slot_1');
     setPulseWindow('slot_1', 'pulse', 400);

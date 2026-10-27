@@ -135,7 +135,7 @@ export const PulseLoginSplash: React.FC<PulseLoginSplashProps> = ({ onLogin }) =
 
   const accountFieldClass = `w-full rounded border border-[#a99bd6] bg-white px-2.5 ${
     wideLayout ? 'py-1.5' : 'py-2'
-  } shadow-[inset_0_1px_2px_rgba(0,0,0,0.08)] outline-none focus:border-[#5b2d8f] focus:ring-2 focus:ring-[#d8c8f5]`;
+  } placeholder:text-[#6b5a7a] shadow-[inset_0_1px_2px_rgba(0,0,0,0.08)] outline-none focus:border-[#5b2d8f] focus:ring-2 focus:ring-[#d8c8f5]`;
 
   const chooseRememberedId = (id: string) => {
     setMode('signin');
