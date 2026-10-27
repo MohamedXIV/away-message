@@ -342,6 +342,27 @@ describe('#223 Worker Pulse UI session and attention', () => {
     await waitFor(() => document.activeElement === opener);
   });
 
+  it('does not reload or blink authored choices on unrelated world revisions', async () => {
+    checkPulseCredentials([], 'shared_id', 'slot-a-password', 'slot_1');
+    setPulseWindow('slot_1', 'pulse');
+    const { session, pulseNarrative } = createSession({
+      choices: [{ id: 'choice_1', text: 'Hello there' }],
+    });
+    await act(async () => {
+      root.render(React.createElement(WorkerPulsePanel, { session, revision: 1, windowId: 'pulse', slotId: 'slot_1' }));
+    });
+    await waitFor(() => container.querySelector('button[aria-label="Hello there"]') !== null);
+    const calls = () => pulseNarrative.mock.calls.filter(([command]) => command.kind === 'choices').length;
+    const before = calls();
+
+    await act(async () => {
+      root.render(React.createElement(WorkerPulsePanel, { session, revision: 2, windowId: 'pulse', slotId: 'slot_1' }));
+    });
+    await flush();
+    expect(calls()).toBe(before);
+    expect(container.querySelector('button[aria-label="Hello there"]')).toBeTruthy();
+  });
+
   it('keeps numbered reply shortcuts inside the composer', async () => {
     checkPulseCredentials([], 'shared_id', 'slot-a-password', 'slot_1');
     setPulseWindow('slot_1', 'pulse');
