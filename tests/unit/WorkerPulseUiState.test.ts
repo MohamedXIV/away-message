@@ -83,6 +83,7 @@ describe('#223 Pulse conversation acknowledgement visibility', () => {
     windowVisible: true,
     documentVisible: true,
     conversationObscured: false,
+    latestVisible: true,
   };
 
   it('acknowledges a visible, active conversation exactly once', () => {
@@ -95,6 +96,10 @@ describe('#223 Pulse conversation acknowledgement visibility', () => {
     expect(shouldAcknowledgePulseConversation({ ...visible, windowVisible: false })).toBe(false);
     expect(shouldAcknowledgePulseConversation({ ...visible, documentVisible: false })).toBe(false);
     expect(shouldAcknowledgePulseConversation({ ...visible, conversationObscured: true })).toBe(false);
+  });
+
+  it('keeps a new turn unread while the player is scrolled up in history', () => {
+    expect(shouldAcknowledgePulseConversation({ ...visible, latestVisible: false })).toBe(false);
   });
 
   it('does not acknowledge while browsing older history or without a thread', () => {

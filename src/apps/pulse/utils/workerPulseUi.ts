@@ -51,6 +51,7 @@ export interface PulseAcknowledgementInput {
   windowVisible: boolean;
   documentVisible: boolean;
   conversationObscured: boolean;
+  latestVisible: boolean;
 }
 
 /**
@@ -66,5 +67,6 @@ export function shouldAcknowledgePulseConversation(input: PulseAcknowledgementIn
     && input.windowActive
     && input.windowVisible
     && input.documentVisible
-    && !input.conversationObscured;
+    && !input.conversationObscured
+    && input.latestVisible;
 }

@@ -282,20 +282,20 @@ export const useWindowStore = create<WindowStore>()(
       }
 
       const cascadeStep = (cascadeCounter % 8) * 26;
-      const initialPos: WindowPosition = config.defaultPosition ?? {
-        x: Math.max(40, 60 + cascadeStep),
-        y: Math.max(30, 40 + cascadeStep),
-      };
-
       // Pulse keeps standard WindowFrame. Its messenger layout is genuinely
       // split-pane when the desktop has room and compact on a narrow surface.
       const framelessDefault = false;
       const isPulse = config.appId === 'pulse' || config.appId === 'app.pulse' || config.appId === 'pulse_messenger';
+      // Pulse opens near the top so the OS cascade cannot squeeze it into a
+      // shallow strip; its conversation needs the height more than the stack.
+      const initialPos: WindowPosition = config.defaultPosition ?? (isPulse
+        ? { x: Math.max(40, 60 + cascadeStep), y: 24 }
+        : { x: Math.max(40, 60 + cascadeStep), y: Math.max(30, 40 + cascadeStep) });
       const pulseNarrowSurface = typeof window !== 'undefined' && window.innerWidth < 720;
       const pulseDefaultSize = (pulseNarrowSurface
         ? { width: 360, height: 560 }
         : { width: 600, height: 540 }) as WindowSize;
-      const pulseMinSize = { width: 340, height: 360 } as WindowSize;
+      const pulseMinSize = { width: 340, height: 420 } as WindowSize;
       const newWindow: WindowState = {
         id,
         appId: config.appId,

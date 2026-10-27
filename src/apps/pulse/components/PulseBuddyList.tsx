@@ -62,7 +62,7 @@ export function formatPulseLastMessage(minute: number | null): string {
 
 export function pulsePresenceLine(contact: PulseContactView): string {
   if (contact.status === 'offline') {
-    return formatPulseLastMessage(contact.lastMessageMinute) || 'Offline';
+    return formatPulseLastMessage(contact.lastMessageMinute) || 'No messages yet';
   }
   const label = PULSE_STATUS_LABEL[contact.status];
   return contact.awayMessage ? `${label} — “${contact.awayMessage}”` : label;
@@ -170,7 +170,6 @@ export const PulseBuddyList: React.FC<PulseBuddyListProps> = ({
       || contact.handle.toLowerCase().includes(needle));
   }, [contacts, search]);
   const { online, offline } = partitionPulseContacts(filtered);
-  const onlineCount = partitionPulseContacts(contacts).online.length;
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-[#fbf8ff]" data-testid="worker-pulse-contacts">
@@ -181,8 +180,14 @@ export const PulseBuddyList: React.FC<PulseBuddyListProps> = ({
           type="search"
           value={search}
           onChange={event => setSearch(event.target.value)}
+          onKeyDown={event => {
+            if (event.key !== 'Escape') return;
+            event.preventDefault();
+            setSearch('');
+            event.currentTarget.blur();
+          }}
           placeholder="Search buddies…"
-          className="w-full border border-[#a78fc2] bg-white px-2 py-1 font-sans text-[12px] text-[#332247] shadow-[inset_1px_1px_2px_rgba(55,30,80,0.12)] outline-none focus:border-[#5b2d8f]"
+          className="w-full border border-[#a78fc2] bg-white px-2 py-1 font-pixel text-[12px] text-[#332247] shadow-[inset_1px_1px_2px_rgba(55,30,80,0.12)] outline-none focus:border-[#5b2d8f]"
         />
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto">
@@ -202,10 +207,6 @@ export const PulseBuddyList: React.FC<PulseBuddyListProps> = ({
           </>
         )}
       </div>
-      <div className="flex items-center justify-between gap-2 border-t border-[#bca8d2] bg-[#ece5f4] px-2 py-1 text-[10px] text-[#6a5680]">
-        <span>{onlineCount} online · {contacts.length} contacts</span>
-        <span>Pulse 5.2</span>
-      </div>
     </div>
   );
 };
@@ -214,7 +215,7 @@ interface PulseContactRailProps {
   contacts: PulseContactView[];
   selectedId: string | null;
   onSelect: (actorId: string) => void;
-  onOpenList: () => void;
+  onOpenList: (opener: HTMLElement) => void;
 }
 
 /** Compact windows keep presence visible without hiding the conversation. */
@@ -222,39 +223,42 @@ export const PulseContactRail: React.FC<PulseContactRailProps> = ({
   contacts, selectedId, onSelect, onOpenList,
 }) => {
   return (
-    <div className="flex shrink-0 items-stretch gap-1 overflow-x-auto border-b border-[#bca8d2] bg-[#f1ebf8] px-1 py-1"
+    <div className="flex shrink-0 items-stretch border-b border-[#bca8d2] bg-[#f1ebf8]"
       data-testid="worker-pulse-contact-rail">
-      {contacts.length === 0 ? (
-        <p className="px-2 py-1 text-[11px] italic text-[#7d6d8d]">No buddies yet.</p>
-      ) : contacts.map(contact => {
-        const selected = contact.actorId === selectedId;
-        return (
-          <button
-            key={contact.actorId}
-            type="button"
-            onClick={() => onSelect(contact.actorId)}
-            aria-pressed={selected}
-            aria-label={`${contact.displayName}, ${PULSE_STATUS_LABEL[contact.status]}${contact.unread > 0 ? `, ${contact.unread} unread` : ''}`}
-            className={`relative flex min-w-[64px] max-w-[86px] shrink-0 flex-col items-center gap-0.5 border px-1 py-1 text-center ${
-              selected ? 'border-[#77549b] bg-white shadow-[inset_0_0_0_1px_#d9c9ec]' : 'border-transparent hover:border-[#c7b6da] hover:bg-white/60'
-            }`}
-          >
-            <PulseAvatar actorId={contact.actorId} name={contact.displayName}
-              archetype={contact.archetype} status={contact.status} size="sm" />
-            <span className="w-full truncate text-[10px] font-bold text-[#3c2360]">{contact.displayName}</span>
-            {contact.status !== 'online' && (
-              <span className="text-[10px] uppercase text-[#756487]">{PULSE_STATUS_LABEL[contact.status]}</span>
-            )}
-            {contact.unread > 0 && (
-              <span className="absolute -right-0.5 -top-0.5 rounded-full border border-[#8d2f1f] bg-[#d84a32] px-1 text-[10px] font-bold leading-3 text-white">
-                {contact.unread > 9 ? '9+' : contact.unread}
-              </span>
-            )}
-          </button>
-        );
-      })}
-      <button type="button" onClick={onOpenList}
-        className="ml-auto flex min-w-[52px] shrink-0 flex-col items-center justify-center border border-[#b49dcb] bg-[#fff9e8] px-1 text-[10px] font-bold leading-tight text-[#5b3a7b] hover:bg-white">
+      <div className="flex min-w-0 flex-1 items-stretch gap-1 overflow-x-auto px-1 py-1">
+        {contacts.length === 0 ? (
+          <p className="px-2 py-1 text-[11px] italic text-[#7d6d8d]">No buddies yet.</p>
+        ) : contacts.map(contact => {
+          const selected = contact.actorId === selectedId;
+          return (
+            <button
+              key={contact.actorId}
+              type="button"
+              onClick={() => onSelect(contact.actorId)}
+              aria-pressed={selected}
+              aria-label={`${contact.displayName}, ${PULSE_STATUS_LABEL[contact.status]}${contact.unread > 0 ? `, ${contact.unread} unread` : ''}`}
+              className={`relative flex min-w-[64px] max-w-[86px] shrink-0 flex-col items-center gap-0.5 border px-1 py-1 text-center ${
+                selected ? 'border-[#77549b] bg-white shadow-[inset_0_0_0_1px_#d9c9ec]' : 'border-transparent hover:border-[#c7b6da] hover:bg-white/60'
+              }`}
+            >
+              <PulseAvatar actorId={contact.actorId} name={contact.displayName}
+                archetype={contact.archetype} status={contact.status} size="sm" />
+              <span className="w-full truncate text-[10px] font-bold text-[#3c2360]">{contact.displayName}</span>
+              {contact.status !== 'online' && (
+                <span className="text-[10px] uppercase text-[#756487]">{PULSE_STATUS_LABEL[contact.status]}</span>
+              )}
+              {contact.unread > 0 && (
+                <span className="absolute -right-0.5 -top-0.5 rounded-full border border-[#8d2f1f] bg-[#d84a32] px-1 text-[10px] font-bold leading-3 text-white">
+                  {contact.unread > 9 ? '9+' : contact.unread}
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+      <button type="button" onClick={(event) => onOpenList(event.currentTarget)}
+        aria-label="Open full buddy list"
+        className="flex w-[54px] shrink-0 flex-col items-center justify-center border-l border-[#b49dcb] bg-[#fff9e8] px-1 text-[10px] font-bold leading-tight text-[#5b3a7b] hover:bg-white">
         <span aria-hidden="true" className="text-sm">☰</span>
         All
       </button>

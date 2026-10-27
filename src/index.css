@@ -28,3 +28,22 @@ html, body, #root {
   -ms-overflow-style: none;
   scrollbar-width: none;
 }
+
+/* Pulse Messenger: one visible focus treatment across its nested panels. */
+.pulse-panel button:focus-visible,
+.pulse-panel input:focus-visible,
+.pulse-panel [tabindex]:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: -2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pulse-panel *,
+  .pulse-panel *::before,
+  .pulse-panel *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
