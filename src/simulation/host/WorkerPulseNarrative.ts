@@ -4,7 +4,7 @@ import { socialHashText } from '../../engine/social/SocialMemoryLedger';
 import { pulseOutreachOptions, type PulseOutreachMotive } from './PulseOutreachContent';
 import { formatPulseNewsLine, realizePulseReply } from './PulseVoice';
 import { createSimulationNarrative } from '../../narrative/SimulationNarrativeAdapter';
-import { DEFAULT_NARRATIVE_FLOWS, PULSE_CONTEXTUAL_FLOWS, PULSE_FOLLOWUP_FLOWS, PULSE_OUTREACH_REPLY_FLOW, PULSE_OUTREACH_NEWS_REPLY_FLOW, PULSE_OUTREACH_PROMISE_REPLY_FLOW, PULSE_OUTREACH_SHARED_REPLY_FLOW } from '../../narrative/flows';
+import { DEFAULT_NARRATIVE_FLOWS, PULSE_CONTEXTUAL_FLOWS, PULSE_FOLLOWUP_FLOWS, PULSE_REACTIVE_FOLLOWUP_FLOWS, PULSE_OUTREACH_REPLY_FLOW, PULSE_OUTREACH_NEWS_REPLY_FLOW, PULSE_OUTREACH_PROMISE_REPLY_FLOW, PULSE_OUTREACH_SHARED_REPLY_FLOW } from '../../narrative/flows';
 import type { NarrativeFlowDefinition } from '../../narrative/NarrativeCoordinator';
 import type { SimulationPulseNarrativeCommand, SimulationPulseNarrativeResult } from './SimulationHostProtocol';
 
@@ -19,15 +19,36 @@ const firstFlows = [
   DEFAULT_NARRATIVE_FLOWS.find(flow => flow.flowId === 'pulse_checkin')!,
   ...Object.values(PULSE_CONTEXTUAL_FLOWS),
 ];
-const allFlows = [...firstFlows, ...PULSE_FOLLOWUP_FLOWS, PULSE_OUTREACH_REPLY_FLOW, PULSE_OUTREACH_NEWS_REPLY_FLOW, PULSE_OUTREACH_PROMISE_REPLY_FLOW, PULSE_OUTREACH_SHARED_REPLY_FLOW];
+const allFlows = [...firstFlows, ...PULSE_FOLLOWUP_FLOWS, ...Object.values(PULSE_REACTIVE_FOLLOWUP_FLOWS), PULSE_OUTREACH_REPLY_FLOW, PULSE_OUTREACH_NEWS_REPLY_FLOW, PULSE_OUTREACH_PROMISE_REPLY_FLOW, PULSE_OUTREACH_SHARED_REPLY_FLOW];
 const flowById = new Map(allFlows.map(flow => [flow.flowId, flow]));
+
+type PulseReplyCue = 'reciprocal' | 'playful' | 'quiet' | 'vulnerable' | 'work' | 'topic' | 'general';
+
+/** Cues are authored Ink meanings, not keyword guesses over generated prose. */
+function cueFromInk(tags: readonly string[]): PulseReplyCue {
+  const facts = new Set(tags.map(tag => tag.trim()));
+  if (facts.has('playful')) return 'playful';
+  if (facts.has('quiet')) return 'quiet';
+  if (facts.has('vulnerable')) return 'vulnerable';
+  if (facts.has('fact:how about you') || facts.has('fact:holding up')) return 'reciprocal';
+  if (facts.has('work')) return 'work';
+  if (facts.has('curious') || facts.has('remembered')) return 'topic';
+  return 'general';
+}
+
+function cueFromMessage(message: MessageRecord): PulseReplyCue | undefined {
+  const marker = message.tags?.find(tag => tag.startsWith('pulse:cue:'))?.slice('pulse:cue:'.length);
+  return marker === 'reciprocal' || marker === 'playful' || marker === 'quiet'
+    || marker === 'vulnerable' || marker === 'work' || marker === 'topic' || marker === 'general'
+    ? marker : undefined;
+}
 
 type Thread =
   | { stage: 'first' }
-  | { stage: 'second'; topic: number }
+  | { stage: 'second'; topic: number; cue?: PulseReplyCue }
   | { stage: 'outreach' }
   | { stage: 'waiting_first'; topic: number; flowId: string; sentMinute: number }
-  | { stage: 'waiting_second'; topic: number; replyIndex: number; sentMinute: number }
+  | { stage: 'waiting_second'; topic: number; replyIndex: number; sentMinute: number; flowId?: string }
   | { stage: 'waiting_outreach'; replyIndex: number; sentMinute: number }
   | { stage: 'complete' };
 
@@ -60,15 +81,18 @@ function thread(engine: SimulationKernel, actorId: string, accountId?: string): 
   }
   const response = /^pulse:v2:response:([0-2])$/.exec(marker);
   if (response && last.senderId === actorId) {
-    return { stage: 'second', topic: Number(response[1]) };
+    return { stage: 'second', topic: Number(response[1]), ...(accountId ? { cue: cueFromMessage(last) } : {}) };
   }
   const first = /^pulse:v2:open:([0-2]):(pulse_[a-z_]+)$/.exec(marker);
   if (first && last.senderId === 'player' && first[2] && firstFlows.some(f => f.flowId === first[2])) {
     return { stage: 'waiting_first', topic: Number(first[1]), flowId: first[2], sentMinute: last.timestampMinute };
   }
-  const second = /^pulse:v2:followup_out:([0-2]):([0-2])$/.exec(marker);
+  const second = /^pulse:v2:followup_out:([0-2]):([0-2])(?::(pulse_followup_[a-z_]+))?$/.exec(marker);
   if (second && last.senderId === 'player') {
-    return { stage: 'waiting_second', topic: Number(second[1]), replyIndex: Number(second[2]), sentMinute: last.timestampMinute };
+    const flowId = second[3];
+    return { stage: 'waiting_second', topic: Number(second[1]), replyIndex: Number(second[2]),
+      sentMinute: last.timestampMinute,
+      ...(flowId && flowById.has(flowId) ? { flowId } : {}) };
   }
   return { stage: 'first' };
 }
@@ -144,7 +168,16 @@ function outreachReplyFlow(engine: SimulationKernel, actorId: string): Narrative
 
 function flowFor(state: Thread, engine: SimulationKernel, actorId: string, accountId?: string): NarrativeFlowDefinition | null {
   if (state.stage === 'first') return firstFlow(engine, actorId, accountId);
-  if (state.stage === 'second') return PULSE_FOLLOWUP_FLOWS[state.topic] ?? null;
+  if (state.stage === 'second') {
+    if (accountId) {
+      if (state.cue === 'reciprocal') return PULSE_REACTIVE_FOLLOWUP_FLOWS.reciprocal;
+      if (state.cue === 'playful') return PULSE_REACTIVE_FOLLOWUP_FLOWS.playful;
+      if (state.cue === 'quiet') return PULSE_FOLLOWUP_FLOWS[2]!;
+      if (state.cue === 'vulnerable') return PULSE_FOLLOWUP_FLOWS[0]!;
+      if (state.cue === 'work' || state.cue === 'topic') return PULSE_FOLLOWUP_FLOWS[1]!;
+    }
+    return PULSE_FOLLOWUP_FLOWS[state.topic] ?? null;
+  }
   if (state.stage === 'outreach') return outreachReplyFlow(engine, actorId);
   return null;
 }
@@ -163,7 +196,7 @@ function openInk(engine: SimulationKernel, actorId: string, flow: NarrativeFlowD
   return { coordinator, choices };
 }
 
-function responseFor(engine: SimulationKernel, actorId: string, flow: NarrativeFlowDefinition, index: number): string {
+function responseFor(engine: SimulationKernel, actorId: string, flow: NarrativeFlowDefinition, index: number): { text: string; cue: PulseReplyCue } {
   const { coordinator, choices } = openInk(engine, actorId, flow);
   if (!Number.isInteger(index) || index < 0 || index >= choices.length) throw new Error('Invalid narrative reply.');
   const chosen = coordinator.choose(index);
@@ -171,7 +204,10 @@ function responseFor(engine: SimulationKernel, actorId: string, flow: NarrativeF
     ? coordinator.advanceToChoices() : chosen;
   const authored = response.text.trim().slice(0, 500);
   const buddy = engine.social.getBuddy(actorId);
-  return buddy ? realizePulseReply(authored, buddy.traits).slice(0, 500) : authored;
+  return {
+    text: buddy ? realizePulseReply(authored, buddy.traits).slice(0, 500) : authored,
+    cue: cueFromInk(response.tags),
+  };
 }
 
 function receive(engine: SimulationKernel, actorId: string, text: string, tags: string[], accountId?: string) {
@@ -186,15 +222,16 @@ function receive(engine: SimulationKernel, actorId: string, text: string, tags: 
 function deliver(engine: SimulationKernel, actorId: string, state: Extract<Thread, { stage: 'waiting_first' | 'waiting_second' | 'waiting_outreach' }>, accountId?: string): string {
   const flow = state.stage === 'waiting_first'
     ? flowById.get(state.flowId)
-    : state.stage === 'waiting_second' ? PULSE_FOLLOWUP_FLOWS[state.topic]
+    : state.stage === 'waiting_second' ? (state.flowId ? flowById.get(state.flowId) : PULSE_FOLLOWUP_FLOWS[state.topic])
     : outreachReplyFlow(engine, actorId);
   if (!flow) throw new Error('Unknown authored thread.');
-  const text = responseFor(engine, actorId, flow,
+  const reply = responseFor(engine, actorId, flow,
     state.stage === 'waiting_first' ? state.topic : state.replyIndex);
   const tag = state.stage === 'waiting_first'
     ? `pulse:v2:response:${state.topic}` : 'pulse:v2:closed';
-  receive(engine, actorId, text, [tag], accountId);
-  return text;
+  receive(engine, actorId, reply.text,
+    [tag, ...(accountId && state.stage === 'waiting_first' ? [`pulse:cue:${reply.cue}`] : [])], accountId);
+  return reply.text;
 }
 
 function view(engine: SimulationKernel, actorId: string, accountId?: string): SimulationPulseNarrativeResult {
@@ -363,7 +400,7 @@ export function createWorkerPulseNarrative(engine: SimulationKernel) {
       const tag = first
         ? `pulse:v2:open:${topic}:${flow.flowId}`
         : state.stage === 'outreach' ? `pulse:v2:outreach_out:${command.choiceIndex}`
-        : `pulse:v2:followup_out:${topic}:${command.choiceIndex}`;
+        : `pulse:v2:followup_out:${topic}:${command.choiceIndex}${command.accountId ? `:${flow.flowId}` : ''}`;
       const sentText = choices[command.choiceIndex]!.text;
       const sent = engine.dispatchAction({
         type: 'SOCIAL_SEND_MESSAGE', buddyId: command.actorId, text: sentText,
@@ -382,8 +419,8 @@ export function createWorkerPulseNarrative(engine: SimulationKernel) {
           : state.stage === 'outreach' ? outreachReplyFlow(engine, command.actorId)
           : PULSE_FOLLOWUP_FLOWS[topic]!;
         const spoken = responseFor(engine, command.actorId, replyFlow, replyIndex);
-        receive(engine, command.actorId, spoken, [first ? `pulse:v2:response:${topic}` : 'pulse:v2:closed'], command.accountId);
-        reply = spoken;
+        receive(engine, command.actorId, spoken.text, [first ? `pulse:v2:response:${topic}` : 'pulse:v2:closed'], command.accountId);
+        reply = spoken.text;
       }
       return { ...view(engine, command.actorId, command.accountId), sent: sentText, reply };
     },

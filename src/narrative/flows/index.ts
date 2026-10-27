@@ -11,6 +11,8 @@ import pulseReminisceCompiled from '../ink/flows/pulse-reminisce.ink.json';
 import pulseFollowupPersonal from '../ink/flows/pulse-followup-personal.ink.json';
 import pulseFollowupTopic from '../ink/flows/pulse-followup-topic.ink.json';
 import pulseFollowupCourtesy from '../ink/flows/pulse-followup-courtesy.ink.json';
+import pulseFollowupReciprocal from '../ink/flows/pulse-followup-reciprocal.ink.json';
+import pulseFollowupPlayful from '../ink/flows/pulse-followup-playful.ink.json';
 import pulseOutreachReply from '../ink/flows/pulse-outreach-reply.ink.json';
 import pulseOutreachNewsReply from '../ink/flows/pulse-outreach-news-reply.ink.json';
 import pulseOutreachPromiseReply from '../ink/flows/pulse-outreach-promise-reply.ink.json';
@@ -53,6 +55,16 @@ export const PULSE_FOLLOWUP_FLOWS: readonly NarrativeFlowDefinition[] = [
   { flowId: 'pulse_followup_courtesy', compiledStory: pulseFollowupCourtesy,
     startsOn: { semanticKinds: ['conversation_started'], conversationChannels: ['pulse'] } },
 ];
+
+/** Signed-in identities use the incoming Ink reply cue to select a response,
+ * rather than assuming the opening choice tells us what the NPC said.
+ */
+export const PULSE_REACTIVE_FOLLOWUP_FLOWS: Readonly<Record<'reciprocal' | 'playful', NarrativeFlowDefinition>> = Object.freeze({
+  reciprocal: { flowId: 'pulse_followup_reciprocal', compiledStory: pulseFollowupReciprocal,
+    startsOn: { semanticKinds: ['conversation_started'], conversationChannels: ['pulse'] } },
+  playful: { flowId: 'pulse_followup_playful', compiledStory: pulseFollowupPlayful,
+    startsOn: { semanticKinds: ['conversation_started'], conversationChannels: ['pulse'] } },
+});
 
 export const PULSE_CONTEXTUAL_FLOWS: Readonly<Record<string, NarrativeFlowDefinition>> = Object.freeze({
   nearby: { flowId: 'pulse_nearby', compiledStory: pulseNearbyCompiled, startsOn: {
