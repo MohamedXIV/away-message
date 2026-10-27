@@ -77,6 +77,7 @@ export function WorkerPulsePanel({
   const [choices, setChoices] = useState<SimulationPulseNarrativeResult['choices']>([]);
   const [choicesLoading, setChoicesLoading] = useState(false);
   const [conversationPhase, setConversationPhase] = useState<SimulationPulseNarrativeResult['phase']>('first');
+  const [replyActivity, setReplyActivity] = useState<SimulationPulseNarrativeResult['replyActivity']>('idle');
   const [sending, setSending] = useState(false);
   const [pendingChoiceIndex, setPendingChoiceIndex] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -112,6 +113,7 @@ export function WorkerPulsePanel({
   useEffect(() => {
     let active = true;
     setOpenedAccount(null);
+    setReplyActivity('idle');
     setMessenger(null);
     setPage(null);
     setSelected(null);
@@ -171,6 +173,7 @@ export function WorkerPulsePanel({
     setPageOffset(0);
     setChoices([]);
     setConversationPhase('first');
+    setReplyActivity('idle');
     setPendingChoiceIndex(null);
     setNotice(null);
     setDrawerOpen(false);
@@ -182,6 +185,7 @@ export function WorkerPulsePanel({
   useEffect(() => {
     let active = true;
     if (!readyForAccount) {
+      setReplyActivity('idle');
       setMessenger(null);
       setPresence(null);
       setSelected(null);
@@ -253,6 +257,7 @@ export function WorkerPulsePanel({
         if (active && result.actorId === selected) {
           setChoices(result.choices);
           setConversationPhase(result.phase);
+          setReplyActivity(result.replyActivity);
           setError(null);
         }
       })
@@ -262,6 +267,24 @@ export function WorkerPulsePanel({
       .finally(() => { if (active) setChoicesLoading(false); });
     return () => { active = false; };
   }, [session, selected, page?.messages.at(-1)?.id, refreshNonce, readyForAccount, activeAccountId]);
+
+  // Only the Worker knows whether the world-time composing window has begun.
+  // Its passive read leaves transcript pages, authored choices and loaders stable.
+  useEffect(() => {
+    const waiting = conversationPhase === 'waiting_first' || conversationPhase === 'waiting_second'
+      || conversationPhase === 'waiting_outreach';
+    if (!readyForAccount || !selected || !waiting || !windowVisible || !documentVisible) return;
+    let active = true;
+    void session.pulseNarrative({ kind: 'choices', actorId: selected, accountId: activeAccountId! })
+      .then(result => {
+        if (active && result.actorId === selected) {
+          setReplyActivity(previous => previous === result.replyActivity ? previous : result.replyActivity);
+        }
+      })
+      .catch(() => { if (active) setReplyActivity('waiting'); });
+    return () => { active = false; };
+  }, [session, revision, selected, readyForAccount, activeAccountId,
+    conversationPhase, windowVisible, documentVisible]);
 
   useEffect(() => {
     if (!messenger) return;
@@ -416,6 +439,7 @@ export function WorkerPulsePanel({
     setPage(null);
     setChoices([]);
     setConversationPhase('first');
+    setReplyActivity('idle');
     setPendingChoiceIndex(null);
     setError(null);
     setLatestVisible(true);
@@ -434,6 +458,7 @@ export function WorkerPulsePanel({
     setPageOffset(0);
     setChoices([]);
     setConversationPhase('first');
+    setReplyActivity('idle');
     setPendingChoiceIndex(null);
     setError(null);
     setLatestVisible(true);
@@ -455,6 +480,7 @@ export function WorkerPulsePanel({
       if (result.actorId === selected) {
         setChoices(result.choices);
         setConversationPhase(result.phase);
+        setReplyActivity(result.replyActivity);
         setPageOffset(0);
         setLatestVisible(true);
         setConversationRevision(result.revision);
@@ -471,6 +497,7 @@ export function WorkerPulsePanel({
         if (refreshed.actorId === selected) {
           setChoices(refreshed.choices);
           setConversationPhase(refreshed.phase);
+          setReplyActivity(refreshed.replyActivity);
         }
       } catch { /* the visible error already explains the failed send */ }
     } finally {
@@ -586,7 +613,7 @@ export function WorkerPulsePanel({
               page={page} pageOffset={pageOffset} latestUnread={activeContact?.unread ?? 0}
               loading={pageLoading}
               choices={choices} choicesLoading={choicesLoading}
-              phase={conversationPhase} sending={sending} pendingChoiceIndex={pendingChoiceIndex}
+              phase={conversationPhase} replyActivity={replyActivity} sending={sending} pendingChoiceIndex={pendingChoiceIndex}
               compact
               onOlder={() => setPageOffset(current => current + 30)}
               onNewer={() => setPageOffset(current => Math.max(0, current - 30))}
@@ -612,7 +639,7 @@ export function WorkerPulsePanel({
             page={page} pageOffset={pageOffset} latestUnread={activeContact?.unread ?? 0}
             loading={pageLoading}
             choices={choices} choicesLoading={choicesLoading}
-            phase={conversationPhase} sending={sending} pendingChoiceIndex={pendingChoiceIndex}
+            phase={conversationPhase} replyActivity={replyActivity} sending={sending} pendingChoiceIndex={pendingChoiceIndex}
             compact={false}
             onOlder={() => setPageOffset(current => current + 30)}
             onNewer={() => setPageOffset(current => Math.max(0, current - 30))}

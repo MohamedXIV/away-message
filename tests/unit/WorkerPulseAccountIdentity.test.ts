@@ -55,6 +55,9 @@ describe('#223 independent player Pulse identities', () => {
     engine.advanceGameMinutes(9);
     expect(deliverPendingPulseReplies(engine)).toBe(0);
     engine.advanceGameMinutes(1);
+    expect(deliverPendingPulseReplies(engine)).toBe(0);
+    expect(narrative.run({ kind: 'choices', accountId: 'nightowl06', actorId }).replyActivity).toBe('typing');
+    engine.advanceGameMinutes(3);
     expect(deliverPendingPulseReplies(engine)).toBe(1);
     expect(deliverPendingPulseReplies(engine)).toBe(0);
     expect(engine.getConversationRead(actorId, 0, 30, 'nightowl06').messages).toHaveLength(2);
@@ -90,6 +93,8 @@ describe('#223 independent player Pulse identities', () => {
     expect(deliverPendingPulseReplies(engine)).toBe(0);
     expect(engine.getConversationRead(actorId, 0, 30, 'nightowl06').messages).toHaveLength(1);
     away = false;
+    expect(deliverPendingPulseReplies(engine)).toBe(0);
+    engine.advanceGameMinutes(2);
     expect(deliverPendingPulseReplies(engine)).toBe(1);
     expect(engine.getConversationRead(actorId, 0, 30, 'nightowl06').messages).toHaveLength(2);
   });
@@ -132,7 +137,7 @@ describe('#223 reply-aware signed-in Pulse continuation', () => {
     const first = narrative.run({ kind: 'choices', actorId, accountId });
     narrative.run({ kind: 'choose', actorId, accountId, choiceIndex: 0,
       expectedText: first.choices[0]!.text });
-    engine.advanceGameMinutes(10);
+    engine.advanceGameMinutes(13);
     expect(deliverPendingPulseReplies(engine)).toBe(1);
     const response = engine.getConversationRead(actorId, 0, 10, accountId).messages.at(-1)!;
     expect(response.text).toMatch(/how about you/i);
@@ -159,7 +164,7 @@ describe('#223 reply-aware signed-in Pulse continuation', () => {
       ? { status: 'online', awayMessage: '' } : { status: 'offline', awayMessage: '' });
     expect(createWorkerPulseNarrative(cold).run({ kind: 'choices', actorId, accountId }).phase)
       .toBe('waiting_second');
-    cold.advanceGameMinutes(10);
+    cold.advanceGameMinutes(13);
     expect(deliverPendingPulseReplies(cold)).toBe(1);
     expect(cold.getConversationRead(actorId, 0, 10, accountId).messages.at(-1)?.text)
       .toContain('Hope you get a break soon');
@@ -171,7 +176,7 @@ describe('#223 reply-aware signed-in Pulse continuation', () => {
     const first = narrative.run({ kind: 'choices', actorId, accountId });
     narrative.run({ kind: 'choose', actorId, accountId, choiceIndex: 1,
       expectedText: first.choices[1]!.text });
-    engine.advanceGameMinutes(10);
+    engine.advanceGameMinutes(13);
     expect(deliverPendingPulseReplies(engine)).toBe(1);
     expect(engine.getConversationRead(actorId, 0, 10, accountId).messages.at(-1)?.tags)
       .toContain('pulse:cue:playful');

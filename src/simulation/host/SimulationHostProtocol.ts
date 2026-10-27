@@ -124,6 +124,8 @@ export interface SimulationPulseNarrativeResult {
   actorId: string;
   choices: Array<{ id: string; text: string }>;
   phase: 'first' | 'second' | 'outreach' | 'waiting_first' | 'waiting_second' | 'waiting_outreach' | 'complete';
+  /** Worker-derived composing state; no React timers or extra persisted cursor. */
+  replyActivity: 'idle' | 'waiting' | 'typing';
   sent?: string;
   reply?: string | null;
 }

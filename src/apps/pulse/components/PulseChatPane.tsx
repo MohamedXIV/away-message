@@ -13,6 +13,7 @@ export function pulseConversationStateText(
   phase: PulseNarrativePhase,
   contact: PulseContactView | null,
   sending: boolean,
+  replyActivity: SimulationPulseNarrativeResult['replyActivity'] = 'idle',
 ): string {
   if (sending) return 'Sending your message…';
   const name = contact?.displayName ?? 'They';
@@ -23,6 +24,7 @@ export function pulseConversationStateText(
     if (contact?.status === 'away' || contact?.status === 'busy') {
       return `${name} is ${PULSE_STATUS_LABEL[contact.status].toLowerCase()} right now. They'll reply when they're free.`;
     }
+    if (replyActivity === 'typing' && contact?.status === 'online') return `${name} is typing…`;
     return `Waiting for ${name} to reply…`;
   }
   if (phase === 'complete') {
@@ -41,6 +43,7 @@ interface PulseChatPaneProps {
   choices: Array<{ id: string; text: string }>;
   choicesLoading: boolean;
   phase: PulseNarrativePhase;
+  replyActivity?: SimulationPulseNarrativeResult['replyActivity'];
   sending: boolean;
   pendingChoiceIndex: number | null;
   compact: boolean;
@@ -57,7 +60,7 @@ interface PulseChatPaneProps {
  * composes through authored choices, so no fake free-text intent is implied. */
 export const PulseChatPane: React.FC<PulseChatPaneProps> = ({
   contact, accountName, page, pageOffset, latestUnread, loading, choices, choicesLoading,
-  phase, sending, pendingChoiceIndex, compact, onOlder, onNewer, onNewest, onChoose,
+  phase, replyActivity = 'idle', sending, pendingChoiceIndex, compact, onOlder, onNewer, onNewest, onChoose,
   onLatestVisibilityChange, scrollToLatestSignal, onJumpToLatest,
 }) => {
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -340,15 +343,17 @@ export const PulseChatPane: React.FC<PulseChatPaneProps> = ({
           </div>
         ) : (
           <p role="status" data-testid="worker-pulse-conversation-state"
-            aria-live="polite"
+            data-reply-activity={replyActivity} aria-live="polite"
             className={`border px-2 py-1 text-[11px] ${
               waiting
                 ? 'border-[#c8a74a] bg-[#fff8d8] text-[#624900]'
                 : 'border-[#bca8d2] bg-white/80 text-[#5b4a6d]'
             }`}>
-            <span aria-hidden="true" className="mr-1">{waiting ? '⌛' : '☕'}</span>
+            <span aria-hidden="true" className={`mr-1 inline-block ${replyActivity === 'typing' ? 'motion-safe:animate-pulse' : ''}`}>
+              {replyActivity === 'typing' && contact?.status === 'online' ? '✎' : waiting ? '⌛' : '☕'}
+            </span>
             {sending || choicesLoading ? (sending ? 'Sending your message…' : 'Checking what you can say…')
-              : pulseConversationStateText(phase, contact, sending)}
+              : pulseConversationStateText(phase, contact, sending, replyActivity)}
           </p>
         )}
       </div>

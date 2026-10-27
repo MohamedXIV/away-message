@@ -10,6 +10,9 @@ import type { SimulationPulseNarrativeCommand, SimulationPulseNarrativeResult } 
 
 const MAX_CHOICES = 8;
 const MIN_REPLY_WAIT_MINUTES = 10;
+// Only signed-in Pulse IDs stage a visible world-time composing interval.
+// Legacy accountless simulation replies retain their established schedule.
+const COMPOSING_MINUTES = 3;
 const MAX_CONTACT_CHECK = 100;
 const MAX_DELIVERIES_PER_ADVANCE = 4;
 const MAX_OUTREACH_CANDIDATES_PER_DAY = 2;
@@ -234,6 +237,18 @@ function deliver(engine: SimulationKernel, actorId: string, state: Extract<Threa
   return reply.text;
 }
 
+function replyActivity(
+  engine: SimulationKernel, actorId: string, state: Thread, accountId?: string,
+): SimulationPulseNarrativeResult['replyActivity'] {
+  if (state.stage !== 'waiting_first' && state.stage !== 'waiting_second' && state.stage !== 'waiting_outreach') return 'idle';
+  if (!accountId || totalMinutes(engine) - state.sentMinute < MIN_REPLY_WAIT_MINUTES) return 'waiting';
+  // World-owned actor availability + canonical Social presence are both required.
+  // UI does not start a timer or invent a typing transition on its own.
+  if (!engine.getPlayerActorRead(actorId)?.actor?.canChatNow.allowed
+    || engine.social.getPresence(actorId)?.status !== 'online') return 'waiting';
+  return 'typing';
+}
+
 function view(engine: SimulationKernel, actorId: string, accountId?: string): SimulationPulseNarrativeResult {
   const state = thread(engine, actorId, accountId);
   const flow = flowFor(state, engine, actorId, accountId);
@@ -241,6 +256,7 @@ function view(engine: SimulationKernel, actorId: string, accountId?: string): Si
     revision: engine.getMessengerRead(0).revision,
     actorId,
     phase: state.stage,
+    replyActivity: replyActivity(engine, actorId, state, accountId),
     choices: flow ? openInk(engine, actorId, flow).choices : [],
   };
 }
@@ -258,7 +274,8 @@ export function deliverPendingPulseReplies(engine: SimulationKernel): number {
     const id = contact.actorId;
     const state = thread(engine, id, accountId);
     if (state.stage !== 'waiting_first' && state.stage !== 'waiting_second' && state.stage !== 'waiting_outreach') continue;
-    if (totalMinutes(engine) - state.sentMinute < MIN_REPLY_WAIT_MINUTES) continue;
+    const dueAfter = MIN_REPLY_WAIT_MINUTES + (accountId ? COMPOSING_MINUTES : 0);
+    if (totalMinutes(engine) - state.sentMinute < dueAfter) continue;
     const actor = engine.getPlayerActorRead(id)?.actor;
     if (!actor?.canChatNow.allowed) continue;
     // Away/busy/offline is not a fake typing session. Wait for real online presence.
@@ -376,11 +393,11 @@ export function createWorkerPulseNarrative(engine: SimulationKernel) {
       if (!engine.getChromeRead().pulseInstalled) throw new Error('Install Pulse Messenger to chat.');
       if (command.kind === 'openAccount') {
         engine.openPulseAccount(command.accountId);
-        return { revision: engine.getRevision(), actorId: '', phase: 'first', choices: [] };
+        return { revision: engine.getRevision(), actorId: '', phase: 'first', replyActivity: 'idle', choices: [] };
       }
       if (command.kind === 'addBuddy') {
         engine.addPulseBuddy(command.accountId, command.actorId);
-        return { revision: engine.getRevision(), actorId: command.actorId, phase: 'first', choices: [] };
+        return { revision: engine.getRevision(), actorId: command.actorId, phase: 'first', replyActivity: 'idle', choices: [] };
       }
       const actor = authorize(engine, command.actorId, command.accountId);
       if (command.kind === 'choices') return view(engine, command.actorId, command.accountId);
