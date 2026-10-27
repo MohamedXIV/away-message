@@ -19,7 +19,7 @@ describe('#223 independent player Pulse identities', () => {
     const { engine, actorId, narrative } = fixture();
     (narrative.run as (command: any) => any)({ kind: 'openAccount', accountId: 'nightowl06' });
     (narrative.run as (command: any) => any)({ kind: 'addBuddy', accountId: 'nightowl06', actorId });
-    expect((engine.getMessengerRead as any)(32, 'nightowl06').contacts.map(row => row.actorId)).toEqual([actorId]);
+    expect((engine.getMessengerRead as any)(32, 'nightowl06').contacts.map((row: { actorId: string }) => row.actorId)).toEqual([actorId]);
 
     (narrative.run as (command: any) => any)({ kind: 'openAccount', accountId: 'pixelghost' });
     expect((engine.getMessengerRead as any)(32, 'pixelghost').contacts).toEqual([]);
@@ -50,7 +50,7 @@ describe('#223 independent player Pulse identities', () => {
     expect((engine.getConversationRead as any)(actorId, 0, 30, 'pixelghost').messages).toEqual([]);
 
     const restored = new SimulationKernel(engine.exportSnapshot());
-    expect((restored.getMessengerRead as any)(32, 'pixelghost').contacts.map(row => row.actorId)).toEqual([actorId]);
+    expect((restored.getMessengerRead as any)(32, 'pixelghost').contacts.map((row: { actorId: string }) => row.actorId)).toEqual([actorId]);
     expect((restored.getConversationRead as any)(actorId, 0, 30, 'nightowl06').messages).toHaveLength(2);
     expect((restored.getConversationRead as any)(actorId, 0, 30, 'pixelghost').messages).toEqual([]);
   });
