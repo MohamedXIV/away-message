@@ -301,4 +301,126 @@ describe('#223 NPC-initiated Pulse — canonical social opportunity', () => {
     const options = ctx.narrative.run({ kind: 'choices', actorId: id }).choices;
     expect(options[0]?.text).toBe("Hey, good to hear from you. What's up?");
   });
+
+  it('continues a genuine open-promise outreach with commitment choices, without resolving the promise', () => {
+    const ctx = fixture('npc-outreach-promise-flow-001');
+    for (const id of ctx.ids) {
+      expect(ctx.engine.social.addPromise(id, 'Review our pending arrangement together', 1)).toBeTruthy();
+    }
+    ctx.toEligibleDay();
+    expect(initiateWorkerPulseOutreach(ctx.engine)).toBeGreaterThan(0);
+    const id = ctx.ids.find(actorId => ctx.engine.getConversationRead(actorId, 0, 5)
+      .messages.some(message => message.tags?.includes('pulse:v2:outreach:promise')))!;
+    expect(id).toBeTruthy();
+    const offered = ctx.narrative.run({ kind: 'choices', actorId: id });
+    expect(offered.phase).toBe('outreach');
+    expect(offered.choices.map(choice => choice.text))
+      .toContain('Where do we stand on what we agreed?');
+    expect(offered.choices.map(choice => choice.text))
+      .not.toContain("Hey, good to hear from you. What's up?");
+    const answer = ctx.narrative.run({
+      kind: 'choose', actorId: id, choiceIndex: 0, expectedText: offered.choices[0]!.text,
+    });
+    expect(answer.phase).toBe('complete');
+    expect(answer.reply).toMatch(/agreed|agreement/i);
+    expect(answer.reply).not.toMatch(/nothing urgent/i);
+    expect(ctx.engine.social.getOpenPromises(id)).toHaveLength(1);
+    const history = ctx.engine.getConversationRead(id, 0, 10).messages;
+    expect(history.map(row => row.senderId)).toEqual([id, 'player', id]);
+    expect(history.at(-1)?.tags).toContain('pulse:v2:closed');
+    const restored = new SimulationKernel(ctx.engine.exportSnapshot());
+    expect(restored.social.getOpenPromises(id)).toHaveLength(1);
+    expect(restored.getConversationRead(id, 0, 10).messages.at(-1)?.text).toBe(answer.reply);
+  });
+
+  it('continues an actual mutual memory without assuming it was happy, including delayed cold delivery', () => {
+    const ctx = fixture('npc-outreach-shared-flow-001');
+    for (const id of ctx.ids) {
+      ctx.engine.social.addCoreMemory(id, {
+        text: 'A difficult moment the player and contact experienced together',
+        kind: 'shared_moment', day: 1,
+        meaning: {
+          participants: ['player', id],
+          subject: { kind: 'event', id: 'a_difficult_shared_moment' },
+          source: { kind: 'direct_experience', refId: 'shared_difficulty_01' },
+          salience: 'high', valence: 'negative',
+        },
+      });
+    }
+    ctx.toEligibleDay();
+    expect(initiateWorkerPulseOutreach(ctx.engine)).toBeGreaterThan(0);
+    const id = ctx.ids.find(actorId => ctx.engine.getConversationRead(actorId, 0, 5)
+      .messages.some(message => message.tags?.includes('pulse:v2:outreach:shared')))!;
+    expect(id).toBeTruthy();
+    const offered = ctx.narrative.run({ kind: 'choices', actorId: id });
+    expect(offered.choices.map(choice => choice.text))
+      .toContain('What do you remember about that time together?');
+    ctx.setAvailable(false);
+    const pending = ctx.narrative.run({
+      kind: 'choose', actorId: id, choiceIndex: 0, expectedText: offered.choices[0]!.text,
+    });
+    expect(pending.phase).toBe('waiting_outreach');
+    expect(pending.reply).toBeNull();
+    ctx.engine.advanceGameMinutes(11);
+    const restored = new SimulationKernel(ctx.engine.exportSnapshot());
+    const chrome = restored.getChromeRead.bind(restored);
+    vi.spyOn(restored, 'getChromeRead').mockImplementation(() => ({
+      ...chrome(), pulseInstalled: true,
+    }));
+    const read = restored.getPlayerActorRead.bind(restored);
+    vi.spyOn(restored, 'getPlayerActorRead').mockImplementation(other => {
+      const state = read(other);
+      return state && other === id ? { ...state, actor: {
+        ...state.actor, canChatNow: { allowed: true, reasons: [] },
+      } } : state;
+    });
+    expect(createWorkerPulseNarrative(restored).run({ kind: 'choices', actorId: id }).phase)
+      .toBe('waiting_outreach');
+    expect(deliverPendingPulseReplies(restored)).toBe(1);
+    expect(deliverPendingPulseReplies(restored)).toBe(0);
+    const response = restored.getConversationRead(id, 0, 10).messages.at(-1)!;
+    expect(response.text).toMatch(/remember|stayed with me|there with you/i);
+    expect(response.text).not.toMatch(/great day|happy time|nothing urgent/i);
+    expect(response.tags).toContain('pulse:v2:closed');
+    expect(new SimulationKernel(restored.exportSnapshot())
+      .getConversationRead(id, 0, 10).messages.at(-1)?.text).toBe(response.text);
+  });
+
+  it('does not promote forged, private or expired Social context into outreach options', () => {
+    const ctx = fixture('npc-outreach-context-forgery-001');
+    const promiseActor = ctx.ids[0]!;
+    const sharedActor = ctx.ids[1]!;
+    const promise = ctx.engine.social.addPromise(promiseActor, 'An unfinished arrangement with the player', 1)!;
+    expect(promise).toBeTruthy();
+    expect(ctx.engine.dispatchAction({
+      type: 'SOCIAL_RECEIVE_MESSAGE', buddyId: promiseActor,
+      text: 'We still have an agreement?',
+      tags: ['ink_pulse', 'pulse:v2:outreach:promise'],
+    }).success).toBe(true);
+    const valid = ctx.narrative.run({ kind: 'choices', actorId: promiseActor });
+    expect(valid.choices[0]?.text).toBe('Where do we stand on what we agreed?');
+    ctx.engine.social.resolvePromise(promiseActor, promise.id, true, 1);
+    expect(ctx.engine.social.getOpenPromises(promiseActor)).toHaveLength(0);
+    expect(ctx.narrative.run({ kind: 'choices', actorId: promiseActor }).choices[0]?.text)
+      .toBe("Hey, good to hear from you. What's up?");
+
+    ctx.engine.social.addCoreMemory(sharedActor, {
+      text: 'A private meeting with somebody other than the player',
+      kind: 'shared_moment', day: 1,
+      meaning: {
+        participants: [sharedActor, 'someone-else'],
+        subject: { kind: 'event', id: 'private_meeting' },
+        source: { kind: 'direct_experience', refId: 'private_meeting_01' },
+        salience: 'high', valence: 'neutral',
+      },
+    });
+    expect(ctx.engine.dispatchAction({
+      type: 'SOCIAL_RECEIVE_MESSAGE', buddyId: sharedActor,
+      text: 'Remember that thing?',
+      tags: ['ink_pulse', 'pulse:v2:outreach:shared'],
+    }).success).toBe(true);
+    expect(ctx.narrative.run({ kind: 'choices', actorId: sharedActor }).choices[0]?.text)
+      .toBe("Hey, good to hear from you. What's up?");
+  });
+
 });

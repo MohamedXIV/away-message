@@ -116,6 +116,42 @@ const REPLY_VOICES: Record<string, Record<PulseVoice, string>> = {
     gentle: "No worries at all. Talk when you've got a moment.",
     direct: "No worries. Talk when you've got a moment.",
   },
+  "We can take another look at what we agreed and work out the next step.": {
+    reserved: "We can revisit what we agreed and work out the next step.",
+    bright: "Hey, we can look at what we agreed and figure out our next step!",
+    gentle: "We can go over what we agreed together and take the next step slowly.",
+    direct: "Let's review what we agreed and decide the next step.",
+  },
+  "Let's find a time to talk it through. I haven't crossed it off.": {
+    reserved: "Maybe we can find a time to talk it through. I haven't crossed it off.",
+    bright: "Let's find time to talk it through! I haven't crossed it off!",
+    gentle: "Let's find a time that works to talk it through. I haven't crossed it off.",
+    direct: "We need a time to talk it through. I haven't crossed it off.",
+  },
+  "That's okay. We can come back to the plan when you're ready.": {
+    reserved: "That's okay. We can revisit the plan when you're ready.",
+    bright: "That's okay! We'll come back to the plan when you're ready.",
+    gentle: "That's all right. We can return to the plan when you feel ready.",
+    direct: "Okay. We'll come back to the plan when you're ready.",
+  },
+  "I remember being there with you. Some parts of it have stayed with me.": {
+    reserved: "I remember being there with you. Some of it stayed with me.",
+    bright: "I remember being there with you! Parts of that moment keep coming back.",
+    gentle: "I remember being there with you. Some parts have stayed with me.",
+    direct: "I remember being there with you. Parts of it stayed.",
+  },
+  "Sometimes. I still think about what that moment meant to us.": {
+    reserved: "Sometimes. I think about what that moment meant to us.",
+    bright: "Sometimes, yeah! I keep thinking about what that moment meant to us.",
+    gentle: "Sometimes. I still wonder what that moment meant to us.",
+    direct: "Sometimes. I think about what that moment meant to us.",
+  },
+  "I hear you. We can leave that memory alone for now.": {
+    reserved: "I hear you. We can leave that memory alone for now.",
+    bright: "I hear you! We can leave that memory alone for now.",
+    gentle: "I hear you. It's okay to leave that memory alone for now.",
+    direct: "I hear you. We'll leave that memory alone for now.",
+  },
 };
 
 export function realizePulseReply(authoredText: string, traits: CharacterTraits): string {

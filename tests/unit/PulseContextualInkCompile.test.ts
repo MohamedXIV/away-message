@@ -11,6 +11,7 @@ const dialogueFlows = [
   'pulse-followup-personal', 'pulse-followup-topic', 'pulse-followup-courtesy',
   'pulse-outreach-reply',
   'pulse-outreach-news-reply',
+  'pulse-outreach-promise-reply', 'pulse-outreach-shared-reply',
 ] as const;
 
 describe('#223 authored contextual Ink consistency', () => {
