@@ -60,4 +60,20 @@ describe('#223 character-specific offline Pulse realization', () => {
     expect(guarded).not.toBe(upbeat);
     expect(guarded.length).toBeLessThanOrEqual(240);
   });
+
+  it('keeps distinct voice without inventing promise completion or a positive shared memory', () => {
+    const cases = [
+      { ink: 'We can take another look at what we agreed and work out the next step.',
+        grounded: /agreed|agreement/i, forbidden: /finished|fulfilled|complete/i },
+      { ink: 'I remember being there with you. Some parts of it have stayed with me.',
+        grounded: /remember|there with you/i, forbidden: /great day|happy time|celebrat/i },
+    ];
+    for (const { ink, grounded, forbidden } of cases) {
+      const lines = [reserved, bright, gentle, direct].map(traits => realizePulseReply(ink, traits));
+      expect(new Set(lines).size).toBe(4);
+      expect(lines.every(line => grounded.test(line))).toBe(true);
+      expect(lines.every(line => !forbidden.test(line))).toBe(true);
+    }
+  });
+
 });
