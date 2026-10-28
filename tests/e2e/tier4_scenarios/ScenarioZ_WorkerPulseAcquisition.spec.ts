@@ -81,9 +81,20 @@ test('#214 fresh Orion acquires Pulse only through real internet â†’ VFS setup â
   // A brand-new online identity starts with no buddies even though the
   // physical player's world has known people. Contacts must be added by this ID.
   await expect(contacts).toContainText('No buddies yet');
-  const finder = messenger.getByRole('combobox', { name: 'Find a known buddy' });
-  await expect(finder.locator('option')).not.toHaveCount(0);
-  await messenger.getByRole('button', { name: 'Add', exact: true }).click();
+  // Adding a buddy is a period-style typed Pulse ID flow, not a roster dropdown.
+  await messenger.getByRole('button', { name: 'Add a buddy' }).click();
+  const addDialog = messenger.getByRole('dialog', { name: 'Add a buddy' });
+  const idInput = addDialog.getByRole('textbox', { name: "Buddy's Pulse ID" });
+  await expect(idInput).toBeFocused();
+  await idInput.fill('@not_a_learned_buddy');
+  await addDialog.getByRole('button', { name: 'Add Buddy', exact: true }).click();
+  await expect(addDialog.getByRole('alert')).toContainText('not among the handles');
+  await expect(contacts.locator('[data-testid^="worker-pulse-contact-"]')).toHaveCount(0);
+  const firstKnownHandle = await addDialog.locator('datalist option').first().getAttribute('value');
+  if (!firstKnownHandle) throw new Error('Expected a learned Pulse ID suggestion');
+  await idInput.fill('@' + firstKnownHandle.toUpperCase());
+  await addDialog.getByRole('button', { name: 'Add Buddy', exact: true }).click();
+  await expect(addDialog).toHaveCount(0);
   await expect(contacts.locator('[data-testid^="worker-pulse-contact-"]')).toHaveCount(1);
 
   // A signed-in identity can inspect its own learned buddy. Profiles only
@@ -123,7 +134,13 @@ test('#214 fresh Orion acquires Pulse only through real internet â†’ VFS setup â
   const contactRows = contacts.locator('[data-testid^="worker-pulse-contact-"]');
   const originalContactTestId = await contactRows.first().getAttribute('data-testid');
   if (!originalContactTestId) throw new Error('Expected the original Pulse contact');
-  await messenger.getByRole('button', { name: 'Add', exact: true }).click();
+  await messenger.getByRole('button', { name: 'Add a buddy' }).click();
+  const addSecondDialog = messenger.getByRole('dialog', { name: 'Add a buddy' });
+  const secondKnownHandle = await addSecondDialog.locator('datalist option').first().getAttribute('value');
+  if (!secondKnownHandle) throw new Error('Expected a second learned Pulse ID');
+  await addSecondDialog.getByRole('textbox', { name: "Buddy's Pulse ID" }).fill(secondKnownHandle);
+  await addSecondDialog.getByRole('button', { name: 'Add Buddy', exact: true }).click();
+  await expect(addSecondDialog).toHaveCount(0);
   await expect(contactRows).toHaveCount(2);
   const newContactRow = contacts.locator(
     `[data-testid^="worker-pulse-contact-"]:not([data-testid="${originalContactTestId}"])`,

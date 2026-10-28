@@ -49,6 +49,8 @@ function createSession(options: SessionOptions = {}) {
             lastMessageMinute: null, unread: 0,
           }] : [])],
           unreadCounts: { actor_a: 1, ...(options.extraBuddy ? { actor_b: 0 } : {}) },
+          availableBuddies: options.extraBuddy
+            ? [{ actorId: 'actor_c', displayName: 'Actor C', handle: 'actor_c' }] : [],
         };
       }
       if (query.kind === 'presence') {
@@ -474,6 +476,57 @@ describe('#223 Worker Pulse UI session and attention', () => {
       .find(button => button.textContent?.includes('Send IM'))!;
     await act(async () => { send.click(); });
     await waitFor(() => container.querySelector('button[aria-label="Switch to Actor B"]') !== null);
+  });
+
+  it('adds only a learned typed Pulse ID for the signed-in account and restores dialog focus', async () => {
+    checkPulseCredentials([], 'shared_id', 'slot-a-password', 'slot_1');
+    setPulseWindow('slot_1', 'pulse');
+    const { session, pulseNarrative } = createSession({ extraBuddy: true });
+
+    await act(async () => {
+      root.render(React.createElement(WorkerPulsePanel, { session, revision: 1, windowId: 'pulse', slotId: 'slot_1' }));
+    });
+    await waitFor(() => container.textContent?.includes('are you around?') === true);
+    const opener = container.querySelector<HTMLButtonElement>('button[aria-label="Add a buddy"]');
+    expect(opener).toBeTruthy();
+    await act(async () => { opener!.click(); });
+    const dialog = container.querySelector<HTMLElement>('[role="dialog"][aria-label="Add a buddy"]');
+    expect(dialog).toBeTruthy();
+    const input = dialog?.querySelector<HTMLInputElement>('input[name="buddyPulseId"]');
+    expect(input).toBeTruthy();
+    await waitFor(() => document.activeElement === input);
+    const edit = async (value: string) => {
+      await act(async () => {
+        Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(input, value);
+        input!.dispatchEvent(new Event('input', { bubbles: true }));
+      });
+    };
+    const submit = async () => {
+      await act(async () => {
+        dialog!.querySelector('form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+      });
+    };
+
+    await edit('@not_a_learned_id');
+    await submit();
+    expect(dialog?.textContent).toContain('not among the handles');
+    expect(pulseNarrative.mock.calls.filter(([command]) => command.kind === 'addBuddy')).toHaveLength(0);
+    expect(container.querySelector('[data-testid="worker-pulse-messages"]')?.textContent).toContain('are you around?');
+
+    await edit(' @ACTOR_C ');
+    await submit();
+    await waitFor(() => pulseNarrative.mock.calls.some(([command]) => command.kind === 'addBuddy'));
+    expect(pulseNarrative).toHaveBeenCalledWith({ kind: 'addBuddy', actorId: 'actor_c', accountId: 'shared_id' });
+    await waitFor(() => container.querySelector('[role="dialog"][aria-label="Add a buddy"]') === null);
+    await waitFor(() => document.activeElement === opener);
+
+    await act(async () => { opener!.click(); });
+    await waitFor(() => container.querySelector('[role="dialog"][aria-label="Add a buddy"]') !== null);
+    await act(async () => {
+      document.activeElement!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    });
+    await waitFor(() => container.querySelector('[role="dialog"][aria-label="Add a buddy"]') === null);
+    await waitFor(() => document.activeElement === opener);
   });
 
 });
