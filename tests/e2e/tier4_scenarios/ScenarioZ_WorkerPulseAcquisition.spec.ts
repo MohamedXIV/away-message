@@ -84,7 +84,7 @@ test('#214 fresh Orion acquires Pulse only through real internet â†’ VFS setup â
   // Adding a buddy is a period-style typed Pulse ID flow, not a roster dropdown.
   await messenger.getByRole('button', { name: 'Add a buddy' }).click();
   const addDialog = messenger.getByRole('dialog', { name: 'Add a buddy' });
-  const idInput = addDialog.getByRole('textbox', { name: "Buddy's Pulse ID" });
+  const idInput = addDialog.getByRole('combobox', { name: "Buddy's Pulse ID" });
   await expect(idInput).toBeFocused();
   await idInput.fill('@not_a_learned_buddy');
   await addDialog.getByRole('button', { name: 'Add Buddy', exact: true }).click();
@@ -138,7 +138,7 @@ test('#214 fresh Orion acquires Pulse only through real internet â†’ VFS setup â
   const addSecondDialog = messenger.getByRole('dialog', { name: 'Add a buddy' });
   const secondKnownHandle = await addSecondDialog.locator('datalist option').first().getAttribute('value');
   if (!secondKnownHandle) throw new Error('Expected a second learned Pulse ID');
-  await addSecondDialog.getByRole('textbox', { name: "Buddy's Pulse ID" }).fill(secondKnownHandle);
+  await addSecondDialog.getByRole('combobox', { name: "Buddy's Pulse ID" }).fill(secondKnownHandle);
   await addSecondDialog.getByRole('button', { name: 'Add Buddy', exact: true }).click();
   await expect(addSecondDialog).toHaveCount(0);
   await expect(contactRows).toHaveCount(2);
