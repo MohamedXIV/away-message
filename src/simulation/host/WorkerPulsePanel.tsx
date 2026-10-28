@@ -7,6 +7,7 @@ import type {
 import { PulseBuddyList, PulseContactRail, buildPulseContactViews, partitionPulseContacts } from '../../apps/pulse/components/PulseBuddyList';
 import { PulseChatPane } from '../../apps/pulse/components/PulseChatPane';
 import { PulseContactProfile } from '../../apps/pulse/components/PulseContactProfile';
+import { PulseAddBuddyDialog } from '../../apps/pulse/components/PulseAddBuddyDialog';
 import { ChatTabHeader } from '../../apps/pulse/components/ChatTabHeader';
 import { PULSE_STATUS_LABEL } from '../../apps/pulse/components/PulseAvatar';
 import { PulseLoginSplash, type PulseLoginSession } from '../../apps/pulse/components/PulseLoginSplash';
@@ -73,7 +74,7 @@ export function WorkerPulsePanel({
   const [chatTabs, setChatTabs] = useState(() => createPulseChatTabs(bootstrap.selected));
   const selected = chatTabs.activeId;
   const [openedAccount, setOpenedAccount] = useState<string | null>(null);
-  const [buddyToAdd, setBuddyToAdd] = useState('');
+  const [addDialogOpen, setAddDialogOpen] = useState(false);
   const [addingBuddy, setAddingBuddy] = useState(false);
   const [messenger, setMessenger] = useState<SimulationMessengerRead | null>(null);
   const [presence, setPresence] = useState<SimulationPresenceRead | null>(null);
@@ -102,6 +103,7 @@ export function WorkerPulsePanel({
   const drawerRef = useRef<HTMLDivElement>(null);
   const drawerReturnFocus = useRef<HTMLElement | null>(null);
   const profileReturnFocus = useRef<HTMLElement | null>(null);
+  const addDialogReturnFocus = useRef<HTMLElement | null>(null);
   const tabAccountScope = useRef(`${slotId}:${bootstrap.account?.username ?? ''}`);
   const conversationScope = useRef(`${bootstrap.account?.username ?? ''}:${bootstrap.selected ?? ''}`);
   const unreadBaseline = useRef<Record<string, number> | null>(null);
@@ -128,6 +130,8 @@ export function WorkerPulsePanel({
     let active = true;
     setOpenedAccount(null);
     setInspectedActorId(null);
+    setAddDialogOpen(false);
+    addDialogReturnFocus.current = null;
     profileReturnFocus.current = null;
     setReplyActivity('idle');
     setMessenger(null);
@@ -197,6 +201,8 @@ export function WorkerPulsePanel({
     setPendingChoiceIndex(null);
     setNotice(null);
     setDrawerOpen(false);
+    setAddDialogOpen(false);
+    addDialogReturnFocus.current = null;
     setError(null);
     unreadBaseline.current = null;
     acknowledgedMessages.current.clear();
@@ -383,35 +389,41 @@ export function WorkerPulsePanel({
   const totals = partitionPulseContacts(contacts);
   const totalUnread = contacts.reduce((sum, contact) => sum + contact.unread, 0);
   const availableBuddies = messenger?.availableBuddies ?? [];
-  const buddyChoice = availableBuddies.some(row => row.actorId === buddyToAdd)
-    ? buddyToAdd : (availableBuddies[0]?.actorId ?? '');
 
-  const addBuddy = async () => {
-    if (!activeAccountId || !buddyChoice || addingBuddy) return;
+  const openAddDialog = (opener: HTMLElement) => {
+    addDialogReturnFocus.current = opener;
+    setAddDialogOpen(true);
+  };
+
+  const closeAddDialog = () => {
+    setAddDialogOpen(false);
+    const target = addDialogReturnFocus.current;
+    addDialogReturnFocus.current = null;
+    window.setTimeout(() => { if (target?.isConnected) target.focus(); }, 0);
+  };
+
+  const addBuddy = async (actorId: string): Promise<void> => {
+    if (!activeAccountId || addingBuddy) throw new Error('Pulse is not ready to add a buddy.');
+    if (!availableBuddies.some(row => row.actorId === actorId)) {
+      throw new Error('This Pulse ID is no longer available to add.');
+    }
     setAddingBuddy(true);
-    setError(null);
     try {
-      await session.pulseNarrative({ kind: 'addBuddy', accountId: activeAccountId, actorId: buddyChoice });
-      setBuddyToAdd('');
+      await session.pulseNarrative({ kind: 'addBuddy', accountId: activeAccountId, actorId });
       setRefreshNonce(current => current + 1);
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause));
-    } finally { setAddingBuddy(false); }
+      closeAddDialog();
+    } finally {
+      setAddingBuddy(false);
+    }
   };
 
   const addBuddyControls = (
-    <div className="flex shrink-0 items-center gap-1 border-b border-[#b49dcb] bg-[#eee5f6] px-1.5 py-1">
-      <select aria-label="Find a known buddy" value={buddyChoice}
-        onChange={event => setBuddyToAdd(event.target.value)}
-        disabled={!availableBuddies.length}
-        className="min-w-0 flex-1 border border-[#9473b4] bg-white px-1 py-0.5 text-[11px] text-[#2f194c]">
-        {!availableBuddies.length && <option value="">Meet people to add buddies</option>}
-        {availableBuddies.map(row => <option key={row.actorId} value={row.actorId}>{row.displayName} ({row.handle})</option>)}
-      </select>
-      <button type="button" onClick={() => { void addBuddy(); }}
-        disabled={!buddyChoice || addingBuddy}
-        className="shrink-0 border border-[#6f4b98] bg-[#fffdfd] px-1.5 py-0.5 text-[11px] font-bold disabled:opacity-50">
-        Add
+    <div className="flex shrink-0 items-center justify-between gap-2 border-b border-[#b49dcb] bg-[#eee5f6] px-2 py-1">
+      <span className="truncate text-[11px] font-bold text-[#4f326e]">Buddy List</span>
+      <button type="button" onClick={event => openAddDialog(event.currentTarget)}
+        aria-label="Add a buddy"
+        className="shrink-0 border border-[#6f4b98] bg-gradient-to-b from-white to-[#e7dff0] px-2 py-0.5 text-[11px] font-bold text-[#4b2d68] shadow-[1px_1px_0_#bba8cc] hover:from-[#fffbe6] hover:to-[#e4d5f2]">
+        + Add
       </button>
     </div>
   );
@@ -507,6 +519,8 @@ export function WorkerPulsePanel({
     profileReturnFocus.current = null;
     savePulseCredentials(null);
     setDrawerOpen(false);
+    setAddDialogOpen(false);
+    addDialogReturnFocus.current = null;
     setNotice(null);
     setAccount(null);
     setAccountSlotId(null);
@@ -756,6 +770,11 @@ export function WorkerPulsePanel({
         </div>
       )}
 
+      {addDialogOpen && (
+        <PulseAddBuddyDialog accountName={currentAccount.username}
+          candidates={availableBuddies} contacts={contacts} submitting={addingBuddy}
+          onAdd={addBuddy} onClose={closeAddDialog} />
+      )}
       {profileContact && (
         <PulseContactProfile contact={profileContact} onClose={closeProfile} />
       )}
