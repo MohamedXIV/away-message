@@ -98,6 +98,36 @@ test('#214 fresh Orion acquires Pulse only through real internet â†’ VFS setup â
     .toContainText(/\d{1,2}:\d{2} (AM|PM)/);
   await expect(messenger.getByTestId('worker-pulse-messages').locator('[data-sender="buddy"]')).toHaveCount(0);
 
+  // The Worker client restores the classic tabbed IM workflow without
+  // creating a second chat owner. Switching, closing and reopening tabs must
+  // never lose the Social-owned transcript or automatically reopen a closed tab.
+  const tabs = messenger.getByTestId('worker-pulse-chat-tabs');
+  await expect(messenger.getByTestId('worker-pulse-messages'))
+    .toHaveAttribute('data-pulse-transcript-style', 'classic');
+  await expect(tabs.getByRole('button', { name: /^Switch to / })).toHaveCount(1);
+  // Fresh worlds have two known ordinary acquaintances, not a fixed cast.
+  await messenger.getByRole('button', { name: 'Add', exact: true }).click();
+  await expect(contacts.locator('[data-testid^="worker-pulse-contact-"]')).toHaveCount(2);
+  const contactRows = contacts.locator('[data-testid^="worker-pulse-contact-"]');
+  await contactRows.nth(1).click();
+  await expect(tabs.getByRole('button', { name: /^Switch to / })).toHaveCount(2);
+  await expect(tabs.getByRole('button', { name: /^Switch to / }).last()).toHaveAttribute('aria-current', 'page');
+  await tabs.getByRole('button', { name: /^Close conversation with / }).last().click();
+  await expect(tabs.getByRole('button', { name: /^Switch to / })).toHaveCount(1);
+  await expect(messenger.getByTestId('worker-pulse-messages'))
+    .toContainText('Hey! How have you been lately?');
+  await contactRows.nth(1).click();
+  await expect(tabs.getByRole('button', { name: /^Switch to / })).toHaveCount(2);
+  await tabs.getByRole('button', { name: /^Close conversation with / }).first().click();
+  await expect(tabs.getByRole('button', { name: /^Switch to / })).toHaveCount(1);
+  await tabs.getByRole('button', { name: /^Close conversation with / }).first().click();
+  await expect(tabs.getByRole('button', { name: /^Switch to / })).toHaveCount(0);
+  await expect(messenger.getByTestId('worker-pulse-messages')).toHaveCount(0);
+  await contactRows.first().click();
+  await expect(tabs.getByRole('button', { name: /^Switch to / })).toHaveCount(1);
+  await expect(messenger.getByTestId('worker-pulse-messages'))
+    .toContainText('Hey! How have you been lately?');
+
   // A second account is a separate identity, not a shared device-local buddy list.
   await messenger.getByRole('button', { name: 'Sign out' }).click();
   await messenger.getByText('Get a new Pulse ID').click();

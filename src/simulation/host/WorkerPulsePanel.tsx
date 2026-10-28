@@ -6,10 +6,14 @@ import type {
 } from '../../engine/kernel/SimulationPublication';
 import { PulseBuddyList, PulseContactRail, buildPulseContactViews, partitionPulseContacts } from '../../apps/pulse/components/PulseBuddyList';
 import { PulseChatPane } from '../../apps/pulse/components/PulseChatPane';
+import { ChatTabHeader } from '../../apps/pulse/components/ChatTabHeader';
 import { PULSE_STATUS_LABEL } from '../../apps/pulse/components/PulseAvatar';
 import { PulseLoginSplash, type PulseLoginSession } from '../../apps/pulse/components/PulseLoginSplash';
 import { findPulseAccount, loadPulseAccounts, loadPulseCredentials, savePulseCredentials } from '../../apps/pulse/persistence';
-import { restorePulseUiSession, shouldAcknowledgePulseConversation } from '../../apps/pulse/utils/workerPulseUi';
+import {
+  createPulseChatTabs, reconcilePulseChatTabs, openPulseChatTab, closePulseChatTab,
+  restorePulseUiSession, shouldAcknowledgePulseConversation,
+} from '../../apps/pulse/utils/workerPulseUi';
 import { useWindowStore } from '../../store/useWindowStore';
 import type { WorkerGameSession } from './WorkerGameSession';
 import type { SimulationPulseNarrativeResult } from './SimulationHostProtocol';
@@ -65,7 +69,8 @@ export function WorkerPulsePanel({
   const [accountSlotId, setAccountSlotId] = useState<string | null>(
     bootstrap.account ? slotId : null,
   );
-  const [selected, setSelected] = useState<string | null>(bootstrap.selected);
+  const [chatTabs, setChatTabs] = useState(() => createPulseChatTabs(bootstrap.selected));
+  const selected = chatTabs.activeId;
   const [openedAccount, setOpenedAccount] = useState<string | null>(null);
   const [buddyToAdd, setBuddyToAdd] = useState('');
   const [addingBuddy, setAddingBuddy] = useState(false);
@@ -94,6 +99,8 @@ export function WorkerPulsePanel({
   const panelRef = useRef<HTMLElement>(null);
   const drawerRef = useRef<HTMLDivElement>(null);
   const drawerReturnFocus = useRef<HTMLElement | null>(null);
+  const tabAccountScope = useRef(`${slotId}:${bootstrap.account?.username ?? ''}`);
+  const conversationScope = useRef(`${bootstrap.account?.username ?? ''}:${bootstrap.selected ?? ''}`);
   const unreadBaseline = useRef<Record<string, number> | null>(null);
   const acknowledgedMessages = useRef(new Set<string>());
   const updateWindowCustomState = useWindowStore(s => s.updateWindowCustomState);
@@ -111,12 +118,20 @@ export function WorkerPulsePanel({
   const readyForAccount = activeAccountId && openedAccount === activeAccountId;
 
   useEffect(() => {
+    conversationScope.current = `${activeAccountId ?? ''}:${selected ?? ''}`;
+  }, [activeAccountId, selected]);
+
+  useEffect(() => {
     let active = true;
     setOpenedAccount(null);
     setReplyActivity('idle');
     setMessenger(null);
     setPage(null);
-    setSelected(null);
+    const scope = `${slotId}:${activeAccountId ?? ''}`;
+    if (tabAccountScope.current !== scope) {
+      tabAccountScope.current = scope;
+      setChatTabs(createPulseChatTabs(null));
+    }
     setChoices([]);
     setPageOffset(0);
     unreadBaseline.current = null;
@@ -166,7 +181,7 @@ export function WorkerPulsePanel({
     // player must authenticate against the new slot's own account store.
     setAccount(null);
     setAccountSlotId(null);
-    setSelected(null);
+    setChatTabs(createPulseChatTabs(null));
     setMessenger(null);
     setPresence(null);
     setPage(null);
@@ -188,7 +203,6 @@ export function WorkerPulsePanel({
       setReplyActivity('idle');
       setMessenger(null);
       setPresence(null);
-      setSelected(null);
       setPage(null);
       setChoices([]);
       return () => { active = false; };
@@ -207,9 +221,7 @@ export function WorkerPulsePanel({
       setPresence(previous => previous
         && JSON.stringify({ ...previous, revision: 0 }) === JSON.stringify({ ...nextPresence, revision: 0 })
           ? previous : nextPresence);
-      setSelected(current =>
-        current && next.contacts.some(row => row.actorId === current)
-          ? current : (next.contacts[0]?.actorId ?? null));
+      setChatTabs(current => reconcilePulseChatTabs(current, next.contacts.map(row => row.actorId)));
       setError(null);
     }).catch(cause => {
       if (active) setError(cause instanceof Error ? cause.message : String(cause));
@@ -354,6 +366,14 @@ export function WorkerPulsePanel({
     [messenger, presence],
   );
   const activeContact = contacts.find(contact => contact.actorId === selected) ?? null;
+  const tabBuddies = useMemo(
+    () => Object.fromEntries(contacts.map(row => [row.actorId, { displayName: row.displayName }])),
+    [contacts],
+  );
+  const tabUnread = useMemo(
+    () => Object.fromEntries(contacts.map(row => [row.actorId, row.unread])),
+    [contacts],
+  );
   const totals = partitionPulseContacts(contacts);
   const totalUnread = contacts.reduce((sum, contact) => sum + contact.unread, 0);
   const availableBuddies = messenger?.availableBuddies ?? [];
@@ -430,11 +450,7 @@ export function WorkerPulsePanel({
     }
   };
 
-  const selectContact = (actorId: string) => {
-    if (drawerOpen) closeDrawer();
-    setNotice(current => current?.actorId === actorId ? null : current);
-    if (selected === actorId) return;
-    setSelected(actorId);
+  const resetThreadView = () => {
     setPageOffset(0);
     setPage(null);
     setChoices([]);
@@ -445,13 +461,33 @@ export function WorkerPulsePanel({
     setLatestVisible(true);
   };
 
+  const selectContact = (actorId: string) => {
+    if (drawerOpen) closeDrawer();
+    setNotice(current => current?.actorId === actorId ? null : current);
+    if (selected === actorId && chatTabs.openIds.includes(actorId)) return;
+    conversationScope.current = `${activeAccountId ?? ''}:${actorId}`;
+    setChatTabs(current => openPulseChatTab(current, actorId));
+    resetThreadView();
+  };
+
+  const closeContactTab = (actorId: string) => {
+    const next = closePulseChatTab(chatTabs, actorId);
+    if (next === chatTabs) return;
+    setChatTabs(next);
+    if (next.activeId !== selected) {
+      conversationScope.current = `${activeAccountId ?? ''}:${next.activeId ?? ''}`;
+      resetThreadView();
+    }
+  };
+
   const signOut = () => {
+    conversationScope.current = '';
     savePulseCredentials(null);
     setDrawerOpen(false);
     setNotice(null);
     setAccount(null);
     setAccountSlotId(null);
-    setSelected(null);
+    setChatTabs(createPulseChatTabs(null));
     setMessenger(null);
     setPresence(null);
     setPage(null);
@@ -469,6 +505,7 @@ export function WorkerPulsePanel({
   const choose = async (index: number) => {
     if (!currentAccount || !selected || !choices[index] || sending) return;
     const chosen = choices[index]!;
+    const requestScope = `${activeAccountId}:${selected}`;
     setSending(true);
     setPendingChoiceIndex(index);
     setError(null);
@@ -477,7 +514,7 @@ export function WorkerPulsePanel({
         kind: 'choose', actorId: selected, accountId: activeAccountId!, choiceIndex: index,
         expectedText: chosen.text,
       });
-      if (result.actorId === selected) {
+      if (result.actorId === selected && conversationScope.current === requestScope) {
         setChoices(result.choices);
         setConversationPhase(result.phase);
         setReplyActivity(result.replyActivity);
@@ -489,12 +526,13 @@ export function WorkerPulsePanel({
       }
       // A real Social revision refreshes the canonical transcript.
     } catch (cause) {
+      if (conversationScope.current !== requestScope) return;
       setError(cause instanceof Error ? cause.message : String(cause));
       // The offered set may have gone stale while another turn landed. Ask the
       // Worker again rather than keeping dead buttons on screen.
       try {
         const refreshed = await session.pulseNarrative({ kind: 'choices', actorId: selected, accountId: activeAccountId! });
-        if (refreshed.actorId === selected) {
+        if (refreshed.actorId === selected && conversationScope.current === requestScope) {
           setChoices(refreshed.choices);
           setConversationPhase(refreshed.phase);
           setReplyActivity(refreshed.replyActivity);
@@ -505,6 +543,12 @@ export function WorkerPulsePanel({
       setPendingChoiceIndex(null);
     }
   };
+
+  const chatTabStrip = (
+    <ChatTabHeader appearance="pulse" openBuddyIds={chatTabs.openIds}
+      activeBuddyId={selected} buddies={tabBuddies} unreadCounts={tabUnread}
+      onSelectTab={selectContact} onCloseTab={closeContactTab} />
+  );
 
   if (!currentAccount) {
     return (
@@ -609,6 +653,7 @@ export function WorkerPulsePanel({
           <PulseContactRail contacts={contacts} selectedId={selected}
             onSelect={selectContact} onOpenList={openDrawer} />
           <div className="flex min-h-0 flex-1 flex-col">
+            {chatTabStrip}
             <PulseChatPane contact={activeContact} accountName={currentAccount.username}
               page={page} pageOffset={pageOffset} latestUnread={activeContact?.unread ?? 0}
               loading={pageLoading}
@@ -635,7 +680,9 @@ export function WorkerPulsePanel({
               <PulseBuddyList contacts={contacts} selectedId={selected} onSelect={selectContact} />
             </div>
           </div>
-          <PulseChatPane contact={activeContact} accountName={currentAccount.username}
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+            {chatTabStrip}
+            <PulseChatPane contact={activeContact} accountName={currentAccount.username}
             page={page} pageOffset={pageOffset} latestUnread={activeContact?.unread ?? 0}
             loading={pageLoading}
             choices={choices} choicesLoading={choicesLoading}
@@ -651,6 +698,7 @@ export function WorkerPulsePanel({
               setRefreshNonce(current => current + 1);
               setScrollToLatestSignal(current => current + 1);
             }} />
+          </div>
         </div>
       )}
 

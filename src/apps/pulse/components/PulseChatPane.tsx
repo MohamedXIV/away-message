@@ -227,8 +227,9 @@ export const PulseChatPane: React.FC<PulseChatPaneProps> = ({
           aria-live="polite"
           aria-label={`Conversation with ${contact.displayName}`}
           data-testid="worker-pulse-messages"
+          data-pulse-transcript-style="classic"
           onScroll={handleScroll}
-          className="absolute inset-0 overflow-y-auto bg-[linear-gradient(180deg,#fffdf8_0%,#fbf7ff_100%)] px-2 py-2 pb-8 text-[12px]"
+          className="absolute inset-0 overflow-y-auto bg-white px-2 py-2 pb-8 font-sans text-[12px] select-text"
         >
           {loading && messages.length === 0 ? (
             <p className="py-6 text-center italic text-[#6d5684]">Opening conversation…</p>
@@ -255,39 +256,34 @@ export const PulseChatPane: React.FC<PulseChatPaneProps> = ({
                     <span className="h-px flex-1 bg-[#e2d7ee]" aria-hidden="true" />
                   </div>
                 )}
-                <div className={`mb-1.5 flex ${player ? 'justify-end' : 'justify-start'}`}>
-                  <div
-                    className={`max-w-[88%] border px-2 py-1 shadow-[1px_1px_0_rgba(70,45,95,0.12)] ${
-                      player
-                        ? 'border-[#9a76bf] bg-[#eee3fb]'
-                        : 'border-[#d8c7e8] bg-white'
-                    }`}
-                    data-sender={player ? 'player' : 'buddy'}
-                  >
-                    <div className="mb-0.5 flex flex-wrap items-baseline gap-1 text-[10px]">
-                      <span className="font-bold" style={{ color: player ? '#4a2a77' : signature }}>{senderName}</span>
-                      <time className="text-[10px] text-[#6d5684]" title={`Day ${message.day}`}>
-                        ({formatSimulationMinutes(message.timestampMinute % 1440)})
-                      </time>
-                      {offline && (
-                        <span className="border border-[#c8a74a] bg-[#fff3c2] px-1 text-[9px] font-bold uppercase tracking-wide text-[#6d5000]">
-                          offline message
-                        </span>
+                <div data-sender={player ? 'player' : 'buddy'}
+                  className={`mb-1 rounded-sm border-l-[3px] py-0.5 pl-1.5 pr-1 leading-relaxed ${
+                    offline ? 'border-[#c89f47] bg-[#fff7d9]' : player
+                      ? 'border-[#8970ad] bg-[#f5effa]' : 'border-transparent hover:bg-[#f5f1fa]'
+                  }`}>
+                  <time className="mr-1.5 font-mono text-[10px] text-[#82718d]"
+                    title={`Day ${message.day}`}>
+                    ({formatSimulationMinutes(message.timestampMinute % 1440)})
+                  </time>
+                  {offline && (
+                    <span className="mr-1 border border-[#c8a74a] bg-[#fff3c2] px-1 text-[9px] font-bold uppercase tracking-wide text-[#6d5000]">
+                      offline
+                    </span>
+                  )}
+                  <span className="mr-1.5 font-bold"
+                    style={{ color: player ? '#452765' : signature }}>{senderName}:</span>
+                  <span className="whitespace-pre-wrap break-words text-[#2e2438]">{message.text}</span>
+                  {message.imageUrl && (
+                    <figure className="mt-1.5 ml-4 max-w-[280px]">
+                      <img src={message.imageUrl}
+                        alt={message.imageCaption || message.imagePrompt || `Photo from ${senderName}`}
+                        loading="lazy"
+                        className="max-h-48 w-auto border border-[#bca8d2] bg-white object-contain" />
+                      {message.imageCaption && (
+                        <figcaption className="mt-0.5 text-[10px] italic text-[#6d5684]">{message.imageCaption}</figcaption>
                       )}
-                    </div>
-                    <div className="whitespace-pre-wrap break-words leading-snug text-[#2e2438]">{message.text}</div>
-                    {message.imageUrl && (
-                      <figure className="mt-1.5 max-w-[280px]">
-                        <img src={message.imageUrl}
-                          alt={message.imageCaption || message.imagePrompt || `Photo from ${senderName}`}
-                          loading="lazy"
-                          className="max-h-48 w-auto border border-[#bca8d2] bg-white object-contain" />
-                        {message.imageCaption && (
-                          <figcaption className="mt-0.5 text-[10px] italic text-[#6d5684]">{message.imageCaption}</figcaption>
-                        )}
-                      </figure>
-                    )}
-                  </div>
+                    </figure>
+                  )}
                 </div>
               </React.Fragment>
             );

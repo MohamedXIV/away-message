@@ -70,3 +70,61 @@ export function shouldAcknowledgePulseConversation(input: PulseAcknowledgementIn
     && !input.conversationObscured
     && input.latestVisible;
 }
+
+/**
+ * Transient chat-window state. The Social Worker remains the only owner of
+ * buddy membership and messages; these IDs describe only open UI tabs.
+ */
+export interface PulseChatTabs {
+  openIds: string[];
+  activeId: string | null;
+  /** Auto-open the first known contact only on an untouched account session. */
+  autoOpenFirst: boolean;
+}
+
+export function createPulseChatTabs(initialActorId: string | null): PulseChatTabs {
+  const id = initialActorId?.trim() || null;
+  return { openIds: id ? [id] : [], activeId: id, autoOpenFirst: true };
+}
+
+export function reconcilePulseChatTabs(
+  state: PulseChatTabs,
+  permittedActorIds: readonly string[],
+): PulseChatTabs {
+  const permitted = new Set(permittedActorIds);
+  const openIds = state.openIds.filter(id => permitted.has(id));
+  let activeId = state.activeId && openIds.includes(state.activeId)
+    ? state.activeId : (openIds.at(-1) ?? null);
+  let autoOpenFirst = state.autoOpenFirst;
+  if (openIds.length === 0 && autoOpenFirst && permittedActorIds.length > 0) {
+    const first = permittedActorIds[0]!;
+    openIds.push(first);
+    activeId = first;
+  }
+  if (openIds.length > 0) autoOpenFirst = false;
+  if (activeId === state.activeId && autoOpenFirst === state.autoOpenFirst
+    && openIds.length === state.openIds.length
+    && openIds.every((id, index) => id === state.openIds[index])) return state;
+  return { openIds, activeId, autoOpenFirst };
+}
+
+export function openPulseChatTab(state: PulseChatTabs, actorId: string): PulseChatTabs {
+  if (!actorId) return state;
+  if (state.activeId === actorId && state.openIds.includes(actorId)) return state;
+  return {
+    openIds: state.openIds.includes(actorId) ? state.openIds : [...state.openIds, actorId],
+    activeId: actorId, autoOpenFirst: false,
+  };
+}
+
+export function closePulseChatTab(state: PulseChatTabs, actorId: string): PulseChatTabs {
+  const index = state.openIds.indexOf(actorId);
+  if (index === -1) return state;
+  const openIds = state.openIds.filter(id => id !== actorId);
+  return {
+    openIds,
+    activeId: state.activeId === actorId
+      ? (openIds[Math.min(index, openIds.length - 1)] ?? null) : state.activeId,
+    autoOpenFirst: false,
+  };
+}
