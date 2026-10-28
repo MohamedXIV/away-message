@@ -385,4 +385,34 @@ describe('#223 Worker Pulse UI session and attention', () => {
       kind: 'choose', actorId: 'actor_a', accountId: 'shared_id', choiceIndex: 0, expectedText: 'Hello there',
     });
   });
+
+  it('inspects only a learned buddy through a period-style profile and restores focus on Escape', async () => {
+    checkPulseCredentials([], 'shared_id', 'slot-a-password', 'slot_1');
+    setPulseWindow('slot_1', 'pulse');
+    const { session } = createSession();
+
+    await act(async () => {
+      root.render(React.createElement(WorkerPulsePanel, { session, revision: 1, windowId: 'pulse', slotId: 'slot_1' }));
+    });
+    await waitFor(() => container.textContent?.includes('are you around?') === true);
+    const opener = container.querySelector<HTMLButtonElement>('button[aria-label="View profile for Actor A"]');
+    expect(opener).toBeTruthy();
+    await act(async () => { opener!.click(); });
+    const profile = container.querySelector<HTMLElement>('[role="dialog"][aria-label="Buddy profile"]');
+    expect(profile).toBeTruthy();
+    expect(profile?.textContent).toContain('Actor A');
+    expect(profile?.textContent).toContain('@actor_a');
+    expect(profile?.textContent).toContain('Online');
+    expect(profile?.textContent).toContain('Last message Day 1');
+    expect(profile?.textContent).not.toContain('friend'); // hidden relationship stage stays private
+    await waitFor(() => profile?.contains(document.activeElement) === true);
+
+    await act(async () => {
+      document.activeElement!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    });
+    await waitFor(() => container.querySelector('[role="dialog"][aria-label="Buddy profile"]') === null);
+    await waitFor(() => document.activeElement === opener);
+    expect(container.textContent).toContain('are you around?');
+  });
+
 });
