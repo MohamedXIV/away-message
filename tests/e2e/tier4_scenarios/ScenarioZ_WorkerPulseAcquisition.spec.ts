@@ -134,13 +134,13 @@ test('#214 fresh Orion acquires Pulse only through real internet â†’ VFS setup â
   const buddyActions = messenger.getByRole('menu', { name: /^Buddy actions for / });
   await expect(buddyActions).toBeVisible();
   await buddyActions.getByRole('menuitem', { name: 'View Profile' }).click();
-  const buddyProfile = messenger.getByRole('dialog', { name: 'Buddy profile' });
-  await expect(buddyProfile).toBeVisible();
+  const otherBuddyProfile = messenger.getByRole('dialog', { name: 'Buddy profile' });
+  await expect(otherBuddyProfile).toBeVisible();
   await expect(tabs.getByRole('button', { name: /^Switch to / })).toHaveCount(1);
   await expect(messenger.getByTestId('worker-pulse-messages'))
     .toContainText('Hey! How have you been lately?');
   await page.keyboard.press('Escape');
-  await expect(buddyProfile).toHaveCount(0);
+  await expect(otherBuddyProfile).toHaveCount(0);
   await expect(newContactRow).toBeFocused();
   await newContactRow.locator('..').getByRole('button', { name: /^Actions for / }).click();
   await buddyActions.getByRole('menuitem', { name: 'Send IM' }).click();
