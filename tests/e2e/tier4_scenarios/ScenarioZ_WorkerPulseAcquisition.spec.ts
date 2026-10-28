@@ -86,6 +86,19 @@ test('#214 fresh Orion acquires Pulse only through real internet â†’ VFS setup â
   await messenger.getByRole('button', { name: 'Add', exact: true }).click();
   await expect(contacts.locator('[data-testid^="worker-pulse-contact-"]')).toHaveCount(1);
 
+  // A signed-in identity can inspect its own learned buddy. Profiles only
+  // show account-visible fields, never hidden Social relationship scores.
+  const inspectProfile = messenger.getByRole('button', { name: /^View profile for / });
+  await inspectProfile.click();
+  const buddyProfile = messenger.getByRole('dialog', { name: 'Buddy profile' });
+  await expect(buddyProfile).toBeVisible();
+  await expect(buddyProfile).toContainText('Pulse ID');
+  await expect(buddyProfile).toContainText('Current status');
+  await expect(buddyProfile).toContainText('Last IM');
+  await page.keyboard.press('Escape');
+  await expect(buddyProfile).toHaveCount(0);
+  await expect(inspectProfile).toBeFocused();
+
   // Offline dialogue is choice-driven and Worker-authored. No free textbox
   // invites arbitrary messages to a keyword bot.
   const choices = messenger.getByTestId('worker-pulse-choices');

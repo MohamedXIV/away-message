@@ -51,6 +51,7 @@ interface PulseChatPaneProps {
   onNewer: () => void;
   onNewest: () => void;
   onChoose: (index: number) => void;
+  onInspect: (opener: HTMLElement) => void;
   onLatestVisibilityChange?: (visible: boolean) => void;
   scrollToLatestSignal: number;
   onJumpToLatest: () => void;
@@ -61,7 +62,7 @@ interface PulseChatPaneProps {
 export const PulseChatPane: React.FC<PulseChatPaneProps> = ({
   contact, accountName, page, pageOffset, latestUnread, loading, choices, choicesLoading,
   phase, replyActivity = 'idle', sending, pendingChoiceIndex, compact, onOlder, onNewer, onNewest, onChoose,
-  onLatestVisibilityChange, scrollToLatestSignal, onJumpToLatest,
+  onLatestVisibilityChange, scrollToLatestSignal, onJumpToLatest, onInspect,
 }) => {
   const scrollRef = useRef<HTMLDivElement>(null);
   const nearBottom = useRef(true);
@@ -191,11 +192,11 @@ export const PulseChatPane: React.FC<PulseChatPaneProps> = ({
             {contact.awayMessage && contact.status !== 'offline' ? ` — “${contact.awayMessage}”` : ''}
           </p>
         </div>
-        {!compact && (
-          <span className="shrink-0 border border-[#b49dcb] bg-[#fff9e8] px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-[#6b4f1d]">
-            IM
-          </span>
-        )}
+        <button type="button" onClick={event => onInspect(event.currentTarget)}
+          aria-label={`View profile for ${contact.displayName}`}
+          className="shrink-0 border border-[#9473b4] bg-gradient-to-b from-white to-[#e4d8f0] px-2 py-1 text-[10px] font-bold text-[#4b2d68] shadow-[1px_1px_0_#bba8cc] hover:from-[#fff9e8] hover:to-[#eadcf6] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[#71479e]">
+          Profile
+        </button>
       </header>
 
       {showPager && (

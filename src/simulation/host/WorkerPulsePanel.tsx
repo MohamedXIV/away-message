@@ -6,6 +6,7 @@ import type {
 } from '../../engine/kernel/SimulationPublication';
 import { PulseBuddyList, PulseContactRail, buildPulseContactViews, partitionPulseContacts } from '../../apps/pulse/components/PulseBuddyList';
 import { PulseChatPane } from '../../apps/pulse/components/PulseChatPane';
+import { PulseContactProfile } from '../../apps/pulse/components/PulseContactProfile';
 import { ChatTabHeader } from '../../apps/pulse/components/ChatTabHeader';
 import { PULSE_STATUS_LABEL } from '../../apps/pulse/components/PulseAvatar';
 import { PulseLoginSplash, type PulseLoginSession } from '../../apps/pulse/components/PulseLoginSplash';
@@ -92,6 +93,7 @@ export function WorkerPulsePanel({
   const [scrollToLatestSignal, setScrollToLatestSignal] = useState(0);
   const [notice, setNotice] = useState<{ actorId: string; name: string; count: number } | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [inspectedActorId, setInspectedActorId] = useState<string | null>(null);
   const [compact, setCompact] = useState<boolean>(() => {
     const width = useWindowStore.getState().windows[windowId]?.size.width;
     return typeof width !== 'number' || width < SPLIT_LAYOUT_MIN_WIDTH;
@@ -99,6 +101,7 @@ export function WorkerPulsePanel({
   const panelRef = useRef<HTMLElement>(null);
   const drawerRef = useRef<HTMLDivElement>(null);
   const drawerReturnFocus = useRef<HTMLElement | null>(null);
+  const profileReturnFocus = useRef<HTMLElement | null>(null);
   const tabAccountScope = useRef(`${slotId}:${bootstrap.account?.username ?? ''}`);
   const conversationScope = useRef(`${bootstrap.account?.username ?? ''}:${bootstrap.selected ?? ''}`);
   const unreadBaseline = useRef<Record<string, number> | null>(null);
@@ -124,6 +127,8 @@ export function WorkerPulsePanel({
   useEffect(() => {
     let active = true;
     setOpenedAccount(null);
+    setInspectedActorId(null);
+    profileReturnFocus.current = null;
     setReplyActivity('idle');
     setMessenger(null);
     setPage(null);
@@ -450,6 +455,19 @@ export function WorkerPulsePanel({
     }
   };
 
+  const inspectContact = (opener: HTMLElement) => {
+    if (!activeContact || !activeAccountId) return;
+    profileReturnFocus.current = opener;
+    setInspectedActorId(activeContact.actorId);
+  };
+
+  const closeProfile = () => {
+    setInspectedActorId(null);
+    const target = profileReturnFocus.current;
+    profileReturnFocus.current = null;
+    window.setTimeout(() => { if (target?.isConnected) target.focus(); }, 0);
+  };
+
   const resetThreadView = () => {
     setPageOffset(0);
     setPage(null);
@@ -462,6 +480,7 @@ export function WorkerPulsePanel({
   };
 
   const selectContact = (actorId: string) => {
+    setInspectedActorId(null);
     if (drawerOpen) closeDrawer();
     setNotice(current => current?.actorId === actorId ? null : current);
     if (selected === actorId && chatTabs.openIds.includes(actorId)) return;
@@ -471,6 +490,7 @@ export function WorkerPulsePanel({
   };
 
   const closeContactTab = (actorId: string) => {
+    setInspectedActorId(null);
     const next = closePulseChatTab(chatTabs, actorId);
     if (next === chatTabs) return;
     setChatTabs(next);
@@ -482,6 +502,8 @@ export function WorkerPulsePanel({
 
   const signOut = () => {
     conversationScope.current = '';
+    setInspectedActorId(null);
+    profileReturnFocus.current = null;
     savePulseCredentials(null);
     setDrawerOpen(false);
     setNotice(null);
@@ -664,6 +686,7 @@ export function WorkerPulsePanel({
               onNewer={() => setPageOffset(current => Math.max(0, current - 30))}
               onNewest={() => setPageOffset(0)}
               onChoose={index => { void choose(index); }}
+              onInspect={inspectContact}
               onLatestVisibilityChange={setLatestVisible}
               scrollToLatestSignal={scrollToLatestSignal}
               onJumpToLatest={() => {
@@ -692,6 +715,7 @@ export function WorkerPulsePanel({
             onNewer={() => setPageOffset(current => Math.max(0, current - 30))}
             onNewest={() => setPageOffset(0)}
             onChoose={index => { void choose(index); }}
+              onInspect={inspectContact}
             onLatestVisibilityChange={setLatestVisible}
             scrollToLatestSignal={scrollToLatestSignal}
             onJumpToLatest={() => {
@@ -728,6 +752,10 @@ export function WorkerPulsePanel({
           <button type="button" aria-label="Close buddy list" tabIndex={-1} onClick={closeDrawer}
             className="h-full min-w-0 flex-1" />
         </div>
+      )}
+
+      {inspectedActorId && activeContact?.actorId === inspectedActorId && (
+        <PulseContactProfile contact={activeContact} onClose={closeProfile} />
       )}
 
       <footer data-testid="worker-pulse-statusbar"
