@@ -371,6 +371,7 @@ export function WorkerPulsePanel({
     [messenger, presence],
   );
   const activeContact = contacts.find(contact => contact.actorId === selected) ?? null;
+  const profileContact = contacts.find(contact => contact.actorId === inspectedActorId) ?? null;
   const tabBuddies = useMemo(
     () => Object.fromEntries(contacts.map(row => [row.actorId, { displayName: row.displayName }])),
     [contacts],
@@ -455,10 +456,10 @@ export function WorkerPulsePanel({
     }
   };
 
-  const inspectContact = (opener: HTMLElement) => {
-    if (!activeContact || !activeAccountId) return;
+  const inspectContact = (actorId: string, opener: HTMLElement) => {
+    if (!activeAccountId || !contacts.some(contact => contact.actorId === actorId)) return;
     profileReturnFocus.current = opener;
-    setInspectedActorId(activeContact.actorId);
+    setInspectedActorId(actorId);
   };
 
   const closeProfile = () => {
@@ -686,7 +687,7 @@ export function WorkerPulsePanel({
               onNewer={() => setPageOffset(current => Math.max(0, current - 30))}
               onNewest={() => setPageOffset(0)}
               onChoose={index => { void choose(index); }}
-              onInspect={inspectContact}
+              onInspect={opener => { if (activeContact) inspectContact(activeContact.actorId, opener); }}
               onLatestVisibilityChange={setLatestVisible}
               scrollToLatestSignal={scrollToLatestSignal}
               onJumpToLatest={() => {
@@ -700,7 +701,8 @@ export function WorkerPulsePanel({
           <div className="flex min-h-0 flex-col border-r border-[#b49dcb]">
             {addBuddyControls}
             <div className="min-h-0 flex-1">
-              <PulseBuddyList contacts={contacts} selectedId={selected} onSelect={selectContact} />
+              <PulseBuddyList contacts={contacts} selectedId={selected} onSelect={selectContact}
+                onInspect={inspectContact} />
             </div>
           </div>
           <div className="flex min-h-0 min-w-0 flex-1 flex-col">
@@ -715,7 +717,7 @@ export function WorkerPulsePanel({
             onNewer={() => setPageOffset(current => Math.max(0, current - 30))}
             onNewest={() => setPageOffset(0)}
             onChoose={index => { void choose(index); }}
-              onInspect={inspectContact}
+              onInspect={opener => { if (activeContact) inspectContact(activeContact.actorId, opener); }}
             onLatestVisibilityChange={setLatestVisible}
             scrollToLatestSignal={scrollToLatestSignal}
             onJumpToLatest={() => {
@@ -746,7 +748,7 @@ export function WorkerPulsePanel({
             {addBuddyControls}
             <div className="min-h-0 flex-1">
               <PulseBuddyList contacts={contacts} selectedId={selected}
-                onSelect={selectContact} />
+                onSelect={selectContact} onInspect={inspectContact} />
             </div>
           </div>
           <button type="button" aria-label="Close buddy list" tabIndex={-1} onClick={closeDrawer}
@@ -754,8 +756,8 @@ export function WorkerPulsePanel({
         </div>
       )}
 
-      {inspectedActorId && activeContact?.actorId === inspectedActorId && (
-        <PulseContactProfile contact={activeContact} onClose={closeProfile} />
+      {profileContact && (
+        <PulseContactProfile contact={profileContact} onClose={closeProfile} />
       )}
 
       <footer data-testid="worker-pulse-statusbar"

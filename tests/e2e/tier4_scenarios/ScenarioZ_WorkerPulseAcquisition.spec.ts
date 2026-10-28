@@ -128,7 +128,22 @@ test('#214 fresh Orion acquires Pulse only through real internet â†’ VFS setup â
   const newContactRow = contacts.locator(
     `[data-testid^="worker-pulse-contact-"]:not([data-testid="${originalContactTestId}"])`,
   );
-  await newContactRow.click();
+  // Classic buddy list actions work with the mouse and a visible touch target.
+  // Looking at another person's profile must not switch the current IM.
+  await newContactRow.click({ button: 'right' });
+  const buddyActions = messenger.getByRole('menu', { name: /^Buddy actions for / });
+  await expect(buddyActions).toBeVisible();
+  await buddyActions.getByRole('menuitem', { name: 'View Profile' }).click();
+  const buddyProfile = messenger.getByRole('dialog', { name: 'Buddy profile' });
+  await expect(buddyProfile).toBeVisible();
+  await expect(tabs.getByRole('button', { name: /^Switch to / })).toHaveCount(1);
+  await expect(messenger.getByTestId('worker-pulse-messages'))
+    .toContainText('Hey! How have you been lately?');
+  await page.keyboard.press('Escape');
+  await expect(buddyProfile).toHaveCount(0);
+  await expect(newContactRow).toBeFocused();
+  await newContactRow.locator('..').getByRole('button', { name: /^Actions for / }).click();
+  await buddyActions.getByRole('menuitem', { name: 'Send IM' }).click();
   await expect(tabs.getByRole('button', { name: /^Switch to / })).toHaveCount(2);
   await expect(tabs.getByRole('button', { name: /^Switch to / }).last()).toHaveAttribute('aria-current', 'page');
   await tabs.getByRole('button', { name: /^Close conversation with / }).last().click();
