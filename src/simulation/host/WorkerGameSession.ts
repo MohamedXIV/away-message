@@ -218,8 +218,8 @@ export class WorkerGameSession {
   }
 
   /** Opening a known conversation acknowledges its canonical unread messages. */
-  markConversationRead(actorId: string): Promise<boolean> {
-    return this.active().markConversationRead(actorId);
+  markConversationRead(actorId: string, accountId?: string): Promise<boolean> {
+    return this.active().markConversationRead(actorId, accountId);
   }
 
   async labCharacter(command: LabCharacterCommand): Promise<LabCharacterResult> {

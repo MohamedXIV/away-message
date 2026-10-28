@@ -540,6 +540,8 @@ export interface SocialEngineState {
   // Free roster (v5): pulse handles the player has learned, keyed by buddy id (persisted).
   // Empty at new game — contacts are earned through meetings, intros, and backstory.
   knownHandles?: Record<string, string[]>;
+  /** #223 player-owned Pulse screen names with their private buddy memberships. */
+  pulseAccounts?: Record<string, string[]>;
   // Free roster (v5): one-line epitaphs for pruned gone buddies, oldest-first (persisted, capped).
   epitaphs?: string[];
 }
@@ -905,9 +907,9 @@ export type SimulationAction =
   | { type: 'SOFTWARE_INSTALL'; softwareId: string; selectedOptions?: Record<string, boolean> }
   | { type: 'SOFTWARE_INSTALL_FROM_DOWNLOAD'; filePath: string; selectedOptions?: Record<string, boolean> }
   | { type: 'SOFTWARE_UNINSTALL'; installedId: string }
-  | { type: 'SOCIAL_SEND_MESSAGE'; buddyId: string; text: string; tags?: string[]; imageUrl?: string; imagePrompt?: string; imageCaption?: string }
+  | { type: 'SOCIAL_SEND_MESSAGE'; buddyId: string; text: string; pulseAccountId?: string; tags?: string[]; imageUrl?: string; imagePrompt?: string; imageCaption?: string }
   | { type: 'PULSE_SEND_MESSAGE'; buddyId: string; text: string }
-  | { type: 'SOCIAL_RECEIVE_MESSAGE'; buddyId: string; text: string; timestampMinute?: number; deliveredAway?: boolean; tags?: string[]; imageUrl?: string; imagePrompt?: string; imageCaption?: string }
+  | { type: 'SOCIAL_RECEIVE_MESSAGE'; buddyId: string; text: string; pulseAccountId?: string; timestampMinute?: number; deliveredAway?: boolean; tags?: string[]; imageUrl?: string; imagePrompt?: string; imageCaption?: string }
   | { type: 'SOCIAL_APPLY_ACTION'; buddyId: string; socialAction: string }
   // Character Lives (v4): the player's answer to an NPC mediation request.
   // Rules resolve it; the Pulse UI may dispatch this (chat command or button follow-up).

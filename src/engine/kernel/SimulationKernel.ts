@@ -1069,11 +1069,11 @@ export class SimulationKernel {
     }, changed => changed);
   }
 
-  public markConversationAsRead(actorId: string): boolean {
-    if (!this.social.isKnown(actorId)) return false;
+  public markConversationAsRead(actorId: string, accountId?: string): boolean {
+    if (!this.social.isKnown(actorId) || (accountId && !this.social.hasPulseBuddy(accountId, actorId))) return false;
     return this.publishOwnerMutation(
       ['social'],
-      () => this.social.markAsRead(actorId),
+      () => this.social.markAsRead(actorId, accountId),
       changed => changed,
     );
   }
@@ -1094,11 +1094,24 @@ export class SimulationKernel {
     return { revision: this.revision, ...this.social.getPulseDirectoryRead(rooms) };
   }
 
-  public getMessengerRead(maxContacts = 32): SimulationMessengerRead {
+  /** Accounts are real save-owned digital identities, not browser-local buddy filters. */
+  public openPulseAccount(accountId: string): boolean {
+    return this.publishOwnerMutation(['social'], () => this.social.openPulseAccount(accountId), changed => changed);
+  }
+
+  public addPulseBuddy(accountId: string, actorId: string): boolean {
+    return this.publishOwnerMutation(['social'], () => this.social.addPulseBuddy(accountId, actorId), changed => changed);
+  }
+
+  public getMessengerRead(maxContacts = 32, accountId?: string): SimulationMessengerRead {
+    const contacts = this.social.getMessengerSummary(maxContacts, accountId);
     return {
       revision: this.revision,
-      contacts: this.social.getMessengerSummary(maxContacts),
-      unreadCounts: this.social.getConversationUnreadCounts(500, true),
+      contacts,
+      unreadCounts: accountId
+        ? Object.fromEntries(contacts.map(contact => [contact.actorId, contact.unread]))
+        : this.social.getConversationUnreadCounts(500, true),
+      availableBuddies: accountId ? this.social.getAvailablePulseBuddies(accountId) : [],
     };
   }
 
@@ -1149,25 +1162,26 @@ export class SimulationKernel {
     }).success;
   }
 
-  public getConversationRead(actorId: string, offset = 0, limit = 30): SimulationConversationRead {
+  public getConversationRead(actorId: string, offset = 0, limit = 30, accountId?: string): SimulationConversationRead {
     // An arbitrary/guessed actor ID is NOT authorization to read their
     // transcript. Source-owned learned handles are the Pulse discovery gate.
     // Keep full canonical histories for future contact unlock and Save Log.
-    if (!this.social.isKnown(actorId)) {
+    if (!this.social.isKnown(actorId) || (accountId && !this.social.hasPulseBuddy(accountId, actorId))) {
       return { revision: this.revision, conversationId: actorId, messages: [], total: 0, hasOlder: false };
     }
-    return { revision: this.revision, ...this.social.getConversationPage(actorId, offset, limit) };
+    return { revision: this.revision, ...this.social.getConversationPage(actorId, offset, limit, accountId) };
   }
 
   /** Async cold pages pass through the SAME player-known contact gate. */
-  public async getConversationReadAsync(actorId: string, offset = 0, limit = 30): Promise<SimulationConversationRead> {
-    if (!this.social.isKnown(actorId)) {
+  public async getConversationReadAsync(actorId: string, offset = 0, limit = 30, accountId?: string): Promise<SimulationConversationRead> {
+    if (!this.social.isKnown(actorId) || (accountId && !this.social.hasPulseBuddy(accountId, actorId))) {
       return { revision: this.revision, conversationId: actorId, messages: [], total: 0, hasOlder: false };
     }
     const revision = this.revision;
-    const page = await this.social.getConversationPageAsync(actorId, offset, limit);
+    const page = await this.social.getConversationPageAsync(actorId, offset, limit, accountId);
     // Never publish a stale after-await view if contact access or world changes.
-    if (revision !== this.revision || !this.social.isKnown(actorId)) {
+    if (revision !== this.revision || !this.social.isKnown(actorId)
+      || (accountId && !this.social.hasPulseBuddy(accountId, actorId))) {
       throw new Error('Conversation changed during cold read');
     }
     return { revision, ...page };

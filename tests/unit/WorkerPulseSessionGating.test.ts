@@ -15,6 +15,7 @@ const SESSION = {
 };
 
 interface SessionOptions {
+  extraBuddy?: boolean;
   choices?: Array<{ id: string; text: string }>;
   conversationPage?: (offset: number) => {
     revision: number;
@@ -42,20 +43,29 @@ function createSession(options: SessionOptions = {}) {
             actorId: 'actor_a', displayName: 'Actor A', handle: 'actor_a',
             archetype: 'regular', onlineStatus: 'online', relationshipStage: 'friend',
             lastMessageMinute: 10, unread: 1,
-          }],
-          unreadCounts: { actor_a: 1 },
+          }, ...(options.extraBuddy ? [{
+            actorId: 'actor_b', displayName: 'Actor B', handle: 'actor_b',
+            archetype: 'regular', onlineStatus: 'away', relationshipStage: 'stranger',
+            lastMessageMinute: null, unread: 0,
+          }] : [])],
+          unreadCounts: { actor_a: 1, ...(options.extraBuddy ? { actor_b: 0 } : {}) },
+          availableBuddies: options.extraBuddy
+            ? [{ actorId: 'actor_c', displayName: 'Actor C', handle: 'actor_c' }] : [],
         };
       }
       if (query.kind === 'presence') {
-        return { revision: 1, presence: { actor_a: { status: 'online', awayMessage: '' } } };
+        return { revision: 1, presence: {
+          actor_a: { status: 'online', awayMessage: '' },
+          ...(options.extraBuddy ? { actor_b: { status: 'away', awayMessage: 'Back after dinner' } } : {}),
+        } };
       }
       if (query.kind === 'conversation') {
         if (options.conversationPage) return options.conversationPage(query.offset ?? 0);
         return {
           revision: 1,
-          conversationId: 'actor_a',
+          conversationId: 'pulse:shared_id:actor_a',
           messages: [{
-            id: 'message_1', conversationId: 'actor_a', senderId: 'actor_a',
+            id: 'message_1', conversationId: 'pulse:shared_id:actor_a', senderId: 'actor_a',
             recipientId: 'player', text: 'are you around?', timestampMinute: 10,
             day: 1, isRead: false, deliveredAway: false,
           }],
@@ -185,7 +195,7 @@ describe('#223 Worker Pulse UI session and attention', () => {
       useWindowStore.setState({ activeWindowId: 'pulse' });
     });
     await waitFor(() => markConversationRead.mock.calls.length === 1);
-    expect(markConversationRead).toHaveBeenCalledWith('actor_a');
+    expect(markConversationRead).toHaveBeenCalledWith('actor_a', 'shared_id');
   });
 
   it('freezes the older history page when a new revision arrives', async () => {
@@ -198,10 +208,10 @@ describe('#223 Worker Pulse UI session and attention', () => {
         const count = Math.min(30, total - offset);
         return {
           revision: 1,
-          conversationId: 'actor_a',
+          conversationId: 'pulse:shared_id:actor_a',
           messages: Array.from({ length: count }, (_, index) => ({
             id: `message_${start + index}`,
-            conversationId: 'actor_a',
+            conversationId: 'pulse:shared_id:actor_a',
             senderId: index % 2 === 0 ? 'actor_a' : 'player',
             recipientId: index % 2 === 0 ? 'player' : 'actor_a',
             text: `message ${start + index}`,
@@ -248,10 +258,10 @@ describe('#223 Worker Pulse UI session and attention', () => {
         const start = Math.max(0, latestIndex - 29);
         return {
           revision: 1,
-          conversationId: 'actor_a',
+          conversationId: 'pulse:shared_id:actor_a',
           messages: Array.from({ length: latestIndex - start + 1 }, (_, index) => ({
             id: `message_${start + index}`,
-            conversationId: 'actor_a',
+            conversationId: 'pulse:shared_id:actor_a',
             senderId: (start + index) % 2 === 0 ? 'actor_a' : 'player',
             recipientId: (start + index) % 2 === 0 ? 'player' : 'actor_a',
             text: `message ${start + index}`,
@@ -342,6 +352,27 @@ describe('#223 Worker Pulse UI session and attention', () => {
     await waitFor(() => document.activeElement === opener);
   });
 
+  it('does not reload or blink authored choices on unrelated world revisions', async () => {
+    checkPulseCredentials([], 'shared_id', 'slot-a-password', 'slot_1');
+    setPulseWindow('slot_1', 'pulse');
+    const { session, pulseNarrative } = createSession({
+      choices: [{ id: 'choice_1', text: 'Hello there' }],
+    });
+    await act(async () => {
+      root.render(React.createElement(WorkerPulsePanel, { session, revision: 1, windowId: 'pulse', slotId: 'slot_1' }));
+    });
+    await waitFor(() => container.querySelector('button[aria-label="Hello there"]') !== null);
+    const calls = () => pulseNarrative.mock.calls.filter(([command]) => command.kind === 'choices').length;
+    const before = calls();
+
+    await act(async () => {
+      root.render(React.createElement(WorkerPulsePanel, { session, revision: 2, windowId: 'pulse', slotId: 'slot_1' }));
+    });
+    await flush();
+    expect(calls()).toBe(before);
+    expect(container.querySelector('button[aria-label="Hello there"]')).toBeTruthy();
+  });
+
   it('keeps numbered reply shortcuts inside the composer', async () => {
     checkPulseCredentials([], 'shared_id', 'slot-a-password', 'slot_1');
     setPulseWindow('slot_1', 'pulse');
@@ -361,7 +392,141 @@ describe('#223 Worker Pulse UI session and attention', () => {
     await waitFor(() => pulseNarrative.mock.calls.some(([command]) =>
       (command as { kind: string }).kind === 'choose'));
     expect(pulseNarrative).toHaveBeenCalledWith({
-      kind: 'choose', actorId: 'actor_a', choiceIndex: 0, expectedText: 'Hello there',
+      kind: 'choose', actorId: 'actor_a', accountId: 'shared_id', choiceIndex: 0, expectedText: 'Hello there',
     });
   });
+
+  it('inspects only a learned buddy through a period-style profile and restores focus on Escape', async () => {
+    checkPulseCredentials([], 'shared_id', 'slot-a-password', 'slot_1');
+    setPulseWindow('slot_1', 'pulse');
+    const { session } = createSession();
+
+    await act(async () => {
+      root.render(React.createElement(WorkerPulsePanel, { session, revision: 1, windowId: 'pulse', slotId: 'slot_1' }));
+    });
+    await waitFor(() => container.textContent?.includes('are you around?') === true);
+    const opener = container.querySelector<HTMLButtonElement>('button[aria-label="View profile for Actor A"]');
+    expect(opener).toBeTruthy();
+    await act(async () => { opener!.click(); });
+    const profile = container.querySelector<HTMLElement>('[role="dialog"][aria-label="Buddy profile"]');
+    expect(profile).toBeTruthy();
+    expect(profile?.textContent).toContain('Actor A');
+    expect(profile?.textContent).toContain('@actor_a');
+    expect(profile?.textContent).toContain('Online');
+    expect(profile?.textContent).toContain('Last message Day 1');
+    expect(profile?.textContent).not.toContain('friend'); // hidden relationship stage stays private
+    await waitFor(() => profile?.contains(document.activeElement) === true);
+
+    await act(async () => {
+      document.activeElement!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    });
+    await waitFor(() => container.querySelector('[role="dialog"][aria-label="Buddy profile"]') === null);
+    await waitFor(() => document.activeElement === opener);
+    expect(container.textContent).toContain('are you around?');
+  });
+
+
+  it('opens a learned buddy context menu by mouse or keyboard without switching the active IM to inspect them', async () => {
+    checkPulseCredentials([], 'shared_id', 'slot-a-password', 'slot_1');
+    setPulseWindow('slot_1', 'pulse');
+    const { session } = createSession({ extraBuddy: true });
+
+    await act(async () => {
+      root.render(React.createElement(WorkerPulsePanel, { session, revision: 1, windowId: 'pulse', slotId: 'slot_1' }));
+    });
+    await waitFor(() => container.textContent?.includes('are you around?') === true);
+    const buddy = container.querySelector<HTMLButtonElement>('[data-testid="worker-pulse-contact-actor_b"]');
+    expect(buddy).toBeTruthy();
+    await act(async () => {
+      buddy!.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 40, clientY: 60 }));
+    });
+    const findMenu = () => container.querySelector<HTMLElement>('[role="menu"][aria-label="Buddy actions for Actor B"]');
+    await waitFor(() => findMenu() !== null);
+    expect(findMenu()?.textContent).toContain('Send IM');
+    expect(findMenu()?.textContent).toContain('View Profile');
+    const inspect = Array.from(findMenu()!.querySelectorAll<HTMLButtonElement>('button'))
+      .find(button => button.textContent?.includes('View Profile'))!;
+    await act(async () => { inspect.click(); });
+    const profile = container.querySelector<HTMLElement>('[role="dialog"][aria-label="Buddy profile"]');
+    expect(profile?.textContent).toContain('Actor B');
+    expect(profile?.textContent).toContain('Back after dinner');
+    expect(container.querySelector('[data-testid="worker-pulse-messages"]')?.textContent)
+      .toContain('are you around?'); // inspecting B must leave A's IM active
+    await act(async () => {
+      document.activeElement!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    });
+    await waitFor(() => container.querySelector('[role="dialog"][aria-label="Buddy profile"]') === null);
+    await waitFor(() => document.activeElement === buddy);
+
+    await act(async () => {
+      buddy!.dispatchEvent(new KeyboardEvent('keydown', { key: 'F10', shiftKey: true, bubbles: true, cancelable: true }));
+    });
+    await waitFor(() => findMenu() !== null);
+    await act(async () => {
+      document.activeElement!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    });
+    await waitFor(() => findMenu() === null);
+    await waitFor(() => document.activeElement === buddy);
+
+    const actions = container.querySelector<HTMLButtonElement>('button[aria-label="Actions for Actor B"]');
+    expect(actions).toBeTruthy();
+    await act(async () => { actions!.click(); });
+    await waitFor(() => findMenu() !== null);
+    const send = Array.from(findMenu()!.querySelectorAll<HTMLButtonElement>('button'))
+      .find(button => button.textContent?.includes('Send IM'))!;
+    await act(async () => { send.click(); });
+    await waitFor(() => container.querySelector('button[aria-label="Switch to Actor B"]') !== null);
+  });
+
+  it('adds only a learned typed Pulse ID for the signed-in account and restores dialog focus', async () => {
+    checkPulseCredentials([], 'shared_id', 'slot-a-password', 'slot_1');
+    setPulseWindow('slot_1', 'pulse');
+    const { session, pulseNarrative } = createSession({ extraBuddy: true });
+
+    await act(async () => {
+      root.render(React.createElement(WorkerPulsePanel, { session, revision: 1, windowId: 'pulse', slotId: 'slot_1' }));
+    });
+    await waitFor(() => container.textContent?.includes('are you around?') === true);
+    const opener = container.querySelector<HTMLButtonElement>('button[aria-label="Add a buddy"]');
+    expect(opener).toBeTruthy();
+    await act(async () => { opener!.click(); });
+    const dialog = container.querySelector<HTMLElement>('[role="dialog"][aria-label="Add a buddy"]');
+    expect(dialog).toBeTruthy();
+    const input = dialog?.querySelector<HTMLInputElement>('input[name="buddyPulseId"]');
+    expect(input).toBeTruthy();
+    await waitFor(() => document.activeElement === input);
+    const edit = async (value: string) => {
+      await act(async () => {
+        Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(input, value);
+        input!.dispatchEvent(new Event('input', { bubbles: true }));
+      });
+    };
+    const submit = async () => {
+      await act(async () => {
+        dialog!.querySelector('form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+      });
+    };
+
+    await edit('@not_a_learned_id');
+    await submit();
+    expect(dialog?.textContent).toContain('not among the handles');
+    expect(pulseNarrative.mock.calls.filter(([command]) => command.kind === 'addBuddy')).toHaveLength(0);
+    expect(container.querySelector('[data-testid="worker-pulse-messages"]')?.textContent).toContain('are you around?');
+
+    await edit(' @ACTOR_C ');
+    await submit();
+    await waitFor(() => pulseNarrative.mock.calls.some(([command]) => command.kind === 'addBuddy'));
+    expect(pulseNarrative).toHaveBeenCalledWith({ kind: 'addBuddy', actorId: 'actor_c', accountId: 'shared_id' });
+    await waitFor(() => container.querySelector('[role="dialog"][aria-label="Add a buddy"]') === null);
+    await waitFor(() => document.activeElement === opener);
+
+    await act(async () => { opener!.click(); });
+    await waitFor(() => container.querySelector('[role="dialog"][aria-label="Add a buddy"]') !== null);
+    await act(async () => {
+      document.activeElement!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    });
+    await waitFor(() => container.querySelector('[role="dialog"][aria-label="Add a buddy"]') === null);
+    await waitFor(() => document.activeElement === opener);
+  });
+
 });

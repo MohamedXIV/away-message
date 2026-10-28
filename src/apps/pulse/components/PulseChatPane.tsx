@@ -13,6 +13,7 @@ export function pulseConversationStateText(
   phase: PulseNarrativePhase,
   contact: PulseContactView | null,
   sending: boolean,
+  replyActivity: SimulationPulseNarrativeResult['replyActivity'] = 'idle',
 ): string {
   if (sending) return 'Sending your message…';
   const name = contact?.displayName ?? 'They';
@@ -23,10 +24,11 @@ export function pulseConversationStateText(
     if (contact?.status === 'away' || contact?.status === 'busy') {
       return `${name} is ${PULSE_STATUS_LABEL[contact.status].toLowerCase()} right now. They'll reply when they're free.`;
     }
+    if (replyActivity === 'typing' && contact?.status === 'online') return `${name} is typing…`;
     return `Waiting for ${name} to reply…`;
   }
   if (phase === 'complete') {
-    return `You've caught up with ${name} for today. The thread opens again tomorrow.`;
+    return `You've caught up with ${name} for today. You can start another conversation tomorrow.`;
   }
   return 'No reply options are available right now.';
 }
@@ -41,6 +43,7 @@ interface PulseChatPaneProps {
   choices: Array<{ id: string; text: string }>;
   choicesLoading: boolean;
   phase: PulseNarrativePhase;
+  replyActivity?: SimulationPulseNarrativeResult['replyActivity'];
   sending: boolean;
   pendingChoiceIndex: number | null;
   compact: boolean;
@@ -48,6 +51,7 @@ interface PulseChatPaneProps {
   onNewer: () => void;
   onNewest: () => void;
   onChoose: (index: number) => void;
+  onInspect?: (opener: HTMLElement) => void;
   onLatestVisibilityChange?: (visible: boolean) => void;
   scrollToLatestSignal: number;
   onJumpToLatest: () => void;
@@ -57,8 +61,8 @@ interface PulseChatPaneProps {
  * composes through authored choices, so no fake free-text intent is implied. */
 export const PulseChatPane: React.FC<PulseChatPaneProps> = ({
   contact, accountName, page, pageOffset, latestUnread, loading, choices, choicesLoading,
-  phase, sending, pendingChoiceIndex, compact, onOlder, onNewer, onNewest, onChoose,
-  onLatestVisibilityChange, scrollToLatestSignal, onJumpToLatest,
+  phase, replyActivity = 'idle', sending, pendingChoiceIndex, compact, onOlder, onNewer, onNewest, onChoose,
+  onLatestVisibilityChange, scrollToLatestSignal, onJumpToLatest, onInspect,
 }) => {
   const scrollRef = useRef<HTMLDivElement>(null);
   const nearBottom = useRef(true);
@@ -188,10 +192,12 @@ export const PulseChatPane: React.FC<PulseChatPaneProps> = ({
             {contact.awayMessage && contact.status !== 'offline' ? ` — “${contact.awayMessage}”` : ''}
           </p>
         </div>
-        {!compact && (
-          <span className="shrink-0 border border-[#b49dcb] bg-[#fff9e8] px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-[#6b4f1d]">
-            IM
-          </span>
+        {onInspect && (
+          <button type="button" onClick={event => onInspect(event.currentTarget)}
+            aria-label={`View profile for ${contact.displayName}`}
+            className="shrink-0 border border-[#9473b4] bg-gradient-to-b from-white to-[#e4d8f0] px-2 py-1 text-[10px] font-bold text-[#4b2d68] shadow-[1px_1px_0_#bba8cc] hover:from-[#fff9e8] hover:to-[#eadcf6] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[#71479e]">
+            {compact ? 'Info' : 'Profile'}
+          </button>
         )}
       </header>
 
@@ -224,8 +230,9 @@ export const PulseChatPane: React.FC<PulseChatPaneProps> = ({
           aria-live="polite"
           aria-label={`Conversation with ${contact.displayName}`}
           data-testid="worker-pulse-messages"
+          data-pulse-transcript-style="classic"
           onScroll={handleScroll}
-          className="absolute inset-0 overflow-y-auto bg-[linear-gradient(180deg,#fffdf8_0%,#fbf7ff_100%)] px-2 py-2 pb-8 text-[12px]"
+          className="absolute inset-0 overflow-y-auto bg-white px-2 py-2 pb-8 font-sans text-[12px] select-text"
         >
           {loading && messages.length === 0 ? (
             <p className="py-6 text-center italic text-[#6d5684]">Opening conversation…</p>
@@ -252,39 +259,34 @@ export const PulseChatPane: React.FC<PulseChatPaneProps> = ({
                     <span className="h-px flex-1 bg-[#e2d7ee]" aria-hidden="true" />
                   </div>
                 )}
-                <div className={`mb-1.5 flex ${player ? 'justify-end' : 'justify-start'}`}>
-                  <div
-                    className={`max-w-[88%] border px-2 py-1 shadow-[1px_1px_0_rgba(70,45,95,0.12)] ${
-                      player
-                        ? 'border-[#9a76bf] bg-[#eee3fb]'
-                        : 'border-[#d8c7e8] bg-white'
-                    }`}
-                    data-sender={player ? 'player' : 'buddy'}
-                  >
-                    <div className="mb-0.5 flex flex-wrap items-baseline gap-1 text-[10px]">
-                      <span className="font-bold" style={{ color: player ? '#4a2a77' : signature }}>{senderName}</span>
-                      <time className="text-[10px] text-[#6d5684]" title={`Day ${message.day}`}>
-                        ({formatSimulationMinutes(message.timestampMinute % 1440)})
-                      </time>
-                      {offline && (
-                        <span className="border border-[#c8a74a] bg-[#fff3c2] px-1 text-[9px] font-bold uppercase tracking-wide text-[#6d5000]">
-                          offline message
-                        </span>
+                <div data-sender={player ? 'player' : 'buddy'}
+                  className={`mb-1 rounded-sm border-l-[3px] py-0.5 pl-1.5 pr-1 leading-relaxed ${
+                    offline ? 'border-[#c89f47] bg-[#fff7d9]' : player
+                      ? 'border-[#8970ad] bg-[#f5effa]' : 'border-transparent hover:bg-[#f5f1fa]'
+                  }`}>
+                  <time className="mr-1.5 font-mono text-[10px] text-[#6d5684]"
+                    title={`Day ${message.day}`}>
+                    ({formatSimulationMinutes(message.timestampMinute % 1440)})
+                  </time>
+                  {offline && (
+                    <span className="mr-1 border border-[#c8a74a] bg-[#fff3c2] px-1 text-[9px] font-bold uppercase tracking-wide text-[#6d5000]">
+                      offline
+                    </span>
+                  )}
+                  <span className="mr-1.5 font-bold"
+                    style={{ color: player ? '#452765' : signature }}>{senderName}:</span>
+                  <span className="whitespace-pre-wrap break-words text-[#2e2438]">{message.text}</span>
+                  {message.imageUrl && (
+                    <figure className="mt-1.5 ml-4 max-w-[280px]">
+                      <img src={message.imageUrl}
+                        alt={message.imageCaption || message.imagePrompt || `Photo from ${senderName}`}
+                        loading="lazy"
+                        className="max-h-48 w-auto border border-[#bca8d2] bg-white object-contain" />
+                      {message.imageCaption && (
+                        <figcaption className="mt-0.5 text-[10px] italic text-[#6d5684]">{message.imageCaption}</figcaption>
                       )}
-                    </div>
-                    <div className="whitespace-pre-wrap break-words leading-snug text-[#2e2438]">{message.text}</div>
-                    {message.imageUrl && (
-                      <figure className="mt-1.5 max-w-[280px]">
-                        <img src={message.imageUrl}
-                          alt={message.imageCaption || message.imagePrompt || `Photo from ${senderName}`}
-                          loading="lazy"
-                          className="max-h-48 w-auto border border-[#bca8d2] bg-white object-contain" />
-                        {message.imageCaption && (
-                          <figcaption className="mt-0.5 text-[10px] italic text-[#6d5684]">{message.imageCaption}</figcaption>
-                        )}
-                      </figure>
-                    )}
-                  </div>
+                    </figure>
+                  )}
                 </div>
               </React.Fragment>
             );
@@ -340,15 +342,17 @@ export const PulseChatPane: React.FC<PulseChatPaneProps> = ({
           </div>
         ) : (
           <p role="status" data-testid="worker-pulse-conversation-state"
-            aria-live="polite"
+            data-reply-activity={replyActivity} aria-live="polite"
             className={`border px-2 py-1 text-[11px] ${
               waiting
                 ? 'border-[#c8a74a] bg-[#fff8d8] text-[#624900]'
                 : 'border-[#bca8d2] bg-white/80 text-[#5b4a6d]'
             }`}>
-            <span aria-hidden="true" className="mr-1">{waiting ? '⌛' : '☕'}</span>
+            <span aria-hidden="true" className={`mr-1 inline-block ${replyActivity === 'typing' ? 'motion-safe:animate-pulse' : ''}`}>
+              {replyActivity === 'typing' && contact?.status === 'online' ? '✎' : waiting ? '⌛' : '☕'}
+            </span>
             {sending || choicesLoading ? (sending ? 'Sending your message…' : 'Checking what you can say…')
-              : pulseConversationStateText(phase, contact, sending)}
+              : pulseConversationStateText(phase, contact, sending, replyActivity)}
           </p>
         )}
       </div>

@@ -46,10 +46,10 @@ export interface SimulationQueryResults {
 export type SimulationQuery =
   | { kind: 'gameView' | 'hud' | 'world' | 'playerStatus' | 'chrome' | 'desktop' | 'apps' | 'installedPrograms' | 'presence' | 'situation' | 'residence' | 'transit' | 'website' | 'jobBoard' | 'mailbox' | 'weatherBuddy' }
   | { kind: 'cafeGuest' }
-  | { kind: 'messenger'; maxContacts?: number }
+  | { kind: 'messenger'; maxContacts?: number; accountId?: string }
   | { kind: 'labPage'; actorPage?: number; meetingPage?: number }
   | { kind: 'actor'; actorId: string }
-  | { kind: 'conversation'; actorId: string; offset?: number; limit?: number }
+  | { kind: 'conversation'; actorId: string; offset?: number; limit?: number; accountId?: string }
   | { kind: 'directory'; path: string; offset?: number; limit?: number }
   | { kind: 'file'; path: string }
   | { kind: 'installer'; filePath: string }
@@ -115,13 +115,17 @@ export interface LabCharacterResult {
 
 /** Offline Pulse uses Worker-validated Ink choices, never unrestricted guessed intent. */
 export type SimulationPulseNarrativeCommand =
-  | { kind: 'choices'; actorId: string }
-  | { kind: 'choose'; actorId: string; choiceIndex: number; expectedText: string };
+  | { kind: 'openAccount'; accountId: string }
+  | { kind: 'addBuddy'; accountId: string; actorId: string }
+  | { kind: 'choices'; actorId: string; accountId?: string }
+  | { kind: 'choose'; actorId: string; accountId?: string; choiceIndex: number; expectedText: string };
 export interface SimulationPulseNarrativeResult {
   revision: number;
   actorId: string;
   choices: Array<{ id: string; text: string }>;
   phase: 'first' | 'second' | 'outreach' | 'waiting_first' | 'waiting_second' | 'waiting_outreach' | 'complete';
+  /** Worker-derived composing state; no React timers or extra persisted cursor. */
+  replyActivity: 'idle' | 'waiting' | 'typing';
   sent?: string;
   reply?: string | null;
 }
@@ -158,7 +162,7 @@ export type SimulationWorkerRequest =
   | { id: number; op: 'hardware'; command: SimulationHardwareCommand }
   | { id: number; op: 'cafeNarrative'; command: SimulationCafeNarrativeCommand }
   | { id: number; op: 'pulseNarrative'; command: SimulationPulseNarrativeCommand }
-  | { id: number; op: 'markConversationRead'; actorId: string }
+  | { id: number; op: 'markConversationRead'; actorId: string; accountId?: string }
   | { id: number; op: 'labProcedural'; command: LabProceduralCommand }
   | { id: number; op: 'labOs'; command: LabOsCommand }
   | { id: number; op: 'labCharacter'; command: LabCharacterCommand }
@@ -187,7 +191,7 @@ export interface SimulationHost {
   cafeNarrative(command: SimulationCafeNarrativeCommand): Promise<SimulationCafeNarrativeResult>;
   pulseNarrative(command: SimulationPulseNarrativeCommand): Promise<SimulationPulseNarrativeResult>;
   /** Player opening a known thread acknowledges its canonical unread state. */
-  markConversationRead(actorId: string): Promise<boolean>;
+  markConversationRead(actorId: string, accountId?: string): Promise<boolean>;
   labProcedural(command: LabProceduralCommand): Promise<LabProceduralResult>;
   labOs(command: LabOsCommand): Promise<LabOsResult>;
   labCharacter(command: LabCharacterCommand): Promise<LabCharacterResult>;

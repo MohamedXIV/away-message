@@ -122,6 +122,8 @@ export interface SimulationMessengerRead {
   revision: number;
   contacts: ReturnType<import('../SocialEngine').SocialEngine['getMessengerSummary']>;
   unreadCounts: Record<string, number>;
+  /** Learned handles not yet added to this online identity; bounded and public. */
+  availableBuddies?: Array<{ actorId: string; displayName: string; handle: string }>;
 }
 
 export interface SimulationConversationRead extends ReturnType<import('../SocialEngine').SocialEngine['getConversationPage']> {
