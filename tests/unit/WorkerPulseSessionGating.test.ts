@@ -15,6 +15,7 @@ const SESSION = {
 };
 
 interface SessionOptions {
+  extraBuddy?: boolean;
   choices?: Array<{ id: string; text: string }>;
   conversationPage?: (offset: number) => {
     revision: number;
@@ -42,12 +43,19 @@ function createSession(options: SessionOptions = {}) {
             actorId: 'actor_a', displayName: 'Actor A', handle: 'actor_a',
             archetype: 'regular', onlineStatus: 'online', relationshipStage: 'friend',
             lastMessageMinute: 10, unread: 1,
-          }],
-          unreadCounts: { actor_a: 1 },
+          }, ...(options.extraBuddy ? [{
+            actorId: 'actor_b', displayName: 'Actor B', handle: 'actor_b',
+            archetype: 'regular', onlineStatus: 'away', relationshipStage: 'stranger',
+            lastMessageMinute: null, unread: 0,
+          }] : [])],
+          unreadCounts: { actor_a: 1, ...(options.extraBuddy ? { actor_b: 0 } : {}) },
         };
       }
       if (query.kind === 'presence') {
-        return { revision: 1, presence: { actor_a: { status: 'online', awayMessage: '' } } };
+        return { revision: 1, presence: {
+          actor_a: { status: 'online', awayMessage: '' },
+          ...(options.extraBuddy ? { actor_b: { status: 'away', awayMessage: 'Back after dinner' } } : {}),
+        } };
       }
       if (query.kind === 'conversation') {
         if (options.conversationPage) return options.conversationPage(query.offset ?? 0);
@@ -413,6 +421,59 @@ describe('#223 Worker Pulse UI session and attention', () => {
     await waitFor(() => container.querySelector('[role="dialog"][aria-label="Buddy profile"]') === null);
     await waitFor(() => document.activeElement === opener);
     expect(container.textContent).toContain('are you around?');
+  });
+
+
+  it('opens a learned buddy context menu by mouse or keyboard without switching the active IM to inspect them', async () => {
+    checkPulseCredentials([], 'shared_id', 'slot-a-password', 'slot_1');
+    setPulseWindow('slot_1', 'pulse');
+    const { session } = createSession({ extraBuddy: true });
+
+    await act(async () => {
+      root.render(React.createElement(WorkerPulsePanel, { session, revision: 1, windowId: 'pulse', slotId: 'slot_1' }));
+    });
+    await waitFor(() => container.textContent?.includes('are you around?') === true);
+    const buddy = container.querySelector<HTMLButtonElement>('[data-testid="worker-pulse-contact-actor_b"]');
+    expect(buddy).toBeTruthy();
+    await act(async () => {
+      buddy!.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 40, clientY: 60 }));
+    });
+    const findMenu = () => container.querySelector<HTMLElement>('[role="menu"][aria-label="Buddy actions for Actor B"]');
+    await waitFor(() => findMenu() !== null);
+    expect(findMenu()?.textContent).toContain('Send IM');
+    expect(findMenu()?.textContent).toContain('View Profile');
+    const inspect = Array.from(findMenu()!.querySelectorAll<HTMLButtonElement>('button'))
+      .find(button => button.textContent?.includes('View Profile'))!;
+    await act(async () => { inspect.click(); });
+    const profile = container.querySelector<HTMLElement>('[role="dialog"][aria-label="Buddy profile"]');
+    expect(profile?.textContent).toContain('Actor B');
+    expect(profile?.textContent).toContain('Back after dinner');
+    expect(container.querySelector('[data-testid="worker-pulse-messages"]')?.textContent)
+      .toContain('are you around?'); // inspecting B must leave A's IM active
+    await act(async () => {
+      document.activeElement!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    });
+    await waitFor(() => container.querySelector('[role="dialog"][aria-label="Buddy profile"]') === null);
+    await waitFor(() => document.activeElement === buddy);
+
+    await act(async () => {
+      buddy!.dispatchEvent(new KeyboardEvent('keydown', { key: 'F10', shiftKey: true, bubbles: true, cancelable: true }));
+    });
+    await waitFor(() => findMenu() !== null);
+    await act(async () => {
+      document.activeElement!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    });
+    await waitFor(() => findMenu() === null);
+    await waitFor(() => document.activeElement === buddy);
+
+    const actions = container.querySelector<HTMLButtonElement>('button[aria-label="Actions for Actor B"]');
+    expect(actions).toBeTruthy();
+    await act(async () => { actions!.click(); });
+    await waitFor(() => findMenu() !== null);
+    const send = Array.from(findMenu()!.querySelectorAll<HTMLButtonElement>('button'))
+      .find(button => button.textContent?.includes('Send IM'))!;
+    await act(async () => { send.click(); });
+    await waitFor(() => container.querySelector('button[aria-label="Switch to Actor B"]') !== null);
   });
 
 });
