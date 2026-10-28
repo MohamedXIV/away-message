@@ -106,24 +106,30 @@ test('#214 fresh Orion acquires Pulse only through real internet â†’ VFS setup â
     .toHaveAttribute('data-pulse-transcript-style', 'classic');
   await expect(tabs.getByRole('button', { name: /^Switch to / })).toHaveCount(1);
   // Fresh worlds have two known ordinary acquaintances, not a fixed cast.
-  await messenger.getByRole('button', { name: 'Add', exact: true }).click();
-  await expect(contacts.locator('[data-testid^="worker-pulse-contact-"]')).toHaveCount(2);
+  // Capture the original ID: presence/unread sorting can reorder the list.
   const contactRows = contacts.locator('[data-testid^="worker-pulse-contact-"]');
-  await contactRows.nth(1).click();
+  const originalContactTestId = await contactRows.first().getAttribute('data-testid');
+  if (!originalContactTestId) throw new Error('Expected the original Pulse contact');
+  await messenger.getByRole('button', { name: 'Add', exact: true }).click();
+  await expect(contactRows).toHaveCount(2);
+  const newContactRow = contacts.locator(
+    `[data-testid^="worker-pulse-contact-"]:not([data-testid="${originalContactTestId}"])`,
+  );
+  await newContactRow.click();
   await expect(tabs.getByRole('button', { name: /^Switch to / })).toHaveCount(2);
   await expect(tabs.getByRole('button', { name: /^Switch to / }).last()).toHaveAttribute('aria-current', 'page');
   await tabs.getByRole('button', { name: /^Close conversation with / }).last().click();
   await expect(tabs.getByRole('button', { name: /^Switch to / })).toHaveCount(1);
   await expect(messenger.getByTestId('worker-pulse-messages'))
     .toContainText('Hey! How have you been lately?');
-  await contactRows.nth(1).click();
+  await newContactRow.click();
   await expect(tabs.getByRole('button', { name: /^Switch to / })).toHaveCount(2);
   await tabs.getByRole('button', { name: /^Close conversation with / }).first().click();
   await expect(tabs.getByRole('button', { name: /^Switch to / })).toHaveCount(1);
   await tabs.getByRole('button', { name: /^Close conversation with / }).first().click();
   await expect(tabs.getByRole('button', { name: /^Switch to / })).toHaveCount(0);
   await expect(messenger.getByTestId('worker-pulse-messages')).toHaveCount(0);
-  await contactRows.first().click();
+  await contacts.getByTestId(originalContactTestId).click();
   await expect(tabs.getByRole('button', { name: /^Switch to / })).toHaveCount(1);
   await expect(messenger.getByTestId('worker-pulse-messages'))
     .toContainText('Hey! How have you been lately?');

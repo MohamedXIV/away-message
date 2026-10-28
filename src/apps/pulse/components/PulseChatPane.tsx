@@ -261,7 +261,7 @@ export const PulseChatPane: React.FC<PulseChatPaneProps> = ({
                     offline ? 'border-[#c89f47] bg-[#fff7d9]' : player
                       ? 'border-[#8970ad] bg-[#f5effa]' : 'border-transparent hover:bg-[#f5f1fa]'
                   }`}>
-                  <time className="mr-1.5 font-mono text-[10px] text-[#82718d]"
+                  <time className="mr-1.5 font-mono text-[10px] text-[#6d5684]"
                     title={`Day ${message.day}`}>
                     ({formatSimulationMinutes(message.timestampMinute % 1440)})
                   </time>
